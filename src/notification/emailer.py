@@ -52,6 +52,7 @@ class EmailNotifier:
                     self.logger.error(f"Failed to attach file {file_path}: {e}")
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.ehlo()
                 server.starttls()
                 server.login(self.sender_email, self.sender_password)
                 server.send_message(msg)
@@ -102,3 +103,5 @@ if __name__ == "__main__":
         print(f"Test email sent to {to_addr}")
     except Exception as e:
         print(f"Failed to send test email: {e}")
+    finally:
+        print(f"DONE")
