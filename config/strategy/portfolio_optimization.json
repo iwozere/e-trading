@@ -1,0 +1,101 @@
+{
+    "portfolio_optimization_strategies": {
+        "modern_portfolio_theory": {
+            "name": "Modern Portfolio Theory Strategy",
+            "description": "Uses MPT for optimal asset allocation and risk management",
+            "optimization_method": "sharpe_ratio_maximization",
+            "constraints": {
+                "max_position_size": 0.25,
+                "min_position_size": 0.05,
+                "max_portfolio_volatility": 0.15,
+                "target_return": 0.12
+            },
+            "rebalancing": {
+                "frequency": "weekly",
+                "threshold": 0.05,
+                "transaction_cost_consideration": true
+            },
+            "risk_management": {
+                "var_limit": 0.02,
+                "max_drawdown_limit": 0.10,
+                "correlation_threshold": 0.7
+            }
+        },
+        "risk_parity": {
+            "name": "Risk Parity Strategy",
+            "description": "Equalizes risk contribution across all assets",
+            "risk_measure": "volatility",
+            "target_risk_contribution": "equal",
+            "constraints": {
+                "max_position_size": 0.30,
+                "min_position_size": 0.02,
+                "leverage_limit": 1.5
+            },
+            "rebalancing": {
+                "frequency": "daily",
+                "threshold": 0.02,
+                "volatility_adjustment": true
+            },
+            "risk_management": {
+                "volatility_target": 0.10,
+                "dynamic_leverage": true,
+                "tail_risk_hedging": true
+            }
+        },
+        "momentum_portfolio": {
+            "name": "Momentum Portfolio Strategy",
+            "description": "Allocates based on relative momentum across assets",
+            "momentum_calculation": {
+                "lookback_period": 252,
+                "momentum_measure": "total_return",
+                "ranking_method": "percentile"
+            },
+            "allocation": {
+                "top_n_assets": 10,
+                "equal_weight": true,
+                "momentum_threshold": 0.6
+            },
+            "rebalancing": {
+                "frequency": "monthly",
+                "momentum_recalculation": true,
+                "position_adjustment": "gradual"
+            },
+            "risk_management": {
+                "volatility_scaling": true,
+                "correlation_adjustment": true,
+                "sector_diversification": true
+            }
+        },
+        "dynamic_asset_allocation": {
+            "name": "Dynamic Asset Allocation",
+            "description": "Adapts allocation based on market conditions and regime changes",
+            "regime_detection": {
+                "volatility_regime": true,
+                "trend_regime": true,
+                "correlation_regime": true
+            },
+            "allocation_rules": {
+                "trending_market": {
+                    "equity_weight": 0.7,
+                    "bond_weight": 0.2,
+                    "commodity_weight": 0.1
+                },
+                "ranging_market": {
+                    "equity_weight": 0.4,
+                    "bond_weight": 0.4,
+                    "commodity_weight": 0.2
+                },
+                "crisis_market": {
+                    "equity_weight": 0.2,
+                    "bond_weight": 0.7,
+                    "commodity_weight": 0.1
+                }
+            },
+            "rebalancing": {
+                "frequency": "weekly",
+                "regime_change_threshold": 0.3,
+                "smooth_transition": true
+            }
+        }
+    }
+} 

@@ -1,0 +1,41 @@
+{
+    "name": "RSIBBVolumeEntryMixin",
+    "params": {
+        "e_rsi_period": {
+            "type": "int",
+            "low": 5,
+            "high": 30,
+            "default": 14
+        },
+        "e_rsi_oversold": {
+            "type": "int",
+            "low": 20,
+            "high": 40,
+            "default": 30
+        },
+        "e_bb_period": {
+            "type": "int",
+            "low": 10,
+            "high": 50,
+            "default": 20
+        },
+        "e_bb_dev": {
+            "type": "float",
+            "low": 1.0,
+            "high": 3.0,
+            "default": 2.0
+        },
+        "e_vol_ma_period": {
+            "type": "int",
+            "low": 5,
+            "high": 50,
+            "default": 20
+        },
+        "e_min_volume_ratio": {
+            "type": "float",
+            "low": 1.0,
+            "high": 2.0,
+            "default": 1.1
+        }
+    }
+} 

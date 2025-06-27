@@ -1,0 +1,76 @@
+{
+  "entry_mixins": {
+    "RSIBBEntryMixin": {
+      "indicators": ["rsi", "bollinger_bands"],
+      "subplot_type": {
+        "rsi": "separate",
+        "bollinger_bands": "overlay"
+      }
+    },
+    "RSIBBVolumeEntryMixin": {
+      "indicators": ["rsi", "bollinger_bands", "volume"],
+      "subplot_type": {
+        "rsi": "separate",
+        "bollinger_bands": "overlay",
+        "volume": "separate"
+      }
+    },
+    "RSIIchimokuEntryMixin": {
+      "indicators": ["rsi", "ichimoku"],
+      "subplot_type": {
+        "rsi": "separate",
+        "ichimoku": "overlay"
+      }
+    },
+    "RSIVolumeSupertrendEntryMixin": {
+      "indicators": ["rsi", "volume", "supertrend"],
+      "subplot_type": {
+        "rsi": "separate",
+        "volume": "separate",
+        "supertrend": "overlay"
+      }
+    },
+    "BBVolumeSuperTrendEntryMixin": {
+      "indicators": ["bollinger_bands", "volume", "supertrend"],
+      "subplot_type": {
+        "bollinger_bands": "overlay",
+        "volume": "separate",
+        "supertrend": "overlay"
+      }
+    }
+  },
+  "exit_mixins": {
+    "ATRExitMixin": {
+      "indicators": ["atr"],
+      "subplot_type": {
+        "atr": "separate"
+      }
+    },
+    "RSIBBExitMixin": {
+      "indicators": ["rsi", "bollinger_bands"],
+      "subplot_type": {
+        "rsi": "separate",
+        "bollinger_bands": "overlay"
+      }
+    },
+    "MACrossoverExitMixin": {
+      "indicators": ["sma", "ema"],
+      "subplot_type": {
+        "sma": "overlay",
+        "ema": "overlay"
+      }
+    },
+    "TrailingStopExitMixin": {
+      "indicators": [],
+      "subplot_type": {}
+    },
+    "TimeBasedExitMixin": {
+      "indicators": [],
+      "subplot_type": {}
+    },
+    "FixedRatioExitMixin": {
+      "indicators": [],
+      "subplot_type": {}
+    }
+  }
+} 
