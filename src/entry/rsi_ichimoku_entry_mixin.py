@@ -133,7 +133,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
                 logger.debug(
                     f"ENTRY: Price: {current_price}, RSI: {rsi[0]}, "
                     f"Tenkan-sen: {ichimoku.tenkan_sen[0]}, Kijun-sen: {ichimoku.kijun_sen[0]}, "
-                    f"span_a: {span_a[0]}, span_b: {span_b[0]}"
+                    f"span_a: {span_a}, span_b: {span_b}"
                 )
 
             # Exit condition: cross below Kijun-sen, RSI overbought, inside Kumo cloud (optional)
