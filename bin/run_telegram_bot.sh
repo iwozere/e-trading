@@ -9,4 +9,4 @@ mkdir -p "$PROJECT_ROOT/logs/log"
 
 source "$PROJECT_ROOT/.venv/bin/activate"
 
-nohup "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/screener/telegram/bot.py" > "$PROJECT_ROOT/logs/log/telegram_bot.log" 2>&1 & 
+nohup "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/screener/telegram/telegram_screener_bot.py" > "$PROJECT_ROOT/logs/log/telegram_bot.log" 2>&1 & 

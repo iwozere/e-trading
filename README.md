@@ -426,4 +426,15 @@ The crypto trading platform has evolved into a **comprehensive, production-ready
 ---
 
 *Last Updated: June 2025*
-*For detailed roadmap and future plans, see [docs/ROADMAP.md](docs/ROADMAP.md)* 
+*For detailed roadmap and future plans, see [docs/ROADMAP.md](docs/ROADMAP.md)*
+
+## Telegram Screener Bot
+
+See the full documentation for the Telegram Screener Bot here:
+
+[docs/TELEGRAM_SCREENER_BOT.md](docs/TELEGRAM_SCREENER_BOT.md)
+
+- Use `/analyze` for all analysis tasks (single ticker or all tickers, with all flags).
+- `/my-status` and `/my-analyze` are now replaced by `/analyze`.
+
+This guide covers all features, commands, configuration, and advanced usage for the Telegram-based screener and analysis bot. 

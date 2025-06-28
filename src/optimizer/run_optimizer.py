@@ -229,7 +229,7 @@ def save_results(result, data_file):
                     f"Exit={serializable_trade['exit_price']} @ {serializable_trade['exit_time']}"
                 )
             except Exception as e:
-                _logger.error(f"Error processing trade: {str(e)}")
+                _logger.error(f"Error processing trade: {str(e)}", exc_info=e)
                 continue
 
         # Process analyzer results
@@ -378,8 +378,8 @@ if __name__ == "__main__":
                             n_jobs=optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1),
                         )
                     except Exception as e:
-                        _logger.error(f"Error during optimization for {entry_logic_name} + {exit_logic_name}: {e}")
-                        continue
+                        _logger.error(f"Error during optimization for {entry_logic_name} + {exit_logic_name}: {e}", exc_info=e)
+                        raise
 
                     # Get best result
                     if len(study.trials) == 0:
@@ -405,8 +405,8 @@ if __name__ == "__main__":
                         # Save results
                         save_results(best_result, data_file)
                     except Exception as e:
-                        _logger.error(f"Error in final backtest for {entry_logic_name} + {exit_logic_name}: {e}")
-                        continue
+                        _logger.error(f"Error in final backtest for {entry_logic_name} + {exit_logic_name}: {e}", exc_info=e)
+                        raise
 
                     _logger.info(f"Completed optimization {processed_combinations}/{total_combinations}")
                     
