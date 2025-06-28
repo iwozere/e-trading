@@ -16,6 +16,7 @@ def get_broker(config: Dict[str, Any]):
     Supported types: 'binance', 'binance_paper', 'ibkr', 'mock'.
     """
     broker_type = config.get("type", "mock").lower()
+    
     if broker_type == "binance":
         return BinanceBroker(BINANCE_KEY, BINANCE_SECRET, config.get("cash", 1000.0))
     elif broker_type == "binance_paper":

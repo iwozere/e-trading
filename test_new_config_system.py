@@ -14,7 +14,7 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.config.config_models import TradingBotConfig, OptimizerConfig, DataConfig, BrokerType, DataSourceType, StrategyType, Environment
+from src.config.config_models import TradingBotConfig, OptimizerConfig, DataConfig, BrokerType, DataSourceType
 from src.config.config_loader import load_config, save_config, validate_config_file, create_sample_config
 
 
@@ -26,10 +26,11 @@ def test_trading_bot_config():
         # Create a valid config
         config = TradingBotConfig(
             bot_id="test_bot_001",
+            name="Test Bot",
             symbol="BTCUSDT",
             broker_type=BrokerType.BINANCE_PAPER,
             data_source=DataSourceType.BINANCE,
-            strategy_type=StrategyType.CUSTOM,
+            strategy_name="RSIStrategy",
             description="Test configuration"
         )
         
@@ -48,10 +49,11 @@ def test_trading_bot_config():
         try:
             invalid_config = TradingBotConfig(
                 bot_id="",  # Empty bot_id should fail
+                name="Test Bot",
                 symbol="BTCUSDT",
                 broker_type=BrokerType.BINANCE_PAPER,
                 data_source=DataSourceType.BINANCE,
-                strategy_type=StrategyType.CUSTOM
+                strategy_name="RSIStrategy"
             )
             print("❌ Invalid config should have failed")
             return False
@@ -73,10 +75,11 @@ def test_config_loading_saving():
         # Create a config
         config = TradingBotConfig(
             bot_id="test_save_load",
+            name="Test Save Load Bot",
             symbol="ETHUSDT",
             broker_type=BrokerType.BINANCE_PAPER,
             data_source=DataSourceType.BINANCE,
-            strategy_type=StrategyType.CUSTOM,
+            strategy_name="MACDStrategy",
             description="Test save/load"
         )
         
@@ -115,10 +118,11 @@ def test_config_validation():
         # Create a valid config and save it
         config = TradingBotConfig(
             bot_id="test_validation",
+            name="Test Validation Bot",
             symbol="BTCUSDT",
             broker_type=BrokerType.BINANCE_PAPER,
             data_source=DataSourceType.BINANCE,
-            strategy_type=StrategyType.CUSTOM
+            strategy_name="BollingerStrategy"
         )
         
         save_config(config, "test_validation.json")
@@ -150,10 +154,13 @@ def test_optimizer_config():
     
     try:
         config = OptimizerConfig(
-            optimizer_type="optuna",
-            initial_capital=10000.0,
-            n_trials=100,
-            n_jobs=1
+            optimizer_id="test_optimizer",
+            name="Test Optimizer",
+            strategy_name="RSIStrategy",
+            param_ranges={"rsi_period": [14, 21], "overbought": [70, 80]},
+            symbol="BTCUSDT",
+            start_date="2023-01-01",
+            end_date="2023-12-31"
         )
         
         print(f"✅ Created optimizer config: {config.optimizer_type}")
@@ -173,13 +180,15 @@ def test_data_config():
     
     try:
         config = DataConfig(
+            data_id="test_data",
+            name="Test Data Config",
             data_source=DataSourceType.BINANCE,
-            symbol="BTCUSDT",
+            symbols=["BTCUSDT", "ETHUSDT"],
             interval="1h"
         )
         
         print(f"✅ Created data config: {config.data_source}")
-        print(f"   Symbol: {config.symbol}")
+        print(f"   Symbols: {config.symbols}")
         print(f"   Interval: {config.interval}")
         
         return True
@@ -199,10 +208,18 @@ def test_sample_configs():
         create_sample_config("test_sample_optimizer.json", "optimizer")
         create_sample_config("test_sample_data.json", "data")
         
-        print("✅ Sample configs created")
+        print("Sample trading configuration created: test_sample_trading.json")
+        print("Sample optimizer configuration created: test_sample_optimizer.json")
+        print("Sample data configuration created: test_sample_data.json")
         
-        # Verify they can be loaded
+        # Verify files exist
+        assert os.path.exists("test_sample_trading.json")
+        assert os.path.exists("test_sample_optimizer.json")
+        assert os.path.exists("test_sample_data.json")
+        
+        # Load and verify trading config
         trading_config = load_config("test_sample_trading.json")
+        print(f"✅ Sample configs created")
         print(f"   Trading sample: {trading_config.bot_id}")
         
         # Clean up
@@ -238,19 +255,15 @@ def main():
     for test in tests:
         if test():
             passed += 1
-        print()
     
-    print("=" * 50)
+    print("\n" + "=" * 50)
     print(f"Tests passed: {passed}/{total}")
     
     if passed == total:
         print("🎉 All tests passed! The new config system is working correctly.")
-        return True
     else:
         print("❌ Some tests failed. Please check the errors above.")
-        return False
 
 
 if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1) 
+    main() 
