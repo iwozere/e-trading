@@ -12,11 +12,11 @@ from src.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntry
 
 # Registry of all available entry mixins
 ENTRY_MIXIN_REGISTRY = {
-    "RSIBBEntryMixin": RSIBBEntryMixin,  # 1
-    #"RSIIchimokuEntryMixin": RSIIchimokuEntryMixin,
-    "RSIBBVolumeEntryMixin": RSIBBVolumeEntryMixin,
-    "RSIVolumeSupertrendEntryMixin": RSIVolumeSupertrendEntryMixin,
-    "BBVolumeSuperTrendEntryMixin": BBVolumeSupertrendEntryMixin,
+    #"RSIBBEntryMixin": RSIBBEntryMixin,  # 1
+    "RSIIchimokuEntryMixin": RSIIchimokuEntryMixin,
+    #"RSIBBVolumeEntryMixin": RSIBBVolumeEntryMixin,
+    #"RSIVolumeSupertrendEntryMixin": RSIVolumeSupertrendEntryMixin,
+    #"BBVolumeSuperTrendEntryMixin": BBVolumeSupertrendEntryMixin,
 }
 
 

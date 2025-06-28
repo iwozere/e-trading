@@ -84,10 +84,10 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             )
             self.register_indicator(self.ichimoku_name, self.ichimoku)
 
-            self.tenkan_sen = self.ichi.tenkan_sen
-            self.kijun_sen = self.ichi.kijun_sen
-            self.senkou_span_a = self.ichi.senkou_span_a
-            self.senkou_span_b = self.ichi.senkou_span_b
+            self.tenkan_sen = self.ichimoku.tenkan_sen
+            self.kijun_sen = self.ichimoku.kijun_sen
+            self.senkou_span_a = self.ichimoku.senkou_span_a
+            self.senkou_span_b = self.ichimoku.senkou_span_b
 
             self.cross_over_tenkan = bt.indicators.CrossOver(self.strategy.data.close, self.tenkan_sen)
             self.cross_below_kijun = bt.indicators.CrossDown(self.strategy.data.close, self.kijun_sen)
