@@ -121,11 +121,10 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             Or RSI is above 70 (overbought, potential reversal)
             """
 
-            span_a = self.senkou_span_a[self.get_param("e_kijun")]  # shift back to current candle
-            span_b = self.senkou_span_b[self.get_param("e_kijun")]
+            span_a = self.senkou_span_a[-self.get_param("e_kijun")]  # shift back to current candle
+            span_b = self.senkou_span_b[-self.get_param("e_kijun")]
 
             kumo_top = max(span_a, span_b)
-            kumo_bottom = min(span_a, span_b)
 
             # Price must be above the cloud
             # RSI oversold and bullish price crossover above Tenkan-sen
@@ -138,6 +137,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
                 )
 
             # Exit condition: cross below Kijun-sen, RSI overbought, inside Kumo cloud (optional)
+            #kumo_bottom = min(span_a, span_b)
             #return_value = self.cross_below_kijun[0] or self.rsi[0] > self.p.rsi_overbought or (kumo_bottom <= current_price <= kumo_top)  
 
             return return_value
