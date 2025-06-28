@@ -51,13 +51,13 @@ def get_or_create_user(telegram_id):
     conn.close()
     return user_id
 
-def add_ticker(telegram_id, provider, ticker):
+def add_ticker(telegram_id, provider, ticker, period=None, interval=None):
     user_id = get_or_create_user(telegram_id)
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "INSERT OR IGNORE INTO tickers (user_id, provider, ticker) VALUES (?, ?, ?)",
-        (user_id, provider, ticker.upper())
+        "INSERT OR IGNORE INTO tickers (user_id, provider, ticker, period, interval) VALUES (?, ?, ?, ?, ?)",
+        (user_id, provider, ticker.upper(), period, interval)
     )
     conn.commit()
     conn.close()
@@ -79,19 +79,23 @@ def list_tickers(telegram_id, provider=None):
     cur = conn.cursor()
     if provider:
         cur.execute(
-            "SELECT provider, ticker FROM tickers WHERE user_id = ? AND provider = ? ORDER BY provider, ticker",
+            "SELECT provider, ticker, period, interval FROM tickers WHERE user_id = ? AND provider = ? ORDER BY provider, ticker",
             (user_id, provider)
         )
     else:
         cur.execute(
-            "SELECT provider, ticker FROM tickers WHERE user_id = ? ORDER BY provider, ticker",
+            "SELECT provider, ticker, period, interval FROM tickers WHERE user_id = ? ORDER BY provider, ticker",
             (user_id,)
         )
     rows = cur.fetchall()
     conn.close()
     result = {}
     for row in rows:
-        result.setdefault(row["provider"], []).append(row["ticker"])
+        result.setdefault(row["provider"], []).append({
+            "ticker": row["ticker"],
+            "period": row["period"],
+            "interval": row["interval"]
+        })
     return result
 
 def all_tickers_for_status(telegram_id, provider=None):
@@ -100,7 +104,7 @@ def all_tickers_for_status(telegram_id, provider=None):
     result = []
     for prov, tlist in tickers_by_provider.items():
         for ticker in tlist:
-            result.append((prov, ticker))
+            result.append((prov, ticker["ticker"]))
     return result
 
 def all_tickers_with_providers_for_status(telegram_id, provider=None):
@@ -109,7 +113,7 @@ def all_tickers_with_providers_for_status(telegram_id, provider=None):
     result = []
     for prov, tlist in tickers_by_provider.items():
         for ticker in tlist:
-            result.append((prov, ticker))
+            result.append((prov, ticker["ticker"]))
     return result
 
 def migrate_users_table():
@@ -127,6 +131,19 @@ def migrate_users_table():
         cur.execute("ALTER TABLE users ADD COLUMN email_verification_received DATETIME")
     if 'email_verification_code' not in columns:
         cur.execute("ALTER TABLE users ADD COLUMN email_verification_code TEXT")
+    conn.commit()
+    conn.close()
+
+def migrate_tickers_table():
+    """Standalone migration: add period and interval columns to tickers table if not present."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(tickers)")
+    columns = [row[1] for row in cur.fetchall()]
+    if 'period' not in columns:
+        cur.execute("ALTER TABLE tickers ADD COLUMN period TEXT")
+    if 'interval' not in columns:
+        cur.execute("ALTER TABLE tickers ADD COLUMN interval TEXT")
     conn.commit()
     conn.close()
 
@@ -178,10 +195,47 @@ def set_user_verified(telegram_id, received_time):
     conn.commit()
     conn.close()
 
+# Helper to get period/interval for a ticker
+
+def get_ticker_settings(telegram_id, provider, ticker):
+    user_id = get_or_create_user(telegram_id)
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT period, interval FROM tickers WHERE user_id = ? AND provider = ? AND ticker = ?",
+        (user_id, provider, ticker.upper())
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None, None
+    return row["period"], row["interval"]
+
+# Helper to update period/interval for a ticker
+
+def update_ticker_settings(telegram_id, provider, ticker, period=None, interval=None):
+    user_id = get_or_create_user(telegram_id)
+    conn = get_conn()
+    cur = conn.cursor()
+    if period is not None:
+        cur.execute(
+            "UPDATE tickers SET period = ? WHERE user_id = ? AND provider = ? AND ticker = ?",
+            (period, user_id, provider, ticker.upper())
+        )
+    if interval is not None:
+        cur.execute(
+            "UPDATE tickers SET interval = ? WHERE user_id = ? AND provider = ? AND ticker = ?",
+            (interval, user_id, provider, ticker.upper())
+        )
+    conn.commit()
+    conn.close()
+
 # Initialize database when module is imported
 init_db()
 
 if __name__ == "__main__":
     print("Running users table migration...")
     migrate_users_table()
+    print("Running tickers table migration...")
+    migrate_tickers_table()
     print("Migration complete.") 

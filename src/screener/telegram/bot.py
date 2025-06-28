@@ -41,7 +41,11 @@ from aiogram.filters import Command
 from aiogram.types import FSInputFile, Message
 from src.notification.logger import setup_logger
 from src.screener.telegram.combine import analyze_ticker, format_comprehensive_analysis
-from src.screener.telegram.screener_db import add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status, set_user_email, get_user_email, get_user_verification_status, get_user_verification_code, set_user_verified
+from src.screener.telegram.screener_db import (
+    add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status,
+    set_user_email, get_user_email, get_user_verification_status, get_user_verification_code, set_user_verified,
+    get_ticker_settings, update_ticker_settings
+)
 from src.screener.telegram.technicals import calculate_technicals
 from src.notification.emailer import EmailNotifier
 from src.screener.telegram.chart import generate_enhanced_chart, generate_binance_chart
@@ -59,6 +63,8 @@ if not TELEGRAM_BOT_TOKEN:
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 
+DEFAULT_PERIOD = "2y"
+DEFAULT_INTERVAL = "1d"
 
 @dp.message(Command("start", "help"))
 async def send_welcome(message: Message):
@@ -92,6 +98,15 @@ def is_valid_ticker(text):
 def is_email(s):
     return re.match(r"[^@\s]+@[^@\s]+\.[^@\s]+", s) is not None
 
+# Helper to parse period/interval flags from args
+def parse_period_interval(args):
+    period = None
+    interval = None
+    for arg in args:
+        if arg.startswith('-period='):
+            period = arg.split('=', 1)[1]
+        elif arg.startswith('-interval='):
+            interval = arg.split('=', 1)[1]
 @dp.message(lambda message: message.text and is_valid_ticker(message.text.strip()))
 async def handle_ticker(message: Message):
     ticker = message.text.strip().upper()
@@ -168,7 +183,13 @@ async def my_add(message: Message):
             ticker = ticker.strip()
             if ticker:
                 try:
-                    add_ticker(user_id, provider, ticker)
+                    # Parse -period= and -interval= flags per ticker, store in DB
+                    period, interval = get_ticker_settings(ticker)
+                    if not period:
+                        period = DEFAULT_PERIOD
+                    if not interval:
+                        interval = DEFAULT_INTERVAL
+                    add_ticker(user_id, provider, ticker, period, interval)
                     added.append(ticker)
                     print(f"[DEBUG] Added {ticker} to {provider}", flush=True)
                     logger.info(f"User {user_id} added {ticker} to {provider}")

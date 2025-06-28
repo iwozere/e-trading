@@ -17,13 +17,13 @@ def generate_recommendation(technicals_data: dict) -> str:
     return f"{signal}: {reason}"
 
 
-def analyze_ticker(ticker: str) -> TickerAnalysis:
+def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d") -> TickerAnalysis:
     """Analyze ticker with enhanced technical analysis and recommendations"""
     try:
         # Get fundamental data (now a dataclass)
         fundamentals = get_fundamentals(ticker)
         # Get enhanced technical analysis with recommendations (now a dataclass)
-        technicals = calculate_technicals(ticker)
+        technicals = calculate_technicals(ticker, period=period, interval=interval)
         # Generate enhanced chart with all indicators
         chart_image = generate_enhanced_chart(ticker, technicals)
         # Generate recommendation using enhanced technical analysis

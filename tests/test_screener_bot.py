@@ -14,7 +14,7 @@ import shutil
 
 from src.screener.telegram.screener_db import (
     add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status,
-    set_user_email, get_user_email, get_user_verification_status, get_user_verification_code, set_user_verified, get_conn
+    set_user_email, get_user_email, get_user_verification_status, get_user_verification_code, set_user_verified, get_conn, get_ticker_settings
 )
 from src.screener.telegram.technicals import calculate_technicals, format_technical_analysis
 from src.screener.telegram.chart import generate_enhanced_chart, generate_binance_chart

@@ -98,10 +98,10 @@ def get_overall_recommendation(recommendations: List[Tuple[str, str]]) -> Tuple[
     else:
         return "HOLD", f"Mixed signals - Hold position ({hold_count}/{total} neutral)"
 
-def calculate_technicals(ticker: str) -> Technicals:
+def calculate_technicals(ticker: str, period: str = "2y", interval: str = "1d") -> Technicals:
     try:
-        logger.debug(f"Starting technical analysis for {ticker}")
-        df = yf.download(ticker, period="2y", interval="1d")
+        logger.debug(f"Starting technical analysis for {ticker} (period={period}, interval={interval})")
+        df = yf.download(ticker, period=period, interval=interval)
         if df.empty:
             logger.error(f"No data downloaded for ticker {ticker}")
             return None

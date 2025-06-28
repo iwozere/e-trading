@@ -13,19 +13,21 @@ import pandas as pd
 logger = setup_logger("telegram_bot")
 
 
-def generate_enhanced_chart(ticker: str, technicals_data: dict = None) -> bytes:
+def generate_enhanced_chart(ticker: str, technicals_data: dict = None, period: str = "2y", interval: str = "1d") -> bytes:
     """
     Generate comprehensive chart with all technical indicators
     
     Args:
         ticker: Stock ticker symbol
         technicals_data: Optional pre-calculated technical data
+        period: yfinance period (e.g., '2y')
+        interval: yfinance interval (e.g., '1d')
         
     Returns:
         bytes: Chart image as bytes
     """
     try:
-        df = yf.download(ticker, period="6mo", interval="1d")
+        df = yf.download(ticker, period=period, interval=interval)
         
         if df.empty:
             raise ValueError(f"No data available for {ticker}")

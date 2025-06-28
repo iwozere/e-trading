@@ -143,4 +143,20 @@ The Telegram Screener Bot is an advanced tool for managing, analyzing, and monit
 
 ## Contact & Support
 
-For support, bug reports, or feature requests, contact the bot administrator or open an issue in the project repository. 
+For support, bug reports, or feature requests, contact the bot administrator or open an issue in the project repository.
+
+## Per-Ticker and Per-Command Period/Interval
+
+- You can specify custom data periods and intervals for each ticker.
+- **Defaults:** If not specified, the bot uses 2 years (`2y`) and daily bars (`1d`).
+- **Override on add:**
+  - `/my-add -yf AAPL -period=1y -interval=15m` adds AAPL with 1 year of 15-minute bars.
+  - `/my-add -bnc BTCUSDT` uses the default (2y, 1d).
+- **Override on analysis:**
+  - `AAPL -period=6mo -interval=1h` analyzes AAPL with 6 months of 1-hour bars (does not change DB).
+- **/my-list:**
+  - Shows period/interval for each ticker if not default.
+- **How it works:**
+  - The bot stores period/interval per ticker in the database if provided in /my-add.
+  - If not set, the default is used.
+  - You can override for a single analysis by providing flags in the command. 
