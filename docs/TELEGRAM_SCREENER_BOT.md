@@ -55,17 +55,17 @@ The Telegram Screener Bot is an advanced tool for managing, analyzing, and monit
 - `/my-delete -PROVIDER TICKER`
   - Remove a ticker from your list.
 
-### Analysis & Reporting
+### Analysis Command
 
-- `/my-status [-PROVIDER] [-email]`
-  - Analyze all your tickers (optionally filter by provider).
-  - Add `-email` to receive the report and charts at your registered email (must be verified).
-  - Example: `/my-status -yf -email`
-
-- `/my-analyze -PROVIDER TICKER [-email]`
-  - Analyze a single ticker.
-  - Add `-email` to receive the analysis and chart at your registered email (must be verified).
-  - Example: `/my-analyze -bnc BTCUSDT -email`
+- **/analyze** is the unified command for all analysis:
+  - `/analyze` — analyze all your tickers
+  - `/analyze -yf` — analyze all your YF tickers
+  - `/analyze AAPL` — analyze just AAPL
+  - `/analyze AAPL -period=1y -interval=1h` — analyze AAPL with custom settings
+  - `/analyze -email` — send all results to your email
+  - `/analyze BTCUSDT -period=1y -interval=1d -email` — analyze BTCUSDT with custom settings and email
+- All previous functionality of `/my-status` and `/my-analyze` is now handled by `/analyze`.
+- You can combine provider, period, interval, and email flags as needed.
 
 ### Help & Info
 
@@ -83,7 +83,7 @@ The Telegram Screener Bot is an advanced tool for managing, analyzing, and monit
 2. **Verification Email**: The bot sends a verification email with subject `e-Trading: email verification` and a 6-digit code (valid for 1 hour).
 3. **Verify**: Use `/my-verify CODE` in Telegram to verify your email.
 4. **Check Status**: Use `/my-info` to see your email and verification status.
-5. **Receive Reports**: Use `-email` flag in `/my-status` or `/my-analyze` to receive reports at your verified email.
+5. **Receive Reports**: Use `-email` flag in `/analyze` to receive reports at your verified email.
 
 **Note:**
 - Only one email per Telegram user is allowed.
@@ -117,8 +117,10 @@ The Telegram Screener Bot is an advanced tool for managing, analyzing, and monit
 # (Check your email, then:)
 /my-verify 123456
 /my-info
-/my-status -email
-/my-analyze -yf MSFT -email
+/analyze -email
+/analyze -yf -email
+/analyze AAPL -period=1y -interval=1h -email
+/analyze BTCUSDT -period=1y -interval=1d -email
 ```
 
 ---
