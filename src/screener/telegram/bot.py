@@ -33,13 +33,15 @@ import ta
 import pandas as pd
 from binance.client import Client
 import requests
+from datetime import datetime, timedelta
+import random
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import FSInputFile, Message
 from src.notification.logger import setup_logger
 from src.screener.telegram.combine import analyze_ticker, format_comprehensive_analysis
-from src.screener.telegram.screener_db import add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status
+from src.screener.telegram.screener_db import add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status, set_user_email, get_user_email, get_user_verification_status, get_user_verification_code, set_user_verified
 from src.screener.telegram.technicals import calculate_technicals
 from src.notification.emailer import EmailNotifier
 from src.screener.telegram.chart import generate_enhanced_chart, generate_binance_chart
@@ -61,16 +63,26 @@ dp = Dispatcher()
 async def send_welcome(message: Message):
     logger.info(f"User {message.from_user.id} started the bot")
     await message.reply(
-        "📊 Send a ticker symbol (e.g., AAPL, TSLA, BTC-USD), and I'll analyze it for you.\n\n"
-        "Available providers: yf (yfinance) and bnc (binance for crypto pairs)\n"
-        "Available commands:\n"
-        "/start or /help - Show this message\n"
-        "/my-add -PROVIDER TICKER      Add ticker to your provider list (provider mandatory)\n"
-        "/my-delete -PROVIDER TICKER   Remove ticker from your provider list (provider mandatory)\n"
-        "/my-list                      Show all your tickers (all providers)\n"
-        "/my-list -PROVIDER            Show your tickers for a provider (provider optional)\n"
-        "/my-status [-PROVIDER] [EMAIL]         Analyze your tickers (optionally for a provider) and optionally email results\n"
-        "/my-analyze -PROVIDER TICKER [EMAIL]   Analyze ticker and optionally email results + chart\n"
+        "<b>Welcome to the e-Trading Screener Bot!</b>\n\n"
+        "Send a ticker symbol (e.g., AAPL, TSLA, BTCUSDT), and I'll analyze it for you.\n\n"
+        "<b>Available providers:</b> yf (yfinance) and bnc (binance for crypto pairs)\n\n"
+        "<b>Key commands:</b>\n"
+        "/my-register email@example.com Register or update your email for reports\n"
+        "/my-verify CODE               Verify your email with the code sent\n"
+        "/my-info                      Show your registered email and verification status\n\n"
+        "/my-add -PROVIDER TICKER      Add ticker to your provider list. Supported providers are YF and BNC.\n"
+        "/my-delete -PROVIDER TICKER   Remove ticker from your provider list\n"
+        "/my-list                      Show all your tickers\n"
+        "/my-list -PROVIDER            Show your tickers for a provider\n"
+        "/my-status [-PROVIDER] [-email]         Analyze your tickers (optionally for a provider), use -email to send to your verified email\n"
+        "/my-analyze -PROVIDER TICKER [-email]   Analyze ticker, use -email to send to your verified email\n"
+        "<b>Email flow:</b>\n"
+        "1. Register your email with /my-register email@example.com\n"
+        "2. Check your inbox for a 6-digit code\n"
+        "3. Verify with /my-verify CODE\n"
+        "4. Use -email flag with /my-status or /my-analyze to receive reports by email (only if verified)\n\n"
+        "All actions and errors are logged. For help, contact the admin."
+        , parse_mode="HTML"
     )
 
 def is_valid_ticker(text):
@@ -248,26 +260,17 @@ async def my_list(message: Message):
 async def my_status(message: Message):
     user_id = str(message.from_user.id)
     args = message.text.split()
-    email = None
+    email_flag = False
     provider_filter = None
     
     logger.info(f"my_status called by user {user_id} with args: {args}")
     
     # Parse arguments
-    if len(args) == 3 and is_email(args[2]):
-        provider_filter = args[1][1:].lower()
-        email = args[2]
-        logger.info(f"Parsed: provider_filter={provider_filter}, email={email}")
-    elif len(args) == 2:
-        if is_email(args[1]):
-            email = args[1]
-            logger.info(f"Parsed: email={email}")
-        else:
-            provider_filter = args[1][1:].lower()
-            logger.info(f"Parsed: provider_filter={provider_filter}")
-    elif len(args) > 3:
-        await message.reply("Usage: /my-status [-PROVIDER] [EMAIL] (e.g., /my-status -yf user@email.com)")
-        return
+    for arg in args[1:]:
+        if arg == "-email":
+            email_flag = True
+        elif arg.startswith("-"):
+            provider_filter = arg[1:].lower()
 
     await message.reply("🔍 Analyzing your tickers...")
     logger.info("Sent initial response")
@@ -330,7 +333,7 @@ async def my_status(message: Message):
                     recommendation = technicals_data.get('recommendations', {}).get('overall', {}).get('signal', 'HOLD')
                     
                     # Save chart for email attachment
-                    if email:
+                    if email_flag:
                         chart_filename = f"{ticker}_analysis.png"
                         with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
                             temp_file.write(chart_data)
@@ -491,7 +494,7 @@ async def my_status(message: Message):
                     chart_data = generate_binance_chart(ticker, df)
                     
                     # Save chart for email attachment
-                    if email:
+                    if email_flag:
                         chart_filename = f"{ticker}_analysis.png"
                         with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
                             temp_file.write(chart_data)
@@ -532,64 +535,60 @@ async def my_status(message: Message):
             logger.error(f"User {user_id} error {ticker}: {e}")
     
     # Send comprehensive email if requested
-    if email and email_body:
+    if email_flag:
+        # Check verification
+        status = get_user_verification_status(user_id)
+        if not status or not status["email"]:
+            await message.reply("No email registered. Use /my-register to set your email.")
+            return
+        if not status["verification_received"]:
+            await message.reply("Your email is not verified. Use /my-verify CODE to verify.")
+            return
+        email = status["email"]
         logger.info(f"Sending email to {email} with {len(chart_files)} charts")
         try:
             notifier = EmailNotifier()
-            
-            # Create comprehensive email body
             email_content = f"""
             <h2>📊 Your Screener Status Report</h2>
             <p>Analysis completed for {len(pairs)} ticker(s)</p>
             <hr>
             """
             email_content += "<br><br>".join(email_body)
-            
             notifier.send_email(
                 to_addr=email,
                 subject=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
                 body=email_content,
                 attachments=chart_files
             )
-            
             await message.reply(f"📧 Status report sent to {email} with {len(chart_files)} charts")
             logger.info("Email sent successfully")
-            
-            # Clean up chart files
             for chart_file in chart_files:
                 try:
                     os.unlink(chart_file)
                 except:
                     pass
-                    
         except Exception as e:
             await message.reply(f"❌ Failed to send email: {e}")
             logger.error(f"Email send error: {e}")
-    elif email:
-        logger.warning(f"Email requested but no email_body generated")
-        await message.reply(f"❌ No analysis data to send to {email}")
+    elif any(arg == "-email" for arg in args[1:]):
+        await message.reply("❌ No analysis data to send to your email.")
 
 @dp.message(Command("my-analyze"))
 async def my_analyze(message: Message):
     user_id = str(message.from_user.id)
     args = message.text.split()
-    email = None
-    if len(args) == 4 and is_email(args[3]):
-        provider = args[1][1:].lower()
-        ticker = args[2].upper()
-        email = args[3]
-    elif len(args) == 3 and is_email(args[2]):
-        provider = args[1][1:].lower()
-        ticker = None
-        email = args[2]
-    elif len(args) == 3:
-        provider = args[1][1:].lower()
-        ticker = args[2].upper()
-    else:
-        await message.reply("Usage: /my-analyze -PROVIDER TICKER [EMAIL] (e.g., /my-analyze -yf AAPL user@email.com)")
-        return
-    if not ticker:
-        await message.reply("Ticker is required.")
+    email_flag = False
+    provider = None
+    ticker = None
+    for arg in args[1:]:
+        if arg == "-email":
+            email_flag = True
+        elif arg.startswith("-") and provider is None:
+            provider = arg[1:].lower()
+        elif ticker is None:
+            ticker = arg.upper()
+    if not provider or not ticker:
+        await message.reply("Usage: /my-analyze -PROVIDER TICKER [-email]")
         return
     try:
         result = analyze_ticker(ticker)
@@ -622,12 +621,20 @@ async def my_analyze(message: Message):
             )
             
             # Email if requested
-            if email:
+            if email_flag:
+                status = get_user_verification_status(user_id)
+                if not status or not status["email"]:
+                    await message.reply("No email registered. Use /my-register to set your email.")
+                    return
+                if not status["verification_received"]:
+                    await message.reply("Your email is not verified. Use /my-verify CODE to verify.")
+                    return
+                email = status["email"]
                 notifier = EmailNotifier()
                 notifier.send_email(
                     to_addr=email,
                     subject=f"Comprehensive Analysis for {ticker}",
-                    body=comprehensive_text.replace('<b>', '').replace('</b>', '').replace('\n', '<br>'),
+                    body=comprehensive_text,
                     attachments=[chart_temp_file.name]
                 )
                 await message.reply(f"📧 Analysis for {ticker} sent to {email}")
@@ -648,6 +655,67 @@ async def my_analyze(message: Message):
     except Exception as e:
         await message.reply(f"Error analyzing {ticker}: {e}")
         logger.error(f"User {user_id} error analyze {ticker}: {e}")
+
+@dp.message(Command("my-register"))
+async def my_register(message: Message):
+    args = message.text.split()
+    if len(args) != 2 or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", args[1]):
+        await message.reply("Usage: /my-register email@example.com")
+        return
+    email = args[1].strip()
+    telegram_id = str(message.from_user.id)
+    code = f"{random.randint(100000, 999999)}"
+    sent_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    set_user_email(telegram_id, email, code, sent_time)
+    # Send verification email
+    subject = "e-Trading: email verification"
+    body = f"""
+    <h2>e-Trading Email Verification</h2>
+    <p>Your verification code is: <b>{code}</b></p>
+    <p>Enter this code in Telegram using <b>/my-verify {code}</b> within 1 hour to verify your email.</p>
+    """
+    try:
+        EmailNotifier().send_email(email, subject, body)
+        await message.reply(f"Verification code sent to {email}. Please check your inbox and use /my-verify CODE in Telegram.")
+    except Exception as e:
+        await message.reply(f"Failed to send verification email: {e}")
+
+@dp.message(Command("my-verify"))
+async def my_verify(message: Message):
+    args = message.text.split()
+    if len(args) != 2 or not args[1].isdigit():
+        await message.reply("Usage: /my-verify CODE (6 digits)")
+        return
+    code = args[1]
+    telegram_id = str(message.from_user.id)
+    db_code, sent_time = get_user_verification_code(telegram_id)
+    if not db_code or not sent_time:
+        await message.reply("No verification code found. Please register your email first with /my-register.")
+        return
+    # Check code and expiry
+    sent_dt = datetime.strptime(sent_time, "%Y-%m-%d %H:%M:%S")
+    if code != db_code:
+        await message.reply("Invalid verification code.")
+        return
+    if datetime.utcnow() > sent_dt + timedelta(hours=1):
+        await message.reply("Verification code expired. Please re-register your email.")
+        return
+    set_user_verified(telegram_id, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    await message.reply("✅ Email verified successfully! You can now use -email flag to receive reports by email.")
+
+@dp.message(Command("my-info"))
+async def my_info(message: Message):
+    telegram_id = str(message.from_user.id)
+    status = get_user_verification_status(telegram_id)
+    if not status or not status["email"]:
+        await message.reply("No email registered. Use /my-register email@example.com to set your email.")
+        return
+    verified = bool(status["verification_received"])
+    reply = f"<b>Email:</b> {status['email']}\n"
+    reply += f"<b>Verified:</b> {'✅' if verified else '❌'}\n"
+    reply += f"<b>Verification sent:</b> {status['verification_sent']}\n"
+    reply += f"<b>Verification received:</b> {status['verification_received'] or '-'}"
+    await message.reply(reply, parse_mode="HTML")
 
 async def main():
     logger.info("Starting ticker analyzer bot")

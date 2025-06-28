@@ -1,7 +1,7 @@
 # ticker_bot/analyzer/models.py
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict
 
 
 @dataclass
@@ -21,12 +21,23 @@ class Technicals:
     rsi: float
     sma_50: float
     sma_200: float
+    macd: float
     macd_signal: float
+    macd_histogram: float
+    stoch_k: float
+    stoch_d: float
+    adx: float
+    plus_di: float
+    minus_di: float
+    obv: float
+    adr: float
+    avg_adr: float
     trend: str
     bb_upper: float
     bb_middle: float
     bb_lower: float
-    bb_width: float  # (upper - lower) / middle
+    bb_width: float
+    recommendations: Optional[Dict] = None
 
 
 @dataclass

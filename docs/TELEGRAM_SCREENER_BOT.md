@@ -9,6 +9,7 @@ The Telegram Screener Bot is an advanced tool for managing, analyzing, and monit
 - Email reporting with charts and recommendations
 - Support for both Yahoo Finance (YF) and Binance (BNC) tickers
 - Robust error handling and logging
+- **Secure email registration and verification**
 
 ---
 
@@ -20,122 +21,104 @@ The Telegram Screener Bot is an advanced tool for managing, analyzing, and monit
   - Fundamental data (for YF tickers: price, company, market cap, P/E, EPS, dividend yield, etc.)
   - Per-indicator recommendations and overall signal
 - **Chart generation**: Generates and sends detailed charts for each ticker, visualizing all major indicators.
-- **Email integration**: Users can request analysis results and charts to be sent to their email.
-- **Error handling**: All actions and errors are logged. User-facing errors are clear and actionable.
-- **Multi-provider support**: Works with both Yahoo Finance (stocks/ETFs) and Binance (crypto).
+- **Email reporting**: Users can receive analysis and charts via email (after secure registration and verification).
+- **Security**: Each Telegram user can register and verify only one email, which is securely bound to their Telegram account.
+- **Verification**: Email verification is required before any reports can be sent to email.
 
 ---
 
 ## Commands
 
-### `/my-add -PROVIDER TICKER`
-Add a ticker to your list for a specific provider.
-- Example: `/my-add -yf AAPL` or `/my-add -bnc BTCUSDT`
+### Registration & Verification
 
-### `/my-delete -PROVIDER TICKER`
-Remove a ticker from your list for a specific provider.
-- Example: `/my-delete -yf AAPL`
+- `/my-register email@example.com`
+  - Register or update your email address.
+  - Triggers a verification email with a 6-digit code (valid for 1 hour).
+  - You must verify your email before receiving reports.
 
-### `/my-list [-PROVIDER]`
-List all your tickers, or only those for a specific provider.
-- Example: `/my-list` or `/my-list -bnc`
+- `/my-verify CODE`
+  - Enter the 6-digit code you received by email to verify your address.
+  - If the code is valid and not expired, your email is marked as verified.
+  - The bot will notify you of success or failure.
 
-### `/my-status [-PROVIDER] [EMAIL]`
-Analyze all your tickers (optionally for a provider) and optionally email the results (with charts).
-- Example: `/my-status` or `/my-status -yf user@email.com`
+- `/my-info`
+  - Shows your registered email, verification status, and timestamps for registration and verification.
 
-### `/my-analyze -PROVIDER TICKER [EMAIL]`
-Analyze a single ticker and optionally email the result and chart.
-- Example: `/my-analyze -bnc BTCUSDT user@email.com`
+### Ticker Management
 
----
+- `/my-list [-PROVIDER]`
+  - List your saved tickers (optionally filter by provider: `-yf` or `-bnc`).
 
-## Analysis Details
+- `/my-add -PROVIDER TICKER`
+  - Add a ticker to your list (e.g., `/my-add -yf AAPL`).
 
-### Technical Indicators (YF & BNC)
-- **RSI**: Relative Strength Index
-- **MACD**: Moving Average Convergence Divergence
-- **Bollinger Bands**: Upper, Middle, Lower bands
-- **Stochastic Oscillator**: %K and %D
-- **ADX**: Average Directional Index (+DI, -DI)
-- **OBV**: On-Balance Volume
-- **ADR**: Average Daily Range
-- **SMA/EMA**: Simple/Exponential Moving Averages (20, 50, 200)
-- **Volume**: Daily trading volume
+- `/my-delete -PROVIDER TICKER`
+  - Remove a ticker from your list.
 
-### Fundamental Data (YF only)
-- **Current Price**
-- **Company Name**
-- **Market Cap**
-- **P/E Ratio**
-- **Forward P/E**
-- **Earnings Per Share (EPS)**
-- **Dividend Yield**
+### Analysis & Reporting
 
-### Recommendations
-- Each indicator provides a recommendation (BUY/SELL/HOLD) with a reason.
-- An overall recommendation is generated based on all indicators.
+- `/my-status [-PROVIDER] [-email]`
+  - Analyze all your tickers (optionally filter by provider).
+  - Add `-email` to receive the report and charts at your registered email (must be verified).
+  - Example: `/my-status -yf -email`
+
+- `/my-analyze -PROVIDER TICKER [-email]`
+  - Analyze a single ticker.
+  - Add `-email` to receive the analysis and chart at your registered email (must be verified).
+  - Example: `/my-analyze -bnc BTCUSDT -email`
+
+### Help & Info
+
+- `/start`
+  - Welcome message and quickstart guide.
+
+- `/help`
+  - Detailed help, including registration, verification, and all commands.
 
 ---
 
-## Chart Generation
+## Email Registration & Verification Flow
 
-- Charts are generated using Matplotlib and TA-Lib (for YF) or TA-Lib and pandas-ta (for BNC).
-- Each chart includes:
-  - Price with Bollinger Bands and SMAs
-  - RSI, MACD, Stochastic, ADX, OBV, Volume, ADR
-  - Current values and recommendations
-- Charts are sent as images to Telegram and as attachments in emails.
+1. **Register**: Use `/my-register email@example.com` to set or update your email.
+2. **Verification Email**: The bot sends a verification email with subject `e-Trading: email verification` and a 6-digit code (valid for 1 hour).
+3. **Verify**: Use `/my-verify CODE` in Telegram to verify your email.
+4. **Check Status**: Use `/my-info` to see your email and verification status.
+5. **Receive Reports**: Use `-email` flag in `/my-status` or `/my-analyze` to receive reports at your verified email.
 
----
-
-## Email Reporting
-
-- If an email is provided with `/my-status` or `/my-analyze`, the bot sends a detailed HTML report with:
-  - Fundamental and technical analysis (one indicator per line)
-  - All generated charts as attachments
-- Email formatting uses HTML for clear, readable output.
-- SMTP credentials are loaded from `config/donotshare/donotshare.py`.
+**Note:**
+- Only one email per Telegram user is allowed.
+- You can update your email at any time by re-registering and re-verifying.
+- If you try to use `-email` without a verified email, the bot will notify you.
 
 ---
 
-## Error Handling & Logging
+## Technical Details
 
-- All actions and errors are logged to `logs/log/my_screener.log`.
-- User-facing errors are clear (e.g., "No data available for TICKER", "Failed to generate chart for TICKER").
-- Temporary files for charts are only deleted after successful message/email delivery, preventing file access errors.
-- If a chart or analysis fails, the bot continues processing other tickers.
-
----
-
-## Architecture & Key Files
-
-- `src/screener/telegram/bot.py`: Main bot logic, command handlers, Telegram and email integration
-- `src/screener/telegram/technicals.py`: Technical indicator calculation and recommendation logic
-- `src/screener/telegram/chart.py`: Chart generation for YF and BNC tickers
-- `src/screener/telegram/combine.py`: Formatting for comprehensive analysis (email/Telegram)
-- `src/notification/emailer.py`: Email sending logic
-- `config/screener/my_screener.json`: Per-user ticker storage
-- `logs/log/my_screener.log`: Log file for all bot actions/errors
+- **Database**: User info (including email and verification status) is stored in the `users` table in SQLite.
+- **Verification Code**: 6-digit numeric code, expires after 1 hour.
+- **Security**: Only the Telegram user who registered the email can trigger email reports for their account.
+- **No email argument**: The bot no longer accepts an email address as a command argument; use `-email` flag and your registered/verified email will be used.
 
 ---
 
-## Usage Examples
+## Error Handling & User Feedback
 
-### Add and Analyze a Ticker
+- If you try to use `-email` without registering, you'll get: `No email registered. Use /my-register to set your email.`
+- If you try to use `-email` without verifying, you'll get: `Your email is not verified. Use /my-verify CODE to verify.`
+- If your verification code is expired or invalid, the bot will notify you.
+- All errors are logged for troubleshooting.
+
+---
+
+## Example Usage
+
 ```
-/my-add -yf AAPL
-/my-status
-```
-
-### Analyze and Email Results
-```
-/my-analyze -bnc BTCUSDT user@email.com
-```
-
-### List All Tickers
-```
-/my-list
+/my-register alice@example.com
+# (Check your email, then:)
+/my-verify 123456
+/my-info
+/my-status -email
+/my-analyze -yf MSFT -email
 ```
 
 ---
@@ -160,4 +143,4 @@ Analyze a single ticker and optionally email the result and chart.
 
 ## Contact & Support
 
-For issues, feature requests, or contributions, please open an issue or pull request on the project repository. 
+For support, bug reports, or feature requests, contact the bot administrator or open an issue in the project repository. 
