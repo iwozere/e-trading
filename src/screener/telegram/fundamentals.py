@@ -38,7 +38,7 @@ def get_fundamentals(ticker: str) -> Fundamentals:
             earnings_per_share=info.get("trailingEps", 0.0),
         )
     except Exception as e:
-        logger.error(f"Failed to get fundamentals for {ticker}: {str(e)}", exc_info=e)
+        logger.error(f"Failed to get fundamentals for {ticker}: {str(e)}", exc_info=True)
         return Fundamentals(
             ticker=ticker.upper(),
             company_name="Unknown",

@@ -163,8 +163,8 @@ def calculate_technicals(ticker: str, period: str = "2y", interval: str = "1d") 
             sma_200 = talib.SMA(close, timeperiod=200)
             logger.debug(f"TA-Lib calculations completed successfully for {ticker}")
         except Exception as e:
-            logger.error(f"TA-Lib calculation failed for {ticker}: {e}")
-            logger.error(f"Array shapes - close: {close.shape}, high: {high.shape}, low: {low.shape}, volume: {volume.shape}")
+            logger.error(f"TA-Lib calculation failed for {ticker}: {e}", exc_info=True)
+            logger.error(f"Array shapes - close: {close.shape}, high: {high.shape}, low: {low.shape}, volume: {volume.shape}", exc_info=True)
             return None
         current_idx = -1
         current_close = close[current_idx]
@@ -243,7 +243,7 @@ def calculate_technicals(ticker: str, period: str = "2y", interval: str = "1d") 
             recommendations=recommendations
         )
     except Exception as e:
-        logger.error(f"Technical analysis failed for {ticker}: {str(e)}", exc_info=e)
+        logger.error(f"Technical analysis failed for {ticker}: {str(e)}", exc_info=True)
         return None
 
 def format_technical_analysis(ticker: str, technicals: Technicals) -> str:

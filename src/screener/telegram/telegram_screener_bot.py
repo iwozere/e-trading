@@ -156,7 +156,7 @@ async def handle_ticker(message: Message):
         os.unlink(temp_file.name)
 
     except Exception as e:
-        logger.error(f"Error analyzing {ticker}", exc_info=e)
+        logger.error(f"Error analyzing {ticker}", exc_info=True)
         await message.reply(
             f"⚠️ Error analyzing {ticker}:\n"
             f"Please check if the ticker symbol is correct and try again."
@@ -195,7 +195,7 @@ async def my_add(message: Message):
                     logger.info(f"User {user_id} added {ticker} to {provider}")
                 except Exception as e:
                     print(f"[ERROR] Exception adding {ticker}: {e}", flush=True)
-                    logger.error(f"Exception adding {ticker}: {e}", exc_info=e)
+                    logger.error(f"Exception adding {ticker}: {e}", exc_info=True)
         if added:
             await message.reply(f"✅ Added to your {provider} list: {', '.join(added)}.")
             print(f"[DEBUG] my_add: Successfully added: {added}", flush=True)
@@ -206,7 +206,7 @@ async def my_add(message: Message):
             logger.warning("my_add: No valid tickers provided")
     except Exception as e:
         print(f"[ERROR] Exception in my_add handler: {e}", flush=True)
-        logger.error(f"Exception in my_add handler: {e}", exc_info=e)
+        logger.error(f"Exception in my_add handler: {e}", exc_info=True)
         await message.reply(f"Error in /my-add: {e}")
 
 @dp.message(Command("my-delete"))
@@ -237,7 +237,7 @@ async def my_delete(message: Message):
                     logger.info(f"User {user_id} deleted {ticker} from {provider}")
                 except Exception as e:
                     print(f"[ERROR] Exception deleting {ticker}: {e}", flush=True)
-                    logger.error(f"Exception deleting {ticker}: {e}", exc_info=e)
+                    logger.error(f"Exception deleting {ticker}: {e}", exc_info=True)
         if deleted:
             await message.reply(f"❌ Removed from your {provider} list: {', '.join(deleted)}.")
             print(f"[DEBUG] my_delete: Successfully deleted: {deleted}", flush=True)
@@ -248,7 +248,7 @@ async def my_delete(message: Message):
             logger.warning("my_delete: No valid tickers provided")
     except Exception as e:
         print(f"[ERROR] Exception in my_delete handler: {e}", flush=True)
-        logger.error(f"Exception in my_delete handler: {e}", exc_info=e)
+        logger.error(f"Exception in my_delete handler: {e}", exc_info=True)
         await message.reply(f"Error in /my-delete: {e}")
 
 @dp.message(Command("my-list"))
@@ -277,7 +277,7 @@ async def my_list(message: Message):
         logger.info(f"my_list: Successfully listed: {lines}")
     except Exception as e:
         print(f"[ERROR] Exception in my_list handler: {e}", flush=True)
-        logger.error(f"Exception in my_list handler: {e}", exc_info=e)
+        logger.error(f"Exception in my_list handler: {e}", exc_info=True)
         await message.reply(f"Error in /my-list: {e}")
 
 @dp.message(Command("analyze"))

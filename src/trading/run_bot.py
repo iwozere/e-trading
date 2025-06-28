@@ -66,7 +66,7 @@ def main(config_name: Optional[str] = None):
         if 'bot' in locals():
             bot.stop()
     except Exception as e:
-        _logger.error(f"Error running live trading bot: {e}", exc_info=e)
+        _logger.error(f"Error running live trading bot: {e}", exc_info=True)
         if 'bot' in locals():
             bot.stop()
         sys.exit(1)
