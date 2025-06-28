@@ -35,7 +35,4 @@ class TickerAnalysis:
     fundamentals: Fundamentals
     technicals: Technicals
     chart_image: bytes
-    recommendation: str = "Neutral"  # Default value
-
-    # Resume
-    recommendation: Optional[str]
+    recommendation: Optional[str] = "Neutral"  # Default value

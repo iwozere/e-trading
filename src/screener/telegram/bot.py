@@ -38,8 +38,9 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import FSInputFile, Message
 from src.notification.logger import setup_logger
-from src.screener.telegram.combine import analyze_ticker
+from src.screener.telegram.combine import analyze_ticker, format_comprehensive_analysis
 from src.screener.telegram.screener_db import add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status
+from src.screener.telegram.technicals import calculate_technicals
 from src.notification.emailer import EmailNotifier
 
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN
@@ -87,7 +88,7 @@ async def handle_ticker(message: Message):
         result = analyze_ticker(ticker)
         logger.info(f"Successfully analyzed {ticker}")
 
-        # Format response text
+        # Format response text with enhanced information
         text = (
             f"📈 <b>{result.ticker}</b> - {result.fundamentals.company_name or 'Unknown'}\n\n"
             f"💵 Price: ${result.fundamentals.current_price or 0.0:.2f}\n"
@@ -246,72 +247,96 @@ async def my_list(message: Message):
 async def my_status(message: Message):
     user_id = str(message.from_user.id)
     args = message.text.split()
-    provider = None
     email = None
-    # Detect provider and email
-    if len(args) >= 2 and args[1].startswith('-'):
-        provider = args[1][1:].lower()
-        if len(args) == 3 and is_email(args[2]):
-            email = args[2]
-    elif len(args) == 2 and is_email(args[1]):
-        email = args[1]
-    # Get all (provider, ticker) pairs
-    pairs = all_tickers_with_providers_for_status(user_id, provider)
-    if not pairs:
-        await message.reply("Your ticker list is empty. Use /my-add -PROVIDER TICKER to add one.")
+    provider_filter = None
+    
+    logger.info(f"my_status called by user {user_id} with args: {args}")
+    
+    # Parse arguments
+    if len(args) == 3 and is_email(args[2]):
+        provider_filter = args[1][1:].lower()
+        email = args[2]
+        logger.info(f"Parsed: provider_filter={provider_filter}, email={email}")
+    elif len(args) == 2:
+        if is_email(args[1]):
+            email = args[1]
+            logger.info(f"Parsed: email={email}")
+        else:
+            provider_filter = args[1][1:].lower()
+            logger.info(f"Parsed: provider_filter={provider_filter}")
+    elif len(args) > 3:
+        await message.reply("Usage: /my-status [-PROVIDER] [EMAIL] (e.g., /my-status -yf user@email.com)")
         return
-    await message.reply(f"Downloading data for {len(pairs)} tickers. Please wait...")
+
+    await message.reply("🔍 Analyzing your tickers...")
+    logger.info("Sent initial response")
+    
+    # Get user's tickers
+    if provider_filter:
+        pairs = all_tickers_with_providers_for_status(user_id, provider_filter)
+        logger.info(f"Got {len(pairs)} tickers for provider {provider_filter}")
+    else:
+        pairs = all_tickers_for_status(user_id)
+        logger.info(f"Got {len(pairs)} total tickers")
+    
+    if not pairs:
+        await message.reply("❌ No tickers found. Use /my-add to add tickers first.")
+        logger.info("No tickers found for user")
+        return
+
     email_body = []
+    chart_files = []
+    
     for prov, ticker in pairs:
+        logger.info(f"Processing {prov}:{ticker}")
         try:
             if prov.lower() == "yf":
-                ticker_data = yf.Ticker(ticker)
-                info = ticker_data.info
-                fundamentals = None
-                if info and "longName" in info:
-                    fundamentals = {
-                        "Company": info.get("longName"),
-                        "Sector": info.get("sector"),
-                        "Market Cap": info.get("marketCap"),
-                        "P/E Ratio": info.get("trailingPE"),
-                        "EPS": info.get("trailingEps"),
-                        "Dividend Yield": info.get("dividendYield"),
-                        "52 Week High": info.get("fiftyTwoWeekHigh"),
-                        "52 Week Low": info.get("fiftyTwoWeekLow"),
-                        "Return on Equity": info.get("returnOnEquity"),
-                        "Return on Assets": info.get("returnOnAssets"),
-                        "Revenue": info.get("totalRevenue"),
-                        "Gross Profits": info.get("grossProfits"),
-                        "Net Income": info.get("netIncomeToCommon"),
-                    }
-                df = ticker_data.history(period="1y", interval="1d")
-                if df is None or df.empty:
-                    await message.reply(f"❌ No price data found for '{ticker}'.")
-                    continue
-                df = df.dropna()
-                df["RSI"] = ta.momentum.RSIIndicator(df["Close"]).rsi()
-                df["MACD"] = ta.trend.MACD(df["Close"]).macd()
-                df["SMA_20"] = ta.trend.SMAIndicator(df["Close"], window=20).sma_indicator()
-                df["EMA_20"] = ta.trend.EMAIndicator(df["Close"], window=20).ema_indicator()
-                bb = ta.volatility.BollingerBands(df["Close"])
-                df["BB_High"] = bb.bollinger_hband()
-                df["BB_Low"] = bb.bollinger_lband()
-                latest = df.iloc[-1]
-                text = f"<b>{ticker}</b>\n"
-                if fundamentals:
-                    text += f"Company: {fundamentals['Company']}\nSector: {fundamentals['Sector']}\nMarket Cap: {fundamentals['Market Cap']}\nP/E Ratio: {fundamentals['P/E Ratio']}\nEPS: {fundamentals['EPS']}\nDividend Yield: {fundamentals['Dividend Yield']}\n"
-                text += (
-                    f"Latest Close: {latest['Close']:.2f}\n"
-                    f"RSI: {latest['RSI']:.2f}\n"
-                    f"MACD: {latest['MACD']:.2f}\n"
-                    f"SMA 20: {latest['SMA_20']:.2f}\n"
-                    f"EMA 20: {latest['EMA_20']:.2f}\n"
-                    f"Bollinger High: {latest['BB_High']:.2f}\n"
-                    f"Bollinger Low: {latest['BB_Low']:.2f}"
-                )
-                await message.reply(text, parse_mode="HTML")
-                email_body.append(text.replace('<b>', '').replace('</b>', ''))
+                # Use enhanced analysis for Yahoo Finance tickers
+                result = analyze_ticker(ticker)
+                logger.info(f"Successfully analyzed {ticker}")
+                
+                # Format comprehensive analysis for email
+                technicals_data = calculate_technicals(ticker)
+                fundamentals_data = {
+                    'current_price': result.fundamentals.current_price,
+                    'company_name': result.fundamentals.company_name,
+                    'market_cap': result.fundamentals.market_cap,
+                    'pe_ratio': result.fundamentals.pe_ratio,
+                    'forward_pe': result.fundamentals.forward_pe,
+                    'earnings_per_share': result.fundamentals.earnings_per_share,
+                    'dividend_yield': result.fundamentals.dividend_yield
+                }
+                
+                comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
+                email_body.append(comprehensive_text)
+                
+                # Save chart for email attachment
+                if email:
+                    chart_filename = f"{ticker}_analysis.png"
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
+                        temp_file.write(result.chart_image)
+                        temp_file.flush()
+                        chart_files.append(temp_file.name)
+                        logger.info(f"Saved chart for {ticker}")
+                
+                # Send chart to Telegram
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+                    temp_file.write(result.chart_image)
+                    temp_file.flush()
+                    
+                    await bot.send_photo(
+                        chat_id=message.chat.id,
+                        photo=FSInputFile(temp_file.name),
+                        caption=f"📊 {ticker} Analysis\n🎯 {result.recommendation}",
+                        parse_mode="HTML",
+                    )
+                    logger.info(f"Sent chart for {ticker} to Telegram")
+                    
+                    # Clean up temp file
+                    os.unlink(temp_file.name)
+
             elif prov.lower() == "bnc":
+                # Enhanced Binance analysis
                 symbol = ticker.upper()
                 url = f"https://api.binance.com/api/v3/klines"
                 params = {"symbol": symbol, "interval": "1d", "limit": 365}
@@ -323,6 +348,7 @@ async def my_status(message: Message):
                 if not data:
                     await message.reply(f"❌ No price data found for '{ticker}' on Binance.")
                     continue
+                
                 df = pd.DataFrame(data, columns=[
                     "timestamp", "open", "high", "low", "close", "volume", "close_time", "quote_asset_volume", "number_of_trades", "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"
                 ])
@@ -330,6 +356,8 @@ async def my_status(message: Message):
                 for col in ["open", "high", "low", "close", "volume"]:
                     df[col] = df[col].astype(float)
                 df = df.dropna()
+                
+                # Calculate technical indicators
                 df["RSI"] = ta.momentum.RSIIndicator(df["close"]).rsi()
                 df["MACD"] = ta.trend.MACD(df["close"]).macd()
                 df["SMA_20"] = ta.trend.SMAIndicator(df["close"], window=20).sma_indicator()
@@ -337,7 +365,18 @@ async def my_status(message: Message):
                 bb = ta.volatility.BollingerBands(df["close"])
                 df["BB_High"] = bb.bollinger_hband()
                 df["BB_Low"] = bb.bollinger_lband()
+                
                 latest = df.iloc[-1]
+                
+                # Generate recommendation
+                rsi_val = latest['RSI']
+                if rsi_val < 30:
+                    recommendation = "BUY: Oversold condition"
+                elif rsi_val > 70:
+                    recommendation = "SELL: Overbought condition"
+                else:
+                    recommendation = "HOLD: Neutral condition"
+                
                 text = (
                     f"<b>{ticker}</b> (Binance)\n"
                     f"Latest Close: {latest['close']:.2f}\n"
@@ -346,24 +385,57 @@ async def my_status(message: Message):
                     f"SMA 20: {latest['SMA_20']:.2f}\n"
                     f"EMA 20: {latest['EMA_20']:.2f}\n"
                     f"Bollinger High: {latest['BB_High']:.2f}\n"
-                    f"Bollinger Low: {latest['BB_Low']:.2f}"
+                    f"Bollinger Low: {latest['BB_Low']:.2f}\n"
+                    f"🎯 Recommendation: {recommendation}"
                 )
+                
                 await message.reply(text, parse_mode="HTML")
                 email_body.append(text.replace('<b>', '').replace('</b>', ''))
+                
             else:
                 await message.reply(f"Unknown provider '{prov}' for ticker '{ticker}'.")
+                
         except Exception as e:
             await message.reply(f"Error analyzing {ticker}: {e}")
             logger.error(f"User {user_id} error {ticker}: {e}")
-    # Send email if requested
+    
+    # Send comprehensive email if requested
     if email and email_body:
-        notifier = EmailNotifier()
-        notifier.send_email(
-            to_addr=email,
-            subject="Your Screener Status Report",
-            body="<br><br>".join(email_body)
-        )
-        await message.reply(f"Status report sent to {email}")
+        logger.info(f"Sending email to {email} with {len(chart_files)} charts")
+        try:
+            notifier = EmailNotifier()
+            
+            # Create comprehensive email body
+            email_content = f"""
+            <h2>📊 Your Screener Status Report</h2>
+            <p>Analysis completed for {len(pairs)} ticker(s)</p>
+            <hr>
+            """
+            email_content += "<br><br>".join(email_body)
+            
+            notifier.send_email(
+                to_addr=email,
+                subject=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
+                body=email_content,
+                attachments=chart_files
+            )
+            
+            await message.reply(f"📧 Status report sent to {email} with {len(chart_files)} charts")
+            logger.info("Email sent successfully")
+            
+            # Clean up chart files
+            for chart_file in chart_files:
+                try:
+                    os.unlink(chart_file)
+                except:
+                    pass
+                    
+        except Exception as e:
+            await message.reply(f"❌ Failed to send email: {e}")
+            logger.error(f"Email send error: {e}")
+    elif email:
+        logger.warning(f"Email requested but no email_body generated")
+        await message.reply(f"❌ No analysis data to send to {email}")
 
 @dp.message(Command("my-analyze"))
 async def my_analyze(message: Message):
@@ -388,33 +460,29 @@ async def my_analyze(message: Message):
         await message.reply("Ticker is required.")
         return
     try:
-        result = analyze_ticker(ticker)  # You may want to pass provider if needed
-        text = (
-            f"📈 <b>{result.ticker}</b> - {result.fundamentals.company_name or 'Unknown'}\n\n"
-            f"💵 Price: ${result.fundamentals.current_price or 0.0:.2f}\n"
-            f"🏦 P/E: {result.fundamentals.pe_ratio or 0.0:.2f}, Forward P/E: {result.fundamentals.forward_pe or 0.0:.2f}\n"
-            f"💸 Market Cap: ${(result.fundamentals.market_cap or 0.0)/1e9:.2f}B\n"
-            f"📊 EPS: ${result.fundamentals.earnings_per_share or 0.0:.2f}, Div Yield: {(result.fundamentals.dividend_yield or 0.0)*100:.2f}%\n\n"
-            f"📉 Technical Analysis:\n"
-            f"RSI: {result.technicals.rsi:.2f}\n"
-            f"MA(50): ${result.technicals.sma_50:.2f}\n"
-            f"MA(200): ${result.technicals.sma_200:.2f}\n"
-            f"MACD Signal: {result.technicals.macd_signal:.2f}\n"
-            f"Trend: {result.technicals.trend}\n\n"
-            f"📊 Bollinger Bands:\n"
-            f"Upper: ${result.technicals.bb_upper:.2f}\n"
-            f"Middle: ${result.technicals.bb_middle:.2f}\n"
-            f"Lower: ${result.technicals.bb_lower:.2f}\n"
-            f"Width: {result.technicals.bb_width:.4f}\n\n"
-            f"🎯 Recommendation: {result.recommendation}"
-        )
+        result = analyze_ticker(ticker)
+        
+        # Enhanced text with comprehensive analysis
+        technicals_data = calculate_technicals(ticker)
+        fundamentals_data = {
+            'current_price': result.fundamentals.current_price,
+            'company_name': result.fundamentals.company_name,
+            'market_cap': result.fundamentals.market_cap,
+            'pe_ratio': result.fundamentals.pe_ratio,
+            'forward_pe': result.fundamentals.forward_pe,
+            'earnings_per_share': result.fundamentals.earnings_per_share,
+            'dividend_yield': result.fundamentals.dividend_yield
+        }
+        
+        comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
+        
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
             temp_file.write(result.chart_image)
             temp_file.flush()
             await bot.send_photo(
                 chat_id=message.chat.id,
                 photo=FSInputFile(temp_file.name),
-                caption=text,
+                caption=f"📊 {ticker} Analysis\n🎯 {result.recommendation}",
                 parse_mode="HTML",
             )
             # Email if requested
@@ -422,11 +490,11 @@ async def my_analyze(message: Message):
                 notifier = EmailNotifier()
                 notifier.send_email(
                     to_addr=email,
-                    subject=f"Analysis for {ticker}",
-                    body=text.replace('<b>', '').replace('</b>', '').replace('\n', '<br>'),
+                    subject=f"Comprehensive Analysis for {ticker}",
+                    body=comprehensive_text.replace('<b>', '').replace('</b>', '').replace('\n', '<br>'),
                     attachments=[temp_file.name]
                 )
-                await message.reply(f"Analysis for {ticker} sent to {email}")
+                await message.reply(f"📧 Analysis for {ticker} sent to {email}")
         os.unlink(temp_file.name)
         logger.info(f"User {user_id} analyzed {ticker}")
     except Exception as e:

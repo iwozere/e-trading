@@ -353,26 +353,19 @@ if __name__ == "__main__":
 
                     def objective(trial):
                         """Objective function for optimization"""
-                        try:
-                            # Create a new data feed for each trial (important for parallel jobs)
-                            data = prepare_data_feed(df, symbol)
-                            _optimizer_config = {
-                                "data": data,
-                                "entry_logic": entry_logic_config,
-                                "exit_logic": exit_logic_config,
-                                "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
-                                "visualization_settings": optimizer_config.get("visualization_settings", {}),
-                            }
-                            optimizer = CustomOptimizer(_optimizer_config)
-                            # Disable analyzers for optimization trials to improve performance
-                            _, _, result = optimizer.run_optimization(trial, include_analyzers=False)
-                            return result["total_profit_with_commission"]
-                        except ZeroDivisionError as e:
-                            _logger.warning(f"ZeroDivisionError in trial for {entry_logic_name} + {exit_logic_name}: {e}")
-                            return float('-inf')  # Return very poor score to skip this trial
-                        except Exception as e:
-                            _logger.error(f"Exception in trial for {entry_logic_name} + {exit_logic_name}: {e}")
-                            return float('-inf')  # Return very poor score to skip this trial
+                        # Create a new data feed for each trial (important for parallel jobs)
+                        data = prepare_data_feed(df, symbol)
+                        _optimizer_config = {
+                            "data": data,
+                            "entry_logic": entry_logic_config,
+                            "exit_logic": exit_logic_config,
+                            "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
+                            "visualization_settings": optimizer_config.get("visualization_settings", {}),
+                        }
+                        optimizer = CustomOptimizer(_optimizer_config)
+                        # Disable analyzers for optimization trials to improve performance
+                        _, _, result = optimizer.run_optimization(trial, include_analyzers=False)
+                        return result["total_profit_with_commission"]
 
                     # Create study
                     study = optuna.create_study(direction="maximize")
