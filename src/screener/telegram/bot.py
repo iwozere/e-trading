@@ -45,6 +45,7 @@ from src.screener.telegram.screener_db import add_ticker, delete_ticker, list_ti
 from src.screener.telegram.technicals import calculate_technicals
 from src.notification.emailer import EmailNotifier
 from src.screener.telegram.chart import generate_enhanced_chart, generate_binance_chart
+from src.screener.telegram.models import Fundamentals, Technicals
 
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN
 
@@ -102,23 +103,25 @@ async def handle_ticker(message: Message):
         logger.info(f"Successfully analyzed {ticker}")
 
         # Format response text with enhanced information
+        technicals = result.technicals
+        fundamentals = result.fundamentals
         text = (
-            f"📈 <b>{result.ticker}</b> - {result.fundamentals.company_name or 'Unknown'}\n\n"
-            f"💵 Price: ${result.fundamentals.current_price or 0.0:.2f}\n"
-            f"🏦 P/E: {result.fundamentals.pe_ratio or 0.0:.2f}, Forward P/E: {result.fundamentals.forward_pe or 0.0:.2f}\n"
-            f"💸 Market Cap: ${(result.fundamentals.market_cap or 0.0)/1e9:.2f}B\n"
-            f"📊 EPS: ${result.fundamentals.earnings_per_share or 0.0:.2f}, Div Yield: {(result.fundamentals.dividend_yield or 0.0)*100:.2f}%\n\n"
+            f"📈 <b>{result.ticker}</b> - {fundamentals.company_name or 'Unknown'}\n\n"
+            f"💵 Price: ${fundamentals.current_price or 0.0:.2f}\n"
+            f"🏦 P/E: {fundamentals.pe_ratio or 0.0:.2f}, Forward P/E: {fundamentals.forward_pe or 0.0:.2f}\n"
+            f"💸 Market Cap: ${(fundamentals.market_cap or 0.0)/1e9:.2f}B\n"
+            f"📊 EPS: ${fundamentals.earnings_per_share or 0.0:.2f}, Div Yield: {(fundamentals.dividend_yield or 0.0)*100:.2f}%\n\n"
             f"📉 Technical Analysis:\n"
-            f"RSI: {result.technicals.rsi:.2f}\n"
-            f"MA(50): ${result.technicals.sma_50:.2f}\n"
-            f"MA(200): ${result.technicals.sma_200:.2f}\n"
-            f"MACD Signal: {result.technicals.macd_signal:.2f}\n"
-            f"Trend: {result.technicals.trend}\n\n"
+            f"RSI: {technicals.rsi:.2f}\n"
+            f"MA(50): ${technicals.sma_50:.2f}\n"
+            f"MA(200): ${technicals.sma_200:.2f}\n"
+            f"MACD Signal: {technicals.macd_signal:.2f}\n"
+            f"Trend: {technicals.trend}\n\n"
             f"📊 Bollinger Bands:\n"
-            f"Upper: ${result.technicals.bb_upper:.2f}\n"
-            f"Middle: ${result.technicals.bb_middle:.2f}\n"
-            f"Lower: ${result.technicals.bb_lower:.2f}\n"
-            f"Width: {result.technicals.bb_width:.4f}\n\n"
+            f"Upper: ${technicals.bb_upper:.2f}\n"
+            f"Middle: ${technicals.bb_middle:.2f}\n"
+            f"Lower: ${technicals.bb_lower:.2f}\n"
+            f"Width: {technicals.bb_width:.4f}\n\n"
             f"🎯 Recommendation: {result.recommendation}"
         )
 
@@ -310,27 +313,26 @@ async def my_status(message: Message):
                     stock = yf.Ticker(ticker)
                     info = stock.info
                     
-                    fundamentals_data = {
-                        'current_price': info.get('currentPrice', 0.0),
-                        'company_name': info.get('longName', ticker),
-                        'market_cap': info.get('marketCap', 0.0),
-                        'pe_ratio': info.get('trailingPE', 0.0),
-                        'forward_pe': info.get('forwardPE', 0.0),
-                        'earnings_per_share': info.get('trailingEps', 0.0),
-                        'dividend_yield': info.get('dividendYield', 0.0) if info.get('dividendYield') else 0.0
-                    }
+                    fundamentals_data = Fundamentals(
+                        current_price=info.get('currentPrice', 0.0),
+                        company_name=info.get('longName', ticker),
+                        market_cap=info.get('marketCap', 0.0),
+                        pe_ratio=info.get('trailingPE', 0.0),
+                        forward_pe=info.get('forwardPE', 0.0),
+                        earnings_per_share=info.get('trailingEps', 0.0),
+                        dividend_yield=info.get('dividendYield', 0.0) if info.get('dividendYield') else 0.0
+                    )
                     
                     # Format comprehensive analysis for Telegram (plain text)
-                    telegram_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
-                    telegram_text = telegram_text.replace('<br>', '\n').replace('<b>', '').replace('</b>', '')
+                    comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
+                    telegram_text = comprehensive_text.replace('<br>', '\n').replace('<b>', '').replace('</b>', '')
                     await message.reply(telegram_text)
                     
                     # Format comprehensive analysis for email
-                    comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
                     email_body.append(comprehensive_text)
                     
                     # Get recommendation
-                    recommendation = technicals_data.get('recommendations', {}).get('overall', {}).get('signal', 'HOLD')
+                    recommendation = technicals_data.recommendations.overall.signal if technicals_data.recommendations else 'HOLD'
                     
                     # Save chart for email attachment
                     if email_flag:
@@ -594,18 +596,9 @@ async def my_analyze(message: Message):
         result = analyze_ticker(ticker)
         
         # Enhanced text with comprehensive analysis
-        technicals_data = calculate_technicals(ticker)
-        fundamentals_data = {
-            'current_price': result.fundamentals.current_price,
-            'company_name': result.fundamentals.company_name,
-            'market_cap': result.fundamentals.market_cap,
-            'pe_ratio': result.fundamentals.pe_ratio,
-            'forward_pe': result.fundamentals.forward_pe,
-            'earnings_per_share': result.fundamentals.earnings_per_share,
-            'dividend_yield': result.fundamentals.dividend_yield
-        }
-        
-        comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
+        technicals = result.technicals
+        fundamentals = result.fundamentals
+        text = format_comprehensive_analysis(ticker, technicals, fundamentals)
         
         chart_temp_file = None
         try:
@@ -634,7 +627,7 @@ async def my_analyze(message: Message):
                 notifier.send_email(
                     to_addr=email,
                     subject=f"Comprehensive Analysis for {ticker}",
-                    body=comprehensive_text,
+                    body=text,
                     attachments=[chart_temp_file.name]
                 )
                 await message.reply(f"📧 Analysis for {ticker} sent to {email}")

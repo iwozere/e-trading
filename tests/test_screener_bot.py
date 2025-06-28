@@ -19,6 +19,9 @@ from src.screener.telegram.screener_db import (
 from src.screener.telegram.technicals import calculate_technicals, format_technical_analysis
 from src.screener.telegram.chart import generate_enhanced_chart, generate_binance_chart
 from src.notification.emailer import EmailNotifier
+from src.screener.telegram.models import Fundamentals, Technicals, TickerAnalysis
+from src.screener.telegram.fundamentals import get_fundamentals
+from src.screener.telegram.combine import analyze_ticker, format_comprehensive_analysis
 
 import yfinance as yf
 import pandas as pd
@@ -55,11 +58,11 @@ def test_my_status(user_id=TEST_USER_ID, provider_filter=None, email=None):
     for prov, ticker in pairs:
         print(f"\n--- {prov}:{ticker} ---")
         if prov.lower() == "yf":
-            technicals_data = calculate_technicals(ticker)
-            if not technicals_data:
-                print(f"Failed to calculate technicals for {ticker}")
-                continue
-            print(format_technical_analysis(ticker, technicals_data))
+            result = analyze_ticker(ticker)
+            technicals = result.technicals
+            fundamentals = result.fundamentals
+            text = format_technical_analysis(ticker, technicals)
+            comprehensive_text = format_comprehensive_analysis(ticker, technicals, fundamentals)
             # Generate chart
             chart_data = generate_enhanced_chart(ticker)
             if email:
@@ -68,7 +71,7 @@ def test_my_status(user_id=TEST_USER_ID, provider_filter=None, email=None):
                     temp_file.flush()
                     chart_files.append(temp_file.name)
             # Add to email body
-            email_body.append(format_technical_analysis(ticker, technicals_data).replace("*", ""))
+            email_body.append(text.replace("*", ""))
         elif prov.lower() == "bnc":
             # Download Binance data
             symbol = ticker.upper()

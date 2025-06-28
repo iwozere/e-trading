@@ -4,6 +4,7 @@ import yfinance as yf
 import talib
 from typing import Dict, Tuple, List
 from src.notification.logger import setup_logger
+from src.screener.telegram.models import Technicals
 
 logger = setup_logger("telegram_bot")
 
@@ -97,78 +98,56 @@ def get_overall_recommendation(recommendations: List[Tuple[str, str]]) -> Tuple[
     else:
         return "HOLD", f"Mixed signals - Hold position ({hold_count}/{total} neutral)"
 
-def calculate_technicals(ticker: str) -> dict:
+def calculate_technicals(ticker: str) -> Technicals:
     try:
         logger.debug(f"Starting technical analysis for {ticker}")
-        df = yf.download(ticker, period="6mo", interval="1d")
+        df = yf.download(ticker, period="2y", interval="1d")
         if df.empty:
             logger.error(f"No data downloaded for ticker {ticker}")
-            return {}
+            return None
         logger.debug(f"Downloaded {len(df)} days of data for {ticker}")
         if len(df) < 50:
             logger.error(f"Insufficient data for {ticker}: {len(df)} days")
-            return {}
-        
-        # Clean the data - remove NaN values
+            return None
         df = df.dropna()
         logger.debug(f"After dropna: {len(df)} days for {ticker}")
         if len(df) < 50:
             logger.error(f"Insufficient data after cleaning for {ticker}: {len(df)} days")
-            return {}
-        
-        # Convert to numpy arrays and ensure they are 1D
+            return None
         if isinstance(df.columns, pd.MultiIndex):
-            # Handle MultiIndex columns (like for some YF tickers)
-            ticker_col = df.columns[0][1]  # Get the ticker name from the first column
+            ticker_col = df.columns[0][1]
             high = df[('High', ticker_col)].values.astype(float)
             low = df[('Low', ticker_col)].values.astype(float)
             close = df[('Close', ticker_col)].values.astype(float)
             volume = df[('Volume', ticker_col)].values.astype(float)
             open_price = df[('Open', ticker_col)].values.astype(float)
         else:
-            # Handle standard columns
             high = df['High'].values.astype(float)
             low = df['Low'].values.astype(float)
             close = df['Close'].values.astype(float)
             volume = df['Volume'].values.astype(float)
             open_price = df['Open'].values.astype(float)
-        
-        logger.debug(f"Array lengths for {ticker}: high={len(high)}, low={len(low)}, close={len(close)}, volume={len(volume)}, open={len(open_price)}")
-        
-        # Ensure arrays are not empty and have correct dimensions
         if len(close) == 0:
             logger.error(f"Empty close price array for {ticker}")
-            return {}
-        
-        # Ensure all arrays have the same length
+            return None
         min_length = min(len(high), len(low), len(close), len(volume), len(open_price))
         logger.debug(f"Min length for {ticker}: {min_length}")
         if min_length < 50:
             logger.error(f"Insufficient data after length check for {ticker}: {min_length} days")
-            return {}
-        
-        # Truncate arrays to the same length (take the last min_length elements)
+            return None
         high = high[-min_length:]
         low = low[-min_length:]
         close = close[-min_length:]
         volume = volume[-min_length:]
         open_price = open_price[-min_length:]
-        
         logger.debug(f"After truncation for {ticker}: all arrays have length {len(close)}")
-        
-        # Verify arrays are valid
         if np.any(np.isnan(close)) or np.any(np.isnan(high)) or np.any(np.isnan(low)) or np.any(np.isnan(volume)):
             logger.error(f"NaN values found in data for {ticker}")
-            return {}
-        
-        # Check for infinite values
+            return None
         if np.any(np.isinf(close)) or np.any(np.isinf(high)) or np.any(np.isinf(low)) or np.any(np.isinf(volume)):
             logger.error(f"Infinite values found in data for {ticker}")
-            return {}
-        
+            return None
         logger.debug(f"Starting TA-Lib calculations for {ticker}")
-        
-        # Calculate technical indicators with error handling
         try:
             rsi = talib.RSI(close, timeperiod=14)
             bb_upper, bb_middle, bb_lower = talib.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
@@ -186,9 +165,7 @@ def calculate_technicals(ticker: str) -> dict:
         except Exception as e:
             logger.error(f"TA-Lib calculation failed for {ticker}: {e}")
             logger.error(f"Array shapes - close: {close.shape}, high: {high.shape}, low: {low.shape}, volume: {volume.shape}")
-            return {}
-        
-        # Get current values (last element)
+            return None
         current_idx = -1
         current_close = close[current_idx]
         current_rsi = rsi[current_idx] if not np.isnan(rsi[current_idx]) else 50.0
@@ -207,28 +184,19 @@ def calculate_technicals(ticker: str) -> dict:
         current_adr = adr[current_idx] if not np.isnan(adr[current_idx]) else 0.0
         current_sma_50 = sma_50[current_idx] if not np.isnan(sma_50[current_idx]) else current_close
         current_sma_200 = sma_200[current_idx] if not np.isnan(sma_200[current_idx]) else current_close
-        
-        # Get previous values for comparison
         prev_idx = -2 if len(close) > 1 else -1
         prev_close = close[prev_idx]
         prev_obv = obv[prev_idx] if not np.isnan(obv[prev_idx]) else current_obv
-        
         price_change = current_close - prev_close
-        
-        # Generate recommendations
         rsi_rec, rsi_reason = get_rsi_recommendation(current_rsi)
         bb_rec, bb_reason = get_bollinger_recommendation(current_close, current_bb_upper, current_bb_middle, current_bb_lower)
         macd_rec, macd_reason = get_macd_recommendation(current_macd, current_macd_signal, current_macd_hist)
         stoch_rec, stoch_reason = get_stochastic_recommendation(current_stoch_k, current_stoch_d)
         adx_rec, adx_reason = get_adx_recommendation(current_adx, current_plus_di, current_minus_di)
         obv_rec, obv_reason = get_obv_recommendation(current_obv, prev_obv, price_change)
-        
-        # Calculate average ADR
         valid_adr = adr[~np.isnan(adr)]
         avg_adr = np.mean(valid_adr[-20:]) if len(valid_adr) >= 20 else current_adr
         adr_rec, adr_reason = get_adr_recommendation(current_adr, avg_adr)
-        
-        # Overall recommendation
         all_recommendations = [rsi_rec, bb_rec, macd_rec, stoch_rec, adx_rec, obv_rec, adr_rec]
         overall_rec, overall_reason = get_overall_recommendation([
             (rsi_rec, rsi_reason),
@@ -239,83 +207,79 @@ def calculate_technicals(ticker: str) -> dict:
             (obv_rec, obv_reason),
             (adr_rec, adr_reason)
         ])
-        
-        # Determine trend
         trend = "Uptrend" if current_sma_50 > current_sma_200 and current_close > current_sma_50 else \
                 "Downtrend" if current_sma_50 < current_sma_200 and current_close < current_sma_50 else "Sideways"
-        
         logger.debug(f"Calculated technicals for {ticker}: RSI={current_rsi:.2f}, Overall={overall_rec}")
-        
-        return {
-            "close": round(current_close, 2),
-            "rsi": round(current_rsi, 2),
-            "sma_50": round(current_sma_50, 2),
-            "sma_200": round(current_sma_200, 2),
-            "trend": trend,
-            "bb_upper": round(current_bb_upper, 2),
-            "bb_middle": round(current_bb_middle, 2),
-            "bb_lower": round(current_bb_lower, 2),
-            "bb_width": round((current_bb_upper - current_bb_lower) / current_bb_middle, 4),
-            "macd": round(current_macd, 4),
-            "macd_signal": round(current_macd_signal, 4),
-            "macd_histogram": round(current_macd_hist, 4),
-            "stoch_k": round(current_stoch_k, 2),
-            "stoch_d": round(current_stoch_d, 2),
-            "adx": round(current_adx, 2),
-            "plus_di": round(current_plus_di, 2),
-            "minus_di": round(current_minus_di, 2),
-            "obv": round(current_obv, 0),
-            "adr": round(current_adr, 2),
-            "avg_adr": round(avg_adr, 2),
-            "recommendations": {
-                "rsi": {"signal": rsi_rec, "reason": rsi_reason},
-                "bollinger": {"signal": bb_rec, "reason": bb_reason},
-                "macd": {"signal": macd_rec, "reason": macd_reason},
-                "stochastic": {"signal": stoch_rec, "reason": stoch_reason},
-                "adx": {"signal": adx_rec, "reason": adx_reason},
-                "obv": {"signal": obv_rec, "reason": obv_reason},
-                "adr": {"signal": adr_rec, "reason": adr_reason},
-                "overall": {"signal": overall_rec, "reason": overall_reason}
-            }
+        recommendations = {
+            "rsi": {"signal": rsi_rec, "reason": rsi_reason},
+            "bollinger": {"signal": bb_rec, "reason": bb_reason},
+            "macd": {"signal": macd_rec, "reason": macd_reason},
+            "stochastic": {"signal": stoch_rec, "reason": stoch_reason},
+            "adx": {"signal": adx_rec, "reason": adx_reason},
+            "obv": {"signal": obv_rec, "reason": obv_reason},
+            "adr": {"signal": adr_rec, "reason": adr_reason},
+            "overall": {"signal": overall_rec, "reason": overall_reason}
         }
+        return Technicals(
+            rsi=round(current_rsi, 2),
+            sma_50=round(current_sma_50, 2),
+            sma_200=round(current_sma_200, 2),
+            macd=round(current_macd, 4),
+            macd_signal=round(current_macd_signal, 4),
+            macd_histogram=round(current_macd_hist, 4),
+            stoch_k=round(current_stoch_k, 2),
+            stoch_d=round(current_stoch_d, 2),
+            adx=round(current_adx, 2),
+            plus_di=round(current_plus_di, 2),
+            minus_di=round(current_minus_di, 2),
+            obv=round(current_obv, 0),
+            adr=round(current_adr, 2),
+            avg_adr=round(avg_adr, 2),
+            trend=trend,
+            bb_upper=round(current_bb_upper, 2),
+            bb_middle=round(current_bb_middle, 2),
+            bb_lower=round(current_bb_lower, 2),
+            bb_width=round((current_bb_upper - current_bb_lower) / current_bb_middle, 4),
+            recommendations=recommendations
+        )
     except Exception as e:
         logger.error(f"Technical analysis failed for {ticker}: {str(e)}", exc_info=e)
-        return {}
+        return None
 
-def format_technical_analysis(ticker: str, technicals: dict) -> str:
+def format_technical_analysis(ticker: str, technicals: Technicals) -> str:
     if not technicals:
         return f"❌ Unable to analyze {ticker}"
-    close = technicals.get("close", 0)
-    rsi = technicals.get("rsi", 0)
-    trend = technicals.get("trend", "Unknown")
-    overall_rec = technicals.get("recommendations", {}).get("overall", {})
+    close = technicals.bb_middle  # Or use another field for price if preferred
+    rsi = technicals.rsi
+    trend = technicals.trend
+    overall_rec = technicals.recommendations.get("overall", {}) if technicals.recommendations else {}
     message = f"📊 *Technical Analysis: {ticker}*\n\n"
     message += f"💰 Price: ${close:.2f}\n"
     message += f"📈 Trend: {trend}\n"
     message += f"🎯 Overall: *{overall_rec.get('signal', 'HOLD')}*\n"
     message += f"💡 {overall_rec.get('reason', 'No reason available')}\n\n"
     message += "*Key Indicators:*\n"
-    rsi_rec = technicals.get("recommendations", {}).get("rsi", {})
+    rsi_rec = technicals.recommendations.get("rsi", {}) if technicals.recommendations else {}
     message += f"• RSI ({rsi:.1f}): {rsi_rec.get('signal', 'HOLD')} - {rsi_rec.get('reason', '')}\n"
-    macd_rec = technicals.get("recommendations", {}).get("macd", {})
-    macd_val = technicals.get("macd", 0)
+    macd_rec = technicals.recommendations.get("macd", {}) if technicals.recommendations else {}
+    macd_val = technicals.macd
     message += f"• MACD ({macd_val:.4f}): {macd_rec.get('signal', 'HOLD')} - {macd_rec.get('reason', '')}\n"
-    bb_rec = technicals.get("recommendations", {}).get("bollinger", {})
-    bb_lower = technicals.get("bb_lower", 0)
-    bb_upper = technicals.get("bb_upper", 0)
+    bb_rec = technicals.recommendations.get("bollinger", {}) if technicals.recommendations else {}
+    bb_lower = technicals.bb_lower
+    bb_upper = technicals.bb_upper
     message += f"• BB ({bb_lower:.2f} - {bb_upper:.2f}): {bb_rec.get('signal', 'HOLD')} - {bb_rec.get('reason', '')}\n"
-    stoch_rec = technicals.get("recommendations", {}).get("stochastic", {})
-    stoch_k = technicals.get("stoch_k", 0)
-    stoch_d = technicals.get("stoch_d", 0)
+    stoch_rec = technicals.recommendations.get("stochastic", {}) if technicals.recommendations else {}
+    stoch_k = technicals.stoch_k
+    stoch_d = technicals.stoch_d
     message += f"• Stoch K/D ({stoch_k:.1f}/{stoch_d:.1f}): {stoch_rec.get('signal', 'HOLD')} - {stoch_rec.get('reason', '')}\n"
-    adx_rec = technicals.get("recommendations", {}).get("adx", {})
-    adx_val = technicals.get("adx", 0)
+    adx_rec = technicals.recommendations.get("adx", {}) if technicals.recommendations else {}
+    adx_val = technicals.adx
     message += f"• ADX ({adx_val:.1f}): {adx_rec.get('signal', 'HOLD')} - {adx_rec.get('reason', '')}\n"
-    obv_rec = technicals.get("recommendations", {}).get("obv", {})
-    obv_val = technicals.get("obv", 0)
+    obv_rec = technicals.recommendations.get("obv", {}) if technicals.recommendations else {}
+    obv_val = technicals.obv
     message += f"• OBV: {obv_rec.get('signal', 'HOLD')} - {obv_rec.get('reason', '')}\n"
-    adr_rec = technicals.get("recommendations", {}).get("adr", {})
-    adr_val = technicals.get("adr", 0)
+    adr_rec = technicals.recommendations.get("adr", {}) if technicals.recommendations else {}
+    adr_val = technicals.adr
     message += f"• ADR ({adr_val:.2f}): {adr_rec.get('signal', 'HOLD')} - {adr_rec.get('reason', '')}\n"
     return message
 
