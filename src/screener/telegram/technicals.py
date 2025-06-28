@@ -99,6 +99,7 @@ def get_overall_recommendation(recommendations: List[Tuple[str, str]]) -> Tuple[
 
 def calculate_technicals(ticker: str) -> dict:
     try:
+        logger.debug(f"Starting technical analysis for {ticker}")
         df = yf.download(ticker, period="6mo", interval="1d")
         if df.empty:
             logger.error(f"No data downloaded for ticker {ticker}")
@@ -110,21 +111,62 @@ def calculate_technicals(ticker: str) -> dict:
         
         # Clean the data - remove NaN values
         df = df.dropna()
+        logger.debug(f"After dropna: {len(df)} days for {ticker}")
         if len(df) < 50:
             logger.error(f"Insufficient data after cleaning for {ticker}: {len(df)} days")
             return {}
         
         # Convert to numpy arrays and ensure they are 1D
-        high = df['High'].values.astype(float)
-        low = df['Low'].values.astype(float)
-        close = df['Close'].values.astype(float)
-        volume = df['Volume'].values.astype(float)
-        open_price = df['Open'].values.astype(float)
+        if isinstance(df.columns, pd.MultiIndex):
+            # Handle MultiIndex columns (like for some YF tickers)
+            ticker_col = df.columns[0][1]  # Get the ticker name from the first column
+            high = df[('High', ticker_col)].values.astype(float)
+            low = df[('Low', ticker_col)].values.astype(float)
+            close = df[('Close', ticker_col)].values.astype(float)
+            volume = df[('Volume', ticker_col)].values.astype(float)
+            open_price = df[('Open', ticker_col)].values.astype(float)
+        else:
+            # Handle standard columns
+            high = df['High'].values.astype(float)
+            low = df['Low'].values.astype(float)
+            close = df['Close'].values.astype(float)
+            volume = df['Volume'].values.astype(float)
+            open_price = df['Open'].values.astype(float)
+        
+        logger.debug(f"Array lengths for {ticker}: high={len(high)}, low={len(low)}, close={len(close)}, volume={len(volume)}, open={len(open_price)}")
         
         # Ensure arrays are not empty and have correct dimensions
         if len(close) == 0:
             logger.error(f"Empty close price array for {ticker}")
             return {}
+        
+        # Ensure all arrays have the same length
+        min_length = min(len(high), len(low), len(close), len(volume), len(open_price))
+        logger.debug(f"Min length for {ticker}: {min_length}")
+        if min_length < 50:
+            logger.error(f"Insufficient data after length check for {ticker}: {min_length} days")
+            return {}
+        
+        # Truncate arrays to the same length (take the last min_length elements)
+        high = high[-min_length:]
+        low = low[-min_length:]
+        close = close[-min_length:]
+        volume = volume[-min_length:]
+        open_price = open_price[-min_length:]
+        
+        logger.debug(f"After truncation for {ticker}: all arrays have length {len(close)}")
+        
+        # Verify arrays are valid
+        if np.any(np.isnan(close)) or np.any(np.isnan(high)) or np.any(np.isnan(low)) or np.any(np.isnan(volume)):
+            logger.error(f"NaN values found in data for {ticker}")
+            return {}
+        
+        # Check for infinite values
+        if np.any(np.isinf(close)) or np.any(np.isinf(high)) or np.any(np.isinf(low)) or np.any(np.isinf(volume)):
+            logger.error(f"Infinite values found in data for {ticker}")
+            return {}
+        
+        logger.debug(f"Starting TA-Lib calculations for {ticker}")
         
         # Calculate technical indicators with error handling
         try:
@@ -140,8 +182,10 @@ def calculate_technicals(ticker: str) -> dict:
             adr = talib.SMA(daily_range, timeperiod=14)
             sma_50 = talib.SMA(close, timeperiod=50)
             sma_200 = talib.SMA(close, timeperiod=200)
+            logger.debug(f"TA-Lib calculations completed successfully for {ticker}")
         except Exception as e:
             logger.error(f"TA-Lib calculation failed for {ticker}: {e}")
+            logger.error(f"Array shapes - close: {close.shape}, high: {high.shape}, low: {low.shape}, volume: {volume.shape}")
             return {}
         
         # Get current values (last element)

@@ -107,20 +107,21 @@ def format_comprehensive_analysis(ticker: str, technicals_data: dict, fundamenta
     if not technicals_data:
         return f"❌ Unable to analyze {ticker}"
     
-    # Get technical analysis formatted text
+    # Get technical analysis formatted text and convert to HTML
     technical_text = format_technical_analysis(ticker, technicals_data)
+    technical_text_html = technical_text.replace('\n', '<br>').replace('*', '').replace('  ', ' ')
     
-    # Add fundamental information
+    # Add fundamental information with <br> for line breaks
     fundamental_text = f"""
-📊 <b>Fundamental Analysis: {ticker}</b>
-
-💰 Current Price: ${fundamentals_data.get('current_price', 0.0):.2f}
-🏢 Company: {fundamentals_data.get('company_name', 'Unknown')}
-💸 Market Cap: ${(fundamentals_data.get('market_cap', 0.0)/1e9):.2f}B
-📈 P/E Ratio: {fundamentals_data.get('pe_ratio', 0.0):.2f}
-📊 Forward P/E: {fundamentals_data.get('forward_pe', 0.0):.2f}
-💵 EPS: ${fundamentals_data.get('earnings_per_share', 0.0):.2f}
-🎯 Dividend Yield: {(fundamentals_data.get('dividend_yield', 0.0)*100):.2f}%
+<b>📊 Fundamental Analysis: {ticker}</b><br>
+<br>
+💰 Current Price: ${fundamentals_data.get('current_price', 0.0):.2f}<br>
+🏢 Company: {fundamentals_data.get('company_name', 'Unknown')}<br>
+💸 Market Cap: ${(fundamentals_data.get('market_cap', 0.0)/1e9):.2f}B<br>
+📈 P/E Ratio: {fundamentals_data.get('pe_ratio', 0.0):.2f}<br>
+📊 Forward P/E: {fundamentals_data.get('forward_pe', 0.0):.2f}<br>
+💵 EPS: ${fundamentals_data.get('earnings_per_share', 0.0):.2f}<br>
+🎯 Dividend Yield: {(fundamentals_data.get('dividend_yield', 0.0)*100):.2f}%<br>
 """
     
-    return fundamental_text + "\n" + technical_text
+    return fundamental_text + "<br>" + technical_text_html

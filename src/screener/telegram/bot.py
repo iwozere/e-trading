@@ -42,6 +42,7 @@ from src.screener.telegram.combine import analyze_ticker, format_comprehensive_a
 from src.screener.telegram.screener_db import add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status
 from src.screener.telegram.technicals import calculate_technicals
 from src.notification.emailer import EmailNotifier
+from src.screener.telegram.chart import generate_enhanced_chart, generate_binance_chart
 
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN
 
@@ -292,51 +293,80 @@ async def my_status(message: Message):
         try:
             if prov.lower() == "yf":
                 # Use enhanced analysis for Yahoo Finance tickers
-                result = analyze_ticker(ticker)
-                logger.info(f"Successfully analyzed {ticker}")
-                
-                # Format comprehensive analysis for email
-                technicals_data = calculate_technicals(ticker)
-                fundamentals_data = {
-                    'current_price': result.fundamentals.current_price,
-                    'company_name': result.fundamentals.company_name,
-                    'market_cap': result.fundamentals.market_cap,
-                    'pe_ratio': result.fundamentals.pe_ratio,
-                    'forward_pe': result.fundamentals.forward_pe,
-                    'earnings_per_share': result.fundamentals.earnings_per_share,
-                    'dividend_yield': result.fundamentals.dividend_yield
-                }
-                
-                comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
-                email_body.append(comprehensive_text)
-                
-                # Save chart for email attachment
-                if email:
-                    chart_filename = f"{ticker}_analysis.png"
-                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
-                        temp_file.write(result.chart_image)
-                        temp_file.flush()
-                        chart_files.append(temp_file.name)
-                        logger.info(f"Saved chart for {ticker}")
-                
-                # Send chart to Telegram
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
-                    temp_file.write(result.chart_image)
-                    temp_file.flush()
+                try:
+                    # Calculate technicals first
+                    technicals_data = calculate_technicals(ticker)
+                    if not technicals_data:
+                        await message.reply(f"❌ Failed to calculate technical indicators for {ticker}")
+                        continue
                     
-                    await bot.send_photo(
-                        chat_id=message.chat.id,
-                        photo=FSInputFile(temp_file.name),
-                        caption=f"📊 {ticker} Analysis\n🎯 {result.recommendation}",
-                        parse_mode="HTML",
-                    )
-                    logger.info(f"Sent chart for {ticker} to Telegram")
+                    # Generate chart
+                    chart_data = generate_enhanced_chart(ticker)
                     
-                    # Clean up temp file
-                    os.unlink(temp_file.name)
+                    # Get fundamentals from yfinance
+                    stock = yf.Ticker(ticker)
+                    info = stock.info
+                    
+                    fundamentals_data = {
+                        'current_price': info.get('currentPrice', 0.0),
+                        'company_name': info.get('longName', ticker),
+                        'market_cap': info.get('marketCap', 0.0),
+                        'pe_ratio': info.get('trailingPE', 0.0),
+                        'forward_pe': info.get('forwardPE', 0.0),
+                        'earnings_per_share': info.get('trailingEps', 0.0),
+                        'dividend_yield': info.get('dividendYield', 0.0) if info.get('dividendYield') else 0.0
+                    }
+                    
+                    # Format comprehensive analysis for email
+                    comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
+                    email_body.append(comprehensive_text)
+                    
+                    # Get recommendation
+                    recommendation = technicals_data.get('recommendations', {}).get('overall', {}).get('signal', 'HOLD')
+                    
+                    # Save chart for email attachment
+                    if email:
+                        chart_filename = f"{ticker}_analysis.png"
+                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
+                            temp_file.write(chart_data)
+                            temp_file.flush()
+                            chart_files.append(temp_file.name)
+                            logger.info(f"Saved chart for {ticker}")
+                    
+                    # Send chart to Telegram
+                    chart_temp_file = None
+                    try:
+                        chart_temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                        chart_temp_file.write(chart_data)
+                        chart_temp_file.flush()
+                        
+                        await bot.send_photo(
+                            chat_id=message.chat.id,
+                            photo=FSInputFile(chart_temp_file.name),
+                            caption=f"📊 {ticker} Analysis\n🎯 {recommendation}",
+                            parse_mode="HTML",
+                        )
+                        logger.info(f"Sent chart for {ticker} to Telegram")
+                        
+                    except Exception as e:
+                        logger.error(f"Error analyzing YF ticker {ticker}: {e}")
+                        await message.reply(f"❌ Error analyzing {ticker}: {str(e)}")
+                    finally:
+                        # Clean up temp file only after message is delivered
+                        if chart_temp_file:
+                            try:
+                                os.unlink(chart_temp_file.name)
+                                chart_temp_file.close()
+                            except Exception as cleanup_error:
+                                logger.warning(f"Failed to cleanup chart temp file for {ticker}: {cleanup_error}")
+                    
+                except Exception as e:
+                    logger.error(f"Error analyzing YF ticker {ticker}: {e}")
+                    await message.reply(f"❌ Error analyzing {ticker}: {str(e)}")
+                    continue
 
             elif prov.lower() == "bnc":
-                # Enhanced Binance analysis
+                # Enhanced Binance analysis with chart generation
                 symbol = ticker.upper()
                 url = f"https://api.binance.com/api/v3/klines"
                 params = {"symbol": symbol, "interval": "1d", "limit": 365}
@@ -360,37 +390,135 @@ async def my_status(message: Message):
                 # Calculate technical indicators
                 df["RSI"] = ta.momentum.RSIIndicator(df["close"]).rsi()
                 df["MACD"] = ta.trend.MACD(df["close"]).macd()
+                df["MACD_Signal"] = ta.trend.MACD(df["close"]).macd_signal()
+                df["MACD_Hist"] = ta.trend.MACD(df["close"]).macd_diff()
                 df["SMA_20"] = ta.trend.SMAIndicator(df["close"], window=20).sma_indicator()
                 df["EMA_20"] = ta.trend.EMAIndicator(df["close"], window=20).ema_indicator()
                 bb = ta.volatility.BollingerBands(df["close"])
                 df["BB_High"] = bb.bollinger_hband()
+                df["BB_Middle"] = bb.bollinger_mavg()
                 df["BB_Low"] = bb.bollinger_lband()
                 
                 latest = df.iloc[-1]
                 
-                # Generate recommendation
+                # Generate per-indicator recommendations
                 rsi_val = latest['RSI']
                 if rsi_val < 30:
-                    recommendation = "BUY: Oversold condition"
+                    rsi_rec = "BUY: Oversold condition"
                 elif rsi_val > 70:
-                    recommendation = "SELL: Overbought condition"
+                    rsi_rec = "SELL: Overbought condition"
                 else:
-                    recommendation = "HOLD: Neutral condition"
+                    rsi_rec = "HOLD: Neutral condition"
+                
+                macd_val = latest['MACD']
+                macd_signal = latest['MACD_Signal']
+                macd_hist = latest['MACD_Hist']
+                if macd_val > macd_signal and macd_hist > 0:
+                    macd_rec = "BUY: Bullish MACD crossover"
+                elif macd_val < macd_signal and macd_hist < 0:
+                    macd_rec = "SELL: Bearish MACD crossover"
+                else:
+                    macd_rec = "HOLD: MACD neutral"
+                
+                close_val = latest['close']
+                bb_high = latest['BB_High']
+                bb_middle = latest['BB_Middle']
+                bb_low = latest['BB_Low']
+                if close_val <= bb_low:
+                    bb_rec = "BUY: Price at lower Bollinger band"
+                elif close_val >= bb_high:
+                    bb_rec = "SELL: Price at upper Bollinger band"
+                elif close_val < bb_middle:
+                    bb_rec = "BUY: Price below middle band"
+                else:
+                    bb_rec = "HOLD: Price above middle band"
+                
+                sma_20 = latest['SMA_20']
+                ema_20 = latest['EMA_20']
+                if close_val > sma_20 and close_val > ema_20:
+                    ma_rec = "BUY: Price above moving averages"
+                elif close_val < sma_20 and close_val < ema_20:
+                    ma_rec = "SELL: Price below moving averages"
+                else:
+                    ma_rec = "HOLD: Mixed moving average signals"
+                
+                # Overall recommendation
+                buy_count = sum(1 for rec in [rsi_rec, macd_rec, bb_rec, ma_rec] if rec.startswith("BUY"))
+                sell_count = sum(1 for rec in [rsi_rec, macd_rec, bb_rec, ma_rec] if rec.startswith("SELL"))
+                
+                if buy_count > sell_count and buy_count >= 2:
+                    overall_rec = "BUY: Multiple bullish signals"
+                elif sell_count > buy_count and sell_count >= 2:
+                    overall_rec = "SELL: Multiple bearish signals"
+                else:
+                    overall_rec = "HOLD: Mixed signals"
                 
                 text = (
-                    f"<b>{ticker}</b> (Binance)\n"
-                    f"Latest Close: {latest['close']:.2f}\n"
-                    f"RSI: {latest['RSI']:.2f}\n"
-                    f"MACD: {latest['MACD']:.2f}\n"
-                    f"SMA 20: {latest['SMA_20']:.2f}\n"
-                    f"EMA 20: {latest['EMA_20']:.2f}\n"
-                    f"Bollinger High: {latest['BB_High']:.2f}\n"
-                    f"Bollinger Low: {latest['BB_Low']:.2f}\n"
-                    f"🎯 Recommendation: {recommendation}"
+                    f"<b>{ticker}</b> (Binance)\n\n"
+                    f"📊 <b>Price Analysis:</b>\n"
+                    f"Latest Close: {latest['close']:.2f}\n\n"
+                    f"📈 <b>Technical Indicators:</b>\n"
+                    f"RSI ({latest['RSI']:.2f}): {rsi_rec}\n"
+                    f"MACD ({latest['MACD']:.2f}): {macd_rec}\n"
+                    f"Bollinger Bands: {bb_rec}\n"
+                    f"Moving Averages: {ma_rec}\n\n"
+                    f"🎯 <b>Overall Recommendation:</b> {overall_rec}"
                 )
                 
                 await message.reply(text, parse_mode="HTML")
-                email_body.append(text.replace('<b>', '').replace('</b>', ''))
+                
+                # Format for email (without HTML tags)
+                email_text = (
+                    f"{ticker} (Binance)<br><br>"
+                    f"<b>Price Analysis:</b><br>"
+                    f"Latest Close: {latest['close']:.2f}<br><br>"
+                    f"<b>Technical Indicators:</b><br>"
+                    f"RSI ({latest['RSI']:.2f}): {rsi_rec}<br>"
+                    f"MACD ({latest['MACD']:.2f}): {macd_rec}<br>"
+                    f"Bollinger Bands: {bb_rec}<br>"
+                    f"Moving Averages: {ma_rec}<br><br>"
+                    f"<b>Overall Recommendation:</b> {overall_rec}"
+                )
+                email_body.append(email_text)
+                
+                # Generate and send chart for BNC tickers
+                chart_temp_file = None
+                try:
+                    chart_data = generate_binance_chart(ticker, df)
+                    
+                    # Save chart for email attachment
+                    if email:
+                        chart_filename = f"{ticker}_analysis.png"
+                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
+                            temp_file.write(chart_data)
+                            temp_file.flush()
+                            chart_files.append(temp_file.name)
+                            logger.info(f"Saved chart for {ticker}")
+                    
+                    # Send chart to Telegram
+                    chart_temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                    chart_temp_file.write(chart_data)
+                    chart_temp_file.flush()
+                    
+                    await bot.send_photo(
+                        chat_id=message.chat.id,
+                        photo=FSInputFile(chart_temp_file.name),
+                        caption=f"📊 {ticker} Analysis (Binance)\n🎯 {overall_rec}",
+                        parse_mode="HTML",
+                    )
+                    logger.info(f"Sent BNC chart for {ticker} to Telegram")
+                    
+                except Exception as chart_error:
+                    logger.error(f"Failed to generate chart for BNC ticker {ticker}: {chart_error}", exc_info=e)
+                    await message.reply(f"⚠️ Analysis completed but chart generation failed for {ticker}")
+                finally:
+                    # Clean up temp file only after message is delivered
+                    if chart_temp_file:
+                        try:
+                            os.unlink(chart_temp_file.name)
+                            chart_temp_file.close()
+                        except Exception as cleanup_error:
+                            logger.warning(f"Failed to cleanup chart temp file for {ticker}: {cleanup_error}")
                 
             else:
                 await message.reply(f"Unknown provider '{prov}' for ticker '{ticker}'.")
@@ -476,15 +604,19 @@ async def my_analyze(message: Message):
         
         comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
         
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
-            temp_file.write(result.chart_image)
-            temp_file.flush()
+        chart_temp_file = None
+        try:
+            chart_temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            chart_temp_file.write(result.chart_image)
+            chart_temp_file.flush()
+            
             await bot.send_photo(
                 chat_id=message.chat.id,
-                photo=FSInputFile(temp_file.name),
+                photo=FSInputFile(chart_temp_file.name),
                 caption=f"📊 {ticker} Analysis\n🎯 {result.recommendation}",
                 parse_mode="HTML",
             )
+            
             # Email if requested
             if email:
                 notifier = EmailNotifier()
@@ -492,10 +624,22 @@ async def my_analyze(message: Message):
                     to_addr=email,
                     subject=f"Comprehensive Analysis for {ticker}",
                     body=comprehensive_text.replace('<b>', '').replace('</b>', '').replace('\n', '<br>'),
-                    attachments=[temp_file.name]
+                    attachments=[chart_temp_file.name]
                 )
                 await message.reply(f"📧 Analysis for {ticker} sent to {email}")
-        os.unlink(temp_file.name)
+                
+        except Exception as e:
+            await message.reply(f"Error analyzing {ticker}: {e}")
+            logger.error(f"User {user_id} error analyze {ticker}: {e}")
+        finally:
+            # Clean up temp file only after message is delivered
+            if chart_temp_file:
+                try:
+                    os.unlink(chart_temp_file.name)
+                    chart_temp_file.close()
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup chart temp file for {ticker}: {cleanup_error}")
+                    
         logger.info(f"User {user_id} analyzed {ticker}")
     except Exception as e:
         await message.reply(f"Error analyzing {ticker}: {e}")
