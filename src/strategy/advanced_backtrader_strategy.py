@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import logging
 
-from src.strategy.advanced_strategy_framework import AdvancedStrategyFramework, CompositeSignal
+from src.strategy.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
 from src.entry.entry_mixin_factory import EntryMixinFactory
 from src.exit.exit_mixin_factory import ExitMixinFactory
 

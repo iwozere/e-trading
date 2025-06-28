@@ -20,7 +20,7 @@ import logging
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from src.strategy.advanced_backtrader_strategy import AdvancedBacktraderStrategy
-from src.strategy.advanced_strategy_framework import AdvancedStrategyFramework, CompositeSignal
+from src.strategy.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

@@ -136,4 +136,13 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## [Unreleased]
+- Refactored advanced strategy framework into modular components:
+  - `strategy_core.py` (base abstractions, signals, risk, aggregation, regime detection)
+  - `multi_timeframe_engine.py` (multi-timeframe logic)
+  - `composite_strategy_manager.py` (strategy orchestration)
+- Removed monolithic logic from `advanced_strategy_framework.py`.
+- Updated all imports and documentation.
+- Added and improved tests for all modules. 

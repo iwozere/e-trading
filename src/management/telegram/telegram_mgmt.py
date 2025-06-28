@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN
+from src.config.config_models import TradingBotConfig, BrokerType, DataSourceType, StrategyType
 
 """
 Telegram Bot Management Module
@@ -46,24 +47,37 @@ async def start_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Bot for {strategy_name} is already running.")
         return
     try:
+        # Create a simple config using the new Pydantic models
+        config = TradingBotConfig(
+            bot_id=f"telegram_{strategy_name}",
+            symbol="BTCUSDT",
+            broker_type=BrokerType.BINANCE_PAPER,
+            data_source=DataSourceType.BINANCE,
+            strategy_type=StrategyType.CUSTOM,
+            description=f"Telegram-managed bot for {strategy_name}",
+            initial_balance=1000.0,
+            risk_per_trade=0.01,
+            max_open_trades=3
+        )
+        
         # Dynamically import the bot class
         bot_module = importlib.import_module(f"src.trading.{strategy_name}_bot")
         bot_class = getattr(
             bot_module,
             "".join([w.capitalize() for w in strategy_name.split("_")]) + "Bot",
         )
-        config = {
-            "trading_pair": "BTCUSDT",
-            "initial_balance": 1000.0,
-        }  # Example config, extend as needed
-        bot_instance = bot_class(config)
+        
+        # Create bot instance with config file name
+        config_filename = f"telegram_{strategy_name}.json"
+        bot_instance = bot_class(config_filename)
         running_bots[strategy_name] = bot_instance
+        
         # Start the bot in a background thread
         import threading
-
         t = threading.Thread(target=bot_instance.run, daemon=True)
         t.start()
-        await update.message.reply_text(f"Started bot for {strategy_name}.")
+        
+        await update.message.reply_text(f"Started bot for {strategy_name} with config: {config.bot_id}")
     except Exception as e:
         _logger.error(f"Failed to start bot: {e}")
         await update.message.reply_text(f"Failed to start bot: {e}")

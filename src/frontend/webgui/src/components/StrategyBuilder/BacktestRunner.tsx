@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import { Card, CardContent, Typography, Button, Box, List, ListItem, ListItemText } from '@mui/material';
 import { useStrategyData } from '../../hooks/useStrategyData';

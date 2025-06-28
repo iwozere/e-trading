@@ -10,20 +10,25 @@ This module provides a unified configuration management system with:
 - Template-based configuration generation
 
 Classes:
-- ConfigManager: Main configuration manager
-- ConfigSchema: Base schema for all configurations
-- TradingConfig: Trading bot configuration schema
-- OptimizerConfig: Optimization configuration schema
-- DataConfig: Data feed configuration schema
-- NotificationConfig: Notification configuration schema
+- ConfigManager: Main configuration manager (legacy)
+- ConfigSchema: Base schema for all configurations (legacy)
+- TradingConfig: Trading bot configuration schema (legacy)
+- OptimizerConfig: Optimization configuration schema (legacy)
+- DataConfig: Data feed configuration schema (legacy)
+
+New Simplified Models:
+- TradingBotConfig: Simplified trading bot configuration
+- OptimizerConfig: Simplified optimizer configuration
+- DataConfig: Simplified data configuration
 """
 
+# Legacy imports (for backward compatibility)
 from .config_manager import ConfigManager
 from .schemas import (
     ConfigSchema,
     TradingConfig,
-    OptimizerConfig,
-    DataConfig,
+    OptimizerConfig as LegacyOptimizerConfig,
+    DataConfig as LegacyDataConfig,
     NotificationConfig,
     RiskManagementConfig,
     LoggingConfig,
@@ -33,17 +38,54 @@ from .schemas import (
 from .registry import ConfigRegistry
 from .templates import ConfigTemplates
 
+# New simplified imports
+from .config_models import (
+    TradingBotConfig,
+    OptimizerConfig,
+    DataConfig,
+    Environment,
+    BrokerType,
+    DataSourceType,
+    StrategyType
+)
+from .config_loader import (
+    load_config,
+    load_optimizer_config,
+    load_data_config,
+    save_config,
+    validate_config_file,
+    create_sample_config,
+    convert_old_config
+)
+
 __all__ = [
+    # Legacy exports (for backward compatibility)
     'ConfigManager',
     'ConfigSchema',
     'TradingConfig',
-    'OptimizerConfig',
-    'DataConfig',
+    'LegacyOptimizerConfig',
+    'LegacyDataConfig',
     'NotificationConfig',
     'RiskManagementConfig',
     'LoggingConfig',
     'SchedulingConfig',
     'PerformanceConfig',
     'ConfigRegistry',
-    'ConfigTemplates'
+    'ConfigTemplates',
+    
+    # New simplified exports
+    'TradingBotConfig',
+    'OptimizerConfig',
+    'DataConfig',
+    'Environment',
+    'BrokerType',
+    'DataSourceType',
+    'StrategyType',
+    'load_config',
+    'load_optimizer_config',
+    'load_data_config',
+    'save_config',
+    'validate_config_file',
+    'create_sample_config',
+    'convert_old_config'
 ] 

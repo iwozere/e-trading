@@ -1,8 +1,50 @@
-# Advanced Strategy Framework
+# Advanced Strategy Framework (Refactored)
 
 ## Overview
 
-The Advanced Strategy Framework is a comprehensive trading strategy system that implements advanced features including composite strategies, multi-timeframe analysis, dynamic strategy switching, and portfolio optimization. This framework extends the basic strategy system with sophisticated capabilities for professional trading.
+The Advanced Strategy Framework is now modular, split into three core components:
+- `strategy_core.py`: Base abstractions, signals, risk, aggregation, regime detection
+- `multi_timeframe_engine.py`: Data aggregation, multi-timeframe logic
+- `composite_strategy_manager.py`: Strategy orchestration, composite signal management
+
+## Usage
+
+### 1. Core Abstractions
+```python
+from src.strategy.strategy_core import BaseStrategy, StrategySignal, CompositeSignal, SignalAggregator, AggregationMethod, MarketRegimeDetector
+```
+
+### 2. Multi-Timeframe Engine
+```python
+from src.strategy.multi_timeframe_engine import TimeframeSyncer, MultiTimeframeStrategy
+```
+
+### 3. Composite Strategy Manager
+```python
+from src.strategy.composite_strategy_manager import StrategyComposer, AdvancedStrategyFramework
+```
+
+## Example: Creating and Running a Composite Strategy
+```python
+from src.strategy.composite_strategy_manager import AdvancedStrategyFramework
+
+framework = AdvancedStrategyFramework(config_path="config/strategy/")
+framework.initialize_composite_strategies()
+framework.initialize_multi_timeframe_strategies()
+framework.initialize_dynamic_switching()
+
+# Example: Get a composite signal
+signal = framework.get_composite_signal("momentum_trend_composite", data_feeds)
+print(signal)
+```
+
+## Configuration
+
+Configuration files remain the same as before. See the original documentation below for details on composite, multi-timeframe, and dynamic switching configurations.
+
+---
+
+# [Legacy Documentation]
 
 ## Key Features
 

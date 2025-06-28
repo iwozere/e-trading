@@ -3,14 +3,14 @@ Live Trading Bot Module
 ----------------------
 
 This module implements a comprehensive live trading bot that:
-1. Reads configuration from JSON files
+1. Reads configuration from JSON files using new Pydantic models
 2. Constructs data feeds, strategies, and brokers
 3. Manages live trading with real-time data
 4. Handles error recovery and notifications
 5. Integrates with existing components
 
 Main Features:
-- Configuration-driven setup
+- Configuration-driven setup with Pydantic validation
 - Live data feed integration
 - Strategy execution with Backtrader
 - Position management and persistence
@@ -37,8 +37,10 @@ from src.broker.broker_factory import get_broker
 from src.data.data_feed_factory import DataFeedFactory
 from src.notification.logger import setup_logger
 from src.strategy.custom_strategy import CustomStrategy
-from src.strategy.advanced_strategy_framework import AdvancedStrategyFramework
+from src.strategy.composite_strategy_manager import AdvancedStrategyFramework
 from src.trading.base_trading_bot import BaseTradingBot
+from src.config.config_loader import load_config
+from src.config.config_models import TradingBotConfig
 
 _logger = setup_logger(__name__)
 
@@ -73,27 +75,25 @@ class LiveTradingBot(BaseTradingBot):
         Args:
             config_file: Path to configuration file (e.g., '0001.json')
         """
-        # Load configuration first
+        # Load configuration first using new Pydantic models
         self.config_file = config_file
         self.config = self._load_configuration()
-        self._validate_configuration()
         
         # Extract components for BaseTradingBot
         broker = self._create_broker()
-        strategy_name = self.config["strategy"].get("name", "CustomStrategy")
-        strategy_class = STRATEGY_REGISTRY.get(strategy_name)
-        if strategy_class is None:
-            raise ValueError(f"Unknown strategy class: {strategy_name}")
+        strategy_name = self.config.strategy_type.value
+        strategy_class = STRATEGY_REGISTRY.get(strategy_name, CustomStrategy)
         parameters = self._create_strategy_parameters()
         
-        # Initialize BaseTradingBot
+        # Initialize BaseTradingBot with legacy config format for compatibility
+        legacy_config = self._convert_to_legacy_format()
         super().__init__(
-            config=self.config,
+            config=legacy_config,
             strategy_class=strategy_class,
             parameters=parameters,
             broker=broker,
-            paper_trading=self.config["broker"].get("type") == "binance_paper",
-            bot_id=self.config_file  # Use config filename as bot_id
+            paper_trading=self.config.paper_trading,
+            bot_id=self.config.bot_id
         )
         
         # LiveTradingBot specific attributes
@@ -109,54 +109,46 @@ class LiveTradingBot(BaseTradingBot):
         self.monitor_thread = None
         
         # Override trading pair from config
-        self.trading_pair = self.config["trading"]["symbol"]
+        self.trading_pair = self.config.symbol
         
         # Load open positions
         self._load_open_positions()
     
-    def _load_configuration(self) -> Dict[str, Any]:
-        """Load configuration from JSON file."""
+    def _load_configuration(self) -> TradingBotConfig:
+        """Load and validate configuration using new Pydantic models."""
         try:
             config_path = f"config/trading/{self.config_file}"
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-            _logger.info(f"Loaded configuration from {config_path}")
+            config = load_config(config_path)
+            _logger.info(f"Loaded and validated configuration from {config_path}")
             return config
         except Exception as e:
             _logger.error(f"Failed to load configuration: {e}")
             raise
     
-    def _validate_configuration(self):
-        """Validate configuration parameters."""
-        required_sections = ["broker", "trading", "data", "strategy"]
-        for section in required_sections:
-            if section not in self.config:
-                raise ValueError(f"Missing required configuration section: {section}")
-        
-        # Validate data feed configuration
-        data_config = self.config["data"]
-        if "data_source" not in data_config:
-            raise ValueError("Missing data_source in data configuration")
-        
-        # Validate strategy configuration
-        strategy_config = self.config["strategy"]
-        if strategy_config.get("type") != "custom":
-            raise ValueError("Only 'custom' strategy type is supported")
-        
-        if "entry_logic" not in strategy_config:
-            raise ValueError("Missing entry_logic in strategy configuration")
-        
-        if "exit_logic" not in strategy_config:
-            raise ValueError("Missing exit_logic in strategy configuration")
-        
-        _logger.info("Configuration validation passed")
+    def _convert_to_legacy_format(self) -> Dict[str, Any]:
+        """Convert new config format to legacy format for BaseTradingBot compatibility."""
+        return {
+            "bot_id": self.config.bot_id,
+            "trading_pair": self.config.symbol,
+            "initial_balance": self.config.initial_balance,
+            "broker": self.config.get_broker_config(),
+            "trading": self.config.get_trading_config(),
+            "data": self.config.get_data_config(),
+            "strategy": self.config.get_strategy_config(),
+            "risk_management": self.config.get_risk_management_config(),
+            "logging": self.config.get_logging_config(),
+            "notifications": self.config.get_notifications_config(),
+            "max_drawdown_pct": self.config.max_drawdown_pct,
+            "max_exposure": self.config.max_exposure,
+            "position_sizing_pct": self.config.position_size
+        }
     
     def _create_broker(self):
         """Create and initialize the broker."""
         try:
-            broker_config = self.config["broker"]
+            broker_config = self.config.get_broker_config()
             broker = get_broker(broker_config)
-            _logger.info(f"Created broker: {broker_config.get('type', 'unknown')}")
+            _logger.info(f"Created broker: {self.config.broker_type}")
             return broker
         except Exception as e:
             _logger.error(f"Error creating broker: {e}")
@@ -165,20 +157,23 @@ class LiveTradingBot(BaseTradingBot):
     def _create_strategy_parameters(self) -> Dict[str, Any]:
         """Create the strategy parameters for BaseTradingBot."""
         try:
-            strategy_config = self.config["strategy"]
-            trading_config = self.config["trading"]
-            
-            # Build strategy parameters
+            # Build strategy parameters using new config
             parameters = {
                 "strategy_config": {
-                    "entry_logic": strategy_config["entry_logic"],
-                    "exit_logic": strategy_config["exit_logic"],
-                    "position_size": trading_config.get("position_size", 0.1),
-                    "use_talib": strategy_config.get("use_talib", False)
+                    "entry_logic": {
+                        "name": "RSIBBVolumeEntryMixin",
+                        "params": self.config.strategy_params.get("entry", {})
+                    },
+                    "exit_logic": {
+                        "name": "RSIBBExitMixin", 
+                        "params": self.config.strategy_params.get("exit", {})
+                    },
+                    "position_size": self.config.position_size,
+                    "use_talib": self.config.strategy_params.get("use_talib", False)
                 }
             }
             
-            _logger.info(f"Created strategy parameters for: {strategy_config.get('type', 'custom')}")
+            _logger.info(f"Created strategy parameters for: {self.config.strategy_type}")
             return parameters
             
         except Exception as e:
@@ -188,7 +183,7 @@ class LiveTradingBot(BaseTradingBot):
     def _create_data_feed(self):
         """Create and initialize the data feed."""
         try:
-            data_config = self.config["data"]
+            data_config = self.config.get_data_config()
             
             # Add callback for new data notifications
             def on_new_bar(symbol, timestamp, data):
@@ -200,7 +195,7 @@ class LiveTradingBot(BaseTradingBot):
             if self.data_feed is None:
                 raise ValueError("Failed to create data feed")
             
-            _logger.info(f"Created data feed for {data_config.get('symbol', 'unknown')}")
+            _logger.info(f"Created data feed for {self.config.symbol}")
             return True
             
         except Exception as e:
@@ -223,11 +218,11 @@ class LiveTradingBot(BaseTradingBot):
                 self.cerebro.broker = self.broker
             
             # Setup initial cash
-            initial_balance = self.config["broker"].get("initial_balance", 1000.0)
+            initial_balance = self.config.initial_balance
             self.cerebro.broker.setcash(initial_balance)
             
             # Setup commission
-            commission = self.config["broker"].get("commission", 0.001)
+            commission = self.config.commission
             self.cerebro.broker.setcommission(commission=commission)
             
             _logger.info(f"Setup Backtrader with initial balance: {initial_balance}")
@@ -388,14 +383,14 @@ class LiveTradingBot(BaseTradingBot):
             
             if self.broker:
                 status["broker_status"] = {
-                    "type": self.config["broker"].get("type"),
+                    "type": self.config.broker_type,
                     "cash": getattr(self.cerebro.broker, 'cash', 0) if self.cerebro else 0
                 }
             
             if hasattr(self, 'parameters') and self.parameters:
                 strategy_config = self.parameters.get("strategy_config", {})
                 status["strategy_status"] = {
-                    "type": "custom",
+                    "type": self.config.strategy_type,
                     "entry_logic": strategy_config.get("entry_logic", {}).get("name", "unknown"),
                     "exit_logic": strategy_config.get("exit_logic", {}).get("name", "unknown")
                 }

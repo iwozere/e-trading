@@ -818,4 +818,39 @@ class RSIBBMixin(BaseEntryMixin):
         
         return (rsi < self.get_param("rsi_threshold") and 
                 price <= bb_lower * 1.01)
-``` 
+```
+
+# Modular Strategy Framework
+
+The advanced strategy system is now split into three core modules:
+- `strategy_core.py`: Base classes, signals, risk, aggregation, regime detection
+- `multi_timeframe_engine.py`: Multi-timeframe data handling and strategy logic
+- `composite_strategy_manager.py`: Orchestration and composite signal management
+
+## Extending the Framework
+
+- To add a new strategy, inherit from `BaseStrategy` in `strategy_core.py` and implement `generate_signal()`.
+- To create a new multi-timeframe strategy, inherit from `MultiTimeframeStrategy` in `multi_timeframe_engine.py`.
+- To compose strategies, use `StrategyComposer` in `composite_strategy_manager.py`.
+- For custom aggregation, extend `SignalAggregator`.
+
+## Example
+```python
+from src.strategy.strategy_core import BaseStrategy, StrategySignal
+
+class MyCustomStrategy(BaseStrategy):
+    def generate_signal(self):
+        # Your logic here
+        return StrategySignal(
+            strategy_name=self.name,
+            signal_type="buy",
+            confidence=1.0,
+            weight=self.weight,
+            timestamp=datetime.now(),
+            metadata={}
+        )
+```
+
+See also: `ADVANCED_STRATEGY_FRAMEWORK.md` for configuration and usage examples.
+
+--- 

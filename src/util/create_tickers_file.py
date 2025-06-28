@@ -1,4 +1,6 @@
-import datetime
+#!/usr/bin/env python3
+
+content = '''import datetime
 import io
 import os
 from typing import Any, Dict, List, Optional
@@ -64,9 +66,8 @@ def _load_tickers_from_csv(filename: str) -> List[str]:
     try:
         # Get the path to the data/tickers directory relative to this file
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up: screener -> src -> project root
-        project_root = os.path.dirname(os.path.dirname(current_dir))
-        csv_path = os.path.join(project_root, 'src', 'data', 'tickers', filename)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+        csv_path = os.path.join(project_root, 'data', 'tickers', filename)
         
         if not os.path.exists(csv_path):
             print(f"Warning: CSV file not found: {csv_path}")
@@ -166,12 +167,18 @@ if __name__ == "__main__":
     print(get_sp_midcap_yfinance())
     print("US Small Cap Tickers:")
     print(get_us_small_cap_tickers())
-    print("\nUS Medium Cap Tickers:")
+    print("\\nUS Medium Cap Tickers:")
     print(get_us_medium_cap_tickers())
-    print("\nUS Large Cap Tickers:")
+    print("\\nUS Large Cap Tickers:")
     print(get_us_large_cap_tickers())
-    print("\nCirculating Supply:")
+    print("\\nCirculating Supply:")
     print(get_circulating_supply("bitcoin"))
     print(get_circulating_supply("ethereum"))
     print(get_circulating_supply("litecoin"))
     print(get_circulating_supply("xrp"))
+'''
+
+with open('src/screener/tickers_list.py', 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("File created successfully!") 

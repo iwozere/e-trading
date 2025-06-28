@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from 'react';
 import { getProviders, signIn } from 'next-auth/react';
 import { Button, Container, Typography, Box, TextField, Divider, Stack } from '@mui/material';
