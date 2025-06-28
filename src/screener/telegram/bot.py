@@ -317,6 +317,11 @@ async def my_status(message: Message):
                         'dividend_yield': info.get('dividendYield', 0.0) if info.get('dividendYield') else 0.0
                     }
                     
+                    # Format comprehensive analysis for Telegram (plain text)
+                    telegram_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
+                    telegram_text = telegram_text.replace('<br>', '\n').replace('<b>', '').replace('</b>', '')
+                    await message.reply(telegram_text)
+                    
                     # Format comprehensive analysis for email
                     comprehensive_text = format_comprehensive_analysis(ticker, technicals_data, fundamentals_data)
                     email_body.append(comprehensive_text)
@@ -467,17 +472,16 @@ async def my_status(message: Message):
                 
                 await message.reply(text, parse_mode="HTML")
                 
-                # Format for email (without HTML tags)
+                # Format for email (with fancy icons and HTML tags)
                 email_text = (
-                    f"{ticker} (Binance)<br><br>"
-                    f"<b>Price Analysis:</b><br>"
-                    f"Latest Close: {latest['close']:.2f}<br><br>"
-                    f"<b>Technical Indicators:</b><br>"
-                    f"RSI ({latest['RSI']:.2f}): {rsi_rec}<br>"
-                    f"MACD ({latest['MACD']:.2f}): {macd_rec}<br>"
-                    f"Bollinger Bands: {bb_rec}<br>"
-                    f"Moving Averages: {ma_rec}<br><br>"
-                    f"<b>Overall Recommendation:</b> {overall_rec}"
+                    f"<b>📊 {ticker} (Binance)</b><br><br>"
+                    f"💰 <b>Latest Close:</b> {latest['close']:.2f}<br>"
+                    f"<b>📈 Technical Indicators:</b><br>"
+                    f"🔸 <b>RSI</b> ({latest['RSI']:.2f}): {rsi_rec}<br>"
+                    f"🔸 <b>MACD</b> ({latest['MACD']:.2f}): {macd_rec}<br>"
+                    f"🔸 <b>Bollinger Bands:</b> {bb_rec}<br>"
+                    f"🔸 <b>Moving Averages:</b> {ma_rec}<br><br>"
+                    f"🎯 <b>Overall Recommendation:</b> {overall_rec}"
                 )
                 email_body.append(email_text)
                 
