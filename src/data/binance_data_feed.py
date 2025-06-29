@@ -7,6 +7,8 @@ import requests
 from datetime import datetime
 
 """
+Data feed implementation for Binance, providing real-time and historical market data for trading strategies.
+
 Binance Data Feed Module
 -----------------------
 

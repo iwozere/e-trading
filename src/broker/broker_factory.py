@@ -33,6 +33,8 @@ def get_broker(config: Dict[str, Any]):
         raise ValueError(f"Unsupported broker type: {broker_type}")
 
 """
+Factory module for creating broker instances based on configuration or runtime parameters.
+
 Broker factory for instantiating the correct broker implementation based on configuration.
 Supports Binance, Binance Paper, IBKR, and Mock brokers.
 """

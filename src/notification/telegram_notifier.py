@@ -24,6 +24,7 @@ from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 
 class TelegramNotifier:
+    """Sends trade and error notifications to Telegram using a bot for real-time trading alerts."""
     def __init__(self, token: str, chat_id: str):
         """
         Initialize the Telegram trade notifier.
@@ -67,7 +68,7 @@ class TelegramNotifier:
             self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode="HTML")
 
             _logger.info(
-                f"Trade notification sent successfully for {trade_data['symbol']}"
+                "Trade notification sent successfully for %s", trade_data['symbol']
             )
             return True
 
@@ -101,7 +102,7 @@ class TelegramNotifier:
             self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode="HTML")
 
             _logger.info(
-                f"Trade update notification sent successfully for {trade_data['symbol']}"
+                "Trade update notification sent successfully for %s", trade_data['symbol']
             )
             return True
 
@@ -134,7 +135,7 @@ class TelegramNotifier:
     def _format_trade_message(self, trade_data: Dict[str, Any]) -> str:
         """Format trade entry message"""
         message = [
-            f"🔔 <b>New Trade Alert</b>",
+            "🔔 <b>New Trade Alert</b>",
             f"Symbol: {trade_data['symbol']}",
             f"Side: {'🟢 BUY' if trade_data['side'] == 'BUY' else '🔴 SELL'}",
             f"Entry Price: {trade_data['entry_price']:.8f}",
@@ -177,7 +178,7 @@ class TelegramNotifier:
             else ("🔴 SELL" if side == "SELL" else "❓ UNKNOWN")
         )
         message = [
-            f"📊 <b>Trade Update</b>",
+            "📊 <b>Trade Update</b>",
             f"Symbol: {trade_data.get('symbol', 'UNKNOWN')}",
             f"Side: {side_str}",
             f"Entry Price: {trade_data.get('entry_price', 0):.8f}",
@@ -202,7 +203,7 @@ class TelegramNotifier:
                 chat_id=self.chat_id, text=message, parse_mode="HTML"
             )
             _logger.info(
-                f"Trade notification sent successfully for {trade_data['symbol']}"
+                "Trade notification sent successfully for %s", trade_data['symbol']
             )
             return True
         except TelegramError as e:
@@ -223,7 +224,7 @@ class TelegramNotifier:
                 chat_id=self.chat_id, text=message, parse_mode="HTML"
             )
             _logger.info(
-                f"Trade update notification sent successfully for {trade_data.get('symbol', 'UNKNOWN')}"
+                "Trade update notification sent successfully for %s", trade_data.get('symbol', 'UNKNOWN')
             )
             return True
         except TelegramError as e:
@@ -307,6 +308,7 @@ def create_notifier() -> Optional[TelegramNotifier]:
 
 
 def send_telegram_alert(message: str):
+    """Send a system alert message to the configured Telegram chat using the TelegramNotifier."""
     try:
         notifier = TelegramNotifier(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
         notifier.send_error_notification(message)

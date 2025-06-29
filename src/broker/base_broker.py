@@ -6,8 +6,7 @@ _logger = setup_logger(__name__)
 
 
 """
-Abstract base broker class for all broker implementations.
-Defines the required interface and common attributes for brokers in the trading system.
+Base class for all broker implementations, defining the interface and common functionality for trading brokers.
 """
 
 class BaseBroker(bt.BrokerBase):

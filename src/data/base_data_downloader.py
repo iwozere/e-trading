@@ -4,6 +4,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 """
+Abstract base class for data downloaders, defining the interface for downloading historical market data from various sources.
+
 Base Data Downloader Module
 --------------------------
 

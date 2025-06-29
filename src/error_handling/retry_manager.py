@@ -215,8 +215,8 @@ class RetryManager:
 
         log_level = getattr(logging, self.config.log_level.upper(), logging.WARNING)
         _logger.log(log_level,
-                   f"Retry attempt {attempt}/{self.config.max_attempts} failed: {type(exception).__name__}: {str(exception)}. "
-                   f"Retrying in {delay:.2f}s. Context: {context}")
+                   "Retry attempt %d/%d failed: %s: %s. Retrying in %.2fs. Context: %s",
+                   attempt, self.config.max_attempts, type(exception).__name__, exception, delay, context)
 
     def _log_retry_success(self, attempt: int, context: Dict[str, Any]):
         """Log successful retry."""
@@ -225,7 +225,8 @@ class RetryManager:
 
         log_level = getattr(logging, self.config.log_level.upper(), logging.WARNING)
         _logger.log(log_level,
-                   f"Retry succeeded after {attempt} attempts. Context: {context}")
+                   "Retry succeeded after %d attempts. Context: %s",
+                   attempt, context)
 
     def _log_final_failure(self, attempt: int, exception: Exception, context: Dict[str, Any]):
         """Log final failure after all retries."""

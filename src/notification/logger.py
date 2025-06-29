@@ -126,9 +126,7 @@ def log_exception(logger, exc_info=None):
 #
 # Set up the logger for the application
 # Usage: setup_logger('live_trader')
-def setup_logger(
-    name: str, log_file: str = None, level: int = logging.DEBUG
-) -> logging.Logger:
+def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG) -> logging.Logger:
     """
     Set up the logger with custom configuration.
 

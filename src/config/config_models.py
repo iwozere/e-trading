@@ -98,7 +98,6 @@ class TradingBotConfig(BaseModel):
             raise ValueError('Initial balance must be positive')
         return v
 
-
 class OptimizerConfig(BaseModel):
     """Configuration for strategy optimization."""
 
@@ -158,4 +157,4 @@ class DataConfig(BaseModel):
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
-    updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp") 
+    updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp")

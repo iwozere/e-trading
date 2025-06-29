@@ -11,8 +11,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 """
-Binance paper trading broker implementation for testnet trading using the Binance API.
-Simulates trading without real funds for strategy testing and development.
+Paper trading broker implementation for Binance, simulating trades without executing real orders on the exchange.
 """
 
 class BinancePaperBroker(BaseBinanceBroker):

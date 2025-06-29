@@ -1,3 +1,7 @@
+"""
+Base class for Binance broker implementations, providing common trading methods and API integration for Binance-based brokers.
+"""
+
 from typing import Any, Optional
 
 import pandas as pd

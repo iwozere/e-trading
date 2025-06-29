@@ -35,7 +35,8 @@ class EmailNotifier:
         self.sender_email = SMTP_USER
         self.sender_password = SMTP_PASSWORD
 
-    def send_email(self, to_addr: str, subject: str, body: str, from_name: str = None, attachments: list = None):
+    def send_email(self, to_addr: str, subject: str, body: str, from_name: str = None, attachments: list = None) -> bool:
+        """Send an email with the given subject and body to the specified recipient."""
         msg = MIMEMultipart()
         if from_name:
             msg["From"] = f"{from_name} <{self.sender_email}>"
@@ -66,21 +67,37 @@ class EmailNotifier:
                 server.login(self.sender_email, self.sender_password)
                 server.send_message(msg)
             _logger.info("Email sent to %s with subject: %s", to_addr, subject)
+            return True
         except Exception as e:
             _logger.error("Failed to send email: %s", e, exc_info=True)
+            return False
 
     def send_notification_email(self, buy_or_sell: str, symbol: str, price: float, amount: float, to_addr: str, body: str = ""):
+        """Send a trade notification email with the provided trade data."""
         subject = f"Trade notification: {buy_or_sell} {symbol} at {price} with {amount}"
         self.send_email(to_addr, subject, body)
         _logger.debug("Email sent successfully: %s", subject)
 
 def send_email_alert(receiver_email: str, subject: str, message: str):
+    """Send alert email
+
+    Args:
+        receiver_email (str): to address
+        subject (str): email subject
+        message (str): message body
+    """
     try:
         notifier = EmailNotifier()
         notifier.send_email(receiver_email, subject, message)
         _logger.info("System alert email sent: %s", subject)
     except Exception as e:
         _logger.error("Failed to send system alert email: %s", e, exc_info=True)
+
+def send_async_email(subject: str, body: str, to: str) -> None:
+    """Send an email asynchronously with the given subject, body, and recipient."""
+    # Implementation of send_async_email method
+    # TODO: implement
+    pass
 
 #######################################
 # Quick test. Keep commented out.
@@ -113,4 +130,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Failed to send test email: {e}")
     finally:
-        print(f"DONE")
+        print("DONE")
+

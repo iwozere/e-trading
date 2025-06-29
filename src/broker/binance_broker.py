@@ -6,7 +6,7 @@ from src.broker.base_broker import BaseBroker
 
 class BinanceBroker(BaseBroker):
     """
-    Live Binance broker implementation for real trading using the Binance API.
+    Concrete implementation of a trading broker for Binance, handling live trading operations and API communication.
     Implements order placement and management for live trading accounts.
     """
 

@@ -10,8 +10,7 @@ _logger = setup_logger(__name__)
 from .base_data_downloader import BaseDataDownloader
 
 """
-Yahoo Data Downloader Module
----------------------------
+Data downloader implementation for Yahoo Finance, fetching historical market data for analysis and backtesting.
 
 This module provides the YahooDataDownloader class for downloading historical OHLCV (Open, High, Low, Close, Volume) data from Yahoo Finance. It supports fetching, saving, loading, and updating data for single or multiple symbols, and is suitable for both research and production trading workflows.
 

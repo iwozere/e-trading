@@ -24,6 +24,8 @@ from .base_data_downloader import BaseDataDownloader
 
 
 class BinanceDataDownloader(BaseDataDownloader):
+    """Implementation of a data downloader for Binance, fetching historical market data using the Binance API."""
+
     def __init__(
         self,
         api_key: Optional[str] = None,

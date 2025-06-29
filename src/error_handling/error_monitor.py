@@ -166,8 +166,7 @@ class ErrorMonitor:
 
             # Log error
             log_level = getattr(logging, severity.value)
-            _logger.log(log_level,
-                       f"Error in {component}: {error_type}: {str(error)}")
+            _logger.log(log_level, "Error event: %s", event)
 
     def _get_stack_trace(self, error: Exception) -> Optional[str]:
         """Get stack trace for error."""
