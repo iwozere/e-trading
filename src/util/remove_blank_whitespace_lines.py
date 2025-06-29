@@ -3,6 +3,9 @@ for root, dirs, files in os.walk('.'):
     for file in files:
         if file.endswith('.py'):
             path = os.path.join(root, file)
+            if "\\." in path:
+                continue
+            print(path)
             try:
                 try:
                     with open(path, 'r', encoding='utf-8') as f:
@@ -18,6 +21,8 @@ for root, dirs, files in os.walk('.'):
                     for line in lines:
                         if line.strip() != '':
                             f.write(line)
+                        else:
+                            f.write("\n")
             except Exception as write_err:
                 print(f"[WARN] Could not write {path}: {write_err}")
                 continue

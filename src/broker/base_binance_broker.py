@@ -39,7 +39,7 @@ class BaseBinanceBroker(BaseBroker):
             self.orders.append(order)
             self._notify_order(order)
             _logger.info(f"Buy order placed: {order}")
-            
+
             # ✅ NON-BLOCKING: Async notification doesn't block trade execution
             asyncio.create_task(send_trade_notification(
                 symbol=symbol,
@@ -47,17 +47,17 @@ class BaseBinanceBroker(BaseBroker):
                 price=float(order.get('price', 0)),
                 quantity=float(order.get('executedQty', qty))
             ))
-            
+
             return order
         except Exception as e:
             _logger.error(f"Buy order failed: {e}")
-            
+
             # ✅ NON-BLOCKING: Async error notification
             asyncio.create_task(send_error_notification(
                 f"Buy order failed for {symbol}: {str(e)}",
                 source="binance_broker"
             ))
-            
+
             return None
 
     def sell(self, symbol: str, qty: float, price: Optional[float] = None) -> Any:
@@ -73,7 +73,7 @@ class BaseBinanceBroker(BaseBroker):
             self.orders.append(order)
             self._notify_order(order)
             _logger.info(f"Sell order placed: {order}")
-            
+
             # ✅ NON-BLOCKING: Async notification doesn't block trade execution
             asyncio.create_task(send_trade_notification(
                 symbol=symbol,
@@ -81,17 +81,17 @@ class BaseBinanceBroker(BaseBroker):
                 price=float(order.get('price', 0)),
                 quantity=float(order.get('executedQty', qty))
             ))
-            
+
             return order
         except Exception as e:
             _logger.error(f"Sell order failed: {e}")
-            
+
             # ✅ NON-BLOCKING: Async error notification
             asyncio.create_task(send_error_notification(
                 f"Sell order failed for {symbol}: {str(e)}",
                 source="binance_broker"
             ))
-            
+
             return None
 
     def get_open_orders(self, symbol=None):

@@ -33,18 +33,18 @@ logger = logging.getLogger(__name__)
 def create_sample_data(n_samples: int = 1000) -> pd.DataFrame:
     """Create sample trading data for demonstration."""
     np.random.seed(42)
-    
+
     # Generate time series data
     dates = pd.date_range(start='2023-01-01', periods=n_samples, freq='1H')
-    
+
     # Generate price data with some patterns
     base_price = 100
     trend = np.cumsum(np.random.randn(n_samples) * 0.01)
     seasonality = 5 * np.sin(np.arange(n_samples) * 2 * np.pi / 24)  # Daily seasonality
     noise = np.random.randn(n_samples) * 2
-    
+
     close_prices = base_price + trend + seasonality + noise
-    
+
     # Generate OHLCV data
     data = pd.DataFrame({
         'datetime': dates,
@@ -54,11 +54,11 @@ def create_sample_data(n_samples: int = 1000) -> pd.DataFrame:
         'close': close_prices,
         'volume': np.random.randint(1000, 10000, n_samples)
     })
-    
+
     # Ensure OHLC relationships
     data['high'] = np.maximum(data['high'], np.maximum(data['open'], data['close']))
     data['low'] = np.minimum(data['low'], np.minimum(data['open'], data['close']))
-    
+
     return data
 
 
@@ -71,17 +71,17 @@ def create_target_variable(data: pd.DataFrame, horizon: int = 1) -> pd.Series:
 def demonstrate_mlflow_integration():
     """Demonstrate MLflow integration features."""
     logger.info("=== MLflow Integration Demo ===")
-    
+
     # Initialize MLflow manager
     mlflow_manager = MLflowManager(
         tracking_uri="sqlite:///mlflow_demo.db",
         registry_uri="sqlite:///mlflow_demo.db",
         experiment_name="crypto_trading_demo"
     )
-    
+
     # Start a new run
     run_id = mlflow_manager.start_run("demo_run")
-    
+
     # Log parameters
     params = {
         'model_type': 'xgboost',
@@ -90,7 +90,7 @@ def demonstrate_mlflow_integration():
         'learning_rate': 0.1
     }
     mlflow_manager.log_parameters(params)
-    
+
     # Simulate training and get metrics
     metrics = {
         'train_accuracy': 0.85,
@@ -100,10 +100,10 @@ def demonstrate_mlflow_integration():
         'max_drawdown': -0.05
     }
     mlflow_manager.log_metrics(metrics)
-    
+
     # Create sample model metadata
     from src.ml.mlflow_integration import ModelMetadata
-    
+
     metadata = ModelMetadata(
         model_name="crypto_prediction_model",
         version="1.0.0",
@@ -120,33 +120,33 @@ def demonstrate_mlflow_integration():
         data_version="2023.1.0",
         git_commit="abc123"
     )
-    
+
     # Log model (simulated)
     logger.info("Logging model to MLflow...")
     # mlflow_manager.log_model(model, "crypto_model", "xgboost", metadata)
-    
+
     # Register model
     logger.info("Registering model in MLflow registry...")
     # version = mlflow_manager.register_model("crypto_prediction_model", model_uri, "Staging")
-    
+
     # List models
     models = mlflow_manager.list_models()
     logger.info(f"Registered models: {len(models)}")
-    
+
     # End run
     mlflow_manager.end_run()
-    
+
     logger.info("MLflow integration demo completed")
 
 
 def demonstrate_feature_engineering():
     """Demonstrate feature engineering pipeline."""
     logger.info("=== Feature Engineering Pipeline Demo ===")
-    
+
     # Create sample data
     data = create_sample_data(500)
     logger.info(f"Created sample data with {len(data)} rows")
-    
+
     # Initialize feature engineering pipeline
     config = {
         "technical": {
@@ -167,52 +167,52 @@ def demonstrate_feature_engineering():
             "threshold": 0.01
         }
     }
-    
+
     feature_pipeline = FeatureEngineeringPipeline(config)
-    
+
     # Generate features
     logger.info("Generating features...")
     features_df = feature_pipeline.generate_features(data)
-    
+
     logger.info(f"Original features: {len(data.columns)}")
     logger.info(f"Generated features: {len(features_df.columns)}")
     logger.info(f"New features: {len(features_df.columns) - len(data.columns)}")
-    
+
     # Create target variable
     target = create_target_variable(data)
-    
+
     # Remove rows with NaN values
     valid_indices = ~(features_df.isnull().any(axis=1) | target.isnull())
     features_df = features_df[valid_indices]
     target = target[valid_indices]
-    
+
     # Feature selection
     logger.info("Performing feature selection...")
     selected_features = feature_pipeline.select_features(
         features_df, target, method="mutual_info", n_features=20
     )
-    
+
     logger.info(f"Selected {len(selected_features.columns)} features")
-    
+
     # Get feature importance
     importance = feature_pipeline.get_feature_importance()
     top_features = sorted(importance.items(), key=lambda x: x[1], reverse=True)[:10]
-    
+
     logger.info("Top 10 features by importance:")
     for feature, score in top_features:
         logger.info(f"  {feature}: {score:.4f}")
-    
+
     # Correlation analysis
     logger.info("Performing correlation analysis...")
     correlation_analysis = feature_pipeline.get_correlation_analysis(selected_features)
-    
+
     high_corr_pairs = correlation_analysis.get('high_correlation_pairs', [])
     logger.info(f"Found {len(high_corr_pairs)} highly correlated feature pairs")
-    
+
     # Feature scaling
     logger.info("Scaling features...")
     scaled_features = feature_pipeline.scale_features(selected_features, scaler_type="standard")
-    
+
     logger.info("Feature engineering demo completed")
     return scaled_features, target
 
@@ -220,7 +220,7 @@ def demonstrate_feature_engineering():
 def demonstrate_automated_training():
     """Demonstrate automated training pipeline."""
     logger.info("=== Automated Training Pipeline Demo ===")
-    
+
     # Create training configuration
     training_config = TrainingConfig(
         model_type=ModelType.XGBOOST,
@@ -240,7 +240,7 @@ def demonstrate_automated_training():
         n_features=20,
         scaler_type="standard"
     )
-    
+
     # Pipeline configuration
     pipeline_config = {
         "mlflow_tracking_uri": "sqlite:///automated_training.db",
@@ -263,85 +263,85 @@ def demonstrate_automated_training():
         },
         "deployment_threshold": 0.6
     }
-    
+
     # Initialize automated training pipeline
     pipeline = AutomatedTrainingPipeline(pipeline_config)
-    
+
     # Get training data
     data = create_sample_data(1000)
     target = create_target_variable(data)
-    
+
     # Remove NaN values
     valid_indices = ~(data.isnull().any(axis=1) | target.isnull())
     data = data[valid_indices]
     target = target[valid_indices]
-    
+
     # Trigger manual training
     logger.info("Triggering manual training...")
     pipeline.trigger_training(TrainingTrigger.MANUAL)
-    
+
     # Check drift
     logger.info("Checking for data drift...")
     drift_results = pipeline.check_drift(data)
-    
+
     if drift_results.get('overall_drift_detected'):
         logger.warning("Drift detected! Consider retraining model.")
         logger.info(f"Data drift: {drift_results.get('data_drift_detected')}")
         logger.info(f"Concept drift: {drift_results.get('concept_drift_detected')}")
     else:
         logger.info("No drift detected")
-    
+
     # Get performance report
     logger.info("Generating performance report...")
     performance_report = pipeline.get_performance_report()
-    
+
     logger.info("Performance report generated:")
     logger.info(f"  Performance trends: {len(performance_report.get('performance_trends', {}))}")
     logger.info(f"  Registered models: {len(performance_report.get('registered_models', []))}")
     logger.info(f"  Is training: {performance_report.get('is_training', False)}")
-    
+
     logger.info("Automated training demo completed")
 
 
 def demonstrate_ab_testing():
     """Demonstrate A/B testing framework."""
     logger.info("=== A/B Testing Framework Demo ===")
-    
+
     # Create sample data
     data = create_sample_data(1000)
     target = create_target_variable(data)
-    
+
     # Remove NaN values
     valid_indices = ~(data.isnull().any(axis=1) | target.isnull())
     data = data[valid_indices]
     target = target[valid_indices]
-    
+
     # Initialize A/B testing framework
     from src.ml.automated_training_pipeline import ABTestingFramework
-    
+
     ab_config = {
         "traffic_split": 0.5,
         "significance_level": 0.05
     }
-    
+
     ab_testing = ABTestingFramework(ab_config)
-    
+
     # Create two different models for comparison
     from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-    
+
     model_a = RandomForestRegressor(n_estimators=100, random_state=42)
     model_b = GradientBoostingRegressor(n_estimators=100, random_state=42)
-    
+
     # Train models
     from sklearn.model_selection import train_test_split
-    
+
     X_train, X_test, y_train, y_test = train_test_split(
         data, target, test_size=0.3, random_state=42
     )
-    
+
     model_a.fit(X_train, y_train)
     model_b.fit(X_train, y_train)
-    
+
     # Create A/B experiment
     experiment_id = ab_testing.create_experiment(
         "model_comparison_demo",
@@ -349,54 +349,54 @@ def demonstrate_ab_testing():
         model_b,
         ["mse", "r2", "sharpe_ratio"]
     )
-    
+
     # Run experiment
     logger.info("Running A/B experiment...")
     results = ab_testing.run_experiment(experiment_id, X_test, y_test)
-    
+
     logger.info("A/B Testing Results:")
     logger.info(f"  Experiment ID: {results['experiment_id']}")
     logger.info(f"  Recommendation: {results['recommendation']}")
-    
+
     if 'significance' in results:
         for metric, sig_result in results['significance'].items():
             logger.info(f"  {metric}:")
             logger.info(f"    Significant: {sig_result.get('significant', False)}")
             logger.info(f"    P-value: {sig_result.get('p_value', 0):.4f}")
             logger.info(f"    Improvement: {sig_result.get('improvement', 0):.2%}")
-    
+
     logger.info("A/B testing demo completed")
 
 
 def demonstrate_experiment_management():
     """Demonstrate experiment management."""
     logger.info("=== Experiment Management Demo ===")
-    
+
     # Initialize MLflow manager and experiment manager
     mlflow_manager = MLflowManager(
         tracking_uri="sqlite:///experiments.db",
         experiment_name="experiment_demo"
     )
-    
+
     experiment_manager = ExperimentManager(mlflow_manager)
-    
+
     # Create multiple experiments
     experiments = [
         ("xgboost_optimization", "XGBoost hyperparameter optimization"),
         ("feature_selection", "Feature selection methods comparison"),
         ("ensemble_models", "Ensemble model performance comparison")
     ]
-    
+
     for exp_name, exp_desc in experiments:
         experiment_id = experiment_manager.create_experiment(
             exp_name, exp_desc, {"type": "optimization"}
         )
         logger.info(f"Created experiment: {exp_name} (ID: {experiment_id})")
-    
+
     # Simulate multiple runs
     for i in range(5):
         run_id = mlflow_manager.start_run(f"run_{i+1}")
-        
+
         # Log different parameters
         params = {
             'learning_rate': 0.01 + i * 0.05,
@@ -404,7 +404,7 @@ def demonstrate_experiment_management():
             'n_estimators': 50 + i * 25
         }
         mlflow_manager.log_parameters(params)
-        
+
         # Log metrics
         metrics = {
             'test_accuracy': 0.75 + i * 0.02,
@@ -412,33 +412,33 @@ def demonstrate_experiment_management():
             'max_drawdown': -0.05 - i * 0.01
         }
         mlflow_manager.log_metrics(metrics)
-        
+
         mlflow_manager.end_run()
-    
+
     # Compare runs
     logger.info("Comparing experiment runs...")
     comparison_df = experiment_manager.compare_runs(
         "xgboost_optimization", "test_accuracy", max_results=5
     )
-    
+
     logger.info("Top 5 runs by test accuracy:")
     for _, run in comparison_df.iterrows():
         logger.info(f"  Run {run['run_id'][:8]}: {run['metric']:.4f}")
-    
+
     # Get best run
     best_run = experiment_manager.get_best_run("xgboost_optimization", "test_accuracy")
-    
+
     if best_run:
         logger.info(f"Best run: {best_run['run_id'][:8]}")
         logger.info(f"Best accuracy: {best_run['metric_value']:.4f}")
-    
+
     logger.info("Experiment management demo completed")
 
 
 def create_configuration_files():
     """Create configuration files for the ML system."""
     logger.info("=== Creating Configuration Files ===")
-    
+
     # MLflow configuration
     mlflow_config = {
         "tracking_uri": "sqlite:///mlflow.db",
@@ -446,10 +446,10 @@ def create_configuration_files():
         "experiment_name": "crypto_trading",
         "artifacts_dir": "mlruns"
     }
-    
+
     with open("config/mlflow_config.yaml", "w") as f:
         yaml.dump(mlflow_config, f, default_flow_style=False)
-    
+
     # Feature engineering configuration
     feature_config = {
         "technical": {
@@ -485,10 +485,10 @@ def create_configuration_files():
             "fit_on_train": True
         }
     }
-    
+
     with open("config/feature_engineering_config.yaml", "w") as f:
         yaml.dump(feature_config, f, default_flow_style=False)
-    
+
     # Training configuration
     training_config = {
         "model_type": "xgboost",
@@ -514,10 +514,10 @@ def create_configuration_files():
             "method": "standard"
         }
     }
-    
+
     with open("config/training_config.yaml", "w") as f:
         yaml.dump(training_config, f, default_flow_style=False)
-    
+
     # Monitoring configuration
     monitoring_config = {
         "performance_monitoring": {
@@ -542,10 +542,10 @@ def create_configuration_files():
             "backup_enabled": True
         }
     }
-    
+
     with open("config/monitoring_config.yaml", "w") as f:
         yaml.dump(monitoring_config, f, default_flow_style=False)
-    
+
     logger.info("Configuration files created in config/ directory")
 
 
@@ -553,29 +553,29 @@ def main():
     """Main function to run all demonstrations."""
     logger.info("Starting Advanced ML Features Demonstration")
     logger.info("=" * 50)
-    
+
     try:
         # Create configuration files
         create_configuration_files()
-        
+
         # Demonstrate MLflow integration
         demonstrate_mlflow_integration()
-        
+
         # Demonstrate feature engineering
         features, target = demonstrate_feature_engineering()
-        
+
         # Demonstrate automated training
         demonstrate_automated_training()
-        
+
         # Demonstrate A/B testing
         demonstrate_ab_testing()
-        
+
         # Demonstrate experiment management
         demonstrate_experiment_management()
-        
+
         logger.info("=" * 50)
         logger.info("All demonstrations completed successfully!")
-        
+
         # Summary
         logger.info("\nSummary of Advanced ML Features:")
         logger.info("✓ MLflow Integration - Model versioning, tracking, registry, deployment")
@@ -585,7 +585,7 @@ def main():
         logger.info("✓ Experiment Management - Organized experimentation")
         logger.info("✓ Drift Detection - Data and concept drift monitoring")
         logger.info("✓ Performance Monitoring - Real-time performance tracking")
-        
+
     except Exception as e:
         logger.error(f"Error in demonstration: {e}")
         raise

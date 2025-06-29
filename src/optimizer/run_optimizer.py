@@ -32,12 +32,12 @@ _logger = setup_logger(__name__)
 def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
     """
     Check if this combination has already been processed.
-    
+
     Args:
         data_file: Name of the data file
         entry_logic_name: Name of the entry logic mixin
         exit_logic_name: Name of the exit logic mixin
-        
+
     Returns:
         bool: True if already processed, False otherwise
     """
@@ -49,12 +49,12 @@ def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
         suffix="",
         include_timestamp=False
     )
-    
+
     # Look for existing files in results directory
     results_dir = "results"
     if not os.path.exists(results_dir):
         return False
-    
+
     # Check if any file matches the pattern
     for filename in os.listdir(results_dir):
         if filename.startswith(base_filename) and filename.endswith('.json'):
@@ -63,24 +63,24 @@ def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
             try:
                 with open(filepath, 'r') as f:
                     result_data = json.load(f)
-                
+
                 # Check if the file has complete results
                 if (result_data.get('trades') is not None and 
                     result_data.get('analyzers') is not None and 
                     result_data.get('best_params') is not None and
                     len(result_data.get('trades', [])) >= 0):
-                    
+
                     _logger.info(f"Skipping {data_file} + {entry_logic_name} + {exit_logic_name} - already processed")
                     _logger.info(f"   Found existing file: {filename}")
                     return True
                 else:
                     _logger.warning(f"Found existing file {filename} but it appears incomplete, will reprocess")
                     return False
-                    
+
             except Exception as e:
                 _logger.warning(f"Found existing file {filename} but it appears corrupted: {e}")
                 continue
-    
+
     return False
 
 
@@ -334,7 +334,7 @@ if __name__ == "__main__":
 
             for exit_logic_name in EXIT_MIXIN_REGISTRY.keys():
                 processed_combinations += 1
-                
+
                 # Check if already processed
                 if check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
                     skipped_combinations += 1
@@ -384,7 +384,7 @@ if __name__ == "__main__":
                     if len(study.trials) == 0:
                         _logger.warning(f"No successful trials for {entry_logic_name} + {exit_logic_name}, skipping")
                         continue
-                        
+
                     data = prepare_data_feed(df, symbol)
                     _optimizer_config = {
                         "data": data,
@@ -408,13 +408,13 @@ if __name__ == "__main__":
                         raise
 
                     _logger.info(f"Completed optimization {processed_combinations}/{total_combinations}")
-                    
+
                 except Exception as e:
                     _logger.error(f"Error for {entry_logic_name} + {exit_logic_name}: {e}", exc_info=True)
 
     end_time = dt.now()
     duration = end_time - start_time
-    
+
     _logger.info(f"Optimization completed at {end_time}")
     _logger.info(f"Total duration: {duration}")
     _logger.info(f"Summary:")

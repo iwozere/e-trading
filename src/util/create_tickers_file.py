@@ -56,10 +56,10 @@ def get_circulating_supply(ticker):
 def _load_tickers_from_csv(filename: str) -> List[str]:
     """
     Load tickers from a CSV file in the data/tickers directory.
-    
+
     Args:
         filename: Name of the CSV file (e.g., 'all_us_tickers.csv')
-        
+
     Returns:
         List of ticker symbols
     """
@@ -68,18 +68,18 @@ def _load_tickers_from_csv(filename: str) -> List[str]:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
         csv_path = os.path.join(project_root, 'data', 'tickers', filename)
-        
+
         if not os.path.exists(csv_path):
             print(f"Warning: CSV file not found: {csv_path}")
             return []
-        
+
         df = pd.read_csv(csv_path)
         if 'ticker' in df.columns:
             return df['ticker'].tolist()
         else:
             print(f"Warning: No 'ticker' column found in {filename}")
             return []
-            
+
     except Exception as e:
         print(f"Error loading tickers from {filename}: {str(e)}")
         return []

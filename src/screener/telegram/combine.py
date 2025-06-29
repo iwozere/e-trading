@@ -9,11 +9,11 @@ def generate_recommendation(technicals_data: dict) -> str:
     """Generate trading recommendation based on technical indicators."""
     if not technicals_data or not technicals_data.get("recommendations"):
         return "Unable to generate recommendation - insufficient data"
-    
+
     overall_rec = technicals_data.get("recommendations", {}).get("overall", {})
     signal = overall_rec.get("signal", "HOLD")
     reason = overall_rec.get("reason", "No reason available")
-    
+
     return f"{signal}: {reason}"
 
 
@@ -44,7 +44,7 @@ def format_comprehensive_analysis(ticker: str, technicals: Technicals, fundament
     """Format comprehensive analysis for email with all recommendations"""
     if not technicals:
         return f"❌ Unable to analyze {ticker}"
-    
+
     # Technical analysis text (HTML)
     technical_text = format_technical_analysis(ticker, technicals)
     technical_text_html = technical_text.replace('\n', '<br>').replace('*', '').replace('  ', ' ')

@@ -34,7 +34,7 @@ class RetryStrategy(Enum):
 @dataclass
 class RetryConfig:
     """Configuration for retry behavior."""
-    
+
     max_attempts: int = 3
     base_delay: float = 1.0  # seconds
     max_delay: float = 60.0  # seconds
@@ -42,15 +42,15 @@ class RetryConfig:
     jitter: bool = True
     jitter_factor: float = 0.1  # 10% jitter
     backoff_factor: float = 2.0  # for exponential backoff
-    
+
     # Retry conditions
     retry_on_exceptions: tuple = (Exception,)
     retry_on_result: Optional[Callable] = None  # Function to evaluate result
-    
+
     # Logging
     log_retries: bool = True
     log_level: str = "WARNING"
-    
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         if self.max_attempts < 1:
@@ -66,7 +66,7 @@ class RetryConfig:
 class RetryManager:
     """
     Manages retry logic with configurable strategies and exponential backoff.
-    
+
     Features:
     - Multiple retry strategies (fixed, exponential, linear, fibonacci)
     - Jitter to prevent thundering herd
@@ -74,11 +74,11 @@ class RetryManager:
     - Retry statistics tracking
     - Integration with circuit breaker
     """
-    
+
     def __init__(self, config: Optional[RetryConfig] = None):
         """
         Initialize retry manager.
-        
+
         Args:
             config: Retry configuration, uses defaults if None
         """
@@ -90,7 +90,7 @@ class RetryManager:
             'retry_attempts': 0,
             'total_retry_time': 0.0
         }
-    
+
     def execute(self, 
                 func: Callable, 
                 *args, 
@@ -98,82 +98,82 @@ class RetryManager:
                 **kwargs) -> Any:
         """
         Execute function with retry logic.
-        
+
         Args:
             func: Function to execute
             *args: Function arguments
             context: Additional context for logging
             **kwargs: Function keyword arguments
-            
+
         Returns:
             Function result
-            
+
         Raises:
             Last exception if all retries fail
         """
         context = context or {}
         last_exception = None
         start_time = time.time()
-        
+
         self.stats['total_calls'] += 1
-        
+
         for attempt in range(1, self.config.max_attempts + 1):
             try:
                 # Execute function
                 result = func(*args, **kwargs)
-                
+
                 # Check if result indicates failure
                 if self.config.retry_on_result and self.config.retry_on_result(result):
                     raise ValueError(f"Function returned failure result: {result}")
-                
+
                 # Success
                 self.stats['successful_calls'] += 1
                 if attempt > 1:
                     self._log_retry_success(attempt, context)
                 return result
-                
+
             except Exception as e:
                 last_exception = e
-                
+
                 # Check if we should retry this exception
                 if not self._should_retry(e):
                     self.stats['failed_calls'] += 1
                     raise e
-                
+
                 # Only increment retry attempts if we're actually going to retry
                 self.stats['retry_attempts'] += 1
-                
+
                 # Check if we've exhausted retries
                 if attempt >= self.config.max_attempts:
                     self.stats['failed_calls'] += 1
                     self._log_final_failure(attempt, e, context)
                     raise e
-                
+
                 # Calculate delay
                 delay = self._calculate_delay(attempt)
-                
+
                 # Log retry attempt
                 self._log_retry_attempt(attempt, e, delay, context)
-                
+
                 # Wait before retry
                 time.sleep(delay)
-        
+
         # This should never be reached, but just in case
         self.stats['failed_calls'] += 1
         raise last_exception
-    
+
     def _should_retry(self, exception: Exception) -> bool:
         """Determine if exception should trigger a retry."""
         # Check if exception type is in retry list
         if not isinstance(exception, self.config.retry_on_exceptions):
             return False
-        
+
         # Check if it's a TradingException with retry_after
         if isinstance(exception, TradingException):
             return exception.should_retry()
-        
+
         return True
-    
+
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay for retry attempt."""
         if self.config.strategy == RetryStrategy.FIXED:
@@ -186,18 +186,18 @@ class RetryManager:
             delay = self.config.base_delay * self._fibonacci(attempt)
         else:
             delay = self.config.base_delay
-        
+
         # Apply max delay limit
         delay = min(delay, self.config.max_delay)
-        
+
         # Apply jitter if enabled
         if self.config.jitter:
             jitter_amount = delay * self.config.jitter_factor
             delay += random.uniform(-jitter_amount, jitter_amount)
             delay = max(0, delay)  # Ensure non-negative
-        
+
         return delay
-    
+
     def _fibonacci(self, n: int) -> int:
         """Calculate fibonacci number."""
         if n <= 1:
@@ -206,34 +206,34 @@ class RetryManager:
         for _ in range(2, n + 1):
             a, b = b, a + b
         return b
-    
+
     def _log_retry_attempt(self, attempt: int, exception: Exception, delay: float, context: Dict[str, Any]):
         """Log retry attempt."""
         if not self.config.log_retries:
             return
-        
+
         log_level = getattr(logging, self.config.log_level.upper(), logging.WARNING)
         _logger.log(log_level, 
                    f"Retry attempt {attempt}/{self.config.max_attempts} failed: {type(exception).__name__}: {str(exception)}. "
                    f"Retrying in {delay:.2f}s. Context: {context}")
-    
+
     def _log_retry_success(self, attempt: int, context: Dict[str, Any]):
         """Log successful retry."""
         if not self.config.log_retries:
             return
-        
+
         log_level = getattr(logging, self.config.log_level.upper(), logging.WARNING)
         _logger.log(log_level, 
                    f"Retry succeeded after {attempt} attempts. Context: {context}")
-    
+
     def _log_final_failure(self, attempt: int, exception: Exception, context: Dict[str, Any]):
         """Log final failure after all retries."""
         if not self.config.log_retries:
             return
-        
+
         _logger.error(f"All {attempt} retry attempts failed. Final error: {type(exception).__name__}: {str(exception)}. "
                      f"Context: {context}")
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get retry statistics."""
         stats = self.stats.copy()
@@ -244,7 +244,7 @@ class RetryManager:
             stats['success_rate'] = 0.0
             stats['retry_rate'] = 0.0
         return stats
-    
+
     def reset_stats(self):
         """Reset retry statistics."""
         self.stats = {
@@ -259,10 +259,10 @@ class RetryManager:
 def retry(config: Optional[RetryConfig] = None):
     """
     Decorator for adding retry functionality to functions.
-    
+
     Args:
         config: Retry configuration
-        
+
     Example:
         @retry(RetryConfig(max_attempts=3, base_delay=1.0))
         def my_function():
@@ -271,15 +271,15 @@ def retry(config: Optional[RetryConfig] = None):
     """
     def decorator(func: Callable) -> Callable:
         retry_manager = RetryManager(config)
-        
+
         @wraps(func)
         def wrapper(*args, **kwargs):
             return retry_manager.execute(func, *args, **kwargs)
-        
+
         # Add retry manager to wrapper for access to stats
         wrapper.retry_manager = retry_manager
         return wrapper
-    
+
     return decorator
 
 

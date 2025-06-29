@@ -60,24 +60,24 @@ async def start_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             risk_per_trade=0.01,
             max_open_trades=3
         )
-        
+
         # Dynamically import the bot class
         bot_module = importlib.import_module(f"src.trading.{strategy_name}_bot")
         bot_class = getattr(
             bot_module,
             "".join([w.capitalize() for w in strategy_name.split("_")]) + "Bot",
         )
-        
+
         # Create bot instance with config file name
         config_filename = f"telegram_{strategy_name}.json"
         bot_instance = bot_class(config_filename)
         running_bots[strategy_name] = bot_instance
-        
+
         # Start the bot in a background thread
         import threading
         t = threading.Thread(target=bot_instance.run, daemon=True)
         t.start()
-        
+
         await update.message.reply_text(f"Started bot for {strategy_name} with config: {config.bot_id}")
     except Exception as e:
         _logger.error(f"Failed to start bot: {e}")

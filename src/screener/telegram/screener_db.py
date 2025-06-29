@@ -10,7 +10,7 @@ def init_db():
     """Initialize the screener database with required tables."""
     conn = get_conn()
     cur = conn.cursor()
-    
+
     # Create users table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -19,7 +19,7 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
     # Create tickers table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS tickers (
@@ -32,7 +32,7 @@ def init_db():
             UNIQUE(user_id, provider, ticker)
         )
     """)
-    
+
     conn.commit()
     conn.close()
 

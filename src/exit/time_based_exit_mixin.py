@@ -64,16 +64,16 @@ class TimeBasedExitMixin(BaseExitMixin):
                 # Use calendar time
                 if self.strategy.current_trade is None:
                     return False
-                
+
                 current_time = self.strategy.data.datetime.datetime(0)
                 entry_time = self.strategy.current_trade.get("entry_time")
-                
+
                 if entry_time is None:
                     return False
-                
+
                 time_diff = (current_time - entry_time).total_seconds() / 60
                 return_value = time_diff >= self.get_param("x_max_minutes")
-                
+
                 if return_value:
                     logger.debug(
                         f"EXIT: Price: {self.strategy.data.close[0]}, "
@@ -85,10 +85,10 @@ class TimeBasedExitMixin(BaseExitMixin):
                 # Use bar count
                 if self.entry_bar is None:
                     return False
-                
+
                 bars_held = len(self.strategy.data) - self.entry_bar
                 return_value = bars_held >= self.get_param("x_max_bars")
-                
+
                 if return_value:
                     logger.debug(
                         f"EXIT: Price: {self.strategy.data.close[0]}, "
@@ -96,9 +96,9 @@ class TimeBasedExitMixin(BaseExitMixin):
                         f"Max bars: {self.get_param('x_max_bars')}"
                     )
                     self.strategy.current_exit_reason = "time_limit_bars"
-            
+
             return return_value
-            
+
         except Exception as e:
             logger.error(f"Error in should_exit: {e}", exc_info=e)
             return False

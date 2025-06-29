@@ -13,9 +13,9 @@ from src.screener.tickers_list import (
 
 def test_ticker_loading():
     """Test that all ticker functions load data correctly"""
-    
+
     print("Testing ticker loading from CSV files...")
-    
+
     # Test all functions
     functions = [
         ("All US Tickers", get_all_us_tickers),
@@ -24,7 +24,7 @@ def test_ticker_loading():
         ("US Medium Cap Tickers", get_us_medium_cap_tickers),
         ("US Large Cap Tickers", get_us_large_cap_tickers),
     ]
-    
+
     for name, func in functions:
         try:
             tickers = func()
@@ -33,7 +33,7 @@ def test_ticker_loading():
                 print(f"  Sample tickers: {tickers[:5]}")
         except Exception as e:
             print(f"✗ {name}: Error - {str(e)}")
-    
+
     print("\nAll tests completed!")
 
 if __name__ == "__main__":

@@ -13,18 +13,18 @@ from .schemas import Environment, BrokerType, DataSourceType, StrategyType, Noti
 class ConfigTemplates:
     """
     Configuration templates for different use cases.
-    
+
     Provides pre-defined templates for:
     - Trading bots (paper/live)
     - Optimizers
     - Data feeds
     - Development/Staging/Production environments
     """
-    
+
     def __init__(self):
         """Initialize configuration templates"""
         self._templates = self._load_templates()
-    
+
     def _load_templates(self) -> Dict[str, Dict[str, Any]]:
         """Load all configuration templates"""
         return {
@@ -32,30 +32,30 @@ class ConfigTemplates:
             "trading_paper": self._get_paper_trading_template(),
             "trading_live": self._get_live_trading_template(),
             "trading_dev": self._get_dev_trading_template(),
-            
+
             # Optimizer Templates
             "optimizer_basic": self._get_basic_optimizer_template(),
             "optimizer_advanced": self._get_advanced_optimizer_template(),
-            
+
             # Data Feed Templates
             "data_binance": self._get_binance_data_template(),
             "data_yahoo": self._get_yahoo_data_template(),
             "data_ibkr": self._get_ibkr_data_template(),
-            
+
             # Environment Templates
             "env_development": self._get_development_env_template(),
             "env_staging": self._get_staging_env_template(),
             "env_production": self._get_production_env_template(),
         }
-    
+
     def get_template(self, template_name: str) -> Optional[Dict[str, Any]]:
         """Get a configuration template by name"""
         return self._templates.get(template_name, {}).copy()
-    
+
     def list_templates(self) -> List[str]:
         """List all available template names"""
         return list(self._templates.keys())
-    
+
     def get_template_description(self, template_name: str) -> str:
         """Get description for a template"""
         descriptions = {
@@ -72,14 +72,14 @@ class ConfigTemplates:
             "env_production": "Production environment settings",
         }
         return descriptions.get(template_name, "No description available")
-    
+
     def _get_paper_trading_template(self) -> Dict[str, Any]:
         """Paper trading bot template"""
         return {
             "environment": Environment.DEVELOPMENT,
             "version": "1.0.0",
             "description": "Paper trading bot for strategy testing",
-            
+
             "bot_id": "paper_bot_001",
             "broker": {
                 "type": BrokerType.BINANCE_PAPER,
@@ -167,7 +167,7 @@ class ConfigTemplates:
                 }
             }
         }
-    
+
     def _get_live_trading_template(self) -> Dict[str, Any]:
         """Live trading bot template"""
         template = self._get_paper_trading_template()
@@ -221,7 +221,7 @@ class ConfigTemplates:
             }
         })
         return template
-    
+
     def _get_dev_trading_template(self) -> Dict[str, Any]:
         """Development trading bot template"""
         template = self._get_paper_trading_template()
@@ -243,14 +243,14 @@ class ConfigTemplates:
             }
         })
         return template
-    
+
     def _get_basic_optimizer_template(self) -> Dict[str, Any]:
         """Basic optimizer template"""
         return {
             "environment": Environment.DEVELOPMENT,
             "version": "1.0.0",
             "description": "Basic optimization configuration",
-            
+
             "optimizer_type": "optuna",
             "initial_capital": 1000.0,
             "commission": 0.001,
@@ -258,7 +258,7 @@ class ConfigTemplates:
             "n_trials": 100,
             "n_jobs": 1,
             "position_size": 0.1,
-            
+
             "entry_strategies": [
                 {
                     "name": "RSIBBVolumeEntryMixin",
@@ -278,12 +278,12 @@ class ConfigTemplates:
                     }
                 }
             ],
-            
+
             "plot": True,
             "save_trades": True,
             "output_dir": "results"
         }
-    
+
     def _get_advanced_optimizer_template(self) -> Dict[str, Any]:
         """Advanced optimizer template"""
         template = self._get_basic_optimizer_template()
@@ -291,7 +291,7 @@ class ConfigTemplates:
             "description": "Advanced optimization with extended parameters",
             "n_trials": 500,
             "n_jobs": -1,  # Use all cores
-            
+
             "entry_strategies": [
                 {
                     "name": "RSIBBVolumeEntryMixin",
@@ -330,14 +330,14 @@ class ConfigTemplates:
             ]
         })
         return template
-    
+
     def _get_binance_data_template(self) -> Dict[str, Any]:
         """Binance data feed template"""
         return {
             "environment": Environment.DEVELOPMENT,
             "version": "1.0.0",
             "description": "Binance data feed configuration",
-            
+
             "data_source": DataSourceType.BINANCE,
             "symbol": "BTCUSDT",
             "interval": "1h",
@@ -345,14 +345,14 @@ class ConfigTemplates:
             "retry_interval": 60,
             "testnet": True
         }
-    
+
     def _get_yahoo_data_template(self) -> Dict[str, Any]:
         """Yahoo Finance data feed template"""
         return {
             "environment": Environment.DEVELOPMENT,
             "version": "1.0.0",
             "description": "Yahoo Finance data feed configuration",
-            
+
             "data_source": DataSourceType.YAHOO,
             "symbol": "AAPL",
             "interval": "5m",
@@ -360,14 +360,14 @@ class ConfigTemplates:
             "retry_interval": 60,
             "polling_interval": 60
         }
-    
+
     def _get_ibkr_data_template(self) -> Dict[str, Any]:
         """IBKR data feed template"""
         return {
             "environment": Environment.DEVELOPMENT,
             "version": "1.0.0",
             "description": "IBKR data feed configuration",
-            
+
             "data_source": DataSourceType.IBKR,
             "symbol": "SPY",
             "interval": "1m",
@@ -377,7 +377,7 @@ class ConfigTemplates:
             "port": 7497,
             "client_id": 1
         }
-    
+
     def _get_development_env_template(self) -> Dict[str, Any]:
         """Development environment template"""
         return {
@@ -395,7 +395,7 @@ class ConfigTemplates:
                 "debug": True
             }
         }
-    
+
     def _get_staging_env_template(self) -> Dict[str, Any]:
         """Staging environment template"""
         return {
@@ -413,7 +413,7 @@ class ConfigTemplates:
                 "debug": False
             }
         }
-    
+
     def _get_production_env_template(self) -> Dict[str, Any]:
         """Production environment template"""
         return {

@@ -19,11 +19,11 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
         self._backfill_historical_data()
         self._start_websocket()
         self._state = self._ST_LIVE
-        
+
     def _backfill_historical_data(self):
         end_time = int(datetime.now().timestamp() * 1000)
         start_time = end_time - (self.p.lookback * 60 * 1000)
-        
+
         url = "https://api.binance.com/api/v3/klines"
         params = {
             'symbol': self.p.symbol.upper(),
@@ -32,10 +32,10 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
             'endTime': end_time,
             'limit': self.p.lookback
         }
-        
+
         response = requests.get(url, params=params)
         klines = response.json()
-        
+
         for k in klines:
             self.data_queue.put({
                 'datetime': datetime.utcfromtimestamp(k[0]/1000),
@@ -104,7 +104,7 @@ class SMACrossover(bt.Strategy):
     def next(self):
         if self.order:
             return
-            
+
         if not self.position:
             if self.data.close[0] > self.sma[0]:
                 self.order = self.buy()
@@ -122,18 +122,18 @@ class SMACrossover(bt.Strategy):
 
 if __name__ == '__main__':
     cerebro = bt.Cerebro()
-    
+
     data = BinanceEnhancedFeed(
         symbol='BTCUSDT',
         interval='1m',
         lookback=200
     )
-    
+
     cerebro.adddata(data)
     cerebro.addstrategy(SMACrossover)
     cerebro.broker.setcash(10000)
     cerebro.broker.setcommission(commission=0.001)
-    
+
     print(f"Starting Portfolio Value: {cerebro.broker.getvalue():.2f}")
     cerebro.run()
     print(f"Final Portfolio Value: {cerebro.broker.getvalue():.2f}")

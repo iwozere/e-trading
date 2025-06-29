@@ -32,42 +32,42 @@ Base = declarative_base()
 class Trade(Base):
     """
     Trade table for tracking complete trade lifecycle.
-    
+
     Supports:
     - Live trading (paper and real)
     - Optimization backtesting
     - Order lifecycle tracking
     - Restart recovery
     """
-    
+
     __tablename__ = 'trades'
-    
+
     # Primary identification
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    
+
     # Bot/Config identification
     bot_id = Column(String(255), nullable=False, index=True)
     trade_type = Column(String(10), nullable=False, index=True)  # 'paper', 'live', 'optimization'
-    
+
     # Strategy identification
     strategy_name = Column(String(100), nullable=True)
     entry_logic_name = Column(String(100), nullable=False)
     exit_logic_name = Column(String(100), nullable=False)
-    
+
     # Trade identification
     symbol = Column(String(20), nullable=False, index=True)
     interval = Column(String(10), nullable=False)  # 15m, 1h, 4h, etc.
-    
+
     # Trade timing
     entry_time = Column(DateTime, nullable=True)
     exit_time = Column(DateTime, nullable=True)
-    
+
     # Order tracking (for live/paper trading)
     buy_order_created = Column(DateTime, nullable=True)
     buy_order_closed = Column(DateTime, nullable=True)
     sell_order_created = Column(DateTime, nullable=True)
     sell_order_closed = Column(DateTime, nullable=True)
-    
+
     # Trade details
     entry_price = Column(Numeric(20, 8), nullable=True)
     exit_price = Column(Numeric(20, 8), nullable=True)
@@ -75,24 +75,24 @@ class Trade(Base):
     exit_value = Column(Numeric(20, 8), nullable=True)
     size = Column(Numeric(20, 8), nullable=True)
     direction = Column(String(10), nullable=False)  # 'long', 'short'
-    
+
     # Financial calculations
     commission = Column(Numeric(20, 8), nullable=True)
     gross_pnl = Column(Numeric(20, 8), nullable=True)
     net_pnl = Column(Numeric(20, 8), nullable=True)
     pnl_percentage = Column(Numeric(10, 4), nullable=True)
-    
+
     # Trade metadata
     exit_reason = Column(String(100), nullable=True)
     status = Column(String(20), nullable=False, index=True)  # 'open', 'closed', 'cancelled'
-    
+
     # Additional metadata
     extra_metadata = Column(JSON, nullable=True)  # Store additional context
-    
+
     # System fields
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Constraints
     __table_args__ = (
         CheckConstraint(
@@ -112,10 +112,10 @@ class Trade(Base):
         Index('idx_strategy', 'entry_logic_name', 'exit_logic_name'),
         Index('idx_bot_trade_type', 'bot_id', 'trade_type'),
     )
-    
+
     def __repr__(self):
         return f"<Trade(id={self.id}, symbol={self.symbol}, status={self.status}, bot_id={self.bot_id})>"
-    
+
     def to_dict(self):
         """Convert trade to dictionary for JSON serialization."""
         return {
@@ -154,40 +154,40 @@ class Trade(Base):
 class BotInstance(Base):
     """
     Bot instance tracking for managing bot lifecycle.
-    
+
     Tracks:
     - Bot sessions (live/paper trading)
     - Optimization runs
     - Performance metrics
     - Error tracking
     """
-    
+
     __tablename__ = 'bot_instances'
-    
+
     # Primary identification
     id = Column(String(255), primary_key=True)  # Config filename or optimization result filename
-    
+
     # Bot type and configuration
     type = Column(String(20), nullable=False)  # 'live', 'paper', 'optimization'
     config_file = Column(String(255), nullable=True)  # Full path to config file
-    
+
     # Status tracking
     status = Column(String(20), nullable=False, default='stopped')  # 'running', 'stopped', 'error', 'completed'
     started_at = Column(DateTime, default=datetime.utcnow)
     last_heartbeat = Column(DateTime, default=datetime.utcnow)
     error_count = Column(Integer, default=0)
-    
+
     # Performance tracking
     current_balance = Column(Numeric(20, 8), nullable=True)
     total_pnl = Column(Numeric(20, 8), nullable=True)
-    
+
     # Additional metadata
     extra_metadata = Column(JSON, nullable=True)  # Store additional config info
-    
+
     # System fields
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Constraints
     __table_args__ = (
         CheckConstraint(
@@ -202,10 +202,10 @@ class BotInstance(Base):
         Index('idx_bot_status', 'status'),
         Index('idx_last_heartbeat', 'last_heartbeat'),
     )
-    
+
     def __repr__(self):
         return f"<BotInstance(id={self.id}, type={self.type}, status={self.status})>"
-    
+
     def to_dict(self):
         """Convert bot instance to dictionary for JSON serialization."""
         return {
@@ -227,38 +227,38 @@ class BotInstance(Base):
 class PerformanceMetrics(Base):
     """
     Performance metrics table for storing strategy performance data.
-    
+
     Stores:
     - Sharpe ratio, win rate, profit factor
     - Drawdown analysis
     - Risk metrics
     - Strategy parameters
     """
-    
+
     __tablename__ = 'performance_metrics'
-    
+
     # Primary identification
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    
+
     # Bot identification
     bot_id = Column(String(255), nullable=False, index=True)
     trade_type = Column(String(10), nullable=False)  # 'paper', 'live', 'optimization'
-    
+
     # Strategy identification
     symbol = Column(String(20), nullable=True)
     interval = Column(String(10), nullable=True)
     entry_logic_name = Column(String(100), nullable=True)
     exit_logic_name = Column(String(100), nullable=True)
-    
+
     # Performance metrics
     metrics = Column(JSON, nullable=False)  # Store all performance metrics
-    
+
     # Calculation metadata
     calculated_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # System fields
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Constraints
     __table_args__ = (
         CheckConstraint(
@@ -269,10 +269,10 @@ class PerformanceMetrics(Base):
         Index('idx_metrics_calculated_at', 'calculated_at'),
         Index('idx_metrics_strategy', 'entry_logic_name', 'exit_logic_name'),
     )
-    
+
     def __repr__(self):
         return f"<PerformanceMetrics(id={self.id}, bot_id={self.bot_id}, calculated_at={self.calculated_at})>"
-    
+
     def to_dict(self):
         """Convert performance metrics to dictionary for JSON serialization."""
         return {
@@ -292,28 +292,28 @@ class PerformanceMetrics(Base):
 # Database connection and session management
 class DatabaseManager:
     """Database manager for handling connections and sessions."""
-    
+
     def __init__(self, database_url: str = None):
         """
         Initialize database manager.
-        
+
         Args:
             database_url: SQLAlchemy database URL. If None, uses SQLite for development.
         """
         if database_url is None:
             # Use SQLite for development
             database_url = "sqlite:///db/trading.db"
-        
+
         self.engine = create_engine(database_url)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-        
+
         # Create tables
         Base.metadata.create_all(bind=self.engine)
-    
+
     def get_session(self):
         """Get database session."""
         return self.SessionLocal()
-    
+
     def close_session(self, session):
         """Close database session."""
         session.close()

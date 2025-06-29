@@ -61,7 +61,7 @@ def extract_symbol_interval_dates(filename):
     # Remove the .json extension
     if base.endswith(".json"):
         base = base[:-5]
-    
+
     parts = base.split("_")
     if len(parts) >= 4:
         symbol = parts[0]
@@ -88,24 +88,24 @@ def process_json_file(file_path):
     """Process a single JSON file and extract relevant information"""
     with open(file_path, "r") as f:
         data = json.load(f)
-    
+
     # Extract symbol, interval, start_date, end_date from filename
     symbol, interval, start_date, end_date = extract_symbol_interval_dates(file_path)
     if not all([symbol, interval, start_date, end_date]):
         print(f"Warning: Could not extract symbol/interval/dates from filename: {file_path}")
         return None
-    
+
     # Get basic information
     best_params = data.get("best_params", {})
     analyzers = data.get("analyzers", {})
-    
+
     # Extract entry and exit logic names
     entry_logic_name = extract_nested_value(best_params, ["entry_logic", "name"], "unknown")
     exit_logic_name = extract_nested_value(best_params, ["exit_logic", "name"], "unknown")
-    
+
     # Extract position size
     position_size = best_params.get("position_size", 0.1)
-    
+
     # Extract metrics from analyzers
     win_rate = extract_nested_value(analyzers, ["winrate", "win_rate"], None)
     profit_factor = extract_nested_value(analyzers, ["profit_factor", "profit_factor"], None)
@@ -123,7 +123,7 @@ def process_json_file(file_path):
     total_return = extract_nested_value(analyzers, ["returns", "rtot"], None)
     avg_return = extract_nested_value(analyzers, ["returns", "ravg"], None)
     normalized_return = extract_nested_value(analyzers, ["returns", "rnorm"], None)
-    
+
     # Create result dictionary
     result = {
         "json_filename": os.path.basename(file_path),
@@ -156,24 +156,24 @@ def process_json_file(file_path):
         "avg_return": avg_return,
         "normalized_return": normalized_return,
     }
-    
+
     # Add entry logic parameters
     entry_params = extract_nested_value(best_params, ["entry_logic", "params"], {})
     for param_name, param_value in entry_params.items():
         result[f"entry_{param_name}"] = param_value
-    
+
     # Add exit logic parameters
     exit_params = extract_nested_value(best_params, ["exit_logic", "params"], {})
     for param_name, param_value in exit_params.items():
         result[f"exit_{param_name}"] = param_value
-    
+
     return result
 
 
 def main():
     results_dir = "results"
     all_results = []
-    
+
     for filename in os.listdir(results_dir):
         if filename.endswith(".json") and not filename.endswith("_summary.csv"):
             file_path = os.path.join(results_dir, filename)
@@ -183,11 +183,11 @@ def main():
                     all_results.append(result)
             except Exception as e:
                 print(f"Error processing {filename}: {str(e)}")
-    
+
     df = pd.DataFrame(all_results)
     print("Columns in DataFrame:", df.columns.tolist())
     print(f"Processed {len(df)} result files")
-    
+
     if not df.empty:
         df = df.sort_values(["symbol", "interval", "data_start_date"])
         output_file = os.path.join(results_dir, "optimization_results_summary.csv")

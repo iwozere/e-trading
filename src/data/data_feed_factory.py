@@ -22,22 +22,22 @@ _logger = setup_logger(__name__)
 class DataFeedFactory:
     """
     Factory for creating live data feeds based on configuration.
-    
+
     This factory helps determine which data feed implementation to use
     based on the data source and configuration parameters.
     """
-    
+
     @staticmethod
     def create_data_feed(config: Dict[str, Any]) -> Optional[BaseLiveDataFeed]:
         """
         Create a live data feed based on configuration.
-        
+
         Args:
             config: Configuration dictionary with data feed parameters
-            
+
         Returns:
             Live data feed instance, or None if creation fails
-            
+
         Configuration format:
         {
             "data_source": "binance|yahoo|ibkr",
@@ -46,15 +46,15 @@ class DataFeedFactory:
             "lookback_bars": 1000,
             "retry_interval": 60,
             "on_new_bar": callback_function,
-            
+
             # Binance specific
             "api_key": "your_api_key",
             "api_secret": "your_api_secret", 
             "testnet": false,
-            
+
             # Yahoo specific
             "polling_interval": 60,
-            
+
             # IBKR specific
             "host": "127.0.0.1",
             "port": 7497,
@@ -63,7 +63,7 @@ class DataFeedFactory:
         """
         try:
             data_source = config.get("data_source", "").lower()
-            
+
             if data_source == "binance":
                 return DataFeedFactory._create_binance_feed(config)
             elif data_source == "yahoo":
@@ -73,11 +73,11 @@ class DataFeedFactory:
             else:
                 _logger.error(f"Unknown data source: {data_source}")
                 return None
-                
+
         except Exception as e:
             _logger.error(f"Error creating data feed: {str(e)}")
             return None
-    
+
     @staticmethod
     def _create_binance_feed(config: Dict[str, Any]) -> BinanceLiveDataFeed:
         """Create a Binance live data feed."""
@@ -91,7 +91,7 @@ class DataFeedFactory:
             api_secret=config.get("api_secret"),
             testnet=config.get("testnet", False)
         )
-    
+
     @staticmethod
     def _create_yahoo_feed(config: Dict[str, Any]) -> YahooLiveDataFeed:
         """Create a Yahoo Finance live data feed."""
@@ -103,7 +103,7 @@ class DataFeedFactory:
             on_new_bar=config.get("on_new_bar"),
             polling_interval=config.get("polling_interval", 60)
         )
-    
+
     @staticmethod
     def _create_ibkr_feed(config: Dict[str, Any]) -> IBKRLiveDataFeed:
         """Create an IBKR live data feed."""
@@ -117,22 +117,22 @@ class DataFeedFactory:
             port=config.get("port", 7497),
             client_id=config.get("client_id", 1)
         )
-    
+
     @staticmethod
     def get_supported_sources() -> list:
         """
         Get list of supported data sources.
-        
+
         Returns:
             List of supported data source names
         """
         return ["binance", "yahoo", "ibkr"]
-    
+
     @staticmethod
     def get_source_info() -> Dict[str, Dict[str, Any]]:
         """
         Get information about supported data sources.
-        
+
         Returns:
             Dictionary with information about each data source
         """

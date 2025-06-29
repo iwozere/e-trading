@@ -50,13 +50,13 @@ STRATEGY_REGISTRY = {
 class LiveTradingBot(BaseTradingBot):
     """
     Comprehensive live trading bot that orchestrates all components.
-    
+
     This bot inherits from BaseTradingBot and extends it with:
     - Live data feed management
     - Backtrader integration
     - Real-time strategy execution
     - Enhanced error handling and recovery
-    
+
     It leverages BaseTradingBot's:
     - Position management
     - Trade history tracking
@@ -64,24 +64,24 @@ class LiveTradingBot(BaseTradingBot):
     - State persistence
     - Balance management
     """
-    
+
     def __init__(self, config_file: str):
         """
         Initialize the live trading bot.
-        
+
         Args:
             config_file: Path to configuration file (e.g., '0001.json')
         """
         # Load configuration first using new Pydantic models
         self.config_file = config_file
         self.config = self._load_configuration()
-        
+
         # Extract components for BaseTradingBot
         broker = self._create_broker()
         strategy_name = self.config.strategy_type.value
         strategy_class = STRATEGY_REGISTRY.get(strategy_name, CustomStrategy)
         parameters = self._create_strategy_parameters()
-        
+
         # Initialize BaseTradingBot with legacy config format for compatibility
         legacy_config = self._convert_to_legacy_format()
         super().__init__(
@@ -92,7 +92,7 @@ class LiveTradingBot(BaseTradingBot):
             paper_trading=self.config.paper_trading,
             bot_id=self.config.bot_id
         )
-        
+
         # LiveTradingBot specific attributes
         self.data_feed = None
         self.cerebro = None
@@ -100,17 +100,17 @@ class LiveTradingBot(BaseTradingBot):
         self.error_count = 0
         self.max_errors = 5
         self.error_retry_interval = 60  # seconds
-        
+
         # Threading
         self.main_thread = None
         self.monitor_thread = None
-        
+
         # Override trading pair from config
         self.trading_pair = self.config.symbol
-        
+
         # Load open positions
         self._load_open_positions()
-    
+
     def _load_configuration(self) -> TradingBotConfig:
         """Load and validate configuration using new Pydantic models."""
         try:
@@ -121,7 +121,7 @@ class LiveTradingBot(BaseTradingBot):
         except Exception as e:
             _logger.error(f"Failed to load configuration: {e}")
             raise
-    
+
     def _convert_to_legacy_format(self) -> Dict[str, Any]:
         """Convert new config format to legacy format for BaseTradingBot compatibility."""
         return {
@@ -139,7 +139,7 @@ class LiveTradingBot(BaseTradingBot):
             "max_exposure": self.config.max_exposure,
             "position_sizing_pct": self.config.position_size
         }
-    
+
     def _create_broker(self):
         """Create and initialize the broker."""
         try:
@@ -150,7 +150,7 @@ class LiveTradingBot(BaseTradingBot):
         except Exception as e:
             _logger.error(f"Error creating broker: {e}")
             raise
-    
+
     def _create_strategy_parameters(self) -> Dict[str, Any]:
         """Create the strategy parameters for BaseTradingBot."""
         try:
@@ -169,66 +169,66 @@ class LiveTradingBot(BaseTradingBot):
                     "use_talib": self.config.strategy_params.get("use_talib", False)
                 }
             }
-            
+
             _logger.info(f"Created strategy parameters for: {self.config.strategy_type}")
             return parameters
-            
+
         except Exception as e:
             _logger.error(f"Error creating strategy parameters: {e}")
             raise
-    
+
     def _create_data_feed(self):
         """Create and initialize the data feed."""
         try:
             data_config = self.config.get_data_config()
-            
+
             # Add callback for new data notifications
             def on_new_bar(symbol, timestamp, data):
                 self._notify_new_bar(symbol, timestamp, data)
             data_config["on_new_bar"] = on_new_bar
-            
+
             self.data_feed = DataFeedFactory.create_data_feed(data_config)
-            
+
             if self.data_feed is None:
                 raise ValueError("Failed to create data feed")
-            
+
             _logger.info(f"Created data feed for {self.config.symbol}")
             return True
-            
+
         except Exception as e:
             _logger.error(f"Error creating data feed: {e}")
             return False
-    
+
     def _setup_backtrader(self):
         """Setup Backtrader engine."""
         try:
             self.cerebro = bt.Cerebro()
-            
+
             # Add data feed
             self.cerebro.adddata(self.data_feed)
-            
+
             # Add strategy
             self.cerebro.addstrategy(self.strategy_class, **self.parameters)
-            
+
             # Setup broker
             if self.broker:
                 self.cerebro.broker = self.broker
-            
+
             # Setup initial cash
             initial_balance = self.config.initial_balance
             self.cerebro.broker.setcash(initial_balance)
-            
+
             # Setup commission
             commission = self.config.commission
             self.cerebro.broker.setcommission(commission=commission)
-            
+
             _logger.info(f"Setup Backtrader with initial balance: {initial_balance}")
             return True
-            
+
         except Exception as e:
             _logger.error(f"Error setting up Backtrader: {e}")
             return False
-    
+
     def _load_open_positions(self):
         """Load open positions from database or state file."""
         try:
@@ -236,11 +236,11 @@ class LiveTradingBot(BaseTradingBot):
             self.load_state()
             _logger.info(f"Loaded {len(self.active_positions)} open positions")
             return True
-            
+
         except Exception as e:
             _logger.error(f"Error loading open positions: {e}")
             return False
-    
+
     def _notify_new_bar(self, symbol: str, timestamp, data: Dict[str, Any]):
         """Notify about new data bar."""
         try:
@@ -250,7 +250,7 @@ class LiveTradingBot(BaseTradingBot):
                 self.log_message(message)
         except Exception as e:
             _logger.error(f"Error notifying new bar: {e}")
-    
+
     def _monitor_data_feed(self):
         """Monitor data feed health and reconnect if needed."""
         while self.is_running and not self.should_stop:
@@ -260,20 +260,20 @@ class LiveTradingBot(BaseTradingBot):
                     if not status.get("is_connected", False):
                         _logger.warning("Data feed disconnected, attempting to reconnect...")
                         self._reconnect_data_feed()
-                
+
                 time.sleep(30)  # Check every 30 seconds
-                
+
             except Exception as e:
                 _logger.error(f"Error in data feed monitor: {e}")
                 time.sleep(60)
-    
+
     def _reconnect_data_feed(self):
         """Reconnect data feed."""
         try:
             if self.data_feed:
                 self.data_feed.stop()
                 time.sleep(5)
-            
+
             if self._create_data_feed():
                 self._setup_backtrader()
                 _logger.info("Data feed reconnected successfully")
@@ -282,80 +282,80 @@ class LiveTradingBot(BaseTradingBot):
             else:
                 _logger.error("Failed to reconnect data feed")
                 self.notify_error("Failed to reconnect data feed")
-                
+
         except Exception as e:
             _logger.error(f"Error reconnecting data feed: {e}")
-    
+
     def _run_backtrader(self):
         """Run Backtrader engine."""
         try:
             _logger.info("Starting Backtrader engine...")
             self.notify_bot_event("backtrader_started", "🚀")
-            
+
             # Run Backtrader
             results = self.cerebro.run()
-            
+
             _logger.info("Backtrader engine completed")
             return True
-            
+
         except Exception as e:
             _logger.error(f"Error in Backtrader engine: {e}")
             self.notify_error(f"Backtrader error: {str(e)}")
             return False
-    
+
     def start(self):
         """Start the live trading bot."""
         try:
             _logger.info(f"Starting live trading bot: {self.config_file}")
             self.notify_bot_event("started", "🤖")
-            
+
             # Initialize components
             if not self._create_data_feed():
                 raise RuntimeError("Failed to create data feed")
-            
+
             if not self._setup_backtrader():
                 raise RuntimeError("Failed to setup Backtrader")
-            
+
             # Start monitoring thread
             self.monitor_thread = threading.Thread(target=self._monitor_data_feed, daemon=True)
             self.monitor_thread.start()
-            
+
             # Set running flag
             self.is_running = True
-            
+
             # Start main trading loop
             self._run_backtrader()
-            
+
         except Exception as e:
             _logger.error(f"Error starting bot: {e}")
             self.notify_error(f"Failed to start bot: {str(e)}")
             raise
-    
+
     def stop(self):
         """Stop the live trading bot."""
         try:
             _logger.info("Stopping live trading bot...")
             self.notify_bot_event("stopping", "🛑")
-            
+
             self.should_stop = True
             self.is_running = False
-            
+
             # Stop data feed
             if self.data_feed:
                 self.data_feed.stop()
-            
+
             # Use BaseTradingBot's stop method
             super().stop()
-            
+
             # Save state using BaseTradingBot's method
             self.save_state()
-            
+
             _logger.info("Live trading bot stopped")
             self.notify_bot_event("stopped", "🛑")
-            
+
         except Exception as e:
             _logger.error(f"Error stopping bot: {e}")
-    
+
     def get_status(self) -> Dict[str, Any]:
         """Get current bot status."""
         try:
@@ -374,16 +374,16 @@ class LiveTradingBot(BaseTradingBot):
                 "broker_status": None,
                 "strategy_status": None
             }
-            
+
             if self.data_feed:
                 status["data_feed_status"] = self.data_feed.get_status()
-            
+
             if self.broker:
                 status["broker_status"] = {
                     "type": self.config.broker_type,
                     "cash": getattr(self.cerebro.broker, 'cash', 0) if self.cerebro else 0
                 }
-            
+
             if hasattr(self, 'parameters') and self.parameters:
                 strategy_config = self.parameters.get("strategy_config", {})
                 status["strategy_status"] = {
@@ -391,33 +391,33 @@ class LiveTradingBot(BaseTradingBot):
                     "entry_logic": strategy_config.get("entry_logic", {}).get("name", "unknown"),
                     "exit_logic": strategy_config.get("exit_logic", {}).get("name", "unknown")
                 }
-            
+
             return status
-            
+
         except Exception as e:
             _logger.error(f"Error getting status: {e}")
             return {"error": str(e)}
-    
+
     def restart(self):
         """Restart the live trading bot."""
         try:
             _logger.info("Restarting live trading bot...")
             self.notify_bot_event("restarting", "🔄")
-            
+
             self.stop()
             time.sleep(5)  # Wait for cleanup
-            
+
             # Reset state
             self.should_stop = False
             self.error_count = 0
-            
+
             # Start again
             self.start()
-            
+
         except Exception as e:
             _logger.error(f"Error restarting bot: {e}")
             self.notify_error(f"Failed to restart bot: {str(e)}")
-    
+
     def execute_trade(self, trade_type: str, price: float, size: float) -> None:
         """
         Override BaseTradingBot's execute_trade to integrate with Backtrader.
@@ -425,12 +425,12 @@ class LiveTradingBot(BaseTradingBot):
         try:
             # Use BaseTradingBot's trade execution logic
             super().execute_trade(trade_type, price, size)
-            
+
             # Additional live trading specific logic
             if self.data_feed:
                 # Update data feed status if needed
                 pass
-                
+
         except Exception as e:
             _logger.error(f"Error executing trade: {e}")
             self.notify_error(f"Trade execution error: {str(e)}")
@@ -442,21 +442,21 @@ def main():
         print("Usage: python live_trading_bot.py <config_file>")
         print("Example: python live_trading_bot.py 0001.json")
         sys.exit(1)
-    
+
     config_file = sys.argv[1]
-    
+
     # Create and start bot
     bot = LiveTradingBot(config_file)
-    
+
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):
         _logger.info(f"Received signal {signum}, shutting down...")
         bot.stop()
         sys.exit(0)
-    
+
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     try:
         bot.start()
     except KeyboardInterrupt:

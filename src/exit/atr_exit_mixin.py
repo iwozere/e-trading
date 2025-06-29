@@ -93,7 +93,7 @@ class ATRExitMixin(BaseExitMixin):
 
         try:
             atr_period = self.get_param("x_atr_period")
-            
+
             # Validate ATR period to prevent division by zero
             if atr_period is None or atr_period <= 0:
                 logger.warning(f"Invalid ATR period: {atr_period}, using default value 14")
@@ -101,7 +101,7 @@ class ATRExitMixin(BaseExitMixin):
             elif atr_period < 2:
                 logger.warning(f"ATR period too small: {atr_period}, using minimum value 2")
                 atr_period = 2
-                
+
             if self.strategy.use_talib:
                 self.atr = bt.talib.ATR(
                     self.strategy.data.high,

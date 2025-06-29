@@ -32,14 +32,14 @@ _logger = setup_logger(__name__)
 class BaseLiveDataFeed(bt.feeds.PandasData):
     """
     Base class for live data feeds that provide real-time market data to Backtrader.
-    
+
     This class handles:
     - Historical data loading
     - Real-time data updates
     - Error handling and reconnection
     - Backtrader integration
     """
-    
+
     params = (
         ("datetime", None),
         ("open", "open"),
@@ -49,7 +49,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         ("volume", "volume"),
         ("openinterest", None),
     )
-    
+
     def __init__(self, 
                  symbol: str,
                  interval: str,
@@ -59,7 +59,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                  **kwargs):
         """
         Initialize the live data feed.
-        
+
         Args:
             symbol: Trading symbol (e.g., 'BTCUSDT', 'AAPL')
             interval: Data interval (e.g., '1m', '1h', '1d')
@@ -73,63 +73,63 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         self.lookback_bars = lookback_bars
         self.retry_interval = retry_interval
         self.on_new_bar = on_new_bar
-        
+
         # Initialize data storage
         self.df = None
         self.last_update = None
         self.is_connected = False
         self.should_stop = False
-        
+
         # Load historical data first
         _logger.info(f"Loading {lookback_bars} historical bars for {symbol} {interval}")
         historical_data = self._load_historical_data()
-        
+
         if historical_data is None or historical_data.empty:
             raise ValueError(f"Failed to load historical data for {symbol}")
-        
+
         # Initialize PandasData with historical data
         super().__init__(dataname=historical_data, **kwargs)
-        
+
         # Start real-time updates
         self._start_realtime_updates()
-    
+
     @abstractmethod
     def _load_historical_data(self) -> Optional[pd.DataFrame]:
         """
         Load historical data from the data source.
-        
+
         Returns:
             DataFrame with columns: datetime, open, high, low, close, volume
         """
-    
+
     @abstractmethod
     def _connect_realtime(self) -> bool:
         """
         Connect to real-time data source.
-        
+
         Returns:
             True if connection successful, False otherwise
         """
-    
+
     @abstractmethod
     def _disconnect_realtime(self):
         """Disconnect from real-time data source."""
-    
+
     @abstractmethod
     def _get_latest_data(self) -> Optional[pd.DataFrame]:
         """
         Get the latest data from the source.
-        
+
         Returns:
             DataFrame with latest bar(s), or None if no new data
         """
-    
+
     def _start_realtime_updates(self):
         """Start the real-time update thread."""
         self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
         self.update_thread.start()
         _logger.info(f"Started real-time updates for {self.symbol}")
-    
+
     def _update_loop(self):
         """Main loop for real-time updates."""
         while not self.should_stop:
@@ -143,24 +143,24 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                         _logger.warning(f"Failed to connect to real-time data for {self.symbol}, retrying in {self.retry_interval}s")
                         time.sleep(self.retry_interval)
                         continue
-                
+
                 # Get latest data
                 latest_data = self._get_latest_data()
                 if latest_data is not None and not latest_data.empty:
                     self._process_new_data(latest_data)
-                
+
                 # Sleep before next update
                 time.sleep(self._get_update_interval())
-                
+
             except Exception as e:
                 _logger.error(f"Error in update loop for {self.symbol}: {str(e)}")
                 self.is_connected = False
                 time.sleep(self.retry_interval)
-    
+
     def _process_new_data(self, new_data: pd.DataFrame):
         """
         Process new data and update Backtrader lines.
-        
+
         Args:
             new_data: DataFrame with new bar(s)
         """
@@ -172,7 +172,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                     self.df = new_data
                 else:
                     self.df = pd.concat([self.df, new_data])
-                
+
                 # Update Backtrader lines
                 latest = self.df.iloc[-1]
                 self.lines.datetime[0] = bt.date2num(self.df.index[-1])
@@ -182,25 +182,25 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                 self.lines.close[0] = latest["close"]
                 self.lines.volume[0] = latest["volume"]
                 self.lines.openinterest[0] = 0
-                
+
                 self.last_update = datetime.now()
-                
+
                 # Call callback if provided
                 if self.on_new_bar:
                     try:
                         self.on_new_bar(self.symbol, self.df.index[-1], latest.to_dict())
                     except Exception as e:
                         _logger.error(f"Error in on_new_bar callback: {str(e)}")
-                
+
                 _logger.debug(f"Updated {self.symbol} with new bar at {self.df.index[-1]}")
-        
+
         except Exception as e:
             _logger.error(f"Error processing new data for {self.symbol}: {str(e)}")
-    
+
     def _get_update_interval(self) -> int:
         """
         Get the update interval in seconds based on the data interval.
-        
+
         Returns:
             Update interval in seconds
         """
@@ -215,7 +215,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
             '1d': 3600,  # 1 hour
         }
         return interval_map.get(self.interval, 60)
-    
+
     def _load(self):
         """
         Backtrader's _load method - called when Backtrader needs more data.
@@ -224,7 +224,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         # For live feeds, data is pushed via real-time updates
         # This method is kept for compatibility but should not be called
         return None
-    
+
     def stop(self):
         """Stop the real-time updates and disconnect."""
         _logger.info(f"Stopping real-time updates for {self.symbol}")
@@ -232,11 +232,11 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         self._disconnect_realtime()
         if hasattr(self, 'update_thread'):
             self.update_thread.join(timeout=5)
-    
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get the current status of the data feed.
-        
+
         Returns:
             Dictionary with status information
         """
