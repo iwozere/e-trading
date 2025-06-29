@@ -1,7 +1,8 @@
 from typing import Any
 
 import backtrader as bt
-from src.notification.logger import _logger
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 
 class BaseBroker(bt.BrokerBase):

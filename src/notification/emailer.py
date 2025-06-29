@@ -8,7 +8,7 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from src.notification.logger import _logger, setup_logger
+from src.notification.logger import setup_logger
 from config.donotshare.donotshare import SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USER
 
 import smtplib
@@ -17,10 +17,11 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 
+_logger = setup_logger(__name__)
 
 class EmailNotifier:
     def __init__(self):
-        self.logger = setup_logger(__name__)
+        self.logger = _logger
         self.smtp_server = SMTP_SERVER
         self.smtp_port = SMTP_PORT
         self.sender_email = SMTP_USER

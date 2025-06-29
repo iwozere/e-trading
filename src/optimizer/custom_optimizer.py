@@ -32,9 +32,10 @@ from src.analyzer.bt_analyzers import (CAGR, CalmarRatio,
                                        ConsecutiveWinsLosses,
                                        PortfolioVolatility, ProfitFactor,
                                        SortinoRatio, WinRate)
-from src.notification.logger import _logger
+from src.notification.logger import setup_logger
 from src.strategy.custom_strategy import CustomStrategy
 
+_logger = setup_logger(__name__)
 
 class CustomOptimizer:
     def __init__(self, config: dict):

@@ -39,7 +39,8 @@ def print_log(msg: str):
 ####################################################################
 # This is the logger that will be used in the application.
 # Example usage:
-# from _logging_config import _logger
+# from src.notification.logger import setup_logger
+# _logger = setup_logger(__name__)
 ####################################################################
 LOG_CONFIG = {
     "version": 1,

@@ -7,7 +7,8 @@ import json
 import signal
 from typing import Optional
 
-from src.notification.logger import _logger
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 from src.trading.live_trading_bot import LiveTradingBot
 from src.trading.config_validator import validate_config_file, print_validation_results
 

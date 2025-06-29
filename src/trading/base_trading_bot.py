@@ -20,15 +20,16 @@ import json
 import os
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.notification.emailer import EmailNotifier
-from src.notification.logger import _logger
 from src.notification.telegram_notifier import create_notifier as create_telegram_notifier
 from src.data.trade_repository import TradeRepository
+from src.risk.controller import RiskController
 
-from config.donotshare.donotshare import SENDGRID_API_KEY as sgkey
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 
 class BaseTradingBot:
@@ -82,7 +83,7 @@ class BaseTradingBot:
         # Notification setup
         self.telegram_notifier = create_telegram_notifier()
         try:
-            self.email_notifier = EmailNotifier(sgkey)
+            self.email_notifier = EmailNotifier()
         except Exception as e:
             self.email_notifier = None
             self.log_message(f"Email notifier not initialized: {e}", level="error")
@@ -98,6 +99,9 @@ class BaseTradingBot:
         
         # Load state (including open positions from database)
         self.load_state()
+        
+        self.risk_controller = RiskController(config.get("risk", {}))
+        
 
     def _initialize_bot_instance(self):
         """Initialize bot instance in database."""
@@ -125,7 +129,7 @@ class BaseTradingBot:
                     'status': 'stopped',
                     'current_balance': self.current_balance,
                     'total_pnl': self.total_pnl,
-                    'last_heartbeat': datetime.utcnow()
+                    'last_heartbeat': datetime.now(timezone.utc)
                 })
             else:
                 # Create new bot instance
@@ -147,8 +151,8 @@ class BaseTradingBot:
         try:
             self.trade_repository.update_bot_instance(self.bot_id, {
                 'status': 'running',
-                'started_at': datetime.utcnow(),
-                'last_heartbeat': datetime.utcnow()
+                'started_at': datetime.now(timezone.utc),
+                'last_heartbeat': datetime.now(timezone.utc)
             })
         except Exception as e:
             _logger.error(f"Error updating bot status: {e}")
@@ -163,7 +167,7 @@ class BaseTradingBot:
                 # Update heartbeat
                 try:
                     self.trade_repository.update_bot_instance(self.bot_id, {
-                        'last_heartbeat': datetime.utcnow(),
+                        'last_heartbeat': datetime.now(timezone.utc),
                         'current_balance': self.current_balance,
                         'total_pnl': self.total_pnl
                     })
@@ -205,7 +209,7 @@ class BaseTradingBot:
         """
         Generic trade execution logic for buy/sell with database integration.
         """
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         order = None
         
         try:
@@ -555,7 +559,7 @@ class BaseTradingBot:
         try:
             self.trade_repository.update_bot_instance(self.bot_id, {
                 'status': 'stopped',
-                'last_heartbeat': datetime.utcnow(),
+                'last_heartbeat': datetime.now(timezone.utc),
                 'current_balance': self.current_balance,
                 'total_pnl': self.total_pnl
             })
@@ -593,7 +597,7 @@ class BaseTradingBot:
         _logger.info(
             f"Broker: {self.broker.__class__.__name__ if self.broker else 'None'}"
         )
-        timestamp = datetime.datetime.now()
+        timestamp = datetime.now(timezone.utc)
         _logger.info(f"Timestamp: {timestamp}")
 
     def notify_bot_event(self, event: str, emoji: str):

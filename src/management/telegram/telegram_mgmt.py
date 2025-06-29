@@ -1,7 +1,8 @@
 import importlib
 import os
 
-from src.notification.logger import _logger
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 

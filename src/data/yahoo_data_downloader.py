@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import yfinance as yf
-from src.notification.logger import _logger
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 from .base_data_downloader import BaseDataDownloader
 

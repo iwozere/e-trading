@@ -14,7 +14,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from src.notification.logger import _logger
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 from telegram import Bot
 from telegram.error import TelegramError
 

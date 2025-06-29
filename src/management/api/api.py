@@ -5,11 +5,13 @@ from typing import Any, Callable
 from flask import Flask, Response, jsonify, request
 from src.management.bot_manager import (get_running_bots, get_status,
                                         get_trades, start_bot, stop_bot)
-from src.notification.logger import _logger
+from src.notification.logger import setup_logger
 
 from config.donotshare.donotshare import API_LOGIN, API_PASSWORD, API_PORT
 
 app = Flask(__name__)
+
+_logger = setup_logger(__name__)
 
 
 def check_auth(username: str, password: str) -> bool:
