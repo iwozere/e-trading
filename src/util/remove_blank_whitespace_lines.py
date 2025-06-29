@@ -1,3 +1,4 @@
+"""Removes all lines containing only whitespace from all .py files in the project."""
 import os
 for root, dirs, files in os.walk('.'):
     for file in files:

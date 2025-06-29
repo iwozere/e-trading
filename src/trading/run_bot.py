@@ -1,3 +1,4 @@
+"""This module runs the live trading bot."""
 import os
 import sys
 
@@ -31,7 +32,7 @@ def main(config_name: Optional[str] = None):
 
     # Validate configuration file
     config_path = f"config/trading/{config_name}"
-    _logger.info(f"Validating configuration: {config_path}")
+    _logger.info("Validating configuration: %s", config_path)
 
     is_valid, errors, warnings = validate_config_file(config_path)
     print_validation_results(is_valid, errors, warnings)
@@ -45,12 +46,12 @@ def main(config_name: Optional[str] = None):
 
     # Create and start the live trading bot
     try:
-        _logger.info(f"Creating live trading bot with config: {config_name}")
+        _logger.info("Creating live trading bot with config: %s", config_name)
         bot = LiveTradingBot(config_name)
 
         # Setup signal handlers for graceful shutdown
-        def signal_handler(signum, frame):
-            _logger.info(f"Received signal {signum}, shutting down...")
+        def signal_handler(signum):
+            _logger.info("Received signal %s, shutting down...", signum)
             bot.stop()
             sys.exit(0)
 
@@ -66,7 +67,7 @@ def main(config_name: Optional[str] = None):
         if 'bot' in locals():
             bot.stop()
     except Exception as e:
-        _logger.error(f"Error running live trading bot: {e}", exc_info=True)
+        _logger.error("Error running live trading bot: %s", e, exc_info=True)
         if 'bot' in locals():
             bot.stop()
         sys.exit(1)
