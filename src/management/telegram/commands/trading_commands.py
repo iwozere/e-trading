@@ -3,7 +3,6 @@ Trading Commands Module
 
 Implements Telegram commands for starting, stopping, and checking the status of trading bots.
 """
-from typing import Optional
 
 def start_trading(user_id: int) -> str:
     """

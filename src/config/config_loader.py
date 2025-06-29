@@ -6,11 +6,10 @@ Simple configuration loader that loads YAML/JSON files and validates them
 using Pydantic models. Provides error handling and validation feedback.
 """
 
-import os
 import json
 import yaml
 from pathlib import Path
-from typing import Union, Dict, Any, Optional
+from typing import Union, Dict, Any
 from pydantic import ValidationError
 
 from .config_models import TradingBotConfig, OptimizerConfig, DataConfig

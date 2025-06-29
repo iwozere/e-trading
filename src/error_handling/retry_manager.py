@@ -13,7 +13,7 @@ This module provides a comprehensive retry mechanism with:
 import time
 import random
 import logging
-from typing import Callable, Optional, Dict, Any, List, Union
+from typing import Callable, Optional, Dict, Any
 from functools import wraps
 from dataclasses import dataclass
 from enum import Enum

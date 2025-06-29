@@ -27,34 +27,40 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.
 
 import asyncio
 import tempfile
-import yfinance as yf
 import re
-import ta
-import pandas as pd
-from binance.client import Client
-import requests
 from datetime import datetime, timedelta
 import random
 
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import FSInputFile, Message
 from src.notification.logger import setup_logger
 from src.screener.telegram.combine import analyze_ticker, format_comprehensive_analysis
 from src.screener.telegram.screener_db import (
-    add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status,
-    set_user_email, get_user_email, get_user_verification_status, get_user_verification_code, set_user_verified,
-    get_ticker_settings, update_ticker_settings
+    add_ticker, delete_ticker, list_tickers, all_tickers_with_providers_for_status, set_user_email,
+    get_user_verification_status, get_user_verification_code, set_user_verified, get_ticker_settings
 )
-from src.screener.telegram.technicals import calculate_technicals
-from src.notification.emailer import EmailNotifier
-from src.screener.telegram.chart import generate_enhanced_chart, generate_binance_chart
-from src.screener.telegram.models import Fundamentals, Technicals
+from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
+from src.screener.telegram.chart import generate_enhanced_chart
 
-from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN
+from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER
 
 # Set up logger using the telegram_bot configuration
 logger = setup_logger("telegram_bot")
+
+# Initialize async notification manager (for email/telegram notifications)
+notification_manager = None
+try:
+    notification_manager = asyncio.get_event_loop().run_until_complete(
+        initialize_notification_manager(
+            telegram_token=TELEGRAM_BOT_TOKEN,
+            telegram_chat_id=TELEGRAM_CHAT_ID,
+            email_sender=SMTP_USER,
+            email_receiver=None  # Will be set per user
+        )
+    )
+except Exception as e:
+    logger.error(f"Notification manager not initialized: {e}")
 
 if not TELEGRAM_BOT_TOKEN:
     logger.error("TELEGRAM_BOT_TOKEN environment variable is not set")
@@ -347,13 +353,17 @@ async def analyze_command(message: Message):
                 await message.reply("Your email is not verified. Use /my-verify CODE to verify.")
                 return
             email = status["email"]
-            notifier = EmailNotifier()
-            notifier.send_email(
-                to_addr=email,
-                subject=f"Comprehensive Analysis for {ticker}",
-                body=text,
-                attachments=[chart_file]
-            )
+            # Send email via async notification manager
+            if notification_manager:
+                await notification_manager.send_notification(
+                    notification_type=NotificationType.INFO,
+                    title=f"Comprehensive Analysis for {ticker}",
+                    message=text,
+                    priority=NotificationPriority.NORMAL,
+                    data={},
+                    source="telegram_screener_bot",
+                    channels=["email"],
+                )
             await message.reply(f"📧 Analysis for {ticker} sent to {email}")
         try:
             os.unlink(chart_file)
@@ -393,19 +403,22 @@ async def analyze_command(message: Message):
             await message.reply("Your email is not verified. Use /my-verify CODE to verify.")
             return
         email = status["email"]
-        notifier = EmailNotifier()
         email_content = f"""
         <h2>📊 Your Screener Status Report</h2>
         <p>Analysis completed for {len(pairs)} ticker(s)</p>
         <hr>
         """
         email_content += "<br><br>".join(email_body)
-        notifier.send_email(
-            to_addr=email,
-            subject=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
-            body=email_content,
-            attachments=chart_files
-        )
+        if notification_manager:
+            await notification_manager.send_notification(
+                notification_type=NotificationType.INFO,
+                title=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
+                message=email_content,
+                priority=NotificationPriority.NORMAL,
+                data={},
+                source="telegram_screener_bot",
+                channels=["email"],
+            )
         await message.reply(f"📧 Status report sent to {email} with {len(chart_files)} charts")
         for chart_file in chart_files:
             try:
@@ -432,7 +445,16 @@ async def my_register(message: Message):
     <p>Enter this code in Telegram using <b>/my-verify {code}</b> within 1 hour to verify your email.</p>
     """
     try:
-        EmailNotifier().send_email(email, subject, body)
+        if notification_manager:
+            await notification_manager.send_notification(
+                notification_type=NotificationType.INFO,
+                title=subject,
+                message=body,
+                priority=NotificationPriority.NORMAL,
+                data={},
+                source="telegram_screener_bot",
+                channels=["email"],
+            )
         await message.reply(f"Verification code sent to {email}. Please check your inbox and use /my-verify CODE in Telegram.")
     except Exception as e:
         await message.reply(f"Failed to send verification email: {e}")

@@ -17,8 +17,7 @@ from .strategy_core import (
     CompositeSignal, 
     SignalAggregator, 
     AggregationMethod,
-    MarketRegimeDetector,
-    MarketRegime
+    MarketRegimeDetector
 )
 from .multi_timeframe_engine import TimeframeSyncer, MultiTimeframeStrategy
 

@@ -18,9 +18,9 @@ Classes:
 
 import time
 import threading
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Optional, Callable, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import backtrader as bt
 import pandas as pd
@@ -101,7 +101,6 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         Returns:
             DataFrame with columns: datetime, open, high, low, close, volume
         """
-        pass
     
     @abstractmethod
     def _connect_realtime(self) -> bool:
@@ -111,12 +110,10 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         Returns:
             True if connection successful, False otherwise
         """
-        pass
     
     @abstractmethod
     def _disconnect_realtime(self):
         """Disconnect from real-time data source."""
-        pass
     
     @abstractmethod
     def _get_latest_data(self) -> Optional[pd.DataFrame]:
@@ -126,7 +123,6 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         Returns:
             DataFrame with latest bar(s), or None if no new data
         """
-        pass
     
     def _start_realtime_updates(self):
         """Start the real-time update thread."""

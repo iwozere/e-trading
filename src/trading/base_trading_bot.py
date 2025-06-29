@@ -23,12 +23,15 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from src.notification.emailer import EmailNotifier
-from src.notification.telegram_notifier import create_notifier as create_telegram_notifier
 from src.data.trade_repository import TradeRepository
 from src.risk.controller import RiskController
-
 from src.notification.logger import setup_logger
+from src.notification.async_notification_manager import initialize_notification_manager
+from config.donotshare.donotshare import (
+    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+    SMTP_USER
+)
+
 _logger = setup_logger(__name__)
 
 
@@ -75,18 +78,22 @@ class BaseTradingBot:
         self.trade_type = "paper" if paper_trading else "live"
         self.trade_repository = TradeRepository()
         
-        # Legacy state file (for backward compatibility)
-        self.state_file = os.path.join(
-            "logs", "json", f"{self.trading_pair}_bot_state.json"
-        )
-        
-        # Notification setup
-        self.telegram_notifier = create_telegram_notifier()
+        # Notification setup (async notification manager)
+        # Remove legacy notifiers
+        self.notification_manager = None
         try:
-            self.email_notifier = EmailNotifier()
+            # Email API key is not used, so pass SMTP_USER as sender, SMTP_USER as receiver for now
+            # (If you use SendGrid or similar, adapt accordingly)
+            self.notification_manager = asyncio.run(
+                initialize_notification_manager(
+                    telegram_token=TELEGRAM_BOT_TOKEN,
+                    telegram_chat_id=TELEGRAM_CHAT_ID,
+                    email_sender=SMTP_USER,
+                    email_receiver=SMTP_USER  # Or set to a config value for recipient
+                )
+            )
         except Exception as e:
-            self.email_notifier = None
-            self.log_message(f"Email notifier not initialized: {e}", level="error")
+            self.log_message(f"Notification manager not initialized: {e}", level="error")
         
         self.max_drawdown_pct = config.get("max_drawdown_pct", 20.0)
         self.max_exposure = config.get("max_exposure", 1.0)  # 1.0 = 100% of balance
@@ -442,22 +449,15 @@ class BaseTradingBot:
 
     def notify_error(self, error_msg: str) -> None:
         """
-        Send error notification via Telegram and email.
+        Send error notification via async notification manager (Telegram and email).
         Args:
             error_msg: Error message string
         """
-        if self.telegram_notifier:
+        if self.notification_manager:
             try:
-                asyncio.run(self.telegram_notifier.send_error_notification(error_msg))
-            except Exception:
-                pass
-        if self.email_notifier:
-            try:
-                self.email_notifier.send_notification_email(
-                    "ERROR", self.trading_pair, 0, 0, body=error_msg
-                )
-            except Exception:
-                pass
+                asyncio.run(self.notification_manager.send_error_notification(error_msg))
+            except Exception as e:
+                self.log_message(f"Failed to send error notification: {e}", level="error")
 
     def notify_trade_event(
         self,
@@ -469,7 +469,7 @@ class BaseTradingBot:
         pnl: Optional[float] = None,
     ) -> None:
         """
-        Send trade event notification via Telegram and email.
+        Send trade event notification via async notification manager (Telegram and email).
         Args:
             side: 'BUY' or 'SELL'
             price: Trade price
@@ -478,44 +478,22 @@ class BaseTradingBot:
             entry_price: Entry price (optional)
             pnl: Profit/loss (optional)
         """
-        # Telegram notification
-        if self.telegram_notifier:
-            trade_data = {
-                "symbol": self.trading_pair,
-                "side": side,
-                "entry_price": entry_price if entry_price is not None else price,
-                "exit_price": price if side == "SELL" else None,
-                "tp_price": getattr(self.strategy_class, "tp_atr_mult", None),
-                "sl_price": getattr(self.strategy_class, "sl_atr_mult", None),
-                "quantity": size,
-                "timestamp": timestamp.isoformat(),
-                "pnl": pnl,
-            }
+        if self.notification_manager:
             try:
-                if side == "BUY":
-                    asyncio.run(
-                        self.telegram_notifier.send_trade_notification(trade_data)
+                # For BUY, treat as entry; for SELL, as exit
+                asyncio.run(
+                    self.notification_manager.send_trade_notification(
+                        symbol=self.trading_pair,
+                        side=side,
+                        price=price,
+                        quantity=size,
+                        entry_price=entry_price,
+                        pnl=pnl
                     )
-                else:
-                    asyncio.run(self.telegram_notifier.send_trade_update(trade_data))
-            except Exception as e:
-                self.log_message(
-                    f"Failed to send Telegram notification: {e}", level="error"
-                )
-        # Email notification
-        if self.email_notifier:
-            try:
-                subject = f"Trade notification: {side} {self.trading_pair} at {price}"
-                body = f"{side} {self.trading_pair}\nPrice: {price}\nSize: {size}\nTime: {timestamp}"
-                if pnl is not None:
-                    body += f"\nPnL: {pnl:.2f}%"
-                self.email_notifier.send_notification_email(
-                    side, self.trading_pair, price, size, body=body
                 )
             except Exception as e:
-                self.log_message(
-                    f"Failed to send email notification: {e}", level="error"
-                )
+                self.log_message(f"Failed to send trade notification: {e}", level="error")
+        # TODO: If running in an async context, prefer 'await' over 'asyncio.run' for notification calls.
 
     def update_positions(self):
         """
@@ -611,12 +589,12 @@ class BaseTradingBot:
             f"Broker: `{self.broker.__class__.__name__ if self.broker else 'None'}`"
         )
         try:
-            if hasattr(self, "telegram_notifier") and self.telegram_notifier:
+            if hasattr(self, "notification_manager") and self.notification_manager:
                 asyncio.run(
-                    self.telegram_notifier.send_trade_notification({"message": msg})
+                    self.notification_manager.send_trade_notification({"message": msg})
                 )
         except Exception as e:
-            _logger.error(f"Failed to send Telegram {event.lower()} notification: {e}")
+            _logger.error(f"Failed to send notification: {e}")
 
     def pre_run(self, data_feed):
         """
@@ -625,7 +603,6 @@ class BaseTradingBot:
         Args:
             data_feed: The data feed object that will be added to Cerebro.
         """
-        pass
 
     def post_run(self, data_feed):
         """
@@ -634,7 +611,6 @@ class BaseTradingBot:
         Args:
             data_feed: The data feed object that was used in Cerebro.
         """
-        pass
 
     def run_backtrader_engine(self, data_feed):
         self.log_bot_event("started")

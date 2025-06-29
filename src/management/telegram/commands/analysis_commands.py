@@ -3,7 +3,6 @@ Analysis Commands Module
 
 Implements Telegram commands for generating charts and reports.
 """
-from typing import Optional
 
 def send_chart(user_id: int, symbol: str) -> str:
     """

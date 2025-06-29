@@ -15,7 +15,7 @@ Features:
 
 import time
 import logging
-from typing import Callable, Optional, Dict, Any, List, Union
+from typing import Callable, Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps

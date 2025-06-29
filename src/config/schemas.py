@@ -6,7 +6,7 @@ Pydantic-based schemas for all configuration types with validation rules,
 documentation, and environment-specific defaults.
 """
 
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Any
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from datetime import time

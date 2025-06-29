@@ -17,9 +17,7 @@ Classes:
 - YahooLiveDataFeed: Live data feed for Yahoo Finance
 """
 
-import time
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
 
 import pandas as pd
 import yfinance as yf

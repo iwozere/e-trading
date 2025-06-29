@@ -6,7 +6,7 @@ This module provides the base class for all entry mixins.
 
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, get_args, get_origin, get_type_hints
+from typing import Any, Dict, Optional, get_type_hints
 
 from src.notification.logger import setup_logger
 
@@ -219,7 +219,6 @@ class BaseEntryMixin(ABC):
     @abstractmethod
     def _init_indicators(self):
         """Initialization of technical indicators"""
-        pass
 
     @abstractmethod
     def should_enter(self) -> bool:
@@ -232,7 +231,6 @@ class BaseEntryMixin(ABC):
         Returns:
             bool: True if the mixin should enter a position
         """
-        pass
 
     def get_param(self, key: str, default=None):
         """Safe parameter retrieval"""
@@ -307,4 +305,3 @@ class BaseEntryMixin(ABC):
 
     def notify_trade(self, trade):
         """Strategy will call this method when BUY order is executed (for long position)"""
-        pass

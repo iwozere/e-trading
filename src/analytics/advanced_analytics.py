@@ -13,23 +13,19 @@ Provides comprehensive analytics including:
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 import json
 import os
 from dataclasses import dataclass, field
-from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 
 # For PDF generation
 try:
-    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib.pagesizes import A4
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
     from reportlab.lib import colors
     REPORTLAB_AVAILABLE = True
 except ImportError:
@@ -38,8 +34,7 @@ except ImportError:
 # For Excel export
 try:
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
-    from openpyxl.chart import LineChart, BarChart, Reference
+    from openpyxl.styles import Font, PatternFill
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False

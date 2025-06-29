@@ -6,9 +6,8 @@ and Backtrader's Sharpe ratio calculation.
 """
 
 import json
-import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 
 def load_json_data(filename):
     """Load JSON data from results file"""

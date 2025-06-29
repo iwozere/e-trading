@@ -3,8 +3,8 @@ from functools import wraps
 from typing import Any, Callable
 
 from flask import Flask, Response, jsonify, request
-from src.management.bot_manager import (get_running_bots, get_status,
-                                        get_trades, start_bot, stop_bot)
+from src.management.bot_manager import (get_status, get_trades,
+                                        start_bot, stop_bot)
 from src.notification.logger import setup_logger
 
 from config.donotshare.donotshare import API_LOGIN, API_PASSWORD, API_PORT

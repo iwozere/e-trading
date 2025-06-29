@@ -33,7 +33,6 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 import matplotlib.pyplot as plt
 import talib
 import optuna
-import os
 
 class Config:
     """

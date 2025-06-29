@@ -22,7 +22,6 @@ This strategy is particularly effective for:
 from typing import Any, Dict, Optional
 
 import backtrader as bt
-import numpy as np
 from src.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
 

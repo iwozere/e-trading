@@ -13,7 +13,6 @@ Functions/Classes:
 - super_trend: Main function to compute the Super Trend indicator
 """
 
-import math
 
 import backtrader as bt
 import numpy as np

@@ -25,7 +25,6 @@ from src.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.notification.logger import setup_logger
 from src.optimizer.custom_optimizer import CustomOptimizer
-from src.plotter.base_plotter import BasePlotter
 
 _logger = setup_logger(__name__)
 

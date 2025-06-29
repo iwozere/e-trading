@@ -3,7 +3,6 @@ Chart Generator Module
 
 Implements automatic chart generation for Telegram.
 """
-from typing import Dict
 
 def generate_chart(symbol: str, timeframe: str = '1h') -> str:
     """

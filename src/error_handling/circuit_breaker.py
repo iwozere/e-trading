@@ -21,7 +21,7 @@ from enum import Enum
 from functools import wraps
 from threading import Lock
 
-from .exceptions import TradingException, NetworkException, CircuitBreakerOpenException
+from .exceptions import NetworkException, CircuitBreakerOpenException
 
 _logger = logging.getLogger(__name__)
 

@@ -16,9 +16,7 @@ Classes:
 - IBKRLiveDataFeed: Live data feed for Interactive Brokers
 """
 
-import time
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
 
 import pandas as pd
 from ib_insync import *

@@ -18,9 +18,7 @@ from src.screener.telegram.screener_db import (
 )
 from src.screener.telegram.technicals import calculate_technicals, format_technical_analysis
 from src.screener.telegram.chart import generate_enhanced_chart, generate_binance_chart
-from src.notification.emailer import EmailNotifier
-from src.screener.telegram.models import Fundamentals, Technicals, TickerAnalysis
-from src.screener.telegram.fundamentals import get_fundamentals
+from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
 from src.screener.telegram.combine import analyze_ticker, format_comprehensive_analysis
 
 import yfinance as yf
@@ -28,6 +26,7 @@ import pandas as pd
 import ta
 
 TEST_USER_ID = "test_user"
+TEST_SMTP_USER = "test@example.com"
 
 # Helper to simulate /my-list
 
@@ -114,14 +113,23 @@ def test_my_status(user_id=TEST_USER_ID, provider_filter=None, email=None):
             print(f"Unknown provider '{prov}' for ticker '{ticker}'.")
     # Send email if requested
     if email and email_body:
-        notifier = EmailNotifier()
-        email_content = f"<h2>Your Screener Status Report</h2><hr>" + "<br><br>".join(email_body)
-        notifier.send_email(
-            to_addr=email,
-            subject=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
-            body=email_content,
-            attachments=chart_files
-        )
+        # Use async notification manager for email
+        import asyncio
+        async def send_email_async():
+            notification_manager = await initialize_notification_manager(
+                email_sender=TEST_SMTP_USER,
+                email_receiver=email
+            )
+            await notification_manager.send_notification(
+                notification_type=NotificationType.INFO,
+                title=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
+                message=f"<h2>Your Screener Status Report</h2><hr>" + "<br><br>".join(email_body),
+                priority=NotificationPriority.NORMAL,
+                data={},
+                source="test_screener_bot",
+                channels=["email"],
+            )
+        asyncio.run(send_email_async())
         print(f"Email sent to {email} with {len(chart_files)} charts.")
         for chart_file in chart_files:
             try:
@@ -148,13 +156,23 @@ def test_my_analyze(user_id=TEST_USER_ID, provider="yf", ticker=None, email=None
                 temp_file.write(chart_data)
                 temp_file.flush()
                 chart_file = temp_file.name
-            notifier = EmailNotifier()
-            notifier.send_email(
-                to_addr=email,
-                subject=f"Comprehensive Analysis for {ticker}",
-                body=format_technical_analysis(ticker, technicals_data).replace("*", "").replace("\n", "<br>"),
-                attachments=[chart_file]
-            )
+            # Use async notification manager for email
+            import asyncio
+            async def send_email_async():
+                notification_manager = await initialize_notification_manager(
+                    email_sender=TEST_SMTP_USER,
+                    email_receiver=email
+                )
+                await notification_manager.send_notification(
+                    notification_type=NotificationType.INFO,
+                    title=f"Comprehensive Analysis for {ticker}",
+                    message=format_technical_analysis(ticker, technicals_data).replace("*", "").replace("\n", "<br>"),
+                    priority=NotificationPriority.NORMAL,
+                    data={},
+                    source="test_screener_bot",
+                    channels=["email"],
+                )
+            asyncio.run(send_email_async())
             print(f"Email sent to {email} with chart for {ticker}.")
             os.unlink(chart_file)
     elif provider == "bnc":
@@ -192,13 +210,23 @@ def test_my_analyze(user_id=TEST_USER_ID, provider="yf", ticker=None, email=None
                 temp_file.write(chart_data)
                 temp_file.flush()
                 chart_file = temp_file.name
-            notifier = EmailNotifier()
-            notifier.send_email(
-                to_addr=email,
-                subject=f"Comprehensive Analysis for {ticker}",
-                body=f"{ticker} (Binance)<br>Close: {latest['close']:.2f}, RSI: {latest['RSI']:.2f}, MACD: {latest['MACD']:.2f}, BB High: {latest['BB_High']:.2f}, BB Low: {latest['BB_Low']:.2f}",
-                attachments=[chart_file]
-            )
+            # Use async notification manager for email
+            import asyncio
+            async def send_email_async():
+                notification_manager = await initialize_notification_manager(
+                    email_sender=TEST_SMTP_USER,
+                    email_receiver=email
+                )
+                await notification_manager.send_notification(
+                    notification_type=NotificationType.INFO,
+                    title=f"Comprehensive Analysis for {ticker}",
+                    message=f"{ticker} (Binance)<br>Close: {latest['close']:.2f}, RSI: {latest['RSI']:.2f}, MACD: {latest['MACD']:.2f}, BB High: {latest['BB_High']:.2f}, BB Low: {latest['BB_Low']:.2f}",
+                    priority=NotificationPriority.NORMAL,
+                    data={},
+                    source="test_screener_bot",
+                    channels=["email"],
+                )
+            asyncio.run(send_email_async())
             print(f"Email sent to {email} with chart for {ticker}.")
             os.unlink(chart_file)
     else:
@@ -370,14 +398,23 @@ def test_my_status_and_analyze():
                 chart_files.append(temp_file.name)
             email_body.append(f"{ticker} (Binance)\nClose: {latest['close']:.2f}, RSI: {latest['RSI']:.2f}, MACD: {latest['MACD']:.2f}, BB High: {latest['BB_High']:.2f}, BB Low: {latest['BB_Low']:.2f}")
     # Send email
-    notifier = EmailNotifier()
-    email_content = f"<h2>Your Screener Status Report</h2><hr>" + "<br><br>".join(email_body)
-    notifier.send_email(
-        to_addr=email,
-        subject=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
-        body=email_content,
-        attachments=chart_files
-    )
+    # Use async notification manager for email
+    import asyncio
+    async def send_email_async():
+        notification_manager = await initialize_notification_manager(
+            email_sender=TEST_SMTP_USER,
+            email_receiver=email
+        )
+        await notification_manager.send_notification(
+            notification_type=NotificationType.INFO,
+            title=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
+            message=f"<h2>Your Screener Status Report</h2><hr>" + "<br><br>".join(email_body),
+            priority=NotificationPriority.NORMAL,
+            data={},
+            source="test_screener_bot",
+            channels=["email"],
+        )
+    asyncio.run(send_email_async())
     print(f"Email sent to {email} with {len(chart_files)} charts.")
     for chart_file in chart_files:
         try:

@@ -3,18 +3,10 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from typing import Any
 
-import backtrader as bt
-from binance.client import Client
-from binance.enums import *
 from src.broker.base_binance_broker import BaseBinanceBroker
-from src.notification.emailer import send_email_alert
 from src.notification.logger import setup_logger
-from src.notification.telegram_notifier import send_telegram_alert
 
-from config.donotshare.donotshare import (BINANCE_PAPER_KEY,
-                                          BINANCE_PAPER_SECRET)
 
 _logger = setup_logger(__name__)
 

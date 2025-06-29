@@ -4,7 +4,6 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim

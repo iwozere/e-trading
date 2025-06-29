@@ -1,5 +1,3 @@
-import datetime
-from typing import Any, Dict, Optional
 
 import pandas as pd
 import yfinance as yf

@@ -10,11 +10,9 @@ Advanced alert system with:
 - Alert history and management
 """
 
-import asyncio
-import json
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 import re

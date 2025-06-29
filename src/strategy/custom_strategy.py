@@ -12,12 +12,8 @@ It provides:
 from typing import Any, Dict
 
 import backtrader as bt
-import pandas as pd
-from src.entry.entry_mixin_factory import (ENTRY_MIXIN_REGISTRY,
-                                           get_entry_mixin,
-                                           get_entry_mixin_from_config)
-from src.exit.exit_mixin_factory import (EXIT_MIXIN_REGISTRY, get_exit_mixin,
-                                         get_exit_mixin_from_config)
+from src.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
+from src.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -111,7 +107,6 @@ class CustomStrategy(bt.Strategy):
 
     def prenext(self):
         """Skip bars until we have enough data"""
-        pass
 
     def next(self):
         """Called for each bar"""

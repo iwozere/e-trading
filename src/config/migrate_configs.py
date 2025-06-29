@@ -12,7 +12,6 @@ Features:
 - Validation of migrated configurations
 """
 
-import os
 import json
 import yaml
 import shutil

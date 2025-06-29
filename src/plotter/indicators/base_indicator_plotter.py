@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 
-import matplotlib.pyplot as plt
 from src.notification.logger import setup_logger
 
 
@@ -14,7 +13,6 @@ class BaseIndicatorPlotter(ABC):
     @abstractmethod
     def plot(self, ax):
         """Plot the indicator on the given axis"""
-        pass
 
     @property
     @abstractmethod
@@ -23,7 +21,6 @@ class BaseIndicatorPlotter(ABC):
         - 'price': plot on the same subplot as price
         - 'separate': plot on a separate subplot
         """
-        pass
 
     def _apply_style(self, ax):
         """Apply common styling to the axis"""

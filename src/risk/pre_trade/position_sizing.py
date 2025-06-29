@@ -6,7 +6,6 @@ Implements position sizing algorithms:
 - Fixed Fractional
 """
 
-from typing import Optional
 
 def kelly_criterion(win_prob: float, win_loss_ratio: float) -> float:
     """

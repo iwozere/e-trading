@@ -2,6 +2,9 @@
 Sends trade notifications and alerts via email using SendGrid.
 
 This module defines EmailNotifier, which can send trade and system notifications to configured email addresses for trading bots.
+
+NOTE: The preferred way to send emails is now via the async notification system (AsyncNotificationManager).
+Direct use of EmailNotifier is deprecated for new code. Use AsyncNotificationManager for all new notification logic.
 """
 
 import os
@@ -20,6 +23,10 @@ from email import encoders
 _logger = setup_logger(__name__)
 
 class EmailNotifier:
+    """
+    DEPRECATED: Use AsyncNotificationManager for all new notification logic.
+    EmailNotifier provides synchronous email sending for legacy code only.
+    """
     def __init__(self):
         self.logger = _logger
         self.smtp_server = SMTP_SERVER

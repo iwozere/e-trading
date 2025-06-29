@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc
+from sqlalchemy import and_, desc
 
 from src.data.database import Trade, BotInstance, PerformanceMetrics, get_session, close_session
 

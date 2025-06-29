@@ -3,11 +3,7 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-import datetime
-from typing import Any, Dict, Optional
 
-import pandas as pd
-import yfinance as yf
 from src.screener.stock_screener import StockScreener
 from src.screener.tickers_list import get_six_tickers
 

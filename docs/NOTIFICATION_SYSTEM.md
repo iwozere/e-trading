@@ -505,6 +505,58 @@ notification_manager.enable_debug_mode()
 6. **WebSocket Notifications**: Real-time web notifications
 7. **Mobile Push Notifications**: iOS/Android push notifications
 
+## Notification System
+
+## Overview
+
+The e-Trading platform supports a unified, asynchronous notification system for sending alerts and trade notifications via multiple channels, including Telegram and Email. The preferred way to send notifications (including emails) is via the `AsyncNotificationManager`.
+
+## Preferred Usage: AsyncNotificationManager
+
+All new code should use the async notification system for sending notifications. This system provides:
+- Asynchronous, non-blocking notification delivery
+- Unified API for multiple channels (Telegram, Email, etc.)
+- Batching, rate limiting, and retry mechanisms
+- Extensible for future channels
+
+### Example: Sending an Email Notification
+
+```python
+import asyncio
+from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
+from config.donotshare.donotshare import SMTP_USER
+
+async def send_email():
+    notification_manager = await initialize_notification_manager(
+        email_api_key=None,  # If using SMTP
+        email_sender=SMTP_USER,
+        email_receiver="recipient@example.com"
+    )
+    await notification_manager.send_notification(
+        notification_type=NotificationType.INFO,
+        title="Trade Alert",
+        message="A trade has been executed.",
+        priority=NotificationPriority.NORMAL,
+        data={},
+        source="my_trading_bot",
+        channels=["email"],
+    )
+
+asyncio.run(send_email())
+```
+
+## Legacy Usage: EmailNotifier (Deprecated)
+
+The `EmailNotifier` class provides synchronous email sending and is now **deprecated**. It is retained for backward compatibility only. All new code should use `AsyncNotificationManager`.
+
+### Migration Notes
+- Replace all direct usages of `EmailNotifier` with the async notification system as shown above.
+- For synchronous code, use `asyncio.run` to call async notification methods.
+
+## Additional Resources
+- See `src/notification/async_notification_manager.py` for full API details.
+- See `src/trading/base_trading_bot.py` for an example of integration in a trading bot.
+
 ---
 
 *Last Updated: December 2024*

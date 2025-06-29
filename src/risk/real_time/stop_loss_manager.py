@@ -3,7 +3,6 @@ Stop Loss Manager Module
 
 Implements dynamic stop-loss adjustment.
 """
-from typing import Optional
 
 def dynamic_stop_loss(entry_price: float, current_price: float, initial_stop: float, trailing_pct: float = 0.02) -> float:
     """

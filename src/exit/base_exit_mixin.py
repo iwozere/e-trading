@@ -106,4 +106,3 @@ class BaseExitMixin(ABC):
 
     def notify_trade(self, trade):
         """Strategy will call this method when SELL order is executed (for long position)"""
-        pass

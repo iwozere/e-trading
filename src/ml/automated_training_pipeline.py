@@ -10,11 +10,10 @@ This module provides comprehensive automated training capabilities:
 
 import pandas as pd
 import numpy as pd
-from typing import Dict, List, Optional, Tuple, Any, Union, Callable
-from datetime import datetime, timedelta
+from typing import Dict, List, Tuple, Any
+from datetime import datetime
 import logging
 import json
-import yaml
 import schedule
 import time
 import threading

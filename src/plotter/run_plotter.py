@@ -20,22 +20,14 @@ import glob
 import json
 import os
 import sys
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 from src.notification.logger import setup_logger
-from src.plotter.indicators.bollinger_bands_plotter import \
-    BollingerBandsPlotter
-from src.plotter.indicators.ichimoku_plotter import IchimokuPlotter
-from src.plotter.indicators.rsi_plotter import RSIPlotter
-from src.plotter.indicators.supertrend_plotter import SuperTrendPlotter
-from src.plotter.indicators.volume_plotter import VolumePlotter
 
 _logger = setup_logger(__name__)
 

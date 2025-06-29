@@ -9,11 +9,10 @@ Classes:
 - ConfigValidator: Validates trading bot configurations using Pydantic models
 """
 
-import json
 from typing import Dict, Any, List, Tuple
 from pathlib import Path
 from src.notification.logger import setup_logger
-from src.config.config_loader import load_config, validate_config_file as pydantic_validate_config_file
+from src.config.config_loader import validate_config_file as pydantic_validate_config_file
 from src.config.config_models import TradingBotConfig
 
 _logger = setup_logger(__name__)

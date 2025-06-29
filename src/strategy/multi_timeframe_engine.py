@@ -6,8 +6,8 @@ This module handles data aggregation and timeframe synchronization for multi-tim
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from typing import Dict, List, Any
+from datetime import datetime
 import logging
 
 from .strategy_core import BaseStrategy, StrategySignal

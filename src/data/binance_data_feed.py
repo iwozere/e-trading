@@ -4,8 +4,7 @@ import json
 import threading
 import queue
 import requests
-import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class BinanceEnhancedFeed(bt.feed.DataBase):
     params = (

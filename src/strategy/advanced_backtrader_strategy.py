@@ -8,9 +8,7 @@ and dynamic switching.
 
 import backtrader as bt
 import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from typing import Dict, Optional, Any
 import logging
 
 from src.strategy.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal

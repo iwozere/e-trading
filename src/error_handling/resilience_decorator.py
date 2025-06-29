@@ -16,12 +16,11 @@ Features:
 import time
 import logging
 import functools
-from typing import Callable, Optional, Dict, Any, Union
+from typing import Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from .retry_manager import RetryManager, RetryConfig
 from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-from .recovery_manager import RecoveryStrategy
 from .error_monitor import error_monitor, ErrorSeverity
 
 _logger = logging.getLogger(__name__)

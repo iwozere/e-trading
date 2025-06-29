@@ -7,7 +7,7 @@ These exceptions provide standardized error handling with detailed context
 and categorization for different types of errors.
 """
 
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from datetime import datetime
 import traceback
 

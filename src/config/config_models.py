@@ -8,7 +8,7 @@ management of defaults and validation rules.
 """
 
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field, field_validator, validator
+from pydantic import BaseModel, Field, validator
 from enum import Enum
 from datetime import datetime
 

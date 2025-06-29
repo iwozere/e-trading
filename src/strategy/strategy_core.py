@@ -11,7 +11,6 @@ from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 import pandas as pd
-import backtrader as bt
 
 
 class AggregationMethod(Enum):
@@ -69,7 +68,6 @@ class BaseStrategy(ABC):
         Returns:
             StrategySignal: Signal with asset, action, and confidence
         """
-        pass
     
     def set_data(self, data: pd.DataFrame):
         """Set the data for the strategy."""
@@ -98,7 +96,6 @@ class RiskManager(ABC):
         Returns:
             bool: True if position is valid, False otherwise
         """
-        pass
     
     @abstractmethod
     def calculate_position_size(self, signal: StrategySignal, capital: float) -> float:
@@ -112,7 +109,6 @@ class RiskManager(ABC):
         Returns:
             float: Position size
         """
-        pass
 
 
 class DataLoader(Protocol):

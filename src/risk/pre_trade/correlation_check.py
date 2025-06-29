@@ -3,7 +3,6 @@ Correlation Check Module
 
 Implements correlation-based position limits.
 """
-from typing import Dict
 import numpy as np
 
 def check_correlation_limit(correlation_matrix: np.ndarray, threshold: float) -> bool:

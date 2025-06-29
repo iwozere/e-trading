@@ -1,7 +1,6 @@
-import datetime
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 import pandas as pd
 import yfinance as yf

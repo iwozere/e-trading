@@ -22,14 +22,11 @@ Classes:
 - LiveTradingBot: Main live trading bot implementation
 """
 
-import json
-import os
 import signal
 import sys
 import time
 import threading
-from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import backtrader as bt
 

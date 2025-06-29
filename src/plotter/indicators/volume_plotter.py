@@ -1,4 +1,3 @@
-import numpy as np
 from src.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
 
 
