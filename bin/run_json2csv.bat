@@ -34,7 +34,7 @@ if errorlevel 1 (
 
 REM Run the JSON to CSV converter script
 echo Running JSON to CSV converter...
-python src\plotter\run_json2csv.py
+python src\optimizer\run_json2csv.py
 
 REM Check if script ran successfully
 if errorlevel 1 (
