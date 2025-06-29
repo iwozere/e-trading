@@ -18,7 +18,8 @@ from pathlib import Path
 from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import logging
+from src.notification.logger import setup_logger
+
 
 from .schemas import (
     ConfigSchema,
@@ -29,7 +30,7 @@ from .schemas import (
 from .registry import ConfigRegistry
 from .templates import ConfigTemplates
 
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 class ConfigFileHandler(FileSystemEventHandler):
     """File system event handler for configuration hot-reloading"""

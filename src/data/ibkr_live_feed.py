@@ -118,7 +118,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             return contract
 
         except Exception as e:
-            _logger.error(f"Error creating contract for {self.symbol}: {str(e)}")
+            _logger.error("Error creating contract for %s: %s", self.symbol, e, exc_info=True)
             return None
 
     def _load_historical_data(self) -> Optional[pd.DataFrame]:
@@ -129,7 +129,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             DataFrame with historical OHLCV data
         """
         try:
-            _logger.info(f"Loading {self.lookback_bars} historical bars for {self.symbol}")
+            _logger.info("Loading %d historical bars for %s", self.lookback_bars, self.symbol)
 
             # Create contract
             self.contract = self._create_contract()
@@ -153,7 +153,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             )
 
             if not bars:
-                _logger.warning(f"No historical data found for {self.symbol}")
+                _logger.warning("No historical data found for %s", self.symbol)
                 return None
 
             # Convert to DataFrame
@@ -173,11 +173,11 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             if len(df) > self.lookback_bars:
                 df = df.tail(self.lookback_bars)
 
-            _logger.info(f"Loaded {len(df)} historical bars for {self.symbol}")
+            _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
             return df
 
         except Exception as e:
-            _logger.error(f"Error loading historical data for {self.symbol}: {str(e)}")
+            _logger.error("Error loading historical data for %s: %s", self.symbol, e, exc_info=True)
             return None
 
     def _calculate_duration(self) -> str:
@@ -239,10 +239,10 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             self.ib.sleep(2)
 
             if not self.ib.isConnected():
-                _logger.error(f"Failed to connect to IBKR at {self.host}:{self.port}")
+                _logger.error("Failed to connect to IBKR at %s:%s", self.host, self.port, exc_info=True)
                 return False
 
-            _logger.info(f"Connected to IBKR for {self.symbol}")
+            _logger.info("Connected to IBKR for %s", self.symbol)
 
             # Subscribe to real-time data
             self._subscribe_realtime_data()
@@ -250,7 +250,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             return True
 
         except Exception as e:
-            _logger.error(f"Error connecting to IBKR: {str(e)}")
+            _logger.error("Error connecting to IBKR: %s", e, exc_info=True)
             return False
 
     def _subscribe_realtime_data(self):
@@ -271,10 +271,10 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
                 # Set up callback for real-time data
                 self.ib.barUpdateEvent += self._on_bar_update
 
-                _logger.info(f"Subscribed to real-time data for {self.symbol}")
+                _logger.info("Subscribed to real-time data for %s", self.symbol)
 
         except Exception as e:
-            _logger.error(f"Error subscribing to real-time data: {str(e)}")
+            _logger.error("Error subscribing to real-time data: %s", e, exc_info=True)
 
     def _disconnect_realtime(self):
         """Disconnect from IBKR."""
@@ -286,10 +286,10 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             if self.ib.isConnected():
                 self.ib.disconnect()
 
-            _logger.info(f"Disconnected from IBKR for {self.symbol}")
+            _logger.info("Disconnected from IBKR for %s", self.symbol)
 
         except Exception as e:
-            _logger.error(f"Error disconnecting from IBKR: {str(e)}")
+            _logger.error("Error disconnecting from IBKR: %s", e, exc_info=True)
 
     def _on_bar_update(self, bars):
         """Callback for real-time bar updates."""
@@ -312,7 +312,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             self._process_new_data(new_data)
 
         except Exception as e:
-            _logger.error(f"Error processing real-time bar update: {str(e)}")
+            _logger.error("Error processing real-time bar update: %s", e, exc_info=True)
 
     def _get_latest_data(self) -> Optional[pd.DataFrame]:
         """

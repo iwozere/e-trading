@@ -8,8 +8,9 @@ and relationships. Provides discovery and query capabilities.
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-import logging
+from src.notification.logger import setup_logger
 
+_logger = setup_logger(__name__)
 
 class ConfigRegistry:
     """
@@ -24,8 +25,6 @@ class ConfigRegistry:
 
     def __init__(self):
         """Initialize the configuration registry"""
-        self.logger = logging.getLogger(__name__)
-
         # Configuration storage by type
         self._configs_by_type: Dict[str, Dict[str, Any]] = {}
 
@@ -75,7 +74,7 @@ class ConfigRegistry:
         # Initialize relationships
         self._relationships[config_id] = []
 
-        self.logger.debug(f"Registered config: {config_id} (type: {config_type})")
+        _logger.debug("Registered config: %s (type: %s)", config_id, config_type)
 
     def unregister_config(self, config_id: str):
         """Unregister a configuration from the registry"""
@@ -97,7 +96,7 @@ class ConfigRegistry:
         if config_id in self._tags:
             del self._tags[config_id]
 
-        self.logger.debug(f"Unregistered config: {config_id}")
+        _logger.debug("Unregistered config: %s", config_id)
 
     def get_config(self, config_id: str) -> Optional[Any]:
         """Get a configuration by ID"""
@@ -221,7 +220,7 @@ class ConfigRegistry:
         self._metadata.clear()
         self._relationships.clear()
         self._tags.clear()
-        self.logger.info("Configuration registry cleared")
+        _logger.info("Configuration registry cleared")
 
     def validate_registry(self) -> List[str]:
         """

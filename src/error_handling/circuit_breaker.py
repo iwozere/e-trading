@@ -14,7 +14,6 @@ Features:
 """
 
 import time
-import logging
 from typing import Callable, Optional, Dict, Any, List
 from dataclasses import dataclass
 from enum import Enum
@@ -22,8 +21,9 @@ from functools import wraps
 from threading import Lock
 
 from .exceptions import NetworkException, CircuitBreakerOpenException
+from src.notification.logger import setup_logger
 
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 
 class CircuitState(Enum):
@@ -95,7 +95,7 @@ class CircuitBreaker:
         # Thread safety
         self._lock = Lock()
 
-        _logger.info(f"Circuit breaker '{name}' initialized")
+        _logger.info("Circuit breaker '%s' initialized", name)
 
     def call(self, func: Callable, *args, **kwargs) -> Any:
         """
@@ -168,7 +168,7 @@ class CircuitBreaker:
 
         if self.state == CircuitState.HALF_OPEN:
             self.success_count += 1
-            _logger.info(f"Circuit breaker '{self.name}' success in HALF_OPEN state: {self.success_count}/{self.config.success_threshold}")
+            _logger.info("Circuit breaker '%s' success in HALF_OPEN state: %d/%d", self.name, self.success_count, self.config.success_threshold)
 
         # Reset failure count in CLOSED state
         elif self.state == CircuitState.CLOSED:
@@ -190,7 +190,7 @@ class CircuitBreaker:
         self.failure_times.append(current_time)
         self.last_failure_time = current_time
 
-        _logger.warning(f"Circuit breaker '{self.name}' failure: {self.failure_count}/{self.config.failure_threshold}")
+        _logger.warning("Circuit breaker '%s' failure: %d/%d", self.name, self.failure_count, self.config.failure_threshold)
 
         # Check if we should open the circuit
         if (self.state == CircuitState.CLOSED and
@@ -209,7 +209,7 @@ class CircuitBreaker:
             self.success_count = 0
 
             if self.config.log_state_changes:
-                _logger.warning(f"Circuit breaker '{self.name}' transitioned to OPEN state")
+                _logger.warning("Circuit breaker '%s' transitioned to OPEN state", self.name)
 
     def _transition_to_half_open(self):
         """Transition circuit to HALF_OPEN state."""
@@ -219,7 +219,7 @@ class CircuitBreaker:
             self.success_count = 0
 
             if self.config.log_state_changes:
-                _logger.info(f"Circuit breaker '{self.name}' transitioned to HALF_OPEN state")
+                _logger.info("Circuit breaker '%s' transitioned to HALF_OPEN state", self.name)
 
     def _transition_to_closed(self):
         """Transition circuit to CLOSED state."""
@@ -231,7 +231,7 @@ class CircuitBreaker:
             self.success_count = 0
 
             if self.config.log_state_changes:
-                _logger.info(f"Circuit breaker '{self.name}' transitioned to CLOSED state")
+                _logger.info("Circuit breaker '%s' transitioned to CLOSED state", self.name)
 
     def force_open(self):
         """Force circuit to OPEN state."""

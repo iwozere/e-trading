@@ -24,8 +24,9 @@ import json
 import threading
 
 from .exceptions import TradingException
+from src.notification.logger import setup_logger
 
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 
 class ErrorSeverity(Enum):
@@ -237,7 +238,7 @@ class ErrorMonitor:
                 _logger.error("Failed to send alert: %s", e, exc_info=True)
 
         self.alert_count += 1
-        _logger.warning(f"Alert generated: {message}")
+        _logger.warning("Alert generated: %s", message)
 
     def _monitor_loop(self):
         """Background monitoring loop."""
@@ -409,7 +410,7 @@ class ErrorMonitor:
     def add_alert_function(self, alert_func: Callable) -> None:
         """Add alert function for sending notifications."""
         self.alert_config.alert_functions.append(alert_func)
-        _logger.info(f"Added alert function: {alert_func.__name__}")
+        _logger.info("Added alert function: %s", alert_func.__name__)
 
     def clear_errors(self) -> None:
         """Clear all error events."""

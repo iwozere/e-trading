@@ -21,13 +21,13 @@ import threading
 from abc import abstractmethod
 from typing import Optional, Callable, Dict, Any
 from datetime import datetime
+import logging
 
 import backtrader as bt
 import pandas as pd
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
-
 
 class BaseLiveDataFeed(bt.feeds.PandasData):
     """
@@ -81,11 +81,11 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         self.should_stop = False
 
         # Load historical data first
-        _logger.info(f"Loading {lookback_bars} historical bars for {symbol} {interval}")
+        _logger.info("Loading %d historical bars for %s %s", lookback_bars, symbol, interval)
         historical_data = self._load_historical_data()
 
         if historical_data is None or historical_data.empty:
-            raise ValueError(f"Failed to load historical data for {symbol}")
+            raise ValueError("Failed to load historical data for %s", symbol)
 
         # Initialize PandasData with historical data
         super().__init__(dataname=historical_data, **kwargs)
@@ -128,19 +128,19 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         """Start the real-time update thread."""
         self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
         self.update_thread.start()
-        _logger.info(f"Started real-time updates for {self.symbol}")
+        _logger.info("Started real-time updates for %s", self.symbol)
 
     def _update_loop(self):
         """Main loop for real-time updates."""
         while not self.should_stop:
             try:
                 if not self.is_connected:
-                    _logger.info(f"Connecting to real-time data for {self.symbol}")
+                    _logger.info("Connecting to real-time data for %s", self.symbol)
                     if self._connect_realtime():
                         self.is_connected = True
-                        _logger.info(f"Connected to real-time data for {self.symbol}")
+                        _logger.info("Connected to real-time data for %s", self.symbol)
                     else:
-                        _logger.warning(f"Failed to connect to real-time data for {self.symbol}, retrying in {self.retry_interval}s")
+                        _logger.warning("Failed to connect to real-time data for %s, retrying in %d seconds", self.symbol, self.retry_interval)
                         time.sleep(self.retry_interval)
                         continue
 
@@ -192,7 +192,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                     except Exception as e:
                         _logger.error("Error in on_new_bar callback: %s", e, exc_info=True)
 
-                _logger.debug(f"Updated {self.symbol} with new bar at {self.df.index[-1]}")
+                _logger.debug("Updated %s with new bar at %s", self.symbol, self.df.index[-1])
 
         except Exception as e:
             _logger.error("Error processing new data for %s: %s", self.symbol, e, exc_info=True)
@@ -227,7 +227,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
 
     def stop(self):
         """Stop the real-time updates and disconnect."""
-        _logger.info(f"Stopping real-time updates for {self.symbol}")
+        _logger.info("Stopping real-time updates for %s", self.symbol)
         self.should_stop = True
         self._disconnect_realtime()
         if hasattr(self, 'update_thread'):

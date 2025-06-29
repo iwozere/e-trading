@@ -21,7 +21,7 @@ from email.mime.base import MIMEBase
 from email import encoders
 import logging
 
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 class EmailNotifier:
     """
@@ -58,21 +58,21 @@ class EmailNotifier:
                     )
                     msg.attach(part)
                 except Exception as e:
-                    self.logger.error(f"Failed to attach file {file_path}: {e}")
+                    _logger.error("Failed to attach file %s: %s", file_path, e, exc_info=True)
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.ehlo()
                 server.starttls()
                 server.login(self.sender_email, self.sender_password)
                 server.send_message(msg)
-            self.logger.info(f"Email sent to {to_addr} with subject: {subject}")
+            _logger.info("Email sent to %s with subject: %s", to_addr, subject)
         except Exception as e:
-            self.logger.error(f"Failed to send email: {e}")
+            _logger.error("Failed to send email: %s", e, exc_info=True)
 
     def send_notification_email(self, buy_or_sell: str, symbol: str, price: float, amount: float, to_addr: str, body: str = ""):
         subject = f"Trade notification: {buy_or_sell} {symbol} at {price} with {amount}"
         self.send_email(to_addr, subject, body)
-        self.logger.debug(f"Email sent successfully: {subject}")
+        _logger.debug("Email sent successfully: %s", subject)
 
 def send_email_alert(receiver_email: str, subject: str, message: str):
     try:

@@ -21,6 +21,7 @@ from typing import Optional, Dict, Any
 
 import pandas as pd
 import yfinance as yf
+import logging
 
 from src.data.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
@@ -91,7 +92,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             DataFrame with historical OHLCV data
         """
         try:
-            _logger.info(f"Loading {self.lookback_bars} historical bars for {self.symbol}")
+            _logger.info("Loading %d historical bars for %s", self.lookback_bars, self.symbol)
 
             # Create ticker object
             self.ticker = yf.Ticker(self.symbol)
@@ -107,7 +108,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             )
 
             if df.empty:
-                _logger.warning(f"No historical data found for {self.symbol}")
+                _logger.warning("No historical data found for %s", self.symbol)
                 return None
 
             # Ensure we have the right number of bars
@@ -121,7 +122,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             required_columns = ['open', 'high', 'low', 'close', 'volume']
             df = df[required_columns]
 
-            _logger.info(f"Loaded {len(df)} historical bars for {self.symbol}")
+            _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
             return df
 
         except Exception as e:
@@ -196,7 +197,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
                 _logger.error("Invalid ticker symbol: %s", self.symbol)
                 return False
 
-            _logger.info(f"Connected to Yahoo Finance for {self.symbol}")
+            _logger.info("Connected to Yahoo Finance for %s", self.symbol)
             return True
 
         except Exception as e:
@@ -206,7 +207,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
     def _disconnect_realtime(self):
         """Disconnect from Yahoo Finance."""
         self.ticker = None
-        _logger.info(f"Disconnected from Yahoo Finance for {self.symbol}")
+        _logger.info("Disconnected from Yahoo Finance for %s", self.symbol)
 
     def _get_latest_data(self) -> Optional[pd.DataFrame]:
         """
@@ -242,7 +243,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
                 new_data = recent_data[recent_data.index > last_known_time]
 
                 if not new_data.empty:
-                    _logger.debug(f"Found {len(new_data)} new bars for {self.symbol}")
+                    _logger.debug("Found %d new bars for %s", len(new_data), self.symbol)
                     return new_data
                 else:
                     return None

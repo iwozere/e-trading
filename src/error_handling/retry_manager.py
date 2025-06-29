@@ -19,8 +19,9 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .exceptions import TradingException
+from src.notification.logger import setup_logger
 
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 
 class RetryStrategy(Enum):

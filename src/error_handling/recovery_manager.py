@@ -21,8 +21,9 @@ from enum import Enum
 from functools import wraps
 
 from .exceptions import TradingException, RecoveryException
+from src.notification.logger import setup_logger
 
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 
 class RecoveryStrategy(Enum):
@@ -87,7 +88,7 @@ class ErrorRecoveryManager:
             config: Recovery configuration
         """
         self.recovery_configs[error_type] = config
-        _logger.info(f"Registered recovery strategy for {error_type}: {config.strategy.value}")
+        _logger.info("Registered recovery strategy for %s: %s", error_type, config.strategy.value)
 
     def execute_recovery(self,
                         error: Exception,
@@ -113,7 +114,7 @@ class ErrorRecoveryManager:
         config = self.recovery_configs.get(error_type)
 
         if not config:
-            _logger.warning(f"No recovery strategy registered for {error_type}")
+            _logger.warning("No recovery strategy registered for %s", error_type)
             return None
 
         start_time = time.time()
@@ -125,7 +126,7 @@ class ErrorRecoveryManager:
             self.metrics['recovery_time'] += time.time() - start_time
 
             if config.log_recovery:
-                _logger.info(f"Recovery successful for {error_type}: {config.strategy.value}")
+                _logger.info("Recovery successful for %s: %s", error_type, config.strategy.value)
 
             return result
 
@@ -253,7 +254,7 @@ class ErrorRecoveryManager:
                        error: Exception,
                        context: Dict[str, Any]) -> Any:
         """Execute ignore strategy."""
-        _logger.info(f"Ignoring error: {str(error)}")
+        _logger.info("Ignoring error: %s", error)
         return context.get('default_value')
 
     def _execute_alert(self,

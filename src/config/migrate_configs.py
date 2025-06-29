@@ -18,10 +18,10 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Any
 from datetime import datetime
-import logging
-
 from .config_manager import ConfigManager
+from src.notification.logger import setup_logger
 
+_logger = setup_logger(__name__)
 
 class ConfigMigrator:
     """
@@ -41,7 +41,6 @@ class ConfigMigrator:
         """
         self.old_config_dir = Path(old_config_dir)
         self.new_config_dir = Path(new_config_dir)
-        self.logger = logging.getLogger(__name__)
 
         # Ensure directories exist
         self.new_config_dir.mkdir(parents=True, exist_ok=True)
@@ -70,7 +69,7 @@ class ConfigMigrator:
         }
 
         if not self.old_config_dir.exists():
-            self.logger.warning(f"Old config directory not found: {self.old_config_dir}")
+            _logger.warning(f"Old config directory not found: {self.old_config_dir}")
             return configs
 
         # Scan for configuration files
@@ -80,10 +79,10 @@ class ConfigMigrator:
                 configs[config_type].append(config_file)
                 self.migration_stats["total_files"] += 1
 
-        self.logger.info(f"Discovered {self.migration_stats['total_files']} configuration files")
+        _logger.info(f"Discovered {self.migration_stats['total_files']} configuration files")
         for config_type, files in configs.items():
             if files:
-                self.logger.info(f"  {config_type}: {len(files)} files")
+                _logger.info(f"  {config_type}: {len(files)} files")
 
         return configs
 
@@ -111,7 +110,7 @@ class ConfigMigrator:
                 return "unknown"
 
         except Exception as e:
-            self.logger.warning(f"Error detecting config type for {config_path}: {e}")
+            _logger.warning(f"Error detecting config type for {config_path}: {e}")
             return "unknown"
 
     def migrate_configs(self, environment: str = "development") -> bool:
@@ -124,7 +123,7 @@ class ConfigMigrator:
         Returns:
             True if migration was successful
         """
-        self.logger.info("Starting configuration migration...")
+        _logger.info("Starting configuration migration...")
 
         # Discover old configurations
         old_configs = self.discover_old_configs()
@@ -136,7 +135,7 @@ class ConfigMigrator:
         # Migrate each type of configuration
         for config_type, config_files in old_configs.items():
             if config_files:
-                self.logger.info(f"Migrating {config_type} configurations...")
+                _logger.info(f"Migrating {config_type} configurations...")
                 for config_file in config_files:
                     try:
                         self._migrate_single_config(config_file, config_type, env_dir)
@@ -147,7 +146,7 @@ class ConfigMigrator:
                             "file": str(config_file),
                             "error": str(e)
                         })
-                        self.logger.error(f"Failed to migrate {config_file}: {e}")
+                        _logger.error("Failed to migrate %s: %s", config_file, e, exc_info=True)
 
         # Generate migration report
         self._generate_migration_report(env_dir)
@@ -190,7 +189,7 @@ class ConfigMigrator:
         with open(new_config_path, 'w') as f:
             json.dump(new_config, f, indent=2, default=str)
 
-        self.logger.debug(f"Migrated {config_path} -> {new_config_path}")
+        _logger.debug(f"Migrated {config_path} -> {new_config_path}")
 
     def _transform_trading_config(self, old_config: Dict[str, Any], config_path: Path) -> Dict[str, Any]:
         """Transform old trading configuration to new format"""
@@ -348,7 +347,7 @@ class ConfigMigrator:
         with open(report_path, 'w') as f:
             json.dump(report, f, indent=2, default=str)
 
-        self.logger.info(f"Migration report saved to: {report_path}")
+        _logger.info(f"Migration report saved to: {report_path}")
 
     def validate_migrated_configs(self) -> List[str]:
         """Validate all migrated configurations"""
@@ -378,10 +377,10 @@ class ConfigMigrator:
 
         if self.old_config_dir.exists():
             shutil.copytree(self.old_config_dir, backup_dir)
-            self.logger.info(f"Backup created: {backup_dir}")
+            _logger.info(f"Backup created: {backup_dir}")
             return backup_dir
         else:
-            self.logger.warning("No old config directory to backup")
+            _logger.warning("No old config directory to backup")
             return ""
 
 
@@ -438,4 +437,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

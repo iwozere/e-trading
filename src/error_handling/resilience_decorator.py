@@ -22,8 +22,9 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from .retry_manager import RetryManager, RetryConfig
 from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from .error_monitor import error_monitor, ErrorSeverity
+from src.notification.logger import setup_logger
 
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 
 def resilient(retry_config: Optional[RetryConfig] = None,
@@ -104,7 +105,7 @@ def resilient(retry_config: Optional[RetryConfig] = None,
 
                 # Log success if monitoring
                 if monitor_errors:
-                    _logger.debug(f"Function {func.__name__} executed successfully")
+                    _logger.debug("Function %s executed successfully", func.__name__)
 
                 return result
 
@@ -125,7 +126,7 @@ def resilient(retry_config: Optional[RetryConfig] = None,
                 # Try fallback if available
                 if fallback_func:
                     try:
-                        _logger.warning(f"Using fallback for {func.__name__}: {str(e)}")
+                        _logger.warning("Using fallback for %s: %s", func.__name__, e)
                         return fallback_func(*args, **kwargs)
                     except Exception as fallback_error:
                         _logger.error("Fallback also failed for %s: %s", func.__name__, fallback_error, exc_info=True)
@@ -382,7 +383,7 @@ def with_caching(cache_func: Callable, ttl: int = 300):
                 if cached_result is not None:
                     return cached_result
             except Exception as e:
-                _logger.warning(f"Cache get failed: {e}")
+                _logger.warning("Cache get failed: %s", e)
 
             # Execute function
             result = func(*args, **kwargs)
@@ -391,7 +392,7 @@ def with_caching(cache_func: Callable, ttl: int = 300):
             try:
                 cache_func.set(cache_key, result, ttl)
             except Exception as e:
-                _logger.warning(f"Cache set failed: {e}")
+                _logger.warning("Cache set failed: %s", e)
 
             return result
 

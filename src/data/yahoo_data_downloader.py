@@ -189,7 +189,7 @@ class YahooDataDownloader(BaseDataDownloader):
             new_df = self.download_data(symbol, interval, new_start, new_end)
 
             if new_df.empty:
-                _logger.info(f"No new data available for {symbol}")
+                _logger.info("No new data available for %s", symbol)
                 return filepath
 
             # Combine existing and new data

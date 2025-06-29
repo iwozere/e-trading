@@ -15,15 +15,15 @@ Features:
 - Data validation
 """
 
-import logging
+
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
-
+from src.notification.logger import setup_logger
 from src.data.database import Trade, BotInstance, PerformanceMetrics, get_session, close_session
 
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 
 class TradeRepository:
@@ -81,7 +81,7 @@ class TradeRepository:
             trade = Trade(**trade_data)
             self.session.add(trade)
             self.commit()
-            _logger.info(f"Created trade: {trade.id} for {trade.symbol}")
+            _logger.info("Created trade: %s for %s", trade.id, trade.symbol)
             return trade
         except Exception as e:
             self.rollback()
@@ -123,7 +123,7 @@ class TradeRepository:
                         setattr(trade, key, value)
                 trade.updated_at = datetime.utcnow()
                 self.commit()
-                _logger.info(f"Updated trade: {trade_id}")
+                _logger.info("Updated trade: %s", trade_id)
                 return trade
             return None
         except Exception as e:
@@ -273,7 +273,7 @@ class TradeRepository:
             if trade:
                 self.session.delete(trade)
                 self.commit()
-                _logger.info(f"Deleted trade: {trade_id}")
+                _logger.info("Deleted trade: %s", trade_id)
                 return True
             return False
         except Exception as e:
@@ -296,7 +296,7 @@ class TradeRepository:
             bot_instance = BotInstance(**bot_data)
             self.session.add(bot_instance)
             self.commit()
-            _logger.info(f"Created bot instance: {bot_instance.id}")
+            _logger.info("Created bot instance: %s", bot_instance.id)
             return bot_instance
         except Exception as e:
             self.rollback()
@@ -338,7 +338,7 @@ class TradeRepository:
                         setattr(bot_instance, key, value)
                 bot_instance.updated_at = datetime.utcnow()
                 self.commit()
-                _logger.info(f"Updated bot instance: {bot_id}")
+                _logger.info("Updated bot instance: %s", bot_id)
                 return bot_instance
             return None
         except Exception as e:
@@ -390,7 +390,7 @@ class TradeRepository:
             metrics = PerformanceMetrics(**metrics_data)
             self.session.add(metrics)
             self.commit()
-            _logger.info(f"Created performance metrics: {metrics.id}")
+            _logger.info("Created performance metrics: %s", metrics.id)
             return metrics
         except Exception as e:
             self.rollback()
@@ -480,7 +480,7 @@ class TradeRepository:
                 Trade.created_at < cutoff_date
             ).delete()
             self.commit()
-            _logger.info(f"Cleaned up {deleted_count} old trade records")
+            _logger.info("Cleaned up %s old trade records", deleted_count)
             return deleted_count
         except Exception as e:
             self.rollback()
