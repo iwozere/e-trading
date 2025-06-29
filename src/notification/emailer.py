@@ -19,8 +19,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
+import logging
 
-_logger = setup_logger(__name__)
+_logger = logging.getLogger(__name__)
 
 class EmailNotifier:
     """

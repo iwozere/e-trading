@@ -22,6 +22,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+import logging
 
 from src.data.trade_repository import TradeRepository
 from src.risk.controller import RiskController
@@ -32,7 +33,7 @@ from config.donotshare.donotshare import (
     SMTP_USER
 )
 
-_logger = setup_logger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class BaseTradingBot:

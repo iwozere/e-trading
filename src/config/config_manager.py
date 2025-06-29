@@ -16,9 +16,9 @@ import yaml
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 from datetime import datetime
-import logging
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+import logging
 
 from .schemas import (
     ConfigSchema,
@@ -29,17 +29,17 @@ from .schemas import (
 from .registry import ConfigRegistry
 from .templates import ConfigTemplates
 
+_logger = logging.getLogger(__name__)
 
 class ConfigFileHandler(FileSystemEventHandler):
     """File system event handler for configuration hot-reloading"""
 
     def __init__(self, config_manager):
         self.config_manager = config_manager
-        self.logger = logging.getLogger(__name__)
 
     def on_modified(self, event):
         if not event.is_directory and event.src_path.endswith(('.json', '.yaml', '.yml')):
-            self.logger.info(f"Configuration file modified: {event.src_path}")
+            _logger.info("Configuration file modified: %s", event.src_path)
             self.config_manager.reload_config(event.src_path)
 
 
@@ -65,7 +65,6 @@ class ConfigManager:
         """
         self.config_dir = Path(config_dir)
         self.environment = environment or os.getenv("TRADING_ENV", "development")
-        self.logger = logging.getLogger(__name__)
 
         # Initialize components
         self.registry = ConfigRegistry()
@@ -89,7 +88,7 @@ class ConfigManager:
         """Load environment-specific configuration files"""
         env_dir = self.config_dir / self.environment
         if env_dir.exists():
-            self.logger.info(f"Loading environment-specific configs from: {env_dir}")
+            _logger.info("Loading environment-specific configs from: %s", env_dir)
             for config_file in env_dir.rglob("*.json"):
                 self._load_config_file(config_file)
             for config_file in env_dir.rglob("*.yaml"):
@@ -117,7 +116,7 @@ class ConfigManager:
             return config
 
         except Exception as e:
-            self.logger.error(f"Error loading config file {config_path}: {e}")
+            _logger.error("Error loading config file %s: %s", config_path, e)
             return None
 
     def _validate_and_cache_config(self, config: Dict[str, Any], config_path: Path):
@@ -144,10 +143,10 @@ class ConfigManager:
             # Register in registry
             self.registry.register_config(config_id, validated_config, config_type)
 
-            self.logger.info(f"Loaded and validated config: {config_id}")
+            _logger.info("Loaded and validated config: %s", config_id)
 
         except Exception as e:
-            self.logger.error(f"Configuration validation failed for {config_path}: {e}")
+            _logger.error("Configuration validation failed for %s: %s", config_path, e)
             raise
 
     def _detect_config_type(self, config: Dict[str, Any]) -> str:
@@ -191,7 +190,7 @@ class ConfigManager:
         """Create a new configuration using templates"""
         template = self.templates.get_template(config_type)
         if not template:
-            raise ValueError(f"No template found for config type: {config_type}")
+            raise ValueError("No template found for config type: %s", config_type)
 
         # Merge template with provided kwargs
         config_data = template.copy()
@@ -211,9 +210,9 @@ class ConfigManager:
         """Save a configuration to file"""
         if not filename:
             if hasattr(config, 'bot_id'):
-                filename = f"{config.bot_id}.json"
+                filename = "%s.json" % config.bot_id
             else:
-                filename = f"config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                filename = "config_%s.json" % datetime.now().strftime('%Y%m%d_%H%M%S')
 
         config_path = self.config_dir / self.environment / filename
 
@@ -230,7 +229,7 @@ class ConfigManager:
         # Reload the config
         self._load_config_file(config_path)
 
-        self.logger.info(f"Saved configuration: {config_path}")
+        _logger.info("Saved configuration: %s", config_path)
         return str(config_path)
 
     def delete_config(self, config_id: str) -> bool:
@@ -242,10 +241,10 @@ class ConfigManager:
                 del self._config_cache[config_id]
                 del self._config_files[config_id]
                 self.registry.unregister_config(config_id)
-                self.logger.info(f"Deleted configuration: {config_id}")
+                _logger.info("Deleted configuration: %s", config_id)
                 return True
             except Exception as e:
-                self.logger.error(f"Error deleting config {config_id}: {e}")
+                _logger.error("Error deleting config %s: %s", config_id, e, exc_info=True)
                 return False
         return False
 
@@ -269,18 +268,18 @@ class ConfigManager:
             self._observer.schedule(handler, str(self.config_dir), recursive=True)
             self._observer.start()
             self._hot_reload_enabled = True
-            self.logger.info("Hot-reload enabled for configuration files")
+            _logger.info("Hot-reload enabled for configuration files")
 
         elif not enabled and self._hot_reload_enabled:
             if self._observer:
                 self._observer.stop()
                 self._observer.join()
             self._hot_reload_enabled = False
-            self.logger.info("Hot-reload disabled")
+            _logger.info("Hot-reload disabled")
 
     def get_environment_config(self, key: str, default: Any = None) -> Any:
         """Get environment-specific configuration value"""
-        env_config_file = self.config_dir / f"{self.environment}.json"
+        env_config_file = self.config_dir / "%s.json" % self.environment
 
         if env_config_file.exists():
             with open(env_config_file, 'r') as f:
@@ -326,4 +325,4 @@ class ConfigManager:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
-        self.enable_hot_reload(False) 
+        self.enable_hot_reload(False)

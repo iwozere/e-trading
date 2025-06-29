@@ -7,6 +7,7 @@ This module defines TelegramNotifier, which can send trade entries, updates, and
 import asyncio
 import os
 import sys
+import logging
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -15,7 +16,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from src.notification.logger import setup_logger
-_logger = setup_logger(__name__)
+_logger = logging.getLogger(__name__)
 from telegram import Bot
 from telegram.error import TelegramError
 
@@ -65,13 +66,13 @@ class TelegramNotifier:
             # Send the message
             self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode="HTML")
 
-            self.logger.info(
+            _logger.info(
                 f"Trade notification sent successfully for {trade_data['symbol']}"
             )
             return True
 
         except TelegramError as e:
-            self.logger.error(f"Failed to send trade notification: {e}")
+            _logger.error(f"Failed to send trade notification: {e}")
             return False
 
     def send_trade_update(self, trade_data: Dict[str, Any]) -> bool:
@@ -99,13 +100,13 @@ class TelegramNotifier:
             # Send the message
             self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode="HTML")
 
-            self.logger.info(
+            _logger.info(
                 f"Trade update notification sent successfully for {trade_data['symbol']}"
             )
             return True
 
         except TelegramError as e:
-            self.logger.error(f"Failed to send trade update notification: {e}")
+            _logger.error(f"Failed to send trade update notification: {e}")
             return False
 
     def send_error_notification(self, error_message: str) -> bool:
@@ -123,11 +124,11 @@ class TelegramNotifier:
 
             self.bot.send_message(chat_id=self.chat_id, text=message, parse_mode="HTML")
 
-            self.logger.info("Error notification sent successfully")
+            _logger.info("Error notification sent successfully")
             return True
 
         except TelegramError as e:
-            self.logger.error(f"Failed to send error notification: {e}")
+            _logger.error(f"Failed to send error notification: {e}")
             return False
 
     def _format_trade_message(self, trade_data: Dict[str, Any]) -> str:
@@ -200,12 +201,12 @@ class TelegramNotifier:
             await self.bot.send_message(
                 chat_id=self.chat_id, text=message, parse_mode="HTML"
             )
-            self.logger.info(
+            _logger.info(
                 f"Trade notification sent successfully for {trade_data['symbol']}"
             )
             return True
         except TelegramError as e:
-            self.logger.error(f"Failed to send trade notification (async): {e}")
+            _logger.error(f"Failed to send trade notification (async): {e}")
             return False
 
     async def send_trade_update_async(self, trade_data: Dict[str, Any]) -> bool:
@@ -221,12 +222,12 @@ class TelegramNotifier:
             await self.bot.send_message(
                 chat_id=self.chat_id, text=message, parse_mode="HTML"
             )
-            self.logger.info(
+            _logger.info(
                 f"Trade update notification sent successfully for {trade_data.get('symbol', 'UNKNOWN')}"
             )
             return True
         except TelegramError as e:
-            self.logger.error(f"Failed to send trade update notification (async): {e}")
+            _logger.error(f"Failed to send trade update notification (async): {e}")
             return False
 
     async def send_error_notification_async(self, error_message: str) -> bool:
@@ -242,10 +243,10 @@ class TelegramNotifier:
             await self.bot.send_message(
                 chat_id=self.chat_id, text=message, parse_mode="HTML"
             )
-            self.logger.info("Error notification sent successfully (async)")
+            _logger.info("Error notification sent successfully (async)")
             return True
         except TelegramError as e:
-            self.logger.error(f"Failed to send error notification (async): {e}")
+            _logger.error(f"Failed to send error notification (async): {e}")
             return False
 
     async def send_message_async(self, message: str, parse_mode: str = "HTML") -> bool:
@@ -261,7 +262,7 @@ class TelegramNotifier:
         """
         try:
             if not self.bot or not self.chat_id:
-                self.logger.warning("Telegram bot not configured")
+                _logger.warning("Telegram bot not configured")
                 return False
 
             # Add timestamp to message
@@ -278,7 +279,7 @@ class TelegramNotifier:
             return True
 
         except Exception as e:
-            self.logger.error(f"Error sending Telegram message (async): {str(e)}")
+            _logger.error(f"Error sending Telegram message (async): {str(e)}")
             return False
 
 
