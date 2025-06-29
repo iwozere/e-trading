@@ -428,7 +428,7 @@ class BaseTradingBot:
         """
         try:
             open_trades = self.trade_repository.get_open_trades(
-                bot_id=self.bot_id, 
+                bot_id=self.bot_id,
                 symbol=self.trading_pair
             )
 

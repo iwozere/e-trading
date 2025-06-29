@@ -91,9 +91,9 @@ class RetryManager:
             'total_retry_time': 0.0
         }
 
-    def execute(self, 
-                func: Callable, 
-                *args, 
+    def execute(self,
+                func: Callable,
+                *args,
                 context: Optional[Dict[str, Any]] = None,
                 **kwargs) -> Any:
         """
@@ -213,7 +213,7 @@ class RetryManager:
             return
 
         log_level = getattr(logging, self.config.log_level.upper(), logging.WARNING)
-        _logger.log(log_level, 
+        _logger.log(log_level,
                    f"Retry attempt {attempt}/{self.config.max_attempts} failed: {type(exception).__name__}: {str(exception)}. "
                    f"Retrying in {delay:.2f}s. Context: {context}")
 
@@ -223,7 +223,7 @@ class RetryManager:
             return
 
         log_level = getattr(logging, self.config.log_level.upper(), logging.WARNING)
-        _logger.log(log_level, 
+        _logger.log(log_level,
                    f"Retry succeeded after {attempt} attempts. Context: {context}")
 
     def _log_final_failure(self, attempt: int, exception: Exception, context: Dict[str, Any]):
@@ -317,4 +317,4 @@ def retry_on_validation_error(max_attempts: int = 2, base_delay: float = 0.5):
         strategy=RetryStrategy.FIXED,
         retry_on_exceptions=(ValidationException,)
     )
-    return retry(config) 
+    return retry(config)

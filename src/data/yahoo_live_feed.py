@@ -39,7 +39,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
     - Error handling and rate limiting
     """
 
-    def __init__(self, 
+    def __init__(self,
                  symbol: str,
                  interval: str,
                  polling_interval: int = 60,
@@ -278,4 +278,4 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             'last_poll_time': self.last_poll_time,
             'ticker_valid': self.ticker is not None
         })
-        return status 
+        return status

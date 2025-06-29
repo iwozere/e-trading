@@ -1,3 +1,8 @@
+"""
+Mock broker implementation for testing and development.
+Simulates order execution and portfolio management without real API calls.
+"""
+
 from src.broker.base_broker import BaseBroker
 
 

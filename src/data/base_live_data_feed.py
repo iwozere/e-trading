@@ -50,7 +50,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         ("openinterest", None),
     )
 
-    def __init__(self, 
+    def __init__(self,
                  symbol: str,
                  interval: str,
                  lookback_bars: int = 1000,
@@ -247,4 +247,4 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
             'last_update': self.last_update,
             'data_points': len(self.df) if self.df is not None else 0,
             'should_stop': self.should_stop
-        } 
+        }

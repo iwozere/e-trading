@@ -1,3 +1,16 @@
+"""
+Custom Backtrader analyzers for advanced trading performance metrics.
+
+This module provides several custom analyzers for use with Backtrader strategies, including:
+- Calmar Ratio
+- CAGR (Compound Annual Growth Rate)
+- Sortino Ratio
+- Profit Factor
+- Win Rate
+- Consecutive Wins/Losses
+- Portfolio Volatility
+"""
+
 import math
 
 import backtrader as bt
@@ -5,6 +18,10 @@ import numpy as np
 
 
 class CalmarRatio(bt.Analyzer):
+    """
+    Analyzer to calculate the Calmar Ratio, which is the CAGR divided by the maximum drawdown.
+    Uses CAGR and DrawDown analyzers to compute the metric.
+    """
     params = (("riskfreerate", 0.0), ("timeframe", bt.TimeFrame.Years))
 
     def __init__(self):
@@ -31,6 +48,9 @@ class CalmarRatio(bt.Analyzer):
 
 
 class CAGR(bt.Analyzer):
+    """
+    Analyzer to calculate the Compound Annual Growth Rate (CAGR) of the strategy's equity curve.
+    """
     params = (("timeframe", bt.TimeFrame.Years),)
 
     def start(self):
@@ -56,6 +76,9 @@ class CAGR(bt.Analyzer):
 
 
 class SortinoRatio(bt.Analyzer):
+    """
+    Analyzer to calculate the Sortino Ratio, a risk-adjusted return metric that penalizes only downside volatility.
+    """
     params = (("riskfreerate", 0.0), ("timeframe", bt.TimeFrame.Days))
 
     def start(self):
@@ -95,6 +118,9 @@ class SortinoRatio(bt.Analyzer):
 
 
 class ProfitFactor(bt.Analyzer):
+    """
+    Analyzer to calculate the Profit Factor, defined as the ratio of gross profit to gross loss from closed trades.
+    """
     def start(self):
         self.gross_profit = 0.0
         self.gross_loss = 0.0
@@ -119,6 +145,9 @@ class ProfitFactor(bt.Analyzer):
 
 
 class WinRate(bt.Analyzer):
+    """
+    Analyzer to calculate the win rate (percentage of winning trades), average win, and average loss.
+    """
     def start(self):
         self.winning_trades = 0
         self.total_trades = 0
@@ -149,6 +178,9 @@ class WinRate(bt.Analyzer):
 
 
 class ConsecutiveWinsLosses(bt.Analyzer):
+    """
+    Analyzer to track the maximum number of consecutive winning and losing trades.
+    """
     def start(self):
         self.current_wins = 0
         self.current_losses = 0
@@ -179,6 +211,9 @@ class ConsecutiveWinsLosses(bt.Analyzer):
 
 
 class PortfolioVolatility(bt.Analyzer):
+    """
+    Analyzer to calculate the volatility of the portfolio's returns, optionally annualized.
+    """
     params = (("annualize", True),)
 
     def start(self):

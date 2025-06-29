@@ -76,8 +76,8 @@ class ErrorRecoveryManager:
             'recovery_time': 0.0
         }
 
-    def register_recovery(self, 
-                         error_type: str, 
+    def register_recovery(self,
+                         error_type: str,
                          config: RecoveryConfig) -> None:
         """
         Register recovery configuration for an error type.
@@ -89,8 +89,8 @@ class ErrorRecoveryManager:
         self.recovery_configs[error_type] = config
         _logger.info(f"Registered recovery strategy for {error_type}: {config.strategy.value}")
 
-    def execute_recovery(self, 
-                        error: Exception, 
+    def execute_recovery(self,
+                        error: Exception,
                         context: Optional[Dict[str, Any]] = None) -> Any:
         """
         Execute recovery strategy for an error.
@@ -164,9 +164,9 @@ class ErrorRecoveryManager:
         else:
             return 'general'
 
-    def _execute_strategy(self, 
-                         config: RecoveryConfig, 
-                         error: Exception, 
+    def _execute_strategy(self,
+                         config: RecoveryConfig,
+                         error: Exception,
                          context: Dict[str, Any]) -> Any:
         """Execute specific recovery strategy."""
         if config.strategy == RecoveryStrategy.RETRY:
@@ -184,9 +184,9 @@ class ErrorRecoveryManager:
         else:
             raise ValueError(f"Unknown recovery strategy: {config.strategy}")
 
-    def _execute_retry(self, 
-                      config: RecoveryConfig, 
-                      error: Exception, 
+    def _execute_retry(self,
+                      config: RecoveryConfig,
+                      error: Exception,
                       context: Dict[str, Any]) -> Any:
         """Execute retry strategy."""
         for attempt in range(config.max_attempts):
@@ -209,9 +209,9 @@ class ErrorRecoveryManager:
                 else:
                     raise retry_error
 
-    def _execute_fallback(self, 
-                         config: RecoveryConfig, 
-                         error: Exception, 
+    def _execute_fallback(self,
+                         config: RecoveryConfig,
+                         error: Exception,
                          context: Dict[str, Any]) -> Any:
         """Execute fallback strategy."""
         if not config.fallback_function:
@@ -222,9 +222,9 @@ class ErrorRecoveryManager:
 
         return config.fallback_function(*args, **kwargs)
 
-    def _execute_degrade(self, 
-                        config: RecoveryConfig, 
-                        error: Exception, 
+    def _execute_degrade(self,
+                        config: RecoveryConfig,
+                        error: Exception,
                         context: Dict[str, Any]) -> Any:
         """Execute degradation strategy."""
         if not config.degrade_function:
@@ -235,9 +235,9 @@ class ErrorRecoveryManager:
 
         return config.degrade_function(*args, **kwargs)
 
-    def _execute_restart(self, 
-                        config: RecoveryConfig, 
-                        error: Exception, 
+    def _execute_restart(self,
+                        config: RecoveryConfig,
+                        error: Exception,
                         context: Dict[str, Any]) -> Any:
         """Execute restart strategy."""
         # Get restart function from context
@@ -248,17 +248,17 @@ class ErrorRecoveryManager:
         time.sleep(config.restart_delay)
         return restart_func()
 
-    def _execute_ignore(self, 
-                       config: RecoveryConfig, 
-                       error: Exception, 
+    def _execute_ignore(self,
+                       config: RecoveryConfig,
+                       error: Exception,
                        context: Dict[str, Any]) -> Any:
         """Execute ignore strategy."""
         _logger.info(f"Ignoring error: {str(error)}")
         return context.get('default_value')
 
-    def _execute_alert(self, 
-                      config: RecoveryConfig, 
-                      error: Exception, 
+    def _execute_alert(self,
+                      config: RecoveryConfig,
+                      error: Exception,
                       context: Dict[str, Any]) -> Any:
         """Execute alert strategy."""
         if config.alert_function:
@@ -296,7 +296,7 @@ class ErrorRecoveryManager:
 recovery_manager = ErrorRecoveryManager()
 
 
-def with_recovery(error_type: str, 
+def with_recovery(error_type: str,
                  strategy: RecoveryStrategy,
                  **strategy_kwargs):
     """
@@ -416,4 +416,4 @@ class CommonRecoveryStrategies:
 
 
 # Initialize default strategies
-CommonRecoveryStrategies.setup_default_strategies() 
+CommonRecoveryStrategies.setup_default_strategies()

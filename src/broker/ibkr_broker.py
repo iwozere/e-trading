@@ -1,3 +1,8 @@
+"""
+Interactive Brokers (IBKR) broker implementation for live trading using the IBKR API.
+Provides order management, balance retrieval, and OHLCV data fetching for IBKR accounts.
+"""
+
 from typing import Any, Optional
 
 import pandas as pd

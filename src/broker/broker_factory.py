@@ -31,3 +31,8 @@ def get_broker(config: Dict[str, Any]):
         return MockBroker(config.get("cash", 1000.0))
     else:
         raise ValueError(f"Unsupported broker type: {broker_type}")
+
+"""
+Broker factory for instantiating the correct broker implementation based on configuration.
+Supports Binance, Binance Paper, IBKR, and Mock brokers.
+"""

@@ -43,7 +43,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
     - Error handling and rate limiting
     """
 
-    def __init__(self, 
+    def __init__(self,
                  symbol: str,
                  interval: str,
                  api_key: Optional[str] = None,

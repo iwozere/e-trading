@@ -5,6 +5,11 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+"""
+Abstract base broker class for all broker implementations.
+Defines the required interface and common attributes for brokers in the trading system.
+"""
+
 class BaseBroker(bt.BrokerBase):
     """
     Abstract base class for all brokers. Defines the required interface and common attributes.

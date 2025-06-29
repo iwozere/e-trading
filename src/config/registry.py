@@ -38,7 +38,7 @@ class ConfigRegistry:
         # Configuration tags
         self._tags: Dict[str, List[str]] = {}
 
-    def register_config(self, config_id: str, config: Any, config_type: str, 
+    def register_config(self, config_id: str, config: Any, config_type: str,
                        metadata: Dict[str, Any] = None, tags: List[str] = None):
         """
         Register a configuration in the registry.
@@ -253,4 +253,4 @@ class ConfigRegistry:
                 if not self.get_config(related_id):
                     errors.append(f"Invalid relationship: {config_id} -> {related_id}")
 
-        return errors 
+        return errors

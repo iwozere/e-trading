@@ -144,7 +144,7 @@ class CircuitBreaker:
 
         if self.state == CircuitState.OPEN:
             # Check if recovery timeout has passed
-            if (self.last_failure_time and 
+            if (self.last_failure_time and
                 current_time - self.last_failure_time >= self.config.recovery_timeout):
                 self._transition_to_half_open()
 
@@ -193,7 +193,7 @@ class CircuitBreaker:
         _logger.warning(f"Circuit breaker '{self.name}' failure: {self.failure_count}/{self.config.failure_threshold}")
 
         # Check if we should open the circuit
-        if (self.state == CircuitState.CLOSED and 
+        if (self.state == CircuitState.CLOSED and
             self.failure_count >= self.config.failure_threshold):
             self._transition_to_open()
 
@@ -367,4 +367,4 @@ class CircuitBreakerRegistry:
 
 
 # Global registry instance
-circuit_breaker_registry = CircuitBreakerRegistry() 
+circuit_breaker_registry = CircuitBreakerRegistry()

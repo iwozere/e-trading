@@ -24,7 +24,7 @@ class TradingException(Exception):
     - Recovery suggestions
     """
 
-    def __init__(self, 
+    def __init__(self,
                  message: str,
                  error_code: Optional[str] = None,
                  context: Optional[Dict[str, Any]] = None,
@@ -89,7 +89,7 @@ class TradingException(Exception):
             parts.append(f"Code: {self.error_code}")
 
         if self.context:
-            context_str = ", ".join([f"{k}={v}" for k, v in self.context.items() 
+            context_str = ", ".join([f"{k}={v}" for k, v in self.context.items()
                                    if k not in ['timestamp', 'error_code']])
             if context_str:
                 parts.append(f"Context: {context_str}")
@@ -100,7 +100,7 @@ class TradingException(Exception):
 class DataFeedException(TradingException):
     """Exception raised for data feed related errors."""
 
-    def __init__(self, 
+    def __init__(self,
                  message: str,
                  data_source: Optional[str] = None,
                  symbol: Optional[str] = None,
@@ -132,7 +132,7 @@ class DataFeedException(TradingException):
 class BrokerException(TradingException):
     """Exception raised for broker related errors."""
 
-    def __init__(self, 
+    def __init__(self,
                  message: str,
                  broker_type: Optional[str] = None,
                  symbol: Optional[str] = None,
@@ -164,7 +164,7 @@ class BrokerException(TradingException):
 class StrategyException(TradingException):
     """Exception raised for strategy related errors."""
 
-    def __init__(self, 
+    def __init__(self,
                  message: str,
                  strategy_name: Optional[str] = None,
                  strategy_type: Optional[str] = None,
@@ -193,7 +193,7 @@ class StrategyException(TradingException):
 class ConfigurationException(TradingException):
     """Exception raised for configuration related errors."""
 
-    def __init__(self, 
+    def __init__(self,
                  message: str,
                  config_file: Optional[str] = None,
                  config_section: Optional[str] = None,
@@ -222,7 +222,7 @@ class ConfigurationException(TradingException):
 class NetworkException(TradingException):
     """Exception raised for network related errors."""
 
-    def __init__(self, 
+    def __init__(self,
                  message: str,
                  url: Optional[str] = None,
                  status_code: Optional[int] = None,
@@ -258,7 +258,7 @@ class NetworkException(TradingException):
 class ValidationException(TradingException):
     """Exception raised for validation errors."""
 
-    def __init__(self, 
+    def __init__(self,
                  message: str,
                  field: Optional[str] = None,
                  value: Optional[Any] = None,
@@ -290,7 +290,7 @@ class ValidationException(TradingException):
 class RecoveryException(TradingException):
     """Exception raised when recovery strategies fail."""
 
-    def __init__(self, 
+    def __init__(self,
                  message: str,
                  original_error: Optional[Exception] = None,
                  recovery_strategy: Optional[str] = None,
@@ -416,4 +416,4 @@ class CircuitBreakerOpenException(TradingException):
             'last_failure_time': last_failure_time,
             'component': 'circuit_breaker'
         }
-        super().__init__(message, error_code="CIRCUIT_BREAKER_OPEN", context=context) 
+        super().__init__(message, error_code="CIRCUIT_BREAKER_OPEN", context=context)

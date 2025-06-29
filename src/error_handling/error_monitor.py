@@ -120,8 +120,8 @@ class ErrorMonitor:
 
         _logger.info("Error monitor initialized")
 
-    def record_error(self, 
-                    error: Exception, 
+    def record_error(self,
+                    error: Exception,
                     severity: ErrorSeverity = ErrorSeverity.ERROR,
                     component: str = "unknown",
                     context: Optional[Dict[str, Any]] = None,
@@ -165,7 +165,7 @@ class ErrorMonitor:
 
             # Log error
             log_level = getattr(logging, severity.value)
-            _logger.log(log_level, 
+            _logger.log(log_level,
                        f"Error in {component}: {error_type}: {str(error)}")
 
     def _get_stack_trace(self, error: Exception) -> Optional[str]:
@@ -210,7 +210,7 @@ class ErrorMonitor:
         window_start = datetime.utcnow() - timedelta(seconds=self.alert_config.time_window)
 
         # Count errors in window
-        error_count = sum(1 for event in self.error_events 
+        error_count = sum(1 for event in self.error_events
                          if event.timestamp >= window_start)
 
         # Estimate total requests (this is a simplified approach)
@@ -250,7 +250,7 @@ class ErrorMonitor:
             except Exception as e:
                 _logger.error(f"Error in monitor loop: {e}")
 
-    def get_error_stats(self, 
+    def get_error_stats(self,
                        time_window: Optional[int] = None,
                        component: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -299,7 +299,7 @@ class ErrorMonitor:
             for event in events:
                 error_type_counts[type(event.error).__name__] += 1
 
-            top_errors = sorted(error_type_counts.items(), 
+            top_errors = sorted(error_type_counts.items(),
                               key=lambda x: x[1], reverse=True)[:10]
 
             return {
@@ -310,7 +310,7 @@ class ErrorMonitor:
                 'top_errors': top_errors
             }
 
-    def get_recent_errors(self, 
+    def get_recent_errors(self,
                          limit: int = 100,
                          severity: Optional[ErrorSeverity] = None,
                          component: Optional[str] = None) -> List[ErrorEvent]:
@@ -336,7 +336,7 @@ class ErrorMonitor:
 
             return events[-limit:]
 
-    def generate_error_report(self, 
+    def generate_error_report(self,
                             time_window: Optional[int] = None,
                             format: str = "json") -> str:
         """
@@ -499,4 +499,4 @@ def monitor_database_errors(func: Callable) -> Callable:
 
 def monitor_strategy_errors(func: Callable) -> Callable:
     """Monitor strategy-related errors."""
-    return monitor_errors(ErrorSeverity.ERROR, "strategy")(func) 
+    return monitor_errors(ErrorSeverity.ERROR, "strategy")(func)

@@ -122,7 +122,7 @@ def _load_raw_config(config_path: Path) -> Dict[str, Any]:
         raise ValueError(f"Error parsing configuration file {config_path}: {e}")
 
 
-def save_config(config: Union[TradingBotConfig, OptimizerConfig, DataConfig], 
+def save_config(config: Union[TradingBotConfig, OptimizerConfig, DataConfig],
                 output_path: Union[str, Path]) -> None:
     """
     Save a configuration to file.
@@ -220,7 +220,7 @@ def create_sample_config(output_path: Union[str, Path], config_type: str = "trad
     print(f"Sample {config_type} configuration created: {output_path}")
 
 
-def convert_old_config(old_config_path: Union[str, Path], 
+def convert_old_config(old_config_path: Union[str, Path],
                       new_config_path: Union[str, Path]) -> None:
     """
     Convert old configuration format to new simplified format.
@@ -285,4 +285,4 @@ def _convert_old_to_new_format(old_config: Dict[str, Any]) -> TradingBotConfig:
         if "level" in logging:
             new_config.log_level = logging["level"]
 
-    return new_config 
+    return new_config

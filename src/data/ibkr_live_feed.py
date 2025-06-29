@@ -38,7 +38,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
     - Error handling and rate limiting
     """
 
-    def __init__(self, 
+    def __init__(self,
                  symbol: str,
                  interval: str,
                  host: str = '127.0.0.1',

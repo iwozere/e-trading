@@ -198,7 +198,7 @@ class TradeRepository:
             _logger.error(f"Error getting trades by symbol: {e}")
             return []
 
-    def get_trades_by_date_range(self, start_date: datetime, end_date: datetime, 
+    def get_trades_by_date_range(self, start_date: datetime, end_date: datetime,
                                 bot_id: str = None, symbol: str = None) -> List[Trade]:
         """
         Get trades within a date range.
@@ -231,7 +231,7 @@ class TradeRepository:
             _logger.error(f"Error getting trades by date range: {e}")
             return []
 
-    def get_closed_trades(self, bot_id: str = None, symbol: str = None, 
+    def get_closed_trades(self, bot_id: str = None, symbol: str = None,
                          limit: int = 100) -> List[Trade]:
         """
         Get closed trades.
@@ -485,4 +485,4 @@ class TradeRepository:
         except Exception as e:
             self.rollback()
             _logger.error(f"Error cleaning up old data: {e}")
-            return 0 
+            return 0
