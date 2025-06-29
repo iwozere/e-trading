@@ -1,10 +1,10 @@
-import backtrader as bt
-import websocket
 import json
 import threading
 import queue
 import requests
 from datetime import datetime
+import websocket
+import backtrader as bt
 
 """
 Data feed implementation for Binance, providing real-time and historical market data for trading strategies.

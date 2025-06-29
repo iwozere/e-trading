@@ -2,6 +2,7 @@
 Base class for Binance broker implementations, providing common trading methods and API integration for Binance-based brokers.
 """
 
+import asyncio
 from typing import Any, Optional
 
 import pandas as pd
@@ -11,7 +12,6 @@ from binance.exceptions import BinanceAPIException
 from src.broker.base_broker import BaseBroker
 from src.notification.logger import setup_logger
 from src.notification.async_notification_manager import send_trade_notification, send_error_notification
-import asyncio
 
 _logger = setup_logger(__name__)
 

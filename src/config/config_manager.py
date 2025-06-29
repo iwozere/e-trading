@@ -12,10 +12,10 @@ Main configuration manager that handles:
 
 import os
 import json
-import yaml
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 from datetime import datetime
+import yaml
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from src.notification.logger import setup_logger

@@ -6,12 +6,11 @@ Pydantic-based schemas for all configuration types with validation rules,
 documentation, and environment-specific defaults.
 """
 
+import os
+from datetime import time
 from typing import Dict, List, Optional, Any
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from datetime import time
-import os
-
 
 class Environment(str, Enum):
     """Environment types"""
@@ -565,4 +564,4 @@ class TradingConfig(ConfigSchema):
             if not strategy_config.get('entry_logic') or not strategy_config.get('exit_logic'):
                 raise ValueError("Custom strategy requires entry and exit logic")
 
-        return self 
+        return self

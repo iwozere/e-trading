@@ -21,7 +21,6 @@ from typing import Optional, Dict, Any
 
 import pandas as pd
 import yfinance as yf
-import logging
 
 from src.data.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger

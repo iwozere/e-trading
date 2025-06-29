@@ -7,7 +7,6 @@ This module defines TelegramNotifier, which can send trade entries, updates, and
 import asyncio
 import os
 import sys
-import logging
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -15,12 +14,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from src.notification.logger import setup_logger
-_logger = setup_logger(__name__)
 from telegram import Bot
 from telegram.error import TelegramError
 
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
 
 
 class TelegramNotifier:

@@ -7,9 +7,9 @@ using Pydantic models. Provides error handling and validation feedback.
 """
 
 import json
-import yaml
 from pathlib import Path
 from typing import Union, Dict, Any
+import yaml
 from pydantic import ValidationError
 
 from .config_models import TradingBotConfig, OptimizerConfig, DataConfig
