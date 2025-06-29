@@ -145,7 +145,7 @@ class BaseTradingBot:
             _logger.info(f"Initialized bot instance: {self.bot_id}")
 
         except Exception as e:
-            _logger.error(f"Error initializing bot instance: {e}")
+            _logger.error("Error initializing bot instance: %s", e, exc_info=True)
 
     def run(self) -> None:
         """
@@ -162,7 +162,7 @@ class BaseTradingBot:
                 'last_heartbeat': datetime.now(timezone.utc)
             })
         except Exception as e:
-            _logger.error(f"Error updating bot status: {e}")
+            _logger.error("Error updating bot status: %s", e, exc_info=True)
 
         while self.is_running:
             try:
@@ -179,7 +179,7 @@ class BaseTradingBot:
                         'total_pnl': self.total_pnl
                     })
                 except Exception as e:
-                    _logger.error(f"Error updating heartbeat: {e}")
+                    _logger.error("Error updating heartbeat: %s", e, exc_info=True)
 
                 time.sleep(1)
             except Exception as e:
@@ -443,7 +443,7 @@ class BaseTradingBot:
             _logger.info(f"Loaded {len(open_trades)} open positions from database for {self.bot_id}")
 
         except Exception as e:
-            _logger.error(f"Error loading open positions from database: {e}")
+            _logger.error("Error loading open positions from database: %s", e, exc_info=True)
             # Fall back to empty active positions
             self.active_positions = {}
 
@@ -542,7 +542,7 @@ class BaseTradingBot:
                 'total_pnl': self.total_pnl
             })
         except Exception as e:
-            _logger.error(f"Error updating bot status on stop: {e}")
+            _logger.error("Error updating bot status on stop: %s", e, exc_info=True)
 
         # Close all open positions
         for pair in list(self.active_positions.keys()):
@@ -594,7 +594,7 @@ class BaseTradingBot:
                     self.notification_manager.send_trade_notification({"message": msg})
                 )
         except Exception as e:
-            _logger.error(f"Failed to send notification: {e}")
+            _logger.error("Failed to send notification: %s", e, exc_info=True)
 
     def pre_run(self, data_feed):
         """

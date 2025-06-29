@@ -49,7 +49,7 @@ class DataFeedFactory:
 
             # Binance specific
             "api_key": "your_api_key",
-            "api_secret": "your_api_secret", 
+            "api_secret": "your_api_secret",
             "testnet": false,
 
             # Yahoo specific
@@ -71,11 +71,11 @@ class DataFeedFactory:
             elif data_source == "ibkr":
                 return DataFeedFactory._create_ibkr_feed(config)
             else:
-                _logger.error(f"Unknown data source: {data_source}")
+                _logger.error("Unknown data source: %s", data_source)
                 return None
 
         except Exception as e:
-            _logger.error(f"Error creating data feed: {str(e)}")
+            _logger.error("Error creating data feed: %s", e, exc_info=True)
             return None
 
     @staticmethod
@@ -167,4 +167,4 @@ class DataFeedFactory:
                 "rate_limits": "High frequency",
                 "cost": "Market data subscriptions required"
             }
-        } 
+        }

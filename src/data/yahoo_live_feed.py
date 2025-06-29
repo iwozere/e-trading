@@ -125,7 +125,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             return df
 
         except Exception as e:
-            _logger.error(f"Error loading historical data for {self.symbol}: {str(e)}")
+            _logger.error("Error loading historical data for %s: %s", self.symbol, e, exc_info=True)
             return None
 
     def _calculate_period(self) -> str:
@@ -193,14 +193,14 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             # Test if ticker is valid by getting basic info
             info = self.ticker.info
             if 'regularMarketPrice' not in info:
-                _logger.error(f"Invalid ticker symbol: {self.symbol}")
+                _logger.error("Invalid ticker symbol: %s", self.symbol)
                 return False
 
             _logger.info(f"Connected to Yahoo Finance for {self.symbol}")
             return True
 
         except Exception as e:
-            _logger.error(f"Error connecting to Yahoo Finance for {self.symbol}: {str(e)}")
+            _logger.error("Error connecting to Yahoo Finance for %s: %s", self.symbol, e, exc_info=True)
             return False
 
     def _disconnect_realtime(self):
@@ -251,7 +251,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
                 return recent_data.tail(1)
 
         except Exception as e:
-            _logger.error(f"Error getting latest data for {self.symbol}: {str(e)}")
+            _logger.error("Error getting latest data for %s: %s", self.symbol, e, exc_info=True)
             return None
 
     def _get_update_interval(self) -> int:

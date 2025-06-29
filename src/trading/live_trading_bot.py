@@ -116,10 +116,10 @@ class LiveTradingBot(BaseTradingBot):
         try:
             config_path = f"config/trading/{self.config_file}"
             config = load_config(config_path)
-            _logger.info(f"Loaded and validated configuration from {config_path}")
+            _logger.info("Loaded and validated configuration from %s", config_path)
             return config
         except Exception as e:
-            _logger.error(f"Failed to load configuration: {e}")
+            _logger.error("Failed to load configuration: %s", e, exc_info=True)
             raise
 
     def _convert_to_legacy_format(self) -> Dict[str, Any]:
@@ -145,10 +145,10 @@ class LiveTradingBot(BaseTradingBot):
         try:
             broker_config = self.config.get_broker_config()
             broker = get_broker(broker_config)
-            _logger.info(f"Created broker: {self.config.broker_type}")
+            _logger.info("Created broker: %s", self.config.broker_type)
             return broker
         except Exception as e:
-            _logger.error(f"Error creating broker: {e}")
+            _logger.error("Error creating broker: %s", e, exc_info=True)
             raise
 
     def _create_strategy_parameters(self) -> Dict[str, Any]:
@@ -162,7 +162,7 @@ class LiveTradingBot(BaseTradingBot):
                         "params": self.config.strategy_params.get("entry", {})
                     },
                     "exit_logic": {
-                        "name": "RSIBBExitMixin", 
+                        "name": "RSIBBExitMixin",
                         "params": self.config.strategy_params.get("exit", {})
                     },
                     "position_size": self.config.position_size,
@@ -170,11 +170,11 @@ class LiveTradingBot(BaseTradingBot):
                 }
             }
 
-            _logger.info(f"Created strategy parameters for: {self.config.strategy_type}")
+            _logger.info("Created strategy parameters for: %s", self.config.strategy_type)
             return parameters
 
         except Exception as e:
-            _logger.error(f"Error creating strategy parameters: {e}")
+            _logger.error("Error creating strategy parameters: %s", e, exc_info=True)
             raise
 
     def _create_data_feed(self):
@@ -192,11 +192,11 @@ class LiveTradingBot(BaseTradingBot):
             if self.data_feed is None:
                 raise ValueError("Failed to create data feed")
 
-            _logger.info(f"Created data feed for {self.config.symbol}")
+            _logger.info("Created data feed for %s", self.config.symbol)
             return True
 
         except Exception as e:
-            _logger.error(f"Error creating data feed: {e}")
+            _logger.error("Error creating data feed: %s", e, exc_info=True)
             return False
 
     def _setup_backtrader(self):
@@ -222,11 +222,11 @@ class LiveTradingBot(BaseTradingBot):
             commission = self.config.commission
             self.cerebro.broker.setcommission(commission=commission)
 
-            _logger.info(f"Setup Backtrader with initial balance: {initial_balance}")
+            _logger.info("Setup Backtrader with initial balance: %s", initial_balance)
             return True
 
         except Exception as e:
-            _logger.error(f"Error setting up Backtrader: {e}")
+            _logger.error("Error setting up Backtrader: %s", e, exc_info=True)
             return False
 
     def _load_open_positions(self):
@@ -234,11 +234,11 @@ class LiveTradingBot(BaseTradingBot):
         try:
             # Use BaseTradingBot's load_state method
             self.load_state()
-            _logger.info(f"Loaded {len(self.active_positions)} open positions")
+            _logger.info("Loaded %d open positions", len(self.active_positions))
             return True
 
         except Exception as e:
-            _logger.error(f"Error loading open positions: {e}")
+            _logger.error("Error loading open positions: %s", e, exc_info=True)
             return False
 
     def _notify_new_bar(self, symbol: str, timestamp, data: Dict[str, Any]):
@@ -249,7 +249,7 @@ class LiveTradingBot(BaseTradingBot):
                 # Use BaseTradingBot's notification method
                 self.log_message(message)
         except Exception as e:
-            _logger.error(f"Error notifying new bar: {e}")
+            _logger.error("Error notifying new bar: %s", e, exc_info=True)
 
     def _monitor_data_feed(self):
         """Monitor data feed health and reconnect if needed."""
@@ -264,7 +264,7 @@ class LiveTradingBot(BaseTradingBot):
                 time.sleep(30)  # Check every 30 seconds
 
             except Exception as e:
-                _logger.error(f"Error in data feed monitor: {e}")
+                _logger.error("Error in data feed monitor: %s", e, exc_info=True)
                 time.sleep(60)
 
     def _reconnect_data_feed(self):
@@ -280,11 +280,11 @@ class LiveTradingBot(BaseTradingBot):
                 # Use BaseTradingBot's notification method
                 self.notify_bot_event("data_feed_reconnected", "🔌")
             else:
-                _logger.error("Failed to reconnect data feed")
+                _logger.error("Failed to reconnect data feed", exc_info=True)
                 self.notify_error("Failed to reconnect data feed")
 
         except Exception as e:
-            _logger.error(f"Error reconnecting data feed: {e}")
+            _logger.error("Error reconnecting data feed: %s", e, exc_info=True)
 
     def _run_backtrader(self):
         """Run Backtrader engine."""
@@ -299,14 +299,14 @@ class LiveTradingBot(BaseTradingBot):
             return True
 
         except Exception as e:
-            _logger.error(f"Error in Backtrader engine: {e}")
+            _logger.error("Error in Backtrader engine: %s", e, exc_info=True)
             self.notify_error(f"Backtrader error: {str(e)}")
             return False
 
     def start(self):
         """Start the live trading bot."""
         try:
-            _logger.info(f"Starting live trading bot: {self.config_file}")
+            _logger.info("Starting live trading bot: %s", self.config_file)
             self.notify_bot_event("started", "🤖")
 
             # Initialize components
@@ -327,7 +327,7 @@ class LiveTradingBot(BaseTradingBot):
             self._run_backtrader()
 
         except Exception as e:
-            _logger.error(f"Error starting bot: {e}")
+            _logger.error("Error starting bot: %s", e, exc_info=True)
             self.notify_error(f"Failed to start bot: {str(e)}")
             raise
 
@@ -354,7 +354,7 @@ class LiveTradingBot(BaseTradingBot):
             self.notify_bot_event("stopped", "🛑")
 
         except Exception as e:
-            _logger.error(f"Error stopping bot: {e}")
+            _logger.error("Error stopping bot: %s", e, exc_info=True)
 
     def get_status(self) -> Dict[str, Any]:
         """Get current bot status."""
@@ -395,7 +395,7 @@ class LiveTradingBot(BaseTradingBot):
             return status
 
         except Exception as e:
-            _logger.error(f"Error getting status: {e}")
+            _logger.error("Error getting status: %s", e, exc_info=True)
             return {"error": str(e)}
 
     def restart(self):
@@ -415,7 +415,7 @@ class LiveTradingBot(BaseTradingBot):
             self.start()
 
         except Exception as e:
-            _logger.error(f"Error restarting bot: {e}")
+            _logger.error("Error restarting bot: %s", e, exc_info=True)
             self.notify_error(f"Failed to restart bot: {str(e)}")
 
     def execute_trade(self, trade_type: str, price: float, size: float) -> None:
@@ -432,7 +432,7 @@ class LiveTradingBot(BaseTradingBot):
                 pass
 
         except Exception as e:
-            _logger.error(f"Error executing trade: {e}")
+            _logger.error("Error executing trade: %s", e, exc_info=True)
             self.notify_error(f"Trade execution error: {str(e)}")
 
 
@@ -463,10 +463,10 @@ def main():
         _logger.info("Received keyboard interrupt, shutting down...")
         bot.stop()
     except Exception as e:
-        _logger.error(f"Unexpected error: {e}")
+        _logger.error(f"Unexpected error: {e}", exc_info=True)
         bot.stop()
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    main() 
+    main()

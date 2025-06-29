@@ -96,7 +96,7 @@ class YahooDataDownloader(BaseDataDownloader):
             return df
 
         except Exception as e:
-            _logger.error(f"Error downloading data for {symbol}: {str(e)}")
+            _logger.error("Error downloading data for %s: %s", symbol, e, exc_info=True)
             raise
 
     def save_data(
@@ -127,7 +127,7 @@ class YahooDataDownloader(BaseDataDownloader):
             return super().save_data(df, symbol, start_date, end_date)
 
         except Exception as e:
-            _logger.error(f"Error saving data for {symbol}: {str(e)}")
+            _logger.error("Error saving data for %s: %s", symbol, e, exc_info=True)
             raise
 
     def load_data(self, filepath: str) -> pd.DataFrame:
@@ -144,7 +144,7 @@ class YahooDataDownloader(BaseDataDownloader):
             return super().load_data(filepath)
 
         except Exception as e:
-            _logger.error(f"Error loading data from {filepath}: {str(e)}")
+            _logger.error("Error loading data from %s: %s", filepath, e, exc_info=True)
             raise
 
     def update_data(self, symbol: str, interval: str) -> str:
@@ -201,7 +201,7 @@ class YahooDataDownloader(BaseDataDownloader):
             return self.save_data(combined_df, symbol)
 
         except Exception as e:
-            _logger.error(f"Error updating data for {symbol}: {str(e)}")
+            _logger.error("Error updating data for %s: %s", symbol, e, exc_info=True)
             raise
 
     def download_multiple_symbols(

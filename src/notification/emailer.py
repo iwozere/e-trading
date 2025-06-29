@@ -79,7 +79,7 @@ def send_email_alert(receiver_email: str, subject: str, message: str):
         notifier.send_email(receiver_email, subject, message)
         _logger.info(f"System alert email sent: {subject}")
     except Exception as e:
-        _logger.error(f"Failed to send system alert email: {e}")
+        _logger.error("Failed to send system alert email: %s", e, exc_info=True)
 
 #######################################
 # Quick test. Keep commented out.

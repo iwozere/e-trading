@@ -50,7 +50,7 @@ class BaseBinanceBroker(BaseBroker):
 
             return order
         except Exception as e:
-            _logger.error(f"Buy order failed: {e}")
+            _logger.error("Buy order failed: %s", e, exc_info=True)
 
             # ✅ NON-BLOCKING: Async error notification
             asyncio.create_task(send_error_notification(
@@ -84,7 +84,7 @@ class BaseBinanceBroker(BaseBroker):
 
             return order
         except Exception as e:
-            _logger.error(f"Sell order failed: {e}")
+            _logger.error("Sell order failed: %s", e, exc_info=True)
 
             # ✅ NON-BLOCKING: Async error notification
             asyncio.create_task(send_error_notification(

@@ -20,6 +20,10 @@ Classes:
 
 
 class BaseDataDownloader:
+    """
+    Abstract base class for data downloaders. Provides methods for saving, loading, and managing historical market data files.
+    """
+
     def __init__(self, data_dir: Optional[str] = None, interval: Optional[str] = None):
         self.data_dir = data_dir or os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "dataset"

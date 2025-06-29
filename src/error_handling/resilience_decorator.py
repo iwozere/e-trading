@@ -128,7 +128,7 @@ def resilient(retry_config: Optional[RetryConfig] = None,
                         _logger.warning(f"Using fallback for {func.__name__}: {str(e)}")
                         return fallback_func(*args, **kwargs)
                     except Exception as fallback_error:
-                        _logger.error(f"Fallback also failed for {func.__name__}: {str(fallback_error)}")
+                        _logger.error("Fallback also failed for %s: %s", func.__name__, fallback_error, exc_info=True)
                         raise fallback_error
                 else:
                     raise e
@@ -475,4 +475,4 @@ def with_metrics(metric_func: Callable):
 
         return wrapper
 
-    return decorator 
+    return decorator

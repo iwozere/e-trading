@@ -1,3 +1,8 @@
+"""
+Trading package for bot creation, configuration validation, and live trading integration.
+Provides centralized functions and imports for trading bot setup and management.
+"""
+
 from typing import Any, Dict
 
 from src.broker.broker_factory import get_broker

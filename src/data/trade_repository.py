@@ -59,7 +59,7 @@ class TradeRepository:
             self.session.commit()
         except Exception as e:
             self.session.rollback()
-            _logger.error(f"Error committing transaction: {e}")
+            _logger.error("Error committing transaction: %s", e, exc_info=True)
             raise
 
     def rollback(self):
@@ -85,7 +85,7 @@ class TradeRepository:
             return trade
         except Exception as e:
             self.rollback()
-            _logger.error(f"Error creating trade: {e}")
+            _logger.error("Error creating trade: %s", e, exc_info=True)
             raise
 
     def get_trade_by_id(self, trade_id: str) -> Optional[Trade]:
@@ -101,7 +101,7 @@ class TradeRepository:
         try:
             return self.session.query(Trade).filter(Trade.id == trade_id).first()
         except Exception as e:
-            _logger.error(f"Error getting trade by ID: {e}")
+            _logger.error("Error getting trade by ID: %s", e, exc_info=True)
             return None
 
     def update_trade(self, trade_id: str, update_data: Dict[str, Any]) -> Optional[Trade]:
@@ -128,7 +128,7 @@ class TradeRepository:
             return None
         except Exception as e:
             self.rollback()
-            _logger.error(f"Error updating trade: {e}")
+            _logger.error("Error updating trade: %s", e, exc_info=True)
             raise
 
     def get_open_trades(self, bot_id: str = None, symbol: str = None) -> List[Trade]:
@@ -153,7 +153,7 @@ class TradeRepository:
 
             return query.all()
         except Exception as e:
-            _logger.error(f"Error getting open trades: {e}")
+            _logger.error("Error getting open trades: %s", e, exc_info=True)
             return []
 
     def get_trades_by_bot(self, bot_id: str, limit: int = 100) -> List[Trade]:
@@ -174,7 +174,7 @@ class TradeRepository:
                     .limit(limit)
                     .all())
         except Exception as e:
-            _logger.error(f"Error getting trades by bot: {e}")
+            _logger.error("Error getting trades by bot: %s", e, exc_info=True)
             return []
 
     def get_trades_by_symbol(self, symbol: str, limit: int = 100) -> List[Trade]:
@@ -195,7 +195,7 @@ class TradeRepository:
                     .limit(limit)
                     .all())
         except Exception as e:
-            _logger.error(f"Error getting trades by symbol: {e}")
+            _logger.error("Error getting trades by symbol: %s", e, exc_info=True)
             return []
 
     def get_trades_by_date_range(self, start_date: datetime, end_date: datetime,
@@ -228,7 +228,7 @@ class TradeRepository:
 
             return query.order_by(desc(Trade.entry_time)).all()
         except Exception as e:
-            _logger.error(f"Error getting trades by date range: {e}")
+            _logger.error("Error getting trades by date range: %s", e, exc_info=True)
             return []
 
     def get_closed_trades(self, bot_id: str = None, symbol: str = None,
@@ -255,7 +255,7 @@ class TradeRepository:
 
             return query.order_by(desc(Trade.exit_time)).limit(limit).all()
         except Exception as e:
-            _logger.error(f"Error getting closed trades: {e}")
+            _logger.error("Error getting closed trades: %s", e, exc_info=True)
             return []
 
     def delete_trade(self, trade_id: str) -> bool:
@@ -278,7 +278,7 @@ class TradeRepository:
             return False
         except Exception as e:
             self.rollback()
-            _logger.error(f"Error deleting trade: {e}")
+            _logger.error("Error deleting trade: %s", e, exc_info=True)
             return False
 
     # Bot Instance Operations
@@ -300,7 +300,7 @@ class TradeRepository:
             return bot_instance
         except Exception as e:
             self.rollback()
-            _logger.error(f"Error creating bot instance: {e}")
+            _logger.error("Error creating bot instance: %s", e, exc_info=True)
             raise
 
     def get_bot_instance(self, bot_id: str) -> Optional[BotInstance]:
@@ -316,7 +316,7 @@ class TradeRepository:
         try:
             return self.session.query(BotInstance).filter(BotInstance.id == bot_id).first()
         except Exception as e:
-            _logger.error(f"Error getting bot instance: {e}")
+            _logger.error("Error getting bot instance: %s", e, exc_info=True)
             return None
 
     def update_bot_instance(self, bot_id: str, update_data: Dict[str, Any]) -> Optional[BotInstance]:
@@ -343,7 +343,7 @@ class TradeRepository:
             return None
         except Exception as e:
             self.rollback()
-            _logger.error(f"Error updating bot instance: {e}")
+            _logger.error("Error updating bot instance: %s", e, exc_info=True)
             raise
 
     def get_running_bots(self) -> List[BotInstance]:
@@ -356,7 +356,7 @@ class TradeRepository:
         try:
             return self.session.query(BotInstance).filter(BotInstance.status == 'running').all()
         except Exception as e:
-            _logger.error(f"Error getting running bots: {e}")
+            _logger.error("Error getting running bots: %s", e, exc_info=True)
             return []
 
     def get_bot_instances_by_type(self, bot_type: str) -> List[BotInstance]:
@@ -372,7 +372,7 @@ class TradeRepository:
         try:
             return self.session.query(BotInstance).filter(BotInstance.type == bot_type).all()
         except Exception as e:
-            _logger.error(f"Error getting bot instances by type: {e}")
+            _logger.error("Error getting bot instances by type: %s", e, exc_info=True)
             return []
 
     # Performance Metrics Operations
@@ -394,7 +394,7 @@ class TradeRepository:
             return metrics
         except Exception as e:
             self.rollback()
-            _logger.error(f"Error creating performance metrics: {e}")
+            _logger.error("Error creating performance metrics: %s", e, exc_info=True)
             raise
 
     def get_performance_metrics(self, bot_id: str, limit: int = 10) -> List[PerformanceMetrics]:
@@ -415,7 +415,7 @@ class TradeRepository:
                     .limit(limit)
                     .all())
         except Exception as e:
-            _logger.error(f"Error getting performance metrics: {e}")
+            _logger.error("Error getting performance metrics: %s", e, exc_info=True)
             return []
 
     # Utility Methods
@@ -455,7 +455,7 @@ class TradeRepository:
                 'win_rate': (len([t for t in closed_trades_list if t.net_pnl and float(t.net_pnl) > 0]) / closed_trades * 100) if closed_trades > 0 else 0
             }
         except Exception as e:
-            _logger.error(f"Error getting trade summary: {e}")
+            _logger.error("Error getting trade summary: %s", e, exc_info=True)
             return {
                 'total_trades': 0,
                 'closed_trades': 0,
@@ -484,5 +484,5 @@ class TradeRepository:
             return deleted_count
         except Exception as e:
             self.rollback()
-            _logger.error(f"Error cleaning up old data: {e}")
+            _logger.error("Error cleaning up old data: %s", e, exc_info=True)
             return 0

@@ -311,7 +311,7 @@ def send_telegram_alert(message: str):
         notifier.send_error_notification(message)
         _logger.info(f"System alert sent to Telegram: {message}")
     except Exception as e:
-        _logger.error(f"Failed to send system alert to Telegram: {e}")
+        _logger.error("Failed to send system alert to Telegram: %s", e, exc_info=True)
 
 
 if __name__ == "__main__":

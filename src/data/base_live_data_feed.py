@@ -153,7 +153,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                 time.sleep(self._get_update_interval())
 
             except Exception as e:
-                _logger.error(f"Error in update loop for {self.symbol}: {str(e)}")
+                _logger.error("Error in update loop for %s: %s", self.symbol, e, exc_info=True)
                 self.is_connected = False
                 time.sleep(self.retry_interval)
 
@@ -190,12 +190,12 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                     try:
                         self.on_new_bar(self.symbol, self.df.index[-1], latest.to_dict())
                     except Exception as e:
-                        _logger.error(f"Error in on_new_bar callback: {str(e)}")
+                        _logger.error("Error in on_new_bar callback: %s", e, exc_info=True)
 
                 _logger.debug(f"Updated {self.symbol} with new bar at {self.df.index[-1]}")
 
         except Exception as e:
-            _logger.error(f"Error processing new data for {self.symbol}: {str(e)}")
+            _logger.error("Error processing new data for %s: %s", self.symbol, e, exc_info=True)
 
     def _get_update_interval(self) -> int:
         """

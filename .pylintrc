@@ -1,0 +1,6 @@
+[MAIN]
+max-line-length=200
+
+[FORMAT]
+max-line-length=200
+

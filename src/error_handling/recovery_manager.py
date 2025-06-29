@@ -134,7 +134,7 @@ class ErrorRecoveryManager:
             self.metrics['recovery_time'] += time.time() - start_time
 
             if config.log_recovery:
-                _logger.error(f"Recovery failed for {error_type}: {str(recovery_error)}")
+                _logger.error("Recovery failed for %s: %s", error_type, recovery_error, exc_info=True)
 
             raise RecoveryException(
                 f"Recovery strategy {config.strategy.value} failed for {error_type}",

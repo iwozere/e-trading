@@ -6,7 +6,21 @@ import queue
 import requests
 from datetime import datetime
 
+"""
+Binance Data Feed Module
+-----------------------
+
+This module provides a Backtrader-compatible data feed for Binance, supporting both historical and real-time data via REST API and WebSocket.
+
+Classes:
+- BinanceEnhancedFeed: Backtrader data feed for Binance with live updates
+- SMACrossover: Example strategy using a simple moving average crossover
+"""
+
 class BinanceEnhancedFeed(bt.feed.DataBase):
+    """
+    Backtrader data feed for Binance supporting historical and real-time data via REST API and WebSocket.
+    """
     params = (
         ('symbol', 'BTCUSDT'),
         ('interval', '1m'),
@@ -93,6 +107,9 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
         return False
 
 class SMACrossover(bt.Strategy):
+    """
+    Example Backtrader strategy implementing a simple moving average crossover.
+    """
     params = (
         ('sma_period', 50),
     )
