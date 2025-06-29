@@ -102,7 +102,7 @@ class CustomStrategy(bt.Strategy):
                         f"Exit mixin created with params: {self.exit_logic['params']}"
                     )
         except Exception as e:
-            _logger.error(f"Error in start: {e}", exc_info=True)
+            _logger.error("Error in start: %s", e, exc_info=True)
             raise
 
     def prenext(self):
@@ -224,7 +224,7 @@ class CustomStrategy(bt.Strategy):
                 self.exit_mixin.notify_trade(trade)
 
         except Exception as e:
-            _logger.error(f"Error in notify_trade: {e}", exc_info=True)
+            _logger.error("Error in notify_trade: %s", e, exc_info=True)
             raise
 
 

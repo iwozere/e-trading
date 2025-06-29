@@ -106,7 +106,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             DataFrame with historical OHLCV data
         """
         try:
-            _logger.info(f"Loading {self.lookback_bars} historical bars for {self.symbol}")
+            _logger.info("Loading %d historical bars for %s", self.lookback_bars, self.symbol)
 
             # Calculate start time based on lookback_bars
             # Approximate: each bar represents the interval duration
@@ -123,7 +123,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             )
 
             if not klines:
-                _logger.warning(f"No historical data found for {self.symbol}")
+                _logger.warning("No historical data found for %s", self.symbol)
                 return None
 
             # Convert to DataFrame
@@ -144,7 +144,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             # Select only required columns
             df = df[['open', 'high', 'low', 'close', 'volume']]
 
-            _logger.info(f"Loaded {len(df)} historical bars for {self.symbol}")
+            _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
             return df
 
         except BinanceAPIException as e:
@@ -215,11 +215,11 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
     def _on_ws_open(self, ws):
         """WebSocket connection opened."""
-        _logger.info(f"Binance WebSocket connected for {self.symbol}")
+        _logger.info("Binance WebSocket connected for %s", self.symbol)
 
     def _on_ws_close(self, ws, close_status_code, close_msg):
         """WebSocket connection closed."""
-        _logger.warning(f"Binance WebSocket disconnected for {self.symbol}: {close_msg}")
+        _logger.warning("Binance WebSocket disconnected for %s: %s", self.symbol, close_msg)
         self.is_connected = False
 
     def _on_ws_error(self, ws, error):

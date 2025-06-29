@@ -450,7 +450,7 @@ def main():
 
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):
-        _logger.info(f"Received signal {signum}, shutting down...")
+        _logger.info("Received signal %s, shutting down...", signum)
         bot.stop()
         sys.exit(0)
 
@@ -463,7 +463,7 @@ def main():
         _logger.info("Received keyboard interrupt, shutting down...")
         bot.stop()
     except Exception as e:
-        _logger.error(f"Unexpected error: {e}", exc_info=True)
+        _logger.error("Unexpected error: %s", e, exc_info=True)
         bot.stop()
         sys.exit(1)
 

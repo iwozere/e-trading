@@ -52,7 +52,7 @@ class ResultPlotter:
             with open(config_path, "r") as f:
                 return json.load(f)
         except Exception as e:
-            _logger.error(f"Error loading config from {config_path}: {e}")
+            _logger.error("Error loading config from %s: %s", config_path, e, exc_info=True)
             return {}
 
     def _load_mixin_config(self) -> Dict:
@@ -61,14 +61,14 @@ class ResultPlotter:
             with open("config/plotter/mixin_indicators.json", "r") as f:
                 return json.load(f)
         except Exception as e:
-            _logger.error(f"Error loading mixin config: {e}")
+            _logger.error("Error loading mixin config: %s", e, exc_info=True)
             return {"entry_mixins": {}, "exit_mixins": {}}
 
     def get_json_files(self, results_dir: str = "results") -> List[str]:
         """Get all JSON files from results directory"""
         pattern = os.path.join(results_dir, "*.json")
         json_files = glob.glob(pattern)
-        _logger.info(f"Found {len(json_files)} JSON files in {results_dir}")
+        _logger.info("Found %d JSON files in %s", len(json_files), results_dir)
         return json_files
 
     def load_result_data(self, json_file: str) -> Dict:
@@ -79,7 +79,7 @@ class ResultPlotter:
             _logger.debug(f"Loaded result data from {json_file}")
             return data
         except Exception as e:
-            _logger.error(f"Error loading JSON file {json_file}: {e}")
+            _logger.error("Error loading JSON file %s: %s", json_file, e, exc_info=True)
             return {}
 
     def load_price_data(self, data_file: str) -> pd.DataFrame:
@@ -107,7 +107,7 @@ class ResultPlotter:
             return df
 
         except Exception as e:
-            _logger.error(f"Error loading price data from {data_file}: {e}")
+            _logger.error("Error loading price data from %s: %s", data_file, e, exc_info=True)
             return pd.DataFrame()
 
     def get_indicators_for_strategy(self, result_data: Dict) -> List[str]:
@@ -206,7 +206,7 @@ class ResultPlotter:
                     calculated_indicators["atr"] = self._calculate_atr(df, period)
 
             except Exception as e:
-                _logger.warning(f"Error calculating {indicator}: {e}")
+                _logger.warning("Error calculating %s: %s", indicator, e)
 
         return calculated_indicators
 
@@ -529,7 +529,7 @@ class ResultPlotter:
         )
         plt.close()
 
-        _logger.info(f"Plot saved: {output_file}")
+        _logger.info("Plot saved: %s", output_file)
 
     def _plot_trades(self, ax, trades: List[Dict]) -> None:
         """Plot trades on the price chart"""
@@ -565,7 +565,7 @@ class ResultPlotter:
     def process_json_file(self, json_file: str) -> None:
         """Process a single JSON file and create plot"""
         try:
-            _logger.info(f"Processing {json_file}")
+            _logger.info("Processing %s", json_file)
 
             # Load result data
             result_data = self.load_result_data(json_file)
@@ -575,13 +575,13 @@ class ResultPlotter:
             # Get data file name
             data_file = result_data.get("data_file", "")
             if not data_file:
-                _logger.warning(f"No data_file found in {json_file}")
+                _logger.warning("No data_file found in %s", json_file)
                 return
 
             # Load price data
             df = self.load_price_data(data_file)
             if df.empty:
-                _logger.warning(f"Could not load price data for {data_file}")
+                _logger.warning("Could not load price data for %s", data_file)
                 return
 
             # Get strategy parameters
@@ -610,7 +610,7 @@ class ResultPlotter:
             )
 
         except Exception as e:
-            _logger.error(f"Error processing {json_file}: {e}", exc_info=True)
+            _logger.error("Error processing %s: %s", json_file, e, exc_info=True)
 
     def run(self, results_dir: str = "results") -> None:
         """Main method to process all JSON files"""
@@ -620,7 +620,7 @@ class ResultPlotter:
         json_files = self.get_json_files(results_dir)
 
         if not json_files:
-            _logger.warning(f"No JSON files found in {results_dir}")
+            _logger.warning("No JSON files found in %s", results_dir)
             return
 
         # Process each file

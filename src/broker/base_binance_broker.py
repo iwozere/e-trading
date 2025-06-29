@@ -24,7 +24,7 @@ class BaseBinanceBroker(BaseBroker):
         self.client = Client(api_key, api_secret)
         self.client.API_URL = None
         self.broker_name = "Binance" if not testnet else "Binance Testnet"
-        _logger.info(f"{self.broker_name} initialized with testnet.")
+        _logger.info("%s initialized with testnet.", self.broker_name)
 
     def buy(self, symbol: str, qty: float, price: Optional[float] = None) -> Any:
         """Place a buy order on Binance."""
@@ -38,7 +38,7 @@ class BaseBinanceBroker(BaseBroker):
             )
             self.orders.append(order)
             self._notify_order(order)
-            _logger.info(f"Buy order placed: {order}")
+            _logger.info("Buy order placed: %s", order)
 
             # ✅ NON-BLOCKING: Async notification doesn't block trade execution
             asyncio.create_task(send_trade_notification(
@@ -72,7 +72,7 @@ class BaseBinanceBroker(BaseBroker):
             )
             self.orders.append(order)
             self._notify_order(order)
-            _logger.info(f"Sell order placed: {order}")
+            _logger.info("Sell order placed: %s", order)
 
             # ✅ NON-BLOCKING: Async notification doesn't block trade execution
             asyncio.create_task(send_trade_notification(

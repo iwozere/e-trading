@@ -55,7 +55,7 @@ class BasePlotter:
         # Add plotters based on available indicators
         if hasattr(entry_mixin, "indicators"):
             indicators = entry_mixin.indicators
-            _logger.info(f"Found indicators: {list(indicators.keys())}")
+            _logger.info("Found indicators: %s", list(indicators.keys()))
 
             # RSI
             if "rsi" in indicators:
@@ -72,7 +72,7 @@ class BasePlotter:
                         )
                         _logger.debug("RSI plotter created successfully")
                 except Exception as e:
-                    _logger.error(f"Error creating RSI plotter: {str(e)}")
+                    _logger.error("Error creating RSI plotter: %s", e, exc_info=True)
 
             # Ichimoku
             if all(
@@ -97,7 +97,7 @@ class BasePlotter:
                         )
                         _logger.debug("Ichimoku plotter created successfully")
                 except Exception as e:
-                    _logger.error(f"Error creating Ichimoku plotter: {str(e)}")
+                    _logger.error("Error creating Ichimoku plotter: %s", e, exc_info=True)
 
             # Bollinger Bands
             if "bb" in indicators:
@@ -116,7 +116,7 @@ class BasePlotter:
                         )
                         _logger.debug("Bollinger Bands plotter created successfully")
                 except Exception as e:
-                    _logger.error(f"Error creating Bollinger Bands plotter: {str(e)}")
+                    _logger.error("Error creating Bollinger Bands plotter: %s", e, exc_info=True)
 
             # Volume
             if "volume" in indicators:
@@ -133,7 +133,7 @@ class BasePlotter:
                         )
                         _logger.debug("Volume plotter created successfully")
                 except Exception as e:
-                    _logger.error(f"Error creating Volume plotter: {str(e)}")
+                    _logger.error("Error creating Volume plotter: %s", e, exc_info=True)
 
             # SuperTrend
             if "supertrend" in indicators:
@@ -152,9 +152,9 @@ class BasePlotter:
                         )
                         _logger.debug("SuperTrend plotter created successfully")
                 except Exception as e:
-                    _logger.error(f"Error creating SuperTrend plotter: {str(e)}")
+                    _logger.error("Error creating SuperTrend plotter: %s", e, exc_info=True)
 
-            _logger.info(f"Created {len(plotters)} indicator plotters")
+            _logger.info("Created %d indicator plotters", len(plotters))
         else:
             _logger.warning("No indicators found in entry mixin")
 
@@ -229,7 +229,7 @@ class BasePlotter:
                     )
                     break  # Stop if we hit an error
         except Exception as e:
-            _logger.error(f"Error accessing data: {str(e)}", exc_info=False)
+            _logger.error("Error accessing data: %s", e, exc_info=False)
             return
 
         # Ensure we have data to plot
@@ -282,7 +282,7 @@ class BasePlotter:
                     )
                     plotter.plot(self.axes[current_ax])
             except Exception as e:
-                _logger.error(f"Error plotting {plotter.__class__.__name__}: {str(e)}")
+                _logger.error("Error plotting %s: %s", plotter.__class__.__name__, e, exc_info=True)
                 continue
 
     def _plot_trades(self):
@@ -295,7 +295,7 @@ class BasePlotter:
                     # Convert Backtrader datetime to pandas datetime
                     entry_date = pd.to_datetime(trade["entry_time"])
                     if entry_date.year < 2000:  # Skip invalid dates
-                        _logger.warning(f"Invalid entry date: {entry_date}")
+                        _logger.warning("Invalid entry date: %s", entry_date)
                         continue
                     ax.scatter(
                         entry_date,
@@ -311,7 +311,7 @@ class BasePlotter:
                     # Convert Backtrader datetime to pandas datetime
                     exit_date = pd.to_datetime(trade["exit_time"])
                     if exit_date.year < 2000:  # Skip invalid dates
-                        _logger.warning(f"Invalid exit date: {exit_date}")
+                        _logger.warning("Invalid exit date: %s", exit_date)
                         continue
                     ax.scatter(
                         exit_date,
@@ -322,7 +322,7 @@ class BasePlotter:
                         label="Sell" if trade == self.trades[0] else "",
                     )
             except Exception as e:
-                _logger.error(f"Error plotting trade: {str(e)}")
+                _logger.error("Error plotting trade: %s", e, exc_info=True)
                 continue
 
     def _plot_equity(self):

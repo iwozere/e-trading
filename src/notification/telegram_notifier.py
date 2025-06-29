@@ -309,7 +309,7 @@ def send_telegram_alert(message: str):
     try:
         notifier = TelegramNotifier(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
         notifier.send_error_notification(message)
-        _logger.info(f"System alert sent to Telegram: {message}")
+        _logger.info("System alert sent to Telegram: %s", message)
     except Exception as e:
         _logger.error("Failed to send system alert to Telegram: %s", e, exc_info=True)
 

@@ -142,7 +142,7 @@ class BaseTradingBot:
                 # Create new bot instance
                 self.trade_repository.create_bot_instance(bot_data)
 
-            _logger.info(f"Initialized bot instance: {self.bot_id}")
+            _logger.info("Initialized bot instance: %s", self.bot_id)
 
         except Exception as e:
             _logger.error("Error initializing bot instance: %s", e, exc_info=True)
@@ -440,7 +440,7 @@ class BaseTradingBot:
                     "trade_id": str(trade.id)
                 }
 
-            _logger.info(f"Loaded {len(open_trades)} open positions from database for {self.bot_id}")
+            _logger.info("Loaded %d open positions from database for %s", len(open_trades), self.bot_id)
 
         except Exception as e:
             _logger.error("Error loading open positions from database: %s", e, exc_info=True)
@@ -565,18 +565,13 @@ class BaseTradingBot:
             _logger.info(message)
 
     def log_bot_event(self, event: str):
-        _logger.info(f"{event}: {self.__class__.__name__}")
-        _logger.info(f"Trading pair: {self.trading_pair}")
-        _logger.info(f"Initial balance: {self.initial_balance}")
-        _logger.info(
-            f"Strategy class: {getattr(self, 'strategy_class', type(self.strategy_class).__name__)}"
-        )
-        _logger.info(f"Strategy parameters: {getattr(self, 'parameters', {})}")
-        _logger.info(
-            f"Broker: {self.broker.__class__.__name__ if self.broker else 'None'}"
-        )
+        _logger.info("%s: %s", event, self.__class__.__name__)
+        _logger.info("Trading pair: %s", self.trading_pair)
+        _logger.info("Initial balance: %s", self.initial_balance)
+        _logger.info("Strategy parameters: %s", getattr(self, 'parameters', {}))
+        _logger.info("Broker: %s", self.broker.__class__.__name__ if self.broker else 'None')
         timestamp = datetime.now(timezone.utc)
-        _logger.info(f"Timestamp: {timestamp}")
+        _logger.info("Timestamp: %s", timestamp)
 
     def notify_bot_event(self, event: str, emoji: str):
         msg = (
@@ -619,7 +614,7 @@ class BaseTradingBot:
 
         cerebro = bt.Cerebro()
         cerebro.adddata(data_feed)
-        _logger.info(f"Added data feed for {self.trading_pair}")
+        _logger.info("Added data feed for %s", self.trading_pair)
         cerebro.broker.setcash(self.initial_balance)
         if self.broker:
             cerebro.setbroker(self.broker)
@@ -627,7 +622,7 @@ class BaseTradingBot:
             getattr(self, "strategy_class"), params=getattr(self, "parameters", {})
         )
         self.pre_run(data_feed)
-        _logger.info(f"Starting Backtrader engine for {self.trading_pair}")
+        _logger.info("Starting Backtrader engine for %s", self.trading_pair)
         cerebro.run()
         self.post_run(data_feed)
         self.log_bot_event("stopped")
