@@ -397,8 +397,6 @@ def main():
 
     args = parser.parse_args()
 
-    # Setup logging
-    logging.basicConfig(level=logging.INFO)
 
     # Create migrator
     migrator = ConfigMigrator(args.old_dir, args.new_dir)
