@@ -8,7 +8,7 @@ Features:
 - Chart sent only on explicit request
 - All actions and errors logged to logs/log/my_screener.log
 - User tickers stored in config/screener/my_screener.json (auto-created if missing)
-- Optionally email analysis results by providing an email address as the last argument to /my-status or /my-analyze
+- Optionally email analysis results by providing an email address as the last argument to /analyze
 
 Commands:
   /add -PROVIDER TICKER      Add ticker to your provider list (provider mandatory)
@@ -91,7 +91,7 @@ async def send_welcome(message: Message):
         "/list [-PROVIDER]          Show your tickers for a provider\n"
         "/analyze [-PROVIDER] [TICKER] [-email]   Analyze ticker, use -email to send to your verified email\n"
         "<b>Email flow:</b>\n"
-        "1. Register your email with /my-register email@example.com\n"
+        "1. Register your email with /register email@example.com\n"
         "2. Check your inbox for a 6-digit code\n"
         "3. Verify with /verify CODE\n"
         "4. Use -email flag with /analyze to receive reports by email (only if verified)\n\n"
@@ -305,13 +305,13 @@ def analyze_command_core(
     if ticker:
         if not provider:
             for prov in ["yf", "bnc"]:
-                p, i = get_ticker_settings(user_id, prov, ticker)
+                p, i = get_ticker_settings(ticker)
                 if p or i:
                     provider = prov
                     break
         if not provider:
             provider = "yf"
-        db_period, db_interval = get_ticker_settings(user_id, provider, ticker)
+        db_period, db_interval = get_ticker_settings(ticker)
         if not period:
             period = db_period or DEFAULT_PERIOD
         if not interval:
@@ -353,6 +353,8 @@ def analyze_command_core(
             actions.append({"type": "text", "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"})
         return actions
     # If no ticker, analyze all tickers in user's list (optionally filtered by provider)
+    if provider:
+        provider = provider.lower()
     pairs = all_tickers_with_providers_for_status(user_id, provider)
     if not pairs:
         actions.append({"type": "text", "content": "No tickers found. Use /add to add tickers first."})

@@ -94,7 +94,8 @@ def format_comprehensive_analysis(ticker: str, technicals: Technicals, fundament
     technical_text = format_technical_analysis(ticker, technicals)
     technical_text_html = technical_text.replace('\n', '<br>').replace('*', '').replace('  ', ' ')
     # Fundamental info (HTML)
-    fundamental_text = f"""
+    if fundamentals is not None:
+        fundamental_text = f"""
 <b>📊 Fundamental Analysis: {ticker}</b><br>
 <br>
 💰 Current Price: ${fundamentals.current_price:.2f}<br>
@@ -103,4 +104,6 @@ def format_comprehensive_analysis(ticker: str, technicals: Technicals, fundament
 📈 P/E: {fundamentals.pe_ratio:.2f}, Forward P/E: {fundamentals.forward_pe:.2f}<br>
 💸 EPS: ${fundamentals.earnings_per_share:.2f}, Div Yield: {fundamentals.dividend_yield * 100:.2f}%<br>
 """
+    else:
+        fundamental_text = f"<b>📊 Fundamental Analysis: {ticker}</b><br><br>No fundamentals available for this asset.<br>"
     return fundamental_text + "<br>" + technical_text_html

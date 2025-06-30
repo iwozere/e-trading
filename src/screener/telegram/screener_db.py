@@ -79,7 +79,7 @@ def list_tickers(telegram_id, provider=None):
     cur = conn.cursor()
     if provider:
         cur.execute(
-            "SELECT provider, ticker, period, interval FROM tickers WHERE user_id = ? AND provider = ? ORDER BY provider, ticker",
+            "SELECT provider, ticker, period, interval FROM tickers WHERE user_id = ? AND UPPER(provider) = UPPER(?) ORDER BY provider, ticker",
             (user_id, provider)
         )
     else:
@@ -109,11 +109,12 @@ def all_tickers_for_status(telegram_id, provider=None):
 
 def all_tickers_with_providers_for_status(telegram_id, provider=None):
     """Returns a list of (provider, ticker) tuples for status analysis with provider filter"""
-    tickers_by_provider = list_tickers(telegram_id, provider)
+    tickers_by_provider = list_tickers(telegram_id)
     result = []
     for prov, tlist in tickers_by_provider.items():
-        for ticker in tlist:
-            result.append((prov, ticker["ticker"]))
+        if provider is None or prov.lower() == provider.lower():
+            for ticker in tlist:
+                result.append((prov, ticker["ticker"]))
     return result
 
 def migrate_users_table():
@@ -238,4 +239,4 @@ if __name__ == "__main__":
     migrate_users_table()
     print("Running tickers table migration...")
     migrate_tickers_table()
-    print("Migration complete.") 
+    print("Migration complete.")

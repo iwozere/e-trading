@@ -1,7 +1,4 @@
-import numpy as np
 import pandas as pd
-import yfinance as yf
-import talib
 from typing import Tuple, List
 from src.notification.logger import setup_logger
 from src.screener.telegram.models import Technicals
