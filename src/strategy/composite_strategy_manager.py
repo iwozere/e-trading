@@ -12,10 +12,10 @@ import logging
 import pandas as pd
 
 from .strategy_core import (
-    BaseStrategy, 
-    StrategySignal, 
-    CompositeSignal, 
-    SignalAggregator, 
+    BaseStrategy,
+    StrategySignal,
+    CompositeSignal,
+    SignalAggregator,
     AggregationMethod,
     MarketRegimeDetector
 )
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class StrategyComposer:
     """Orchestrates multiple strategies and aggregates their signals."""
 
-    def __init__(self, strategies: List[BaseStrategy], 
+    def __init__(self, strategies: List[BaseStrategy],
                  aggregation_method: AggregationMethod = AggregationMethod.WEIGHTED_VOTING,
                  consensus_threshold: float = 0.6):
         """
@@ -56,7 +56,7 @@ class StrategyComposer:
             try:
                 signal = strategy.generate_signal()
                 signals.append(signal)
-                logger.debug(f"Generated signal from {strategy.name}: {signal.signal_type} (confidence: {signal.confidence})")
+                logger.debug("Generated signal from %s: %s (confidence: %s)", strategy.name, signal.signal_type, signal.confidence)
             except Exception as e:
                 logger.error(f"Error generating signal from {strategy.name}: {str(e)}")
                 # Add a hold signal with zero confidence for failed strategies
@@ -153,7 +153,7 @@ class AdvancedStrategyFramework:
 
         config_files = [
             "composite_strategies.json",
-            "multi_timeframe.json", 
+            "multi_timeframe.json",
             "dynamic_switching.json"
         ]
 
@@ -163,11 +163,11 @@ class AdvancedStrategyFramework:
                 try:
                     with open(file_path, 'r') as f:
                         configs[config_file.replace('.json', '')] = json.load(f)
-                    logger.info(f"Loaded configuration from {config_file}")
+                    logger.info("Loaded configuration from %s", config_file)
                 except Exception as e:
                     logger.error(f"Error loading {config_file}: {str(e)}")
             else:
-                logger.warning(f"Configuration file not found: {config_file}")
+                logger.warning("Configuration file not found: %s", config_file)
 
         return configs
 
@@ -201,7 +201,7 @@ class AdvancedStrategyFramework:
                     "config": strategy_config
                 }
 
-                logger.info(f"Initialized composite strategy: {strategy_name}")
+                logger.info("Initialized composite strategy: %s", strategy_name)
 
             except Exception as e:
                 logger.error(f"Error initializing composite strategy {strategy_name}: {str(e)}")
@@ -232,7 +232,7 @@ class AdvancedStrategyFramework:
                     "config": strategy_config
                 }
 
-                logger.info(f"Initialized multi-timeframe strategy: {strategy_name}")
+                logger.info("Initialized multi-timeframe strategy: %s", strategy_name)
 
             except Exception as e:
                 logger.error(f"Error initializing multi-timeframe strategy {strategy_name}: {str(e)}")
@@ -260,7 +260,7 @@ class AdvancedStrategyFramework:
         elif strategy_type == "atr_breakout":
             return self._create_atr_breakout_strategy(strategy_name, weight, config)
         else:
-            logger.warning(f"Unknown strategy type: {strategy_type}")
+            logger.warning("Unknown strategy type: %s", strategy_type)
             return None
 
     def _create_rsi_momentum_strategy(self, name: str, weight: float, config: Dict) -> BaseStrategy:
@@ -659,4 +659,4 @@ class AdvancedStrategyFramework:
             values = [h['metrics'].get(key, 0) for h in history]
             metrics[key] = sum(values) / len(values)
 
-        return metrics 
+        return metrics

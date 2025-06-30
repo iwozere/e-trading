@@ -71,21 +71,21 @@ class RSIBBEntryMixin(BaseEntryMixin):
 
             # Validate parameters to prevent issues
             if rsi_period is None or rsi_period <= 0:
-                logger.warning(f"Invalid RSI period: {rsi_period}, using default value 14")
+                logger.warning("Invalid RSI period: %s, using default value 14", rsi_period)
                 rsi_period = 14
             elif rsi_period < 2:
-                logger.warning(f"RSI period too small: {rsi_period}, using minimum value 2")
+                logger.warning("RSI period too small: %s, using minimum value 2", rsi_period)
                 rsi_period = 2
 
             if bb_period is None or bb_period <= 0:
-                logger.warning(f"Invalid BB period: {bb_period}, using default value 20")
+                logger.warning("Invalid BB period: %s, using default value 20", bb_period)
                 bb_period = 20
             elif bb_period < 2:
-                logger.warning(f"BB period too small: {bb_period}, using minimum value 2")
+                logger.warning("BB period too small: %s, using minimum value 2", bb_period)
                 bb_period = 2
 
             if bb_dev_factor is None or bb_dev_factor <= 0:
-                logger.warning(f"Invalid BB deviation factor: {bb_dev_factor}, using default value 2.0")
+                logger.warning("Invalid BB deviation factor: %s, using default value 2.0", bb_dev_factor)
                 bb_dev_factor = 2.0
 
             if self.strategy.use_talib:

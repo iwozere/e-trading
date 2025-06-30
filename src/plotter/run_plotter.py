@@ -76,7 +76,7 @@ class ResultPlotter:
         try:
             with open(json_file, "r") as f:
                 data = json.load(f)
-            _logger.debug(f"Loaded result data from {json_file}")
+            _logger.debug("Loaded result data from %s", json_file)
             return data
         except Exception as e:
             _logger.error("Error loading JSON file %s: %s", json_file, e, exc_info=True)
@@ -103,7 +103,7 @@ class ResultPlotter:
             df.ffill(inplace=True)
             df.bfill(inplace=True)
 
-            _logger.debug(f"Loaded price data from {csv_path}")
+            _logger.debug("Loaded price data from %s", csv_path)
             return df
 
         except Exception as e:
@@ -136,7 +136,7 @@ class ResultPlotter:
             )
             indicators.update(exit_indicators)
 
-        _logger.debug(f"Strategy uses indicators: {list(indicators)}")
+        _logger.debug("Strategy uses indicators: %s", list(indicators))
         return list(indicators)
 
     def get_subplot_layout(self, indicators: List[str]) -> Dict[str, str]:

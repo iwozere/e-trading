@@ -96,10 +96,10 @@ class ATRExitMixin(BaseExitMixin):
 
             # Validate ATR period to prevent division by zero
             if atr_period is None or atr_period <= 0:
-                logger.warning(f"Invalid ATR period: {atr_period}, using default value 14")
+                logger.warning("Invalid ATR period: %s, using default value 14", atr_period)
                 atr_period = 14
             elif atr_period < 2:
-                logger.warning(f"ATR period too small: {atr_period}, using minimum value 2")
+                logger.warning("ATR period too small: %s, using minimum value 2", atr_period)
                 atr_period = 2
 
             if self.strategy.use_talib:
@@ -132,7 +132,7 @@ class ATRExitMixin(BaseExitMixin):
 
             # Defensive check: Ensure ATR value is valid and not zero
             if atr_val is None or atr_val <= 0:
-                logger.warning(f"Invalid ATR value: {atr_val}, skipping exit check")
+                logger.warning("Invalid ATR value: %s, skipping exit check", atr_val)
                 return False
 
             # Calculate stop loss from highest price

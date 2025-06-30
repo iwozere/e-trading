@@ -11,12 +11,11 @@ Features:
 - Optionally email analysis results by providing an email address as the last argument to /my-status or /my-analyze
 
 Commands:
-  /my-add -PROVIDER TICKER      Add ticker to your provider list (provider mandatory)
-  /my-delete -PROVIDER TICKER   Remove ticker from your provider list (provider mandatory)
-  /my-list                      Show all your tickers (all providers)
-  /my-list -PROVIDER            Show your tickers for a provider (provider optional)
-  /my-status [-PROVIDER] [EMAIL]         Analyze your tickers (optionally for a provider) and optionally email results
-  /my-analyze -PROVIDER TICKER [EMAIL]   Analyze ticker and optionally email results + chart
+  /add -PROVIDER TICKER      Add ticker to your provider list (provider mandatory)
+  /delete -PROVIDER TICKER   Remove ticker from your provider list (provider mandatory)
+  /list                      Show all your tickers (all providers)
+  /list -PROVIDER            Show your tickers for a provider (provider optional)
+  /analyze [-PROVIDER] [TICKER] [-email]   Analyze ticker and optionally send to email results + chart
 
 Note: Uses analyze_ticker for all analysis. Respects yfinance rate limits.
 """
@@ -28,8 +27,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.
 import asyncio
 import tempfile
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
+import functools
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
@@ -42,6 +42,8 @@ from src.screener.telegram.screener_db import (
 )
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
 from src.screener.telegram.chart import generate_enhanced_chart
+from src.screener.telegram.technicals import calculate_technicals_from_df
+from src.screener.telegram.technicals import format_technical_analysis
 
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER
 
@@ -60,7 +62,7 @@ try:
         )
     )
 except Exception as e:
-    logger.error(f"Notification manager not initialized: {e}")
+    logger.error("Notification manager not initialized: %s", e, exc_info=True)
 
 if not TELEGRAM_BOT_TOKEN:
     logger.error("TELEGRAM_BOT_TOKEN environment variable is not set")
@@ -74,26 +76,25 @@ DEFAULT_INTERVAL = "1d"
 
 @dp.message(Command("start", "help"))
 async def send_welcome(message: Message):
-    logger.info(f"User {message.from_user.id} started the bot")
+    logger.info("User %s started the bot", message.from_user.id)
     await message.reply(
         "<b>Welcome to the e-Trading Screener Bot!</b>\n\n"
         "Send a ticker symbol (e.g., AAPL, TSLA, BTCUSDT), and I'll analyze it for you.\n\n"
         "<b>Available providers:</b> yf (yfinance) and bnc (binance for crypto pairs)\n\n"
         "<b>Key commands:</b>\n"
-        "/my-register email@example.com Register or update your email for reports\n"
-        "/my-verify CODE               Verify your email with the code sent\n"
-        "/my-info                      Show your registered email and verification status\n\n"
-        "/my-add -PROVIDER TICKER      Add ticker to your provider list. Supported providers are YF and BNC.\n"
-        "/my-delete -PROVIDER TICKER   Remove ticker from your provider list\n"
-        "/my-list                      Show all your tickers\n"
-        "/my-list -PROVIDER            Show your tickers for a provider\n"
-        "/my-status [-PROVIDER] [-email]         Analyze your tickers (optionally for a provider), use -email to send to your verified email\n"
-        "/my-analyze -PROVIDER TICKER [-email]   Analyze ticker, use -email to send to your verified email\n"
+        "/register email@example.com Register or update your email for reports\n"
+        "/verify CODE               Verify your email with the code sent\n"
+        "/info                      Show your registered email and verification status\n\n"
+        "/add -PROVIDER TICKER      Add ticker to your provider list. Supported providers are YF and BNC.\n"
+        "/delete -PROVIDER TICKER   Remove ticker from your provider list\n"
+        "/list                      Show all your tickers\n"
+        "/list [-PROVIDER]          Show your tickers for a provider\n"
+        "/analyze [-PROVIDER] [TICKER] [-email]   Analyze ticker, use -email to send to your verified email\n"
         "<b>Email flow:</b>\n"
         "1. Register your email with /my-register email@example.com\n"
         "2. Check your inbox for a 6-digit code\n"
-        "3. Verify with /my-verify CODE\n"
-        "4. Use -email flag with /my-status or /my-analyze to receive reports by email (only if verified)\n\n"
+        "3. Verify with /verify CODE\n"
+        "4. Use -email flag with /analyze to receive reports by email (only if verified)\n\n"
         "All actions and errors are logged. For help, contact the admin."
         , parse_mode="HTML"
     )
@@ -113,15 +114,16 @@ def parse_period_interval(args):
             period = arg.split('=', 1)[1]
         elif arg.startswith('-interval='):
             interval = arg.split('=', 1)[1]
+
 @dp.message(lambda message: message.text and is_valid_ticker(message.text.strip()))
 async def handle_ticker(message: Message):
     ticker = message.text.strip().upper()
-    logger.info(f"User {message.from_user.id} requested analysis for {ticker}")
+    logger.info("User %s requested analysis for %s", message.from_user.id, ticker)
     await message.reply(f"🔍 Analyzing {ticker}...")
 
     try:
         result = analyze_ticker(ticker)
-        logger.info(f"Successfully analyzed {ticker}")
+        logger.info("Successfully analyzed %s", ticker)
 
         # Format response text with enhanced information
         technicals = result.technicals
@@ -162,135 +164,126 @@ async def handle_ticker(message: Message):
         os.unlink(temp_file.name)
 
     except Exception as e:
-        logger.error(f"Error analyzing {ticker}", exc_info=True)
+        logger.error("Error analyzing %s", ticker, exc_info=True)
         await message.reply(
             f"⚠️ Error analyzing {ticker}:\n"
             f"Please check if the ticker symbol is correct and try again."
         )
 
-@dp.message(Command("my-add"))
-async def my_add(message: Message):
-    print("[DEBUG] Entered my_add handler", flush=True)
-    logger.info("Entered my_add handler")
-    user_id = str(message.from_user.id)
-    args = message.text.split()
-    print(f"[DEBUG] my_add args: {args}", flush=True)
-    logger.info(f"my_add args: {args}")
-    try:
-        if len(args) < 3 or not args[1].startswith('-'):
-            await message.reply("Usage: /my-add -PROVIDER TICKER1[,TICKER2,...] (e.g., /my-add -yf AAPL,MSFT,TSLA)")
-            print("[DEBUG] my_add: invalid arguments", flush=True)
-            logger.warning("my_add: invalid arguments")
-            return
-        provider = args[1][1:].lower()
-        tickers = args[2].upper().split(',')
-        added = []
-        for ticker in tickers:
-            ticker = ticker.strip()
-            if ticker:
-                try:
-                    # Parse -period= and -interval= flags per ticker, store in DB
-                    period, interval = get_ticker_settings(ticker)
-                    if not period:
-                        period = DEFAULT_PERIOD
-                    if not interval:
-                        interval = DEFAULT_INTERVAL
-                    add_ticker(user_id, provider, ticker, period, interval)
-                    added.append(ticker)
-                    print(f"[DEBUG] Added {ticker} to {provider}", flush=True)
-                    logger.info(f"User {user_id} added {ticker} to {provider}")
-                except Exception as e:
-                    print(f"[ERROR] Exception adding {ticker}: {e}", flush=True)
-                    logger.error(f"Exception adding {ticker}: {e}", exc_info=True)
-        if added:
-            await message.reply(f"✅ Added to your {provider} list: {', '.join(added)}.")
-            print(f"[DEBUG] my_add: Successfully added: {added}", flush=True)
-            logger.info(f"my_add: Successfully added: {added}")
-        else:
-            await message.reply("No valid tickers provided.")
-            print("[DEBUG] my_add: No valid tickers provided", flush=True)
-            logger.warning("my_add: No valid tickers provided")
-    except Exception as e:
-        print(f"[ERROR] Exception in my_add handler: {e}", flush=True)
-        logger.error(f"Exception in my_add handler: {e}", exc_info=True)
-        await message.reply(f"Error in /my-add: {e}")
+# --- Command Logic Functions ---
+def handle_add(user_id, args):
+    # Logic for adding tickers, returns (success, message)
+    if len(args) < 3 or not args[1].startswith('-'):
+        return False, "Usage: /add -PROVIDER TICKER1[,TICKER2,...] (e.g., /add -yf AAPL,MSFT,TSLA)"
+    provider = args[1][1:].lower()
+    tickers = args[2].upper().split(',')
+    added = []
+    for ticker in tickers:
+        ticker = ticker.strip()
+        if ticker:
+            try:
+                period, interval = get_ticker_settings(ticker)
+                if not period:
+                    period = DEFAULT_PERIOD
+                if not interval:
+                    interval = DEFAULT_INTERVAL
+                add_ticker(user_id, provider, ticker, period, interval)
+                added.append(ticker)
+            except Exception as e:
+                continue
+    if added:
+        return True, f"✅ Added to your {provider} list: {', '.join(added)}."
+    else:
+        return False, "No valid tickers provided."
 
-@dp.message(Command("my-delete"))
-async def my_delete(message: Message):
-    print("[DEBUG] Entered my_delete handler", flush=True)
-    logger.info("Entered my_delete handler")
-    user_id = str(message.from_user.id)
-    # Split on whitespace, remove empty strings, and strip each arg
-    args = [a.strip() for a in re.split(r'\s+', message.text) if a.strip()]
-    print(f"[DEBUG] my_delete args: {args}", flush=True)
-    logger.info(f"my_delete args: {args}")
-    try:
-        if len(args) < 3 or not args[1].startswith('-'):
-            await message.reply("Usage: /my-delete -PROVIDER TICKER1[,TICKER2,...] (e.g., /my-delete -yf AAPL,MSFT,TSLA)")
-            print("[DEBUG] my_delete: invalid arguments", flush=True)
-            logger.warning("my_delete: invalid arguments")
-            return
-        provider = args[1][1:].lower()
-        tickers = args[2].upper().split(',')
-        deleted = []
-        for ticker in tickers:
-            ticker = ticker.strip()
-            if ticker:
-                try:
-                    delete_ticker(user_id, provider, ticker)
-                    deleted.append(ticker)
-                    print(f"[DEBUG] Deleted {ticker} from {provider}", flush=True)
-                    logger.info(f"User {user_id} deleted {ticker} from {provider}")
-                except Exception as e:
-                    print(f"[ERROR] Exception deleting {ticker}: {e}", flush=True)
-                    logger.error(f"Exception deleting {ticker}: {e}", exc_info=True)
-        if deleted:
-            await message.reply(f"❌ Removed from your {provider} list: {', '.join(deleted)}.")
-            print(f"[DEBUG] my_delete: Successfully deleted: {deleted}", flush=True)
-            logger.info(f"my_delete: Successfully deleted: {deleted}")
-        else:
-            await message.reply("No valid tickers provided.")
-            print("[DEBUG] my_delete: No valid tickers provided", flush=True)
-            logger.warning("my_delete: No valid tickers provided")
-    except Exception as e:
-        print(f"[ERROR] Exception in my_delete handler: {e}", flush=True)
-        logger.error(f"Exception in my_delete handler: {e}", exc_info=True)
-        await message.reply(f"Error in /my-delete: {e}")
+def handle_delete(user_id, args):
+    # Logic for deleting tickers, returns (success, message)
+    if len(args) < 3 or not args[1].startswith('-'):
+        return False, "Usage: /delete -PROVIDER TICKER1[,TICKER2,...] (e.g., /delete -yf AAPL,MSFT,TSLA)"
+    provider = args[1][1:].lower()
+    tickers = args[2].upper().split(',')
+    deleted = []
+    for ticker in tickers:
+        ticker = ticker.strip()
+        if ticker:
+            try:
+                delete_ticker(user_id, provider, ticker)
+                deleted.append(ticker)
+            except Exception as e:
+                continue
+    if deleted:
+        return True, f"❌ Removed from your {provider} list: {', '.join(deleted)}."
+    else:
+        return False, "No valid tickers provided."
 
-@dp.message(Command("my-list"))
-async def my_list(message: Message):
-    print("[DEBUG] Entered my_list handler", flush=True)
-    logger.info("Entered my_list handler")
-    user_id = str(message.from_user.id)
-    args = message.text.split()
-    print(f"[DEBUG] my_list args: {args}", flush=True)
-    logger.info(f"my_list args: {args}")
-    provider = None
-    if len(args) == 2 and args[1].startswith('-'):
-        provider = args[1][1:].lower()
-    try:
-        tickers_by_provider = list_tickers(user_id, provider)
-        if not tickers_by_provider or all(not v for v in tickers_by_provider.values()):
-            await message.reply("Your ticker list is empty. Use /my-add -PROVIDER TICKER to add one.")
-            print("[DEBUG] my_list: ticker list is empty", flush=True)
-            logger.info("my_list: ticker list is empty")
-            return
-        lines = []
-        for prov, tickers in tickers_by_provider.items():
-            lines.append(f"{prov.upper()}: " + ", ".join(tickers))
-        await message.reply("Your tickers:\n" + "\n".join(lines))
-        print(f"[DEBUG] my_list: Successfully listed: {lines}", flush=True)
-        logger.info(f"my_list: Successfully listed: {lines}")
-    except Exception as e:
-        print(f"[ERROR] Exception in my_list handler: {e}", flush=True)
-        logger.error(f"Exception in my_list handler: {e}", exc_info=True)
-        await message.reply(f"Error in /my-list: {e}")
+def handle_list(user_id, provider=None):
+    tickers_by_provider = list_tickers(user_id, provider)
+    if not tickers_by_provider or all(not v for v in tickers_by_provider.values()):
+        return False, "Your ticker list is empty. Use /add -PROVIDER TICKER to add one."
+    lines = []
+    for prov, tickers in tickers_by_provider.items():
+        for t in tickers:
+            period = t.get('period') or DEFAULT_PERIOD
+            interval = t.get('interval') or DEFAULT_INTERVAL
+            lines.append(f"{prov.upper()}: {t.get('ticker')} {interval} {period}")
+    return True, "Your tickers:\n" + "\n".join(lines)
 
-@dp.message(Command("analyze"))
-async def analyze_command(message: Message):
-    user_id = str(message.from_user.id)
-    args = message.text.split()
-    # Parse flags and arguments
+def handle_register(telegram_id, email):
+    import re
+    from src.screener.telegram.telegram_screener_bot import get_user_verification_code, set_user_email
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return False, "Usage: /register email@example.com"
+    code = f"{random.randint(100000, 999999)}"
+    sent_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    set_user_email(telegram_id, email, code, sent_time)
+    subject = "e-Trading Email Verification"
+    body = f"""
+    <h2>e-Trading Email Verification</h2>
+    <p>Your verification code is: <b>{code}</b></p>
+    <p>Enter this code in Telegram using <b>/verify {code}</b> within 1 hour to verify your email.</p>
+    """
+    return True, (email, code, subject, body)
+
+def handle_info(telegram_id):
+    status = get_user_verification_status(telegram_id)
+    if not status or not status["email"]:
+        return False, "No email registered. Use /register email@example.com to set your email."
+    verified = bool(status["verification_received"])
+    reply = f"<b>Email:</b> {status['email']}\n"
+    reply += f"<b>Verified:</b> {'✅' if verified else '❌'}\n"
+    reply += f"<b>Verification sent:</b> {status['verification_sent']}\n"
+    reply += f"<b>Verification received:</b> {status['verification_received'] or '-'}"
+    return True, reply
+
+def handle_verify(telegram_id, code):
+    db_code, sent_time = get_user_verification_code(telegram_id)
+    if not db_code or not sent_time:
+        return False, "No verification code found. Please register your email first with /register."
+    sent_dt = datetime.strptime(sent_time, "%Y-%m-%d %H:%M:%S")
+    # Make sent_dt timezone-aware if naive
+    if sent_dt.tzinfo is None:
+        from datetime import timezone
+        sent_dt = sent_dt.replace(tzinfo=timezone.utc)
+    if code != db_code:
+        return False, "Invalid verification code."
+    if datetime.now(timezone.utc) > sent_dt + timedelta(hours=1):
+        return False, "Verification code expired. Please re-register your email."
+    set_user_verified(telegram_id, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
+    return True, "✅ Email verified successfully! You can now use -email flag to receive reports by email."
+
+def analyze_command_core(
+    user_id,
+    message_text,
+    notification_manager,
+    get_ticker_settings,
+    format_comprehensive_analysis,
+    get_user_verification_status,
+    bot=None
+):
+    import re
+    import tempfile
+    import asyncio
+    args = message_text.split()
     ticker = None
     provider = None
     email_flag = False
@@ -308,9 +301,8 @@ async def analyze_command(message: Message):
                 interval = arg.split("=", 1)[1]
         elif ticker is None:
             ticker = arg.upper()
-    # If ticker is given, analyze just that ticker
+    actions = []
     if ticker:
-        # If provider not given, try to infer from DB
         if not provider:
             for prov in ["yf", "bnc"]:
                 p, i = get_ticker_settings(user_id, prov, ticker)
@@ -318,90 +310,82 @@ async def analyze_command(message: Message):
                     provider = prov
                     break
         if not provider:
-            provider = "yf"  # Default to yf if not found
-        # Get period/interval from DB if not provided
+            provider = "yf"
         db_period, db_interval = get_ticker_settings(user_id, provider, ticker)
         if not period:
             period = db_period or DEFAULT_PERIOD
         if not interval:
             interval = db_interval or DEFAULT_INTERVAL
-        await message.reply(f"🔍 Analyzing {ticker} (provider={provider}, period={period}, interval={interval})...")
-        result = analyze_ticker(ticker, period=period, interval=interval)
-        technicals = result.technicals
-        fundamentals = result.fundamentals
-        text = format_comprehensive_analysis(ticker, technicals, fundamentals)
-        await message.reply(text.replace('<br>', '\n').replace('<b>', '').replace('</b>', ''))
-        # Chart
-        chart_data = generate_enhanced_chart(ticker, technicals, period=period, interval=interval)
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
-            temp_file.write(chart_data)
-            temp_file.flush()
-            chart_file = temp_file.name
-        await bot.send_photo(
-            chat_id=message.chat.id,
-            photo=FSInputFile(chart_file),
-            caption=f"📊 {ticker} Analysis\n🎯 {technicals.recommendations.get('overall', {}).get('signal', 'HOLD') if technicals.recommendations else 'HOLD'}",
-            parse_mode="HTML",
-        )
-        # Email if requested
-        if email_flag:
-            status = get_user_verification_status(user_id)
-            if not status or not status["email"]:
-                await message.reply("No email registered. Use /my-register to set your email.")
-                return
-            if not status["verification_received"]:
-                await message.reply("Your email is not verified. Use /my-verify CODE to verify.")
-                return
-            email = status["email"]
-            # Send email via async notification manager
-            if notification_manager:
-                await notification_manager.send_notification(
-                    notification_type=NotificationType.INFO,
-                    title=f"Comprehensive Analysis for {ticker}",
-                    message=text,
-                    priority=NotificationPriority.NORMAL,
-                    data={},
-                    source="telegram_screener_bot",
-                    channels=["email"],
-                )
-            await message.reply(f"📧 Analysis for {ticker} sent to {email}")
+        actions.append({"type": "text", "content": f"🔍 Analyzing {ticker} (provider={provider}, period={period}, interval={interval})..."})
         try:
-            os.unlink(chart_file)
-        except:
-            pass
-        return
+            result = analyze_ticker(ticker, period=period, interval=interval, provider=provider)
+            text = format_comprehensive_analysis(ticker, result.technicals, result.fundamentals)
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
+                    temp_file.write(result.chart_image)
+                    temp_file.flush()
+                    chart_file = temp_file.name
+                actions.append({"type": "photo", "file": chart_file, "caption": f"📊 {ticker} Analysis\n🎯 {result.recommendation}"})
+            except Exception as e:
+                actions.append({"type": "text", "content": f"No chart available for {ticker}. Reason: {e}"})
+            if email_flag:
+                status = get_user_verification_status(user_id)
+                if not status or not status["email"]:
+                    actions.append({"type": "text", "content": "No email registered. Use /register to set your email."})
+                    return actions
+                if not status["verification_received"]:
+                    actions.append({"type": "text", "content": "Your email is not verified. Use /verify CODE to verify."})
+                    return actions
+                email = status["email"]
+                email_content = text
+                if notification_manager:
+                    notification_manager.send_notification(
+                        notification_type="INFO",
+                        title=f"Comprehensive Analysis for {ticker}",
+                        message=email_content,
+                        priority="NORMAL",
+                        data={},
+                        source="telegram_screener_bot",
+                        channels=["email"],
+                    )
+                actions.append({"type": "text", "content": f"📧 Analysis for {ticker} sent to {email}"})
+        except Exception as e:
+            actions.append({"type": "text", "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"})
+        return actions
     # If no ticker, analyze all tickers in user's list (optionally filtered by provider)
     pairs = all_tickers_with_providers_for_status(user_id, provider)
     if not pairs:
-        await message.reply("No tickers found. Use /my-add to add tickers first.")
-        return
+        actions.append({"type": "text", "content": "No tickers found. Use /add to add tickers first."})
+        return actions
     email_body = []
     chart_files = []
     for prov, ticker in pairs:
         p, i = get_ticker_settings(user_id, prov, ticker)
         use_period = period or p or DEFAULT_PERIOD
         use_interval = interval or i or DEFAULT_INTERVAL
-        await message.reply(f"🔍 Analyzing {ticker} (provider={prov}, period={use_period}, interval={use_interval})...")
-        result = analyze_ticker(ticker, period=use_period, interval=use_interval)
-        technicals = result.technicals
-        fundamentals = result.fundamentals
-        text = format_comprehensive_analysis(ticker, technicals, fundamentals)
-        await message.reply(text.replace('<br>', '\n').replace('<b>', '').replace('</b>', ''))
-        chart_data = generate_enhanced_chart(ticker, technicals, period=use_period, interval=use_interval)
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
-            temp_file.write(chart_data)
-            temp_file.flush()
-            chart_files.append(temp_file.name)
-        email_body.append(text)
-    # Email if requested
+        actions.append({"type": "text", "content": f"🔍 Analyzing {ticker} (provider={prov}, period={use_period}, interval={use_interval})..."})
+        try:
+            result = analyze_ticker(ticker, period=use_period, interval=use_interval, provider=prov)
+            text = format_comprehensive_analysis(ticker, result.technicals, result.fundamentals)
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
+                    temp_file.write(result.chart_image)
+                    temp_file.flush()
+                    chart_files.append(temp_file.name)
+                actions.append({"type": "photo", "file": chart_files[-1], "caption": f"📊 {ticker} Analysis\n🎯 {result.recommendation}"})
+            except Exception as e:
+                actions.append({"type": "text", "content": f"No chart available for {ticker}. Reason: {e}"})
+            email_body.append(text)
+        except Exception as e:
+            actions.append({"type": "text", "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"})
     if email_flag:
         status = get_user_verification_status(user_id)
         if not status or not status["email"]:
-            await message.reply("No email registered. Use /my-register to set your email.")
-            return
+            actions.append({"type": "text", "content": "No email registered. Use /register to set your email."})
+            return actions
         if not status["verification_received"]:
-            await message.reply("Your email is not verified. Use /my-verify CODE to verify.")
-            return
+            actions.append({"type": "text", "content": "Your email is not verified. Use /verify CODE to verify."})
+            return actions
         email = status["email"]
         email_content = f"""
         <h2>📊 Your Screener Status Report</h2>
@@ -410,40 +394,97 @@ async def analyze_command(message: Message):
         """
         email_content += "<br><br>".join(email_body)
         if notification_manager:
-            await notification_manager.send_notification(
-                notification_type=NotificationType.INFO,
+            notification_manager.send_notification(
+                notification_type="INFO",
                 title=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
                 message=email_content,
-                priority=NotificationPriority.NORMAL,
+                priority="NORMAL",
                 data={},
                 source="telegram_screener_bot",
                 channels=["email"],
             )
-        await message.reply(f"📧 Status report sent to {email} with {len(chart_files)} charts")
-        for chart_file in chart_files:
-            try:
-                os.unlink(chart_file)
-            except:
-                pass
+        actions.append({"type": "text", "content": f"📧 Status report sent to {email} with {len(chart_files)} charts"})
+    return actions
 
-@dp.message(Command("my-register"))
+@dp.message(Command("analyze"))
+async def analyze_command(message: Message):
+    user_id = str(message.from_user.id)
+    loop = asyncio.get_event_loop()
+    actions = await loop.run_in_executor(
+        None,
+        functools.partial(
+            analyze_command_core,
+            user_id,
+            message.text,
+            notification_manager,
+            get_ticker_settings,
+            format_comprehensive_analysis,
+            get_user_verification_status,
+            bot
+        )
+    )
+    for action in actions:
+        if action["type"] == "text":
+            await message.reply(action["content"])
+        elif action["type"] == "photo":
+            await bot.send_photo(
+                chat_id=message.chat.id,
+                photo=FSInputFile(action["file"]),
+                caption=action["caption"],
+                parse_mode="HTML",
+            )
+            import os
+            os.unlink(action["file"])
+
+@dp.message(Command("add"))
+async def my_add(message: Message):
+    print("[DEBUG] Entered add handler", flush=True)
+    logger.info("Entered add handler")
+    user_id = str(message.from_user.id)
+    args = message.text.split()
+    print(f"[DEBUG] add args: {args}", flush=True)
+    logger.info("add args: %s", args)
+    success, reply = handle_add(user_id, args)
+    await message.reply(reply)
+
+@dp.message(Command("delete"))
+async def my_delete(message: Message):
+    print("[DEBUG] Entered delete handler", flush=True)
+    logger.info("Entered delete handler")
+    user_id = str(message.from_user.id)
+    args = [a.strip() for a in re.split(r'\s+', message.text) if a.strip()]
+    print(f"[DEBUG] delete args: {args}", flush=True)
+    logger.info("delete args: %s", args)
+    success, reply = handle_delete(user_id, args)
+    await message.reply(reply)
+
+@dp.message(Command("list"))
+async def my_list(message: Message):
+    print("[DEBUG] Entered list handler", flush=True)
+    logger.info("Entered list handler")
+    user_id = str(message.from_user.id)
+    args = message.text.split()
+    print(f"[DEBUG] list args: {args}", flush=True)
+    logger.info("list args: %s", args)
+    provider = None
+    if len(args) == 2 and args[1].startswith('-'):
+        provider = args[1][1:].lower()
+    success, reply = handle_list(user_id, provider)
+    await message.reply(reply)
+
+@dp.message(Command("register"))
 async def my_register(message: Message):
     args = message.text.split()
-    if len(args) != 2 or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", args[1]):
-        await message.reply("Usage: /my-register email@example.com")
+    if len(args) != 2:
+        await message.reply("Usage: /register email@example.com")
         return
     email = args[1].strip()
     telegram_id = str(message.from_user.id)
-    code = f"{random.randint(100000, 999999)}"
-    sent_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    set_user_email(telegram_id, email, code, sent_time)
-    # Send verification email
-    subject = "e-Trading: email verification"
-    body = f"""
-    <h2>e-Trading Email Verification</h2>
-    <p>Your verification code is: <b>{code}</b></p>
-    <p>Enter this code in Telegram using <b>/my-verify {code}</b> within 1 hour to verify your email.</p>
-    """
+    success, result = handle_register(telegram_id, email)
+    if not success:
+        await message.reply(result)
+        return
+    email, code, subject, body = result
     try:
         if notification_manager:
             await notification_manager.send_notification(
@@ -455,51 +496,38 @@ async def my_register(message: Message):
                 source="telegram_screener_bot",
                 channels=["email"],
             )
-        await message.reply(f"Verification code sent to {email}. Please check your inbox and use /my-verify CODE in Telegram.")
+        await message.reply(f"Verification code sent to {email}. Please check your inbox and use /verify CODE in Telegram.")
     except Exception as e:
+        logger.error("Failed to send verification email: %s", e, exc_info=True)
         await message.reply(f"Failed to send verification email: {e}")
 
-@dp.message(Command("my-verify"))
+@dp.message(Command("info"))
+async def my_info(message: Message):
+    telegram_id = str(message.from_user.id)
+    success, reply = handle_info(telegram_id)
+    await message.reply(reply, parse_mode="HTML")
+
+@dp.message(Command("verify"))
 async def my_verify(message: Message):
     args = message.text.split()
     if len(args) != 2 or not args[1].isdigit():
-        await message.reply("Usage: /my-verify CODE (6 digits)")
+        await message.reply("Usage: /verify CODE (6 digits)")
         return
     code = args[1]
     telegram_id = str(message.from_user.id)
-    db_code, sent_time = get_user_verification_code(telegram_id)
-    if not db_code or not sent_time:
-        await message.reply("No verification code found. Please register your email first with /my-register.")
-        return
-    # Check code and expiry
-    sent_dt = datetime.strptime(sent_time, "%Y-%m-%d %H:%M:%S")
-    if code != db_code:
-        await message.reply("Invalid verification code.")
-        return
-    if datetime.utcnow() > sent_dt + timedelta(hours=1):
-        await message.reply("Verification code expired. Please re-register your email.")
-        return
-    set_user_verified(telegram_id, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
-    await message.reply("✅ Email verified successfully! You can now use -email flag to receive reports by email.")
-
-@dp.message(Command("my-info"))
-async def my_info(message: Message):
-    telegram_id = str(message.from_user.id)
-    status = get_user_verification_status(telegram_id)
-    if not status or not status["email"]:
-        await message.reply("No email registered. Use /my-register email@example.com to set your email.")
-        return
-    verified = bool(status["verification_received"])
-    reply = f"<b>Email:</b> {status['email']}\n"
-    reply += f"<b>Verified:</b> {'✅' if verified else '❌'}\n"
-    reply += f"<b>Verification sent:</b> {status['verification_sent']}\n"
-    reply += f"<b>Verification received:</b> {status['verification_received'] or '-'}"
-    await message.reply(reply, parse_mode="HTML")
+    success, reply = handle_verify(telegram_id, code)
+    await message.reply(reply)
 
 async def main():
     logger.info("Starting ticker analyzer bot")
     await dp.start_polling(bot)
 
+# Ensure handle_analyze is defined at the module level and importable
+__all__ = [
+    'handle_add', 'handle_delete', 'handle_list',
+    'handle_register', 'handle_info', 'handle_verify', 'analyze_command_core',
+    # ... other exports ...
+]
 
 if __name__ == "__main__":
     asyncio.run(main())

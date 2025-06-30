@@ -68,14 +68,14 @@ class BaseExitMixin(ABC):
             name: Name of the indicator
             indicator: The indicator instance
         """
-        _logger.debug(f"Registering indicator: {name}")
+        _logger.debug("Registering indicator: %s", name)
         # Store in indicators dictionary
         self.indicators[name] = indicator
 
         # Also set as strategy attribute if strategy exists
         if hasattr(self, "strategy") and self.strategy is not None:
             setattr(self.strategy, name, indicator)
-            _logger.debug(f"Indicator {name} set as strategy attribute")
+            _logger.debug("Indicator %s set as strategy attribute", name)
         else:
             _logger.warning(
                 f"Cannot set {name} as strategy attribute - strategy not available"

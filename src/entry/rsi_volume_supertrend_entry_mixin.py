@@ -128,7 +128,7 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
 
             return_value = rsi_condition and volume_condition and supertrend_condition
             if return_value:
-                logger.debug(f"ENTRY: Price: {current_price}, RSI: {rsi[0]}, Volume: {current_volume}, Volume MA: {vol_ma[0]}, Supertrend Direction: {supertrend.direction[0]}")
+                logger.debug("ENTRY: Price: %s, RSI: %s, Volume: %s, Volume MA: %s, Supertrend Direction: %s", current_price, rsi[0], current_volume, vol_ma[0], supertrend.direction[0])
             return return_value
         except Exception as e:
             logger.error(f"Error in should_enter: {e}", exc_info=e)

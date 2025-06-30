@@ -102,20 +102,20 @@ class ModelTrainer:
             ModelType.LINEAR_REGRESSION: LinearRegression
         }
 
-    def train_model(self, 
+    def train_model(self,
                    X: pd.DataFrame,
                    y: pd.Series,
                    optimize_hyperparameters: bool = True) -> Any:
         """Train a model with optional hyperparameter optimization."""
         try:
-            logger.info(f"Starting model training for {self.config.model_type.value}")
+            logger.info("Starting model training for %s", self.config.model_type.value)
 
             # Feature engineering
             X_features = self.feature_pipeline.generate_features(X)
 
             # Feature selection
             X_selected = self.feature_pipeline.select_features(
-                X_features, y, 
+                X_features, y,
                 self.config.feature_selection_method,
                 self.config.n_features
             )
@@ -127,7 +127,7 @@ class ModelTrainer:
 
             # Split data
             X_train, X_val, y_train, y_val = train_test_split(
-                X_scaled, y, 
+                X_scaled, y,
                 test_size=self.config.validation_split,
                 random_state=42
             )
@@ -160,7 +160,7 @@ class ModelTrainer:
             # Store model
             self.current_model = model
 
-            logger.info(f"Model training completed. CV MSE: {-cv_scores.mean():.4f}")
+            logger.info("Model training completed. CV MSE: %.4f", -cv_scores.mean())
             return model, metrics
 
         except Exception as e:
@@ -307,9 +307,9 @@ class PerformanceMonitor:
         return degradation_detected, {
             'changes': changes,
             'reasons': degradation_reasons,
-            'recent_avg': {name: np.mean([getattr(m, name) for m in recent_metrics]) 
+            'recent_avg': {name: np.mean([getattr(m, name) for m in recent_metrics])
                           for name in ['mse', 'mae', 'r2', 'sharpe_ratio', 'win_rate']},
-            'historical_avg': {name: np.mean([getattr(m, name) for m in historical_metrics]) 
+            'historical_avg': {name: np.mean([getattr(m, name) for m in historical_metrics])
                               for name in ['mse', 'mae', 'r2', 'sharpe_ratio', 'win_rate']}
         }
 
@@ -390,7 +390,7 @@ class DriftDetector:
 
         return drift_detected, drift_details
 
-    def detect_concept_drift(self, 
+    def detect_concept_drift(self,
                            X: pd.DataFrame,
                            y: pd.Series,
                            model: Any) -> Tuple[bool, Dict[str, Any]]:
@@ -437,7 +437,7 @@ class ABTestingFramework:
         self.traffic_split = config.get("traffic_split", 0.5)
         self.significance_level = config.get("significance_level", 0.05)
 
-    def create_experiment(self, 
+    def create_experiment(self,
                          experiment_name: str,
                          model_a: Any,
                          model_b: Any,
@@ -456,10 +456,10 @@ class ABTestingFramework:
             'status': 'running'
         }
 
-        logger.info(f"Created A/B experiment: {experiment_id}")
+        logger.info("Created A/B experiment: %s", experiment_id)
         return experiment_id
 
-    def run_experiment(self, 
+    def run_experiment(self,
                       experiment_id: str,
                       X: pd.DataFrame,
                       y: pd.Series) -> Dict[str, Any]:
@@ -538,7 +538,7 @@ class ABTestingFramework:
         if not significance_results:
             return "Insufficient data"
 
-        significant_metrics = [metric for metric, result in significance_results.items() 
+        significant_metrics = [metric for metric, result in significance_results.items()
                              if result.get('significant', False)]
 
         if not significant_metrics:
@@ -662,7 +662,7 @@ class AutomatedTrainingPipeline:
             return
 
         try:
-            logger.info(f"Triggering training due to {trigger.value}")
+            logger.info("Triggering training due to %s", trigger.value)
             self.is_training = True
 
             # Get data
@@ -678,7 +678,7 @@ class AutomatedTrainingPipeline:
             degradation_detected, details = self.performance_monitor.check_performance_degradation()
 
             if degradation_detected:
-                logger.warning(f"Performance degradation detected: {details}")
+                logger.warning("Performance degradation detected: %s", details)
 
             self.last_training_time = datetime.now()
             logger.info("Training completed successfully")
@@ -688,7 +688,7 @@ class AutomatedTrainingPipeline:
         finally:
             self.is_training = False
 
-    def run_ab_test(self, 
+    def run_ab_test(self,
                    model_a: Any,
                    model_b: Any,
                    experiment_name: str = "model_comparison") -> Dict[str, Any]:
@@ -707,7 +707,7 @@ class AutomatedTrainingPipeline:
                 experiment_id, data['X'], data['y']
             )
 
-            logger.info(f"A/B test completed: {results['recommendation']}")
+            logger.info("A/B test completed: %s", results['recommendation'])
             return results
 
         except Exception as e:
@@ -783,7 +783,7 @@ class AutomatedTrainingPipeline:
         with open(filepath, 'w') as f:
             json.dump(state, f, default=str, indent=2)
 
-        logger.info(f"Saved pipeline state to {filepath}")
+        logger.info("Saved pipeline state to %s", filepath)
 
     def load_pipeline_state(self, filepath: str):
         """Load pipeline state."""
@@ -803,4 +803,4 @@ class AutomatedTrainingPipeline:
         # Load reference distribution
         self.drift_detector.reference_distribution = state['reference_distribution']
 
-        logger.info(f"Loaded pipeline state from {filepath}") 
+        logger.info("Loaded pipeline state from %s", filepath)

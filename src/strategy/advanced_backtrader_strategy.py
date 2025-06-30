@@ -1,7 +1,7 @@
 """
 Advanced Backtrader Strategy
 
-This module provides a Backtrader strategy class that integrates with the 
+This module provides a Backtrader strategy class that integrates with the
 Advanced Strategy Framework for composite strategies, multi-timeframe support,
 and dynamic switching.
 """
@@ -76,7 +76,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         self.exit_mixins = {}
         self._initialize_mixins()
 
-        logger.info(f"Advanced strategy initialized with strategy: {self.current_strategy}")
+        logger.info("Advanced strategy initialized with strategy: %s", self.current_strategy)
 
     def _initialize_data_feeds(self):
         """Initialize data feeds for different timeframes."""
@@ -144,7 +144,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
                         entry_mixin = entry_factory.create_entry_mixin(strategy_name, strategy.get('params', {}))
                         self.entry_mixins[strategy_name] = entry_mixin
                     except Exception as e:
-                        logger.warning(f"Could not initialize entry mixin for {strategy_name}: {e}")
+                        logger.warning("Could not initialize entry mixin for %s: %s", strategy_name, e)
 
             # Initialize exit mixins
             exit_config = strategy_config.get('risk_management', {})
@@ -153,7 +153,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
                     exit_mixin = exit_factory.create_exit_mixin('atr_exit', exit_config)
                     self.exit_mixins['atr_exit'] = exit_mixin
                 except Exception as e:
-                    logger.warning(f"Could not initialize exit mixin: {e}")
+                    logger.warning("Could not initialize exit mixin: %s", e)
 
     def _get_strategy_config(self) -> Optional[Dict]:
         """Get configuration for the current strategy."""
@@ -171,14 +171,14 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         if self.p.use_dynamic_switching:
             new_strategy = self.advanced_framework.get_dynamic_strategy(self.data_feeds)
             if new_strategy != self.current_strategy:
-                logger.info(f"Switching strategy from {self.current_strategy} to {new_strategy}")
+                logger.info("Switching strategy from %s to %s", self.current_strategy, new_strategy)
                 self.current_strategy = new_strategy
                 self._initialize_mixins()  # Reinitialize mixins for new strategy
 
         # Generate trading signal using advanced framework
         try:
             composite_signal = self.advanced_framework.execute_strategy(
-                self.current_strategy, 
+                self.current_strategy,
                 self.data_feeds
             )
             self.last_signal = composite_signal
@@ -268,9 +268,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         self.position_entry_price = current_price
         self.trailing_stop_price = stop_loss
 
-        logger.info(f"BUY signal executed: Price={current_price:.4f}, Size={position_size}, "
-                   f"Stop={stop_loss:.4f}, Target={take_profit:.4f}, "
-                   f"Confidence={signal.confidence:.2f}, Strategies={signal.contributing_strategies}")
+        logger.info("BUY signal executed: Price=%.4f, Size=%s, Stop=%.4f, TP=%.4f", current_price, position_size, stop_loss, take_profit)
 
     def _execute_sell_signal(self, signal: CompositeSignal, current_price: float):
         """Execute sell signal."""
@@ -288,16 +286,13 @@ class AdvancedBacktraderStrategy(bt.Strategy):
         self.position_entry_price = current_price
         self.trailing_stop_price = stop_loss
 
-        logger.info(f"SELL signal executed: Price={current_price:.4f}, Size={position_size}, "
-                   f"Stop={stop_loss:.4f}, Target={take_profit:.4f}, "
-                   f"Confidence={signal.confidence:.2f}, Strategies={signal.contributing_strategies}")
+        logger.info("SELL signal executed: Price=%.4f, Size=%s, Stop=%.4f, TP=%.4f", current_price, position_size, stop_loss, take_profit)
 
     def _execute_exit_signal(self, signal: CompositeSignal, current_price: float):
         """Execute exit signal."""
         if self.position:
             self.close()
-            logger.info(f"EXIT signal executed: Price={current_price:.4f}, "
-                       f"Confidence={signal.confidence:.2f}, Strategies={signal.contributing_strategies}")
+            logger.info("EXIT signal executed: Price=%.4f, Size=%s, PnL=%.2f", current_price, self.position.size, self.position.pnl)
 
     def _calculate_position_size(self, confidence: float) -> float:
         """Calculate position size based on confidence and risk management."""
@@ -326,7 +321,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
                 self.trailing_stop_price = new_stop
             elif current_price <= self.trailing_stop_price:
                 self.close()
-                logger.info(f"Trailing stop triggered: Price={current_price:.4f}, Stop={self.trailing_stop_price:.4f}")
+                logger.info("Trailing stop triggered: Price=%.4f, Stop=%.4f", current_price, self.trailing_stop_price)
 
         elif self.position.size < 0:  # Short position
             new_stop = current_price * (1 + self.p.trailing_stop_pct)
@@ -334,7 +329,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
                 self.trailing_stop_price = new_stop
             elif current_price >= self.trailing_stop_price:
                 self.close()
-                logger.info(f"Trailing stop triggered: Price={current_price:.4f}, Stop={self.trailing_stop_price:.4f}")
+                logger.info("Trailing stop triggered: Price=%.4f, Stop=%.4f", current_price, self.trailing_stop_price)
 
     def _update_performance_metrics(self):
         """Update performance metrics."""
@@ -365,7 +360,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
             self.performance_metrics['total_pnl'] += trade.pnl
 
             # Calculate win rate
-            win_rate = (self.performance_metrics['winning_trades'] / 
+            win_rate = (self.performance_metrics['winning_trades'] /
                        self.performance_metrics['total_trades']) if self.performance_metrics['total_trades'] > 0 else 0
 
             # Calculate Sharpe ratio (simplified)
@@ -399,16 +394,12 @@ class AdvancedBacktraderStrategy(bt.Strategy):
                 }
             )
 
-            logger.info(f"Trade closed: PnL={trade.pnl:.2f}, Win Rate={win_rate:.2%}, "
-                       f"Sharpe={sharpe_ratio:.2f}, Strategy={self.current_strategy}")
+            logger.info("Trade closed: PnL=%.2f, Win Rate=%.2f%%, Total Trades=%d, Win Trades=%d, Loss Trades=%d", trade.pnl, win_rate*100, self.performance_metrics['total_trades'], self.performance_metrics['winning_trades'], self.performance_metrics['losing_trades'])
 
     def stop(self):
         """Called when the strategy stops."""
         logger.info("Advanced strategy stopped")
-        logger.info(f"Final performance: Total PnL={self.performance_metrics['total_pnl']:.2f}, "
-                   f"Total Trades={self.performance_metrics['total_trades']}, "
-                   f"Win Rate={self.performance_metrics['winning_trades']/max(self.performance_metrics['total_trades'], 1):.2%}, "
-                   f"Max Drawdown={self.performance_metrics['max_drawdown']:.2%}")
+        logger.info("Final performance: Total PnL=%.2f, Sharpe=%.2f, Max Drawdown=%.2f", self.performance_metrics['total_pnl'], self.performance_metrics['sharpe_ratio'], self.performance_metrics['max_drawdown'])
 
     def get_strategy_summary(self) -> Dict[str, Any]:
         """Get summary of strategy performance and configuration."""
@@ -420,4 +411,4 @@ class AdvancedBacktraderStrategy(bt.Strategy):
             'entry_mixins': list(self.entry_mixins.keys()),
             'exit_mixins': list(self.exit_mixins.keys()),
             'last_signal': self.last_signal.__dict__ if self.last_signal else None
-        } 
+        }

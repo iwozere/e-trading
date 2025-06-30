@@ -261,9 +261,9 @@ class BasePlotter:
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
 
         # Log data points for debugging
-        _logger.debug(f"Plotted {len(dates)} data points")
-        _logger.debug(f"Date range: {dates[0]} to {dates[-1]}")
-        _logger.debug(f"Price range: {min(prices)} to {max(prices)}")
+        _logger.debug("Plotted %d data points", len(dates))
+        _logger.debug("Date range: %s to %s", dates[0], dates[-1])
+        _logger.debug("Price range: %s to %s", min(prices), max(prices))
 
     def _plot_indicators(self):
         """Plot all indicators using their respective plotters"""

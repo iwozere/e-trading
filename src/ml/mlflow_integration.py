@@ -51,7 +51,7 @@ class ModelMetadata:
 class MLflowManager:
     """Manages MLflow integration for model lifecycle."""
 
-    def __init__(self, 
+    def __init__(self,
                  tracking_uri: str = "sqlite:///mlflow.db",
                  registry_uri: str = "sqlite:///mlflow.db",
                  artifacts_dir: str = "mlruns",
@@ -72,7 +72,7 @@ class MLflowManager:
         # Initialize model registry client
         self.client = mlflow.tracking.MlflowClient()
 
-        logger.info(f"MLflow initialized with tracking URI: {tracking_uri}")
+        logger.info("MLflow initialized with tracking URI: %s", tracking_uri)
 
     def _setup_experiment(self):
         """Setup MLflow experiment."""
@@ -80,10 +80,10 @@ class MLflowManager:
             experiment = mlflow.get_experiment_by_name(self.experiment_name)
             if experiment is None:
                 mlflow.create_experiment(self.experiment_name)
-                logger.info(f"Created experiment: {self.experiment_name}")
+                logger.info("Created experiment: %s", self.experiment_name)
             else:
                 mlflow.set_experiment(self.experiment_name)
-                logger.info(f"Using existing experiment: {self.experiment_name}")
+                logger.info("Using existing experiment: %s", self.experiment_name)
         except Exception as e:
             logger.error(f"Error setting up experiment: {e}")
             raise
@@ -103,7 +103,7 @@ class MLflowManager:
             mlflow.set_tag("framework", "crypto_trading")
             mlflow.set_tag("created_at", datetime.now().isoformat())
 
-            logger.info(f"Started MLflow run: {run_id}")
+            logger.info("Started MLflow run: %s", run_id)
             return run_id
 
         except Exception as e:
@@ -123,7 +123,7 @@ class MLflowManager:
         """Log hyperparameters to MLflow."""
         try:
             mlflow.log_params(params)
-            logger.info(f"Logged {len(params)} parameters")
+            logger.info("Logged %d parameters", len(params))
         except Exception as e:
             logger.error(f"Error logging parameters: {e}")
             raise
@@ -132,13 +132,13 @@ class MLflowManager:
         """Log metrics to MLflow."""
         try:
             mlflow.log_metrics(metrics, step=step)
-            logger.info(f"Logged {len(metrics)} metrics")
+            logger.info("Logged %d metrics", len(metrics))
         except Exception as e:
             logger.error(f"Error logging metrics: {e}")
             raise
 
-    def log_model(self, 
-                  model, 
+    def log_model(self,
+                  model,
                   model_name: str,
                   model_type: str,
                   metadata: ModelMetadata,
@@ -167,13 +167,13 @@ class MLflowManager:
                 for name, path in artifacts.items():
                     mlflow.log_artifact(path, name)
 
-            logger.info(f"Logged model: {model_name} (type: {model_type})")
+            logger.info("Logged model: %s (type: %s)", model_name, model_type)
 
         except Exception as e:
             logger.error(f"Error logging model: {e}")
             raise
 
-    def register_model(self, 
+    def register_model(self,
                       model_name: str,
                       model_uri: str,
                       stage: str = "Staging",
@@ -200,7 +200,7 @@ class MLflowManager:
                 stage=stage
             )
 
-            logger.info(f"Registered model: {model_name} v{model_version.version} -> {stage}")
+            logger.info("Registered model: %s v%s -> %s", model_name, model_version.version, stage)
             return model_version.version
 
         except Exception as e:
@@ -215,35 +215,35 @@ class MLflowManager:
             # Try to load based on model type (you might need to store this info)
             try:
                 model = mlflow.sklearn.load_model(model_uri)
-                logger.info(f"Loaded sklearn model: {model_name}")
+                logger.info("Loaded sklearn model: %s", model_name)
                 return model
             except:
                 pass
 
             try:
                 model = mlflow.pytorch.load_model(model_uri)
-                logger.info(f"Loaded PyTorch model: {model_name}")
+                logger.info("Loaded PyTorch model: %s", model_name)
                 return model
             except:
                 pass
 
             try:
                 model = mlflow.tensorflow.load_model(model_uri)
-                logger.info(f"Loaded TensorFlow model: {model_name}")
+                logger.info("Loaded TensorFlow model: %s", model_name)
                 return model
             except:
                 pass
 
             try:
                 model = mlflow.xgboost.load_model(model_uri)
-                logger.info(f"Loaded XGBoost model: {model_name}")
+                logger.info("Loaded XGBoost model: %s", model_name)
                 return model
             except:
                 pass
 
             try:
                 model = mlflow.lightgbm.load_model(model_uri)
-                logger.info(f"Loaded LightGBM model: {model_name}")
+                logger.info("Loaded LightGBM model: %s", model_name)
                 return model
             except:
                 pass
@@ -306,7 +306,7 @@ class MLflowManager:
                 version=version,
                 stage=stage
             )
-            logger.info(f"Promoted model {model_name} v{version} to {stage}")
+            logger.info("Promoted model %s v%s to %s", model_name, version, stage)
         except Exception as e:
             logger.error(f"Error promoting model: {e}")
             raise
@@ -319,7 +319,7 @@ class MLflowManager:
                 version=version,
                 stage="Archived"
             )
-            logger.info(f"Archived model {model_name} v{version}")
+            logger.info("Archived model %s v%s", model_name, version)
         except Exception as e:
             logger.error(f"Error archiving model: {e}")
             raise
@@ -328,7 +328,7 @@ class MLflowManager:
         """Delete a model from registry."""
         try:
             self.client.delete_registered_model(model_name)
-            logger.info(f"Deleted model: {model_name}")
+            logger.info("Deleted model: %s", model_name)
         except Exception as e:
             logger.error(f"Error deleting model: {e}")
             raise
@@ -346,7 +346,7 @@ class ModelDeployer:
         Path(self.deployment_dir).mkdir(exist_ok=True)
         Path(self.backup_dir).mkdir(exist_ok=True)
 
-    def deploy_model(self, 
+    def deploy_model(self,
                     model_name: str,
                     model_version: int,
                     mlflow_manager: MLflowManager,
@@ -364,7 +364,7 @@ class ModelDeployer:
             logger.error(f"Error deploying model: {e}")
             return False
 
-    def _rolling_deployment(self, 
+    def _rolling_deployment(self,
                           model_name: str,
                           model_version: int,
                           mlflow_manager: MLflowManager) -> bool:
@@ -392,7 +392,7 @@ class ModelDeployer:
             # Promote model to production
             mlflow_manager.promote_model(model_name, model_version, "Production")
 
-            logger.info(f"Successfully deployed {model_name} v{model_version}")
+            logger.info("Successfully deployed %s v%s", model_name, model_version)
             return True
 
         except Exception as e:
@@ -401,7 +401,7 @@ class ModelDeployer:
             self._rollback_deployment(model_name)
             return False
 
-    def _blue_green_deployment(self, 
+    def _blue_green_deployment(self,
                              model_name: str,
                              model_version: int,
                              mlflow_manager: MLflowManager) -> bool:
@@ -432,14 +432,14 @@ class ModelDeployer:
             # Promote model to production
             mlflow_manager.promote_model(model_name, model_version, "Production")
 
-            logger.info(f"Successfully deployed {model_name} v{model_version} to {new_env}")
+            logger.info("Successfully deployed %s v%s to %s", model_name, model_version, new_env)
             return True
 
         except Exception as e:
             logger.error(f"Blue-green deployment failed: {e}")
             return False
 
-    def _create_deployment_package(self, 
+    def _create_deployment_package(self,
                                  model_name: str,
                                  model_version: int,
                                  model: Any) -> str:
@@ -483,7 +483,7 @@ class ModelDeployer:
             deployment_path = f"{self.deployment_dir}/{model_name}"
             shutil.rmtree(deployment_path, ignore_errors=True)
             shutil.copytree(latest_backup, deployment_path)
-            logger.info(f"Rolled back {model_name} to {latest_backup}")
+            logger.info("Rolled back %s to %s", model_name, latest_backup)
 
     def _test_deployment(self, deployment_path: str) -> bool:
         """Test deployment with sample data."""
@@ -554,7 +554,7 @@ class ExperimentManager:
     def __init__(self, mlflow_manager: MLflowManager):
         self.mlflow_manager = mlflow_manager
 
-    def create_experiment(self, 
+    def create_experiment(self,
                          experiment_name: str,
                          description: str = None,
                          tags: Dict[str, str] = None) -> str:
@@ -570,14 +570,14 @@ class ExperimentManager:
                     experiment_id, "description", description
                 )
 
-            logger.info(f"Created experiment: {experiment_name} (ID: {experiment_id})")
+            logger.info("Created experiment: %s (ID: %s)", experiment_name, experiment_id)
             return experiment_id
 
         except Exception as e:
             logger.error(f"Error creating experiment: {e}")
             raise
 
-    def compare_runs(self, 
+    def compare_runs(self,
                     experiment_name: str,
                     metric_name: str = "test_accuracy",
                     max_results: int = 10) -> pd.DataFrame:
@@ -614,7 +614,7 @@ class ExperimentManager:
             logger.error(f"Error comparing runs: {e}")
             return pd.DataFrame()
 
-    def get_best_run(self, 
+    def get_best_run(self,
                     experiment_name: str,
                     metric_name: str = "test_accuracy") -> Dict[str, Any]:
         """Get the best run from an experiment."""
@@ -636,7 +636,7 @@ class ExperimentManager:
             logger.error(f"Error getting best run: {e}")
             return {}
 
-    def export_experiment(self, 
+    def export_experiment(self,
                          experiment_name: str,
                          export_path: str) -> bool:
         """Export experiment data to file."""
@@ -645,12 +645,12 @@ class ExperimentManager:
 
             if not comparison_df.empty:
                 comparison_df.to_csv(f"{export_path}/{experiment_name}_runs.csv", index=False)
-                logger.info(f"Exported experiment to {export_path}")
+                logger.info("Exported experiment to %s", export_path)
                 return True
             else:
-                logger.warning(f"No runs found for experiment: {experiment_name}")
+                logger.warning("No runs found for experiment: %s", experiment_name)
                 return False
 
         except Exception as e:
             logger.error(f"Error exporting experiment: {e}")
-            return False 
+            return False

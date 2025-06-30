@@ -83,7 +83,7 @@ class CustomStrategy(bt.Strategy):
             if self.entry_logic:
                 entry_mixin_class = ENTRY_MIXIN_REGISTRY[self.entry_logic["name"]]
                 if entry_mixin_class:
-                    _logger.debug(f"Creating entry mixin: {self.entry_logic['name']}")
+                    _logger.debug("Creating entry mixin: %s", self.entry_logic['name'])
                     self.entry_mixin = entry_mixin_class(
                         params=self.entry_logic["params"]
                     )
@@ -95,7 +95,7 @@ class CustomStrategy(bt.Strategy):
             if self.exit_logic:
                 exit_mixin_class = EXIT_MIXIN_REGISTRY[self.exit_logic["name"]]
                 if exit_mixin_class:
-                    _logger.debug(f"Creating exit mixin: {self.exit_logic['name']}")
+                    _logger.debug("Creating exit mixin: %s", self.exit_logic['name'])
                     self.exit_mixin = exit_mixin_class(params=self.exit_logic["params"])
                     self.exit_mixin.init_exit(self)
                     _logger.debug(

@@ -34,7 +34,7 @@ class TimeframeSyncer:
     def add_data_feed(self, timeframe: str, data: pd.DataFrame):
         """Add a data feed for a specific timeframe."""
         self.data_feeds[timeframe] = data
-        logger.debug(f"Added data feed for timeframe {timeframe}: {len(data)} rows")
+        logger.debug("Added data feed for timeframe %s: %d rows", timeframe, len(data))
 
     def resample_data(self, data: pd.DataFrame, target_timeframe: str) -> pd.DataFrame:
         """
@@ -321,4 +321,4 @@ class MultiTimeframeStrategy(BaseStrategy):
                 "breakout_threshold": breakout_threshold,
                 "trend_direction": trend_direction
             }
-        ) 
+        )

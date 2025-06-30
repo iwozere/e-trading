@@ -21,7 +21,7 @@ warnings.filterwarnings('ignore')
 from src.ml.mlflow_integration import MLflowManager, ModelDeployer, ExperimentManager
 from src.ml.feature_engineering_pipeline import FeatureEngineeringPipeline
 from src.ml.automated_training_pipeline import (
-    AutomatedTrainingPipeline, TrainingConfig, ModelType, 
+    AutomatedTrainingPipeline, TrainingConfig, ModelType,
     TrainingTrigger, PerformanceMetrics
 )
 
@@ -131,7 +131,7 @@ def demonstrate_mlflow_integration():
 
     # List models
     models = mlflow_manager.list_models()
-    logger.info(f"Registered models: {len(models)}")
+    logger.info("Registered models: %d", len(models))
 
     # End run
     mlflow_manager.end_run()
@@ -145,7 +145,7 @@ def demonstrate_feature_engineering():
 
     # Create sample data
     data = create_sample_data(500)
-    logger.info(f"Created sample data with {len(data)} rows")
+    logger.info("Created sample data with %d rows", len(data))
 
     # Initialize feature engineering pipeline
     config = {
@@ -174,9 +174,9 @@ def demonstrate_feature_engineering():
     logger.info("Generating features...")
     features_df = feature_pipeline.generate_features(data)
 
-    logger.info(f"Original features: {len(data.columns)}")
-    logger.info(f"Generated features: {len(features_df.columns)}")
-    logger.info(f"New features: {len(features_df.columns) - len(data.columns)}")
+    logger.info("Original features: %d", len(data.columns))
+    logger.info("Generated features: %d", len(features_df.columns))
+    logger.info("New features: %d", len(features_df.columns) - len(data.columns))
 
     # Create target variable
     target = create_target_variable(data)
@@ -192,7 +192,7 @@ def demonstrate_feature_engineering():
         features_df, target, method="mutual_info", n_features=20
     )
 
-    logger.info(f"Selected {len(selected_features.columns)} features")
+    logger.info("Selected %d features", len(selected_features.columns))
 
     # Get feature importance
     importance = feature_pipeline.get_feature_importance()
@@ -207,7 +207,7 @@ def demonstrate_feature_engineering():
     correlation_analysis = feature_pipeline.get_correlation_analysis(selected_features)
 
     high_corr_pairs = correlation_analysis.get('high_correlation_pairs', [])
-    logger.info(f"Found {len(high_corr_pairs)} highly correlated feature pairs")
+    logger.info("Found %d highly correlated feature pairs", len(high_corr_pairs))
 
     # Feature scaling
     logger.info("Scaling features...")
@@ -286,8 +286,8 @@ def demonstrate_automated_training():
 
     if drift_results.get('overall_drift_detected'):
         logger.warning("Drift detected! Consider retraining model.")
-        logger.info(f"Data drift: {drift_results.get('data_drift_detected')}")
-        logger.info(f"Concept drift: {drift_results.get('concept_drift_detected')}")
+        logger.info("Data drift: %s", drift_results.get('data_drift_detected'))
+        logger.info("Concept drift: %s", drift_results.get('concept_drift_detected'))
     else:
         logger.info("No drift detected")
 
@@ -296,9 +296,9 @@ def demonstrate_automated_training():
     performance_report = pipeline.get_performance_report()
 
     logger.info("Performance report generated:")
-    logger.info(f"  Performance trends: {len(performance_report.get('performance_trends', {}))}")
-    logger.info(f"  Registered models: {len(performance_report.get('registered_models', []))}")
-    logger.info(f"  Is training: {performance_report.get('is_training', False)}")
+    logger.info("  Performance trends: %d", len(performance_report.get('performance_trends', {})))
+    logger.info("  Registered models: %d", len(performance_report.get('registered_models', [])))
+    logger.info("  Is training: %s", performance_report.get('is_training', False))
 
     logger.info("Automated training demo completed")
 
@@ -391,7 +391,7 @@ def demonstrate_experiment_management():
         experiment_id = experiment_manager.create_experiment(
             exp_name, exp_desc, {"type": "optimization"}
         )
-        logger.info(f"Created experiment: {exp_name} (ID: {experiment_id})")
+        logger.info("Created experiment: %s (ID: %s)", exp_name, experiment_id)
 
     # Simulate multiple runs
     for i in range(5):
@@ -423,14 +423,14 @@ def demonstrate_experiment_management():
 
     logger.info("Top 5 runs by test accuracy:")
     for _, run in comparison_df.iterrows():
-        logger.info(f"  Run {run['run_id'][:8]}: {run['metric']:.4f}")
+        logger.info("  Run %s: %.4f", run['run_id'][:8], run['metric'])
 
     # Get best run
     best_run = experiment_manager.get_best_run("xgboost_optimization", "test_accuracy")
 
     if best_run:
-        logger.info(f"Best run: {best_run['run_id'][:8]}")
-        logger.info(f"Best accuracy: {best_run['metric_value']:.4f}")
+        logger.info("Best run: %s", best_run['run_id'][:8])
+        logger.info("Best accuracy: %.4f", best_run['metric_value'])
 
     logger.info("Experiment management demo completed")
 
@@ -587,9 +587,9 @@ def main():
         logger.info("✓ Performance Monitoring - Real-time performance tracking")
 
     except Exception as e:
-        logger.error(f"Error in demonstration: {e}")
+        logger.error("Error in demonstration: %s", e, exc_info=True)
         raise
 
 
 if __name__ == "__main__":
-    main() 
+    main()

@@ -1,6 +1,7 @@
 import yfinance as yf
 from src.notification.logger import setup_logger
 from src.screener.telegram.models import Fundamentals
+from src.data.binance_data_downloader import BinanceDataDownloader
 
 logger = setup_logger("telegram_bot")
 
@@ -11,7 +12,7 @@ def get_fundamentals(ticker: str) -> Fundamentals:
         info = stock.info
 
         if not info:
-            logger.error(f"No data returned from yfinance for ticker {ticker}")
+            logger.error("No data returned from yfinance for ticker %s", ticker, exc_info=True)
             return Fundamentals(
                 ticker=ticker.upper(),
                 company_name="Unknown",
@@ -24,7 +25,7 @@ def get_fundamentals(ticker: str) -> Fundamentals:
             )
 
         logger.debug(
-            f"Retrieved fundamentals for {ticker}: {info.get('shortName', 'Unknown')}"
+            "Retrieved fundamentals for %s: %s", ticker, info.get('shortName', 'Unknown')
         )
 
         return Fundamentals(
@@ -38,7 +39,7 @@ def get_fundamentals(ticker: str) -> Fundamentals:
             earnings_per_share=info.get("trailingEps", 0.0),
         )
     except Exception as e:
-        logger.error(f"Failed to get fundamentals for {ticker}: {str(e)}", exc_info=True)
+        logger.error("Failed to get fundamentals for %s: %s", ticker, e, exc_info=True)
         return Fundamentals(
             ticker=ticker.upper(),
             company_name="Unknown",

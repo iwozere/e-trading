@@ -418,14 +418,14 @@ class StatisticalFeatures:
         # Z-score of price
         for period in [10, 20, 50]:
             data[f'price_zscore_{period}'] = (
-                (data['close'] - data['close'].rolling(period).mean()) / 
+                (data['close'] - data['close'].rolling(period).mean()) /
                 data['close'].rolling(period).std()
             )
 
         # Z-score of volume
         for period in [10, 20, 50]:
             data[f'volume_zscore_{period}'] = (
-                (data['volume'] - data['volume'].rolling(period).mean()) / 
+                (data['volume'] - data['volume'].rolling(period).mean()) /
                 data['volume'].rolling(period).std()
             )
 
@@ -469,7 +469,7 @@ class FeatureSelector:
         self.feature_importance = {}
         self.correlation_matrix = None
 
-    def select_features(self, 
+    def select_features(self,
                        X: pd.DataFrame,
                        y: pd.Series,
                        method: str = "mutual_info",
@@ -492,7 +492,7 @@ class FeatureSelector:
             logger.error(f"Error in feature selection: {e}")
             return X
 
-    def _mutual_info_selection(self, 
+    def _mutual_info_selection(self,
                              X: pd.DataFrame,
                              y: pd.Series,
                              n_features: int,
@@ -523,7 +523,7 @@ class FeatureSelector:
 
         return X[selected_features]
 
-    def _f_regression_selection(self, 
+    def _f_regression_selection(self,
                               X: pd.DataFrame,
                               y: pd.Series,
                               n_features: int,
@@ -554,7 +554,7 @@ class FeatureSelector:
 
         return X[selected_features]
 
-    def _correlation_selection(self, 
+    def _correlation_selection(self,
                              X: pd.DataFrame,
                              y: pd.Series,
                              threshold: float) -> pd.DataFrame:
@@ -624,7 +624,7 @@ class FeatureSelector:
             'correlation_matrix': self.correlation_matrix
         }
 
-    def get_feature_stability(self, 
+    def get_feature_stability(self,
                             X_train: pd.DataFrame,
                             X_test: pd.DataFrame,
                             feature_importance: Dict[str, float]) -> Dict[str, float]:
@@ -660,7 +660,7 @@ class FeatureEngineeringPipeline:
         self.scalers = {}
         self.feature_names = []
 
-    def generate_features(self, 
+    def generate_features(self,
                          data: pd.DataFrame,
                          orderbook_data: pd.DataFrame = None,
                          target_column: str = None) -> pd.DataFrame:
@@ -683,34 +683,34 @@ class FeatureEngineeringPipeline:
             # Store feature names
             self.feature_names = [col for col in features_df.columns if col not in data.columns]
 
-            logger.info(f"Generated {len(self.feature_names)} features")
+            logger.info("Generated %d features", len(self.feature_names))
             return features_df
 
         except Exception as e:
             logger.error(f"Error in feature generation: {e}")
             return data
 
-    def select_features(self, 
+    def select_features(self,
                        X: pd.DataFrame,
                        y: pd.Series,
                        method: str = "mutual_info",
                        n_features: int = 50) -> pd.DataFrame:
         """Select the most important features."""
         try:
-            logger.info(f"Selecting features using {method}...")
+            logger.info("Selecting features using %s...", method)
 
             selected_X = self.feature_selector.select_features(
                 X, y, method, n_features
             )
 
-            logger.info(f"Selected {len(selected_X.columns)} features")
+            logger.info("Selected %d features", len(selected_X.columns))
             return selected_X
 
         except Exception as e:
             logger.error(f"Error in feature selection: {e}")
             return X
 
-    def scale_features(self, 
+    def scale_features(self,
                       X: pd.DataFrame,
                       scaler_type: str = "standard",
                       fit: bool = True) -> pd.DataFrame:
@@ -748,7 +748,7 @@ class FeatureEngineeringPipeline:
         """Get correlation analysis results."""
         return self.feature_selector.analyze_correlations(X)
 
-    def get_feature_stability(self, 
+    def get_feature_stability(self,
                             X_train: pd.DataFrame,
                             X_test: pd.DataFrame) -> Dict[str, float]:
         """Get feature stability scores."""
@@ -770,7 +770,7 @@ class FeatureEngineeringPipeline:
         with open(filepath, 'wb') as f:
             pickle.dump(pipeline_data, f)
 
-        logger.info(f"Saved feature engineering pipeline to {filepath}")
+        logger.info("Saved feature engineering pipeline to %s", filepath)
 
     def load_pipeline(self, filepath: str):
         """Load the feature engineering pipeline."""
@@ -784,4 +784,4 @@ class FeatureEngineeringPipeline:
         self.feature_selector = pipeline_data['feature_selector']
         self.config = pipeline_data['config']
 
-        logger.info(f"Loaded feature engineering pipeline from {filepath}") 
+        logger.info("Loaded feature engineering pipeline from %s", filepath)

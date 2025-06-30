@@ -43,9 +43,9 @@ def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
     """
     # Generate the base filename (without timestamp)
     base_filename = get_result_filename(
-        data_file, 
-        entry_logic_name=entry_logic_name, 
-        exit_logic_name=exit_logic_name, 
+        data_file,
+        entry_logic_name=entry_logic_name,
+        exit_logic_name=exit_logic_name,
         suffix="",
         include_timestamp=False
     )
@@ -65,20 +65,20 @@ def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
                     result_data = json.load(f)
 
                 # Check if the file has complete results
-                if (result_data.get('trades') is not None and 
-                    result_data.get('analyzers') is not None and 
+                if (result_data.get('trades') is not None and
+                    result_data.get('analyzers') is not None and
                     result_data.get('best_params') is not None and
                     len(result_data.get('trades', [])) >= 0):
 
-                    _logger.info(f"Skipping {data_file} + {entry_logic_name} + {exit_logic_name} - already processed")
-                    _logger.info(f"   Found existing file: {filename}")
+                    _logger.info("Skipping %s + %s + %s - already processed", data_file, entry_logic_name, exit_logic_name)
+                    _logger.info("   Found existing file: %s", filename)
                     return True
                 else:
-                    _logger.warning(f"Found existing file {filename} but it appears incomplete, will reprocess")
+                    _logger.warning("Found existing file %s but it appears incomplete, will reprocess", filename)
                     return False
 
             except Exception as e:
-                _logger.warning(f"Found existing file {filename} but it appears corrupted: {e}")
+                _logger.warning("Found existing file %s but it appears corrupted: %s", filename, e)
                 continue
 
     return False
@@ -119,7 +119,7 @@ def prepare_data_feed(df : pd.DataFrame, symbol : str):
         datetime=None,
         open=df.columns.get_loc("open"),
         high=df.columns.get_loc("high"),
-        low=df.columns.get_loc("low"),  
+        low=df.columns.get_loc("low"),
         close=df.columns.get_loc("close"),
         volume=df.columns.get_loc("volume"),
         openinterest=None,
@@ -271,7 +271,7 @@ def save_results(result, data_file):
                     else:
                         analyzers[name] = str(analyzer)
             except Exception as e:
-                _logger.warning(f"Could not process analyzer {name}: {str(e)}", exc_info=True)
+                _logger.warning("Could not process analyzer %s: %s", name, e, exc_info=True)
                 # Store the raw analyzer value if processing fails
                 analyzers[name] = str(analyzer)
 
@@ -292,7 +292,7 @@ def save_results(result, data_file):
         with open(json_file, "w") as f:
             json.dump(result_dict, f, indent=4)
 
-        _logger.info(f"Results saved to {json_file}")
+        _logger.info("Results saved to %s", json_file)
 
     except Exception as e:
         _logger.error(f"Error saving results: {str(e)}", exc_info=True)
@@ -307,7 +307,7 @@ if __name__ == "__main__":
         optimizer_config = json.load(f)
 
     start_time = dt.now()
-    _logger.info(f"Starting optimization at {start_time}")
+    _logger.info("Starting optimization at %s", start_time)
 
     # Get the data files
     data_files = [f for f in os.listdir("data/") if f.endswith(".csv") and not f.startswith(".")]
@@ -317,13 +317,13 @@ if __name__ == "__main__":
     processed_combinations = 0
     skipped_combinations = 0
 
-    _logger.info(f"Found {len(data_files)} data files")
-    _logger.info(f"Found {len(ENTRY_MIXIN_REGISTRY)} entry mixins")
-    _logger.info(f"Found {len(EXIT_MIXIN_REGISTRY)} exit mixins")
-    _logger.info(f"Total combinations to process: {total_combinations}")
+    _logger.info("Found %d data files", len(data_files))
+    _logger.info("Found %d entry mixins", len(ENTRY_MIXIN_REGISTRY))
+    _logger.info("Found %d exit mixins", len(EXIT_MIXIN_REGISTRY))
+    _logger.info("Total combinations to process: %d", total_combinations)
 
     for data_file in data_files:
-        _logger.info(f"Processing data file: {data_file}")
+        _logger.info("Processing data file: %s", data_file)
         df = prepare_data_frame(data_file)
         symbol, interval, start_date, end_date = parse_data_file_name(data_file)
 
@@ -338,14 +338,14 @@ if __name__ == "__main__":
                 # Check if already processed
                 if check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
                     skipped_combinations += 1
-                    _logger.info(f"Progress: {processed_combinations}/{total_combinations} (Skipped: {skipped_combinations})")
+                    _logger.info("Progress: %d/%d (Skipped: %d)", processed_combinations, total_combinations, skipped_combinations)
                     continue
 
                 # Load exit logic configuration
                 with open(os.path.join("config", "optimizer", "exit", f"{exit_logic_name}.json"), "r") as f:
                     exit_logic_config = json.load(f)
 
-                _logger.info(f"Running optimization {processed_combinations}/{total_combinations}: {data_file} + {entry_logic_name} + {exit_logic_name}")
+                _logger.info("Running optimization %d/%d: %s + %s + %s", processed_combinations, total_combinations, data_file, entry_logic_name, exit_logic_name)
 
                 # Create optimizer configuration
                 try:
@@ -382,7 +382,7 @@ if __name__ == "__main__":
 
                     # Get best result
                     if len(study.trials) == 0:
-                        _logger.warning(f"No successful trials for {entry_logic_name} + {exit_logic_name}, skipping")
+                        _logger.warning("No successful trials for %s + %s, skipping", entry_logic_name, exit_logic_name)
                         continue
 
                     data = prepare_data_feed(df, symbol)
@@ -407,7 +407,7 @@ if __name__ == "__main__":
                         _logger.error(f"Error in final backtest for {entry_logic_name} + {exit_logic_name}: {e}", exc_info=True)
                         raise
 
-                    _logger.info(f"Completed optimization {processed_combinations}/{total_combinations}")
+                    _logger.info("Completed optimization %d/%d", processed_combinations, total_combinations)
 
                 except Exception as e:
                     _logger.error(f"Error for {entry_logic_name} + {exit_logic_name}: {e}", exc_info=True)
@@ -415,10 +415,10 @@ if __name__ == "__main__":
     end_time = dt.now()
     duration = end_time - start_time
 
-    _logger.info(f"Optimization completed at {end_time}")
-    _logger.info(f"Total duration: {duration}")
-    _logger.info(f"Summary:")
-    _logger.info(f"   - Total combinations: {total_combinations}")
-    _logger.info(f"   - Processed: {processed_combinations - skipped_combinations}")
-    _logger.info(f"   - Skipped (already processed): {skipped_combinations}")
-    _logger.info(f"   - Time saved by resume: {skipped_combinations * 5} minutes (estimated)")
+    _logger.info("Optimization completed at %s", end_time)
+    _logger.info("Total duration: %s", duration)
+    _logger.info("Summary:")
+    _logger.info("   - Total combinations: %d", total_combinations)
+    _logger.info("   - Processed: %d", processed_combinations - skipped_combinations)
+    _logger.info("   - Skipped (already processed): %d", skipped_combinations)
+    _logger.info("   - Time saved by resume: %d minutes (estimated)", skipped_combinations * 5)

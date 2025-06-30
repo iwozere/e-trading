@@ -42,8 +42,10 @@ class Technicals:
 
 @dataclass
 class TickerAnalysis:
+    """Encapsulates the result of a ticker analysis, including fundamentals, technicals, chart image, recommendation, and raw pricing DataFrame."""
     ticker: str
     fundamentals: Fundamentals
     technicals: Technicals
     chart_image: bytes
     recommendation: Optional[str] = "Neutral"  # Default value
+    df: Optional[object] = None  # DataFrame with pricing info

@@ -112,19 +112,19 @@ def run_composite_strategy_example():
     ]
 
     for strategy_name in strategies_to_test:
-        logger.info(f"\nTesting strategy: {strategy_name}")
+        logger.info("\nTesting strategy: %s", strategy_name)
 
         try:
             # Generate composite signal
             signal = framework.get_composite_signal(strategy_name, data_feeds)
 
-            logger.info(f"Signal type: {signal.signal_type}")
-            logger.info(f"Confidence: {signal.confidence:.3f}")
-            logger.info(f"Contributing strategies: {signal.contributing_strategies}")
-            logger.info(f"Metadata: {signal.metadata}")
+            logger.info("Signal type: %s", signal.signal_type)
+            logger.info("Confidence: %.3f", signal.confidence)
+            logger.info("Contributing strategies: %s", signal.contributing_strategies)
+            logger.info("Metadata: %s", signal.metadata)
 
         except Exception as e:
-            logger.error(f"Error testing strategy {strategy_name}: {e}")
+            logger.error("Error testing strategy %s: %s", strategy_name, e, exc_info=True)
 
 
 def run_multi_timeframe_example():
@@ -165,18 +165,18 @@ def run_multi_timeframe_example():
     ]
 
     for strategy_name in mtf_strategies:
-        logger.info(f"\nTesting MTF strategy: {strategy_name}")
+        logger.info("\nTesting MTF strategy: %s", strategy_name)
 
         try:
             # Execute strategy
             signal = framework.execute_strategy(strategy_name, data_feeds)
 
-            logger.info(f"Signal type: {signal.signal_type}")
-            logger.info(f"Confidence: {signal.confidence:.3f}")
-            logger.info(f"Contributing strategies: {signal.contributing_strategies}")
+            logger.info("Signal type: %s", signal.signal_type)
+            logger.info("Confidence: %.3f", signal.confidence)
+            logger.info("Contributing strategies: %s", signal.contributing_strategies)
 
         except Exception as e:
-            logger.error(f"Error testing MTF strategy {strategy_name}: {e}")
+            logger.error("Error testing MTF strategy %s: %s", strategy_name, e, exc_info=True)
 
 
 def run_dynamic_switching_example():
@@ -208,16 +208,16 @@ def run_dynamic_switching_example():
     try:
         # Get dynamic strategy recommendation
         recommended_strategy = framework.get_dynamic_strategy(data_feeds)
-        logger.info(f"Recommended strategy: {recommended_strategy}")
+        logger.info("Recommended strategy: %s", recommended_strategy)
 
         # Execute the recommended strategy
         signal = framework.execute_strategy(recommended_strategy, data_feeds)
 
-        logger.info(f"Signal type: {signal.signal_type}")
-        logger.info(f"Confidence: {signal.confidence:.3f}")
+        logger.info("Signal type: %s", signal.signal_type)
+        logger.info("Confidence: %.3f", signal.confidence)
 
     except Exception as e:
-        logger.error(f"Error in dynamic switching: {e}")
+        logger.error("Error in dynamic switching: %s", e, exc_info=True)
 
 
 def run_backtrader_example():
@@ -274,22 +274,22 @@ def run_backtrader_example():
     strategy = results[0]
 
     # Print results
-    logger.info(f"Final Portfolio Value: ${cerebro.broker.getvalue():.2f}")
-    logger.info(f"Total Return: {strategy.analyzers.returns.get_analysis()['rtot']:.2%}")
-    logger.info(f"Sharpe Ratio: {strategy.analyzers.sharpe.get_analysis()['sharperatio']:.3f}")
-    logger.info(f"Max Drawdown: {strategy.analyzers.drawdown.get_analysis()['max']['drawdown']:.2%}")
+    logger.info("Final Portfolio Value: $%.2f", cerebro.broker.getvalue())
+    logger.info("Total Return: %.2f%%", strategy.analyzers.returns.get_analysis()['rtot']*100)
+    logger.info("Sharpe Ratio: %.3f", strategy.analyzers.sharpe.get_analysis()['sharperatio'])
+    logger.info("Max Drawdown: %.2f%%", strategy.analyzers.drawdown.get_analysis()['max']['drawdown']*100)
 
     # Get strategy summary
     summary = strategy.get_strategy_summary()
-    logger.info(f"Strategy used: {summary['strategy_name']}")
-    logger.info(f"Total trades: {summary['performance_metrics']['total_trades']}")
-    logger.info(f"Win rate: {summary['performance_metrics']['winning_trades']/max(summary['performance_metrics']['total_trades'], 1):.2%}")
+    logger.info("Strategy used: %s", summary['strategy_name'])
+    logger.info("Total trades: %d", summary['performance_metrics']['total_trades'])
+    logger.info("Win rate: %.2f%%", summary['performance_metrics']['winning_trades']/max(summary['performance_metrics']['total_trades'], 1)*100)
 
     # Plot results
     try:
         cerebro.plot(style='candlestick', barup='green', bardown='red')
     except Exception as e:
-        logger.warning(f"Could not plot results: {e}")
+        logger.warning("Could not plot results: %s", e)
 
 
 def run_portfolio_optimization_example():
@@ -313,17 +313,17 @@ def run_portfolio_optimization_example():
     portfolio_configs = framework.configs.get("portfolio_optimization", {})
 
     for strategy_name, config in portfolio_configs.get("portfolio_optimization_strategies", {}).items():
-        logger.info(f"\nPortfolio strategy: {config['name']}")
-        logger.info(f"Description: {config['description']}")
+        logger.info("\nPortfolio strategy: %s", config['name'])
+        logger.info("Description: %s", config['description'])
 
         if 'optimization_method' in config:
-            logger.info(f"Optimization method: {config['optimization_method']}")
+            logger.info("Optimization method: %s", config['optimization_method'])
 
         if 'constraints' in config:
-            logger.info(f"Constraints: {config['constraints']}")
+            logger.info("Constraints: %s", config['constraints'])
 
         if 'rebalancing' in config:
-            logger.info(f"Rebalancing: {config['rebalancing']}")
+            logger.info("Rebalancing: %s", config['rebalancing'])
 
 
 def main():
@@ -351,10 +351,8 @@ def main():
         logger.info("All examples completed successfully!")
 
     except Exception as e:
-        logger.error(f"Error running examples: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error running examples: %s", e, exc_info=True)
 
 
 if __name__ == "__main__":
-    main() 
+    main()

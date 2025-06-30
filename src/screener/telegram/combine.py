@@ -2,7 +2,12 @@ from src.screener.telegram.chart import generate_enhanced_chart
 from src.screener.telegram.fundamentals import get_fundamentals
 from src.screener.telegram.models import (Fundamentals, Technicals,
                                           TickerAnalysis)
-from src.screener.telegram.technicals import calculate_technicals, format_technical_analysis
+from src.screener.telegram.technicals import calculate_technicals_from_df, format_technical_analysis
+from src.data.yahoo_data_downloader import YahooDataDownloader
+from src.data.binance_data_downloader import BinanceDataDownloader
+from src.notification.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 def generate_recommendation(technicals_data: dict) -> str:
@@ -17,26 +22,57 @@ def generate_recommendation(technicals_data: dict) -> str:
     return f"{signal}: {reason}"
 
 
-def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d") -> TickerAnalysis:
-    """Analyze ticker with enhanced technical analysis and recommendations"""
+def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provider: str = "yf") -> TickerAnalysis:
+    """Analyze ticker with enhanced technical analysis and recommendations, supporting both Yahoo Finance and Binance providers."""
+    import pandas as pd
     try:
-        # Get fundamental data (now a dataclass)
-        fundamentals = get_fundamentals(ticker)
-        # Get enhanced technical analysis with recommendations (now a dataclass)
-        technicals = calculate_technicals(ticker, period=period, interval=interval)
-        # Generate enhanced chart with all indicators
+        df = None
+        fundamentals = None
+        if provider.lower() == "yf":
+            # Yahoo Finance
+            downloader = YahooDataDownloader()
+            # Convert period/interval to start/end dates
+            import datetime
+            end_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            if period.endswith("y"):
+                years = int(period[:-1])
+                start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
+            elif period.endswith("m"):
+                months = int(period[:-1])
+                start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
+            else:
+                start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime("%Y-%m-%d")
+            df = downloader.download_data(ticker, interval, start_date, end_date)
+            fundamentals = get_fundamentals(ticker)
+        elif provider.lower() == "bnc":
+            downloader = BinanceDataDownloader()
+            import datetime
+            end_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            if period.endswith("y"):
+                years = int(period[:-1])
+                start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
+            elif period.endswith("m"):
+                months = int(period[:-1])
+                start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
+            else:
+                start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime("%Y-%m-%d")
+            df = downloader.download_historical_data(ticker, interval, start_date, end_date, save_to_csv=False)
+            fundamentals = None
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
+        technicals = calculate_technicals_from_df(df)
         chart_image = generate_enhanced_chart(ticker, technicals)
-        # Generate recommendation using enhanced technical analysis
         recommendation = generate_recommendation(technicals.recommendations if technicals else None)
         return TickerAnalysis(
             ticker=ticker.upper(),
             fundamentals=fundamentals,
             technicals=technicals,
             chart_image=chart_image,
-            recommendation=recommendation
+            recommendation=recommendation,
+            df=df
         )
     except Exception as e:
-        print(f"Error in analyze_ticker: {e}")
+        logger.error("Error in analyze_ticker: %s", e, exc_info=True)
         raise
 
 
