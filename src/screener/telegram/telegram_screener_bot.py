@@ -41,7 +41,7 @@ from src.screener.telegram.screener_db import (
     get_user_verification_status, get_user_verification_code, set_user_verified, get_ticker_settings
 )
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
-from src.screener.telegram.chart import generate_enhanced_chart
+from src.screener.telegram.chart import generate_chart
 from src.screener.telegram.technicals import calculate_technicals_from_df
 from src.screener.telegram.technicals import format_technical_analysis
 

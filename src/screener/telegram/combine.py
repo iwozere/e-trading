@@ -1,4 +1,4 @@
-from src.screener.telegram.chart import generate_enhanced_chart
+from src.screener.telegram.chart import generate_chart
 from src.screener.telegram.fundamentals import get_fundamentals
 from src.screener.telegram.models import (Fundamentals, Technicals,
                                           TickerAnalysis)
@@ -61,7 +61,16 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
         else:
             raise ValueError(f"Unknown provider: {provider}")
         technicals = calculate_technicals_from_df(df)
-        chart_image = generate_enhanced_chart(ticker, technicals)
+        # Create a temporary TickerAnalysis for charting, since we need to pass the object
+        temp_analysis = TickerAnalysis(
+            ticker=ticker.upper(),
+            fundamentals=fundamentals,
+            technicals=technicals,
+            chart_image=None,
+            recommendation=None,
+            df=df
+        )
+        chart_image = generate_chart(temp_analysis)
         recommendation = generate_recommendation(technicals.recommendations if technicals else None)
         return TickerAnalysis(
             ticker=ticker.upper(),
