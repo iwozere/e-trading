@@ -92,6 +92,23 @@ The Telegram Screener Bot is an advanced tool for managing, analyzing, and monit
 
 ---
 
+## Email Reports with Attachments
+
+- When you use the `/analyze` command with the `-email` flag, the bot sends a single email containing the analysis for all requested tickers.
+- The email includes:
+  - Fundamentals (if available)
+  - Technicals (all major indicators)
+  - The generated chart for each ticker as an attachment
+- Charts are attached as image files (PNG) to the email, and the email body contains the formatted analysis for each ticker.
+- Temporary chart files are only deleted after the email is successfully sent, ensuring reliable delivery and avoiding file access errors.
+- This is powered by the notification system's support for email attachments.
+
+**Best Practices:**
+- Make sure your registered email can receive attachments.
+- If you do not receive the charts, check your spam folder or email provider's attachment limits.
+
+---
+
 ## Technical Details
 
 - **Database**: User info (including email and verification status) is stored in the `users` table in SQLite.

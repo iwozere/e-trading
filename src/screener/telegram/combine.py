@@ -24,7 +24,6 @@ def generate_recommendation(technicals_data: dict) -> str:
 
 def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provider: str = "yf") -> TickerAnalysis:
     """Analyze ticker with enhanced technical analysis and recommendations, supporting both Yahoo Finance and Binance providers."""
-    import pandas as pd
     try:
         df = None
         fundamentals = None
@@ -86,25 +85,63 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
         raise
 
 
-def format_comprehensive_analysis(ticker: str, technicals: Technicals, fundamentals: Fundamentals) -> str:
-    """Format comprehensive analysis for email with all recommendations"""
-    if not technicals:
-        return f"❌ Unable to analyze {ticker}"
+def analyze_and_respond(ticker_requests):
+    """
+    ticker_requests: list of dicts, each with keys: ticker, provider, period, interval
+    email_flag: bool, whether to collect email_body for email sending
+    format_comprehensive_analysis: function to format HTML for email (pass from combine.py)
+    Returns: (actions, email_body)
+        actions: list of dicts for Telegram (type: 'text' or 'photo')
+        email_body: list of HTML strings (or None if email_flag is False)
+    """
+    import tempfile
+    actions = []
 
-    # Technical analysis text (HTML)
-    technical_text = format_technical_analysis(ticker, technicals)
-    technical_text_html = technical_text.replace('\n', '<br>').replace('*', '').replace('  ', ' ')
-    # Fundamental info (HTML)
-    if fundamentals is not None:
-        fundamental_text = f"""
-<b>📊 Fundamental Analysis: {ticker}</b><br>
-<br>
-💰 Current Price: ${fundamentals.current_price:.2f}<br>
-🏢 Company: {fundamentals.company_name}<br>
-🏦 Market Cap: ${fundamentals.market_cap:,.0f}<br>
-📈 P/E: {fundamentals.pe_ratio:.2f}, Forward P/E: {fundamentals.forward_pe:.2f}<br>
-💸 EPS: ${fundamentals.earnings_per_share:.2f}, Div Yield: {fundamentals.dividend_yield * 100:.2f}%<br>
-"""
-    else:
-        fundamental_text = f"<b>📊 Fundamental Analysis: {ticker}</b><br><br>No fundamentals available for this asset.<br>"
-    return fundamental_text + "<br>" + technical_text_html
+    for req in ticker_requests:
+        ticker = req['ticker']
+        provider = req.get('provider', 'yf')
+        period = req.get('period', '2y')
+        interval = req.get('interval', '1d')
+        try:
+            result = analyze_ticker(ticker, period=period, interval=interval, provider=provider)
+            # Format Telegram text
+            technicals = result.technicals
+            fundamentals = result.fundamentals
+            text = (
+                f"📈 <b>{result.ticker}</b> - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
+                f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
+                f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
+                f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
+                f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
+                f"📉 Technical Analysis:\n"
+                f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}\n"
+                f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}\n"
+                f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}\n"
+                f"OBV: {getattr(technicals, 'obv', 0.0):.0f}\n"
+                f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}\n"
+                f"MA(50): ${getattr(technicals, 'sma_50', 0.0):.2f}\n"
+                f"MA(200): ${getattr(technicals, 'sma_200', 0.0):.2f}\n"
+                f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}\n"
+                f"Trend: {getattr(technicals, 'trend', '-')}\n\n"
+                f"📊 Bollinger Bands:\n"
+                f"Upper: ${getattr(technicals, 'bb_upper', 0.0):.2f}\n"
+                f"Middle: ${getattr(technicals, 'bb_middle', 0.0):.2f}\n"
+                f"Lower: ${getattr(technicals, 'bb_lower', 0.0):.2f}\n"
+                f"Width: {getattr(technicals, 'bb_width', 0.0):.4f}\n\n"
+                f"🎯 Recommendation: {getattr(result, 'recommendation', '-')}"
+            )
+            # Save chart to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
+                temp_file.write(result.chart_image)
+                temp_file.flush()
+                actions.append({
+                    "type": "photo",
+                    "file": temp_file.name,
+                    "caption": text
+                })
+        except Exception as e:
+            actions.append({
+                "type": "text",
+                "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"
+            })
+    return actions

@@ -127,22 +127,25 @@ class EmailChannel(NotificationChannel):
 
     def __init__(self, api_key: str, sender_email: str, receiver_email: str):
         super().__init__("email")
-        self.notifier = EmailNotifier(api_key)
+        self.notifier = EmailNotifier()
         self.sender_email = sender_email
         self.receiver_email = receiver_email
 
     async def send(self, notification: Notification) -> bool:
         """Send notification via email"""
         try:
-            # Run synchronous email sending in thread pool
             loop = asyncio.get_event_loop()
+            attachments = None
+            if notification.data and "attachments" in notification.data:
+                attachments = notification.data["attachments"]
             await loop.run_in_executor(
                 None,
                 self.notifier.send_email,
                 self.receiver_email,
-                self.sender_email,
                 notification.title,
-                notification.message
+                notification.message,
+                None,  # from_name
+                attachments
             )
             return True
         except Exception as e:
@@ -256,7 +259,8 @@ class AsyncNotificationManager:
                               priority: NotificationPriority = NotificationPriority.NORMAL,
                               data: Optional[Dict[str, Any]] = None,
                               source: str = "trading_bot",
-                              channels: Optional[List[str]] = None) -> bool:
+                              channels: Optional[List[str]] = None,
+                              attachments: Optional[list] = None) -> bool:
         """
         Send a notification asynchronously.
 
@@ -268,11 +272,17 @@ class AsyncNotificationManager:
             data: Additional data for the notification
             source: Source of the notification
             channels: Specific channels to use (None for all enabled channels)
+            attachments: List of attachments to include with the notification
 
         Returns:
             True if notification was queued successfully
         """
         try:
+            # Add attachments to data if provided
+            if attachments:
+                if data is None:
+                    data = {}
+                data["attachments"] = attachments
             notification = Notification(
                 type=notification_type,
                 priority=priority,
@@ -320,11 +330,11 @@ class AsyncNotificationManager:
         """
         if side.upper() == "BUY":
             notification_type = NotificationType.TRADE_ENTRY
-            title = f"ðŸŸ¢ Buy Order: {symbol}"
+            title = f"Buy Order: {symbol}"
             message = f"Buy {quantity} {symbol} at {price}"
         else:
             notification_type = NotificationType.TRADE_EXIT
-            title = f"ðŸ”´ Sell Order: {symbol}"
+            title = f"Sell Order: {symbol}"
             message = f"Sell {quantity} {symbol} at {price}"
             if pnl is not None:
                 message += f" (PnL: {pnl:.2f}%)"
@@ -366,7 +376,7 @@ class AsyncNotificationManager:
         """
         return await self.send_notification(
             notification_type=NotificationType.ERROR,
-            title="âš ï¸ Error Alert",
+            title="Error Alert",
             message=error_message,
             priority=NotificationPriority.CRITICAL,
             source=source
@@ -502,7 +512,7 @@ class AsyncNotificationManager:
         titles = [n.title for n in notifications]
         messages = [n.message for n in notifications]
 
-        aggregated_title = f"ðŸ“Š Batch Update ({len(notifications)} notifications)"
+        aggregated_title = f"Batch Update ({len(notifications)} notifications)"
         aggregated_message = "\n\n".join([
             f"**{title}**\n{message}"
             for title, message in zip(titles, messages)
