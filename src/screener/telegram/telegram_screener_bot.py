@@ -112,39 +112,81 @@ def parse_period_interval(args):
         elif arg.startswith('-interval='):
             interval = arg.split('=', 1)[1]
 
+def format_analysis_text(result, technicals, fundamentals):
+    return (
+        f"📈 <b>{result.ticker}</b> - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
+        f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
+        f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
+        f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
+        f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
+        f"📉 Technical Analysis:\n"
+        f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}\n"
+        f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}\n"
+        f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}\n"
+        f"OBV: {getattr(technicals, 'obv', 0.0):.0f}\n"
+        f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}\n"
+        f"MA(50): ${getattr(technicals, 'sma_50', 0.0):.2f}\n"
+        f"MA(200): ${getattr(technicals, 'sma_200', 0.0):.2f}\n"
+        f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}\n"
+        f"Trend: {getattr(technicals, 'trend', '-')}\n\n"
+        f"📊 Bollinger Bands:\n"
+        f"Upper: ${getattr(technicals, 'bb_upper', 0.0):.2f}\n"
+        f"Middle: ${getattr(technicals, 'bb_middle', 0.0):.2f}\n"
+        f"Lower: ${getattr(technicals, 'bb_lower', 0.0):.2f}\n"
+        f"Width: {getattr(technicals, 'bb_width', 0.0):.4f}\n\n"
+        f"🎯 Recommendation: {getattr(result, 'recommendation', '-')}"
+    )
+
+# Helper to analyze a ticker and return telegram action and email info (or error action)
+def analyze_and_format_ticker(user_id, ticker, provider, period, interval, email_flag, get_ticker_settings, get_user_verification_status):
+    telegram_action = None
+    email_info = None
+    try:
+        result = analyze_ticker(ticker, period=period, interval=interval, provider=provider)
+        technicals = result.technicals
+        fundamentals = result.fundamentals
+        text = format_analysis_text(result, technicals, fundamentals)
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
+            temp_file.write(result.chart_image)
+            temp_file.flush()
+            chart_file = temp_file.name
+        telegram_action = {"type": "photo", "file": chart_file, "caption": f"📊 {ticker} Analysis\n🎯 {result.recommendation}"}
+        if email_flag:
+            status = get_user_verification_status(user_id)
+            if status and status["email"] and status["verification_received"]:
+                email_info = {
+                    "ticker": ticker,
+                    "html": text.replace('\n', '<br>'),
+                    "chart_file": chart_file
+                }
+    except Exception as e:
+        telegram_action = {"type": "text", "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"}
+    return telegram_action, email_info
+
 @dp.message(lambda message: message.text and is_valid_ticker(message.text.strip()))
 async def handle_ticker(message: Message):
     ticker = message.text.strip().upper()
     email_flag = "-email" in message.text
     user_id = str(message.from_user.id)
+    # Get period/interval for this ticker
+    period, interval = get_ticker_settings(ticker)
+    period = period or DEFAULT_PERIOD
+    interval = interval or DEFAULT_INTERVAL
+    # Build the info string
+    info_parts = [ticker]
+    if period:
+        info_parts.append(f"-period={period}")
+    if interval:
+        info_parts.append(f"-interval={interval}")
+    info_str = " ".join(info_parts)
+    await message.reply(info_str)
     await message.reply(f"🔍 Analyzing {ticker}...")
     try:
         result = analyze_ticker(ticker)
         technicals = result.technicals
         fundamentals = result.fundamentals
-        text = (
-            f"📈 <b>{result.ticker}</b> - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
-            f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
-            f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
-            f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
-            f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
-            f"📉 Technical Analysis:\n"
-            f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}\n"
-            f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}\n"
-            f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}\n"
-            f"OBV: {getattr(technicals, 'obv', 0.0):.0f}\n"
-            f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}\n"
-            f"MA(50): ${getattr(technicals, 'sma_50', 0.0):.2f}\n"
-            f"MA(200): ${getattr(technicals, 'sma_200', 0.0):.2f}\n"
-            f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}\n"
-            f"Trend: {getattr(technicals, 'trend', '-')}\n\n"
-            f"📊 Bollinger Bands:\n"
-            f"Upper: ${getattr(technicals, 'bb_upper', 0.0):.2f}\n"
-            f"Middle: ${getattr(technicals, 'bb_middle', 0.0):.2f}\n"
-            f"Lower: ${getattr(technicals, 'bb_lower', 0.0):.2f}\n"
-            f"Width: {getattr(technicals, 'bb_width', 0.0):.4f}\n\n"
-            f"🎯 Recommendation: {getattr(result, 'recommendation', '-')}"
-        )
+        text = format_analysis_text(result, technicals, fundamentals)
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
             temp_file.write(result.chart_image)
@@ -276,7 +318,6 @@ def handle_verify(telegram_id, code):
 def analyze_command_core(
     user_id,
     message_text,
-    notification_manager,
     get_ticker_settings,
     get_user_verification_status
 ):
@@ -289,152 +330,96 @@ def analyze_command_core(
     for arg in args[1:]:
         if arg == "-email":
             email_flag = True
-        elif arg.startswith("-") and arg not in ("-email",):
-            if arg[1:] in ["yf", "bnc"]:
-                provider = arg[1:].lower()
-            elif arg.startswith("-period="):
+        elif arg.startswith("-") and arg.lower() not in ("-email",):
+            prov_candidate = arg[1:].lower()
+            if prov_candidate in ["yf", "bnc"]:
+                provider = prov_candidate
+            elif arg.lower().startswith("-period="):
                 period = arg.split("=", 1)[1]
-            elif arg.startswith("-interval="):
+            elif arg.lower().startswith("-interval="):
                 interval = arg.split("=", 1)[1]
+            else:
+                telegram_actions = [{"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"}]
+                return {"telegram_actions": telegram_actions, "email_info": None}
         elif ticker is None:
             ticker = arg.upper()
     telegram_actions = []
-    email_info = None
-    # For multi-ticker email
     email_tickers = []
+    pairs = []
+    # Build pairs to process
     if ticker:
+        # If provider is not specified, try to infer it (case-insensitive)
         if not provider:
+            found = False
             for prov in ["yf", "bnc"]:
                 p, i = get_ticker_settings(ticker)
                 if p or i:
                     provider = prov
+                    found = True
                     break
+            if not found:
+                telegram_actions.append({"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"})
+                return {"telegram_actions": telegram_actions, "email_info": None}
         if not provider:
             provider = "yf"
-        db_period, db_interval = get_ticker_settings(ticker)
-        if not period:
-            period = db_period or DEFAULT_PERIOD
-        if not interval:
-            interval = db_interval or DEFAULT_INTERVAL
-        telegram_actions.append({"type": "text", "content": f"🔍 Analyzing {ticker} (provider={provider}, period={period}, interval={interval})..."})
-        try:
-            result = analyze_ticker(ticker, period=period, interval=interval, provider=provider)
-            technicals = result.technicals
-            fundamentals = result.fundamentals
-            text = (
-                f"📈 <b>{result.ticker}</b> - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
-                f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
-                f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
-                f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
-                f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
-                f"📉 Technical Analysis:\n"
-                f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}\n"
-                f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}\n"
-                f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}\n"
-                f"OBV: {getattr(technicals, 'obv', 0.0):.0f}\n"
-                f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}\n"
-                f"MA(50): ${getattr(technicals, 'sma_50', 0.0):.2f}\n"
-                f"MA(200): ${getattr(technicals, 'sma_200', 0.0):.2f}\n"
-                f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}\n"
-                f"Trend: {getattr(technicals, 'trend', '-')}\n\n"
-                f"📊 Bollinger Bands:\n"
-                f"Upper: ${getattr(technicals, 'bb_upper', 0.0):.2f}\n"
-                f"Middle: ${getattr(technicals, 'bb_middle', 0.0):.2f}\n"
-                f"Lower: ${getattr(technicals, 'bb_lower', 0.0):.2f}\n"
-                f"Width: {getattr(technicals, 'bb_width', 0.0):.4f}\n\n"
-                f"🎯 Recommendation: {getattr(result, 'recommendation', '-')}"
-            )
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
-                temp_file.write(result.chart_image)
-                temp_file.flush()
-                chart_file = temp_file.name
-            telegram_actions.append({"type": "photo", "file": chart_file, "caption": f"📊 {ticker} Analysis\n🎯 {result.recommendation}"})
-            if email_flag:
-                status = get_user_verification_status(user_id)
-                if status and status["email"] and status["verification_received"]:
-                    email_info = {
-                        "to": status["email"],
-                        "subject": f"Comprehensive Analysis for {ticker}",
-                        "tickers": [{
-                            "ticker": ticker,
-                            "html": text.replace('\n', '<br>'),
-                            "chart_file": chart_file
-                        }]
-                    }
-        except Exception as e:
-            telegram_actions.append({"type": "text", "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"})
-        return {"telegram_actions": telegram_actions, "email_info": email_info}
-    # If no ticker, analyze all tickers in user's list (optionally filtered by provider)
-    if provider:
-        provider = provider.lower()
-    pairs = all_tickers_with_providers_for_status(user_id, provider)
+        pairs = [(provider, ticker)]
+    else:
+        if provider:
+            provider = provider.lower()
+        pairs = all_tickers_with_providers_for_status(user_id, provider)
     if not pairs:
         telegram_actions.append({"type": "text", "content": "No tickers found. Use /add to add tickers first."})
         return {"telegram_actions": telegram_actions, "email_info": None}
-    email_tickers = []
-    for prov, ticker in pairs:
-        p, i = get_ticker_settings(user_id, prov, ticker)
-        use_period = period or p or DEFAULT_PERIOD
-        use_interval = interval or i or DEFAULT_INTERVAL
-        telegram_actions.append({"type": "text", "content": f"🔍 Analyzing {ticker} (provider={prov}, period={use_period}, interval={use_interval})..."})
-        try:
-            result = analyze_ticker(ticker, period=use_period, interval=use_interval, provider=prov)
-            technicals = result.technicals
-            fundamentals = result.fundamentals
-            text = (
-                f"📈 <b>{result.ticker}</b> - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
-                f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
-                f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
-                f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
-                f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
-                f"📉 Technical Analysis:\n"
-                f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}\n"
-                f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}\n"
-                f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}\n"
-                f"OBV: {getattr(technicals, 'obv', 0.0):.0f}\n"
-                f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}\n"
-                f"MA(50): ${getattr(technicals, 'sma_50', 0.0):.2f}\n"
-                f"MA(200): ${getattr(technicals, 'sma_200', 0.0):.2f}\n"
-                f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}\n"
-                f"Trend: {getattr(technicals, 'trend', '-')}\n\n"
-                f"📊 Bollinger Bands:\n"
-                f"Upper: ${getattr(technicals, 'bb_upper', 0.0):.2f}\n"
-                f"Middle: ${getattr(technicals, 'bb_middle', 0.0):.2f}\n"
-                f"Lower: ${getattr(technicals, 'bb_lower', 0.0):.2f}\n"
-                f"Width: {getattr(technicals, 'bb_width', 0.0):.4f}\n\n"
-                f"🎯 Recommendation: {getattr(result, 'recommendation', '-')}"
-            )
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
-                temp_file.write(result.chart_image)
-                temp_file.flush()
-                chart_file = temp_file.name
-            telegram_actions.append({"type": "photo", "file": chart_file, "caption": f"📊 {ticker} Analysis\n🎯 {result.recommendation}"})
-            if email_flag:
-                status = get_user_verification_status(user_id)
-                if status and status["email"] and status["verification_received"]:
-                    email_tickers.append({
-                        "ticker": ticker,
-                        "html": text.replace('\n', '<br>'),
-                        "chart_file": chart_file
-                    })
-        except Exception as e:
-            telegram_actions.append({"type": "text", "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"})
+    for prov, tick in pairs:
+        # Case-insensitive match for provider and ticker
+        prov_norm = prov.lower() if isinstance(prov, str) else prov
+        tick_norm = tick.upper() if isinstance(tick, str) else tick
+        provider_norm = provider.lower() if provider else None
+        ticker_norm = ticker.upper() if ticker else None
+        # Only process if provider and ticker match (case-insensitive), or if not filtering
+        if ticker and tick_norm != ticker_norm:
+            continue
+        if provider and prov_norm != provider_norm:
+            continue
+        # Determine period/interval
+        if ticker and tick_norm == ticker_norm:
+            db_period, db_interval = get_ticker_settings(tick)
+            use_period = period or db_period or DEFAULT_PERIOD
+            use_interval = interval or db_interval or DEFAULT_INTERVAL
+        else:
+            p, i = get_ticker_settings(user_id, prov, tick)
+            use_period = period or p or DEFAULT_PERIOD
+            use_interval = interval or i or DEFAULT_INTERVAL
+        telegram_actions.append({"type": "text", "content": f"🔍 Analyzing {tick} (provider={prov}, period={use_period}, interval={use_interval})..."})
+        action, email_ticker = analyze_and_format_ticker(
+            user_id, tick, prov, use_period, use_interval, email_flag, get_ticker_settings, get_user_verification_status
+        )
+        telegram_actions.append(action)
+        if email_flag and email_ticker:
+            email_tickers.append(email_ticker)
     email_info = None
     if email_flag and email_tickers:
         status = get_user_verification_status(user_id)
         if status and status["email"] and status["verification_received"]:
+            subj = f"Comprehensive Analysis for {ticker}" if ticker else f"Your Screener Status Report - {len(email_tickers)} Tickers Analyzed"
             email_info = {
                 "to": status["email"],
-                "subject": f"Your Screener Status Report - {len(email_tickers)} Tickers Analyzed",
+                "subject": subj,
                 "tickers": email_tickers
             }
     return {"telegram_actions": telegram_actions, "email_info": email_info}
 
 @dp.message(Command("analyze"))
 async def analyze_command(message: Message):
+    print("[DEBUG] Entered analyze handler", flush=True)
+    logger.info("Entered analyze handler")
+
     user_id = str(message.from_user.id)
+    args = message.text.split()
+
+    print(f"[DEBUG] analyze args: {args}", flush=True)
+    logger.info("analyze args: %s", args)
+
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None,
@@ -442,7 +427,6 @@ async def analyze_command(message: Message):
             analyze_command_core,
             user_id,
             message.text,
-            notification_manager,
             get_ticker_settings,
             get_user_verification_status
         )
@@ -477,7 +461,6 @@ async def analyze_command(message: Message):
         )
         await message.reply(f"📧 Status report sent to {result['email_info']['to']}")
         files_to_delete.extend(attachments)
-    import os
     for f in set(files_to_delete):
         try:
             os.unlink(f)
@@ -522,6 +505,8 @@ async def my_list(message: Message):
 
 @dp.message(Command("register"))
 async def my_register(message: Message):
+    print("[DEBUG] Entered register handler", flush=True)
+    logger.info("Entered register handler")
     args = message.text.split()
     if len(args) != 2:
         await message.reply("Usage: /register email@example.com")
@@ -551,12 +536,16 @@ async def my_register(message: Message):
 
 @dp.message(Command("info"))
 async def my_info(message: Message):
+    print("[DEBUG] Entered info handler", flush=True)
+    logger.info("Entered info handler")
     telegram_id = str(message.from_user.id)
     success, reply = handle_info(telegram_id)
     await message.reply(reply, parse_mode="HTML")
 
 @dp.message(Command("verify"))
 async def my_verify(message: Message):
+    print("[DEBUG] Entered verify handler", flush=True)
+    logger.info("Entered verify handler")
     args = message.text.split()
     if len(args) != 2 or not args[1].isdigit():
         await message.reply("Usage: /verify CODE (6 digits)")
@@ -565,6 +554,11 @@ async def my_verify(message: Message):
     telegram_id = str(message.from_user.id)
     success, reply = handle_verify(telegram_id, code)
     await message.reply(reply)
+
+# Fallback handler for unknown commands
+@dp.message(lambda message: message.text and message.text.startswith("/"))
+async def unknown_command(message: Message):
+    await send_welcome(message)
 
 async def main():
     logger.info("Starting ticker analyzer bot")

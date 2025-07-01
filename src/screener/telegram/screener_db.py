@@ -98,15 +98,6 @@ def list_tickers(telegram_id, provider=None):
         })
     return result
 
-def all_tickers_for_status(telegram_id, provider=None):
-    """Returns a list of (provider, ticker) tuples for status analysis"""
-    tickers_by_provider = list_tickers(telegram_id, provider)
-    result = []
-    for prov, tlist in tickers_by_provider.items():
-        for ticker in tlist:
-            result.append((prov, ticker["ticker"]))
-    return result
-
 def all_tickers_with_providers_for_status(telegram_id, provider=None):
     """Returns a list of (provider, ticker) tuples for status analysis with provider filter"""
     tickers_by_provider = list_tickers(telegram_id)

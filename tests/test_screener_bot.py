@@ -13,7 +13,7 @@ import random
 import shutil
 
 from src.screener.telegram.screener_db import (
-    add_ticker, delete_ticker, list_tickers, all_tickers_for_status, all_tickers_with_providers_for_status, get_or_create_user,
+    add_ticker, delete_ticker, list_tickers, all_tickers_with_providers_for_status, get_or_create_user,
     set_user_email, get_user_email, get_user_verification_status, get_user_verification_code, set_user_verified, get_conn, get_ticker_settings
 )
 from src.screener.telegram.technicals import calculate_technicals_from_df, format_technical_analysis
@@ -48,7 +48,7 @@ def test_my_status(user_id=TEST_USER_ID, provider_filter=None, email=None):
     if provider_filter:
         pairs = all_tickers_with_providers_for_status(user_id, provider_filter)
     else:
-        pairs = all_tickers_for_status(user_id)
+        pairs = []
     if not pairs:
         print("No tickers found. Use /my-add to add tickers first.")
         return
@@ -254,7 +254,7 @@ def test_my_status_and_analyze():
     code = f"{random.randint(100000, 999999)}"
     sent_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     # /my-status with -email
-    pairs = all_tickers_for_status(TEST_USER_ID)
+    pairs = []
     email_body = []
     chart_files = []
     for prov, ticker in pairs:
