@@ -95,13 +95,13 @@ def get_overall_recommendation(recommendations: List[Tuple[str, str]]) -> Tuple[
     else:
         return "HOLD", f"Mixed signals - Hold position ({hold_count}/{total} neutral)"
 
-def calculate_technicals_from_df(df) -> Technicals:
+def calculate_technicals_from_df(df):
     """
-    Calculate technical indicators from a DataFrame with columns ['open', 'high', 'low', 'close', 'volume'] and return a Technicals object.
+    Calculate technical indicators from a DataFrame with columns ['open', 'high', 'low', 'close', 'volume'] and return a tuple (updated DataFrame, Technicals object).
     Args:
         df: DataFrame with columns ['open', 'high', 'low', 'close', 'volume']
     Returns:
-        Technicals: Dataclass with all technical indicators
+        (DataFrame, Technicals): DataFrame with indicator columns, Technicals dataclass with latest values
     """
     import numpy as np
     import talib
@@ -111,11 +111,11 @@ def calculate_technicals_from_df(df) -> Technicals:
 
     if df is None or df.empty:
         logger.error("No data provided for technicals calculation.")
-        return None
+        return None, None
     df = df.dropna()
     if len(df) < 50:
         logger.error("Insufficient data for technicals: %d rows", len(df))
-        return None
+        return None, None
     high = df['high'].values.astype(float)
     low = df['low'].values.astype(float)
     close = df['close'].values.astype(float)
@@ -124,7 +124,7 @@ def calculate_technicals_from_df(df) -> Technicals:
     min_length = min(len(high), len(low), len(close), len(volume), len(open_price))
     if min_length < 50:
         logger.error("Insufficient data after cleaning: %d rows", min_length)
-        return None
+        return None, None
     high = high[-min_length:]
     low = low[-min_length:]
     close = close[-min_length:]
@@ -145,7 +145,27 @@ def calculate_technicals_from_df(df) -> Technicals:
         sma_200 = talib.SMA(close, timeperiod=200)
     except Exception as e:
         logger.error("TA-Lib calculation failed for data: %s", e, exc_info=True)
-        return None
+        return None, None
+
+    # Add indicator arrays as columns to df
+    df = df.copy()
+    df['rsi'] = rsi
+    df['bb_upper'] = bb_upper
+    df['bb_middle'] = bb_middle
+    df['bb_lower'] = bb_lower
+    df['macd'] = macd
+    df['macd_signal'] = macd_signal
+    df['macd_hist'] = macd_hist
+    df['stoch_k'] = stoch_k
+    df['stoch_d'] = stoch_d
+    df['adx'] = adx
+    df['plus_di'] = plus_di
+    df['minus_di'] = minus_di
+    df['obv'] = obv
+    df['adr'] = adr
+    df['sma_50'] = sma_50
+    df['sma_200'] = sma_200
+
     current_idx = -1
     current_close = close[current_idx]
     current_rsi = rsi[current_idx] if not np.isnan(rsi[current_idx]) else 50.0
@@ -190,7 +210,7 @@ def calculate_technicals_from_df(df) -> Technicals:
     recommendations['overall'] = {'signal': overall_signal, 'reason': overall_reason}
     trend = "Uptrend" if current_sma_50 > current_sma_200 and current_close > current_sma_50 else \
             "Downtrend" if current_sma_50 < current_sma_200 and current_close < current_sma_50 else "Sideways"
-    return Technicals(
+    technicals = Technicals(
         rsi=round(current_rsi, 2),
         sma_50=round(current_sma_50, 2),
         sma_200=round(current_sma_200, 2),
@@ -212,6 +232,7 @@ def calculate_technicals_from_df(df) -> Technicals:
         bb_width=round((current_bb_upper - current_bb_lower) / current_bb_middle, 4) if current_bb_middle else 0.0,
         recommendations=recommendations
     )
+    return df, technicals
 
 def format_technical_analysis(ticker: str, technicals: Technicals) -> str:
     if not technicals:
@@ -253,14 +274,14 @@ def format_technical_analysis(ticker: str, technicals: Technicals) -> str:
 if __name__ == "__main__":
     test_ticker = "AAPL"
     print(f"Testing technical analysis for {test_ticker}...")
-    technicals = calculate_technicals_from_df(pd.DataFrame({
+    df, technicals = calculate_technicals_from_df(pd.DataFrame({
         'open': [100],
         'high': [110],
         'low': [90],
         'close': [100],
         'volume': [1000]
     }))
-    if technicals:
+    if df is not None and technicals:
         print(format_technical_analysis(test_ticker, technicals))
     else:
         print(f"Failed to analyze {test_ticker}")

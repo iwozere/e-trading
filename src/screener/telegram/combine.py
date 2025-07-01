@@ -60,7 +60,8 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
             fundamentals = None
         else:
             raise ValueError(f"Unknown provider: {provider}")
-        technicals = calculate_technicals_from_df(df)
+        # Calculate technicals and update df with indicator columns
+        df, technicals = calculate_technicals_from_df(df)
         # Create a temporary TickerAnalysis for charting, since we need to pass the object
         temp_analysis = TickerAnalysis(
             ticker=ticker.upper(),

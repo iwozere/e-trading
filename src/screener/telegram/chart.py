@@ -36,23 +36,23 @@ def generate_chart(analysis : TickerAnalysis) -> bytes:
         close = df['close'].values.astype(float)
         volume = df['volume'].values.astype(float)
         open_price = df['open'].values.astype(float)
-        # Use indicators from analysis.technicals
-        rsi = analysis.technicals.rsi
-        bb_upper = analysis.technicals.bb_upper
-        bb_middle = analysis.technicals.bb_middle
-        bb_lower = analysis.technicals.bb_lower
-        macd = analysis.technicals.macd
-        macd_signal = analysis.technicals.macd_signal
-        macd_hist = analysis.technicals.macd_histogram
-        stoch_k = analysis.technicals.stoch_k
-        stoch_d = analysis.technicals.stoch_d
-        adx = analysis.technicals.adx
-        plus_di = analysis.technicals.plus_di
-        minus_di = analysis.technicals.minus_di
-        obv = analysis.technicals.obv
-        adr = analysis.technicals.adr
-        sma_50 = analysis.technicals.sma_50
-        sma_200 = analysis.technicals.sma_200
+        # Use indicator arrays from df columns
+        rsi = df['rsi'].values if 'rsi' in df else None
+        bb_upper = df['bb_upper'].values if 'bb_upper' in df else None
+        bb_middle = df['bb_middle'].values if 'bb_middle' in df else None
+        bb_lower = df['bb_lower'].values if 'bb_lower' in df else None
+        macd = df['macd'].values if 'macd' in df else None
+        macd_signal = df['macd_signal'].values if 'macd_signal' in df else None
+        macd_hist = df['macd_hist'].values if 'macd_hist' in df else None
+        stoch_k = df['stoch_k'].values if 'stoch_k' in df else None
+        stoch_d = df['stoch_d'].values if 'stoch_d' in df else None
+        adx = df['adx'].values if 'adx' in df else None
+        plus_di = df['plus_di'].values if 'plus_di' in df else None
+        minus_di = df['minus_di'].values if 'minus_di' in df else None
+        obv = df['obv'].values if 'obv' in df else None
+        adr = df['adr'].values if 'adr' in df else None
+        sma_50 = df['sma_50'].values if 'sma_50' in df else None
+        sma_200 = df['sma_200'].values if 'sma_200' in df else None
         # Use timestamp for x-axis if present
         dates = df['timestamp'] if 'timestamp' in df else df.index
         min_length = len(df)
