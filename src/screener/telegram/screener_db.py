@@ -67,7 +67,7 @@ def delete_ticker(telegram_id, provider, ticker):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "DELETE FROM tickers WHERE user_id = ? AND provider = ? AND ticker = ?",
+        "DELETE FROM tickers WHERE user_id = ? AND UPPER(provider) = UPPER(?) AND UPPER(ticker) = UPPER(?)",
         (user_id, provider, ticker.upper())
     )
     conn.commit()
@@ -79,12 +79,12 @@ def list_tickers(telegram_id, provider=None):
     cur = conn.cursor()
     if provider:
         cur.execute(
-            "SELECT provider, ticker, period, interval FROM tickers WHERE user_id = ? AND UPPER(provider) = UPPER(?) ORDER BY provider, ticker",
+            "SELECT provider, ticker, period, interval FROM tickers WHERE user_id = ? AND UPPER(provider) = UPPER(?) ORDER BY UPPER(provider), UPPER(ticker)",
             (user_id, provider)
         )
     else:
         cur.execute(
-            "SELECT provider, ticker, period, interval FROM tickers WHERE user_id = ? ORDER BY provider, ticker",
+            "SELECT provider, ticker, period, interval FROM tickers WHERE user_id = ? ORDER BY UPPER(provider), UPPER(ticker)",
             (user_id,)
         )
     rows = cur.fetchall()
@@ -194,7 +194,7 @@ def get_ticker_settings(telegram_id, provider, ticker):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "SELECT period, interval FROM tickers WHERE user_id = ? AND provider = ? AND ticker = ?",
+        "SELECT period, interval FROM tickers WHERE user_id = ? AND UPPER(provider) = UPPER(?) AND UPPER(ticker) = UPPER(?)",
         (user_id, provider, ticker.upper())
     )
     row = cur.fetchone()
@@ -211,12 +211,12 @@ def update_ticker_settings(telegram_id, provider, ticker, period=None, interval=
     cur = conn.cursor()
     if period is not None:
         cur.execute(
-            "UPDATE tickers SET period = ? WHERE user_id = ? AND provider = ? AND ticker = ?",
+            "UPDATE tickers SET period = ? WHERE user_id = ? AND UPPER(provider) = UPPER(?) AND UPPER(ticker) = UPPER(?)",
             (period, user_id, provider, ticker.upper())
         )
     if interval is not None:
         cur.execute(
-            "UPDATE tickers SET interval = ? WHERE user_id = ? AND provider = ? AND ticker = ?",
+            "UPDATE tickers SET interval = ? WHERE user_id = ? AND UPPER(provider) = UPPER(?) AND UPPER(ticker) = UPPER(?)",
             (interval, user_id, provider, ticker.upper())
         )
     conn.commit()

@@ -25,7 +25,6 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 import asyncio
-import tempfile
 import re
 from datetime import datetime, timedelta, timezone
 import random
@@ -321,103 +320,109 @@ def analyze_command_core(
     get_ticker_settings,
     get_user_verification_status
 ):
-    args = message_text.split()
-    ticker = None
-    provider = None
-    email_flag = False
-    period = None
-    interval = None
-    for arg in args[1:]:
-        if arg == "-email":
-            email_flag = True
-        elif arg.startswith("-") and arg.lower() not in ("-email",):
-            prov_candidate = arg[1:].lower()
-            if prov_candidate in ["yf", "bnc"]:
-                provider = prov_candidate
-            elif arg.lower().startswith("-period="):
-                period = arg.split("=", 1)[1]
-            elif arg.lower().startswith("-interval="):
-                interval = arg.split("=", 1)[1]
-            else:
-                telegram_actions = [{"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"}]
-                return {"telegram_actions": telegram_actions, "email_info": None}
-        elif ticker is None:
-            ticker = arg.upper()
-    telegram_actions = []
-    email_tickers = []
-    pairs = []
-    # Build pairs to process
-    if ticker:
-        # If provider is not specified, try to infer it (case-insensitive)
-        if not provider:
-            found = False
-            for prov in ["yf", "bnc"]:
-                p, i = get_ticker_settings(ticker)
-                if p or i:
-                    provider = prov
-                    found = True
-                    break
-            if not found:
-                telegram_actions.append({"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"})
-                return {"telegram_actions": telegram_actions, "email_info": None}
-        if not provider:
-            provider = "yf"
-        pairs = [(provider, ticker)]
-    else:
-        if provider:
-            provider = provider.lower()
-        pairs = all_tickers_with_providers_for_status(user_id, provider)
-    if not pairs:
-        telegram_actions.append({"type": "text", "content": "No tickers found. Use /add to add tickers first."})
-        return {"telegram_actions": telegram_actions, "email_info": None}
-    for prov, tick in pairs:
-        # Case-insensitive match for provider and ticker
-        prov_norm = prov.lower() if isinstance(prov, str) else prov
-        tick_norm = tick.upper() if isinstance(tick, str) else tick
-        provider_norm = provider.lower() if provider else None
-        ticker_norm = ticker.upper() if ticker else None
-        # Only process if provider and ticker match (case-insensitive), or if not filtering
-        if ticker and tick_norm != ticker_norm:
-            continue
-        if provider and prov_norm != provider_norm:
-            continue
-        # Determine period/interval
-        if ticker and tick_norm == ticker_norm:
-            db_period, db_interval = get_ticker_settings(tick)
-            use_period = period or db_period or DEFAULT_PERIOD
-            use_interval = interval or db_interval or DEFAULT_INTERVAL
+    try:
+        args = message_text.upper().split()
+        ticker = None
+        provider = None
+        email_flag = False
+        period = None
+        interval = None
+        for arg in args[1:]:
+            if arg == "-EMAIL":
+                email_flag = True
+            elif arg.startswith("-") and arg.upper() not in ("-EMAIL",):
+                prov_candidate = arg[1:].upper()
+                if prov_candidate in ["YF", "BNC"]:
+                    provider = prov_candidate
+                elif arg.upper().startswith("-PERIOD="):
+                    period = arg.split("=", 1)[1]
+                elif arg.upper().startswith("-INTERVAL="):
+                    interval = arg.split("=", 1)[1]
+                else:
+                    telegram_actions = [{"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"}]
+                    return {"telegram_actions": telegram_actions, "email_info": None}
+            elif ticker is None:
+                ticker = arg.upper()
+        telegram_actions = []
+        email_tickers = []
+        pairs = []
+
+        # Build pairs to process
+        if ticker:
+            # If provider is not specified, try to infer it (case-insensitive)
+            if not provider:
+                found = False
+                for prov in ["YF", "BNC"]:
+                    p, i = get_ticker_settings(user_id, prov, ticker)
+                    if p or i:
+                        provider = prov
+                        found = True
+                        break
+                if not found:
+                    telegram_actions.append({"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"})
+                    return {"telegram_actions": telegram_actions, "email_info": None}
+            if not provider:
+                provider = "yf"
+            pairs = [(provider, ticker)]
         else:
+            if provider:
+                provider = provider.lower()
+            pairs = all_tickers_with_providers_for_status(user_id, provider)
+
+        if not pairs:
+            telegram_actions.append({"type": "text", "content": "No tickers found. Use /add to add tickers first."})
+            return {"telegram_actions": telegram_actions, "email_info": None}
+
+        for prov, tick in pairs:
+            # Case-insensitive match for provider and ticker
+            prov_norm = prov.lower() if isinstance(prov, str) else prov
+            tick_norm = tick.upper() if isinstance(tick, str) else tick
+            provider_norm = provider.lower() if provider else None
+            ticker_norm = ticker.upper() if ticker else None
+            # Only process if provider and ticker match (case-insensitive), or if not filtering
+
+            if ticker and tick_norm != ticker_norm:
+                continue
+            if provider and prov_norm != provider_norm:
+                continue
+
+            # Determine period/interval
             p, i = get_ticker_settings(user_id, prov, tick)
             use_period = period or p or DEFAULT_PERIOD
             use_interval = interval or i or DEFAULT_INTERVAL
-        telegram_actions.append({"type": "text", "content": f"🔍 Analyzing {tick} (provider={prov}, period={use_period}, interval={use_interval})..."})
-        action, email_ticker = analyze_and_format_ticker(
-            user_id, tick, prov, use_period, use_interval, email_flag, get_ticker_settings, get_user_verification_status
-        )
-        telegram_actions.append(action)
-        if email_flag and email_ticker:
-            email_tickers.append(email_ticker)
-    email_info = None
-    if email_flag and email_tickers:
-        status = get_user_verification_status(user_id)
-        if status and status["email"] and status["verification_received"]:
-            subj = f"Comprehensive Analysis for {ticker}" if ticker else f"Your Screener Status Report - {len(email_tickers)} Tickers Analyzed"
-            email_info = {
-                "to": status["email"],
-                "subject": subj,
-                "tickers": email_tickers
-            }
-    return {"telegram_actions": telegram_actions, "email_info": email_info}
+
+            telegram_actions.append({"type": "text", "content": f"🔍 Analyzing {tick} (provider={prov}, period={use_period}, interval={use_interval})..."})
+            action, email_ticker = analyze_and_format_ticker(
+                user_id, tick, prov, use_period, use_interval, email_flag, get_ticker_settings, get_user_verification_status
+            )
+            telegram_actions.append(action)
+            if email_flag and email_ticker:
+                email_tickers.append(email_ticker)
+
+        email_info = None
+        if email_flag and email_tickers:
+            status = get_user_verification_status(user_id)
+            if status and status["email"] and status["verification_received"]:
+                subj = f"Comprehensive Analysis for {ticker}" if ticker else f"Your Screener Status Report - {len(email_tickers)} Tickers Analyzed"
+                email_info = {
+                    "to": status["email"],
+                    "subject": subj,
+                    "tickers": email_tickers
+                }
+        return {"telegram_actions": telegram_actions, "email_info": email_info}
+    except Exception as e:
+        logger.error("Internal error: %s", e, exc_info=True)
+        telegram_actions = [{"type": "text", "content": f"Internal error: {e}"}]
+        return {"telegram_actions": telegram_actions, "email_info": None}
+
 
 @dp.message(Command("analyze"))
 async def analyze_command(message: Message):
-    print("[DEBUG] Entered analyze handler", flush=True)
     logger.info("Entered analyze handler")
 
     user_id = str(message.from_user.id)
     args = message.text.split()
 
-    print(f"[DEBUG] analyze args: {args}", flush=True)
     logger.info("analyze args: %s", args)
 
     loop = asyncio.get_event_loop()
@@ -469,33 +474,27 @@ async def analyze_command(message: Message):
 
 @dp.message(Command("add"))
 async def my_add(message: Message):
-    print("[DEBUG] Entered add handler", flush=True)
     logger.info("Entered add handler")
     user_id = str(message.from_user.id)
     args = message.text.split()
-    print(f"[DEBUG] add args: {args}", flush=True)
     logger.info("add args: %s", args)
     success, reply = handle_add(user_id, args)
     await message.reply(reply)
 
 @dp.message(Command("delete"))
 async def my_delete(message: Message):
-    print("[DEBUG] Entered delete handler", flush=True)
     logger.info("Entered delete handler")
     user_id = str(message.from_user.id)
     args = [a.strip() for a in re.split(r'\s+', message.text) if a.strip()]
-    print(f"[DEBUG] delete args: {args}", flush=True)
     logger.info("delete args: %s", args)
     success, reply = handle_delete(user_id, args)
     await message.reply(reply)
 
 @dp.message(Command("list"))
 async def my_list(message: Message):
-    print("[DEBUG] Entered list handler", flush=True)
     logger.info("Entered list handler")
     user_id = str(message.from_user.id)
     args = message.text.split()
-    print(f"[DEBUG] list args: {args}", flush=True)
     logger.info("list args: %s", args)
     provider = None
     if len(args) == 2 and args[1].startswith('-'):
@@ -505,7 +504,6 @@ async def my_list(message: Message):
 
 @dp.message(Command("register"))
 async def my_register(message: Message):
-    print("[DEBUG] Entered register handler", flush=True)
     logger.info("Entered register handler")
     args = message.text.split()
     if len(args) != 2:
@@ -536,7 +534,6 @@ async def my_register(message: Message):
 
 @dp.message(Command("info"))
 async def my_info(message: Message):
-    print("[DEBUG] Entered info handler", flush=True)
     logger.info("Entered info handler")
     telegram_id = str(message.from_user.id)
     success, reply = handle_info(telegram_id)
@@ -544,7 +541,6 @@ async def my_info(message: Message):
 
 @dp.message(Command("verify"))
 async def my_verify(message: Message):
-    print("[DEBUG] Entered verify handler", flush=True)
     logger.info("Entered verify handler")
     args = message.text.split()
     if len(args) != 2 or not args[1].isdigit():

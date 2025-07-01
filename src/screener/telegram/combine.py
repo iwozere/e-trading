@@ -1,8 +1,7 @@
 from src.screener.telegram.chart import generate_chart
 from src.screener.telegram.fundamentals import get_fundamentals
-from src.screener.telegram.models import (Fundamentals, Technicals,
-                                          TickerAnalysis)
-from src.screener.telegram.technicals import calculate_technicals_from_df, format_technical_analysis
+from src.screener.telegram.models import TickerAnalysis
+from src.screener.telegram.technicals import calculate_technicals_from_df
 from src.data.yahoo_data_downloader import YahooDataDownloader
 from src.data.binance_data_downloader import BinanceDataDownloader
 from src.notification.logger import setup_logger
