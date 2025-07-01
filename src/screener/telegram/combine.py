@@ -9,15 +9,13 @@ from src.notification.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-def generate_recommendation(technicals_data: dict) -> str:
+def generate_recommendation(recommendations: dict) -> str:
     """Generate trading recommendation based on technical indicators."""
-    if not technicals_data or not technicals_data.get("recommendations"):
+    if not recommendations or 'overall' not in recommendations:
         return "Unable to generate recommendation - insufficient data"
-
-    overall_rec = technicals_data.get("recommendations", {}).get("overall", {})
+    overall_rec = recommendations.get("overall", {})
     signal = overall_rec.get("signal", "HOLD")
     reason = overall_rec.get("reason", "No reason available")
-
     return f"{signal}: {reason}"
 
 

@@ -112,8 +112,10 @@ def parse_period_interval(args):
             interval = arg.split('=', 1)[1]
 
 def format_analysis_text(result, technicals, fundamentals):
+    print(f"[DEBUG] format_analysis_text fundamentals: {fundamentals}", flush=True)
+    print(f"[DEBUG] format_analysis_text technicals: {technicals}", flush=True)
     return (
-        f"📈 <b>{result.ticker}</b> - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
+        f"📈 {result.ticker} - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
         f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
         f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
         f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
@@ -138,7 +140,7 @@ def format_analysis_text(result, technicals, fundamentals):
 
 # Helper to analyze a ticker and return telegram action and email info (or error action)
 def analyze_and_format_ticker(user_id, ticker, provider, period, interval, email_flag, get_ticker_settings, get_user_verification_status):
-    telegram_action = None
+    telegram_actions = []
     email_info = None
     try:
         result = analyze_ticker(ticker, period=period, interval=interval, provider=provider)
@@ -150,7 +152,11 @@ def analyze_and_format_ticker(user_id, ticker, provider, period, interval, email
             temp_file.write(result.chart_image)
             temp_file.flush()
             chart_file = temp_file.name
-        telegram_action = {"type": "photo", "file": chart_file, "caption": f"📊 {ticker} Analysis\n🎯 {result.recommendation}"}
+        # Send the full analysis text as a separate message
+        telegram_actions.append({"type": "text", "content": text})
+        # Send the chart with a short caption
+        short_caption = f"📊 {ticker} Analysis\n🎯 {result.recommendation}"
+        telegram_actions.append({"type": "photo", "file": chart_file, "caption": short_caption, "parse_mode": "HTML"})
         if email_flag:
             status = get_user_verification_status(user_id)
             if status and status["email"] and status["verification_received"]:
@@ -160,8 +166,8 @@ def analyze_and_format_ticker(user_id, ticker, provider, period, interval, email
                     "chart_file": chart_file
                 }
     except Exception as e:
-        telegram_action = {"type": "text", "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"}
-    return telegram_action, email_info
+        telegram_actions.append({"type": "text", "content": f"⚠️ Error analyzing {ticker}:\nPlease check if the ticker symbol is correct and try again.\nReason: {e}"})
+    return telegram_actions, email_info
 
 @dp.message(lambda message: message.text and is_valid_ticker(message.text.strip()))
 async def handle_ticker(message: Message):
@@ -335,9 +341,9 @@ def analyze_command_core(
                 if prov_candidate in ["YF", "BNC"]:
                     provider = prov_candidate
                 elif arg.upper().startswith("-PERIOD="):
-                    period = arg.split("=", 1)[1]
+                    period = arg.split("=", 1)[1].lower()
                 elif arg.upper().startswith("-INTERVAL="):
-                    interval = arg.split("=", 1)[1]
+                    interval = arg.split("=", 1)[1].lower()
                 else:
                     telegram_actions = [{"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"}]
                     return {"telegram_actions": telegram_actions, "email_info": None}
@@ -392,10 +398,10 @@ def analyze_command_core(
             use_interval = interval or i or DEFAULT_INTERVAL
 
             telegram_actions.append({"type": "text", "content": f"🔍 Analyzing {tick} (provider={prov}, period={use_period}, interval={use_interval})..."})
-            action, email_ticker = analyze_and_format_ticker(
+            actions, email_ticker = analyze_and_format_ticker(
                 user_id, tick, prov, use_period, use_interval, email_flag, get_ticker_settings, get_user_verification_status
             )
-            telegram_actions.append(action)
+            telegram_actions.extend(actions)
             if email_flag and email_ticker:
                 email_tickers.append(email_ticker)
 

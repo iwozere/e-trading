@@ -75,6 +75,47 @@ The Telegram Screener Bot is an advanced tool for managing, analyzing, and monit
 - `/help`
   - Detailed help, including registration, verification, and all commands.
 
+### Data Parameters: -period and -interval
+
+The `/analyze` command supports the `-period` and `-interval` parameters to control how much historical data is downloaded and the granularity of the data for your analysis. These options depend on the data provider (Yahoo Finance or Binance):
+
+#### Yahoo Finance (`-yf` provider)
+
+- **period** (total time span):
+  - `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y`, `5y`, `10y`, `ytd`, `max`
+- **interval** (data frequency):
+  - `1m`, `2m`, `5m`, `15m`, `30m`, `60m`, `90m`, `1h`, `1d`, `5d`, `1wk`, `1mo`, `3mo`
+  - Note: Short intervals (like `1m`, `5m`) are only available for short periods (e.g., up to 7 or 60 days).
+- **Default values:**
+  - `-period=2y`
+  - `-interval=1d`
+
+#### Binance (`-bnc` provider)
+
+- **period** (total time span):
+  - e.g., `1y`, `3mo`, `30d`
+- **interval** (data frequency):
+  - `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, `1d`, `3d`, `1w`, `1M`
+
+#### Usage Examples
+
+- Daily stock/ETF analysis:
+  ```
+  /analyze -yf AAPL -period=1y -interval=1d
+  ```
+- Intraday crypto analysis:
+  ```
+  /analyze -bnc BTCUSDT -period=7d -interval=15m
+  ```
+- Long-term ETF analysis:
+  ```
+  /analyze -yf VT -period=5y -interval=1wk
+  ```
+
+**Tip:**
+- If you request an unsupported combination, the data provider may return an error or empty data.
+- For most users, the defaults (`-period=2y -interval=1d`) are a good starting point for stocks/ETFs.
+
 ---
 
 ## Email Registration & Verification Flow
@@ -167,15 +208,4 @@ For support, bug reports, or feature requests, contact the bot administrator or 
 ## Per-Ticker and Per-Command Period/Interval
 
 - You can specify custom data periods and intervals for each ticker.
-- **Defaults:** If not specified, the bot uses 2 years (`2y`) and daily bars (`1d`).
-- **Override on add:**
-  - `/my-add -yf AAPL -period=1y -interval=15m` adds AAPL with 1 year of 15-minute bars.
-  - `/my-add -bnc BTCUSDT` uses the default (2y, 1d).
-- **Override on analysis:**
-  - `AAPL -period=6mo -interval=1h` analyzes AAPL with 6 months of 1-hour bars (does not change DB).
-- **/my-list:**
-  - Shows period/interval for each ticker if not default.
-- **How it works:**
-  - The bot stores period/interval per ticker in the database if provided in /my-add.
-  - If not set, the default is used.
-  - You can override for a single analysis by providing flags in the command. 
+- **Defaults:** If not specified, the bot uses 2 years (`2y`) and daily bars (`
