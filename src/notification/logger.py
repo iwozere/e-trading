@@ -110,6 +110,10 @@ LOG_CONFIG = {
     "root": {"handlers": ["console", "file"], "level": "DEBUG"},
 }
 
+# --- PATCH LOG_CONFIG for UTF-8 encoding on all file handlers ---
+for handler_name in ["file", "trade_file", "telegram_bot_file", "error_file"]:
+    if handler_name in LOG_CONFIG["handlers"]:
+        LOG_CONFIG["handlers"][handler_name]["encoding"] = "utf-8"
 
 logging.config.dictConfig(LOG_CONFIG)
 _logger = logging.getLogger()
@@ -148,9 +152,9 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG) ->
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
 
-        # Create file handler
+        # Create file handler with UTF-8 encoding
         file_handler = RotatingFileHandler(
-            log_file, maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT
+            log_file, maxBytes=MAX_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8"
         )
         file_handler.setLevel(level)
         file_formatter = logging.Formatter(
@@ -158,5 +162,15 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG) ->
         )
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
+
+    # Ensure all existing StreamHandlers (console) use UTF-8 if possible
+    for handler in logger.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            stream = getattr(handler, "stream", None)
+            if stream and hasattr(stream, "reconfigure"):
+                try:
+                    stream.reconfigure(encoding="utf-8")
+                except Exception:
+                    pass
 
     return logger

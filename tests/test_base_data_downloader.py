@@ -18,7 +18,6 @@ import shutil
 import tempfile
 
 import pandas as pd
-import pytest
 from src.data.base_data_downloader import BaseDataDownloader
 from src.data.binance_data_downloader import BinanceDataDownloader
 from src.data.yahoo_data_downloader import YahooDataDownloader

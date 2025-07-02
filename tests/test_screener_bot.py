@@ -24,6 +24,11 @@ from src.screener.telegram.combine import analyze_ticker, format_comprehensive_a
 import yfinance as yf
 import pandas as pd
 
+import unittest
+from unittest.mock import patch, MagicMock
+
+from src.screener.telegram.telegram_screener_bot import parse_analyze_parameters
+
 
 TEST_USER_ID = "test_user"
 TEST_SMTP_USER = "test@example.com"
@@ -317,3 +322,71 @@ if __name__ == "__main__":
     test_my_status_and_analyze()
     cleanup_test_user()
     print("\nAll tests completed.")
+
+class TestParseAnalyzeParameters(unittest.TestCase):
+    def setUp(self):
+        self.user_id = 'test_user'
+        # Patch all_tickers_with_providers_for_status globally for the test class
+        patcher = patch('src.screener.telegram.telegram_screener_bot.all_tickers_with_providers_for_status')
+        self.mock_all_tickers = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_valid_single_ticker(self):
+        def fake_get_ticker_settings(user_id, provider, ticker):
+            if provider == 'YF' and ticker == 'AAPL':
+                return ('2y', '1d')
+            return (None, None)
+        pairs, telegram_actions, email_flag = parse_analyze_parameters(
+            self.user_id, '/analyze -yf AAPL', fake_get_ticker_settings
+        )
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual(pairs[0][:2], ('YF', 'AAPL'))
+        self.assertEqual(telegram_actions, [])
+        self.assertFalse(email_flag)
+
+    def test_valid_provider_only(self):
+        self.mock_all_tickers.return_value = [('yf', 'AAPL'), ('yf', 'MSFT')]
+        def fake_get_ticker_settings(user_id, provider, ticker):
+            return ('2y', '1d')
+        pairs, telegram_actions, email_flag = parse_analyze_parameters(
+            self.user_id, '/analyze -yf', fake_get_ticker_settings
+        )
+        self.assertEqual(len(pairs), 2)
+        self.assertEqual(pairs[0][:2], ('yf', 'AAPL'))
+        self.assertEqual(telegram_actions, [])
+        self.assertFalse(email_flag)
+
+    def test_missing_ticker_and_provider(self):
+        self.mock_all_tickers.return_value = []
+        def fake_get_ticker_settings(user_id, provider, ticker):
+            return (None, None)
+        pairs, telegram_actions, email_flag = parse_analyze_parameters(
+            self.user_id, '/analyze', fake_get_ticker_settings
+        )
+        self.assertEqual(pairs, [])
+        self.assertTrue(any('No tickers found' in a['content'] for a in telegram_actions))
+        self.assertFalse(email_flag)
+
+    def test_invalid_flag(self):
+        def fake_get_ticker_settings(user_id, provider, ticker):
+            return (None, None)
+        pairs, telegram_actions, email_flag = parse_analyze_parameters(
+            self.user_id, '/analyze -foo', fake_get_ticker_settings
+        )
+        self.assertEqual(pairs, [])
+        self.assertTrue(any('Usage' in a['content'] for a in telegram_actions))
+        self.assertFalse(email_flag)
+
+    def test_email_flag(self):
+        def fake_get_ticker_settings(user_id, provider, ticker):
+            if provider == 'YF' and ticker == 'AAPL':
+                return ('2y', '1d')
+            return (None, None)
+        pairs, telegram_actions, email_flag = parse_analyze_parameters(
+            self.user_id, '/analyze -yf AAPL -email', fake_get_ticker_settings
+        )
+        self.assertEqual(len(pairs), 1)
+        self.assertTrue(email_flag)
+
+if __name__ == '__main__':
+    unittest.main()

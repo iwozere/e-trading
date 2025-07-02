@@ -29,6 +29,7 @@ import re
 from datetime import datetime, timedelta, timezone
 import random
 import functools
+import tempfile
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
@@ -37,7 +38,7 @@ from src.notification.logger import setup_logger
 from src.screener.telegram.combine import analyze_ticker
 from src.screener.telegram.screener_db import (
     add_ticker, delete_ticker, list_tickers, all_tickers_with_providers_for_status,
-    get_user_verification_status, get_user_verification_code, set_user_verified, get_ticker_settings
+    get_user_verification_status, get_user_verification_code, set_user_verified, get_ticker_settings, set_user_email
 )
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
 
@@ -112,8 +113,6 @@ def parse_period_interval(args):
             interval = arg.split('=', 1)[1]
 
 def format_analysis_text(result, technicals, fundamentals):
-    print(f"[DEBUG] format_analysis_text fundamentals: {fundamentals}", flush=True)
-    print(f"[DEBUG] format_analysis_text technicals: {technicals}", flush=True)
     return (
         f"📈 {result.ticker} - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
         f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
@@ -147,7 +146,6 @@ def analyze_and_format_ticker(user_id, ticker, provider, period, interval, email
         technicals = result.technicals
         fundamentals = result.fundamentals
         text = format_analysis_text(result, technicals, fundamentals)
-        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
             temp_file.write(result.chart_image)
             temp_file.flush()
@@ -192,13 +190,11 @@ async def handle_ticker(message: Message):
         technicals = result.technicals
         fundamentals = result.fundamentals
         text = format_analysis_text(result, technicals, fundamentals)
-        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
             temp_file.write(result.chart_image)
             temp_file.flush()
             chart_file = temp_file.name
         await message.reply_photo(FSInputFile(chart_file), caption=text, parse_mode="HTML")
-        import os
         os.unlink(chart_file)
         if email_flag:
             status = get_user_verification_status(user_id)
@@ -278,8 +274,6 @@ def handle_list(user_id, provider=None):
     return True, "Your tickers:\n" + "\n".join(lines)
 
 def handle_register(telegram_id, email):
-    import re
-    from src.screener.telegram.telegram_screener_bot import get_user_verification_code, set_user_email
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
         return False, "Usage: /register email@example.com"
     code = f"{random.randint(100000, 999999)}"
@@ -311,7 +305,6 @@ def handle_verify(telegram_id, code):
     sent_dt = datetime.strptime(sent_time, "%Y-%m-%d %H:%M:%S")
     # Make sent_dt timezone-aware if naive
     if sent_dt.tzinfo is None:
-        from datetime import timezone
         sent_dt = sent_dt.replace(tzinfo=timezone.utc)
     if code != db_code:
         return False, "Invalid verification code."
@@ -320,6 +313,71 @@ def handle_verify(telegram_id, code):
     set_user_verified(telegram_id, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
     return True, "✅ Email verified successfully! You can now use -email flag to receive reports by email."
 
+def parse_analyze_parameters(user_id, message_text, get_ticker_settings):
+    """
+    Parses the analyze command parameters and returns:
+    - pairs: list of (provider, ticker, period, interval)
+    - telegram_actions: list of usage/help messages if parsing fails or no tickers are found
+    If pairs is not empty, telegram_actions is empty, and vice versa.
+    """
+    args = message_text.upper().split()
+    ticker = None
+    provider = None
+    email_flag = False
+    period = None
+    interval = None
+    telegram_actions = []
+    pairs = []
+
+    for arg in args[1:]:
+        if arg == "-EMAIL":
+            email_flag = True
+        elif arg.startswith("-") and arg.upper() not in ("-EMAIL",):
+            prov_candidate = arg[1:].upper()
+            if prov_candidate in ["YF", "BNC"]:
+                provider = prov_candidate
+            elif arg.upper().startswith("-PERIOD="):
+                period = arg.split("=", 1)[1].lower()
+            elif arg.upper().startswith("-INTERVAL="):
+                interval = arg.split("=", 1)[1].lower()
+            else:
+                telegram_actions.append({"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"})
+                return [], telegram_actions, email_flag
+        elif ticker is None:
+            ticker = arg.upper()
+
+    # Build pairs to process
+    if ticker:
+        # If provider is not specified, try to infer it (case-insensitive)
+        if not provider:
+            found = False
+            for prov in ["YF", "BNC"]:
+                p, i = get_ticker_settings(user_id, prov, ticker)
+                if p or i:
+                    provider = prov
+                    found = True
+                    break
+            if not found:
+                telegram_actions.append({"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"})
+                return [], telegram_actions, email_flag
+        if not provider:
+            provider = "yf"
+        pairs = [(provider, ticker, period, interval)]
+    else:
+        if provider:
+            provider = provider.lower()
+        # all_tickers_with_providers_for_status returns list of (provider, ticker)
+        all_pairs = all_tickers_with_providers_for_status(user_id, provider)
+        if not all_pairs:
+            telegram_actions.append({"type": "text", "content": "No tickers found. Use /add to add tickers first."})
+            return [], telegram_actions, email_flag
+        # For each, get period/interval
+        for prov, tick in all_pairs:
+            p, i = get_ticker_settings(user_id, prov, tick)
+            pairs.append((prov, tick, period or p, interval or i))
+
+    return pairs, telegram_actions, email_flag
+
 def analyze_command_core(
     user_id,
     message_text,
@@ -327,76 +385,15 @@ def analyze_command_core(
     get_user_verification_status
 ):
     try:
-        args = message_text.upper().split()
-        ticker = None
-        provider = None
-        email_flag = False
-        period = None
-        interval = None
-        for arg in args[1:]:
-            if arg == "-EMAIL":
-                email_flag = True
-            elif arg.startswith("-") and arg.upper() not in ("-EMAIL",):
-                prov_candidate = arg[1:].upper()
-                if prov_candidate in ["YF", "BNC"]:
-                    provider = prov_candidate
-                elif arg.upper().startswith("-PERIOD="):
-                    period = arg.split("=", 1)[1].lower()
-                elif arg.upper().startswith("-INTERVAL="):
-                    interval = arg.split("=", 1)[1].lower()
-                else:
-                    telegram_actions = [{"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"}]
-                    return {"telegram_actions": telegram_actions, "email_info": None}
-            elif ticker is None:
-                ticker = arg.upper()
-        telegram_actions = []
+        pairs, telegram_actions, email_flag = parse_analyze_parameters(user_id, message_text, get_ticker_settings)
         email_tickers = []
-        pairs = []
-
-        # Build pairs to process
-        if ticker:
-            # If provider is not specified, try to infer it (case-insensitive)
-            if not provider:
-                found = False
-                for prov in ["YF", "BNC"]:
-                    p, i = get_ticker_settings(user_id, prov, ticker)
-                    if p or i:
-                        provider = prov
-                        found = True
-                        break
-                if not found:
-                    telegram_actions.append({"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"})
-                    return {"telegram_actions": telegram_actions, "email_info": None}
-            if not provider:
-                provider = "yf"
-            pairs = [(provider, ticker)]
-        else:
-            if provider:
-                provider = provider.lower()
-            pairs = all_tickers_with_providers_for_status(user_id, provider)
-
-        if not pairs:
-            telegram_actions.append({"type": "text", "content": "No tickers found. Use /add to add tickers first."})
+        if telegram_actions:
             return {"telegram_actions": telegram_actions, "email_info": None}
-
-        for prov, tick in pairs:
-            # Case-insensitive match for provider and ticker
-            prov_norm = prov.lower() if isinstance(prov, str) else prov
-            tick_norm = tick.upper() if isinstance(tick, str) else tick
-            provider_norm = provider.lower() if provider else None
-            ticker_norm = ticker.upper() if ticker else None
-            # Only process if provider and ticker match (case-insensitive), or if not filtering
-
-            if ticker and tick_norm != ticker_norm:
-                continue
-            if provider and prov_norm != provider_norm:
-                continue
-
-            # Determine period/interval
+        for prov, tick, period, interval in pairs:
+            # Determine period/interval with fallback
             p, i = get_ticker_settings(user_id, prov, tick)
             use_period = period or p or DEFAULT_PERIOD
             use_interval = interval or i or DEFAULT_INTERVAL
-
             telegram_actions.append({"type": "text", "content": f"🔍 Analyzing {tick} (provider={prov}, period={use_period}, interval={use_interval})..."})
             actions, email_ticker = analyze_and_format_ticker(
                 user_id, tick, prov, use_period, use_interval, email_flag, get_ticker_settings, get_user_verification_status
@@ -404,23 +401,22 @@ def analyze_command_core(
             telegram_actions.extend(actions)
             if email_flag and email_ticker:
                 email_tickers.append(email_ticker)
-
         email_info = None
         if email_flag and email_tickers:
             status = get_user_verification_status(user_id)
             if status and status["email"] and status["verification_received"]:
-                subj = f"Comprehensive Analysis for {ticker}" if ticker else f"Your Screener Status Report - {len(email_tickers)} Tickers Analyzed"
+                subj = f"Comprehensive Analysis for {pairs[0][1]}" if len(pairs) == 1 else f"Your Screener Status Report - {len(email_tickers)} Tickers Analyzed"
                 email_info = {
                     "to": status["email"],
                     "subject": subj,
                     "tickers": email_tickers
                 }
+        logger.info(f"Telegram actions to send: {telegram_actions}")
         return {"telegram_actions": telegram_actions, "email_info": email_info}
     except Exception as e:
         logger.error("Internal error: %s", e, exc_info=True)
         telegram_actions = [{"type": "text", "content": f"Internal error: {e}"}]
         return {"telegram_actions": telegram_actions, "email_info": None}
-
 
 @dp.message(Command("analyze"))
 async def analyze_command(message: Message):
@@ -431,52 +427,56 @@ async def analyze_command(message: Message):
 
     logger.info("analyze args: %s", args)
 
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None,
-        functools.partial(
-            analyze_command_core,
-            user_id,
-            message.text,
-            get_ticker_settings,
-            get_user_verification_status
-        )
-    )
-    files_to_delete = []
-    for action in result["telegram_actions"]:
-        if action["type"] == "text":
-            await message.reply(action["content"])
-        elif action["type"] == "photo":
-            await bot.send_photo(
-                chat_id=message.chat.id,
-                photo=FSInputFile(action["file"]),
-                caption=action["caption"],
-                parse_mode="HTML",
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            functools.partial(
+                analyze_command_core,
+                user_id,
+                message.text,
+                get_ticker_settings,
+                get_user_verification_status
             )
-            files_to_delete.append(action["file"])
-    if result["email_info"]:
-        email_body = "<h2>📊 Your Screener Status Report</h2>"
-        attachments = []
-        for ticker_info in result["email_info"]["tickers"]:
-            email_body += f"<h3>{ticker_info['ticker']}</h3>{ticker_info['html']}<br><br>"
-            attachments.append(ticker_info["chart_file"])
-        notification_manager.send_notification(
-            notification_type="INFO",
-            title=result["email_info"]["subject"],
-            message=email_body,
-            priority="NORMAL",
-            data={},
-            source="telegram_screener_bot",
-            channels=["email"],
-            attachments=attachments
         )
-        await message.reply(f"📧 Status report sent to {result['email_info']['to']}")
-        files_to_delete.extend(attachments)
-    for f in set(files_to_delete):
-        try:
-            os.unlink(f)
-        except Exception:
-            pass
+        files_to_delete = []
+        for action in result["telegram_actions"]:
+            if action["type"] == "text":
+                await message.reply(action["content"])
+            elif action["type"] == "photo":
+                await bot.send_photo(
+                    chat_id=message.chat.id,
+                    photo=FSInputFile(action["file"]),
+                    caption=action["caption"],
+                    parse_mode="HTML",
+                )
+                files_to_delete.append(action["file"])
+        if result["email_info"]:
+            email_body = "<h2>📊 Your Screener Status Report</h2>"
+            attachments = []
+            for ticker_info in result["email_info"]["tickers"]:
+                email_body += f"<h3>{ticker_info['ticker']}</h3>{ticker_info['html']}<br><br>"
+                attachments.append(ticker_info["chart_file"])
+            await notification_manager.send_notification(
+                notification_type="INFO",
+                title=result["email_info"]["subject"],
+                message=email_body,
+                priority="NORMAL",
+                data={},
+                source="telegram_screener_bot",
+                channels=["email"],
+                attachments=attachments
+            )
+            await message.reply(f"📧 Status report sent to {result['email_info']['to']}")
+            files_to_delete.extend(attachments)
+        for f in set(files_to_delete):
+            try:
+                os.unlink(f)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error("Error in analyze_command: %s", e, exc_info=True)
+        await message.reply(f"Error: {e}")
 
 @dp.message(Command("add"))
 async def my_add(message: Message):

@@ -21,6 +21,7 @@ def generate_recommendation(recommendations: dict) -> str:
 
 def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provider: str = "yf") -> TickerAnalysis:
     """Analyze ticker with enhanced technical analysis and recommendations, supporting both Yahoo Finance and Binance providers."""
+    logger.info(f"Analyzing ticker: {ticker}, period: {period}, interval: {interval}, provider: {provider}")
     try:
         df = None
         fundamentals = None
@@ -33,7 +34,7 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
             if period.endswith("y"):
                 years = int(period[:-1])
                 start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
-            elif period.endswith("m"):
+            elif period.endswith("mo") or period.endswith("m"):
                 months = int(period[:-1])
                 start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
             else:
@@ -47,7 +48,7 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
             if period.endswith("y"):
                 years = int(period[:-1])
                 start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
-            elif period.endswith("m"):
+            elif period.endswith("mo") or period.endswith("m"):
                 months = int(period[:-1])
                 start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
             else:

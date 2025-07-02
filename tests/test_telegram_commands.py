@@ -5,6 +5,7 @@ from src.screener.telegram.telegram_screener_bot import (
     handle_add, handle_delete, handle_list, DEFAULT_PERIOD, DEFAULT_INTERVAL,
     handle_register, handle_info, handle_verify, analyze_command_core,
 )
+from src.screener.telegram.commands import CommandSpec, CommandParser, CommandHandler
 
 class TestTelegramCommandLogic(unittest.TestCase):
     @patch('src.screener.telegram.telegram_screener_bot.add_ticker')
@@ -179,6 +180,72 @@ class TestAnalyzeCommandLogic(unittest.TestCase):
             )
             for action in actions:
                 print(action)
+
+class TestCommandSystem(unittest.TestCase):
+    def setUp(self):
+        spec = CommandSpec(
+            parameters={"timeout": int, "mode": str},
+            defaults={"verbose": False}
+        )
+        self.handler = CommandHandler(CommandParser(spec))
+
+    def test_parameter_parsing(self):
+        result = self.handler.execute("/cmd --timeout=10 --mode=fast")
+        self.assertEqual(result, {
+            "timeout": 10,
+            "mode": "fast",
+            "verbose": False
+        })
+
+    def test_type_conversion(self):
+        result = self.handler.execute("/cmd --timeout=abc")
+        with self.assertRaises(ValueError):
+            self.handler.execute("/cmd --timeout=abc")
+
+    def test_default_handling(self):
+        result = self.handler.execute("/cmd --mode=fast")
+        self.assertEqual(result["verbose"], False)
+
+    def test_analyze_command_core_real(self):
+        """Test analyze_command_core with real dependencies and various message_text inputs."""
+        from src.screener.telegram.telegram_screener_bot import (
+            notification_manager, get_ticker_settings,
+            format_comprehensive_analysis,
+            get_user_verification_status, bot
+        )
+        user_id = "123456"
+        test_cases = [
+            "/analyze",
+            "/analyze -email",
+            "/analyze -yf",
+            "/analyze -bnc",
+            "/analyze -yf -email",
+            "/analyze -bnc -email",
+            "/analyze -yf AAPL",
+            "/analyze -bnc BTCUSDT",
+            "/analyze -yf AAPL -email",
+            "/analyze -bnc BTCUSDT -email",
+            "/analyze INVALIDTICKER",
+            "/analyze -bnc INVALIDCOIN",
+            "/analyze -yf INVALIDTICKER",
+            "/analyze -bnc INVALIDCOIN",
+            "/analyze -yf INVALIDTICKER -email",
+            "/analyze -bnc INVALIDCOIN -email",
+        ]
+        for msg in test_cases:
+            print(f"\n--- Testing: {msg} ---")
+            actions = analyze_command_core(
+                user_id=user_id,
+                message_text=msg,
+                notification_manager=notification_manager,
+                get_ticker_settings=get_ticker_settings,
+                format_comprehensive_analysis=format_comprehensive_analysis,
+                get_user_verification_status=get_user_verification_status,
+                bot=bot
+            )
+            for action in actions:
+                print(action)
+
 
 if __name__ == '__main__':
     unittest.main()
