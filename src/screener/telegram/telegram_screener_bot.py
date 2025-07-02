@@ -87,6 +87,8 @@ async def send_welcome(message: Message):
         "/list                      Show all your tickers\n"
         "/list [-PROVIDER]          Show your tickers for a provider\n"
         "/analyze [-PROVIDER] [TICKER] [-email]   Analyze ticker, use -email to send to your verified email\n"
+        "period: 1d, 5d, 1mo or 1m, 3mo or 3m, 6mo or 6m, 1y, 2y, 5y, 10y\n"
+        "interval:  1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo\n"
         "<b>Email flow:</b>\n"
         "1. Register your email with /register email@example.com\n"
         "2. Check your inbox for a 6-digit code\n"

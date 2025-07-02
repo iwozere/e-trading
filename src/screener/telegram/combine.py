@@ -86,6 +86,11 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
         logger.error("Error in analyze_ticker: %s", e, exc_info=True)
         raise
 
+def format_recommendation(recommendations, name: str) -> str:
+    if recommendations:
+        rec = recommendations.get(name, {})
+        return f" - <b>{rec.get('signal', 'HOLD')}</b> - {rec.get('reason', '')}"
+    return None
 
 def analyze_and_respond(ticker_requests):
     """
@@ -109,6 +114,9 @@ def analyze_and_respond(ticker_requests):
             # Format Telegram text
             technicals = result.technicals
             fundamentals = result.fundamentals
+            recommendations = getattr(technicals, 'recommendations', {}) if technicals else {}
+
+            # Compose per-indicator signals
             text = (
                 f"📈 <b>{result.ticker}</b> - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
                 f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
@@ -116,21 +124,21 @@ def analyze_and_respond(ticker_requests):
                 f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
                 f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
                 f"📉 Technical Analysis:\n"
-                f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}\n"
-                f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}\n"
-                f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}\n"
-                f"OBV: {getattr(technicals, 'obv', 0.0):.0f}\n"
-                f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}\n"
+                f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}{format_recommendation(recommendations, 'rsi')}\n"
+                f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}{format_recommendation(recommendations, 'stochastic')}\n"
+                f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}{format_recommendation(recommendations, 'adx')}\n"
+                f"OBV: {getattr(technicals, 'obv', 0.0):.0f}{format_recommendation(recommendations, 'obv')}\n"
+                f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}{format_recommendation(recommendations, 'adr')}\n"
                 f"MA(50): ${getattr(technicals, 'sma_50', 0.0):.2f}\n"
                 f"MA(200): ${getattr(technicals, 'sma_200', 0.0):.2f}\n"
-                f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}\n"
+                f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}{format_recommendation(recommendations, 'macd')}\n"
                 f"Trend: {getattr(technicals, 'trend', '-')}\n\n"
-                f"📊 Bollinger Bands:\n"
+                f"📊 Bollinger Bands:{format_recommendation(recommendations, 'bollinger')}\n"
                 f"Upper: ${getattr(technicals, 'bb_upper', 0.0):.2f}\n"
                 f"Middle: ${getattr(technicals, 'bb_middle', 0.0):.2f}\n"
                 f"Lower: ${getattr(technicals, 'bb_lower', 0.0):.2f}\n"
                 f"Width: {getattr(technicals, 'bb_width', 0.0):.4f}\n\n"
-                f"🎯 Recommendation: {getattr(result, 'recommendation', '-')}"
+                f"🎯 Overall: {format_recommendation(recommendations, 'overall')}"
             )
             # Save chart to temporary file
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
