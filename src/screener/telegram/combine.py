@@ -126,7 +126,7 @@ def analyze_and_respond(ticker_requests):
                 f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
                 f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
                 f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
-                f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
+                f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)):.2f}%\n\n"
                 f"📉 Technical Analysis:\n"
                 f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}{format_recommendation(recommendations, 'rsi')}\n"
                 f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}{format_recommendation(recommendations, 'stochastic')}\n"

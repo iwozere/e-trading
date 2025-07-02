@@ -102,3 +102,8 @@ class BaseDataDownloader(ABC):
     def is_valid_period_interval(self, period, interval) -> bool:
         """Return True if the provided period/interval combination is valid for this data downloader."""
         pass
+
+    @abstractmethod
+    def download_data(self, symbol, interval, start_date, end_date, **kwargs):
+        """Download historical data for a given symbol. Must be implemented by subclasses."""
+        pass
