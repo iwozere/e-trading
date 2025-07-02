@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List, Optional
-
 import pandas as pd
+from abc import ABC, abstractmethod
 
 """
 Abstract base class for data downloaders, defining the interface for downloading historical market data from various sources.
@@ -21,7 +21,7 @@ Classes:
 """
 
 
-class BaseDataDownloader:
+class BaseDataDownloader(ABC):
     """
     Abstract base class for data downloaders. Provides methods for saving, loading, and managing historical market data files.
     """
@@ -87,3 +87,18 @@ class BaseDataDownloader:
                 print(f"Error processing {symbol}: {str(e)}")
                 continue
         return results
+
+    @abstractmethod
+    def get_periods(self) -> list:
+        """Return the list of valid periods for this data downloader."""
+        pass
+
+    @abstractmethod
+    def get_intervals(self) -> list:
+        """Return the list of valid intervals for this data downloader."""
+        pass
+
+    @abstractmethod
+    def is_valid_period_interval(self, period, interval) -> bool:
+        """Return True if the provided period/interval combination is valid for this data downloader."""
+        pass

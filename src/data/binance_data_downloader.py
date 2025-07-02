@@ -10,6 +10,10 @@ Main Features:
 - Download data for multiple symbols in batch
 - Inherits common logic from BaseDataDownloader for file management
 
+Valid values:
+- interval: '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'
+- period: Any string like '1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y', etc. (used to calculate start_date/end_date)
+
 Classes:
 - BinanceDataDownloader: Main class for interacting with the Binance API and managing data downloads
 """
@@ -122,3 +126,12 @@ class BinanceDataDownloader(BaseDataDownloader):
         end_date: str = None,
     ) -> str:
         return super().save_data(df, symbol, start_date, end_date)
+
+    def get_periods(self) -> list:
+        return ['1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y']
+
+    def get_intervals(self) -> list:
+        return ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
+
+    def is_valid_period_interval(self, period, interval) -> bool:
+        return interval in self.get_intervals() and period in self.get_periods()

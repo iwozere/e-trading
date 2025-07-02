@@ -21,6 +21,10 @@ Main Features:
 - Download data for multiple symbols in batch
 - Inherits common logic from BaseDataDownloader for file management
 
+Valid values:
+- interval: '1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo'
+- period: Any string like '1d', '7d', '1mo', '3mo', '6mo', '1y', '2y', etc. (used to calculate start_date/end_date)
+
 Classes:
 - YahooDataDownloader: Main class for interacting with Yahoo Finance and managing data downloads
 """
@@ -225,6 +229,15 @@ class YahooDataDownloader(BaseDataDownloader):
         return super().download_multiple_symbols(
             symbols, download_func, interval, start_date, end_date
         )
+
+    def get_periods(self) -> list:
+        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+
+    def get_intervals(self) -> list:
+        return ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo']
+
+    def is_valid_period_interval(self, period, interval) -> bool:
+        return interval in self.get_intervals() and period in self.get_periods()
 
 
 if __name__ == "__main__":
