@@ -1,4 +1,5 @@
 import os
+import sys
 import pytest
 import pandas as pd
 
@@ -111,6 +112,4 @@ def test_docs_summary_table_up_to_date():
     pass
 
 if __name__ == "__main__":
-    import sys
-    import pytest
     sys.exit(pytest.main([__file__]))
