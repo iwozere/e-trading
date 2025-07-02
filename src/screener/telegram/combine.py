@@ -1,3 +1,5 @@
+import datetime
+
 from src.screener.telegram.chart import generate_chart
 from src.screener.telegram.fundamentals import get_fundamentals
 from src.screener.telegram.models import TickerAnalysis
@@ -25,40 +27,42 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
     try:
         df = None
         fundamentals = None
+        start_date = None
+        end_date = None
+
+        end_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        if period.endswith("y"):
+            years = int(period[:-1])
+            start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
+        elif period.endswith("m"):
+            months = int(period[:-1])
+            start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
+        elif period.endswith("mo"):
+            months = int(period[:-2])
+            start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
+        elif period.endswith("w"):
+            weeks = int(period[:-1])
+            start_date = (datetime.datetime.now() - datetime.timedelta(days=7*weeks)).strftime("%Y-%m-%d")
+        else:
+            start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime("%Y-%m-%d")
+
         if provider.lower() == "yf":
             # Yahoo Finance
             downloader = YahooDataDownloader()
-            # Convert period/interval to start/end dates
-            import datetime
-            end_date = datetime.datetime.now().strftime("%Y-%m-%d")
-            if period.endswith("y"):
-                years = int(period[:-1])
-                start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
-            elif period.endswith("mo") or period.endswith("m"):
-                months = int(period[:-1])
-                start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
-            else:
-                start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime("%Y-%m-%d")
             df = downloader.download_data(ticker, interval, start_date, end_date)
             fundamentals = get_fundamentals(ticker)
         elif provider.lower() == "bnc":
             downloader = BinanceDataDownloader()
-            import datetime
-            end_date = datetime.datetime.now().strftime("%Y-%m-%d")
-            if period.endswith("y"):
-                years = int(period[:-1])
-                start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
-            elif period.endswith("mo") or period.endswith("m"):
-                months = int(period[:-1])
-                start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
-            else:
-                start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime("%Y-%m-%d")
             df = downloader.download_historical_data(ticker, interval, start_date, end_date, save_to_csv=False)
             fundamentals = None
         else:
             raise ValueError(f"Unknown provider: {provider}")
+
+        logger.info(f"Downloaded data for {ticker} from {start_date} to {end_date}")
+
         # Calculate technicals and update df with indicator columns
         df, technicals = calculate_technicals_from_df(df)
+
         # Create a temporary TickerAnalysis for charting, since we need to pass the object
         temp_analysis = TickerAnalysis(
             ticker=ticker.upper(),
