@@ -254,30 +254,31 @@ CoinGecko - similar to existing BinanceDataDownloader
   No. Set of the commands and their structure should be defined in the requirements later.
 
 Once you provide these details, a complete and actionable requirements document can be drafted for your project.
-Citations:[1] GitHub - paragrudani1/telegram-crypto-alert-bot: A Telegram bot for tracking cryptocurrency prices and setting up price alerts. The bot uses the CoinGecko API to fetch cryptocurrency prices and the python-telegram-bot library to interact with users. Features include getting current crypto prices, setting up price alerts, viewing and managing active alerts, and periodic checking of price alerts. https://github.com/paragrudani1/telegram-crypto-alert-bot
-[2] GitHub - THEFZNKHAN/RealTimeMarketBot: This Telegram bot allows users to fetch real-time stock data directly within Telegram. Users can select from a list of predefined stocks or enter a custom stock symbol to retrieve relevant information such as open, high, low, close prices, and volume. https://github.com/THEFZNKHAN/RealTimeMarketBot
-[3] Telegram bot api and Email integration https://latenode.com/integrations/telegram-bot-api/email
-[4] Telegram Part 3. Authentication. Bot to send private messages https://blog.corsego.com/ruby-on-rails-telegram-login
-[5] Title: How I Created My Own Trading Bot on Telegram to ... https://www.reddit.com/r/solana/comments/1cwe8ik/title_how_i_created_my_own_trading_bot_on/
-[6] account.sendVerifyEmailCode - Telegram APIs https://core.telegram.org/method/account.sendVerifyEmailCode
-[7] How to Build a Telegram Media Sharing Bot with Admin ... https://www.youtube.com/watch?v=ntg6-7OHywI[8] How to send a Telegram message to a username using bot api or ... https://stackoverflow.com/questions/72199108/how-to-send-a-telegram-message-to-a-username-using-bot-api-or-telegram-api
-[9] From BotFather to 'Hello World' https://core.telegram.org/bots/tutorial
-[10] Authorization via Telegram Gateway: Quick-start Guide https://core.telegram.org/gateway/verification-tutorial
-[11] How To Build an AI Chatbot for Telegram [Easy Steps] https://www.voiceflow.com/blog/telegram-chatbot
-[12] Email List Validation to Telegram Bot FREE Integrations - Pabbly https://www.pabbly.com/connect/integrations/email-list-validation/telegram-bot/
-[13] Telegram bot for displaying cryptocurrencies prices and charts https://github.com/ebellocchia/telegram_crypto_price_bot
-[14] Stock Prices Telegram | CoinTrendzBot.com https://cointrendzbot.com/features/stockprice
-[15] Telegram Registration with Email Verification Support (2025 Edition ) No Manual Work https://www.youtube.com/watch?v=ZDG9bMAznh0
-[16] Pabbly Email Verification to Telegram Bot FREE Integrations | Pabbly Connect https://www.pabbly.com/connect/integrations/pabbly-email-verification/telegram-bot/
-[17] How to Build a Telegram Bot in Under 5 Minutes (Quick & ... https://www.youtube.com/watch?v=rKmxRCfITek
-[18] Building a Telegram bot in Python to track your portfolio https://duarteocarmo.com/blog/building-a-telegram-bot-in-python-to-track-your-portfolio.html
-[19] send automatic message for all user and group with telegram bot #20 https://github.com/irazasyed/telegram-bot-sdk/issues/20
-[20] Telegram Bot API Verification - AI Prompt https://docsbot.ai/prompts/technical/telegram-bot-api-verification
-[21] How to integrate Email Validation & Telegram - Integrately https://integrately.com/integrations/email-validation/telegram
-[22] User Authorization - Telegram APIs https://core.telegram.org/api/auth
-[23] Implementing Secure E2E Telegram Process https://www.reddit.com/r/TelegramBots/comments/15vcrke/implementing_secure_e2e_telegram_process_best/
-[24] Integrating with Telegram Bot https://docs.esputnik.com/docs/integrating-with-telegram-bot
-[25] Email List Verify and Telegram Bot Integration https://www.make.com/en/integrations/email-list-verify/telegram
-[26] Exploring the Safety of Telegram Bots https://botpenguin.com/blogs/exploring-the-safety-of-telegram-bots
-[27] How can I get verified on Telegram? - Mad Penguin https://www.madpenguin.org/how-can-i-get-verified-on-telegram/
-[28] Telegram Bot to Email List Validation FREE Integrations https://www.pabbly.com/connect/integrations/telegram-bot/email-list-validation/
+Citations:
+[1] GitHub - paragrudani1/telegram-crypto-alert-bot: A Telegram bot for tracking cryptocurrency prices and setting up price alerts. The bot uses the CoinGecko API to fetch cryptocurrency prices and the python-telegram-bot library to interact with users. Features include getting current crypto prices, setting up price alerts, viewing and managing active alerts, and periodic checking of price alerts. https://github.com/paragrudani1/telegram-crypto-alert-bot  
+[2] GitHub - THEFZNKHAN/RealTimeMarketBot: This Telegram bot allows users to fetch real-time stock data directly within Telegram. Users can select from a list of predefined stocks or enter a custom stock symbol to retrieve relevant information such as open, high, low, close prices, and volume. https://github.com/THEFZNKHAN/RealTimeMarketBot  
+[3] Telegram bot api and Email integration https://latenode.com/integrations/telegram-bot-api/email  
+[4] Telegram Part 3. Authentication. Bot to send private messages https://blog.corsego.com/ruby-on-rails-telegram-login  
+[5] Title: How I Created My Own Trading Bot on Telegram to ... https://www.reddit.com/r/solana/comments/1cwe8ik/title_how_i_created_my_own_trading_bot_on/  
+[6] account.sendVerifyEmailCode - Telegram APIs https://core.telegram.org/method/account.sendVerifyEmailCode  
+[7] How to Build a Telegram Media Sharing Bot with Admin ... https://www.youtube.com/watch?v=ntg6-7OHywI[8] How to send a Telegram message to a username using bot api or ... https://stackoverflow.com/questions/72199108/how-to-send-a-telegram-message-to-a-username-using-bot-api-or-telegram-api  
+[9] From BotFather to 'Hello World' https://core.telegram.org/bots/tutorial  
+[10] Authorization via Telegram Gateway: Quick-start Guide https://core.telegram.org/gateway/verification-tutorial  
+[11] How To Build an AI Chatbot for Telegram [Easy Steps] https://www.voiceflow.com/blog/telegram-chatbot  
+[12] Email List Validation to Telegram Bot FREE Integrations - Pabbly https://www.pabbly.com/connect/integrations/email-list-validation/telegram-bot/  
+[13] Telegram bot for displaying cryptocurrencies prices and charts https://github.com/ebellocchia/telegram_crypto_price_bot  
+[14] Stock Prices Telegram | CoinTrendzBot.com https://cointrendzbot.com/features/stockprice  
+[15] Telegram Registration with Email Verification Support (2025 Edition ) No Manual Work https://www.youtube.com/watch?v=ZDG9bMAznh0  
+[16] Pabbly Email Verification to Telegram Bot FREE Integrations | Pabbly Connect https://www.pabbly.com/connect/integrations/pabbly-email-verification/telegram-bot/  
+[17] How to Build a Telegram Bot in Under 5 Minutes (Quick & ... https://www.youtube.com/watch?v=rKmxRCfITek  
+[18] Building a Telegram bot in Python to track your portfolio https://duarteocarmo.com/blog/building-a-telegram-bot-in-python-to-track-your-portfolio.html  
+[19] send automatic message for all user and group with telegram bot #20 https://github.com/irazasyed/telegram-bot-sdk/issues/20  
+[20] Telegram Bot API Verification - AI Prompt https://docsbot.ai/prompts/technical/telegram-bot-api-verification  
+[21] How to integrate Email Validation & Telegram - Integrately https://integrately.com/integrations/email-validation/telegram  
+[22] User Authorization - Telegram APIs https://core.telegram.org/api/auth  
+[23] Implementing Secure E2E Telegram Process https://www.reddit.com/r/TelegramBots/comments/15vcrke/implementing_secure_e2e_telegram_process_best/  
+[24] Integrating with Telegram Bot https://docs.esputnik.com/docs/integrating-with-telegram-bot  
+[25] Email List Verify and Telegram Bot Integration https://www.make.com/en/integrations/email-list-verify/telegram  
+[26] Exploring the Safety of Telegram Bots https://botpenguin.com/blogs/exploring-the-safety-of-telegram-bots  
+[27] How can I get verified on Telegram? - Mad Penguin https://www.madpenguin.org/how-can-i-get-verified-on-telegram/  
+[28] Telegram Bot to Email List Validation FREE Integrations https://www.pabbly.com/connect/integrations/telegram-bot/email-list-validation/  
