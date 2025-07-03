@@ -1,3 +1,22 @@
+# Clarifications & Implementation Notes
+
+This section summarizes the latest implementation clarifications for the Telegram Screener Bot:
+
+- **Email Report Format:** Reports are sent as HTML emails, with charts included inline (as embedded images) or as attachments.
+- **Admin Panel:** Admin features are available both via bot commands and a web interface (to be implemented in `src/frontend/webgui`).
+- **Scheduled Reports:** Users can set up recurring reports (daily/weekly/monthly) at user-defined times.
+- **Price Alerts:** Alerts can be sent via Telegram and/or email. Users can select their preferred channels.
+- **User Deletion:** Users can delete their account/data via a command (see `01.Detailed_command_syntax_and_usage_examples.md`).
+- **Verification Code Delivery:** The 6-digit code for email verification is always sent via email (never via Telegram).
+- **Localization:** All user-facing text should be localizable. English is the only language for now, but the structure should support future localization.
+- **API Key Management:** All API keys are managed via `.env` and constants in `config/donotshare/donotshare.py`.
+- **UI/UX:** The bot should support both inline keyboards and text commands for all user actions.
+- **Testing:** Comprehensive unit, integration, and UI tests should be implemented for all components, including command parsing, business logic, and user interface.
+
+---
+
+# (Original requirements follow)
+
 I want to develop telegram bot, which would give me information about shares or cryptos by request. it should also be able to send this report via email. 1 email per telegram user is allowed. validation via 6 digits code. ask me questions. i want to create comprehensive requirements.
 
 To create a comprehensive requirements document for your Telegram bot that delivers share/crypto information and sends reports via email (with 1 email per Telegram user and 6-digit code validation), you should clarify several aspects. Here are the main questions and considerations to ensure your requirements are complete and actionable:
@@ -53,7 +72,7 @@ Binance, CoinGecko - for cryptos
   1 hour
 - Should there be rate limiting or anti-abuse mechanisms for email registration/validation?
   Yes. No more than 5 per hour
-- Should you use Telegram’s login widget for authentication, or manage user accounts yourself?[4]
+- Should you use Telegram's login widget for authentication, or manage user accounts yourself?[4]
   I will manage user account myself. But tell me more about telegram authentication widget
 **6. User Management**
 - Should each user be limited to one Telegram account and one email address?
@@ -85,7 +104,7 @@ Binance, CoinGecko - for cryptos
 - Should the bot handle high-frequency requests or just basic queries?
   Only basic queries
 **11. Example User Flow**
-Here’s a sample flow to help clarify requirements:
+Here's a sample flow to help clarify requirements:
 1. User starts the bot and is prompted to register an email.
    No, he may use bot without registration. Email functionality will not be available for him until he registers and confirms the email address. Existing functionality.
 3. User enters email; bot sends a 6-digit code to that email for verification[6].
@@ -149,7 +168,7 @@ CoinGecko - similar to existing BinanceDataDownloader
   Existing functionality.
 - Should the bot support multiple languages?
   Not for now. Only English.
-- Do you want to use Telegram’s official login/auth widget for easier user validation?[4]
+- Do you want to use Telegram's official login/auth widget for easier user validation?[4]
   Not yet
 - Should there be admin features (e.g., user management, usage stats)?
   Yes

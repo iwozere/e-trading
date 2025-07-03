@@ -1,0 +1,132 @@
+Thank you for the correction. Here is the **updated Technical Notes & Code Reuse section** reflecting that **Alpha Vantage, Polygon.io, Finnhub, Twelve Data, and CoinGecko downloaders are already implemented** and should be reused, not developed from scratch.
+
+# Technical Notes & Code Reuse
+
+## 1. **Existing Functionality to Reuse**
+
+### **A. Command Logic & User Flows**
+- **Registration, verification, and email flow:**  
+  - The flows for `/register`, `/verify`, and email confirmation are already implemented and should be reused.
+  - Users can use the bot without registration; email features become available only after registration and verification.
+
+- **Report generation:**  
+  - The logic for fetching and formatting share/crypto reports is already in place and should be extended for new indicators and data sources as needed.
+
+- **Command parsing:**  
+  - Existing command parsing logic should be reused, but refactored into a separate module for easier testing and maintenance.
+
+### **B. Data Downloaders/Providers**
+- **All required data downloaders are already implemented:**  
+  - **YahooDataDownloader, BinanceDataDownloader, AlphaVantageDownloader, PolygonDownloader, FinnhubDownloader, TwelveDataDownloader, CoinGeckoDownloader** (or similarly named classes/modules) are present and should be reused.
+  - When integrating new features, extend or configure these modules as needed, but do not reimplement them.
+
+### **C. Email Integration**
+- **Standard emailer module:**  
+  - Continue using the project’s existing email sending module.
+  - Ensure integration with the notification manager as shown in the provided code snippets.
+
+### **D. Logging**
+- **Standard logging setup:**  
+  - Use the project’s logger, e.g., `from src.notification.logger import setup_logger`.
+  - Follow the lazy `%` message formatting style for all logging.
+  - Log command usage, errors, email delivery, and admin actions.
+
+### **E. Database Layer**
+- **screener_db module:**  
+  - Continue using this module for all database interactions.
+  - Tables to be used/extended: `users`, `alerts`, `schedules`.
+  - Ensure foreign key relationships and timestamp tracking as per the data model.
+
+### **F. Notification Manager**
+- **Notification manager initialization:**  
+  - Use the existing async initialization pattern for the notification manager, as in:
+    ```python
+    notification_manager = asyncio.get_event_loop().run_until_complete(
+        initialize_notification_manager(
+            telegram_token=TELEGRAM_BOT_TOKEN,
+            telegram_chat_id=TELEGRAM_CHAT_ID,
+            email_sender=SMTP_USER,
+            email_receiver=None  # Will be set per user
+        )
+    )
+    ```
+
+## 2. **Required Code Practices**
+
+- **Separation of concerns:**  
+  - Business logic must be separated from Telegram API handling.
+  - Command parsing should be in its own module, with full unit test coverage.
+
+- **Unit Testing:**  
+  - All business logic and command parsing modules must have unit tests.
+  - Use mocks for external API calls and email sending in tests.
+
+- **Error Handling:**  
+  - Handle all exceptions gracefully, log them, and provide user-friendly error messages.
+
+- **Caching:**  
+  - Implement caching for API responses (per ticker/provider/interval) as per existing caching patterns.
+
+## 3. **Patterns and Conventions**
+
+- **Downloader interface:**  
+  - All data downloader classes implement a common interface for fetching ticker data, making it easy to manage and extend providers.
+
+- **Command handler registry:**  
+  - Register command handlers dynamically for maintainability and extensibility.
+
+- **Flag parsing:**  
+  - Use a unified approach to parse command-line style flags (e.g., `-email`, `-indicators=...`) in user commands.
+
+- **Notification logging:**  
+  - Log all outgoing notifications (Telegram, email) for traceability.
+
+## 4. **Integration Points**
+
+- **Telegram Bot API:**  
+  - Continue using the existing integration pattern for receiving and responding to Telegram messages.
+
+- **Email Service:**  
+  - Use the current SMTP or transactional email integration.
+
+- **Database:**  
+  - Use the existing SQLite setup via the `screener_db` module.
+
+## Example: Code Snippets from Existing Functionality
+
+**Logger Setup:**
+```python
+from src.notification.logger import setup_logger
+logger = setup_logger("telegram_bot")
+
+try:
+    # ...code goes here...
+except Exception as e:
+    logger.error("Notification manager not initialized: %s", e, exc_info=True)
+```
+
+**Notification Manager Initialization:**
+```python
+notification_manager = asyncio.get_event_loop().run_until_complete(
+    initialize_notification_manager(
+        telegram_token=TELEGRAM_BOT_TOKEN,
+        telegram_chat_id=TELEGRAM_CHAT_ID,
+        email_sender=SMTP_USER,
+        email_receiver=None  # Will be set per user
+    )
+)
+```
+
+## 5. **Extensibility Considerations**
+
+- **Downloader modules:**  
+  - New providers can be added by following the existing downloader class pattern if needed in the future.
+
+- **Admin features:**  
+  - Admin panel and features should be built on top of the current user/alert/schedule models.
+
+- **Future CRs (Change Requests):**  
+  - Last ticker memory, autocomplete, hot-reload, and multi-language support are planned as future improvements and should be considered in the architecture.
+
+This section ensures all developers are aligned on which code and modules must be reused and which patterns should be followed, supporting maintainability and consistency across your project.
+

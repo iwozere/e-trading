@@ -274,6 +274,7 @@ class TelegramNotifier:
                 f"{message}"
             )
 
+            formatted_message = self.sanitize_for_telegram(formatted_message)
             await self.bot.send_message(
                 chat_id=self.chat_id, text=formatted_message, parse_mode=parse_mode
             )
@@ -282,6 +283,13 @@ class TelegramNotifier:
         except Exception as e:
             _logger.error("Error sending Telegram message (async): %s", e, exc_info=True)
             return False
+
+    def sanitize_for_telegram(self, html: str) -> str:
+        html = html.replace('<h2>', '<b>').replace('</h2>', '</b>')
+        html = html.replace('<h3>', '<b>').replace('</h3>', '</b>')
+        html = html.replace('<br>', '\n')
+        # Optionally strip any other unsupported tags
+        return html
 
 
 def create_notifier() -> Optional[TelegramNotifier]:

@@ -79,7 +79,6 @@ class NotificationChannel:
     def __init__(self, name: str):
         self.name = name
         self.enabled = True
-        self.logger = setup_logger(f"{__name__}.{name}")
 
     async def send(self, notification: Notification) -> bool:
         """Send a notification (to be implemented by subclasses)"""
@@ -118,7 +117,7 @@ class TelegramChannel(NotificationChannel):
                 # Generic message
                 return await self.notifier.send_message_async(notification.message)
         except Exception as e:
-            self.logger.error(f"Failed to send Telegram notification: {e}")
+            _logger.error("Failed to send Telegram notification: %s", e, exc_info=True)
             return False
 
 
@@ -134,6 +133,7 @@ class EmailChannel(NotificationChannel):
     async def send(self, notification: Notification) -> bool:
         """Send notification via email"""
         try:
+            _logger.debug("EmailChannel.send called for %s, subject: %s", self.receiver_email, notification.title)
             loop = asyncio.get_event_loop()
             attachments = None
             if notification.data and "attachments" in notification.data:
@@ -149,7 +149,7 @@ class EmailChannel(NotificationChannel):
             )
             return True
         except Exception as e:
-            self.logger.error(f"Failed to send email notification: {e}")
+            _logger.error("Failed to send email notification: %s", e, exc_info=True)
             return False
 
 
@@ -180,7 +180,6 @@ class AsyncNotificationManager:
             batch_timeout: Timeout for batching in seconds
             max_queue_size: Maximum queue size
         """
-        self.logger = setup_logger(__name__)
 
         # Initialize channels
         self.channels: Dict[str, NotificationChannel] = {}
@@ -226,7 +225,7 @@ class AsyncNotificationManager:
         self.worker_task = asyncio.create_task(self._notification_worker())
         self.batch_worker_task = asyncio.create_task(self._batch_worker())
 
-        self.logger.info("Async notification manager started")
+        _logger.info("Async notification manager started")
 
     async def stop(self):
         """Stop the notification manager"""
@@ -250,7 +249,7 @@ class AsyncNotificationManager:
         except asyncio.CancelledError:
             pass
 
-        self.logger.info("Async notification manager stopped")
+        _logger.info("Async notification manager stopped")
 
     async def send_notification(self,
                               notification_type: NotificationType,
@@ -260,7 +259,8 @@ class AsyncNotificationManager:
                               data: Optional[Dict[str, Any]] = None,
                               source: str = "trading_bot",
                               channels: Optional[List[str]] = None,
-                              attachments: Optional[list] = None) -> bool:
+                              attachments: Optional[list] = None,
+                              email_receiver: Optional[str] = None) -> bool:
         """
         Send a notification asynchronously.
 
@@ -273,11 +273,18 @@ class AsyncNotificationManager:
             source: Source of the notification
             channels: Specific channels to use (None for all enabled channels)
             attachments: List of attachments to include with the notification
+            email_receiver: Receiver email address for email notifications
 
         Returns:
             True if notification was queued successfully
         """
         try:
+            # Set the receiver email dynamically before sending
+            _logger.debug("Start async send_notification")
+            if email_receiver and "email" in self.channels:
+                _logger.debug("Set email_receiver: %s", email_receiver)
+                self.channels["email"].receiver_email = email_receiver
+
             # Add attachments to data if provided
             if attachments:
                 if data is None:
@@ -285,11 +292,11 @@ class AsyncNotificationManager:
                 data["attachments"] = attachments
             notification = Notification(
                 type=notification_type,
-                priority=priority,
                 title=title,
                 message=message,
                 data=data or {},
-                source=source
+                source=source,
+                priority=priority
             )
 
             # Add to queue
@@ -299,10 +306,10 @@ class AsyncNotificationManager:
             return True
 
         except asyncio.QueueFull:
-            self.logger.warning("Notification queue is full, dropping notification")
+            _logger.warning("Notification queue is full, dropping notification")
             return False
         except Exception as e:
-            self.logger.error(f"Error queuing notification: {e}")
+            _logger.error("Error queuing notification: %s", e, exc_info=True)
             return False
 
     async def send_trade_notification(self,
@@ -401,9 +408,10 @@ class AsyncNotificationManager:
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
+                _logger.error("Error in notification worker: CancelledError")
                 break
             except Exception as e:
-                self.logger.error(f"Error in notification worker: {e}")
+                _logger.error("Error in notification worker: %s", e, exc_info=True)
 
     async def _batch_worker(self):
         """Worker task for processing batched notifications"""
@@ -420,6 +428,7 @@ class AsyncNotificationManager:
                     )
                     batch.append(notification)
                     self.batch_queue.task_done()
+                    _logger.debug("Notification added to batch: %s", notification)
                 except asyncio.TimeoutError:
                     pass
 
@@ -431,6 +440,9 @@ class AsyncNotificationManager:
                 )
 
                 if should_process and batch:
+                    _logger.debug("Processing batch of size %d", len(batch))
+                    for n in batch:
+                        _logger.debug("Batch notification: %s", n)
                     await self._process_batch(batch)
                     batch = []
                     last_batch_time = current_time
@@ -438,22 +450,31 @@ class AsyncNotificationManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Error in batch worker: {e}")
+                _logger.error("Error in batch worker: %s", e, exc_info=True)
 
     async def _process_notification(self, notification: Notification):
         """Process a single notification"""
+        _logger.debug("Processing notification: %s", notification)
+        _logger.debug("Channels: %s", self.channels)
+        _logger.debug("Email channel enabled: %s", 'email' in self.channels and self.channels['email'].is_enabled())
+        _logger.debug("Notification channels: %s", getattr(notification, 'channels', None))
+
         # Check if notification should be batched
         if self._should_batch(notification):
             try:
+                _logger.debug("Enqueue the message")
                 await self.batch_queue.put(notification)
                 self.stats["batched"] += 1
                 return
             except asyncio.QueueFull:
-                self.logger.warning("Batch queue is full, processing immediately")
+                _logger.warning("Batch queue is full, processing immediately")
 
         # Send to all enabled channels
+        _logger.debug("Channels: %s", self.channels)
+        _logger.debug(f"Email channel enabled: %s", 'email' in self.channels and self.channels['email'].is_enabled())
         tasks = []
         for channel_name, channel in self.channels.items():
+            _logger.debug("Considering channel: %s, enabled: %s", channel_name, channel.is_enabled())
             if channel.is_enabled():
                 # Check rate limiting
                 if self._check_rate_limit(channel_name):
@@ -474,6 +495,7 @@ class AsyncNotificationManager:
     async def _process_batch(self, batch: List[Notification]):
         """Process a batch of notifications"""
         # Group notifications by type and priority
+        _logger.debug("Start _process_batch")
         grouped = defaultdict(list)
         for notification in batch:
             key = (notification.type, notification.priority)
@@ -485,6 +507,7 @@ class AsyncNotificationManager:
             aggregated = self._aggregate_notifications(notifications)
 
             # Send aggregated notification
+            _logger.debug("_process_batch: _process_notification")
             await self._process_notification(aggregated)
 
     def _should_batch(self, notification: Notification) -> bool:
@@ -518,11 +541,21 @@ class AsyncNotificationManager:
             for title, message in zip(titles, messages)
         ])
 
+        # Collect all attachments from the batch
+        all_attachments = []
+        for n in notifications:
+            if n.data and "attachments" in n.data:
+                all_attachments.extend(n.data["attachments"])
+        aggregated_data = {}
+        if all_attachments:
+            aggregated_data["attachments"] = all_attachments
+
         return Notification(
             type=notifications[0].type,
-            priority=max_priority,
+            priority=NotificationPriority.CRITICAL,
             title=aggregated_title,
             message=aggregated_message,
+            data=aggregated_data,
             source="notification_manager"
         )
 
@@ -545,7 +578,7 @@ class AsyncNotificationManager:
         try:
             return await channel.send(notification)
         except Exception as e:
-            self.logger.error(f"Error sending to channel {channel.name}: {e}")
+            _logger.error("Error sending to channel %s: %s", channel.name, e, exc_info=True)
             return False
 
     async def _handle_failed_notification(self, notification: Notification):
@@ -560,9 +593,9 @@ class AsyncNotificationManager:
             try:
                 await self.notification_queue.put(notification)
             except asyncio.QueueFull:
-                self.logger.error("Queue full, cannot retry notification")
+                _logger.error("Queue full, cannot retry notification")
         else:
-            self.logger.error(f"Notification failed after {notification.max_retries} retries")
+            _logger.error("Notification failed after %s retries", notification.max_retries)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get notification statistics"""
@@ -599,6 +632,7 @@ async def initialize_notification_manager(**kwargs) -> AsyncNotificationManager:
 
     if _notification_manager is None:
         _notification_manager = AsyncNotificationManager(**kwargs)
+        _logger.debug("Start initialize_notification_manager")
         await _notification_manager.start()
 
     return _notification_manager
@@ -613,6 +647,10 @@ async def send_notification(notification_type: NotificationType,
     if manager is None:
         _logger.warning("Notification manager not initialized")
         return False
+
+    # Just before sending the email
+    if "email" in manager.channels:
+        manager.channels["email"].receiver_email = kwargs.get("email_receiver")
 
     return await manager.send_notification(notification_type, title, message, **kwargs)
 

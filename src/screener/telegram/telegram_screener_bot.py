@@ -42,31 +42,27 @@ from src.screener.telegram.screener_db import (
 )
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
 
-from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER
+from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
 
 # Set up logger using the telegram_bot configuration
 logger = setup_logger("telegram_bot")
 
-# Initialize async notification manager (for email/telegram notifications)
-notification_manager = None
-try:
-    notification_manager = asyncio.get_event_loop().run_until_complete(
-        initialize_notification_manager(
-            telegram_token=TELEGRAM_BOT_TOKEN,
-            telegram_chat_id=TELEGRAM_CHAT_ID,
-            email_sender=SMTP_USER,
-            email_receiver=None  # Will be set per user
-        )
-    )
-except Exception as e:
-    logger.error("Notification manager not initialized: %s", e, exc_info=True)
-
-if not TELEGRAM_BOT_TOKEN:
-    logger.error("TELEGRAM_BOT_TOKEN environment variable is not set")
-    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is not set")
+notification_manager = None  # global
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
+
+async def main():
+    global notification_manager
+    notification_manager = await initialize_notification_manager(
+        telegram_token=TELEGRAM_BOT_TOKEN,
+        telegram_chat_id=TELEGRAM_CHAT_ID,
+        email_api_key=SMTP_PASSWORD,
+        email_sender=SMTP_USER,
+        email_receiver=SMTP_USER  # or dummy
+    )
+    logger.info("Starting ticker analyzer bot")
+    await dp.start_polling(bot)
 
 DEFAULT_PERIOD = "2y"
 DEFAULT_INTERVAL = "1d"
@@ -173,7 +169,7 @@ def analyze_and_format_ticker(user_id, ticker, provider, period, interval, email
         # Send the full analysis text as a separate message
         telegram_actions.append({"type": "text", "content": text})
         # Send the chart with a short caption
-        short_caption = f"📊 {ticker} Analysis\n🎯 {result.recommendation}"
+        short_caption = f"📊 {ticker} Analysis\n🎯 {generate_recommendation(technicals.recommendations, 'overall')}"
         telegram_actions.append({"type": "photo", "file": chart_file, "caption": short_caption, "parse_mode": "HTML"})
         if email_flag:
             status = get_user_verification_status(user_id)
@@ -224,10 +220,11 @@ async def handle_ticker(message: Message):
                     notification_type="INFO",
                     title=f"Comprehensive Analysis for {ticker}",
                     message=email_content,
-                    priority="NORMAL",
+                    priority="CRITICAL",
                     data={},
                     source="telegram_screener_bot",
                     channels=["email"],
+                    email_receiver=status["email"]
                 )
                 await message.reply(f"📧 Analysis for {ticker} sent to {status['email']}")
     except Exception as e:
@@ -361,7 +358,7 @@ def parse_analyze_parameters(user_id, message_text, get_ticker_settings):
             elif arg.upper().startswith("-INTERVAL="):
                 interval = arg.split("=", 1)[1].lower()
             else:
-                telegram_actions.append({"type": "text", "content": "Usage: /analyze [-PROVIDER [TICKER]] [-email]"})
+                telegram_actions.append({"type": "text", "content": "Usage: /analyze [-PROVIDER] [TICKER] [-email]"})
                 return [], telegram_actions, email_flag
         elif ticker is None:
             ticker = arg.upper()
@@ -462,7 +459,7 @@ async def analyze_command(message: Message):
         files_to_delete = []
         for action in result["telegram_actions"]:
             if action["type"] == "text":
-                await message.reply(action["content"])
+                await message.reply(sanitize_for_telegram(action["content"]))
             elif action["type"] == "photo":
                 await bot.send_photo(
                     chat_id=message.chat.id,
@@ -485,7 +482,8 @@ async def analyze_command(message: Message):
                 data={},
                 source="telegram_screener_bot",
                 channels=["email"],
-                attachments=attachments
+                attachments=attachments,
+                email_receiver=result["email_info"]["to"]
             )
             await message.reply(f"📧 Status report sent to {result['email_info']['to']}")
             files_to_delete.extend(attachments)
@@ -552,6 +550,7 @@ async def my_register(message: Message):
                 data={},
                 source="telegram_screener_bot",
                 channels=["email"],
+                email_receiver=email
             )
         await message.reply(f"Verification code sent to {email}. Please check your inbox and use /verify CODE in Telegram.")
     except Exception as e:
@@ -582,16 +581,19 @@ async def my_verify(message: Message):
 async def unknown_command(message: Message):
     await send_welcome(message)
 
-async def main():
-    logger.info("Starting ticker analyzer bot")
-    await dp.start_polling(bot)
-
 # Ensure handle_analyze is defined at the module level and importable
 __all__ = [
     'handle_add', 'handle_delete', 'handle_list',
     'handle_register', 'handle_info', 'handle_verify', 'analyze_command_core',
     # ... other exports ...
 ]
+
+def sanitize_for_telegram(html: str) -> str:
+    html = html.replace('<h2>', '<b>').replace('</h2>', '</b>')
+    html = html.replace('<h3>', '<b>').replace('</h3>', '</b>')
+    html = html.replace('<br>', '\n')
+    # Optionally strip any other unsupported tags
+    return html
 
 if __name__ == "__main__":
     asyncio.run(main())
