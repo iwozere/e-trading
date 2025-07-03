@@ -19,8 +19,8 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 
 from src.notification.logger import setup_logger
-from src.notification.telegram_notifier import TelegramNotifier
 from src.notification.emailer import EmailNotifier
+from aiogram import Bot
 
 _logger = setup_logger(__name__)
 
@@ -98,24 +98,38 @@ class NotificationChannel:
 
 
 class TelegramChannel(NotificationChannel):
-    """Telegram notification channel"""
+    """Telegram notification channel using aiogram directly"""
 
     def __init__(self, token: str, chat_id: str):
         super().__init__("telegram")
-        self.notifier = TelegramNotifier(token, chat_id)
+        self.bot = Bot(token=token)
+        self.chat_id = chat_id
 
     async def send(self, notification: Notification) -> bool:
-        """Send notification via Telegram"""
+        """Send notification via Telegram using aiogram"""
         try:
-            if notification.type == NotificationType.TRADE_ENTRY:
-                return await self.notifier.send_trade_notification_async(notification.data)
-            elif notification.type == NotificationType.TRADE_EXIT:
-                return await self.notifier.send_trade_update_async(notification.data)
-            elif notification.type == NotificationType.ERROR:
-                return await self.notifier.send_error_notification_async(notification.message)
-            else:
-                # Generic message
-                return await self.notifier.send_message_async(notification.message)
+            # If attachments are present, send as photo
+            attachments = None
+            if notification.data and "attachments" in notification.data:
+                attachments = notification.data["attachments"]
+            if attachments:
+                # Only send the first attachment as photo (Telegram supports one per message)
+                photo_path = attachments[0]
+                with open(photo_path, "rb") as photo_file:
+                    await self.bot.send_photo(
+                        chat_id=self.chat_id,
+                        photo=photo_file,
+                        caption=notification.message,
+                        parse_mode="HTML"
+                    )
+                return True
+            # Otherwise, send as text
+            await self.bot.send_message(
+                chat_id=self.chat_id,
+                text=notification.message,
+                parse_mode="HTML"
+            )
+            return True
         except Exception as e:
             _logger.error("Failed to send Telegram notification: %s", e, exc_info=True)
             return False
@@ -156,6 +170,7 @@ class EmailChannel(NotificationChannel):
 class AsyncNotificationManager:
     """
     Async notification manager with queuing, batching, and retry mechanisms.
+    Now supports dependency injection for testability.
     """
 
     def __init__(self,
@@ -166,7 +181,10 @@ class AsyncNotificationManager:
                  email_receiver: Optional[str] = None,
                  batch_size: int = 10,
                  batch_timeout: float = 30.0,
-                 max_queue_size: int = 1000):
+                 max_queue_size: int = 1000,
+                 channels: Optional[Dict[str, Any]] = None,
+                 notification_queue: Optional[Any] = None,
+                 batch_queue: Optional[Any] = None):
         """
         Initialize the notification manager.
 
@@ -179,41 +197,27 @@ class AsyncNotificationManager:
             batch_size: Number of notifications to batch
             batch_timeout: Timeout for batching in seconds
             max_queue_size: Maximum queue size
+            channels: Optional dict of channels for testability
+            notification_queue, batch_queue: Optional custom queues for testability
         """
-
-        # Initialize channels
-        self.channels: Dict[str, NotificationChannel] = {}
-
-        if telegram_token and telegram_chat_id:
-            self.channels["telegram"] = TelegramChannel(telegram_token, telegram_chat_id)
-
-        if email_api_key and email_sender and email_receiver:
-            self.channels["email"] = EmailChannel(email_api_key, email_sender, email_receiver)
-
-        # Configuration
+        self.channels: Dict[str, NotificationChannel] = channels or {}
+        if not channels:
+            if telegram_token and telegram_chat_id:
+                self.channels["telegram"] = TelegramChannel(telegram_token, telegram_chat_id)
+            if email_api_key and email_sender and email_receiver:
+                self.channels["email"] = EmailChannel(email_api_key, email_sender, email_receiver)
         self.batch_size = batch_size
         self.batch_timeout = batch_timeout
         self.max_queue_size = max_queue_size
-
-        # Queues and state
-        self.notification_queue = asyncio.Queue(maxsize=max_queue_size)
-        self.batch_queue = asyncio.Queue(maxsize=max_queue_size)
+        self.notification_queue = notification_queue or asyncio.Queue(maxsize=max_queue_size)
+        self.batch_queue = batch_queue or asyncio.Queue(maxsize=max_queue_size)
         self.worker_task: Optional[asyncio.Task] = None
         self.batch_worker_task: Optional[asyncio.Task] = None
         self.running = False
-
-        # Statistics
-        self.stats = {
-            "sent": 0,
-            "failed": 0,
-            "queued": 0,
-            "batched": 0
-        }
-
-        # Rate limiting
+        self.stats = {"sent": 0, "failed": 0, "queued": 0, "batched": 0}
         self.rate_limits = {
-            "telegram": {"last_sent": 0, "min_interval": 1.0},  # 1 second between messages
-            "email": {"last_sent": 0, "min_interval": 5.0}      # 5 seconds between emails
+            "telegram": {"last_sent": 0, "min_interval": 1.0},
+            "email": {"last_sent": 0, "min_interval": 5.0}
         }
 
     async def start(self):
@@ -292,11 +296,11 @@ class AsyncNotificationManager:
                 data["attachments"] = attachments
             notification = Notification(
                 type=notification_type,
+                priority=priority,
                 title=title,
                 message=message,
                 data=data or {},
-                source=source,
-                priority=priority
+                source=source
             )
 
             # Add to queue

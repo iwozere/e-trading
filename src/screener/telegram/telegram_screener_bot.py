@@ -457,15 +457,28 @@ async def analyze_command(message: Message):
             )
         )
         files_to_delete = []
+        # Instead of direct replies, send via notification_manager
         for action in result["telegram_actions"]:
             if action["type"] == "text":
-                await message.reply(sanitize_for_telegram(action["content"]))
+                await notification_manager.send_notification(
+                    notification_type="INFO",
+                    title="Analysis Result",
+                    message=sanitize_for_telegram(action["content"]),
+                    priority="NORMAL",
+                    data={},
+                    source="telegram_screener_bot",
+                    channels=["telegram"]
+                )
             elif action["type"] == "photo":
-                await bot.send_photo(
-                    chat_id=message.chat.id,
-                    photo=FSInputFile(action["file"]),
-                    caption=action["caption"],
-                    parse_mode="HTML",
+                await notification_manager.send_notification(
+                    notification_type="INFO",
+                    title="Analysis Chart",
+                    message=action["caption"],
+                    priority="NORMAL",
+                    data={},
+                    source="telegram_screener_bot",
+                    channels=["telegram"],
+                    attachments=[action["file"]]
                 )
                 files_to_delete.append(action["file"])
         if result["email_info"]:
@@ -485,7 +498,6 @@ async def analyze_command(message: Message):
                 attachments=attachments,
                 email_receiver=result["email_info"]["to"]
             )
-            await message.reply(f"📧 Status report sent to {result['email_info']['to']}")
             files_to_delete.extend(attachments)
         for f in set(files_to_delete):
             try:
@@ -494,7 +506,15 @@ async def analyze_command(message: Message):
                 pass
     except Exception as e:
         logger.error("Error in analyze_command: %s", e, exc_info=True)
-        await message.reply(f"Error: {e}")
+        await notification_manager.send_notification(
+            notification_type="ERROR",
+            title="Analyze Command Error",
+            message=f"Error: {e}",
+            priority="CRITICAL",
+            data={},
+            source="telegram_screener_bot",
+            channels=["telegram"]
+        )
 
 @dp.message(Command("add"))
 async def my_add(message: Message):
