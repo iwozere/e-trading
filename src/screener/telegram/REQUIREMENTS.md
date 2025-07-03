@@ -1,3 +1,100 @@
+Great! You’ve provided very clear and detailed answers. Below is a **refined summary of your comprehensive requirements** for the Telegram bot, organized and ready for use as a foundation for your project specification and development.
+
+# Telegram Bot for Shares & Crypto Reports — Comprehensive Requirements
+
+## 1. Command Structure & User Interaction
+
+- **Command list:**  
+  - `/start` or `/help`: Show all available commands and parameters.  
+  - `/info`: Show registered email and verification status/dates.  
+  - `/register user@email.xyz`: Register or update email for the Telegram user and send 6-digit verification code (valid 1 hour).  
+  - `/verify CODE`: Verify email with the code.  
+  - `/report TICKER1 TICKER2 ... [-email] [-indicators=...]`: Request report for specified tickers (shares or cryptos). Optional flags: send report to email, select indicators.  
+  - `/alerts`: List active price alerts.  
+  - `/alerts add TICKER PRICE CONDITION`: Add alert (condition = above/below).  
+  - `/alerts edit ALERT_ID ...`: Edit alert.  
+  - `/alerts delete ALERT_ID`: Delete alert.  
+  - `/schedules`: List scheduled reports.  
+  - `/schedules add TICKER TIME`: Add scheduled report.  
+  - `/schedules edit SCHEDULE_ID ...`: Edit schedule.  
+  - `/schedules delete SCHEDULE_ID`: Delete schedule.  
+- **User selection of indicators:** Users can specify which technical/fundamental indicators to include in reports.  
+- **Explicit commands only:** No inline commands like `$AAPL`; only explicit commands like `/report AAPL`.  
+- **Limits:** Default max 5 active alerts and 5 scheduled reports per user; configurable by admin.  
+- **Unknown commands:** Bot replies with help message and logs the attempt for admin review.
+
+## 2. API Integration & Data Handling
+
+- **Ticker classification:**  
+  - 1-4 characters → share ticker (e.g., MSFT).  
+  - More than 4 characters → crypto pair (e.g., BTCUSDC).  
+- **Data providers:**  
+  - Shares: Yahoo Finance, Alpha Vantage, Polygon.io, Finnhub, Twelve Data (free tiers only).  
+  - Cryptos: Binance, CoinGecko.  
+- **Failover:** If one API exceeds quota or fails, automatically try next provider.  
+- **Caching:** Cache ticker data per provider and response for report interval (default 1 day).  
+- **Crypto support:** Include spot prices and derivatives/futures if available.  
+- **Error handling:** User-friendly messages for invalid ticker, rate limits, or API errors.
+
+## 3. Email Reporting
+
+- **Format:** Email subject and body customizable by user; default subject: “Alkotarder report”.  
+- **Logging:** Keep log of sent emails per user for admin troubleshooting.  
+- **Notifications:** Notify users in Telegram on successful email delivery or errors.
+
+## 4. Validation & Security
+
+- **Verification code:** 6-digit code sent via email, valid for 1 hour.  
+- **Notifications:** Notify user if registration/verification attempt is made with a new email for their Telegram ID.  
+- **Failed attempts:** Log failed verification attempts for admin review.  
+- **Cooldown:** Lockout for 10 minutes after 5 wrong code entries.
+
+## 5. Admin Features
+
+- **Broadcast:** Admins can broadcast messages to all users.  
+- **Admin panel:** Accessible both via Telegram commands and web interface.  
+- **User management:** Admins can reset user emails and manually verify users.
+
+## 6. Notifications & Alerts
+
+- **Alert notifications:** Send alerts via both Telegram message and email.  
+- **Pause/Resume:** Users can pause or resume alerts and scheduled reports.
+
+## 7. Logging & Monitoring
+
+- **Log contents:** User commands, API errors, email delivery status, admin actions.  
+- **Retention:** Logs kept for 30 days.
+
+## 8. User Experience
+
+- **Last ticker memory:** Not supported initially (future CR).  
+- **Autocomplete/suggestions:** Not supported initially (future CR).
+
+## 9. Development & Deployment
+
+- **Config changes:** Require restart for now; hot-reloading planned for future.  
+- **Testing:**  
+  - Business logic separated from Telegram interface.  
+  - Unit tests for core logic and command parsing modules mandatory.
+
+## 10. Future-Proofing
+
+- **Languages:** Designed to support multiple languages in future.  
+- **Data providers:** Easy to add new stock/crypto data providers later.  
+- **User feedback:** Mechanism for users to request features or report bugs directly via the bot.
+
+If you want, I can also help draft:
+
+- Detailed command syntax and usage examples  
+- Data model diagrams for users, alerts, schedules  
+- API integration design outline  
+- Email template samples  
+- Admin panel feature list and UI mockups  
+
+Just let me know! This requirements summary should give your development team a clear, actionable blueprint to start building your Telegram bot.
+
+***********************************************
+-----------------------------------------------
 I want to develop telegram bot, which would give me information about shares or cryptos by request. it should also be able to send this report via email. 1 email per telegram user is allowed. validation via 6 digits code. ask me questions. i want to create comprehensive requirements.
 
 To create a comprehensive requirements document for your Telegram bot that delivers share/crypto information and sends reports via email (with 1 email per Telegram user and 6-digit code validation), you should clarify several aspects. Here are the main questions and considerations to ensure your requirements are complete and actionable:
