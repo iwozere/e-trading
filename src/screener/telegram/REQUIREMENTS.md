@@ -46,36 +46,60 @@ Binance, CoinGecko - for cryptos
 - Should there be a confirmation email after registration or for every report sent?
 **5. Email Validation & Security**
 - Should the 6-digit code be sent via email or Telegram? (Your description suggests email, but clarify.)
+  Email
 - How should the bot handle expired or invalid codes?
+  Do not use them. For the next request generate a new one
 - What is the desired expiration time for the code (e.g., 10 minutes)?
+  1 hour
 - Should there be rate limiting or anti-abuse mechanisms for email registration/validation?
+  Yes. No more than 5 per hour
 - Should you use Telegram’s login widget for authentication, or manage user accounts yourself?[4]
+  I will manage user account myself. But tell me more about telegram authentication widget
 **6. User Management**
 - Should each user be limited to one Telegram account and one email address?
+  No. Account identifier is a telegram_user_id. One email address per telegram_user_id
 - Should users be able to delete or change their email address?
+  Yes
 - Should admins have access to a list of registered users/emails?
+  Yes
 **7. Privacy & Compliance**
 - Do you need to comply with any privacy regulations (GDPR, etc.) regarding email storage and user data?
+  No
 - Should users be able to delete their data?
+  Yes
 **8. Notifications & Alerts**
 - Should users be able to set price alerts for shares/cryptos?[1]
+  Yes
 - Should the bot send scheduled updates or only on-demand reports?
+  Yes
 **9. Deployment & Maintenance**
 - Where will the bot be hosted (e.g., Heroku, AWS, local server)?[5]
+  Local server
 - Should the bot support logging and error reporting for admin review?
+  Ideally yes
 - Should there be an admin panel for managing users and monitoring usage?
+  Yes
 **10. Scalability & Performance**
 - What is the expected number of users?
+  10-50
 - Should the bot handle high-frequency requests or just basic queries?
+  Only basic queries
 **11. Example User Flow**
 Here’s a sample flow to help clarify requirements:
 1. User starts the bot and is prompted to register an email.
-2. User enters email; bot sends a 6-digit code to that email for verification[6].
-3. User enters the code in Telegram; if valid, email is linked to Telegram account.
-4. User requests a share/crypto report via command or button.
-5. Bot fetches data from selected APIs and prepares a report.
-6. User can request to have the report sent to their registered email.
-7. User receives the report via email.
+   No, he may use bot without registration. Email functionality will not be available for him until he registers and confirms the email address. Existing functionality.
+3. User enters email; bot sends a 6-digit code to that email for verification[6].
+   Yes. Existing functionality.
+5. User enters the code in Telegram; if valid, email is linked to Telegram account.
+   Yes. Existing functionality.
+7. User requests a share/crypto report via command or button.
+   Via telegram command. Existing functionality.
+9. Bot fetches data from selected APIs and prepares a report.
+    Yes. Existing functionality.
+11. User can request to have the report sent to their registered email.
+    Yes, as a part of command, providing "-email" flag in the command.
+13. User receives the report via email.
+    Right
 
 **12. Technical requirements
 1. Use standard logging from the project. 
@@ -114,14 +138,23 @@ CoinGecko - similar to existing BinanceDataDownloader
 
 **Please answer or clarify the following:**
 - What data fields should be included in the share/crypto report?
+  Existing functionality.
 - What is your preferred API or data provider for stocks and cryptos?
+  Existing functionality.
 - Should the bot support both instant and scheduled reports?
+  Yes
 - Should users be able to change or remove their email after registration?
+  Yes
 - What is your preferred email sending method or provider?
+  Existing functionality.
 - Should the bot support multiple languages?
+  Not for now. Only English.
 - Do you want to use Telegram’s official login/auth widget for easier user validation?[4]
+  Not yet
 - Should there be admin features (e.g., user management, usage stats)?
+  Yes
 - Any specific UI/UX preferences for the Telegram bot interface?
+  No. Set of the commands and their structure should be defined in the requirements later.
 
 Once you provide these details, a complete and actionable requirements document can be drafted for your project.
 Citations:[1] GitHub - paragrudani1/telegram-crypto-alert-bot: A Telegram bot for tracking cryptocurrency prices and setting up price alerts. The bot uses the CoinGecko API to fetch cryptocurrency prices and the python-telegram-bot library to interact with users. Features include getting current crypto prices, setting up price alerts, viewing and managing active alerts, and periodic checking of price alerts. https://github.com/paragrudani1/telegram-crypto-alert-bot
