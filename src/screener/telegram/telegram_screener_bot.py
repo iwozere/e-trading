@@ -114,30 +114,48 @@ def parse_period_interval(args):
         elif arg.startswith('-interval='):
             interval = arg.split('=', 1)[1]
 
+def generate_recommendation(recommendations: dict, indicator : str) -> str:
+    """Generate trading recommendation based on technical indicators."""
+    if not recommendations or indicator == "overall" and "overall" not in recommendations:
+        return "Unable to generate recommendation - insufficient data"
+    rec = recommendations.get(indicator, {})
+    signal = rec.get("signal", "HOLD")
+    reason = rec.get("reason", "No reason available")
+    return f"{signal}: {reason}"
+
 def format_analysis_text(result, technicals, fundamentals):
-    return (
-        f"📈 {result.ticker} - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
-        f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
-        f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
-        f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
-        f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
+    recs = technicals.recommendations
+    text = (f"📈 <b>{result.ticker}</b>")
+    if fundamentals:
+        text += (
+            f" - {getattr(fundamentals, 'company_name', 'Unknown')}\n\n"
+            f"💵 Price: ${getattr(fundamentals, 'current_price', 0.0):.2f}\n"
+            f"🏦 P/E: {getattr(fundamentals, 'pe_ratio', 0.0):.2f}, Forward P/E: {getattr(fundamentals, 'forward_pe', 0.0):.2f}\n"
+            f"💸 Market Cap: ${(getattr(fundamentals, 'market_cap', 0.0)/1e9):.2f}B\n"
+            f"📊 EPS: ${getattr(fundamentals, 'earnings_per_share', 0.0):.2f}, Div Yield: {(getattr(fundamentals, 'dividend_yield', 0.0)*100):.2f}%\n\n"
+        )
+    else:
+        text += "\n"
+
+    text += (
         f"📉 Technical Analysis:\n"
-        f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}\n"
-        f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}\n"
-        f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}\n"
-        f"OBV: {getattr(technicals, 'obv', 0.0):.0f}\n"
-        f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}\n"
+        f"RSI: {getattr(technicals, 'rsi', 0.0):.2f}{generate_recommendation(recs, 'rsi')}\n"
+        f"Stochastic %K: {getattr(technicals, 'stoch_k', 0.0):.2f}, %D: {getattr(technicals, 'stoch_d', 0.0):.2f}{generate_recommendation(recs, 'stochastic')}\n"
+        f"ADX: {getattr(technicals, 'adx', 0.0):.2f}, +DI: {getattr(technicals, 'plus_di', 0.0):.2f}, -DI: {getattr(technicals, 'minus_di', 0.0):.2f}{generate_recommendation(recs, 'adx')}\n"
+        f"OBV: {getattr(technicals, 'obv', 0.0):.0f}{generate_recommendation(recs, 'obv')}\n"
+        f"ADR: {getattr(technicals, 'adr', 0.0):.2f}, Avg ADR: {getattr(technicals, 'avg_adr', 0.0):.2f}{generate_recommendation(recs, 'adr')}\n"
         f"MA(50): ${getattr(technicals, 'sma_50', 0.0):.2f}\n"
         f"MA(200): ${getattr(technicals, 'sma_200', 0.0):.2f}\n"
-        f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}\n"
+        f"MACD: {getattr(technicals, 'macd', 0.0):.4f}, Signal: {getattr(technicals, 'macd_signal', 0.0):.4f}, Hist: {getattr(technicals, 'macd_histogram', 0.0):.4f}{generate_recommendation(recs, 'macd')}\n"
         f"Trend: {getattr(technicals, 'trend', '-')}\n\n"
-        f"📊 Bollinger Bands:\n"
+        f"📊 Bollinger Bands:{generate_recommendation(recs, 'bollinger')}\n"
         f"Upper: ${getattr(technicals, 'bb_upper', 0.0):.2f}\n"
         f"Middle: ${getattr(technicals, 'bb_middle', 0.0):.2f}\n"
         f"Lower: ${getattr(technicals, 'bb_lower', 0.0):.2f}\n"
         f"Width: {getattr(technicals, 'bb_width', 0.0):.4f}\n\n"
-        f"🎯 Recommendation: {getattr(result, 'recommendation', '-')}"
+        f"🎯 Overall: {generate_recommendation(recs, 'overall')}"
     )
+    return text
 
 # Helper to analyze a ticker and return telegram action and email info (or error action)
 def analyze_and_format_ticker(user_id, ticker, provider, period, interval, email_flag, get_ticker_settings, get_user_verification_status):

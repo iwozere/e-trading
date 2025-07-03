@@ -47,5 +47,4 @@ class TickerAnalysis:
     fundamentals: Fundamentals
     technicals: Technicals
     chart_image: bytes
-    recommendation: Optional[str] = "Neutral"  # Default value
     df: Optional[object] = None  # DataFrame with pricing info

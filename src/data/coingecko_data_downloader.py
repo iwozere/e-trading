@@ -111,3 +111,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
 
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
+
+    def download_data(self, symbol, interval, start_date, end_date, **kwargs):
+        save_to_csv = kwargs.get('save_to_csv', False)
+        return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=save_to_csv)
