@@ -1,5 +1,3 @@
-Great! You’ve provided very clear and detailed answers. Below is a **refined summary of your comprehensive requirements** for the Telegram bot, organized and ready for use as a foundation for your project specification and development.
-
 # Telegram Bot for Shares & Crypto Reports — Comprehensive Requirements
 
 ## 1. Command Structure & User Interaction
