@@ -23,7 +23,7 @@ This strategy combines mean reversion (RSI) with trend following (Ichimoku) to i
 from typing import Any, Dict, Optional
 
 import backtrader as bt
-from src.entry.base_entry_mixin import BaseEntryMixin
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -138,7 +138,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
 
             # Exit condition: cross below Kijun-sen, RSI overbought, inside Kumo cloud (optional)
             #kumo_bottom = min(span_a, span_b)
-            #return_value = self.cross_below_kijun[0] or self.rsi[0] > self.p.rsi_overbought or (kumo_bottom <= current_price <= kumo_top)  
+            #return_value = self.cross_below_kijun[0] or self.rsi[0] > self.p.rsi_overbought or (kumo_bottom <= current_price <= kumo_top)
 
             return return_value
         except Exception as e:

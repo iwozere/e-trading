@@ -2,11 +2,11 @@
 
 from typing import Any, Dict, Optional
 
-from src.entry.rsi_bb_entry_mixin import RSIBBEntryMixin
-from src.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
-from src.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
-from src.entry.bb_volume_supertrend_entry_mixin import BBVolumeSupertrendEntryMixin
-from src.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntryMixin
+from src.strategy.entry.rsi_bb_entry_mixin import RSIBBEntryMixin
+from src.strategy.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
+from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
+from src.strategy.entry.bb_volume_supertrend_entry_mixin import BBVolumeSupertrendEntryMixin
+from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntryMixin
 
 # Import other mixins...
 

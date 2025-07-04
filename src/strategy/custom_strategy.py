@@ -12,8 +12,8 @@ It provides:
 from typing import Any, Dict
 
 import backtrader as bt
-from src.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
-from src.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
+from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
+from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

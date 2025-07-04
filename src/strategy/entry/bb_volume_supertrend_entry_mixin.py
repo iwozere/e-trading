@@ -26,8 +26,8 @@ This strategy combines mean reversion (BB), volume confirmation, and trend follo
 from typing import Any, Dict, Optional
 
 import backtrader as bt
-from src.entry.base_entry_mixin import BaseEntryMixin
-from src.indicator.super_trend import SuperTrend
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
+from src.strategy.indicator.super_trend import SuperTrend
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)

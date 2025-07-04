@@ -28,10 +28,7 @@ from src.data.trade_repository import TradeRepository
 from src.risk.controller import RiskController
 from src.notification.logger import setup_logger
 from src.notification.async_notification_manager import initialize_notification_manager
-from config.donotshare.donotshare import (
-    TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-    SMTP_USER
-)
+from config.donotshare.donotshare import (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER)
 
 _logger = setup_logger(__name__)
 

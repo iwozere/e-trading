@@ -8,7 +8,6 @@ import json
 import os
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-from src.notification.logger import setup_logger
 import pandas as pd
 
 from .strategy_core import (
@@ -21,6 +20,7 @@ from .strategy_core import (
 )
 from .multi_timeframe_engine import TimeframeSyncer, MultiTimeframeStrategy
 
+from src.notification.logger import setup_logger
 logger = setup_logger(__name__)
 
 

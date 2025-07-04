@@ -12,7 +12,7 @@ from typing import Union, Dict, Any
 import yaml
 from pydantic import ValidationError
 
-from .config_models import TradingBotConfig, OptimizerConfig, DataConfig
+from src.model.telegram_bot import TradingBotConfig, OptimizerConfig, DataConfig
 
 
 def load_config(config_path: Union[str, Path]) -> TradingBotConfig:

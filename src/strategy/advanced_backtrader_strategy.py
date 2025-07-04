@@ -12,8 +12,8 @@ from typing import Dict, Optional, Any
 from src.notification.logger import setup_logger
 
 from src.strategy.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
-from src.entry.entry_mixin_factory import EntryMixinFactory
-from src.exit.exit_mixin_factory import ExitMixinFactory
+from src.strategy.entry.entry_mixin_factory import EntryMixinFactory
+from src.strategy.exit.exit_mixin_factory import ExitMixinFactory
 
 logger = setup_logger(__name__)
 

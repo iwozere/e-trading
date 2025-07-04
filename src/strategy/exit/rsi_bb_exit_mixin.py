@@ -23,7 +23,7 @@ This strategy combines mean reversion (RSI + BB) to identify potential reversal 
 from typing import Any, Dict, Optional
 
 import backtrader as bt
-from src.exit.base_exit_mixin import BaseExitMixin
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)

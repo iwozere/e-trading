@@ -7,10 +7,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 import signal
 from typing import Optional
 
-from src.notification.logger import setup_logger
-_logger = setup_logger(__name__)
 from src.trading.live_trading_bot import LiveTradingBot
 from src.trading.config_validator import validate_config_file, print_validation_results
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
 
 
 def main(config_name: Optional[str] = None):

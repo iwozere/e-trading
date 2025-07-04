@@ -21,7 +21,7 @@ calendar day calculations based on the data feed's timeframe.
 
 from typing import Any, Dict, Optional
 
-from src.exit.base_exit_mixin import BaseExitMixin
+from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)

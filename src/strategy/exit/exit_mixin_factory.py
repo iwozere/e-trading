@@ -2,12 +2,12 @@
 
 from typing import Any, Dict, Optional
 
-from src.exit.atr_exit_mixin import ATRExitMixin
-from src.exit.fixed_ratio_exit_mixin import FixedRatioExitMixin
-from src.exit.ma_crossover_exit_mixin import MACrossoverExitMixin
-from src.exit.rsi_bb_exit_mixin import RSIBBExitMixin
-from src.exit.time_based_exit_mixin import TimeBasedExitMixin
-from src.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
+from src.strategy.exit.atr_exit_mixin import ATRExitMixin
+from src.strategy.exit.fixed_ratio_exit_mixin import FixedRatioExitMixin
+from src.strategy.exit.ma_crossover_exit_mixin import MACrossoverExitMixin
+from src.strategy.exit.rsi_bb_exit_mixin import RSIBBExitMixin
+from src.strategy.exit.time_based_exit_mixin import TimeBasedExitMixin
+from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
 
 # Import other mixins...
 
