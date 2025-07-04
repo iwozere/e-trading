@@ -26,6 +26,12 @@ IBKR_PAPER_KEY = os.getenv("IBKR_PAPER_KEY")
 IBKR_PAPER_SECRET = os.getenv("IBKR_PAPER_SECRET")
 
 
+ALPHA_VANTAGE_KEY=os.getenv("ALPHA_VANTAGE_KEY")
+FINNHUB_KEY=os.getenv("FINNHUB_KEY")
+TWELVE_DATA_KEY=os.getenv("TWELVE_DATA_KEY")
+POLYGON_KEY=os.getenv("POLYGON_KEY")
+
+
 #gmail_password = os.getenv("gmail_password")
 #gmail_username = os.getenv("gmail_username")
 #SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
