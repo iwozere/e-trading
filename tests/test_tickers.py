@@ -3,7 +3,7 @@
 Test script for the refactored tickers_list.py
 """
 
-from src.screener.tickers_list import (
+from src.util.tickers_list import (
     get_all_us_tickers,
     get_us_delisted_tickers,
     get_us_small_cap_tickers,
@@ -37,4 +37,4 @@ def test_ticker_loading():
     print("\nAll tests completed!")
 
 if __name__ == "__main__":
-    test_ticker_loading() 
+    test_ticker_loading()

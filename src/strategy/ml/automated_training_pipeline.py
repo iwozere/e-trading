@@ -31,8 +31,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 from src.model.machine_learning import TrainingConfig, ModelType, PerformanceMetrics, TrainingTrigger
-from src.ml.mlflow_integration import MLflowManager, ModelDeployer
-from src.ml.feature_engineering_pipeline import FeatureEngineeringPipeline
+from src.strategy.ml.mlflow_integration import MLflowManager, ModelDeployer
+from src.strategy.ml.feature_engineering_pipeline import FeatureEngineeringPipeline
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
