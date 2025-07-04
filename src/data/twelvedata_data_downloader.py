@@ -38,9 +38,6 @@ class TwelveDataDataDownloader(BaseDataDownloader):
         super().__init__(data_dir=data_dir)
         self.api_key = api_key
         self.base_url = "https://api.twelvedata.com/time_series"
-        logging.basicConfig(
-            level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-        )
 
     def get_ohlcv(self, symbol: str, interval: str, start_date: str, end_date: str) -> pd.DataFrame:
         """

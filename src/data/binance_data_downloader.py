@@ -23,8 +23,11 @@ from typing import List, Optional
 
 import pandas as pd
 from binance.client import Client
+from src.notification.logger import setup_logger
 
 from .base_data_downloader import BaseDataDownloader
+
+_logger = setup_logger(__name__)
 
 
 class BinanceDataDownloader(BaseDataDownloader):
@@ -61,48 +64,52 @@ class BinanceDataDownloader(BaseDataDownloader):
         Returns:
             DataFrame containing the historical data
         """
-        # Convert dates to timestamps
-        start_timestamp = int(
-            datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000
-        )
-        end_timestamp = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp() * 1000)
+        try:
+            # Convert dates to timestamps
+            start_timestamp = int(
+                datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000
+            )
+            end_timestamp = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp() * 1000)
 
-        # Get klines data
-        klines = self.client.get_historical_klines(
-            symbol, interval, start_timestamp, end_timestamp
-        )
+            # Get klines data
+            klines = self.client.get_historical_klines(
+                symbol, interval, start_timestamp, end_timestamp
+            )
 
-        # Convert to DataFrame
-        df = pd.DataFrame(
-            klines,
-            columns=[
-                "timestamp",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "close_time",
-                "quote_asset_volume",
-                "number_of_trades",
-                "taker_buy_base_asset_volume",
-                "taker_buy_quote_asset_volume",
-                "ignore",
-            ],
-        )
+            # Convert to DataFrame
+            df = pd.DataFrame(
+                klines,
+                columns=[
+                    "timestamp",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "volume",
+                    "close_time",
+                    "quote_asset_volume",
+                    "number_of_trades",
+                    "taker_buy_base_asset_volume",
+                    "taker_buy_quote_asset_volume",
+                    "ignore",
+                ],
+            )
 
-        # Convert timestamp to datetime
-        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            # Convert timestamp to datetime
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
 
-        # Convert string values to float
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = df[col].astype(float)
+            # Convert string values to float
+            for col in ["open", "high", "low", "close", "volume"]:
+                df[col] = df[col].astype(float)
 
-        # Save to CSV if requested
-        if save_to_csv:
-            self.save_data(df, symbol, start_date, end_date)
+            # Save to CSV if requested
+            if save_to_csv:
+                self.save_data(df, symbol, start_date, end_date)
 
-        return df
+            return df
+        except Exception as e:
+            _logger.error(f"Error downloading Binance data for {symbol}: {e}", exc_info=True)
+            raise
 
     def download_multiple_symbols(
         self, symbols: List[str], interval: str, start_date: str, end_date: str

@@ -1,21 +1,8 @@
 import re
 import shlex
-from typing import List, Dict, Any, Optional, Type
-from dataclasses import dataclass, field
+from typing import Dict
+from src.model.model import CommandSpec, ParsedCommand
 
-@dataclass
-class CommandSpec:
-    parameters: Dict[str, Type]  # param_name: type
-    defaults: Dict[str, Any] = field(default_factory=dict)
-    positional: List[str] = field(default_factory=list)  # names for positional args (e.g., tickers)
-
-@dataclass
-class ParsedCommand:
-    command: str
-    args: Dict[str, Any] = field(default_factory=dict)
-    positionals: List[Any] = field(default_factory=list)
-    raw_args: List[str] = field(default_factory=list)
-    extra_flags: Dict[str, Any] = field(default_factory=dict)
 
 class EnterpriseCommandParser:
     def __init__(self, command_specs: Dict[str, CommandSpec]):

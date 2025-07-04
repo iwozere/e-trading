@@ -22,6 +22,9 @@ from typing import Optional
 import pandas as pd
 import requests
 from .base_data_downloader import BaseDataDownloader
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
 
 class CoinGeckoDataDownloader(BaseDataDownloader):
     """Implementation of a data downloader for CoinGecko, fetching historical market data using the CoinGecko API."""
@@ -65,43 +68,50 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
             "to": end_timestamp,
         }
         response = requests.get(url, params=params)
+        if response.status_code != 200:
+            _logger.error(f"CoinGecko API error: {response.status_code} {response.text}")
+            raise RuntimeError(f"CoinGecko API error: {response.status_code} {response.text}")
         data = response.json()
 
         # CoinGecko returns 'prices', 'market_caps', 'total_volumes'. We'll use 'prices' and 'total_volumes'.
         # 'prices' is a list of [timestamp(ms), price].
         # There is no direct OHLCV, so we approximate OHLCV from price/volume data.
-        prices = data.get("prices", [])
-        volumes = {v[0]: v[1] for v in data.get("total_volumes", [])}
+        try:
+            prices = data.get("prices", [])
+            volumes = {v[0]: v[1] for v in data.get("total_volumes", [])}
 
-        # Group by day/hour depending on interval
-        df = pd.DataFrame(prices, columns=["timestamp", "close"])
-        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-        df["volume"] = df["timestamp"].map(lambda ts: volumes.get(int(ts.timestamp() * 1000), 0))
+            # Group by day/hour depending on interval
+            df = pd.DataFrame(prices, columns=["timestamp", "close"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            df["volume"] = df["timestamp"].map(lambda ts: volumes.get(int(ts.timestamp() * 1000), 0))
 
-        # Resample to requested interval
-        if interval.endswith("d"):
-            rule = f'{interval[:-1]}D' if interval != "1d" else "D"
-        elif interval.endswith("h"):
-            rule = f'{interval[:-1]}H' if interval != "1h" else "H"
-        elif interval.endswith("m"):
-            rule = f'{interval[:-1]}T' if interval != "1m" else "T"
-        else:
-            rule = "D"
+            # Resample to requested interval
+            if interval.endswith("d"):
+                rule = f'{interval[:-1]}D' if interval != "1d" else "D"
+            elif interval.endswith("h"):
+                rule = f'{interval[:-1]}H' if interval != "1h" else "H"
+            elif interval.endswith("m"):
+                rule = f'{interval[:-1]}T' if interval != "1m" else "T"
+            else:
+                rule = "D"
 
-        ohlcv = df.resample(rule, on="timestamp").agg({
-            "close": ["first", "max", "min", "last"],
-            "volume": "sum"
-        })
-        ohlcv.columns = ["open", "high", "low", "close", "volume"]
-        ohlcv = ohlcv.reset_index()
-        ohlcv = ohlcv.rename(columns={"timestamp": "timestamp"})
-        ohlcv = ohlcv[["timestamp", "open", "high", "low", "close", "volume"]]
+            ohlcv = df.resample(rule, on="timestamp").agg({
+                "close": ["first", "max", "min", "last"],
+                "volume": "sum"
+            })
+            ohlcv.columns = ["open", "high", "low", "close", "volume"]
+            ohlcv = ohlcv.reset_index()
+            ohlcv = ohlcv.rename(columns={"timestamp": "timestamp"})
+            ohlcv = ohlcv[["timestamp", "open", "high", "low", "close", "volume"]]
 
-        # Save to CSV if requested
-        if save_to_csv:
-            self.save_data(ohlcv, symbol, start_date, end_date)
+            # Save to CSV if requested
+            if save_to_csv:
+                self.save_data(ohlcv, symbol, start_date, end_date)
 
-        return ohlcv
+            return ohlcv
+        except Exception as e:
+            _logger.error(f"Error processing CoinGecko data for {symbol}: {e}", exc_info=True)
+            raise
 
     def get_periods(self) -> list:
         return ['1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y']

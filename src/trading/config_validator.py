@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Tuple
 from pathlib import Path
 from src.notification.logger import setup_logger
 from src.config.config_loader import validate_config_file as pydantic_validate_config_file
-from src.config.config_models import TradingBotConfig
+from src.model.config_models import TradingBotConfig
 
 _logger = setup_logger(__name__)
 
@@ -22,7 +22,7 @@ class ConfigValidator:
     """
     Validates live trading bot configurations using Pydantic models.
 
-    This class leverages Pydantic validation to ensure that all required 
+    This class leverages Pydantic validation to ensure that all required
     parameters are present and valid before the bot starts.
     """
 
@@ -212,4 +212,4 @@ if __name__ == "__main__":
     print_validation_results(is_valid, errors, warnings)
 
     if not is_valid:
-        sys.exit(1) 
+        sys.exit(1)

@@ -5,6 +5,7 @@ import requests
 from datetime import datetime
 import websocket
 import backtrader as bt
+from src.notification.logger import setup_logger
 
 """
 Data feed implementation for Binance, providing real-time and historical market data for trading strategies.
@@ -18,6 +19,8 @@ Classes:
 - BinanceEnhancedFeed: Backtrader data feed for Binance with live updates
 - SMACrossover: Example strategy using a simple moving average crossover
 """
+
+_logger = setup_logger(__name__)
 
 class BinanceEnhancedFeed(bt.feed.DataBase):
     """
@@ -75,7 +78,7 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
         self.ws.run_forever()
 
     def _on_open(self, ws):
-        print(f"WebSocket connected for {self.p.symbol}")
+        _logger.info(f"WebSocket connected for {self.p.symbol}")
 
     def _on_message(self, ws, message):
         msg = json.loads(message)
@@ -91,9 +94,9 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
             })
 
     def _on_error(self, ws, error):
-        print(f"WebSocket error: {error}")
+        _logger.error(f"WebSocket error: {error}")
         # Auto-reconnect logic
-        print("Reconnecting in 5 seconds...")
+        _logger.info("Reconnecting in 5 seconds...")
         threading.Timer(5.0, self._run_websocket).start()
 
     def _load(self):
@@ -153,7 +156,7 @@ if __name__ == '__main__':
     cerebro.broker.setcash(10000)
     cerebro.broker.setcommission(commission=0.001)
 
-    print(f"Starting Portfolio Value: {cerebro.broker.getvalue():.2f}")
+    _logger.info(f"Starting Portfolio Value: {cerebro.broker.getvalue():.2f}")
     cerebro.run()
-    print(f"Final Portfolio Value: {cerebro.broker.getvalue():.2f}")
+    _logger.info(f"Final Portfolio Value: {cerebro.broker.getvalue():.2f}")
     cerebro.plot()

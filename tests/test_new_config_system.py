@@ -14,7 +14,7 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.config.config_models import TradingBotConfig, OptimizerConfig, DataConfig, BrokerType, DataSourceType
+from src.model.config_models import TradingBotConfig, OptimizerConfig, DataConfig, BrokerType, DataSourceType
 from src.config.config_loader import load_config, save_config, validate_config_file, create_sample_config
 
 
@@ -266,4 +266,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

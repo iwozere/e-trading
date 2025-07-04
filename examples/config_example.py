@@ -20,7 +20,7 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config.config_models import TradingBotConfig, OptimizerConfig, DataConfig, BrokerType, DataSourceType, StrategyType, Environment
+from src.model.config_models import TradingBotConfig, OptimizerConfig, DataConfig, BrokerType, DataSourceType, StrategyType, Environment
 from src.config.config_loader import load_config, save_config, validate_config_file, create_sample_config, convert_old_config
 
 from src.notification.logger import setup_logger

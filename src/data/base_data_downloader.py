@@ -2,6 +2,7 @@ import os
 from typing import Dict, List, Optional
 import pandas as pd
 from abc import ABC, abstractmethod
+from src.notification.logger import setup_logger
 
 """
 Abstract base class for data downloaders, defining the interface for downloading historical market data from various sources.
@@ -20,6 +21,7 @@ Classes:
 - BaseDataDownloader: Abstract base class for data downloaders
 """
 
+_logger = setup_logger(__name__)
 
 class BaseDataDownloader(ABC):
     """
@@ -84,7 +86,7 @@ class BaseDataDownloader(ABC):
                 )
                 results[symbol] = filepath
             except Exception as e:
-                print(f"Error processing {symbol}: {str(e)}")
+                _logger.error(f"Error processing {symbol}: {str(e)}", exc_info=True)
                 continue
         return results
 

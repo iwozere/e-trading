@@ -37,7 +37,7 @@ from src.strategy.custom_strategy import CustomStrategy
 from src.strategy.composite_strategy_manager import AdvancedStrategyFramework
 from src.trading.base_trading_bot import BaseTradingBot
 from src.config.config_loader import load_config
-from src.config.config_models import TradingBotConfig
+from src.model.config_models import TradingBotConfig
 
 _logger = setup_logger(__name__)
 

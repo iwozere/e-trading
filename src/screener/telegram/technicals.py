@@ -1,7 +1,9 @@
+import numpy as np
+import talib
 import pandas as pd
 from typing import Tuple, List
 from src.notification.logger import setup_logger
-from src.screener.telegram.models import Technicals
+from src.model.model import Technicals
 
 logger = setup_logger("telegram_bot")
 
@@ -103,9 +105,6 @@ def calculate_technicals_from_df(df):
     Returns:
         (DataFrame, Technicals): DataFrame with indicator columns, Technicals dataclass with latest values
     """
-    import numpy as np
-    import talib
-    from src.screener.telegram.models import Technicals
 
     if df is None or df.empty:
         logger.error("No data provided for technicals calculation.")

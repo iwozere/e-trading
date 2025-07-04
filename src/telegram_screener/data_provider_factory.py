@@ -4,7 +4,7 @@ from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 from src.data.polygon_data_downloader import PolygonDataDownloader
 from src.data.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.twelvedata_data_downloader import TwelveDataDataDownloader
-from src.data.coingecko_data_downloader import CoingeckoDataDownloader
+from src.data.coingecko_data_downloader import CoinGeckoDataDownloader
 
 PROVIDER_MAP = {
     "yf": YahooDataDownloader,
@@ -16,7 +16,7 @@ PROVIDER_MAP = {
     "polygon": PolygonDataDownloader,
     "finnhub": FinnhubDataDownloader,
     "twelvedata": TwelveDataDataDownloader,
-    "coingecko": CoingeckoDataDownloader,
+    "coingecko": CoinGeckoDataDownloader,
 }
 
 def get_downloader(provider: str):

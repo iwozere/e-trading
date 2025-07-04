@@ -7,7 +7,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN
-from src.config.config_models import TradingBotConfig, BrokerType, DataSourceType, StrategyType
+from src.model.config_models import TradingBotConfig, BrokerType, DataSourceType, StrategyType
 
 """
 Telegram Bot Management Module
