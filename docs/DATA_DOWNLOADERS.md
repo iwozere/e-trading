@@ -5,7 +5,7 @@ This document describes all data downloaders implemented in the `src/data` folde
 ## Common Interface
 
 All downloaders inherit from `BaseDataDownloader` and provide:
-- `download_data(symbol, interval, start_date, end_date) -> pd.DataFrame`: Download historical data for a symbol.
+- `get_ohlcv(symbol, interval, start_date, end_date) -> pd.DataFrame`: Download historical data for a symbol.
 - `get_periods() -> list`: List of valid period strings.
 - `get_intervals() -> list`: List of valid interval strings.
 - `is_valid_period_interval(period, interval) -> bool`: Validate a period/interval combination.
@@ -47,7 +47,7 @@ All columns are lowercase. Timestamps are pandas `datetime` objects.
 ```python
 from src.data.binance_data_downloader import BinanceDataDownloader
 downloader = BinanceDataDownloader()
-df = downloader.download_data('BTCUSDT', '1h', '2023-01-01', '2023-02-01')
+df = downloader.get_ohlcv('BTCUSDT', '1h', '2023-01-01', '2023-02-01')
 ```
 
 ### CoinGeckoDataDownloader
@@ -59,7 +59,7 @@ df = downloader.download_data('BTCUSDT', '1h', '2023-01-01', '2023-02-01')
 ```python
 from src.data.coingecko_data_downloader import CoinGeckoDataDownloader
 downloader = CoinGeckoDataDownloader()
-df = downloader.download_historical_data('bitcoin', '1d', '2023-01-01', '2023-02-01')
+df = downloader.get_ohlcv('bitcoin', '1d', '2023-01-01', '2023-02-01')
 ```
 
 ### YahooDataDownloader
@@ -71,7 +71,7 @@ df = downloader.download_historical_data('bitcoin', '1d', '2023-01-01', '2023-02
 ```python
 from src.data.yahoo_data_downloader import YahooDataDownloader
 downloader = YahooDataDownloader()
-df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
+df = downloader.get_ohlcv('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```
 
 ### AlphaVantageDataDownloader
@@ -83,7 +83,7 @@ df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```python
 from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 downloader = AlphaVantageDataDownloader(api_key='YOUR_API_KEY')
-df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
+df = downloader.get_ohlcv('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```
 
 ### PolygonDataDownloader
@@ -95,7 +95,7 @@ df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```python
 from src.data.polygon_data_downloader import PolygonDataDownloader
 downloader = PolygonDataDownloader(api_key='YOUR_API_KEY')
-df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
+df = downloader.get_ohlcv('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```
 
 ### FinnhubDataDownloader
@@ -107,7 +107,7 @@ df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```python
 from src.data.finnhub_data_downloader import FinnhubDataDownloader
 downloader = FinnhubDataDownloader(api_key='YOUR_API_KEY')
-df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
+df = downloader.get_ohlcv('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```
 
 ### TwelveDataDataDownloader
@@ -119,7 +119,7 @@ df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```python
 from src.data.twelvedata_data_downloader import TwelveDataDataDownloader
 downloader = TwelveDataDataDownloader(api_key='YOUR_API_KEY')
-df = downloader.download_data('AAPL', '1d', '2023-01-01', '2023-02-01')
+df = downloader.get_ohlcv('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```
 
 ---

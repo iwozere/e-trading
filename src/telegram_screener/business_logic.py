@@ -35,10 +35,7 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     """
     Business logic for /report command.
     For each ticker:
-      - Select provider (yf/bnc/etc) based on args or default logic
-      - Validate period/interval
-      - Fetch data using get_downloader
-      - Populate TickerAnalysis object
+      - Use analyze_ticker_business for unified analysis logic
     """
     args = parsed.args
     tickers = [args.get("tickers")] if isinstance(args.get("tickers"), str) else args.get("tickers", [])
@@ -47,28 +44,13 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     provider = args.get("provider")
     analyses: List[TickerAnalysis] = []
     for ticker in tickers:
-        # Provider selection logic
-        prov = provider or ("yf" if len(ticker) < 5 else "bnc")
-        try:
-            downloader = get_downloader(prov)
-            if not downloader.is_valid_period_interval(period, interval):
-                analyses.append(TickerAnalysis(
-                    ticker=ticker, provider=prov, period=period, interval=interval,
-                    error=f"Invalid period/interval for provider {prov}"
-                ))
-                continue
-            # For demo, use last 2 years as default
-            start_date = pd.Timestamp.today() - pd.DateOffset(years=int(period[:-1]) if period.endswith('y') else 2)
-            end_date = pd.Timestamp.today()
-            df = downloader.get_ohlcv(ticker, interval, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
-            analyses.append(TickerAnalysis(
-                ticker=ticker, provider=prov, period=period, interval=interval, ohlcv=df
-            ))
-        except Exception as e:
-            analyses.append(TickerAnalysis(
-                ticker=ticker, provider=prov, period=period, interval=interval,
-                error=str(e)
-            ))
+        analysis = analyze_ticker_business(
+            ticker=ticker,
+            provider=provider,
+            period=period,
+            interval=interval
+        )
+        analyses.append(analysis)
     return {
         "status": "ok",
         "analyses": analyses,

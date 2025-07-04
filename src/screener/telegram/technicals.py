@@ -106,8 +106,6 @@ def calculate_technicals_from_df(df):
     import numpy as np
     import talib
     from src.screener.telegram.models import Technicals
-    import logging
-    logger = logging.getLogger("telegram_bot")
 
     if df is None or df.empty:
         logger.error("No data provided for technicals calculation.")

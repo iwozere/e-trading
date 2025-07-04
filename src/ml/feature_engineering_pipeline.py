@@ -11,7 +11,6 @@ This module provides comprehensive feature engineering capabilities:
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Any
-import logging
 from dataclasses import dataclass
 from enum import Enum
 import talib
@@ -19,9 +18,9 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.feature_selection import f_regression, mutual_info_regression
 from sklearn.decomposition import PCA
 import warnings
-warnings.filterwarnings('ignore')
+from src.notification.logger import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 class FeatureType(Enum):

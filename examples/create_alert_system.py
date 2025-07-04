@@ -15,7 +15,6 @@ Advanced alert system with:
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
@@ -24,6 +23,7 @@ import re
 from collections import defaultdict
 
 from .async_notification_manager import AsyncNotificationManager
+from src.notification.logger import setup_logger
 
 
 class AlertSeverity(Enum):
@@ -171,7 +171,7 @@ class SmartAlertSystem:
 
     def __init__(self, notification_manager: AsyncNotificationManager):
         self.notification_manager = notification_manager
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
 
         # Alert rules and instances
         self.alert_rules: Dict[str, AlertRule] = {}

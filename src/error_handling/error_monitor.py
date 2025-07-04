@@ -17,7 +17,7 @@ import time
 import logging
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from collections import defaultdict, deque
 import json
@@ -54,7 +54,7 @@ class ErrorEvent:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            'timestamp': self.timestamp.isoformat(),
+            'timestamp': self.timestamp.now(timezone.utc).isoformat(),
             'error_type': type(self.error).__name__,
             'error_message': str(self.error),
             'severity': self.severity.value,
@@ -142,7 +142,7 @@ class ErrorMonitor:
         with self._lock:
             # Create error event
             event = ErrorEvent(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 error=error,
                 severity=severity,
                 component=component,
@@ -207,7 +207,7 @@ class ErrorMonitor:
 
     def _calculate_error_rate(self) -> float:
         """Calculate current error rate."""
-        window_start = datetime.utcnow() - timedelta(seconds=self.alert_config.time_window)
+        window_start = datetime.now(timezone.utc) - timedelta(seconds=self.alert_config.time_window)
 
         # Count errors in window
         error_count = sum(1 for event in self.error_events
@@ -226,7 +226,7 @@ class ErrorMonitor:
         alert_data = {
             'message': message,
             'error_event': event.to_dict(),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         # Send alerts via configured functions
@@ -265,7 +265,7 @@ class ErrorMonitor:
         """
         with self._lock:
             if time_window:
-                cutoff_time = datetime.utcnow() - timedelta(seconds=time_window)
+                cutoff_time = datetime.now(timezone.utc) - timedelta(seconds=time_window)
                 events = [e for e in self.error_events if e.timestamp >= cutoff_time]
             else:
                 events = list(self.error_events)
@@ -354,7 +354,7 @@ class ErrorMonitor:
 
         if format == "json":
             report = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'time_window': time_window,
                 'statistics': stats,
                 'recent_errors': [e.to_dict() for e in recent_errors]
@@ -363,7 +363,7 @@ class ErrorMonitor:
 
         elif format == "text":
             lines = [
-                f"Error Report - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Error Report - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}",
                 f"Time Window: {time_window}s" if time_window else "Time Window: All time",
                 "",
                 "Statistics:",

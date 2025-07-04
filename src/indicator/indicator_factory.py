@@ -8,9 +8,9 @@ Supports both TA-Lib and Backtrader indicators with consistent interface.
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, Optional, Union
-import logging
+from src.notification.logger import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 class IndicatorFactory:
@@ -163,4 +163,4 @@ class IndicatorFactory:
 
     def list_indicators(self) -> list:
         """List all available indicators."""
-        return list(self.indicators.keys()) 
+        return list(self.indicators.keys())

@@ -16,7 +16,6 @@ import mlflow.xgboost
 import mlflow.lightgbm
 import os
 import json
-import logging
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, List
@@ -25,8 +24,9 @@ import pickle
 import shutil
 from pathlib import Path
 from dataclasses import dataclass, asdict
+from src.notification.logger import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 @dataclass

@@ -145,4 +145,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
   - `composite_strategy_manager.py` (strategy orchestration)
 - Removed monolithic logic from `advanced_strategy_framework.py`.
 - Updated all imports and documentation.
-- Added and improved tests for all modules. 
+- Added and improved tests for all modules.
+- Refactor: All data downloader methods download_data renamed to get_ohlcv for consistency and clarity across the codebase. 

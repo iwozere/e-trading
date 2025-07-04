@@ -12,7 +12,6 @@ import pandas as pd
 import numpy as pd
 from typing import Dict, List, Tuple, Any
 from datetime import datetime
-import logging
 import json
 import schedule
 import time
@@ -33,8 +32,9 @@ warnings.filterwarnings('ignore')
 
 from src.ml.mlflow_integration import MLflowManager, ModelDeployer
 from src.ml.feature_engineering_pipeline import FeatureEngineeringPipeline
+from src.notification.logger import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 class TrainingTrigger(Enum):

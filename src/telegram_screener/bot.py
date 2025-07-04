@@ -1,5 +1,7 @@
-import logging
 import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
 from aiogram.filters import Command, CommandObject
@@ -9,10 +11,11 @@ import random
 import time
 from src.telegram_screener import db
 import sqlite3
+from src.notification.logger import setup_logger
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("telegram_screener_bot")
+setup_logger("telegram_screener_bot")
+logger = setup_logger("telegram_screener_bot")
 
 # Load token from environment or config (placeholder)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TOKEN_HERE")

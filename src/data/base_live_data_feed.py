@@ -21,7 +21,6 @@ import threading
 from abc import abstractmethod
 from typing import Optional, Callable, Dict, Any
 from datetime import datetime
-import logging
 
 import backtrader as bt
 import pandas as pd

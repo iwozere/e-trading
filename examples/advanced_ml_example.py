@@ -9,7 +9,6 @@ This example demonstrates the comprehensive ML capabilities:
 
 import pandas as pd
 import numpy as np
-import logging
 import json
 import yaml
 from datetime import datetime, timedelta
@@ -24,10 +23,10 @@ from src.ml.automated_training_pipeline import (
     AutomatedTrainingPipeline, TrainingConfig, ModelType,
     TrainingTrigger, PerformanceMetrics
 )
+from src.notification.logger import setup_logger
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 def create_sample_data(n_samples: int = 1000) -> pd.DataFrame:

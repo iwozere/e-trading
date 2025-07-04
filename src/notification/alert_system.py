@@ -10,7 +10,6 @@ Advanced alert system with:
 - Alert history and management
 """
 
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field

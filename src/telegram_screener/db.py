@@ -1,7 +1,7 @@
 import sqlite3
 import time
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 DB_PATH = "telegram_screener.sqlite3"
 
@@ -143,7 +143,7 @@ def count_codes_last_hour(telegram_user_id: str) -> int:
 # --- ALERTS CRUD ---
 def add_alert(user_id: str, ticker: str, price: float, condition: str) -> int:
     """Add a new alert. Returns alert id."""
-    created = datetime.utcnow().isoformat()
+    created = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT INTO alerts (ticker, user_id, price, condition, active, created) VALUES (?, ?, ?, ?, 1, ?)",
@@ -198,7 +198,7 @@ def delete_alert(alert_id: int) -> bool:
 # --- SCHEDULES CRUD ---
 def add_schedule(user_id: str, ticker: str, scheduled_time: str, period: str = None, email: int = 0, indicators: str = None, interval: str = None, provider: str = None) -> int:
     """Add a new schedule. Returns schedule id."""
-    created = datetime.utcnow().isoformat()
+    created = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT INTO schedules (ticker, user_id, scheduled_time, period, active, email, indicators, interval, provider, created) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)",

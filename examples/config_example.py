@@ -15,7 +15,6 @@ Features demonstrated:
 
 import os
 import sys
-import logging
 from pathlib import Path
 
 # Add src to path for imports
@@ -24,14 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.config.config_models import TradingBotConfig, OptimizerConfig, DataConfig, BrokerType, DataSourceType, StrategyType, Environment
 from src.config.config_loader import load_config, save_config, validate_config_file, create_sample_config, convert_old_config
 
-
-def setup_logging():
-    """Setup logging for the example"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
+from src.notification.logger import setup_logger
+logger = setup_logger(__name__)
 
 def example_basic_usage():
     """Demonstrate basic configuration management usage"""
@@ -290,8 +283,6 @@ def main():
     print("🚀 Configuration Management Examples")
     print("=" * 50)
 
-    setup_logging()
-
     try:
         # Create config directories if they don't exist
         Path("config/trading").mkdir(parents=True, exist_ok=True)
@@ -317,4 +308,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

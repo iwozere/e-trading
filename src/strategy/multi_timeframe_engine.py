@@ -8,11 +8,11 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Any
 from datetime import datetime
-import logging
+from src.notification.logger import setup_logger
 
 from .strategy_core import BaseStrategy, StrategySignal
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 class TimeframeSyncer:

@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 import backtrader as bt
 from datetime import datetime, timedelta
-import logging
+from src.notification.logger import setup_logger
 
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -23,8 +23,7 @@ from src.strategy.advanced_backtrader_strategy import AdvancedBacktraderStrategy
 from src.strategy.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 def create_sample_data():

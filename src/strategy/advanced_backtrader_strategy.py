@@ -9,13 +9,13 @@ and dynamic switching.
 import backtrader as bt
 import pandas as pd
 from typing import Dict, Optional, Any
-import logging
+from src.notification.logger import setup_logger
 
 from src.strategy.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
 from src.entry.entry_mixin_factory import EntryMixinFactory
 from src.exit.exit_mixin_factory import ExitMixinFactory
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 class AdvancedBacktraderStrategy(bt.Strategy):
