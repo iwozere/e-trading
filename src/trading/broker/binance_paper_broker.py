@@ -1,10 +1,10 @@
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 
-from src.broker.base_binance_broker import BaseBinanceBroker
+from src.trading.broker.base_binance_broker import BaseBinanceBroker
 from src.notification.logger import setup_logger
 
 

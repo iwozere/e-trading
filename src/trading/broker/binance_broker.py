@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
 from binance.client import Client
-from src.broker.base_broker import BaseBroker
+from src.trading.broker.base_broker import BaseBroker
 
 
 class BinanceBroker(BaseBroker):

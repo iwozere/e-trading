@@ -1,9 +1,9 @@
 from typing import Any, Dict
 
-from src.broker.binance_broker import BinanceBroker
-from src.broker.binance_paper_broker import BinancePaperBroker
-from src.broker.ibkr_broker import IBKRBroker
-from src.broker.mock_broker import MockBroker
+from src.trading.broker.binance_broker import BinanceBroker
+from src.trading.broker.binance_paper_broker import BinancePaperBroker
+from src.trading.broker.ibkr_broker import IBKRBroker
+from src.trading.broker.mock_broker import MockBroker
 
 from config.donotshare.donotshare import (BINANCE_KEY, BINANCE_PAPER_KEY,
                                           BINANCE_PAPER_SECRET, BINANCE_SECRET,

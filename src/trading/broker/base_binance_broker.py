@@ -9,7 +9,7 @@ import pandas as pd
 from binance.client import Client
 from binance.enums import *
 from binance.exceptions import BinanceAPIException
-from src.broker.base_broker import BaseBroker
+from src.trading.broker.base_broker import BaseBroker
 from src.notification.logger import setup_logger
 from src.notification.async_notification_manager import send_trade_notification, send_error_notification
 

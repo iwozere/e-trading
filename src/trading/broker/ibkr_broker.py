@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 import pandas as pd
 from ib_insync import IB, LimitOrder, MarketOrder, Stock
-from src.broker.base_broker import BaseBroker
+from src.trading.broker.base_broker import BaseBroker
 
 
 class IBKRBroker(BaseBroker):

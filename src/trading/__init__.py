@@ -5,7 +5,7 @@ Provides centralized functions and imports for trading bot setup and management.
 
 from typing import Any, Dict
 
-from src.broker.broker_factory import get_broker
+from src.trading.broker.broker_factory import get_broker
 from src.trading.live_trading_bot import LiveTradingBot
 from src.trading.config_validator import ConfigValidator, validate_config_file
 

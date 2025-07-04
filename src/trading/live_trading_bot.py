@@ -30,7 +30,7 @@ from typing import Any, Dict
 
 import backtrader as bt
 
-from src.broker.broker_factory import get_broker
+from src.trading.broker.broker_factory import get_broker
 from src.data.data_feed_factory import DataFeedFactory
 from src.notification.logger import setup_logger
 from src.strategy.custom_strategy import CustomStrategy
