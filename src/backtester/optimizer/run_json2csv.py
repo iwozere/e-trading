@@ -52,7 +52,7 @@ import json
 import os
 
 import pandas as pd
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 
 def extract_symbol_interval_dates(filename):

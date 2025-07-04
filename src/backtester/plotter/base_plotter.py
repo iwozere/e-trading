@@ -16,12 +16,11 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 from src.notification.logger import setup_logger
-from src.plotter.indicators.bollinger_bands_plotter import \
-    BollingerBandsPlotter
-from src.plotter.indicators.ichimoku_plotter import IchimokuPlotter
-from src.plotter.indicators.rsi_plotter import RSIPlotter
-from src.plotter.indicators.supertrend_plotter import SuperTrendPlotter
-from src.plotter.indicators.volume_plotter import VolumePlotter
+from src.backtester.plotter.indicators.bollinger_bands_plotter import BollingerBandsPlotter
+from src.backtester.plotter.indicators.ichimoku_plotter import IchimokuPlotter
+from src.backtester.plotter.indicators.rsi_plotter import RSIPlotter
+from src.backtester.plotter.indicators.supertrend_plotter import SuperTrendPlotter
+from src.backtester.plotter.indicators.volume_plotter import VolumePlotter
 
 _logger = setup_logger(__name__)
 

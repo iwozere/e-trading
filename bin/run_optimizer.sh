@@ -18,6 +18,6 @@ fi
 
 source "$PROJECT_ROOT/.venv/bin/activate"
 
-nohup "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/optimizer/run_optimizer.py" > "$PROJECT_ROOT/logs/log/optimizer.log" 2>&1 &
+nohup "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/backtester/optimizer/run_optimizer.py" > "$PROJECT_ROOT/logs/log/optimizer.log" 2>&1 &
 
 echo "Optimizer started in background. Check $PROJECT_ROOT/logs/log/optimizer.log for output."

@@ -34,7 +34,7 @@ if errorlevel 1 (
 
 REM Run the optimizer script
 echo Running optimizer...
-python src\optimizer\run_optimizer.py
+python src\backtester\optimizer\run_optimizer.py
 
 REM Check if script ran successfully
 if errorlevel 1 (

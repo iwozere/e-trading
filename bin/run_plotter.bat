@@ -34,7 +34,7 @@ if errorlevel 1 (
 
 REM Run the plotter script
 echo Running plotter...
-python src\plotter\run_plotter.py
+python src\backtester\plotter\run_plotter.py
 
 REM Check if script ran successfully
 if errorlevel 1 (

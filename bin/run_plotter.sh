@@ -18,6 +18,6 @@ fi
 
 source "$PROJECT_ROOT/.venv/bin/activate"
 
-nohup "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/plotter/run_plotter.py" > "$PROJECT_ROOT/logs/log/plotter.log" 2>&1 &
+nohup "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/backtester/plotter/run_plotter.py" > "$PROJECT_ROOT/logs/log/plotter.log" 2>&1 &
 
 echo "Plotter started in background. Check $PROJECT_ROOT/logs/log/plotter.log for output."

@@ -22,7 +22,7 @@ import os
 import sys
 from typing import Dict, List, Tuple
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt

@@ -25,15 +25,15 @@ Parameters:
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 import backtrader as bt
-from src.analyzer.bt_analyzers import (CAGR, CalmarRatio,
+from src.backtester.analyzer.bt_analyzers import (CAGR, CalmarRatio,
                                        ConsecutiveWinsLosses,
                                        PortfolioVolatility, ProfitFactor,
                                        SortinoRatio, WinRate)
-from src.notification.logger import setup_logger
 from src.strategy.custom_strategy import CustomStrategy
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
