@@ -23,25 +23,6 @@ from src.notification.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-class FeatureType(Enum):
-    """Types of features that can be generated."""
-    TECHNICAL_INDICATOR = "technical_indicator"
-    MARKET_MICROSTRUCTURE = "market_microstructure"
-    STATISTICAL = "statistical"
-    TIME_BASED = "time_based"
-    CROSS_ASSET = "cross_asset"
-
-
-@dataclass
-class FeatureConfig:
-    """Configuration for feature generation."""
-    name: str
-    feature_type: FeatureType
-    parameters: Dict[str, Any]
-    description: str
-    enabled: bool = True
-
-
 class TechnicalIndicatorFeatures:
     """Generates technical indicator features."""
 

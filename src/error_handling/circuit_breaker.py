@@ -15,45 +15,16 @@ Features:
 
 import time
 from typing import Callable, Optional, Dict, Any, List
-from dataclasses import dataclass
-from enum import Enum
 from functools import wraps
 from threading import Lock
 
+from src.model.error_handling import CircuitState, CircuitBreakerConfig
 from .exceptions import NetworkException, CircuitBreakerOpenException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
-class CircuitState(Enum):
-    """Circuit breaker states."""
-    CLOSED = "CLOSED"      # Normal operation, calls pass through
-    OPEN = "OPEN"          # Calls fail fast, no external calls
-    HALF_OPEN = "HALF_OPEN"  # Limited calls allowed to test recovery
-
-
-@dataclass
-class CircuitBreakerConfig:
-    """Configuration for circuit breaker behavior."""
-
-    # Failure threshold
-    failure_threshold: int = 5  # Number of failures before opening circuit
-    failure_window: int = 60    # Time window for failure counting (seconds)
-
-    # Recovery settings
-    recovery_timeout: int = 60  # Time to wait before attempting recovery (seconds)
-    success_threshold: int = 2  # Number of successes needed to close circuit
-
-    # Monitoring
-    monitor_interval: int = 10  # Interval for monitoring calls (seconds)
-
-    # Exceptions that should trigger circuit breaker
-    failure_exceptions: tuple = (Exception,)
-
-    # Logging
-    log_state_changes: bool = True
-    log_level: str = "WARNING"
 
 
 class CircuitBreaker:

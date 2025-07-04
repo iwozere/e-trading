@@ -16,44 +16,15 @@ Features:
 import time
 import logging
 from typing import Callable, Optional, Dict, Any
-from dataclasses import dataclass
-from enum import Enum
 from functools import wraps
 
+from src.model.error_handling import RecoveryConfig, RecoveryStrategy
 from .exceptions import TradingException, RecoveryException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
-class RecoveryStrategy(Enum):
-    """Recovery strategy types."""
-    RETRY = "retry"
-    FALLBACK = "fallback"
-    DEGRADE = "degrade"
-    RESTART = "restart"
-    IGNORE = "ignore"
-    ALERT = "alert"
-
-
-@dataclass
-class RecoveryConfig:
-    """Configuration for recovery behavior."""
-
-    strategy: RecoveryStrategy
-    max_attempts: int = 3
-    timeout: float = 30.0  # seconds
-    fallback_function: Optional[Callable] = None
-    degrade_function: Optional[Callable] = None
-    alert_function: Optional[Callable] = None
-
-    # Strategy-specific settings
-    retry_delay: float = 1.0
-    restart_delay: float = 5.0
-
-    # Monitoring
-    log_recovery: bool = True
-    track_metrics: bool = True
 
 
 class ErrorRecoveryManager:

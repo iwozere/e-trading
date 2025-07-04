@@ -1,6 +1,6 @@
 import yfinance as yf
 from src.notification.logger import setup_logger
-from src.model.model import Fundamentals
+from src.model.telegram_bot import Fundamentals
 
 logger = setup_logger("telegram_bot")
 

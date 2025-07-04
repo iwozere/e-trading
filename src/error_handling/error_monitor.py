@@ -16,68 +16,18 @@ Features:
 import time
 import logging
 from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from collections import defaultdict, deque
 import json
 import threading
 
+from src.model.error_handling import AlertConfig, ErrorSeverity, ErrorEvent
 from .exceptions import TradingException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
 
-class ErrorSeverity(Enum):
-    """Error severity levels."""
-    DEBUG = "DEBUG"
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    CRITICAL = "CRITICAL"
-
-
-@dataclass
-class ErrorEvent:
-    """Represents an error event."""
-
-    timestamp: datetime
-    error: Exception
-    severity: ErrorSeverity
-    component: str
-    context: Dict[str, Any] = field(default_factory=dict)
-    stack_trace: Optional[str] = None
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            'timestamp': self.timestamp.now(timezone.utc).isoformat(),
-            'error_type': type(self.error).__name__,
-            'error_message': str(self.error),
-            'severity': self.severity.value,
-            'component': self.component,
-            'context': self.context,
-            'stack_trace': self.stack_trace,
-            'user_id': self.user_id,
-            'session_id': self.session_id
-        }
-
-
-@dataclass
-class AlertConfig:
-    """Configuration for error alerting."""
-
-    severity_threshold: ErrorSeverity = ErrorSeverity.ERROR
-    error_rate_threshold: float = 0.1  # 10% error rate
-    time_window: int = 300  # 5 minutes
-    max_alerts_per_window: int = 10
-    alert_functions: List[Callable] = field(default_factory=list)
-
-    # Rate limiting
-    alert_cooldown: int = 60  # seconds between alerts for same error type
 
 
 class ErrorMonitor:

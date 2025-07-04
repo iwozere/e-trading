@@ -8,48 +8,9 @@ Provides the foundation for strategy implementation and risk management.
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Protocol
 from datetime import datetime
-from dataclasses import dataclass
-from enum import Enum
 import pandas as pd
 
-
-class AggregationMethod(Enum):
-    """Methods for aggregating signals from multiple strategies."""
-    WEIGHTED_VOTING = "weighted_voting"
-    CONSENSUS = "consensus"
-    MAJORITY = "majority"
-    WEIGHTED_AVERAGE = "weighted_average"
-
-
-class MarketRegime(Enum):
-    """Market regime classifications."""
-    TRENDING_VOLATILE = "trending_volatile"
-    TRENDING_STABLE = "trending_stable"
-    RANGING_VOLATILE = "ranging_volatile"
-    RANGING_STABLE = "ranging_stable"
-    CRISIS = "crisis"
-
-
-@dataclass
-class StrategySignal:
-    """Represents a trading signal from a strategy."""
-    strategy_name: str
-    signal_type: str  # 'buy', 'sell', 'hold'
-    confidence: float  # 0.0 to 1.0
-    weight: float
-    timestamp: datetime
-    metadata: Dict[str, Any]
-
-
-@dataclass
-class CompositeSignal:
-    """Represents an aggregated signal from multiple strategies."""
-    signal_type: str
-    confidence: float
-    contributing_strategies: List[str]
-    timestamp: datetime
-    metadata: Dict[str, Any]
-
+from src.model.strategy import StrategySignal, MarketRegime, AggregationMethod, CompositeSignal
 
 class BaseStrategy(ABC):
     """Base class for all trading strategies."""
@@ -122,7 +83,7 @@ class DataLoader(Protocol):
 class MarketRegimeDetector:
     """Detects market regimes based on volatility and trend conditions."""
 
-    def __init__(self, 
+    def __init__(self,
                  volatility_threshold: float = 0.02,
                  trend_strength_threshold: float = 0.6,
                  lookback_period: int = 20):
@@ -317,4 +278,4 @@ class SignalAggregator:
             contributing_strategies=[s.strategy_name for s in signals],
             timestamp=datetime.now(),
             metadata={"weighted_confidence": weighted_confidence, "total_weight": total_weight}
-        ) 
+        )

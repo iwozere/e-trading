@@ -3,7 +3,7 @@ import talib
 import pandas as pd
 from typing import Tuple, List
 from src.notification.logger import setup_logger
-from src.model.model import Technicals
+from src.model.telegram_bot import Technicals
 
 logger = setup_logger("telegram_bot")
 

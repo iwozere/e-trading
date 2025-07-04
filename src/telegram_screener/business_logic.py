@@ -9,16 +9,7 @@ import datetime
 # from src.data.yahoo_data_downloader import YahooDataDownloader
 # from src.data.binance_data_downloader import BinanceDataDownloader
 # from src.indicator.indicator_factory import IndicatorFactory
-
-@dataclass
-class TickerAnalysis:
-    ticker: str
-    provider: str
-    period: str
-    interval: str
-    ohlcv: Optional[pd.DataFrame] = None
-    error: Optional[str] = None
-    # Add more fields as needed (e.g., indicators, fundamentals, etc.)
+from src.model.telegram_bot import TickerAnalysis
 
 def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
     """

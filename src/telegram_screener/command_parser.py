@@ -1,7 +1,7 @@
 import re
 import shlex
 from typing import Dict
-from src.model.model import CommandSpec, ParsedCommand
+from src.model.telegram_bot import CommandSpec, ParsedCommand
 
 
 class EnterpriseCommandParser:

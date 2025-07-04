@@ -23,29 +23,12 @@ from datetime import datetime
 import pickle
 import shutil
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import  asdict
+
+from src.model.machine_learning import ModelMetadata
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
-
-
-@dataclass
-class ModelMetadata:
-    """Metadata for model tracking and registry."""
-    model_name: str
-    version: str
-    model_type: str  # 'sklearn', 'pytorch', 'tensorflow', 'xgboost', 'lightgbm'
-    framework_version: str
-    created_at: datetime
-    author: str
-    description: str
-    tags: Dict[str, str]
-    hyperparameters: Dict[str, Any]
-    metrics: Dict[str, float]
-    feature_names: List[str]
-    target_column: str
-    data_version: str
-    git_commit: str
 
 
 class MLflowManager:

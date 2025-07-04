@@ -12,12 +12,11 @@ Provides a unified async notification system with:
 
 import asyncio
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Any, Callable
-from enum import Enum
-from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Any
 from collections import defaultdict
 
+from src.model.notification import Notification, NotificationPriority, NotificationType
 from src.notification.logger import setup_logger
 from src.notification.emailer import EmailNotifier
 from aiogram import Bot
@@ -25,52 +24,6 @@ from aiogram import Bot
 _logger = setup_logger(__name__)
 
 
-class NotificationType(Enum):
-    """Types of notifications"""
-    TRADE_ENTRY = "trade_entry"
-    TRADE_EXIT = "trade_exit"
-    TRADE_UPDATE = "trade_update"
-    ERROR = "error"
-    WARNING = "warning"
-    INFO = "info"
-    SYSTEM = "system"
-    PERFORMANCE = "performance"
-
-
-class NotificationPriority(Enum):
-    """Notification priority levels"""
-    LOW = 1
-    NORMAL = 2
-    HIGH = 3
-    CRITICAL = 4
-
-
-@dataclass
-class Notification:
-    """Notification data structure"""
-    type: NotificationType
-    priority: NotificationPriority
-    title: str
-    message: str
-    data: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    source: str = "trading_bot"
-    retry_count: int = 0
-    max_retries: int = 3
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert notification to dictionary"""
-        return {
-            "type": self.type.value,
-            "priority": self.priority.value,
-            "title": self.title,
-            "message": self.message,
-            "data": self.data,
-            "timestamp": self.timestamp.isoformat(),
-            "source": self.source,
-            "retry_count": self.retry_count,
-            "max_retries": self.max_retries
-        }
 
 
 class NotificationChannel:

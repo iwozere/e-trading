@@ -30,57 +30,12 @@ from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 
+from src.model.machine_learning import TrainingConfig, ModelType, PerformanceMetrics, TrainingTrigger
 from src.ml.mlflow_integration import MLflowManager, ModelDeployer
 from src.ml.feature_engineering_pipeline import FeatureEngineeringPipeline
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
-
-
-class TrainingTrigger(Enum):
-    """Types of training triggers."""
-    SCHEDULED = "scheduled"
-    PERFORMANCE_DEGRADATION = "performance_degradation"
-    DATA_DRIFT = "data_drift"
-    MANUAL = "manual"
-
-
-class ModelType(Enum):
-    """Supported model types."""
-    RANDOM_FOREST = "random_forest"
-    GRADIENT_BOOSTING = "gradient_boosting"
-    XGBOOST = "xgboost"
-    LIGHTGBM = "lightgbm"
-    LINEAR_REGRESSION = "linear_regression"
-
-
-@dataclass
-class TrainingConfig:
-    """Configuration for model training."""
-    model_type: ModelType
-    hyperparameters: Dict[str, Any]
-    training_schedule: str  # Cron expression
-    performance_threshold: float
-    retrain_threshold: float
-    max_training_time: int  # minutes
-    validation_split: float
-    cross_validation_folds: int
-    feature_selection_method: str
-    n_features: int
-    scaler_type: str
-
-
-@dataclass
-class PerformanceMetrics:
-    """Performance metrics for model evaluation."""
-    mse: float
-    mae: float
-    r2: float
-    sharpe_ratio: float
-    max_drawdown: float
-    win_rate: float
-    profit_factor: float
-    timestamp: datetime
 
 
 class ModelTrainer:

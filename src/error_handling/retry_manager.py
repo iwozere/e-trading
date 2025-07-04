@@ -15,53 +15,13 @@ import random
 import logging
 from typing import Callable, Optional, Dict, Any
 from functools import wraps
-from dataclasses import dataclass
-from enum import Enum
 
+from src.model.error_handling import RetryConfig, RetryStrategy
 from .exceptions import TradingException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-
-class RetryStrategy(Enum):
-    """Retry strategies."""
-    FIXED = "fixed"
-    EXPONENTIAL = "exponential"
-    LINEAR = "linear"
-    FIBONACCI = "fibonacci"
-
-
-@dataclass
-class RetryConfig:
-    """Configuration for retry behavior."""
-
-    max_attempts: int = 3
-    base_delay: float = 1.0  # seconds
-    max_delay: float = 60.0  # seconds
-    strategy: RetryStrategy = RetryStrategy.EXPONENTIAL
-    jitter: bool = True
-    jitter_factor: float = 0.1  # 10% jitter
-    backoff_factor: float = 2.0  # for exponential backoff
-
-    # Retry conditions
-    retry_on_exceptions: tuple = (Exception,)
-    retry_on_result: Optional[Callable] = None  # Function to evaluate result
-
-    # Logging
-    log_retries: bool = True
-    log_level: str = "WARNING"
-
-    def __post_init__(self):
-        """Validate configuration after initialization."""
-        if self.max_attempts < 1:
-            raise ValueError("max_attempts must be at least 1")
-        if self.base_delay < 0:
-            raise ValueError("base_delay must be non-negative")
-        if self.max_delay < self.base_delay:
-            raise ValueError("max_delay must be greater than or equal to base_delay")
-        if self.backoff_factor < 1:
-            raise ValueError("backoff_factor must be at least 1")
 
 
 class RetryManager:
