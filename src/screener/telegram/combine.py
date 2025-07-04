@@ -47,11 +47,11 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
         if provider.lower() == "yf":
             # Yahoo Finance
             downloader = YahooDataDownloader()
-            df = downloader.download_data(ticker, interval, start_date, end_date)
+            df = downloader.get_ohlcv(ticker, interval, start_date, end_date)
             fundamentals = get_fundamentals(ticker)
         elif provider.lower() == "bnc":
             downloader = BinanceDataDownloader()
-            df = downloader.download_data(ticker, interval, start_date, end_date, save_to_csv=False)
+            df = downloader.get_ohlcv(ticker, interval, start_date, end_date, save_to_csv=False)
             fundamentals = None
         else:
             raise ValueError(f"Unknown provider: {provider}")

@@ -47,7 +47,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
         )
 
-    def download_data(
+    def get_ohlcv(
         self, symbol: str, interval: str, start_date: str, end_date: str
     ) -> pd.DataFrame:
         """
@@ -163,7 +163,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 if f.startswith(f"{symbol}_{interval}_")
             ]
             if not existing_files:
-                df = self.download_data(
+                df = self.get_ohlcv(
                     symbol,
                     interval,
                     "2000-01-01",
@@ -176,7 +176,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             last_date = existing_df["timestamp"].max()
             new_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
             new_end = pd.Timestamp.today().strftime("%Y-%m-%d")
-            new_df = self.download_data(symbol, interval, new_start, new_end)
+            new_df = self.get_ohlcv(symbol, interval, new_start, new_end)
             if new_df.empty:
                 _logger.info("No new data available for %s", symbol)
                 return filepath

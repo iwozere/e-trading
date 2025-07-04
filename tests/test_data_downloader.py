@@ -62,7 +62,7 @@ def test_is_valid_period_interval(downloader_class, period, interval):
     (TwelveDataDataDownloader, 'AAPL', '1d', 'TWELVEDATA_API_KEY'),
 ])
 @pytest.mark.network
-def test_download_data_smoke(downloader_class, symbol, interval, api_env):
+def test_get_ohlcv_smoke(downloader_class, symbol, interval, api_env):
     import datetime
     start_date = (datetime.datetime.now() - datetime.timedelta(days=2)).strftime("%Y-%m-%d")
     end_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -78,7 +78,7 @@ def test_download_data_smoke(downloader_class, symbol, interval, api_env):
     if downloader_class is CoinGeckoDataDownloader:
         df = instance.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=False)
     else:
-        df = instance.download_data(symbol, interval, start_date, end_date)
+        df = instance.get_ohlcv(symbol, interval, start_date, end_date)
     assert isinstance(df, pd.DataFrame)
     for col in REQUIRED_COLUMNS:
         assert col in df.columns, f"Missing column {col} in {downloader_class.__name__}"

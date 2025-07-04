@@ -24,7 +24,7 @@ from src.data.yahoo_data_downloader import YahooDataDownloader
 
 
 class DummyDownloader(BaseDataDownloader):
-    def download_data(self, symbol, start_date, end_date=None):
+    def get_ohlcv(self, symbol, start_date, end_date=None):
         # Return a simple DataFrame
         data = {
             "timestamp": pd.date_range(start=start_date, periods=2, freq="D"),
@@ -41,7 +41,7 @@ def test_save_and_load_data():
     temp_dir = tempfile.mkdtemp()
     try:
         downloader = DummyDownloader(data_dir=temp_dir, interval="1d")
-        df = downloader.download_data("TEST", "2023-01-01", "2023-01-02")
+        df = downloader.get_ohlcv("TEST", "2023-01-01", "2023-01-02")
         filepath = downloader.save_data(df, "TEST", "2023-01-01", "2023-01-02")
         assert os.path.exists(filepath)
         loaded_df = downloader.load_data(filepath)
@@ -56,7 +56,7 @@ def test_download_multiple_symbols():
         downloader = DummyDownloader(data_dir=temp_dir, interval="1d")
         symbols = ["AAA", "BBB"]
         results = downloader.download_multiple_symbols(
-            symbols, downloader.download_data, "2023-01-01", "2023-01-02"
+            symbols, downloader.get_ohlcv, "2023-01-01", "2023-01-02"
         )
         assert set(results.keys()) == set(symbols)
         for path in results.values():
@@ -99,7 +99,7 @@ def test_binance_data_downloader_integration(monkeypatch):
                 bdd.save_data(df, symbol, start_date, end_date)
             return df
 
-        bdd.download_historical_data = fake_download
+        bdd.get_ohlcv = fake_download
         symbols = ["BTCUSDT", "ETHUSDT"]
         results = bdd.download_multiple_symbols(
             symbols, "1d", "2023-01-01", "2023-01-02"
@@ -127,7 +127,7 @@ def test_yahoo_data_downloader_integration(monkeypatch):
             }
             return pd.DataFrame(data)
 
-        ydd.download_data = fake_download
+        ydd.get_ohlcv = fake_download
         symbols = ["AAPL", "MSFT"]
         results = ydd.download_multiple_symbols(symbols, "2023-01-01", "2023-01-02")
         assert set(results.keys()) == set(symbols)

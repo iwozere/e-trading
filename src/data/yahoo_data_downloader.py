@@ -54,7 +54,7 @@ class YahooDataDownloader(BaseDataDownloader):
             level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
         )
 
-    def download_data(
+    def get_ohlcv(
         self, symbol: str, interval: str, start_date: str, end_date: str
     ) -> pd.DataFrame:
         """
@@ -170,7 +170,7 @@ class YahooDataDownloader(BaseDataDownloader):
             ]
             if not existing_files:
                 # If no existing file, download new data
-                df = self.download_data(
+                df = self.get_ohlcv(
                     symbol,
                     interval,
                     "2000-01-01",
@@ -189,7 +189,7 @@ class YahooDataDownloader(BaseDataDownloader):
             # Download new data from last date
             new_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
             new_end = pd.Timestamp.today().strftime("%Y-%m-%d")
-            new_df = self.download_data(symbol, interval, new_start, new_end)
+            new_df = self.get_ohlcv(symbol, interval, new_start, new_end)
 
             if new_df.empty:
                 _logger.info("No new data available for %s", symbol)
@@ -224,7 +224,7 @@ class YahooDataDownloader(BaseDataDownloader):
         """
 
         def download_func(symbol, interval, start_date, end_date):
-            return self.download_data(symbol, interval, start_date, end_date)
+            return self.get_ohlcv(symbol, interval, start_date, end_date)
 
         return super().download_multiple_symbols(
             symbols, download_func, interval, start_date, end_date
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     interval = "1d"
     start_date = "2020-01-01"
     end_date = pd.Timestamp.today().strftime("%Y-%m-%d")
-    df = downloader.download_data(symbol, interval, start_date, end_date)
+    df = downloader.get_ohlcv(symbol, interval, start_date, end_date)
     filepath = downloader.save_data(df, symbol)
     print(f"Data saved to {filepath}")
 
