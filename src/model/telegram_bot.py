@@ -1,3 +1,11 @@
+"""
+Data models for Telegram bot integration.
+
+Includes:
+- Fundamentals and technicals data structures
+- Ticker analysis result encapsulation
+- Command specification and parsing models
+"""
 from typing import Any, Dict, List, Optional, Type
 from dataclasses import dataclass, field
 

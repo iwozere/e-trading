@@ -1,3 +1,10 @@
+"""
+Error handling and resilience models.
+
+Includes:
+- Circuit breaker, error event, alert, recovery, and retry config dataclasses
+- Circuit state, error severity, recovery and retry strategy enums
+"""
 from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass, field

@@ -1,3 +1,10 @@
+"""
+Notification and alerting models.
+
+Includes:
+- Notification, alert, and escalation rule dataclasses
+- Notification types, priorities, alert severity, and channels enums
+"""
 import re
 from enum import Enum
 from typing import Any, Dict, List

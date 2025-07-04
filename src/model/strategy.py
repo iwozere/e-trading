@@ -1,3 +1,10 @@
+"""
+Models for trading strategy logic.
+
+Includes:
+- Aggregation methods and market regime enums
+- Trading signal and composite signal dataclasses
+"""
 from enum import Enum
 from typing import Any, Dict, List
 from dataclasses import dataclass

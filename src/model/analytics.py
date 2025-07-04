@@ -1,3 +1,10 @@
+"""
+Models for analytics and performance tracking.
+
+Includes:
+- Trade data structure
+- Performance metrics (returns, drawdown, Sharpe, win rate, etc.)
+"""
 from dataclasses import dataclass, field
 from datetime import datetime,timedelta
 

@@ -1,3 +1,10 @@
+"""
+Models for machine learning and feature engineering.
+
+Includes:
+- Feature types, training triggers, and model types enums
+- Feature, model metadata, training config, and performance metrics dataclasses
+"""
 from enum import Enum
 from typing import Any, Dict, List
 from dataclasses import dataclass
