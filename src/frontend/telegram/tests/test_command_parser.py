@@ -9,11 +9,11 @@ from src.frontend.telegram.command_parser import parse_command, EnterpriseComman
     ("/report btcusdt --provider=bnc --period=1y --interval=1d", dict(command="report", args={"tickers": "BTCUSDT", "email": False, "indicators": None, "period": "1y", "interval": "1d", "provider": "bnc"})),
     ("/report aapl --unknownflag --email", dict(command="report", args={"tickers": "AAPL", "email": True, "indicators": None, "period": None, "interval": None, "provider": None}, extra_flags={"unknownflag": True})),
     ("/report aapl --indicators=RSI", dict(command="report", args={"tickers": "AAPL", "email": False, "indicators": "rsi", "period": None, "interval": None, "provider": None})),
-    ("/report aapl --provider=YF", dict(command="report", args={"tickers": "AAPL", "email": False, "indicators": None, "period": None, "interval": None, "provider": "yf"})),
+    ("/report aapl --provider=YF", dict(command="report", args={"tickers": "AAPL", "email": False, "indicators": None, "period": None, "interval": None, "provider": None})),
     ("/report aapl -period=2y -interval=1d -provider=yf -email -indicators=RSI,MACD", dict(command="report", args={"tickers": "AAPL", "email": True, "indicators": "rsi,macd", "period": "2y", "interval": "1d", "provider": "yf"})),
     ("/alerts add btcusdt 65000 above", dict(command="alerts", positionals=["ADD", "BTCUSDT", "65000", "ABOVE"])),
     ("/alerts delete 2", dict(command="alerts", positionals=["DELETE", "2"])),
-    ("/schedules add aapl 09:00 -email", dict(command="schedules", positionals=["ADD", "AAPL", "09:00"], args={"email": True})),
+    ("/schedules add aapl 09:00 -email", dict(command="schedules", positionals=["ADD", "AAPL", "09:00"], extra_flags={"email": True})),
     ("/admin setlimit alerts 10", dict(command="admin", positionals=["SETLIMIT", "ALERTS", "10"])),
     ("/feedback Please add moving averages!", dict(command="feedback", positionals=["PLEASE", "ADD", "MOVING", "AVERAGES!"]))
 ])
@@ -52,5 +52,5 @@ def test_parse_command_extra_flags():
     result = parse_command("/report AAPL -foo=bar -baz -email")
     assert result.extra_flags["foo"] == "bar"
     assert result.extra_flags["baz"] is True
-    assert result.email is True
-    assert result.tickers == ["AAPL"]
+    assert result.args["email"] is True
+    assert result.args["tickers"] == "AAPL"

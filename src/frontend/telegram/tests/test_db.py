@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import pytest
+import time
 from src.frontend.telegram import db as db_module
 from datetime import datetime
 
@@ -19,7 +20,7 @@ def test_user_crud():
     telegram_user_id = "testuser"
     email = "test@example.com"
     code = "123456"
-    sent_time = int(datetime.utcnow().timestamp())
+    sent_time = int(time.time())
     db_module.set_user_email(telegram_user_id, email, code, sent_time)
     status = db_module.get_user_status(telegram_user_id)
     assert status["email"] == email
@@ -78,7 +79,7 @@ def test_user_language_and_admin():
     telegram_user_id = "adminuser"
     email = "admin@example.com"
     code = "654321"
-    sent_time = int(datetime.utcnow().timestamp())
+    sent_time = int(time.time())
     # Register as admin with language 'ru'
     db_module.set_user_email(telegram_user_id, email, code, sent_time, language="ru", is_admin=True)
     status = db_module.get_user_status(telegram_user_id)
@@ -108,7 +109,7 @@ def test_settings_and_limits():
     telegram_user_id = "limituser"
     email = "limit@example.com"
     code = "222222"
-    sent_time = int(datetime.utcnow().timestamp())
+    sent_time = int(time.time())
     db_module.set_user_email(telegram_user_id, email, code, sent_time)
     db_module.set_user_limit(telegram_user_id, "max_alerts", 7)
     db_module.set_user_limit(telegram_user_id, "max_schedules", 3)

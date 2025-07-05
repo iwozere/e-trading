@@ -72,7 +72,8 @@ def analyze_ticker_business(
             ohlcv=df_with_technicals,
             fundamentals=fundamentals,
             technicals=technicals,
-            error=None
+            error=None,
+            chart_image=None
         )
     except Exception as e:
         return TickerAnalysis(
@@ -83,5 +84,6 @@ def analyze_ticker_business(
             ohlcv=None,
             fundamentals=None,
             technicals=None,
-            error=str(e)
+            error=str(e),
+            chart_image=None
         )
