@@ -2,13 +2,9 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import pandas as pd
 from src.telegram_screener.command_parser import ParsedCommand
-from src.telegram_screener.data_provider_factory import get_downloader
-import datetime
-
-# Import actual data downloaders and indicator factory in real implementation
-# from src.data.yahoo_data_downloader import YahooDataDownloader
-# from src.data.binance_data_downloader import BinanceDataDownloader
-# from src.indicator.indicator_factory import IndicatorFactory
+from src.common import get_ohlcv, analyze_period_interval
+from src.common.fundamentals import get_fundamentals
+from src.common.technicals import calculate_technicals_from_df
 from src.model.telegram_bot import TickerAnalysis
 
 def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
@@ -49,29 +45,6 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
         "indicators": args.get("indicators"),
     }
 
-def analyze_period_interval(period: str = "2y", interval: str = "1d"):
-    """
-    Given a period (e.g., '2y', '6mo', '1w') and interval, return (start_date, end_date) as strings.
-    Assumes the combination is already validated for the provider.
-    """
-    start_date = None
-    end_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    if period.endswith("y"):
-        years = int(period[:-1])
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
-    elif period.endswith("m"):
-        months = int(period[:-1])
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
-    elif period.endswith("mo"):
-        months = int(period[:-2])
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
-    elif period.endswith("w"):
-        weeks = int(period[:-1])
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=7*weeks)).strftime("%Y-%m-%d")
-    else:
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime("%Y-%m-%d")
-    return start_date, end_date
-
 
 def analyze_ticker_business(
     ticker: str,
@@ -80,38 +53,37 @@ def analyze_ticker_business(
     interval: str = "1d"
 ) -> TickerAnalysis:
     """
-    Business logic: fetch OHLCV for ticker/provider/period/interval, return TickerAnalysis (only ohlcv/error for now).
-    Checks period/interval validity before date calculation.
+    Business logic: fetch OHLCV for ticker/provider/period/interval, return TickerAnalysis.
+    Uses common functions from src/common for data retrieval and analysis.
     """
-    prov = provider or ("yf" if len(ticker) < 5 else "bnc")
     try:
-        downloader = get_downloader(prov)
-        # Check period/interval validity BEFORE date calculation
-        if not downloader.is_valid_period_interval(period, interval):
-            return TickerAnalysis(
-                ticker=ticker,
-                provider=prov,
-                period=period,
-                interval=interval,
-                ohlcv=None,
-                error=f"Invalid period/interval for provider {prov}"
-            )
-        start_date, end_date = analyze_period_interval(period, interval)
-        df = downloader.get_ohlcv(ticker, interval, start_date, end_date)
+        # Get OHLCV data using common function
+        df = get_ohlcv(ticker, interval, period, provider)
+
+        # Get fundamentals using common function
+        fundamentals = get_fundamentals(ticker, provider)
+
+        # Calculate technical indicators
+        df_with_technicals, technicals = calculate_technicals_from_df(df)
+
         return TickerAnalysis(
-            ticker=ticker,
-            provider=prov,
+            ticker=ticker.upper(),
+            provider=provider or ("yf" if len(ticker) < 5 else "bnc"),
             period=period,
             interval=interval,
-            ohlcv=df,
+            ohlcv=df_with_technicals,
+            fundamentals=fundamentals,
+            technicals=technicals,
             error=None
         )
     except Exception as e:
         return TickerAnalysis(
-            ticker=ticker,
-            provider=prov,
+            ticker=ticker.upper(),
+            provider=provider or ("yf" if len(ticker) < 5 else "bnc"),
             period=period,
             interval=interval,
             ohlcv=None,
+            fundamentals=None,
+            technicals=None,
             error=str(e)
         )

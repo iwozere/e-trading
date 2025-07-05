@@ -35,7 +35,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import FSInputFile, Message
 from src.notification.logger import setup_logger
-from src.screener.telegram.combine import analyze_ticker
+from src.common.ticker_analyzer import analyze_ticker
 from src.screener.telegram.screener_db import (
     add_ticker, delete_ticker, list_tickers, all_tickers_with_providers_for_status,
     get_user_verification_status, get_user_verification_code, set_user_verified, get_ticker_settings, set_user_email

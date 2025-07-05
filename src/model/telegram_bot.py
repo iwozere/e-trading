@@ -11,14 +11,14 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Fundamentals:
-    ticker: str
-    company_name: str
-    current_price: float
-    market_cap: float
-    pe_ratio: float
-    forward_pe: float
-    dividend_yield: float
-    earnings_per_share: float
+    ticker: Optional[str] = None
+    company_name: Optional[str] = None
+    current_price: Optional[float] = None
+    market_cap: Optional[float] = None
+    pe_ratio: Optional[float] = None
+    forward_pe: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    earnings_per_share: Optional[float] = None
     # Additional fields for comprehensive fundamental analysis
     price_to_book: Optional[float] = None
     return_on_equity: Optional[float] = None
@@ -50,6 +50,8 @@ class Fundamentals:
     # Data source information
     data_source: Optional[str] = None
     last_updated: Optional[str] = None
+    # Track which provider supplied each value
+    sources: Optional[Dict[str, str]] = field(default_factory=dict)
 
 @dataclass
 class Technicals:
