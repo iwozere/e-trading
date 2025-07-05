@@ -23,9 +23,7 @@ def get_fundamentals(ticker: str) -> Fundamentals:
                 earnings_per_share=0.0,
             )
 
-        logger.debug(
-            "Retrieved fundamentals for %s: %s", ticker, info.get('shortName', 'Unknown')
-        )
+        logger.debug("Retrieved fundamentals for %s: %s", ticker, info.get('shortName', 'Unknown'))
 
         return Fundamentals(
             ticker=ticker.upper(),

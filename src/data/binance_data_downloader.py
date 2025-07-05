@@ -24,6 +24,9 @@ from typing import List, Optional
 import pandas as pd
 from binance.client import Client
 from src.notification.logger import setup_logger
+import logging
+import os
+from src.model.telegram_bot import Fundamentals
 
 from .base_data_downloader import BaseDataDownloader
 
@@ -31,7 +34,49 @@ _logger = setup_logger(__name__)
 
 
 class BinanceDataDownloader(BaseDataDownloader):
-    """Implementation of a data downloader for Binance, fetching historical market data using the Binance API."""
+    """
+    A class to download historical data from Binance.
+
+    This class provides methods to:
+    1. Download historical OHLCV data for cryptocurrencies
+    2. Save data to CSV files
+    3. Load data from CSV files
+    4. Update existing data files with new data
+    5. Get fundamental data (NotImplementedError - Binance doesn't provide stock fundamentals)
+
+    **Fundamental Data Capabilities:**
+    - ❌ PE Ratio (cryptocurrency exchange)
+    - ❌ Financial Ratios (cryptocurrency exchange)
+    - ❌ Growth Metrics (cryptocurrency exchange)
+    - ❌ Company Information (cryptocurrency exchange)
+    - ❌ Market Data (only cryptocurrency data)
+    - ❌ Profitability Metrics (cryptocurrency exchange)
+    - ❌ Valuation Metrics (cryptocurrency exchange)
+
+    **Data Quality:** N/A - Binance is for cryptocurrencies, not stocks
+    **Rate Limits:** 1200 requests per minute (free tier)
+    **Coverage:** Cryptocurrencies only
+
+    Parameters:
+    -----------
+    api_key : str
+        Binance API key
+    secret_key : str
+        Binance secret key
+    data_dir : str
+        Directory to store downloaded data files
+
+    Example:
+    --------
+    >>> downloader = BinanceDataDownloader("YOUR_API_KEY", "YOUR_SECRET_KEY")
+    >>> # Get OHLCV data for cryptocurrency
+    >>> df = downloader.get_ohlcv("BTCUSDT", "1d", "2023-01-01", "2023-12-31")
+    >>> # Get fundamental data (will raise NotImplementedError)
+    >>> try:
+    >>>     fundamentals = downloader.get_fundamentals("AAPL")
+    >>> except NotImplementedError as e:
+    >>>     print(f"Not supported: {e}")
+    """
 
     def __init__(
         self,
@@ -147,3 +192,20 @@ class BinanceDataDownloader(BaseDataDownloader):
         # Wrapper for unified interface
         save_to_csv = kwargs.get('save_to_csv', False)
         return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=save_to_csv)
+
+    def get_fundamentals(self, symbol: str) -> Fundamentals:
+        """
+        Get fundamental data for a given symbol.
+
+        Note: Binance doesn't provide fundamental data for stocks, so this method raises NotImplementedError.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            Fundamentals: Fundamental data for the stock
+
+        Raises:
+            NotImplementedError: Binance doesn't provide fundamental data for stocks
+        """
+        raise NotImplementedError("Binance doesn't provide fundamental data for stocks")

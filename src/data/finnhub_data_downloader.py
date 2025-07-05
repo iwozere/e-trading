@@ -1,9 +1,11 @@
 import logging
 import os
 from typing import Optional
+from datetime import datetime
 import pandas as pd
 import requests
 from src.notification.logger import setup_logger
+from src.model.telegram_bot import Fundamentals
 from .base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
@@ -34,6 +36,47 @@ Classes:
 """
 
 class FinnhubDataDownloader(BaseDataDownloader):
+    """
+    A class to download historical data from Finnhub.
+
+    This class provides methods to:
+    1. Download historical OHLCV data for a given symbol
+    2. Save data to CSV files
+    3. Load data from CSV files
+    4. Update existing data files with new data
+    5. Get comprehensive fundamental data for stocks
+
+    **Fundamental Data Capabilities:**
+    - ✅ PE Ratio (trailing and forward)
+    - ✅ Financial Ratios (P/B, ROE, ROA, debt/equity, current ratio, quick ratio)
+    - ✅ Growth Metrics (revenue growth, net income growth)
+    - ✅ Company Information (name, sector, industry, country, exchange)
+    - ✅ Market Data (market cap, current price, shares outstanding)
+    - ✅ Profitability Metrics (operating margin, profit margin, free cash flow)
+    - ✅ Valuation Metrics (beta, PEG ratio, price-to-sales, enterprise value)
+
+    **Data Quality:** High - Finnhub provides comprehensive fundamental data
+    **Rate Limits:** 60 API calls per minute (free tier)
+    **Coverage:** Global stocks and ETFs
+
+    Parameters:
+    -----------
+    api_key : str
+        Finnhub API key
+    data_dir : str
+        Directory to store downloaded data files
+
+    Example:
+    --------
+    >>> downloader = FinnhubDataDownloader("YOUR_API_KEY")
+    >>> # Get OHLCV data
+    >>> df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
+    >>> # Get fundamental data
+    >>> fundamentals = downloader.get_fundamentals("AAPL")
+    >>> print(f"PE Ratio: {fundamentals.pe_ratio}")
+    >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
+    """
+
     def __init__(self, api_key: str, data_dir: Optional[str] = "data"):
         super().__init__(data_dir=data_dir)
         self.api_key = api_key
@@ -65,7 +108,6 @@ class FinnhubDataDownloader(BaseDataDownloader):
             }
             finnhub_interval = interval_map.get(interval, 'D')
             # Convert dates to UNIX timestamps (seconds)
-            from datetime import datetime
             start_unix = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp())
             end_unix = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp())
             params = {
@@ -113,3 +155,123 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
+
+    def get_fundamentals(self, symbol: str) -> Fundamentals:
+        """
+        Get comprehensive fundamental data for a given stock using Finnhub.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            Fundamentals: Comprehensive fundamental data for the stock
+        """
+        try:
+            # Get company profile
+            profile_url = "https://finnhub.io/api/v1/stock/profile2"
+            profile_params = {
+                'symbol': symbol,
+                'token': self.api_key
+            }
+
+            profile_response = requests.get(profile_url, params=profile_params)
+            if profile_response.status_code != 200:
+                raise RuntimeError(f"Finnhub API error: {profile_response.status_code}")
+
+            profile_data = profile_response.json()
+
+            if not profile_data:
+                _logger.error("No data returned from Finnhub for ticker %s", symbol)
+                return Fundamentals(
+                    ticker=symbol.upper(),
+                    company_name="Unknown",
+                    current_price=0.0,
+                    market_cap=0.0,
+                    pe_ratio=0.0,
+                    forward_pe=0.0,
+                    dividend_yield=0.0,
+                    earnings_per_share=0.0,
+                    data_source="Finnhub",
+                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+
+            # Get current price
+            quote_url = "https://finnhub.io/api/v1/quote"
+            quote_params = {
+                'symbol': symbol,
+                'token': self.api_key
+            }
+
+            quote_response = requests.get(quote_url, params=quote_params)
+            quote_data = quote_response.json() if quote_response.status_code == 200 else {}
+            current_price = quote_data.get('c', 0.0) if quote_data else 0.0
+
+            # Get financial metrics
+            metrics_url = "https://finnhub.io/api/v1/stock/metric"
+            metrics_params = {
+                'symbol': symbol,
+                'metric': 'all',
+                'token': self.api_key
+            }
+
+            metrics_response = requests.get(metrics_url, params=metrics_params)
+            metrics_data = metrics_response.json() if metrics_response.status_code == 200 else {}
+            metrics = metrics_data.get('metric', {}) if metrics_data else {}
+
+            _logger.debug("Retrieved fundamentals for %s: %s", symbol, profile_data.get('name', 'Unknown'))
+
+            return Fundamentals(
+                ticker=symbol.upper(),
+                company_name=profile_data.get("name", "Unknown"),
+                current_price=current_price,
+                market_cap=float(profile_data.get("marketCapitalization", 0)) if profile_data.get("marketCapitalization") else 0.0,
+                pe_ratio=float(metrics.get("peNormalizedAnnual", 0)) if metrics.get("peNormalizedAnnual") else 0.0,
+                forward_pe=float(metrics.get("peForwardAnnual", 0)) if metrics.get("peForwardAnnual") else 0.0,
+                dividend_yield=float(metrics.get("dividendYieldIndicatedAnnual", 0)) if metrics.get("dividendYieldIndicatedAnnual") else 0.0,
+                earnings_per_share=float(metrics.get("epsTTM", 0)) if metrics.get("epsTTM") else 0.0,
+                # Additional fields
+                price_to_book=float(metrics.get("pbAnnual", 0)) if metrics.get("pbAnnual") else None,
+                return_on_equity=float(metrics.get("roeRfy", 0)) if metrics.get("roeRfy") else None,
+                return_on_assets=float(metrics.get("roaRfy", 0)) if metrics.get("roaRfy") else None,
+                debt_to_equity=float(metrics.get("debtToEquityAnnual", 0)) if metrics.get("debtToEquityAnnual") else None,
+                current_ratio=float(metrics.get("currentRatioAnnual", 0)) if metrics.get("currentRatioAnnual") else None,
+                quick_ratio=float(metrics.get("quickRatioAnnual", 0)) if metrics.get("quickRatioAnnual") else None,
+                revenue=float(metrics.get("revenuePerShareAnnual", 0)) if metrics.get("revenuePerShareAnnual") else None,
+                revenue_growth=float(metrics.get("revenueGrowthAnnual", 0)) if metrics.get("revenueGrowthAnnual") else None,
+                net_income=float(metrics.get("netIncomeGrowthAnnual", 0)) if metrics.get("netIncomeGrowthAnnual") else None,
+                net_income_growth=float(metrics.get("netIncomeGrowthAnnual", 0)) if metrics.get("netIncomeGrowthAnnual") else None,
+                free_cash_flow=float(metrics.get("freeCashFlowPerShareTTM", 0)) if metrics.get("freeCashFlowPerShareTTM") else None,
+                operating_margin=float(metrics.get("operatingMarginTTM", 0)) if metrics.get("operatingMarginTTM") else None,
+                profit_margin=float(metrics.get("netProfitMarginTTM", 0)) if metrics.get("netProfitMarginTTM") else None,
+                beta=float(metrics.get("beta", 0)) if metrics.get("beta") else None,
+                sector=profile_data.get("finnhubIndustry", None),
+                industry=profile_data.get("finnhubIndustry", None),
+                country=profile_data.get("country", None),
+                exchange=profile_data.get("exchange", None),
+                currency=profile_data.get("currency", None),
+                shares_outstanding=float(profile_data.get("shareOutstanding", 0)) if profile_data.get("shareOutstanding") else None,
+                float_shares=None,  # Finnhub doesn't provide float shares
+                short_ratio=float(metrics.get("shortInterestRatioAnnual", 0)) if metrics.get("shortInterestRatioAnnual") else None,
+                payout_ratio=float(metrics.get("payoutRatioAnnual", 0)) if metrics.get("payoutRatioAnnual") else None,
+                peg_ratio=float(metrics.get("pegAnnual", 0)) if metrics.get("pegAnnual") else None,
+                price_to_sales=float(metrics.get("psTTM", 0)) if metrics.get("psTTM") else None,
+                enterprise_value=float(metrics.get("enterpriseValueAnnual", 0)) if metrics.get("enterpriseValueAnnual") else None,
+                enterprise_value_to_ebitda=float(metrics.get("evToEbitdaAnnual", 0)) if metrics.get("evToEbitdaAnnual") else None,
+                data_source="Finnhub",
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+
+        except Exception as e:
+            _logger.error("Failed to get fundamentals for %s: %s", symbol, e, exc_info=True)
+            return Fundamentals(
+                ticker=symbol.upper(),
+                company_name="Unknown",
+                current_price=0.0,
+                market_cap=0.0,
+                pe_ratio=0.0,
+                forward_pe=0.0,
+                dividend_yield=0.0,
+                earnings_per_share=0.0,
+                data_source="Finnhub",
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )

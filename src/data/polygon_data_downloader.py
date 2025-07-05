@@ -1,9 +1,11 @@
 import logging
 import os
 from typing import Optional
+from datetime import datetime
 import pandas as pd
 import requests
 from src.notification.logger import setup_logger
+from src.model.telegram_bot import Fundamentals
 from .base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
@@ -34,6 +36,47 @@ Classes:
 """
 
 class PolygonDataDownloader(BaseDataDownloader):
+    """
+    A class to download historical data from Polygon.io.
+
+    This class provides methods to:
+    1. Download historical OHLCV data for a given symbol
+    2. Save data to CSV files
+    3. Load data from CSV files
+    4. Update existing data files with new data
+    5. Get basic fundamental data for stocks (limited by free tier)
+
+    **Fundamental Data Capabilities:**
+    - ❌ PE Ratio (requires paid tier)
+    - ❌ Financial Ratios (requires paid tier)
+    - ❌ Growth Metrics (requires paid tier)
+    - ✅ Company Information (name, sector, industry, country, exchange)
+    - ✅ Market Data (market cap, current price, shares outstanding)
+    - ❌ Profitability Metrics (requires paid tier)
+    - ❌ Valuation Metrics (requires paid tier)
+
+    **Data Quality:** Basic (free tier) - Limited fundamental data available
+    **Rate Limits:** 5 API calls per minute (free tier)
+    **Coverage:** US stocks and ETFs (free tier)
+
+    Parameters:
+    -----------
+    api_key : str
+        Polygon.io API key
+    data_dir : str
+        Directory to store downloaded data files
+
+    Example:
+    --------
+    >>> downloader = PolygonDataDownloader("YOUR_API_KEY")
+    >>> # Get OHLCV data
+    >>> df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
+    >>> # Get fundamental data (limited in free tier)
+    >>> fundamentals = downloader.get_fundamentals("AAPL")
+    >>> print(f"Company: {fundamentals.company_name}")
+    >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
+    """
+
     def __init__(self, api_key: str, data_dir: Optional[str] = "data"):
         super().__init__(data_dir=data_dir)
         self.api_key = api_key
@@ -101,3 +144,116 @@ class PolygonDataDownloader(BaseDataDownloader):
 
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
+
+    def get_fundamentals(self, symbol: str) -> Fundamentals:
+        """
+        Get comprehensive fundamental data for a given stock using Polygon.io.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            Fundamentals: Comprehensive fundamental data for the stock
+        """
+        try:
+            # Get ticker details
+            ticker_url = f"https://api.polygon.io/v3/reference/tickers/{symbol}"
+            ticker_params = {'apiKey': self.api_key}
+
+            ticker_response = requests.get(ticker_url, params=ticker_params)
+            if ticker_response.status_code == 429:
+                raise RuntimeError("Polygon.io API rate limit exceeded")
+            if ticker_response.status_code != 200:
+                raise RuntimeError(f"Polygon.io API error: {ticker_response.status_code}")
+
+            ticker_data = ticker_response.json()
+
+            if not ticker_data or 'results' not in ticker_data:
+                _logger.error("No data returned from Polygon.io for ticker %s", symbol)
+                return Fundamentals(
+                    ticker=symbol.upper(),
+                    company_name="Unknown",
+                    current_price=0.0,
+                    market_cap=0.0,
+                    pe_ratio=0.0,
+                    forward_pe=0.0,
+                    dividend_yield=0.0,
+                    earnings_per_share=0.0,
+                    data_source="Polygon.io",
+                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+
+            ticker_info = ticker_data['results']
+
+            # Get current price
+            quote_url = f"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{symbol}/quote"
+            quote_params = {'apiKey': self.api_key}
+
+            quote_response = requests.get(quote_url, params=quote_params)
+            quote_data = quote_response.json() if quote_response.status_code == 200 else {}
+            current_price = quote_data.get('results', {}).get('p', 0.0) if quote_data else 0.0
+
+            # Get financials (basic info)
+            financials_url = f"https://api.polygon.io/v2/reference/financials/{symbol}"
+            financials_params = {'apiKey': self.api_key}
+
+            financials_response = requests.get(financials_url, params=financials_params)
+            financials_data = financials_response.json() if financials_response.status_code == 200 else {}
+
+            _logger.debug("Retrieved fundamentals for %s: %s", symbol, ticker_info.get('name', 'Unknown'))
+
+            return Fundamentals(
+                ticker=symbol.upper(),
+                company_name=ticker_info.get("name", "Unknown"),
+                current_price=current_price,
+                market_cap=float(ticker_info.get("market_cap", 0)) if ticker_info.get("market_cap") else 0.0,
+                pe_ratio=0.0,  # Polygon.io doesn't provide PE ratio in basic tier
+                forward_pe=0.0,
+                dividend_yield=0.0,  # Polygon.io doesn't provide dividend yield in basic tier
+                earnings_per_share=0.0,  # Polygon.io doesn't provide EPS in basic tier
+                # Additional fields
+                price_to_book=None,
+                return_on_equity=None,
+                return_on_assets=None,
+                debt_to_equity=None,
+                current_ratio=None,
+                quick_ratio=None,
+                revenue=None,
+                revenue_growth=None,
+                net_income=None,
+                net_income_growth=None,
+                free_cash_flow=None,
+                operating_margin=None,
+                profit_margin=None,
+                beta=None,
+                sector=ticker_info.get("sic_description", None),
+                industry=ticker_info.get("sic_description", None),
+                country=ticker_info.get("locale", None),
+                exchange=ticker_info.get("primary_exchange", None),
+                currency=ticker_info.get("currency_name", None),
+                shares_outstanding=float(ticker_info.get("share_class_shares_outstanding", 0)) if ticker_info.get("share_class_shares_outstanding") else None,
+                float_shares=None,
+                short_ratio=None,
+                payout_ratio=None,
+                peg_ratio=None,
+                price_to_sales=None,
+                enterprise_value=None,
+                enterprise_value_to_ebitda=None,
+                data_source="Polygon.io",
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+
+        except Exception as e:
+            _logger.error("Failed to get fundamentals for %s: %s", symbol, e, exc_info=True)
+            return Fundamentals(
+                ticker=symbol.upper(),
+                company_name="Unknown",
+                current_price=0.0,
+                market_cap=0.0,
+                pe_ratio=0.0,
+                forward_pe=0.0,
+                dividend_yield=0.0,
+                earnings_per_share=0.0,
+                data_source="Polygon.io",
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )

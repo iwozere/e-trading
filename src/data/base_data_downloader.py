@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 from abc import ABC, abstractmethod
 from src.notification.logger import setup_logger
+from src.model.telegram_bot import Fundamentals
 
 """
 Abstract base class for data downloaders, defining the interface for downloading historical market data from various sources.
@@ -108,4 +109,9 @@ class BaseDataDownloader(ABC):
     @abstractmethod
     def get_ohlcv(self, symbol, interval, start_date, end_date, **kwargs):
         """Download historical data for a given symbol. Must be implemented by subclasses."""
+        pass
+
+    @abstractmethod
+    def get_fundamentals(self, symbol: str) -> Fundamentals:
+        """Return the fundamentals for a given symbol. Must be implemented by subclasses."""
         pass

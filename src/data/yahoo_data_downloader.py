@@ -1,10 +1,12 @@
 import logging
 import os
 from typing import Dict, List
+from datetime import datetime
 
 import pandas as pd
 import yfinance as yf
 from src.notification.logger import setup_logger
+from src.model.telegram_bot import Fundamentals
 _logger = setup_logger(__name__)
 
 from .base_data_downloader import BaseDataDownloader
@@ -39,11 +41,35 @@ class YahooDataDownloader(BaseDataDownloader):
     2. Save data to CSV files
     3. Load data from CSV files
     4. Update existing data files with new data
+    5. Get comprehensive fundamental data for stocks
+
+    **Fundamental Data Capabilities:**
+    - ✅ PE Ratio (trailing and forward)
+    - ✅ Financial Ratios (P/B, ROE, ROA, debt/equity, current ratio, quick ratio)
+    - ✅ Growth Metrics (revenue growth, net income growth)
+    - ✅ Company Information (name, sector, industry, country, exchange)
+    - ✅ Market Data (market cap, current price, shares outstanding)
+    - ✅ Profitability Metrics (operating margin, profit margin, free cash flow)
+    - ✅ Valuation Metrics (beta, PEG ratio, price-to-sales, enterprise value)
+
+    **Data Quality:** High - Yahoo Finance provides comprehensive fundamental data
+    **Rate Limits:** None for basic usage
+    **Coverage:** Global stocks and ETFs
 
     Parameters:
     -----------
     data_dir : str
         Directory to store downloaded data files
+
+    Example:
+    --------
+    >>> downloader = YahooDataDownloader()
+    >>> # Get OHLCV data
+    >>> df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
+    >>> # Get fundamental data
+    >>> fundamentals = downloader.get_fundamentals("AAPL")
+    >>> print(f"PE Ratio: {fundamentals.pe_ratio}")
+    >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
     """
 
     def __init__(self, data_dir: str = "data"):
@@ -239,26 +265,89 @@ class YahooDataDownloader(BaseDataDownloader):
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
 
+    def get_fundamentals(self, symbol: str) -> Fundamentals:
+        """
+        Get comprehensive fundamental data for a given stock using Yahoo Finance.
 
-if __name__ == "__main__":
-    # Example usage
-    downloader = YahooDataDownloader(data_dir="data")
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
 
-    # Download data for a single symbol
-    symbol = "AAPL"
-    interval = "1d"
-    start_date = "2020-01-01"
-    end_date = pd.Timestamp.today().strftime("%Y-%m-%d")
-    df = downloader.get_ohlcv(symbol, interval, start_date, end_date)
-    filepath = downloader.save_data(df, symbol)
-    print(f"Data saved to {filepath}")
+        Returns:
+            Fundamentals: Comprehensive fundamental data for the stock
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
 
-    # Download data for multiple symbols
-    symbols = ["AAPL", "MSFT", "GOOGL"]
-    interval = "1d"
-    start_date = "2020-01-01"
-    end_date = pd.Timestamp.today().strftime("%Y-%m-%d")
-    results = downloader.download_multiple_symbols(
-        symbols, interval, start_date, end_date
-    )
-    print("Downloaded files:", results)
+            if not info:
+                _logger.error("No data returned from yfinance for ticker %s", symbol)
+                return Fundamentals(
+                    ticker=symbol.upper(),
+                    company_name="Unknown",
+                    current_price=0.0,
+                    market_cap=0.0,
+                    pe_ratio=0.0,
+                    forward_pe=0.0,
+                    dividend_yield=0.0,
+                    earnings_per_share=0.0,
+                    data_source="Yahoo Finance",
+                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+
+            _logger.debug("Retrieved fundamentals for %s: %s", symbol, info.get('shortName', 'Unknown'))
+
+            return Fundamentals(
+                ticker=symbol.upper(),
+                company_name=info.get("longName", "Unknown"),
+                current_price=info.get("regularMarketPrice", 0.0),
+                market_cap=info.get("marketCap", 0.0),
+                pe_ratio=info.get("trailingPE", 0.0),
+                forward_pe=info.get("forwardPE", 0.0),
+                dividend_yield=info.get("dividendYield", 0.0),
+                earnings_per_share=info.get("trailingEps", 0.0),
+                # Additional fields
+                price_to_book=info.get("priceToBook", None),
+                return_on_equity=info.get("returnOnEquity", None),
+                return_on_assets=info.get("returnOnAssets", None),
+                debt_to_equity=info.get("debtToEquity", None),
+                current_ratio=info.get("currentRatio", None),
+                quick_ratio=info.get("quickRatio", None),
+                revenue=info.get("totalRevenue", None),
+                revenue_growth=info.get("revenueGrowth", None),
+                net_income=info.get("netIncomeToCommon", None),
+                net_income_growth=info.get("netIncomeGrowth", None),
+                free_cash_flow=info.get("freeCashflow", None),
+                operating_margin=info.get("operatingMargins", None),
+                profit_margin=info.get("profitMargins", None),
+                beta=info.get("beta", None),
+                sector=info.get("sector", None),
+                industry=info.get("industry", None),
+                country=info.get("country", None),
+                exchange=info.get("exchange", None),
+                currency=info.get("currency", None),
+                shares_outstanding=info.get("sharesOutstanding", None),
+                float_shares=info.get("floatShares", None),
+                short_ratio=info.get("shortRatio", None),
+                payout_ratio=info.get("payoutRatio", None),
+                peg_ratio=info.get("pegRatio", None),
+                price_to_sales=info.get("priceToSalesTrailing12Months", None),
+                enterprise_value=info.get("enterpriseValue", None),
+                enterprise_value_to_ebitda=info.get("enterpriseToEbitda", None),
+                data_source="Yahoo Finance",
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+
+        except Exception as e:
+            _logger.error("Failed to get fundamentals for %s: %s", symbol, e, exc_info=True)
+            return Fundamentals(
+                ticker=symbol.upper(),
+                company_name="Unknown",
+                current_price=0.0,
+                market_cap=0.0,
+                pe_ratio=0.0,
+                forward_pe=0.0,
+                dividend_yield=0.0,
+                earnings_per_share=0.0,
+                data_source="Yahoo Finance",
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )

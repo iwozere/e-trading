@@ -14,6 +14,7 @@ from src.data.base_live_data_feed import BaseLiveDataFeed
 from src.data.binance_live_feed import BinanceLiveDataFeed
 from src.data.yahoo_live_feed import YahooLiveDataFeed
 from src.data.ibkr_live_feed import IBKRLiveDataFeed
+from src.data.coingecko_live_feed import CoinGeckoLiveDataFeed
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -40,7 +41,7 @@ class DataFeedFactory:
 
         Configuration format:
         {
-            "data_source": "binance|yahoo|ibkr",
+            "data_source": "binance|yahoo|ibkr|coingecko",
             "symbol": "BTCUSDT",
             "interval": "1m",
             "lookback_bars": 1000,
@@ -58,7 +59,10 @@ class DataFeedFactory:
             # IBKR specific
             "host": "127.0.0.1",
             "port": 7497,
-            "client_id": 1
+            "client_id": 1,
+
+            # CoinGecko specific
+            "polling_interval": 60
         }
         """
         try:
@@ -70,6 +74,8 @@ class DataFeedFactory:
                 return DataFeedFactory._create_yahoo_feed(config)
             elif data_source == "ibkr":
                 return DataFeedFactory._create_ibkr_feed(config)
+            elif data_source == "coingecko":
+                return DataFeedFactory._create_coingecko_feed(config)
             else:
                 _logger.error("Unknown data source: %s", data_source)
                 return None
@@ -119,6 +125,18 @@ class DataFeedFactory:
         )
 
     @staticmethod
+    def _create_coingecko_feed(config: Dict[str, Any]) -> CoinGeckoLiveDataFeed:
+        """Create a CoinGecko live data feed."""
+        return CoinGeckoLiveDataFeed(
+            symbol=config["symbol"],
+            interval=config["interval"],
+            lookback_bars=config.get("lookback_bars", 1000),
+            retry_interval=config.get("retry_interval", 60),
+            on_new_bar=config.get("on_new_bar"),
+            polling_interval=config.get("polling_interval", 60)
+        )
+
+    @staticmethod
     def get_supported_sources() -> list:
         """
         Get list of supported data sources.
@@ -126,7 +144,7 @@ class DataFeedFactory:
         Returns:
             List of supported data source names
         """
-        return ["binance", "yahoo", "ibkr"]
+        return ["binance", "yahoo", "ibkr", "coingecko"]
 
     @staticmethod
     def get_source_info() -> Dict[str, Dict[str, Any]]:
@@ -166,5 +184,15 @@ class DataFeedFactory:
                 "requires_auth": True,
                 "rate_limits": "High frequency",
                 "cost": "Market data subscriptions required"
+            },
+            "coingecko": {
+                "name": "CoinGecko",
+                "description": "Cryptocurrency data via polling (no WebSocket available)",
+                "symbols": "Cryptocurrencies (e.g., bitcoin, ethereum, cardano)",
+                "intervals": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"],
+                "real_time": "Polling",
+                "requires_auth": False,
+                "rate_limits": "50 calls/minute",
+                "cost": "Free"
             }
         }

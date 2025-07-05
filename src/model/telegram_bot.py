@@ -19,6 +19,37 @@ class Fundamentals:
     forward_pe: float
     dividend_yield: float
     earnings_per_share: float
+    # Additional fields for comprehensive fundamental analysis
+    price_to_book: Optional[float] = None
+    return_on_equity: Optional[float] = None
+    return_on_assets: Optional[float] = None
+    debt_to_equity: Optional[float] = None
+    current_ratio: Optional[float] = None
+    quick_ratio: Optional[float] = None
+    revenue: Optional[float] = None
+    revenue_growth: Optional[float] = None
+    net_income: Optional[float] = None
+    net_income_growth: Optional[float] = None
+    free_cash_flow: Optional[float] = None
+    operating_margin: Optional[float] = None
+    profit_margin: Optional[float] = None
+    beta: Optional[float] = None
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    country: Optional[str] = None
+    exchange: Optional[str] = None
+    currency: Optional[str] = None
+    shares_outstanding: Optional[float] = None
+    float_shares: Optional[float] = None
+    short_ratio: Optional[float] = None
+    payout_ratio: Optional[float] = None
+    peg_ratio: Optional[float] = None
+    price_to_sales: Optional[float] = None
+    enterprise_value: Optional[float] = None
+    enterprise_value_to_ebitda: Optional[float] = None
+    # Data source information
+    data_source: Optional[str] = None
+    last_updated: Optional[str] = None
 
 @dataclass
 class Technicals:

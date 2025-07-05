@@ -1,7 +1,7 @@
 import numpy as np
 import talib
 import pandas as pd
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Any
 from src.notification.logger import setup_logger
 from src.model.telegram_bot import Technicals
 
@@ -229,6 +229,178 @@ def calculate_technicals_from_df(df):
         bb_width=round((current_bb_upper - current_bb_lower) / current_bb_middle, 4) if current_bb_middle else 0.0,
         recommendations=recommendations
     )
+    return df, technicals
+
+def calculate_technicals_from_df_parametrized(df, indicator_params: Dict[str, Dict[str, Any]] = None):
+    """
+    Calculate technical indicators from a DataFrame with customizable parameters.
+    Args:
+        df: DataFrame with columns ['open', 'high', 'low', 'close', 'volume']
+        indicator_params: Dict of indicator names to their parameters
+                         Example: {
+                             'rsi': {'timeperiod': 14},
+                             'bollinger': {'timeperiod': 20, 'nbdevup': 2, 'nbdevdn': 2},
+                             'macd': {'fastperiod': 12, 'slowperiod': 26, 'signalperiod': 9}
+                         }
+    Returns:
+        (DataFrame, Technicals): DataFrame with indicator columns, Technicals dataclass with latest values
+    """
+    if df is None or df.empty:
+        logger.error("No data provided for technicals calculation.")
+        return None, None
+
+    df = df.dropna()
+    if len(df) < 50:
+        logger.error("Insufficient data for technicals: %d rows", len(df))
+        return None, None
+
+    high = df['high'].values.astype(float)
+    low = df['low'].values.astype(float)
+    close = df['close'].values.astype(float)
+    volume = df['volume'].values.astype(float)
+    open_price = df['open'].values.astype(float)
+
+    min_length = min(len(high), len(low), len(close), len(volume), len(open_price))
+    if min_length < 50:
+        logger.error("Insufficient data after cleaning: %d rows", min_length)
+        return None, None
+
+    high = high[-min_length:]
+    low = low[-min_length:]
+    close = close[-min_length:]
+    volume = volume[-min_length:]
+    open_price = open_price[-min_length:]
+
+    # Default parameters
+    default_params = {
+        'rsi': {'timeperiod': 14},
+        'bollinger': {'timeperiod': 20, 'nbdevup': 2, 'nbdevdn': 2, 'matype': 0},
+        'macd': {'fastperiod': 12, 'slowperiod': 26, 'signalperiod': 9},
+        'stochastic': {'fastk_period': 14, 'slowk_period': 3, 'slowd_period': 3},
+        'adx': {'timeperiod': 14},
+        'plus_di': {'timeperiod': 14},
+        'minus_di': {'timeperiod': 14},
+        'sma_50': {'timeperiod': 50},
+        'sma_200': {'timeperiod': 200},
+        'adr': {'timeperiod': 14}
+    }
+
+    # Merge user parameters with defaults
+    if indicator_params:
+        for indicator, params in indicator_params.items():
+            if indicator in default_params:
+                default_params[indicator].update(params)
+
+    try:
+        # Calculate indicators with custom parameters
+        rsi = talib.RSI(close, **default_params['rsi'])
+        bb_upper, bb_middle, bb_lower = talib.BBANDS(close, **default_params['bollinger'])
+        macd, macd_signal, macd_hist = talib.MACD(close, **default_params['macd'])
+        stoch_k, stoch_d = talib.STOCH(high, low, close, **default_params['stochastic'])
+        adx = talib.ADX(high, low, close, **default_params['adx'])
+        plus_di = talib.PLUS_DI(high, low, close, **default_params['plus_di'])
+        minus_di = talib.MINUS_DI(high, low, close, **default_params['minus_di'])
+        obv = talib.OBV(close, volume)
+        daily_range = high - low
+        adr = talib.SMA(daily_range, **default_params['adr'])
+        sma_50 = talib.SMA(close, **default_params['sma_50'])
+        sma_200 = talib.SMA(close, **default_params['sma_200'])
+
+    except Exception as e:
+        logger.error("TA-Lib calculation failed for data: %s", e, exc_info=True)
+        return None, None
+
+    # Add indicator arrays as columns to df
+    df = df.copy()
+    df['rsi'] = rsi
+    df['bb_upper'] = bb_upper
+    df['bb_middle'] = bb_middle
+    df['bb_lower'] = bb_lower
+    df['macd'] = macd
+    df['macd_signal'] = macd_signal
+    df['macd_hist'] = macd_hist
+    df['stoch_k'] = stoch_k
+    df['stoch_d'] = stoch_d
+    df['adx'] = adx
+    df['plus_di'] = plus_di
+    df['minus_di'] = minus_di
+    df['obv'] = obv
+    df['adr'] = adr
+    df['sma_50'] = sma_50
+    df['sma_200'] = sma_200
+
+    current_idx = -1
+    current_close = close[current_idx]
+    current_rsi = rsi[current_idx] if not np.isnan(rsi[current_idx]) else 50.0
+    current_bb_upper = bb_upper[current_idx] if not np.isnan(bb_upper[current_idx]) else current_close
+    current_bb_middle = bb_middle[current_idx] if not np.isnan(bb_middle[current_idx]) else current_close
+    current_bb_lower = bb_lower[current_idx] if not np.isnan(bb_lower[current_idx]) else current_close
+    current_macd = macd[current_idx] if not np.isnan(macd[current_idx]) else 0.0
+    current_macd_signal = macd_signal[current_idx] if not np.isnan(macd_signal[current_idx]) else 0.0
+    current_macd_hist = macd_hist[current_idx] if not np.isnan(macd_hist[current_idx]) else 0.0
+    current_stoch_k = stoch_k[current_idx] if not np.isnan(stoch_k[current_idx]) else 50.0
+    current_stoch_d = stoch_d[current_idx] if not np.isnan(stoch_d[current_idx]) else 50.0
+    current_adx = adx[current_idx] if not np.isnan(adx[current_idx]) else 25.0
+    current_plus_di = plus_di[current_idx] if not np.isnan(plus_di[current_idx]) else 25.0
+    current_minus_di = minus_di[current_idx] if not np.isnan(minus_di[current_idx]) else 25.0
+    current_obv = obv[current_idx] if not np.isnan(obv[current_idx]) else 0.0
+    current_adr = adr[current_idx] if not np.isnan(adr[current_idx]) else 0.0
+    current_sma_50 = sma_50[current_idx] if not np.isnan(sma_50[current_idx]) else current_close
+    current_sma_200 = sma_200[current_idx] if not np.isnan(sma_200[current_idx]) else current_close
+
+    prev_idx = -2 if len(close) > 1 else -1
+    prev_close = close[prev_idx]
+    prev_obv = obv[prev_idx] if not np.isnan(obv[prev_idx]) else current_obv
+    price_change = current_close - prev_close
+
+    # --- Recommendations ---
+    recommendations = {}
+    rsi_signal, rsi_reason = get_rsi_recommendation(current_rsi)
+    recommendations['rsi'] = {'signal': rsi_signal, 'reason': rsi_reason}
+    macd_signal, macd_reason = get_macd_recommendation(current_macd, current_macd_signal, current_macd_hist)
+    recommendations['macd'] = {'signal': macd_signal, 'reason': macd_reason}
+    bb_signal, bb_reason = get_bollinger_recommendation(current_close, current_bb_upper, current_bb_middle, current_bb_lower)
+    recommendations['bollinger'] = {'signal': bb_signal, 'reason': bb_reason}
+    stoch_signal, stoch_reason = get_stochastic_recommendation(current_stoch_k, current_stoch_d)
+    recommendations['stochastic'] = {'signal': stoch_signal, 'reason': stoch_reason}
+    adx_signal, adx_reason = get_adx_recommendation(current_adx, current_plus_di, current_minus_di)
+    recommendations['adx'] = {'signal': adx_signal, 'reason': adx_reason}
+    obv_signal, obv_reason = get_obv_recommendation(current_obv, prev_obv, price_change)
+    recommendations['obv'] = {'signal': obv_signal, 'reason': obv_reason}
+    avg_adr = np.mean(adr[-20:]) if len(adr) >= 20 else current_adr
+    adr_signal, adr_reason = get_adr_recommendation(current_adr, avg_adr)
+    recommendations['adr'] = {'signal': adr_signal, 'reason': adr_reason}
+
+    # Overall
+    overall_signal, overall_reason = get_overall_recommendation([(v['signal'], v['reason']) for v in recommendations.values()])
+    recommendations['overall'] = {'signal': overall_signal, 'reason': overall_reason}
+
+    trend = "Uptrend" if current_sma_50 > current_sma_200 and current_close > current_sma_50 else \
+            "Downtrend" if current_sma_50 < current_sma_200 and current_close < current_sma_50 else "Sideways"
+
+    technicals = Technicals(
+        rsi=round(current_rsi, 2),
+        sma_50=round(current_sma_50, 2),
+        sma_200=round(current_sma_200, 2),
+        macd=round(current_macd, 4),
+        macd_signal=round(current_macd_signal, 4),
+        macd_histogram=round(current_macd_hist, 4),
+        stoch_k=round(current_stoch_k, 2),
+        stoch_d=round(current_stoch_d, 2),
+        adx=round(current_adx, 2),
+        plus_di=round(current_plus_di, 2),
+        minus_di=round(current_minus_di, 2),
+        obv=round(current_obv, 0),
+        adr=round(current_adr, 2),
+        avg_adr=round(avg_adr, 2),
+        trend=trend,
+        bb_upper=round(current_bb_upper, 2),
+        bb_middle=round(current_bb_middle, 2),
+        bb_lower=round(current_bb_lower, 2),
+        bb_width=round((current_bb_upper - current_bb_lower) / current_bb_middle, 4) if current_bb_middle else 0.0,
+        recommendations=recommendations
+    )
+
     return df, technicals
 
 def format_technical_analysis(ticker: str, technicals: Technicals) -> str:

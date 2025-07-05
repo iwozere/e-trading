@@ -1,9 +1,11 @@
 import logging
 import os
 from typing import Dict, List, Optional
+from datetime import datetime
 import pandas as pd
 import requests
 from src.notification.logger import setup_logger
+from src.model.telegram_bot import Fundamentals
 _logger = setup_logger(__name__)
 from .base_data_downloader import BaseDataDownloader
 
@@ -31,12 +33,42 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
     """
     A class to download historical data from Alpha Vantage.
 
+    This class provides methods to:
+    1. Download historical OHLCV data for a given symbol
+    2. Save data to CSV files
+    3. Load data from CSV files
+    4. Update existing data files with new data
+    5. Get comprehensive fundamental data for stocks
+
+    **Fundamental Data Capabilities:**
+    - ✅ PE Ratio (trailing and forward)
+    - ✅ Financial Ratios (P/B, ROE, ROA, debt/equity, current ratio, quick ratio)
+    - ✅ Growth Metrics (revenue growth, net income growth)
+    - ✅ Company Information (name, sector, industry, country, exchange)
+    - ✅ Market Data (market cap, current price, shares outstanding)
+    - ✅ Profitability Metrics (operating margin, profit margin, free cash flow)
+    - ✅ Valuation Metrics (beta, PEG ratio, price-to-sales, enterprise value)
+
+    **Data Quality:** High - Alpha Vantage provides comprehensive fundamental data
+    **Rate Limits:** 5 API calls per minute (free tier), 500 per day (free tier)
+    **Coverage:** Global stocks and ETFs
+
     Parameters:
     -----------
     api_key : str
         Alpha Vantage API key
     data_dir : str
         Directory to store downloaded data files
+
+    Example:
+    --------
+    >>> downloader = AlphaVantageDataDownloader("YOUR_API_KEY")
+    >>> # Get OHLCV data
+    >>> df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
+    >>> # Get fundamental data
+    >>> fundamentals = downloader.get_fundamentals("AAPL")
+    >>> print(f"PE Ratio: {fundamentals.pe_ratio}")
+    >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
     """
 
     def __init__(self, api_key: str, data_dir: Optional[str] = "data"):
@@ -104,13 +136,13 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             # Convert to DataFrame
             df = pd.DataFrame.from_dict(ts_data, orient='index')
             df = df.rename(columns=lambda x: x.lower().replace(' ', '').replace('close', 'close').replace('open', 'open').replace('high', 'high').replace('low', 'low').replace('volume', 'volume'))
-            # Standardize column names
+            # Standardize column names (after lambda function removes spaces)
             col_map = {
-                '1. open': 'open',
-                '2. high': 'high',
-                '3. low': 'low',
-                '4. close': 'close',
-                '5. volume': 'volume',
+                '1.open': 'open',
+                '2.high': 'high',
+                '3.low': 'low',
+                '4.close': 'close',
+                '5.volume': 'volume',
             }
             df = df.rename(columns=col_map)
             # Convert index to datetime and filter by date range
@@ -196,3 +228,113 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
 
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
+
+    def get_fundamentals(self, symbol: str) -> Fundamentals:
+        """
+        Get comprehensive fundamental data for a given stock using Alpha Vantage.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            Fundamentals: Comprehensive fundamental data for the stock
+        """
+        try:
+            # Get company overview
+            overview_url = f"{self.base_url}"
+            overview_params = {
+                'function': 'OVERVIEW',
+                'symbol': symbol,
+                'apikey': self.api_key
+            }
+
+            overview_response = requests.get(overview_url, params=overview_params)
+            if overview_response.status_code != 200:
+                raise RuntimeError(f"Alpha Vantage API error: {overview_response.status_code}")
+
+            overview_data = overview_response.json()
+
+            if not overview_data or 'Error Message' in overview_data:
+                _logger.error("No data returned from Alpha Vantage for ticker %s", symbol)
+                return Fundamentals(
+                    ticker=symbol.upper(),
+                    company_name="Unknown",
+                    current_price=0.0,
+                    market_cap=0.0,
+                    pe_ratio=0.0,
+                    forward_pe=0.0,
+                    dividend_yield=0.0,
+                    earnings_per_share=0.0,
+                    data_source="Alpha Vantage",
+                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+
+            # Get current price
+            quote_url = f"{self.base_url}"
+            quote_params = {
+                'function': 'GLOBAL_QUOTE',
+                'symbol': symbol,
+                'apikey': self.api_key
+            }
+
+            quote_response = requests.get(quote_url, params=quote_params)
+            quote_data = quote_response.json() if quote_response.status_code == 200 else {}
+            current_price = float(quote_data.get('Global Quote', {}).get('05. price', 0)) if quote_data else 0.0
+
+            _logger.debug("Retrieved fundamentals for %s: %s", symbol, overview_data.get('Name', 'Unknown'))
+
+            return Fundamentals(
+                ticker=symbol.upper(),
+                company_name=overview_data.get("Name", "Unknown"),
+                current_price=current_price,
+                market_cap=float(overview_data.get("MarketCapitalization", 0)) if overview_data.get("MarketCapitalization") else 0.0,
+                pe_ratio=float(overview_data.get("PERatio", 0)) if overview_data.get("PERatio") else 0.0,
+                forward_pe=float(overview_data.get("ForwardPE", 0)) if overview_data.get("ForwardPE") else 0.0,
+                dividend_yield=float(overview_data.get("DividendYield", 0)) if overview_data.get("DividendYield") else 0.0,
+                earnings_per_share=float(overview_data.get("EPS", 0)) if overview_data.get("EPS") else 0.0,
+                # Additional fields
+                price_to_book=float(overview_data.get("PriceToBookRatio", 0)) if overview_data.get("PriceToBookRatio") else None,
+                return_on_equity=float(overview_data.get("ReturnOnEquityTTM", 0)) if overview_data.get("ReturnOnEquityTTM") else None,
+                return_on_assets=float(overview_data.get("ReturnOnAssetsTTM", 0)) if overview_data.get("ReturnOnAssetsTTM") else None,
+                debt_to_equity=float(overview_data.get("DebtToEquityRatio", 0)) if overview_data.get("DebtToEquityRatio") else None,
+                current_ratio=float(overview_data.get("CurrentRatio", 0)) if overview_data.get("CurrentRatio") else None,
+                quick_ratio=float(overview_data.get("QuickRatio", 0)) if overview_data.get("QuickRatio") else None,
+                revenue=float(overview_data.get("RevenueTTM", 0)) if overview_data.get("RevenueTTM") else None,
+                revenue_growth=float(overview_data.get("RevenueGrowthTTM", 0)) if overview_data.get("RevenueGrowthTTM") else None,
+                net_income=float(overview_data.get("NetIncomeTTM", 0)) if overview_data.get("NetIncomeTTM") else None,
+                net_income_growth=float(overview_data.get("NetIncomeGrowthTTM", 0)) if overview_data.get("NetIncomeGrowthTTM") else None,
+                free_cash_flow=float(overview_data.get("FreeCashFlowTTM", 0)) if overview_data.get("FreeCashFlowTTM") else None,
+                operating_margin=float(overview_data.get("OperatingMarginTTM", 0)) if overview_data.get("OperatingMarginTTM") else None,
+                profit_margin=float(overview_data.get("ProfitMarginTTM", 0)) if overview_data.get("ProfitMarginTTM") else None,
+                beta=float(overview_data.get("Beta", 0)) if overview_data.get("Beta") else None,
+                sector=overview_data.get("Sector", None),
+                industry=overview_data.get("Industry", None),
+                country=overview_data.get("Country", None),
+                exchange=overview_data.get("Exchange", None),
+                currency=overview_data.get("Currency", None),
+                shares_outstanding=float(overview_data.get("SharesOutstanding", 0)) if overview_data.get("SharesOutstanding") else None,
+                float_shares=float(overview_data.get("SharesFloat", 0)) if overview_data.get("SharesFloat") else None,
+                short_ratio=float(overview_data.get("ShortRatio", 0)) if overview_data.get("ShortRatio") else None,
+                payout_ratio=float(overview_data.get("PayoutRatio", 0)) if overview_data.get("PayoutRatio") else None,
+                peg_ratio=float(overview_data.get("PEGRatio", 0)) if overview_data.get("PEGRatio") else None,
+                price_to_sales=float(overview_data.get("PriceToSalesRatioTTM", 0)) if overview_data.get("PriceToSalesRatioTTM") else None,
+                enterprise_value=float(overview_data.get("MarketCapitalization", 0)) if overview_data.get("MarketCapitalization") else None,
+                enterprise_value_to_ebitda=float(overview_data.get("EVToEBITDA", 0)) if overview_data.get("EVToEBITDA") else None,
+                data_source="Alpha Vantage",
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+
+        except Exception as e:
+            _logger.error("Failed to get fundamentals for %s: %s", symbol, e, exc_info=True)
+            return Fundamentals(
+                ticker=symbol.upper(),
+                company_name="Unknown",
+                current_price=0.0,
+                market_cap=0.0,
+                pe_ratio=0.0,
+                forward_pe=0.0,
+                dividend_yield=0.0,
+                earnings_per_share=0.0,
+                data_source="Alpha Vantage",
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
