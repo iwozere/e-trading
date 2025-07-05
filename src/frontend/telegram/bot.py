@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 import asyncio
 import random
 import time
-from src.telegram_screener import db
+from src.frontend.telegram import db
 import sqlite3
 from src.notification.logger import setup_logger
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN

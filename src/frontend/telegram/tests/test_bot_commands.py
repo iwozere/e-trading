@@ -5,8 +5,8 @@ from aiogram import Dispatcher
 from aiogram.fsm.context import FSMContext
 from unittest.mock import AsyncMock, MagicMock
 import pandas as pd
-import src.telegram_screener.bot as bot_module
-from src.telegram_screener.business_logic import analyze_ticker_business
+import src.frontend.telegram.bot as bot_module
+from src.frontend.telegram.screener.business_logic import analyze_ticker_business
 from src.model.telegram_bot import TickerAnalysis, Fundamentals, Technicals
 
 @pytest.mark.asyncio
@@ -82,9 +82,9 @@ def test_analyze_ticker_business_valid(monkeypatch):
         bb_width=0.2
     )
 
-    monkeypatch.setattr('src.telegram_screener.business_logic.get_ohlcv', lambda *args, **kwargs: mock_df)
-    monkeypatch.setattr('src.telegram_screener.business_logic.get_fundamentals', lambda *args, **kwargs: mock_fundamentals)
-    monkeypatch.setattr('src.telegram_screener.business_logic.calculate_technicals_from_df', lambda df: (mock_df, mock_technicals))
+    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_ohlcv', lambda *args, **kwargs: mock_df)
+    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_fundamentals', lambda *args, **kwargs: mock_fundamentals)
+    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.calculate_technicals_from_df', lambda df: (mock_df, mock_technicals))
 
     result = analyze_ticker_business('AAPL', provider='yf', period='2y', interval='1d')
     assert isinstance(result, TickerAnalysis)
@@ -98,7 +98,7 @@ def test_analyze_ticker_business_invalid_period(monkeypatch):
     def mock_get_ohlcv(*args, **kwargs):
         raise ValueError("Invalid period/interval combination")
 
-    monkeypatch.setattr('src.telegram_screener.business_logic.get_ohlcv', mock_get_ohlcv)
+    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_ohlcv', mock_get_ohlcv)
 
     result = analyze_ticker_business('AAPL', provider='yf', period='bad', interval='bad')
     assert isinstance(result, TickerAnalysis)
@@ -112,7 +112,7 @@ def test_analyze_ticker_business_exception(monkeypatch):
     def mock_get_ohlcv(*args, **kwargs):
         raise Exception('fail')
 
-    monkeypatch.setattr('src.telegram_screener.business_logic.get_ohlcv', mock_get_ohlcv)
+    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_ohlcv', mock_get_ohlcv)
 
     result = analyze_ticker_business('AAPL', provider='yf', period='2y', interval='1d')
     assert isinstance(result, TickerAnalysis)

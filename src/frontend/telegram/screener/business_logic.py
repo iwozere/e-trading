@@ -1,7 +1,5 @@
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
-import pandas as pd
-from src.telegram_screener.command_parser import ParsedCommand
+from typing import Any, Dict, List
+from src.frontend.telegram.command_parser import ParsedCommand
 from src.common import get_ohlcv, analyze_period_interval
 from src.common.fundamentals import get_fundamentals
 from src.common.technicals import calculate_technicals_from_df

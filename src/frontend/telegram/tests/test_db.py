@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import pytest
-from src.telegram_screener import db as db_module
+from src.frontend.telegram import db as db_module
 from datetime import datetime
 
 test_db_path = "test_telegram_screener.sqlite3"

@@ -3,7 +3,7 @@ import time
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
-DB_PATH = "telegram_screener.sqlite3"
+DB_PATH = "db/telegram_screener.sqlite3"
 
 # --- DB Schema ---
 # users: telegram_user_id TEXT PRIMARY KEY, email TEXT, verification_code TEXT, code_sent_time INTEGER, verified INTEGER, language TEXT, is_admin INTEGER DEFAULT 0

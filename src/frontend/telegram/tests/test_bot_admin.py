@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import AsyncMock, patch
-from src.telegram_screener import bot as bot_module
-from src.telegram_screener import db as db_module
+from src.frontend.telegram import bot as bot_module
+from src.frontend.telegram import db as db_module
 
 @pytest.mark.asyncio
-@patch("src.telegram_screener.bot.is_admin_user", return_value=True)
-@patch("src.telegram_screener.db")
+@patch("src.frontend.telegram.bot.is_admin_user", return_value=True)
+@patch("src.frontend.telegram.db")
 async def test_admin_help(mock_db, mock_is_admin):
     message = AsyncMock()
     message.text = "/admin help"
@@ -14,8 +14,8 @@ async def test_admin_help(mock_db, mock_is_admin):
     message.answer.assert_awaited_with(bot_module.ADMIN_HELP_TEXT, parse_mode="HTML")
 
 @pytest.mark.asyncio
-@patch("src.telegram_screener.bot.is_admin_user", return_value=True)
-@patch("src.telegram_screener.db")
+@patch("src.frontend.telegram.bot.is_admin_user", return_value=True)
+@patch("src.frontend.telegram.db")
 async def test_admin_listusers(mock_db, mock_is_admin):
     message = AsyncMock()
     message.text = "/admin listusers"
@@ -29,8 +29,8 @@ async def test_admin_listusers(mock_db, mock_is_admin):
     assert kwargs["parse_mode"] == "HTML"
 
 @pytest.mark.asyncio
-@patch("src.telegram_screener.bot.is_admin_user", return_value=True)
-@patch("src.telegram_screener.db")
+@patch("src.frontend.telegram.bot.is_admin_user", return_value=True)
+@patch("src.frontend.telegram.db")
 async def test_admin_setlimit_global(mock_db, mock_is_admin):
     message = AsyncMock()
     message.text = "/admin setlimit alerts 10"
@@ -40,8 +40,8 @@ async def test_admin_setlimit_global(mock_db, mock_is_admin):
     message.answer.assert_awaited_with("Set global max_alerts to 10.")
 
 @pytest.mark.asyncio
-@patch("src.telegram_screener.bot.is_admin_user", return_value=True)
-@patch("src.telegram_screener.db")
+@patch("src.frontend.telegram.bot.is_admin_user", return_value=True)
+@patch("src.frontend.telegram.db")
 async def test_admin_setlimit_per_user(mock_db, mock_is_admin):
     message = AsyncMock()
     message.text = "/admin setlimit schedules 7 user123"
@@ -51,8 +51,8 @@ async def test_admin_setlimit_per_user(mock_db, mock_is_admin):
     message.answer.assert_awaited_with("Set max_schedules for user user123 to 7.")
 
 @pytest.mark.asyncio
-@patch("src.telegram_screener.bot.is_admin_user", return_value=True)
-@patch("src.telegram_screener.db")
+@patch("src.frontend.telegram.bot.is_admin_user", return_value=True)
+@patch("src.frontend.telegram.db")
 async def test_admin_users(mock_db, mock_is_admin):
     message = AsyncMock()
     message.text = "/admin users"
