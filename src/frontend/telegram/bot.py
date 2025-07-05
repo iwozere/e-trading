@@ -1,24 +1,24 @@
 import os
 import sys
-import re
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-from aiogram import Bot, Dispatcher, types
+import re
+from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import Command, CommandObject
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 import asyncio
 import random
 import time
-from src.frontend.telegram import db
 import sqlite3
-from src.notification.logger import setup_logger
+from src.frontend.telegram import db
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
 from src.frontend.telegram.command_parser import parse_command, ParsedCommand
 from src.frontend.telegram.screener.business_logic import handle_command, is_admin_user
 
 # Configure logging
+from src.notification.logger import setup_logger
 logger = setup_logger("telegram_screener_bot")
 
 
@@ -90,7 +90,7 @@ async def cmd_start(message: Message):
         result = handle_command(parsed)
 
         if result["status"] == "ok":
-            await message.answer(result["help_text"], parse_mode="MarkdownV2")
+            await message.answer(result["help_text"])
         else:
             await message.answer(f"❌ Error: {result.get('message', 'Unknown error')}")
 
@@ -113,7 +113,7 @@ async def cmd_help(message: Message):
         result = handle_command(parsed)
 
         if result["status"] == "ok":
-            await message.answer(result["help_text"], parse_mode="MarkdownV2")
+            await message.answer(result["help_text"])
         else:
             await message.answer(f"❌ Error: {result.get('message', 'Unknown error')}")
     except Exception as e:
@@ -478,7 +478,7 @@ async def cmd_feature(message: Message):
 async def unknown_command(message: Message):
     """Handle unknown commands by showing help."""
     try:
-        await message.answer("Unknown command.\n" + HELP_TEXT, parse_mode="MarkdownV2")
+        await message.answer("Unknown command.\n" + HELP_TEXT, parse_mode="HTML")
     except Exception as e:
         logger.error(f"Error in unknown command handler: {e}", exc_info=True)
         await message.answer("❌ An error occurred while processing your request. Please try again.")
