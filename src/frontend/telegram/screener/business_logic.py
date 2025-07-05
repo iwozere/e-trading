@@ -4,6 +4,10 @@ from src.common import get_ohlcv, analyze_period_interval
 from src.common.fundamentals import get_fundamentals
 from src.common.technicals import calculate_technicals_from_df
 from src.model.telegram_bot import TickerAnalysis
+from src.frontend.telegram import db
+
+from src.notification.logger import setup_logger
+logger = setup_logger("telegram_screener_bot")
 
 def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
     """
@@ -12,8 +16,50 @@ def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
     """
     if parsed.command == "report":
         return handle_report(parsed)
+    elif parsed.command == "help":
+        return handle_help(parsed)
     # Add more command handlers as needed
     return {"status": "error", "message": f"Unknown command: {parsed.command}"}
+
+
+def handle_help(parsed: ParsedCommand) -> Dict[str, Any]:
+    """
+    Business logic for /help and /start commands.
+    Returns appropriate help text based on user admin status.
+    """
+    try:
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        if not telegram_user_id:
+            return {"status": "error", "message": "No telegram_user_id provided"}
+
+        db.init_db()
+        is_admin = is_admin_user(telegram_user_id)
+
+        # Import help texts here to avoid circular imports
+        from src.frontend.telegram.bot import HELP_TEXT, ADMIN_HELP_TEXT
+
+        # Show regular help text
+        help_text = HELP_TEXT
+
+        # Add admin commands if user is admin
+        if is_admin:
+            help_text += "\n\n" + ADMIN_HELP_TEXT
+
+        return {
+            "status": "ok",
+            "help_text": help_text,
+            "is_admin": is_admin
+        }
+    except Exception as e:
+        logger.error("Error: %s", e, exc_info=True)
+        return {"status": "error", "message": f"Error generating help: {str(e)}"}
+
+
+def is_admin_user(telegram_user_id: str) -> bool:
+    """Check if user is an admin."""
+    db.init_db()
+    status = db.get_user_status(telegram_user_id)
+    return status and status.get("is_admin", False)
 
 
 def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
@@ -23,11 +69,24 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
       - Use analyze_ticker_business for unified analysis logic
     """
     args = parsed.args
-    tickers = [args.get("tickers")] if isinstance(args.get("tickers"), str) else args.get("tickers", [])
+    # Handle tickers - could be a single string or list
+    tickers_raw = args.get("tickers")
+    if isinstance(tickers_raw, str):
+        tickers = [tickers_raw]
+    elif isinstance(tickers_raw, list):
+        tickers = tickers_raw
+    else:
+        # Fallback to positionals if tickers not in args
+        tickers = parsed.positionals
+
+    if not tickers:
+        return {"status": "error", "message": "No tickers specified"}
+
     period = args.get("period") or "2y"
     interval = args.get("interval") or "1d"
     provider = args.get("provider")
     analyses: List[TickerAnalysis] = []
+
     for ticker in tickers:
         analysis = analyze_ticker_business(
             ticker=ticker,
@@ -36,6 +95,7 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
             interval=interval
         )
         analyses.append(analysis)
+
     return {
         "status": "ok",
         "analyses": analyses,
@@ -64,6 +124,15 @@ def analyze_ticker_business(
         # Calculate technical indicators
         df_with_technicals, technicals = calculate_technicals_from_df(df)
 
+        # Calculate current price and change percentage
+        current_price = None
+        change_percentage = None
+        if df is not None and not df.empty:
+            current_price = df['close'].iloc[-1]
+            if len(df) > 1:
+                prev_price = df['close'].iloc[-2]
+                change_percentage = ((current_price - prev_price) / prev_price) * 100
+
         return TickerAnalysis(
             ticker=ticker.upper(),
             provider=provider or ("yf" if len(ticker) < 5 else "bnc"),
@@ -72,6 +141,8 @@ def analyze_ticker_business(
             ohlcv=df_with_technicals,
             fundamentals=fundamentals,
             technicals=technicals,
+            current_price=current_price,
+            change_percentage=change_percentage,
             error=None,
             chart_image=None
         )
@@ -84,6 +155,8 @@ def analyze_ticker_business(
             ohlcv=None,
             fundamentals=None,
             technicals=None,
+            current_price=None,
+            change_percentage=None,
             error=str(e),
             chart_image=None
         )

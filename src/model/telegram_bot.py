@@ -84,11 +84,13 @@ class TickerAnalysis:
     provider: str
     period: str
     interval: str
-    fundamentals: Fundamentals
-    technicals: Technicals
-    chart_image: bytes
+    fundamentals: Optional[Fundamentals] = None
+    technicals: Optional[Technicals] = None
+    chart_image: Optional[bytes] = None
     ohlcv: Optional[object] = None  # DataFrame with pricing info
     error: Optional[str] = None
+    current_price: Optional[float] = None
+    change_percentage: Optional[float] = None
 
 
 @dataclass
