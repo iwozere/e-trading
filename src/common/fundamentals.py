@@ -287,3 +287,93 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
         sources=field_sources
     )
     return fundamentals
+
+def format_fundamental_analysis(fundamentals) -> str:
+    """
+    Format the fundamentals section for display in Telegram/email.
+    Handles missing values gracefully. Includes all available fields.
+    """
+    if not fundamentals:
+        return ""
+    lines = []
+    # Header
+    name = getattr(fundamentals, 'company_name', None) or 'Unknown'
+    lines.append(f" - {name}")
+    # Price & Market
+    if fundamentals.current_price is not None:
+        lines.append(f"💵 Price: ${fundamentals.current_price:.2f}")
+    if fundamentals.market_cap is not None:
+        lines.append(f"💸 Market Cap: ${(fundamentals.market_cap/1e9):.2f}B")
+    if fundamentals.pe_ratio is not None or fundamentals.forward_pe is not None:
+        pe = f"{fundamentals.pe_ratio:.2f}" if fundamentals.pe_ratio is not None else "-"
+        fpe = f"{fundamentals.forward_pe:.2f}" if fundamentals.forward_pe is not None else "-"
+        lines.append(f"🏦 P/E: {pe}, Forward P/E: {fpe}")
+    if fundamentals.earnings_per_share is not None or fundamentals.dividend_yield is not None:
+        eps = f"${fundamentals.earnings_per_share:.2f}" if fundamentals.earnings_per_share is not None else "-"
+        dy = f"{fundamentals.dividend_yield*100:.2f}%" if fundamentals.dividend_yield is not None else "-"
+        lines.append(f"📊 EPS: {eps}, Div Yield: {dy}")
+    # Profitability
+    if fundamentals.operating_margin is not None:
+        lines.append(f"🧮 Operating Margin: {fundamentals.operating_margin:.2f}")
+    if fundamentals.profit_margin is not None:
+        lines.append(f"💰 Profit Margin: {fundamentals.profit_margin:.2f}")
+    if fundamentals.return_on_equity is not None:
+        lines.append(f"🔄 ROE: {fundamentals.return_on_equity:.2f}")
+    if fundamentals.return_on_assets is not None:
+        lines.append(f"🔄 ROA: {fundamentals.return_on_assets:.2f}")
+    # Balance Sheet
+    if fundamentals.price_to_book is not None:
+        lines.append(f"📚 Price/Book: {fundamentals.price_to_book:.2f}")
+    if fundamentals.debt_to_equity is not None:
+        lines.append(f"🏦 Debt/Equity: {fundamentals.debt_to_equity:.2f}")
+    if fundamentals.current_ratio is not None:
+        lines.append(f"💧 Current Ratio: {fundamentals.current_ratio:.2f}")
+    if fundamentals.quick_ratio is not None:
+        lines.append(f"⚡ Quick Ratio: {fundamentals.quick_ratio:.2f}")
+    # Growth
+    if fundamentals.revenue is not None:
+        lines.append(f"📈 Revenue: ${fundamentals.revenue/1e6:.2f}M")
+    if fundamentals.revenue_growth is not None:
+        lines.append(f"📈 Revenue Growth: {fundamentals.revenue_growth:.2f}")
+    if fundamentals.net_income is not None:
+        lines.append(f"💵 Net Income: ${fundamentals.net_income/1e6:.2f}M")
+    if fundamentals.net_income_growth is not None:
+        lines.append(f"💵 Net Income Growth: {fundamentals.net_income_growth:.2f}")
+    if fundamentals.free_cash_flow is not None:
+        lines.append(f"💸 Free Cash Flow: ${fundamentals.free_cash_flow/1e6:.2f}M")
+    # Other ratios
+    if fundamentals.beta is not None:
+        lines.append(f"📉 Beta: {fundamentals.beta:.2f}")
+    if fundamentals.shares_outstanding is not None:
+        lines.append(f"🧾 Shares Outstanding: {fundamentals.shares_outstanding/1e6:.2f}M")
+    if fundamentals.float_shares is not None:
+        lines.append(f"🧾 Float Shares: {fundamentals.float_shares/1e6:.2f}M")
+    if fundamentals.short_ratio is not None:
+        lines.append(f"📉 Short Ratio: {fundamentals.short_ratio:.2f}")
+    if fundamentals.payout_ratio is not None:
+        lines.append(f"💵 Payout Ratio: {fundamentals.payout_ratio:.2f}")
+    if fundamentals.peg_ratio is not None:
+        lines.append(f"📈 PEG Ratio: {fundamentals.peg_ratio:.2f}")
+    if fundamentals.price_to_sales is not None:
+        lines.append(f"💲 Price/Sales: {fundamentals.price_to_sales:.2f}")
+    if fundamentals.enterprise_value is not None:
+        lines.append(f"🏢 Enterprise Value: ${fundamentals.enterprise_value/1e9:.2f}B")
+    if fundamentals.enterprise_value_to_ebitda is not None:
+        lines.append(f"🏢 EV/EBITDA: {fundamentals.enterprise_value_to_ebitda:.2f}")
+    # Company Info
+    if fundamentals.sector:
+        lines.append(f"🏭 Sector: {fundamentals.sector}")
+    if fundamentals.industry:
+        lines.append(f"🏢 Industry: {fundamentals.industry}")
+    if fundamentals.country:
+        lines.append(f"🌎 Country: {fundamentals.country}")
+    if fundamentals.exchange:
+        lines.append(f"💹 Exchange: {fundamentals.exchange}")
+    if fundamentals.currency:
+        lines.append(f"💱 Currency: {fundamentals.currency}")
+    # Data source and update info
+    if fundamentals.data_source:
+        lines.append(f"🔗 Data Source: {fundamentals.data_source}")
+    if fundamentals.last_updated:
+        lines.append(f"🕒 Last Updated: {fundamentals.last_updated}")
+    return '\n'.join(lines) + '\n'

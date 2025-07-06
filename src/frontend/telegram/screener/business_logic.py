@@ -5,6 +5,8 @@ from src.common.fundamentals import get_fundamentals
 from src.common.technicals import calculate_technicals_from_df
 from src.model.telegram_bot import TickerAnalysis
 from src.frontend.telegram import db
+import os
+from config.donotshare import donotshare
 
 from src.notification.logger import setup_logger
 logger = setup_logger("telegram_screener_bot")
@@ -18,6 +20,8 @@ def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
         return handle_report(parsed)
     elif parsed.command == "help":
         return handle_help(parsed)
+    elif parsed.command == "info":
+        return handle_info(parsed)
     # Add more command handlers as needed
     return {"status": "error", "message": f"Unknown command: {parsed.command}"}
 
@@ -69,24 +73,30 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
       - Use analyze_ticker_business for unified analysis logic
     """
     args = parsed.args
-    # Handle tickers - could be a single string or list
     tickers_raw = args.get("tickers")
     if isinstance(tickers_raw, str):
         tickers = [tickers_raw]
     elif isinstance(tickers_raw, list):
         tickers = tickers_raw
     else:
-        # Fallback to positionals if tickers not in args
         tickers = parsed.positionals
-
     if not tickers:
-        return {"status": "error", "message": "No tickers specified"}
-
+        return {"status": "error", "title": "Report Error", "message": "No tickers specified"}
     period = args.get("period") or "2y"
     interval = args.get("interval") or "1d"
     provider = args.get("provider")
     analyses: List[TickerAnalysis] = []
-
+    missing_keys = []
+    # Check for required API keys
+    provider_keys = {
+        "av": getattr(donotshare, "ALPHA_VANTAGE_API_KEY", None),
+        "fh": getattr(donotshare, "FINNHUB_API_KEY", None),
+        "td": getattr(donotshare, "TWELVE_DATA_API_KEY", None),
+        "pg": getattr(donotshare, "POLYGON_API_KEY", None),
+    }
+    for k, v in provider_keys.items():
+        if not v:
+            missing_keys.append(k)
     for ticker in tickers:
         analysis = analyze_ticker_business(
             ticker=ticker,
@@ -95,12 +105,28 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
             interval=interval
         )
         analyses.append(analysis)
-
+    # If all analyses failed due to missing keys
+    if all((a.error and any(key in a.error for key in ["Alpha Vantage API key", "Finnhub API key", "Twelve Data API key", "Polygon.io API key"])) for a in analyses):
+        return {
+            "status": "error",
+            "title": "Report Error",
+            "message": f"No data could be retrieved for {', '.join(tickers)}. Missing or invalid API keys for providers: {', '.join(missing_keys)}. Please check your API keys in donotshare.py."
+        }
+    # If all analyses failed for any reason
+    if not analyses or all(a.error for a in analyses):
+        return {
+            "status": "error",
+            "title": "Report Error",
+            "message": f"No data could be retrieved for {', '.join(tickers)}. Please check your API keys or try a different provider/ticker."
+        }
+    # Otherwise, return analyses as before
     return {
         "status": "ok",
         "analyses": analyses,
         "email": args.get("email", False),
         "indicators": args.get("indicators"),
+        "title": f"Report for {', '.join(tickers)}",
+        "message": "Report generated successfully."
     }
 
 
@@ -160,3 +186,26 @@ def analyze_ticker_business(
             error=str(e),
             chart_image=None
         )
+
+
+def handle_info(parsed: ParsedCommand) -> Dict[str, Any]:
+    telegram_user_id = parsed.args.get("telegram_user_id")
+    if not telegram_user_id:
+        return {"status": "error", "message": "No telegram_user_id provided"}
+    db.init_db()
+    status = db.get_user_status(telegram_user_id)
+    if status:
+        email = status["email"] or "(not set)"
+        verified = "Yes" if status["verified"] else "No"
+        language = status["language"] or "(not set)"
+        return {
+            "status": "ok",
+            "title": "Your Info",
+            "message": f"Email: {email}\nVerified: {verified}\nLanguage: {language}"
+        }
+    else:
+        return {
+            "status": "ok",
+            "title": "Your Info",
+            "message": "Email: (not set)\nVerified: No\nLanguage: (not set)"
+        }

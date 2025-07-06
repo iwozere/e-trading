@@ -72,11 +72,14 @@ class TelegramChannel(NotificationChannel):
                     reply_to_message_id = None
                     if notification.data and 'reply_to_message_id' in notification.data:
                         reply_to_message_id = notification.data['reply_to_message_id']
+                    chat_id = self.chat_id
+                    if notification.data and 'telegram_chat_id' in notification.data:
+                        chat_id = notification.data['telegram_chat_id']
                     await self.bot.send_photo(
-                        chat_id=self.chat_id,
+                        chat_id=chat_id,
                         photo=photo_file,
                         caption=notification.message,
-                        parse_mode="HTML",
+                        parse_mode=None,
                         reply_to_message_id=reply_to_message_id
                     )
                 return True
@@ -84,10 +87,13 @@ class TelegramChannel(NotificationChannel):
             reply_to_message_id = None
             if notification.data and 'reply_to_message_id' in notification.data:
                 reply_to_message_id = notification.data['reply_to_message_id']
+            chat_id = self.chat_id
+            if notification.data and 'telegram_chat_id' in notification.data:
+                chat_id = notification.data['telegram_chat_id']
             await self.bot.send_message(
-                chat_id=self.chat_id,
+                chat_id=chat_id,
                 text=notification.message,
-                parse_mode="HTML",
+                parse_mode=None,
                 reply_to_message_id=reply_to_message_id
             )
             return True
@@ -108,6 +114,10 @@ class EmailChannel(NotificationChannel):
     async def send(self, notification: Notification) -> bool:
         """Send notification via email"""
         try:
+            # Only send if 'email' is in notification.data['channels'] (should already be filtered, but double check)
+            channels = notification.data.get("channels") if notification.data else None
+            if channels and "email" not in channels:
+                return False
             _logger.debug("EmailChannel.send called for %s, subject: %s", self.receiver_email, notification.title)
             loop = asyncio.get_event_loop()
             attachments = None
@@ -226,7 +236,8 @@ class AsyncNotificationManager:
                               channels: Optional[List[str]] = None,
                               attachments: Optional[list] = None,
                               email_receiver: Optional[str] = None,
-                              reply_to_message_id: int = None) -> bool:
+                              reply_to_message_id: int = None,
+                              telegram_chat_id: int = None) -> bool:
         """
         Send a notification asynchronously.
 
@@ -241,6 +252,7 @@ class AsyncNotificationManager:
             attachments: List of attachments to include with the notification
             email_receiver: Receiver email address for email notifications
             reply_to_message_id: Reply to message ID for Telegram messages
+            telegram_chat_id: Telegram chat ID for Telegram messages
 
         Returns:
             True if notification was queued successfully
@@ -262,6 +274,16 @@ class AsyncNotificationManager:
                 if data is None:
                     data = {}
                 data['reply_to_message_id'] = reply_to_message_id
+
+            if telegram_chat_id is not None:
+                if data is None:
+                    data = {}
+                data['telegram_chat_id'] = telegram_chat_id
+
+            if channels is not None:
+                if data is None:
+                    data = {}
+                data["channels"] = channels
 
             notification = Notification(
                 type=notification_type,
@@ -447,6 +469,9 @@ class AsyncNotificationManager:
         _logger.debug(f"Email channel enabled: %s", 'email' in self.channels and self.channels['email'].is_enabled())
         tasks = []
         for channel_name, channel in self.channels.items():
+            channels_list = notification.data.get("channels") if notification.data else None
+            if channels_list and channel_name not in channels_list:
+                continue
             _logger.debug("Considering channel: %s, enabled: %s", channel_name, channel.is_enabled())
             if channel.is_enabled():
                 # Check rate limiting
@@ -488,13 +513,17 @@ class AsyncNotificationManager:
         # Don't batch critical notifications
         if notification.priority == NotificationPriority.CRITICAL:
             return False
-
         # Don't batch trade notifications (they're important)
         if notification.type in [NotificationType.TRADE_ENTRY, NotificationType.TRADE_EXIT]:
             return False
-
-        # Batch other notifications
-        return True
+        # Only batch if 'email' in channels and 'telegram' not in channels
+        channels = notification.data.get("channels") if notification.data else None
+        if channels:
+            if "telegram" in channels:
+                return False
+            if "email" in channels:
+                return True
+        return False
 
     def _aggregate_notifications(self, notifications: List[Notification]) -> Notification:
         """Aggregate multiple notifications into one"""
