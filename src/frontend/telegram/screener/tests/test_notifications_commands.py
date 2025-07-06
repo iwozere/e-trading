@@ -88,8 +88,10 @@ async def test_commands_with_args(mocker, func, command, args, result_key, resul
     notification_manager = mocker.Mock()
     notification_manager.send_notification = AsyncMock()
     with patch("src.frontend.telegram.screener.notifications.handle_command") as mock_handle_command:
+        # Use 'ok' for success, 'error' for error
+        status = "ok" if expected_type == "INFO" else "error"
         mock_handle_command.return_value = {
-            "status": expected_type.lower(),
+            "status": status,
             result_key: result_value,
             "title": expected_title
         }
