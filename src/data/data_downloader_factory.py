@@ -192,7 +192,7 @@ class DataDownloaderFactory:
             return downloader_class(api_key=api_key, data_dir=data_dir)
 
         elif provider == "twelvedata":
-            api_key = kwargs.get("api_key") or os.getenv("TWELVEDATA_API_KEY")
+            api_key = kwargs.get("api_key") or os.getenv("TWELVEDATA_KEY")
             if not api_key:
                 raise ValueError("Twelve Data API key is required")
             return downloader_class(api_key=api_key, data_dir=data_dir)
