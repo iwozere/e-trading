@@ -1,12 +1,14 @@
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")))
+
 from typing import Any, Dict, List
 from src.frontend.telegram.command_parser import ParsedCommand
-from src.common import get_ohlcv, analyze_period_interval
+from src.common import get_ohlcv
 from src.common.fundamentals import get_fundamentals
 from src.common.technicals import calculate_technicals_from_df
 from src.model.telegram_bot import TickerAnalysis
 from src.frontend.telegram import db
-import os
-from config.donotshare import donotshare
 from src.common.ticker_analyzer import format_ticker_report
 
 from src.notification.logger import setup_logger

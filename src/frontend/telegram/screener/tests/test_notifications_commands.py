@@ -1,12 +1,16 @@
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "..")))
+
 import pytest
 from unittest.mock import AsyncMock, patch
 from src.frontend.telegram.screener.notifications import (
-    process_start_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_unknown_command, process_report_command
+    process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_unknown_command, process_report_command
 )
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("func,command,extra_args,result_key,result_value,expected_type,expected_title,expected_message", [
-    (process_start_command, "help", None, "help_text", "This is help text.", "INFO", "Help", "This is help text."),
+    (process_help_command, "start", None, "help_text", "This is help text.", "INFO", "Help", "This is help text."),
     (process_help_command, "help", None, "help_text", "This is help text.", "INFO", "Help", "This is help text."),
     (process_info_command, "info", None, "message", "User info", "INFO", "Info", "User info"),
 ])
@@ -35,7 +39,7 @@ async def test_simple_commands_success(mocker, func, command, extra_args, result
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("func,command,extra_args,result_key,result_value,expected_type,expected_title,expected_message", [
-    (process_start_command, "help", None, "message", "Something went wrong.", "ERROR", "Help", "Something went wrong."),
+    (process_help_command, "start", None, "message", "Something went wrong.", "ERROR", "Help", "Something went wrong."),
     (process_help_command, "help", None, "message", "Something went wrong.", "ERROR", "Help", "Something went wrong."),
     (process_info_command, "info", None, "message", "Info error", "ERROR", "Info", "Info error"),
 ])

@@ -1,28 +1,28 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 import unittest
 import backtrader as bt
 import numpy as np
 import pandas as pd
 
-from src.indicator.rsi import RsiIndicator
-from src.indicator.ma import MaIndicator
-from src.indicator.adr import AdrIndicator
-from src.indicator.adx import AdxIndicator
-from src.indicator.atr import AtrIndicator
-from src.indicator.cci import CciIndicator
-from src.indicator.obv import ObvIndicator
-from src.indicator.sar import SarIndicator
-from src.indicator.macd import MacdIndicator
-from src.indicator.aroon import AroonIndicator
-from src.indicator.stochastic import StochasticIndicator
-from src.indicator.ichimoku import IchimokuIndicator
-from src.indicator.bollinger_band import BollingerBandIndicator
+from src.strategy.indicator.rsi import RsiIndicator
+from src.strategy.indicator.ma import MaIndicator
+from src.strategy.indicator.adr import AdrIndicator
+from src.strategy.indicator.adx import AdxIndicator
+from src.strategy.indicator.atr import AtrIndicator
+from src.strategy.indicator.cci import CciIndicator
+from src.strategy.indicator.obv import ObvIndicator
+from src.strategy.indicator.sar import SarIndicator
+from src.strategy.indicator.macd import MacdIndicator
+from src.strategy.indicator.aroon import AroonIndicator
+from src.strategy.indicator.stochastic import StochasticIndicator
+from src.strategy.indicator.ichimoku import IchimokuIndicator
+from src.strategy.indicator.bollinger_band import BollingerBandIndicator
 # super_trend is not always present in all installs, but include if available
 try:
-    from src.indicator.super_trend import SuperTrend
+    from src.strategy.indicator.super_trend import SuperTrend
     HAS_SUPER_TREND = True
 except ImportError:
     HAS_SUPER_TREND = False

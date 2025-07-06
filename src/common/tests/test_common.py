@@ -3,9 +3,12 @@ Tests for the common business logic module.
 
 Tests the fundamentals retrieval and normalization functionality.
 """
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
+
 import unittest
 from unittest.mock import patch, MagicMock
-from datetime import datetime
 from src.common.fundamentals import get_fundamentals, normalize_fundamentals
 from src.model.telegram_bot import Fundamentals
 
