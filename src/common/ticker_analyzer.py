@@ -1,9 +1,11 @@
 from src.common.ticker_chart import generate_chart
-from src.common.fundamentals import get_fundamentals
-from src.common import get_ohlcv, analyze_period_interval
+from src.common.fundamentals import get_fundamentals, format_fundamental_analysis
+from src.common import get_ohlcv
 from src.model.telegram_bot import TickerAnalysis
-from src.common.technicals import calculate_technicals_from_df
+from src.common.technicals import calculate_technicals_from_df, format_technical_analysis
 from src.notification.logger import setup_logger
+#from src.backtester.plotter.base_plotter import
+
 
 logger = setup_logger(__name__)
 
@@ -50,3 +52,32 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
     except Exception as e:
         logger.error("Error in analyze_ticker: %s", e, exc_info=True)
         raise
+
+def format_ticker_report(analysis: TickerAnalysis) -> dict:
+    """
+    Formats a TickerAnalysis into a message and generates a chart image (as bytes).
+    Returns a dict with 'message' and 'chart_bytes' (bytes or None).
+    The caller should use 'chart_bytes' for sending to Telegram/email.
+    """
+    from src.common.ticker_chart import generate_chart
+    # Format fundamentals
+    fundamentals_msg = format_fundamental_analysis(analysis.fundamentals)
+    # Format technicals
+    technicals_msg = ""
+    if analysis.technicals is not None:
+        technicals_msg = format_technical_analysis(analysis.ticker, analysis.technicals)
+    # Generate chart as bytes
+    chart_bytes = None
+    if analysis.ohlcv is not None:
+        try:
+            chart_bytes = generate_chart(analysis)
+            analysis.chart_image = chart_bytes
+        except Exception:
+            chart_bytes = None
+            analysis.chart_image = None
+    # Compose full message
+    full_msg = f"<b>{analysis.ticker}</b>\n\n{fundamentals_msg}\n{technicals_msg}"
+    return {
+        "message": full_msg.strip(),
+        "chart_bytes": chart_bytes
+    }

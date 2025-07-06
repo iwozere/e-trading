@@ -56,9 +56,9 @@ def test_is_valid_period_interval(downloader_class, period, interval):
     (BinanceDataDownloader, 'BTCUSDT', '1h', None),
     (CoinGeckoDataDownloader, 'bitcoin', '1d', None),
     (YahooDataDownloader, 'AAPL', '1d', None),
-    (AlphaVantageDataDownloader, 'AAPL', '1d', 'ALPHA_VANTAGE_API_KEY'),
-    (PolygonDataDownloader, 'AAPL', '1d', 'POLYGON_API_KEY'),
-    (FinnhubDataDownloader, 'AAPL', '1d', 'FINNHUB_API_KEY'),
+    (AlphaVantageDataDownloader, 'AAPL', '1d', 'ALPHA_VANTAGE_KEY'),
+    (PolygonDataDownloader, 'AAPL', '1d', 'POLYGON_KEY'),
+    (FinnhubDataDownloader, 'AAPL', '1d', 'FINNHUB_KEY'),
     (TwelveDataDataDownloader, 'AAPL', '1d', 'TWELVEDATA_API_KEY'),
 ])
 @pytest.mark.network

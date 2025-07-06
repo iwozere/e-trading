@@ -7,6 +7,7 @@ from src.model.telegram_bot import TickerAnalysis
 from src.frontend.telegram import db
 import os
 from config.donotshare import donotshare
+from src.common.ticker_analyzer import format_ticker_report
 
 from src.notification.logger import setup_logger
 logger = setup_logger("telegram_screener_bot")
@@ -71,6 +72,7 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     Business logic for /report command.
     For each ticker:
       - Use analyze_ticker_business for unified analysis logic
+      - Use format_ticker_report to generate message and chart
     """
     args = parsed.args
     tickers_raw = args.get("tickers")
@@ -85,18 +87,19 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     period = args.get("period") or "2y"
     interval = args.get("interval") or "1d"
     provider = args.get("provider")
-    analyses: List[TickerAnalysis] = []
+    reports = []
     missing_keys = []
     # Check for required API keys
     provider_keys = {
-        "av": getattr(donotshare, "ALPHA_VANTAGE_API_KEY", None),
-        "fh": getattr(donotshare, "FINNHUB_API_KEY", None),
-        "td": getattr(donotshare, "TWELVE_DATA_API_KEY", None),
-        "pg": getattr(donotshare, "POLYGON_API_KEY", None),
+        "av": getattr(donotshare, "ALPHA_VANTAGE_KEY", None),
+        "fh": getattr(donotshare, "FINNHUB_KEY", None),
+        "td": getattr(donotshare, "TWELVE_DATA_KEY", None),
+        "pg": getattr(donotshare, "POLYGON_KEY", None),
     }
     for k, v in provider_keys.items():
         if not v:
             missing_keys.append(k)
+    all_failed = True
     for ticker in tickers:
         analysis = analyze_ticker_business(
             ticker=ticker,
@@ -104,27 +107,31 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
             period=period,
             interval=interval
         )
-        analyses.append(analysis)
+        report = format_ticker_report(analysis)
+        report['ticker'] = ticker
+        report['error'] = analysis.error if analysis.error else None
+        reports.append(report)
+        if not analysis.error:
+            all_failed = False
     # If all analyses failed due to missing keys
-    if all((a.error and any(key in a.error for key in ["Alpha Vantage API key", "Finnhub API key", "Twelve Data API key", "Polygon.io API key"])) for a in analyses):
+    if all_failed and any(report['error'] and any(key in report['error'] for key in ["Alpha Vantage API key", "Finnhub API key", "Twelve Data API key", "Polygon.io API key"]) for report in reports):
         return {
             "status": "error",
             "title": "Report Error",
             "message": f"No data could be retrieved for {', '.join(tickers)}. Missing or invalid API keys for providers: {', '.join(missing_keys)}. Please check your API keys in donotshare.py."
         }
     # If all analyses failed for any reason
-    if not analyses or all(a.error for a in analyses):
+    if all_failed:
         return {
             "status": "error",
             "title": "Report Error",
             "message": f"No data could be retrieved for {', '.join(tickers)}. Please check your API keys or try a different provider/ticker."
         }
-    # Otherwise, return analyses as before
+    # Otherwise, return reports for Telegram/email delivery
     return {
         "status": "ok",
-        "analyses": analyses,
+        "reports": reports,
         "email": args.get("email", False),
-        "indicators": args.get("indicators"),
         "title": f"Report for {', '.join(tickers)}",
         "message": "Report generated successfully."
     }

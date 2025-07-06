@@ -1,4 +1,4 @@
-from src.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
+from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
 
 
 class SuperTrendPlotter(BaseIndicatorPlotter):
