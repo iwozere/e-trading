@@ -69,18 +69,26 @@ class TelegramChannel(NotificationChannel):
                 # Only send the first attachment as photo (Telegram supports one per message)
                 photo_path = attachments[0]
                 with open(photo_path, "rb") as photo_file:
+                    reply_to_message_id = None
+                    if notification.data and 'reply_to_message_id' in notification.data:
+                        reply_to_message_id = notification.data['reply_to_message_id']
                     await self.bot.send_photo(
                         chat_id=self.chat_id,
                         photo=photo_file,
                         caption=notification.message,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        reply_to_message_id=reply_to_message_id
                     )
                 return True
             # Otherwise, send as text
+            reply_to_message_id = None
+            if notification.data and 'reply_to_message_id' in notification.data:
+                reply_to_message_id = notification.data['reply_to_message_id']
             await self.bot.send_message(
                 chat_id=self.chat_id,
                 text=notification.message,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_to_message_id=reply_to_message_id
             )
             return True
         except Exception as e:
@@ -217,7 +225,8 @@ class AsyncNotificationManager:
                               source: str = "trading_bot",
                               channels: Optional[List[str]] = None,
                               attachments: Optional[list] = None,
-                              email_receiver: Optional[str] = None) -> bool:
+                              email_receiver: Optional[str] = None,
+                              reply_to_message_id: int = None) -> bool:
         """
         Send a notification asynchronously.
 
@@ -231,6 +240,7 @@ class AsyncNotificationManager:
             channels: Specific channels to use (None for all enabled channels)
             attachments: List of attachments to include with the notification
             email_receiver: Receiver email address for email notifications
+            reply_to_message_id: Reply to message ID for Telegram messages
 
         Returns:
             True if notification was queued successfully
@@ -247,6 +257,12 @@ class AsyncNotificationManager:
                 if data is None:
                     data = {}
                 data["attachments"] = attachments
+
+            if reply_to_message_id is not None:
+                if data is None:
+                    data = {}
+                data['reply_to_message_id'] = reply_to_message_id
+
             notification = Notification(
                 type=notification_type,
                 priority=priority,
