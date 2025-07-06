@@ -14,6 +14,9 @@ from src.notification.async_notification_manager import initialize_notification_
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
 from src.frontend.telegram.command_parser import parse_command, ParsedCommand
 from src.frontend.telegram.screener.business_logic import handle_command, is_admin_user
+from src.frontend.telegram.screener.notifications import (
+    process_report_command, process_start_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_unknown_command
+)
 
 # Configure logging
 from src.notification.logger import setup_logger
@@ -74,455 +77,77 @@ def generate_code():
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        parsed = ParsedCommand(command="help", args={"telegram_user_id": telegram_user_id})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Help"),
-            message=result.get("help_text", result.get("message", "No message")),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in start command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Start Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    await process_help_command(message, telegram_user_id, notification_manager)
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        parsed = ParsedCommand(command="help", args={"telegram_user_id": telegram_user_id})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Help"),
-            message=result.get("help_text", result.get("message", "No message")),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in help command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Help Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    await process_help_command(message, telegram_user_id, notification_manager)
 
 @dp.message(Command("info"))
 async def cmd_info(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        parsed = ParsedCommand(command="info", args={"telegram_user_id": telegram_user_id})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Info"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in info command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Info Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    await process_info_command(message, telegram_user_id, notification_manager)
 
 @dp.message(Command("register"))
 async def cmd_register(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        args = message.text.split()
-        email = args[1].strip() if len(args) > 1 else None
-        language = args[2].strip().lower() if len(args) > 2 else None
-        parsed = ParsedCommand(command="register", args={"telegram_user_id": telegram_user_id, "email": email, "language": language})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Register"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in register command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Register Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split()
+    await process_register_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("verify"))
 async def cmd_verify(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        args = message.text.split()
-        code = args[1] if len(args) > 1 else None
-        parsed = ParsedCommand(command="verify", args={"telegram_user_id": telegram_user_id, "code": code})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Verify"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in verify command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Verify Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split()
+    await process_verify_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("language"))
 async def cmd_language(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        args = message.text.split()
-        lang = args[1].strip().lower() if len(args) > 1 else None
-        parsed = ParsedCommand(command="language", args={"telegram_user_id": telegram_user_id, "language": lang})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Language"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in language command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Language Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split()
+    await process_language_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("admin"))
 async def cmd_admin(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        args = message.text.split()
-        parsed = ParsedCommand(command="admin", args={"telegram_user_id": telegram_user_id, "args": args})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Admin"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in admin command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Admin Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split()
+    await process_admin_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("report"))
 async def cmd_report(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        parsed = parse_command(message.text)
-        parsed.args["telegram_user_id"] = telegram_user_id
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        user_email = result.get("user_email")  # get from result if business logic provides it
-
-        if result.get("status") == "ok" and "reports" in result:
-            # For email, send one email per ticker report
-            if "email" in channels:
-                for report in result["reports"]:
-                    attachments = None
-                    if report.get("chart_bytes"):
-                        attachments = {f"{report['ticker']}_chart.png": report["chart_bytes"]}
-                    print(f"[DEBUG] Sending email report for ticker: {report['ticker']}")
-                    await notification_manager.send_notification(
-                        notification_type="INFO",
-                        title=f"Report for {report['ticker']}",
-                        message=report["message"],
-                        attachments=attachments,
-                        priority="NORMAL",
-                        channels=["email"],
-                        email_receiver=user_email
-                    )
-            # For Telegram, send each report as before
-            for report in result["reports"]:
-                if "telegram" in channels:
-                    attachments = None
-                    if report.get("chart_bytes"):
-                        attachments = {f"{report['ticker']}_chart.png": report["chart_bytes"]}
-                    print(f"[DEBUG] Sending report for {report['ticker']}")
-                    try:
-                        await notification_manager.send_notification(
-                            notification_type="INFO",
-                            title=f"Report for {report['ticker']}",
-                            message=report["message"],
-                            attachments=attachments,
-                            priority="NORMAL",
-                            channels=["telegram"],
-                            telegram_chat_id=message.chat.id,
-                            reply_to_message_id=message.message_id
-                        )
-                    except Exception as e:
-                        logger.error(f"Error sending notification with attachment: {e}", exc_info=True)
-                        # Fallback: send just the text message
-                        await notification_manager.send_notification(
-                            notification_type="INFO",
-                            title=f"Report for {report['ticker']}",
-                            message=report["message"] + "\n\n[Chart could not be sent due to an error.]",
-                            priority="NORMAL",
-                            channels=["telegram"],
-                            telegram_chat_id=message.chat.id,
-                            reply_to_message_id=message.message_id
-                        )
-        else:
-            await notification_manager.send_notification(
-                notification_type="ERROR",
-                title=result.get("title", "Report"),
-                message=result.get("message", "No message"),
-                priority="NORMAL",
-                channels=channels,
-                telegram_chat_id=message.chat.id,
-                reply_to_message_id=message.message_id,
-                email_receiver=user_email if "email" in channels else None
-            )
-    except Exception as e:
-        logger.error(f"Error in report command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Report Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split()
+    await process_report_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("alerts"))
 async def cmd_alerts(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        args = message.text.split()
-        parsed = ParsedCommand(command="alerts", args={"telegram_user_id": telegram_user_id, "args": args})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Alerts"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in alerts command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Alerts Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split()
+    await process_alerts_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("schedules"))
 async def cmd_schedules(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        args = message.text.split()
-        parsed = ParsedCommand(command="schedules", args={"telegram_user_id": telegram_user_id, "args": args})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Schedules"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in schedules command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Schedules Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split()
+    await process_schedules_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("feedback"))
 async def cmd_feedback(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        args = message.text.split(maxsplit=1)
-        feedback_text = args[1] if len(args) > 1 else None
-        parsed = ParsedCommand(command="feedback", args={"telegram_user_id": telegram_user_id, "feedback": feedback_text})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Feedback"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in feedback command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Feedback Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split(maxsplit=1)
+    await process_feedback_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("feature"))
 async def cmd_feature(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        args = message.text.split(maxsplit=1)
-        feature_text = args[1] if len(args) > 1 else None
-        parsed = ParsedCommand(command="feature", args={"telegram_user_id": telegram_user_id, "feature": feature_text})
-        result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Feature Request"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in feature command: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Feature Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split(maxsplit=1)
+    await process_feature_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(lambda message: message.text and message.text.startswith("/"))
 async def unknown_command(message: Message):
-    try:
-        telegram_user_id = str(message.from_user.id)
-        parsed = ParsedCommand(command="unknown", args={"telegram_user_id": telegram_user_id, "text": message.text})
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Unknown Command",
-            message=HELP_TEXT,
-            priority="NORMAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
-    except Exception as e:
-        logger.error(f"Error in unknown command handler: {e}", exc_info=True)
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Unknown Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+    telegram_user_id = str(message.from_user.id)
+    await process_unknown_command(message, telegram_user_id, notification_manager, HELP_TEXT)
 
 async def main():
     global notification_manager

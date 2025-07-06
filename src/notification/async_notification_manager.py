@@ -473,7 +473,7 @@ class AsyncNotificationManager:
                     )
                     batch.append(notification)
                     self.batch_queue.task_done()
-                    _logger.debug("Notification added to batch: %s", notification)
+                    _logger.debug("Notification added to batch: %s", notification.title)
                 except asyncio.TimeoutError:
                     pass
 
@@ -539,24 +539,21 @@ class AsyncNotificationManager:
 
     async def _process_batch(self, batch: List[Notification]):
         """Process a batch of notifications"""
-        # Group notifications by type and priority
         _logger.debug("Start _process_batch")
-        grouped = defaultdict(list)
         for notification in batch:
-            key = (notification.type, notification.priority)
-            grouped[key].append(notification)
-
-        # Process each group
-        for (notification_type, priority), notifications in grouped.items():
-            # Create aggregated message
-            aggregated = self._aggregate_notifications(notifications)
-
-            # Send aggregated notification
             _logger.debug("_process_batch: _process_notification")
-            await self._process_notification(aggregated)
+            # Mark as from_batch to prevent re-batching
+            if notification.data is not None:
+                notification.data["from_batch"] = True
+            else:
+                notification.data = {"from_batch": True}
+            await self._process_notification(notification)
 
     def _should_batch(self, notification: Notification) -> bool:
         """Check if notification should be batched"""
+        # Don't batch if already from batch
+        if notification.data and notification.data.get("from_batch"):
+            return False
         # Don't batch critical notifications
         if notification.priority == NotificationPriority.CRITICAL:
             return False
@@ -571,42 +568,6 @@ class AsyncNotificationManager:
             if "email" in channels:
                 return True
         return False
-
-    def _aggregate_notifications(self, notifications: List[Notification]) -> Notification:
-        """Aggregate multiple notifications into one"""
-        if not notifications:
-            return notifications[0]
-
-        # Use the highest priority
-        max_priority = max(n.priority for n in notifications)
-
-        # Create aggregated message
-        titles = [n.title for n in notifications]
-        messages = [n.message for n in notifications]
-
-        aggregated_title = f"Batch Update ({len(notifications)} notifications)"
-        aggregated_message = "\n\n".join([
-            f"**{title}**\n{message}"
-            for title, message in zip(titles, messages)
-        ])
-
-        # Collect all attachments from the batch
-        all_attachments = []
-        for n in notifications:
-            if n.data and "attachments" in n.data:
-                all_attachments.extend(n.data["attachments"])
-        aggregated_data = {}
-        if all_attachments:
-            aggregated_data["attachments"] = all_attachments
-
-        return Notification(
-            type=notifications[0].type,
-            priority=NotificationPriority.CRITICAL,
-            title=aggregated_title,
-            message=aggregated_message,
-            data=aggregated_data,
-            source="notification_manager"
-        )
 
     def _check_rate_limit(self, channel_name: str) -> bool:
         """Check if channel is rate limited"""
