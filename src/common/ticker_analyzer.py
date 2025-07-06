@@ -59,7 +59,6 @@ def format_ticker_report(analysis: TickerAnalysis) -> dict:
     Returns a dict with 'message' and 'chart_bytes' (bytes or None).
     The caller should use 'chart_bytes' for sending to Telegram/email.
     """
-    from src.common.ticker_chart import generate_chart
     # Format fundamentals
     fundamentals_msg = format_fundamental_analysis(analysis.fundamentals)
     # Format technicals
@@ -72,9 +71,11 @@ def format_ticker_report(analysis: TickerAnalysis) -> dict:
         try:
             chart_bytes = generate_chart(analysis)
             analysis.chart_image = chart_bytes
-        except Exception:
+        except Exception as e:
+            logger.error("generate_chart: %s", e, exc_info=True)
             chart_bytes = None
             analysis.chart_image = None
+
     # Compose full message
     full_msg = f"<b>{analysis.ticker}</b>\n\n{fundamentals_msg}\n{technicals_msg}"
     return {

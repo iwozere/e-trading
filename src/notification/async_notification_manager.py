@@ -61,6 +61,7 @@ class TelegramChannel(NotificationChannel):
     async def send(self, notification: Notification) -> bool:
         """Send notification via Telegram using aiogram"""
         try:
+            print(f"[DEBUG] TelegramChannel: notification.data = {notification.data}")
             # If attachments are present, send as photo
             attachments = None
             if notification.data and "attachments" in notification.data:
@@ -269,6 +270,7 @@ class AsyncNotificationManager:
                 if data is None:
                     data = {}
                 data["attachments"] = attachments
+                print(f"[DEBUG] NotificationManager: attachments set: {attachments}")
 
             if reply_to_message_id is not None:
                 if data is None:

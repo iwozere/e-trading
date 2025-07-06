@@ -15,6 +15,9 @@ def get_fundamentals(ticker: str, provider: str = None, **kwargs) -> Fundamental
     Retrieve fundamentals for a ticker using the specified data provider.
     If provider is None, try all providers and merge results for the most complete Fundamentals.
     """
+    if len(ticker) > 4:
+        return None
+
     if provider:
         prov = provider
         downloader = DataDownloaderFactory.create_downloader(prov, **kwargs)

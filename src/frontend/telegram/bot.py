@@ -2,15 +2,13 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-import re
+import tempfile
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import Command, CommandObject
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 import asyncio
 import random
-import time
-import sqlite3
 from src.frontend.telegram import db
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
@@ -303,16 +301,56 @@ async def cmd_report(message: Message):
         if result.get("email", False):
             channels.append("email")
         user_email = result.get("user_email")  # get from result if business logic provides it
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Report"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id,
-            email_receiver=user_email if "email" in channels else None
-        )
+
+        if result.get("status") == "ok" and "reports" in result:
+            for report in result["reports"]:
+                attachment_paths = []
+                if report.get("chart_bytes"):
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                        tmp.write(report["chart_bytes"])
+                        tmp.flush()
+                        print(f"[DEBUG] Chart temp file written: {tmp.name}, size: {os.path.getsize(tmp.name)}")
+                        attachment_paths.append(tmp.name)
+                try:
+                    await notification_manager.send_notification(
+                        notification_type="INFO",
+                        title=f"Report for {report['ticker']}",
+                        message=report["message"],
+                        attachments=attachment_paths if attachment_paths else None,
+                        priority="NORMAL",
+                        channels=channels,
+                        telegram_chat_id=message.chat.id,
+                        reply_to_message_id=message.message_id,
+                        email_receiver=user_email if "email" in channels else None
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending notification with attachment: {e}", exc_info=True)
+                    # Fallback: send just the text message
+                    await notification_manager.send_notification(
+                        notification_type="INFO",
+                        title=f"Report for {report['ticker']}",
+                        message=report["message"] + "\n\n[Chart could not be sent due to an error.]",
+                        priority="NORMAL",
+                        channels=channels,
+                        telegram_chat_id=message.chat.id,
+                        reply_to_message_id=message.message_id,
+                        email_receiver=user_email if "email" in channels else None
+                    )
+                finally:
+                    for path in attachment_paths:
+                        print(f"[DEBUG] Deleting temp file: {path}, exists before delete: {os.path.exists(path)}")
+                        os.unlink(path)
+        else:
+            await notification_manager.send_notification(
+                notification_type="ERROR",
+                title=result.get("title", "Report"),
+                message=result.get("message", "No message"),
+                priority="NORMAL",
+                channels=channels,
+                telegram_chat_id=message.chat.id,
+                reply_to_message_id=message.message_id,
+                email_receiver=user_email if "email" in channels else None
+            )
     except Exception as e:
         logger.error(f"Error in report command: {e}", exc_info=True)
         await notification_manager.send_notification(
@@ -456,11 +494,10 @@ async def unknown_command(message: Message):
     try:
         telegram_user_id = str(message.from_user.id)
         parsed = ParsedCommand(command="unknown", args={"telegram_user_id": telegram_user_id, "text": message.text})
-        result = handle_command(parsed)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Unknown Command",
-            message=result.get("message", "Unknown command."),
+            message=HELP_TEXT,
             priority="NORMAL",
             channels=["telegram"],
             telegram_chat_id=message.chat.id,

@@ -88,17 +88,7 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     interval = args.get("interval") or "1d"
     provider = args.get("provider")
     reports = []
-    missing_keys = []
-    # Check for required API keys
-    provider_keys = {
-        "av": getattr(donotshare, "ALPHA_VANTAGE_KEY", None),
-        "fh": getattr(donotshare, "FINNHUB_KEY", None),
-        "td": getattr(donotshare, "TWELVE_DATA_KEY", None),
-        "pg": getattr(donotshare, "POLYGON_KEY", None),
-    }
-    for k, v in provider_keys.items():
-        if not v:
-            missing_keys.append(k)
+
     all_failed = True
     for ticker in tickers:
         analysis = analyze_ticker_business(
@@ -118,7 +108,7 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
         return {
             "status": "error",
             "title": "Report Error",
-            "message": f"No data could be retrieved for {', '.join(tickers)}. Missing or invalid API keys for providers: {', '.join(missing_keys)}. Please check your API keys in donotshare.py."
+            "message": f"No data could be retrieved for {', '.join(tickers)}. Missing or invalid API keys for 1 or more providers. Please check your API keys in donotshare.py."
         }
     # If all analyses failed for any reason
     if all_failed:

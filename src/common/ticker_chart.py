@@ -25,7 +25,7 @@ def generate_chart(analysis : TickerAnalysis) -> bytes:
         bytes: Chart image as bytes
     """
     try:
-        df = analysis.df
+        df = analysis.ohlcv
         ticker = analysis.ticker
         if df is None or df.empty:
             raise ValueError(f"No data available for {ticker}")
