@@ -29,6 +29,14 @@ Classes:
 - AlphaVantageDataDownloader: Main class for interacting with Alpha Vantage and managing data downloads
 """
 
+def safe_float(val, default=0.0):
+    try:
+        if val is None or val == "" or val == "None":
+            return default
+        return float(val)
+    except Exception:
+        return default
+
 class AlphaVantageDataDownloader(BaseDataDownloader):
     """
     A class to download historical data from Alpha Vantage.
@@ -279,49 +287,50 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
 
             quote_response = requests.get(quote_url, params=quote_params)
             quote_data = quote_response.json() if quote_response.status_code == 200 else {}
-            current_price = float(quote_data.get('Global Quote', {}).get('05. price', 0)) if quote_data else 0.0
+            current_price = safe_float(quote_data.get('Global Quote', {}).get('05. price', 0)) if quote_data else 0.0
 
             _logger.debug("Retrieved fundamentals for %s: %s", symbol, overview_data.get('Name', 'Unknown'))
 
             return Fundamentals(
                 ticker=symbol.upper(),
                 company_name=overview_data.get("Name", "Unknown"),
-                current_price=current_price,
-                market_cap=float(overview_data.get("MarketCapitalization", 0)) if overview_data.get("MarketCapitalization") else 0.0,
-                pe_ratio=float(overview_data.get("PERatio", 0)) if overview_data.get("PERatio") else 0.0,
-                forward_pe=float(overview_data.get("ForwardPE", 0)) if overview_data.get("ForwardPE") else 0.0,
-                dividend_yield=float(overview_data.get("DividendYield", 0)) if overview_data.get("DividendYield") else 0.0,
-                earnings_per_share=float(overview_data.get("EPS", 0)) if overview_data.get("EPS") else 0.0,
+                current_price=safe_float(current_price),
+                market_cap=safe_float(overview_data.get("MarketCapitalization")),
+                pe_ratio=safe_float(overview_data.get("PERatio")),
+                forward_pe=safe_float(overview_data.get("ForwardPE")),
+                dividend_yield=safe_float(overview_data.get("DividendYield")),
+                earnings_per_share=safe_float(overview_data.get("EPS")),
                 # Additional fields
-                price_to_book=float(overview_data.get("PriceToBookRatio", 0)) if overview_data.get("PriceToBookRatio") else None,
-                return_on_equity=float(overview_data.get("ReturnOnEquityTTM", 0)) if overview_data.get("ReturnOnEquityTTM") else None,
-                return_on_assets=float(overview_data.get("ReturnOnAssetsTTM", 0)) if overview_data.get("ReturnOnAssetsTTM") else None,
-                debt_to_equity=float(overview_data.get("DebtToEquityRatio", 0)) if overview_data.get("DebtToEquityRatio") else None,
-                current_ratio=float(overview_data.get("CurrentRatio", 0)) if overview_data.get("CurrentRatio") else None,
-                quick_ratio=float(overview_data.get("QuickRatio", 0)) if overview_data.get("QuickRatio") else None,
-                revenue=float(overview_data.get("RevenueTTM", 0)) if overview_data.get("RevenueTTM") else None,
-                revenue_growth=float(overview_data.get("RevenueGrowthTTM", 0)) if overview_data.get("RevenueGrowthTTM") else None,
-                net_income=float(overview_data.get("NetIncomeTTM", 0)) if overview_data.get("NetIncomeTTM") else None,
-                net_income_growth=float(overview_data.get("NetIncomeGrowthTTM", 0)) if overview_data.get("NetIncomeGrowthTTM") else None,
-                free_cash_flow=float(overview_data.get("FreeCashFlowTTM", 0)) if overview_data.get("FreeCashFlowTTM") else None,
-                operating_margin=float(overview_data.get("OperatingMarginTTM", 0)) if overview_data.get("OperatingMarginTTM") else None,
-                profit_margin=float(overview_data.get("ProfitMarginTTM", 0)) if overview_data.get("ProfitMarginTTM") else None,
-                beta=float(overview_data.get("Beta", 0)) if overview_data.get("Beta") else None,
-                sector=overview_data.get("Sector", None),
-                industry=overview_data.get("Industry", None),
-                country=overview_data.get("Country", None),
-                exchange=overview_data.get("Exchange", None),
-                currency=overview_data.get("Currency", None),
-                shares_outstanding=float(overview_data.get("SharesOutstanding", 0)) if overview_data.get("SharesOutstanding") else None,
-                float_shares=float(overview_data.get("SharesFloat", 0)) if overview_data.get("SharesFloat") else None,
-                short_ratio=float(overview_data.get("ShortRatio", 0)) if overview_data.get("ShortRatio") else None,
-                payout_ratio=float(overview_data.get("PayoutRatio", 0)) if overview_data.get("PayoutRatio") else None,
-                peg_ratio=float(overview_data.get("PEGRatio", 0)) if overview_data.get("PEGRatio") else None,
-                price_to_sales=float(overview_data.get("PriceToSalesRatioTTM", 0)) if overview_data.get("PriceToSalesRatioTTM") else None,
-                enterprise_value=float(overview_data.get("MarketCapitalization", 0)) if overview_data.get("MarketCapitalization") else None,
-                enterprise_value_to_ebitda=float(overview_data.get("EVToEBITDA", 0)) if overview_data.get("EVToEBITDA") else None,
+                price_to_book=safe_float(overview_data.get("PriceToBookRatio")),
+                return_on_equity=safe_float(overview_data.get("ReturnOnEquityTTM")),
+                return_on_assets=safe_float(overview_data.get("ReturnOnAssetsTTM")),
+                debt_to_equity=safe_float(overview_data.get("DebtToEquityRatio")),
+                current_ratio=safe_float(overview_data.get("CurrentRatio")),
+                quick_ratio=safe_float(overview_data.get("QuickRatio")),
+                revenue=safe_float(overview_data.get("RevenueTTM")),
+                revenue_growth=safe_float(overview_data.get("RevenueGrowthTTM")),
+                net_income=safe_float(overview_data.get("NetIncomeTTM")),
+                net_income_growth=safe_float(overview_data.get("NetIncomeGrowthTTM")),
+                free_cash_flow=safe_float(overview_data.get("FreeCashFlowTTM")),
+                operating_margin=safe_float(overview_data.get("OperatingMarginTTM")),
+                profit_margin=safe_float(overview_data.get("ProfitMarginTTM")),
+                beta=safe_float(overview_data.get("Beta")),
+                sector=overview_data.get("Sector"),
+                industry=overview_data.get("Industry"),
+                country=overview_data.get("Country"),
+                exchange=overview_data.get("Exchange"),
+                currency=overview_data.get("Currency"),
+                shares_outstanding=safe_float(overview_data.get("SharesOutstanding")),
+                float_shares=safe_float(overview_data.get("FloatShares")),
+                short_ratio=safe_float(overview_data.get("ShortRatio")),
+                payout_ratio=safe_float(overview_data.get("PayoutRatio")),
+                peg_ratio=safe_float(overview_data.get("PEGRatio")),
+                price_to_sales=safe_float(overview_data.get("PriceToSalesRatioTTM")),
+                enterprise_value=safe_float(overview_data.get("MarketCapitalization")),
+                enterprise_value_to_ebitda=safe_float(overview_data.get("EVToEBITDA")),
                 data_source="Alpha Vantage",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                sources=None
             )
 
         except Exception as e:

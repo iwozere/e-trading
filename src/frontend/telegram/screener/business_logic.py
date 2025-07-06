@@ -89,6 +89,15 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     provider = args.get("provider")
     reports = []
 
+    # Fetch the registered email for the current user
+    telegram_user_id = args.get("telegram_user_id")
+    user_email = None
+    if telegram_user_id:
+        db.init_db()
+        status = db.get_user_status(telegram_user_id)
+        if status and status.get("email"):
+            user_email = status["email"]
+
     all_failed = True
     for ticker in tickers:
         analysis = analyze_ticker_business(
@@ -122,6 +131,7 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
         "status": "ok",
         "reports": reports,
         "email": args.get("email", False),
+        "user_email": user_email,
         "title": f"Report for {', '.join(tickers)}",
         "message": "Report generated successfully."
     }

@@ -77,6 +77,38 @@ class EmailNotifier:
         self.send_email(to_addr, subject, body)
         _logger.debug("Email sent successfully: %s", subject)
 
+    def send_email_with_mime(self, to_addr: str, subject: str, body: str, from_name: str = None, attachments: list = None) -> bool:
+        """Send an email with the given subject, body, and MIME attachments to the specified recipient."""
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        msg = MIMEMultipart()
+        if from_name:
+            msg["From"] = f"{from_name} <{self.sender_email}>"
+        else:
+            msg["From"] = self.sender_email
+        msg["To"] = to_addr
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "html"))
+        # Attach MIME parts if provided
+        if attachments:
+            for filename, mime_part in attachments:
+                try:
+                    mime_part.add_header("Content-Disposition", f"attachment; filename={filename}")
+                    msg.attach(mime_part)
+                except Exception as e:
+                    self.logger.error(f"Failed to attach MIME part {filename}: {e}", exc_info=True)
+        try:
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(self.sender_email, self.sender_password)
+                server.send_message(msg)
+            self.logger.info("Email sent to %s with subject: %s", to_addr, subject)
+            return True
+        except Exception as e:
+            self.logger.error("Failed to send email: %s", e, exc_info=True)
+            return False
+
 def send_email_alert(receiver_email: str, subject: str, message: str):
     """Send alert email
 

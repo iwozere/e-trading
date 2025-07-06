@@ -15,6 +15,9 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from collections import defaultdict
+import os
+from email.mime.image import MIMEImage
+from email.mime.application import MIMEApplication
 
 from src.model.notification import Notification, NotificationPriority, NotificationType
 from src.notification.logger import setup_logger
@@ -61,41 +64,70 @@ class TelegramChannel(NotificationChannel):
     async def send(self, notification: Notification) -> bool:
         """Send notification via Telegram using aiogram"""
         try:
-            print(f"[DEBUG] TelegramChannel: notification.data = {notification.data}")
             # If attachments are present, send as photo
+            print(f"[DEBUG] TelegramChannel.send called for: {notification.title}")
             attachments = None
             if notification.data and "attachments" in notification.data:
                 attachments = notification.data["attachments"]
             if attachments:
-                # Only send the first attachment as photo (Telegram supports one per message)
-                photo_path = attachments[0]
-                with open(photo_path, "rb") as photo_file:
-                    reply_to_message_id = None
-                    if notification.data and 'reply_to_message_id' in notification.data:
-                        reply_to_message_id = notification.data['reply_to_message_id']
-                    chat_id = self.chat_id
-                    if notification.data and 'telegram_chat_id' in notification.data:
-                        chat_id = notification.data['telegram_chat_id']
-                    await self.bot.send_photo(
-                        chat_id=chat_id,
-                        photo=photo_file,
-                        caption=notification.message,
-                        parse_mode=None,
-                        reply_to_message_id=reply_to_message_id
-                    )
-                return True
-            # Otherwise, send as text
-            reply_to_message_id = None
-            if notification.data and 'reply_to_message_id' in notification.data:
-                reply_to_message_id = notification.data['reply_to_message_id']
-            chat_id = self.chat_id
-            if notification.data and 'telegram_chat_id' in notification.data:
-                chat_id = notification.data['telegram_chat_id']
+                for filename, value in attachments.items():
+                    if isinstance(value, bytes):
+                        from aiogram.types import BufferedInputFile
+                        # If message is too long for caption, send text first
+                        if len(notification.message) > 1024:
+                            await self.bot.send_message(
+                                chat_id=self.chat_id,
+                                text=notification.message,
+                                parse_mode=None,
+                                reply_to_message_id=notification.data.get('reply_to_message_id')
+                            )
+                            await self.bot.send_photo(
+                                chat_id=self.chat_id,
+                                photo=BufferedInputFile(value, filename=filename),
+                                caption=f"Chart for {filename}",
+                                parse_mode=None,
+                                reply_to_message_id=notification.data.get('reply_to_message_id')
+                            )
+                        else:
+                            await self.bot.send_photo(
+                                chat_id=self.chat_id,
+                                photo=BufferedInputFile(value, filename=filename),
+                                caption=notification.message,
+                                parse_mode=None,
+                                reply_to_message_id=notification.data.get('reply_to_message_id')
+                            )
+                        return True
+                    elif isinstance(value, str):
+                        from aiogram.types import FSInputFile
+                        if len(notification.message) > 1024:
+                            await self.bot.send_message(
+                                chat_id=self.chat_id,
+                                text=notification.message,
+                                parse_mode=None,
+                                reply_to_message_id=notification.data.get('reply_to_message_id')
+                            )
+                            await self.bot.send_photo(
+                                chat_id=self.chat_id,
+                                photo=FSInputFile(value, filename=filename),
+                                caption=f"Chart for {filename}",
+                                parse_mode=None,
+                                reply_to_message_id=notification.data.get('reply_to_message_id')
+                            )
+                        else:
+                            await self.bot.send_photo(
+                                chat_id=self.chat_id,
+                                photo=FSInputFile(value, filename=filename),
+                                caption=notification.message,
+                                parse_mode=None,
+                                reply_to_message_id=notification.data.get('reply_to_message_id')
+                            )
+                        return True
+                # If no valid attachment, fall through to text
             await self.bot.send_message(
-                chat_id=chat_id,
+                chat_id=self.chat_id,
                 text=notification.message,
                 parse_mode=None,
-                reply_to_message_id=reply_to_message_id
+                reply_to_message_id=notification.data.get('reply_to_message_id')
             )
             return True
         except Exception as e:
@@ -115,23 +147,40 @@ class EmailChannel(NotificationChannel):
     async def send(self, notification: Notification) -> bool:
         """Send notification via email"""
         try:
-            # Only send if 'email' is in notification.data['channels'] (should already be filtered, but double check)
             channels = notification.data.get("channels") if notification.data else None
             if channels and "email" not in channels:
                 return False
             _logger.debug("EmailChannel.send called for %s, subject: %s", self.receiver_email, notification.title)
             loop = asyncio.get_event_loop()
-            attachments = None
-            if notification.data and "attachments" in notification.data:
-                attachments = notification.data["attachments"]
+            attachments = notification.data.get("attachments", {}) if notification.data else {}
+            # Prepare attachments as (filename, bytes) pairs
+            prepared_attachments = []
+            for filename, value in attachments.items():
+                if isinstance(value, bytes):
+                    if filename.lower().endswith('.png'):
+                        prepared_attachments.append((filename, MIMEImage(value, name=filename)))
+                    else:
+                        prepared_attachments.append((filename, MIMEApplication(value, Name=filename)))
+                elif isinstance(value, str):
+                    try:
+                        with open(value, "rb") as f:
+                            file_bytes = f.read()
+                            if filename.lower().endswith('.png'):
+                                prepared_attachments.append((filename, MIMEImage(file_bytes, name=filename)))
+                            else:
+                                prepared_attachments.append((filename, MIMEApplication(file_bytes, Name=filename)))
+                    except Exception as e:
+                        _logger.error(f"Failed to attach file {filename}: {e}")
+            # Format message as HTML
+            html_message = notification.message.replace('\n', '<br>') if notification.message else ''
             await loop.run_in_executor(
                 None,
-                self.notifier.send_email,
+                self.notifier.send_email_with_mime,
                 self.receiver_email,
                 notification.title,
-                notification.message,
+                html_message,
                 None,  # from_name
-                attachments
+                prepared_attachments
             )
             return True
         except Exception as e:
@@ -235,7 +284,7 @@ class AsyncNotificationManager:
                               data: Optional[Dict[str, Any]] = None,
                               source: str = "trading_bot",
                               channels: Optional[List[str]] = None,
-                              attachments: Optional[list] = None,
+                              attachments: Optional[dict] = None,
                               email_receiver: Optional[str] = None,
                               reply_to_message_id: int = None,
                               telegram_chat_id: int = None) -> bool:
@@ -260,7 +309,7 @@ class AsyncNotificationManager:
         """
         try:
             # Set the receiver email dynamically before sending
-            _logger.debug("Start async send_notification")
+            _logger.debug(f"Start async send_notification {title}")
             if email_receiver and "email" in self.channels:
                 _logger.debug("Set email_receiver: %s", email_receiver)
                 self.channels["email"].receiver_email = email_receiver
@@ -270,7 +319,6 @@ class AsyncNotificationManager:
                 if data is None:
                     data = {}
                 data["attachments"] = attachments
-                print(f"[DEBUG] NotificationManager: attachments set: {attachments}")
 
             if reply_to_message_id is not None:
                 if data is None:
@@ -438,8 +486,6 @@ class AsyncNotificationManager:
 
                 if should_process and batch:
                     _logger.debug("Processing batch of size %d", len(batch))
-                    for n in batch:
-                        _logger.debug("Batch notification: %s", n)
                     await self._process_batch(batch)
                     batch = []
                     last_batch_time = current_time
@@ -451,7 +497,6 @@ class AsyncNotificationManager:
 
     async def _process_notification(self, notification: Notification):
         """Process a single notification"""
-        _logger.debug("Processing notification: %s", notification)
         _logger.debug("Channels: %s", self.channels)
         _logger.debug("Email channel enabled: %s", 'email' in self.channels and self.channels['email'].is_enabled())
         _logger.debug("Notification channels: %s", getattr(notification, 'channels', None))

@@ -303,43 +303,52 @@ async def cmd_report(message: Message):
         user_email = result.get("user_email")  # get from result if business logic provides it
 
         if result.get("status") == "ok" and "reports" in result:
-            for report in result["reports"]:
-                attachment_paths = []
-                if report.get("chart_bytes"):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-                        tmp.write(report["chart_bytes"])
-                        tmp.flush()
-                        print(f"[DEBUG] Chart temp file written: {tmp.name}, size: {os.path.getsize(tmp.name)}")
-                        attachment_paths.append(tmp.name)
-                try:
+            # For email, send one email per ticker report
+            if "email" in channels:
+                for report in result["reports"]:
+                    attachments = None
+                    if report.get("chart_bytes"):
+                        attachments = {f"{report['ticker']}_chart.png": report["chart_bytes"]}
+                    print(f"[DEBUG] Sending email report for ticker: {report['ticker']}")
                     await notification_manager.send_notification(
                         notification_type="INFO",
                         title=f"Report for {report['ticker']}",
                         message=report["message"],
-                        attachments=attachment_paths if attachment_paths else None,
+                        attachments=attachments,
                         priority="NORMAL",
-                        channels=channels,
-                        telegram_chat_id=message.chat.id,
-                        reply_to_message_id=message.message_id,
-                        email_receiver=user_email if "email" in channels else None
+                        channels=["email"],
+                        email_receiver=user_email
                     )
-                except Exception as e:
-                    logger.error(f"Error sending notification with attachment: {e}", exc_info=True)
-                    # Fallback: send just the text message
-                    await notification_manager.send_notification(
-                        notification_type="INFO",
-                        title=f"Report for {report['ticker']}",
-                        message=report["message"] + "\n\n[Chart could not be sent due to an error.]",
-                        priority="NORMAL",
-                        channels=channels,
-                        telegram_chat_id=message.chat.id,
-                        reply_to_message_id=message.message_id,
-                        email_receiver=user_email if "email" in channels else None
-                    )
-                finally:
-                    for path in attachment_paths:
-                        print(f"[DEBUG] Deleting temp file: {path}, exists before delete: {os.path.exists(path)}")
-                        os.unlink(path)
+            # For Telegram, send each report as before
+            for report in result["reports"]:
+                if "telegram" in channels:
+                    attachments = None
+                    if report.get("chart_bytes"):
+                        attachments = {f"{report['ticker']}_chart.png": report["chart_bytes"]}
+                    print(f"[DEBUG] Sending report for {report['ticker']}")
+                    try:
+                        await notification_manager.send_notification(
+                            notification_type="INFO",
+                            title=f"Report for {report['ticker']}",
+                            message=report["message"],
+                            attachments=attachments,
+                            priority="NORMAL",
+                            channels=["telegram"],
+                            telegram_chat_id=message.chat.id,
+                            reply_to_message_id=message.message_id
+                        )
+                    except Exception as e:
+                        logger.error(f"Error sending notification with attachment: {e}", exc_info=True)
+                        # Fallback: send just the text message
+                        await notification_manager.send_notification(
+                            notification_type="INFO",
+                            title=f"Report for {report['ticker']}",
+                            message=report["message"] + "\n\n[Chart could not be sent due to an error.]",
+                            priority="NORMAL",
+                            channels=["telegram"],
+                            telegram_chat_id=message.chat.id,
+                            reply_to_message_id=message.message_id
+                        )
         else:
             await notification_manager.send_notification(
                 notification_type="ERROR",

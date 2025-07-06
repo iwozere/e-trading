@@ -47,6 +47,9 @@ class EnterpriseCommandParser:
             if idx < len(positionals):
                 # Only tickers should be upper case
                 args[pname] = positionals[idx]
+        # Special case: if the only positional is 'tickers', assign all positionals as a list
+        if spec.positional == ["tickers"]:
+            args["tickers"] = positionals
         return ParsedCommand(
             command=command,
             args=args,
