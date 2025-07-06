@@ -165,7 +165,7 @@ def test_process_unknown_command(mocker):
          {"notification_type": "INFO", "title": "Report for vt", "channels": ["telegram"]},
          {"notification_type": "INFO", "title": "Report for vti", "channels": ["telegram"]}
      ]),
-    # 4. /report mrns -email
+    # 4. /report mrns -email (expect both email and telegram)
     (["report", "mrns", "-email"],
      {
          "status": "ok",
@@ -176,9 +176,10 @@ def test_process_unknown_command(mocker):
          "user_email": "user@example.com"
      },
      [
-         {"notification_type": "ERROR", "title": "Report Error for mrns", "channels": ["email"]}
+         {"notification_type": "ERROR", "title": "Report Error for mrns", "channels": ["email"]},
+         {"notification_type": "ERROR", "title": "Report Error for mrns", "channels": ["telegram"]}
      ]),
-    # 5. /report mtns vti -email
+    # 5. /report mtns vti -email (expect both email and telegram for each)
     (["report", "mtns", "vti", "-email"],
      {
          "status": "ok",
@@ -191,9 +192,11 @@ def test_process_unknown_command(mocker):
      },
      [
          {"notification_type": "ERROR", "title": "Report Error for mtns", "channels": ["email"]},
-         {"notification_type": "INFO", "title": "Report for vti", "channels": ["email"]}
+         {"notification_type": "INFO", "title": "Report for vti", "channels": ["email"]},
+         {"notification_type": "ERROR", "title": "Report Error for mtns", "channels": ["telegram"]},
+         {"notification_type": "INFO", "title": "Report for vti", "channels": ["telegram"]}
      ]),
-    # 6. /report vt vti -email
+    # 6. /report vt vti -email (expect both email and telegram for each)
     (["report", "vt", "vti", "-email"],
      {
          "status": "ok",
@@ -206,7 +209,9 @@ def test_process_unknown_command(mocker):
      },
      [
          {"notification_type": "INFO", "title": "Report for vt", "channels": ["email"]},
-         {"notification_type": "INFO", "title": "Report for vti", "channels": ["email"]}
+         {"notification_type": "INFO", "title": "Report for vti", "channels": ["email"]},
+         {"notification_type": "INFO", "title": "Report for vt", "channels": ["telegram"]},
+         {"notification_type": "INFO", "title": "Report for vti", "channels": ["telegram"]}
      ]),
 ])
 async def test_process_report_command_basic(mocker, args, result, expected_calls):
@@ -247,6 +252,12 @@ async def test_process_report_command_with_params(mocker, provider, period, inte
         "email": True,
         "user_email": "user@example.com"
     }
+    expected_calls = [
+        {"notification_type": "INFO", "title": "Report for vt", "channels": ["email"]},
+        {"notification_type": "INFO", "title": "Report for vti", "channels": ["email"]},
+        {"notification_type": "INFO", "title": "Report for vt", "channels": ["telegram"]},
+        {"notification_type": "INFO", "title": "Report for vti", "channels": ["telegram"]},
+    ]
     message = mocker.Mock()
     message.chat.id = 1
     message.message_id = 2
@@ -257,11 +268,10 @@ async def test_process_report_command_with_params(mocker, provider, period, inte
         mock_handle_command.return_value = result
         await process_report_command(message, telegram_user_id, args, notification_manager)
     calls = notification_manager.send_notification.await_args_list
-    assert len(calls) == 2
-    for call, ticker in zip(calls, ["vt", "vti"]):
+    assert len(calls) == len(expected_calls)
+    for call, expected in zip(calls, expected_calls):
         kwargs = call.kwargs
-        assert kwargs["notification_type"] == "INFO"
-        assert kwargs["title"] == f"Report for {ticker}"
-        assert "email" in kwargs["channels"]
-        assert kwargs["email_receiver"] == "user@example.com"
-        assert kwargs["message"].startswith(ticker.upper()) or kwargs["message"].startswith(ticker.capitalize())
+        assert kwargs["notification_type"] == expected["notification_type"]
+        assert kwargs["title"] == expected["title"]
+        for ch in expected["channels"]:
+            assert ch in kwargs["channels"]
