@@ -170,7 +170,7 @@ def generate_chart(analysis : TickerAnalysis) -> bytes:
         return img_buffer.getvalue()
 
     except Exception as e:
-        logger.error(f"Failed to generate chart for {ticker}: {str(e)}")
+        logger.error("Failed to generate chart for %s: %s", ticker, e, exc_info=True)
         # Return a simple error chart
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.text(0.5, 0.5, f'Error generating chart for {ticker}\n{str(e)}',

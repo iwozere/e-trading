@@ -59,7 +59,7 @@ class RsiIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error(f"Error initializing RsiIndicator: {e}. Falling back to bt.indicators.RSI", exc_info=e)
+            logger.error("Error initializing RsiIndicator: %s. Falling back to bt.indicators.RSI", e, exc_info=True)
             self._impl = bt.indicators.RSI(self.data.close, period=self.p.period)
             self._backend = "bt"
 

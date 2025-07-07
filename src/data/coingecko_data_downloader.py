@@ -110,7 +110,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         }
         response = requests.get(url, params=params)
         if response.status_code != 200:
-            _logger.error(f"CoinGecko API error: {response.status_code} {response.text}")
+            _logger.error("CoinGecko API error: %s %s", response.status_code, response.text)
             raise RuntimeError(f"CoinGecko API error: {response.status_code} {response.text}")
         data = response.json()
 
@@ -151,7 +151,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
 
             return ohlcv
         except Exception as e:
-            _logger.error(f"Error processing CoinGecko data for {symbol}: {e}", exc_info=True)
+            _logger.error("Error processing CoinGecko data for %s: %s", symbol, e, exc_info=True)
             raise
 
     def get_periods(self) -> list:

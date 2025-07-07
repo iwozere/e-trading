@@ -1,14 +1,13 @@
 from abc import ABC, abstractmethod
 
 from src.notification.logger import setup_logger
-
+_logger = setup_logger(__name__)
 
 class BaseIndicatorPlotter(ABC):
     def __init__(self, data, indicators, vis_settings):
         self.data = data
         self.indicators = indicators
         self.vis_settings = vis_settings
-        self.logger = setup_logger()
 
     @abstractmethod
     def plot(self, ax):
@@ -34,4 +33,4 @@ class BaseIndicatorPlotter(ABC):
             )
             ax.legend(loc=self.vis_settings.get("legend_loc", "upper left"))
         except Exception as e:
-            self.logger.error(f"Error applying style to axis: {str(e)}")
+            _logger.error("Error applying style to axis: %s", e, exc_info=True)

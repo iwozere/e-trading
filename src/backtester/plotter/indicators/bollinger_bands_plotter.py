@@ -1,5 +1,7 @@
 from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
 
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class BollingerBandsPlotter(BaseIndicatorPlotter):
     def plot(self, ax):
@@ -98,7 +100,7 @@ class BollingerBandsPlotter(BaseIndicatorPlotter):
 
             self._apply_style(ax)
         except Exception as e:
-            self.logger.error(f"Error plotting Bollinger Bands: {str(e)}")
+            _logger.error("Error plotting Bollinger Bands: %s", e, exc_info=True)
 
     @property
     def subplot_type(self):

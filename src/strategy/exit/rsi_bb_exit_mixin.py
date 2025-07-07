@@ -95,7 +95,7 @@ class RSIBBExitMixin(BaseExitMixin):
             self.register_indicator(self.rsi_name, self.rsi)
             self.register_indicator(self.bb_name, self.bb)
         except Exception as e:
-            logger.error(f"Error initializing indicators: {e}", exc_info=e)
+            logger.error("Error initializing indicators: %s", e, exc_info=True)
             raise
 
     def should_exit(self) -> bool:
@@ -128,5 +128,5 @@ class RSIBBExitMixin(BaseExitMixin):
                 self.strategy.current_exit_reason = "rsi_bb_overbought"
             return return_value
         except Exception as e:
-            logger.error(f"Error in should_exit: {e}", exc_info=e)
+            logger.error("Error in should_exit: %s", e, exc_info=True)
             return False

@@ -1,5 +1,7 @@
 from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
 
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class SuperTrendPlotter(BaseIndicatorPlotter):
     def plot(self, ax):
@@ -31,7 +33,7 @@ class SuperTrendPlotter(BaseIndicatorPlotter):
 
             self._apply_style(ax)
         except Exception as e:
-            self.logger.error(f"Error plotting SuperTrend: {str(e)}")
+            _logger.error("Error plotting SuperTrend: %s", e, exc_info=True)
 
     @property
     def subplot_type(self):

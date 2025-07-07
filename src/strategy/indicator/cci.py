@@ -66,7 +66,7 @@ class CciIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error(f"Error initializing CciIndicator: {e}. Falling back to bt.indicators.CCI", exc_info=e)
+            logger.error("Error initializing CciIndicator: %s. Falling back to bt.indicators.CCI", e, exc_info=True)
             self._impl = bt.indicators.CCI(self.data, period=self.p.period)
             self._backend = "bt"
 

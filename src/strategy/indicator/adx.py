@@ -67,7 +67,7 @@ class AdxIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error(f"Error initializing AdxIndicator: {e}. Falling back to bt.indicators.ADX", exc_info=e)
+            logger.error("Error initializing AdxIndicator: %s. Falling back to bt.indicators.ADX", e, exc_info=True)
             self._impl = bt.indicators.ADX(self.data, period=self.p.period)
             self._backend = "bt"
 

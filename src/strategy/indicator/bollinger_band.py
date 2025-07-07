@@ -68,7 +68,7 @@ class BollingerBandIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error(f"Error initializing BollingerBandIndicator: {e}. Falling back to bt.indicators.BollingerBands", exc_info=e)
+            logger.error("Error initializing BollingerBandIndicator: %s. Falling back to bt.indicators.BollingerBands", e, exc_info=True)
             self._impl = bt.indicators.BollingerBands(self.data.close, period=self.p.period, devfactor=self.p.devfactor)
             self._backend = "bt"
 

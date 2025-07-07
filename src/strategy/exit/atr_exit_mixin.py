@@ -115,7 +115,7 @@ class ATRExitMixin(BaseExitMixin):
                 )
             self.register_indicator(self.atr_name, self.atr)
         except Exception as e:
-            logger.error(f"Error initializing indicators: {e}", exc_info=e)
+            logger.error("Error initializing indicators: %s", e, exc_info=True)
             raise
 
     def should_exit(self) -> bool:
@@ -174,7 +174,7 @@ class ATRExitMixin(BaseExitMixin):
 
             return False
         except Exception as e:
-            logger.error(f"Error in should_exit: {e}", exc_info=e)
+            logger.error("Error in should_exit: %s", e, exc_info=True)
             return False
 
     def next(self):

@@ -47,7 +47,7 @@ class IchimokuPlotter(BaseIndicatorPlotter):
 
             self._apply_style(ax)
         except Exception as e:
-            self.logger.error(f"Error plotting Ichimoku Cloud: {str(e)}")
+            self.logger.error("Error plotting Ichimoku Cloud: %s", e)
 
     @property
     def subplot_type(self):

@@ -78,7 +78,7 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
         self.ws.run_forever()
 
     def _on_open(self, ws):
-        _logger.info(f"WebSocket connected for {self.p.symbol}")
+        _logger.info("WebSocket connected for %s", self.p.symbol)
 
     def _on_message(self, ws, message):
         msg = json.loads(message)
@@ -94,7 +94,7 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
             })
 
     def _on_error(self, ws, error):
-        _logger.error(f"WebSocket error: {error}")
+        _logger.error("WebSocket error: %s", error)
         # Auto-reconnect logic
         _logger.info("Reconnecting in 5 seconds...")
         threading.Timer(5.0, self._run_websocket).start()
@@ -156,7 +156,7 @@ if __name__ == '__main__':
     cerebro.broker.setcash(10000)
     cerebro.broker.setcommission(commission=0.001)
 
-    _logger.info(f"Starting Portfolio Value: {cerebro.broker.getvalue():.2f}")
+    _logger.info("Starting Portfolio Value: %d.2f", cerebro.broker.getvalue())
     cerebro.run()
-    _logger.info(f"Final Portfolio Value: {cerebro.broker.getvalue():.2f}")
+    _logger.info("Final Portfolio Value:%d.2f", cerebro.broker.getvalue())
     cerebro.plot()

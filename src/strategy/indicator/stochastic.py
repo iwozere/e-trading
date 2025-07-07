@@ -77,7 +77,7 @@ class StochasticIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error(f"Error initializing StochasticIndicator: {e}. Falling back to bt.indicators.Stochastic", exc_info=e)
+            logger.error("Error initializing StochasticIndicator: %s. Falling back to bt.indicators.Stochastic", e, exc_info=True)
             self._impl = bt.indicators.Stochastic(
                 self.data,
                 period=self.p.k_period,

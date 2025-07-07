@@ -68,7 +68,7 @@ async def process_report_notifications(result, notification_manager, message, us
                         reply_to_message_id=message.message_id
                     )
                 except Exception as e:
-                    logger.error(f"Error sending notification with attachment: {e}", exc_info=True)
+                    logger.error("Error sending notification with attachment: %s", e, exc_info=True)
                     await notification_manager.send_notification(
                         notification_type="INFO",
                         title=f"Report for {report['ticker']}",
@@ -101,7 +101,7 @@ async def process_report_command(message, telegram_user_id, args, notification_m
                 email_receiver=user_email if "email" in channels else None
             )
     except Exception as e:
-        logger.error(f"Error in report command: {e}", exc_info=True)
+        logger.error("Error in report command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Report Command Error",
@@ -129,7 +129,7 @@ async def process_help_command(message, telegram_user_id, notification_manager):
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in help command: {e}", exc_info=True)
+        logger.error("Error in help command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Help Command Error",
@@ -157,7 +157,7 @@ async def process_info_command(message, telegram_user_id, notification_manager):
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in info command: {e}", exc_info=True)
+        logger.error("Error in info command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Info Command Error",
@@ -187,7 +187,7 @@ async def process_register_command(message, telegram_user_id, args, notification
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in register command: {e}", exc_info=True)
+        logger.error("Error in register command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Register Command Error",
@@ -216,7 +216,7 @@ async def process_verify_command(message, telegram_user_id, args, notification_m
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in verify command: {e}", exc_info=True)
+        logger.error("Error in verify command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Verify Command Error",
@@ -245,7 +245,7 @@ async def process_language_command(message, telegram_user_id, args, notification
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in language command: {e}", exc_info=True)
+        logger.error("Error in language command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Language Command Error",
@@ -273,7 +273,7 @@ async def process_admin_command(message, telegram_user_id, args, notification_ma
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in admin command: {e}", exc_info=True)
+        logger.error("Error in admin command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Admin Command Error",
@@ -301,7 +301,7 @@ async def process_alerts_command(message, telegram_user_id, args, notification_m
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in alerts command: {e}", exc_info=True)
+        logger.error("Error in alerts command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Alerts Command Error",
@@ -329,7 +329,7 @@ async def process_schedules_command(message, telegram_user_id, args, notificatio
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in schedules command: {e}", exc_info=True)
+        logger.error("Error in schedules command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Schedules Command Error",
@@ -358,7 +358,7 @@ async def process_feedback_command(message, telegram_user_id, args, notification
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in feedback command: {e}", exc_info=True)
+        logger.error("Error in feedback command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Feedback Command Error",
@@ -387,7 +387,7 @@ async def process_feature_command(message, telegram_user_id, args, notification_
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in feature command: {e}", exc_info=True)
+        logger.error("Error in feature command: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Feature Command Error",
@@ -411,7 +411,7 @@ async def process_unknown_command(message, telegram_user_id, notification_manage
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.error(f"Error in unknown command handler: {e}", exc_info=True)
+        logger.error("Error in unknown command handler: %s", e, exc_info=True)
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Unknown Command Error",

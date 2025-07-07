@@ -396,7 +396,7 @@ async def trading_cycle():
     # Check for active alerts
     active_alerts = alert_system.get_active_alerts()
     if active_alerts:
-        logger.warning(f"Active alerts: {len(active_alerts)}")
+        logger.warning("Active alerts: %d", len(active_alerts))
 ```
 
 ### Analytics Pipeline Integration
