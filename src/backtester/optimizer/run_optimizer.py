@@ -13,7 +13,7 @@ It handles:
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 import json
 from datetime import datetime as dt
@@ -21,10 +21,10 @@ from datetime import datetime as dt
 import backtrader as bt
 import optuna
 import pandas as pd
-from src.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
-from src.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
+from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
+from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.notification.logger import setup_logger
-from src.optimizer.custom_optimizer import CustomOptimizer
+from src.backtester.optimizer.custom_optimizer import CustomOptimizer
 
 _logger = setup_logger(__name__)
 
