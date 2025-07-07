@@ -123,7 +123,7 @@ def log_exception(logger, exc_info=None):
     """Log an exception with full stack trace"""
     if exc_info is None:
         exc_info = sys.exc_info()
-    logger.error("Exception occurred:", exc_info=Truexc_info)
+    logger.error("Exception occurred:", exc_info=True)
     logger.error("Full traceback:\n" + "".join(traceback.format_exception(*exc_info)))
 
 

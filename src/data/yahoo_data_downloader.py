@@ -63,9 +63,9 @@ class YahooDataDownloader(BaseDataDownloader):
 
     Example:
     --------
+    >>> from datetime import datetime
     >>> downloader = YahooDataDownloader()
-    >>> # Get OHLCV data
-    >>> df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
+    >>> df = downloader.get_ohlcv("AAPL", "1d", datetime(2023, 1, 1), datetime(2023, 12, 31))
     >>> # Get fundamental data
     >>> fundamentals = downloader.get_fundamentals("AAPL")
     >>> print(f"PE Ratio: {fundamentals.pe_ratio}")
@@ -81,7 +81,7 @@ class YahooDataDownloader(BaseDataDownloader):
         )
 
     def get_ohlcv(
-        self, symbol: str, interval: str, start_date: str, end_date: str
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:
         """
         Download historical data for a given symbol.
@@ -89,15 +89,17 @@ class YahooDataDownloader(BaseDataDownloader):
         Args:
             symbol: Stock symbol (e.g., 'AAPL')
             interval: Data interval
-            start_date: Start date for historical data
-            end_date: End date for historical data
+            start_date: Start date as datetime.datetime
+            end_date: End date as datetime.datetime
 
         Returns:
             pd.DataFrame: Historical OHLCV data
         """
         try:
             ticker = yf.Ticker(symbol)
-            df = ticker.history(start=start_date, end=end_date, interval=interval)
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
+            df = ticker.history(start=start_str, end=end_str, interval=interval)
 
             # Rename columns to match standard format
             df = df.rename(
@@ -132,8 +134,8 @@ class YahooDataDownloader(BaseDataDownloader):
         self,
         df: pd.DataFrame,
         symbol: str,
-        start_date: str = None,
-        end_date: str = None,
+        start_date: datetime = None,
+        end_date: datetime = None,
     ) -> str:
         """
         Save downloaded data to a CSV file.
@@ -141,18 +143,13 @@ class YahooDataDownloader(BaseDataDownloader):
         Args:
             df: DataFrame containing historical data
             symbol: Stock symbol
-            start_date: Start date for historical data
-            end_date: End date for historical data
+            start_date: Start date as datetime.datetime
+            end_date: End date as datetime.datetime
 
         Returns:
             str: Path to the saved file
         """
         try:
-            # If start_date or end_date are not provided, extract from df
-            if start_date is None:
-                start_date = df["timestamp"].min().strftime("%Y-%m-%d")
-            if end_date is None:
-                end_date = df["timestamp"].max().strftime("%Y-%m-%d")
             return super().save_data(df, symbol, start_date, end_date)
 
         except Exception as e:
@@ -199,8 +196,8 @@ class YahooDataDownloader(BaseDataDownloader):
                 df = self.get_ohlcv(
                     symbol,
                     interval,
-                    "2000-01-01",
-                    pd.Timestamp.today().strftime("%Y-%m-%d"),
+                    datetime.fromtimestamp(0),
+                    datetime.now(),
                 )
                 return self.save_data(df, symbol)
 
@@ -215,7 +212,7 @@ class YahooDataDownloader(BaseDataDownloader):
             # Download new data from last date
             new_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
             new_end = pd.Timestamp.today().strftime("%Y-%m-%d")
-            new_df = self.get_ohlcv(symbol, interval, new_start, new_end)
+            new_df = self.get_ohlcv(symbol, interval, datetime.fromtimestamp(int(new_start)), datetime.fromtimestamp(int(new_end)))
 
             if new_df.empty:
                 _logger.info("No new data available for %s", symbol)
@@ -234,7 +231,7 @@ class YahooDataDownloader(BaseDataDownloader):
             raise
 
     def download_multiple_symbols(
-        self, symbols: List[str], interval: str, start_date: str, end_date: str
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
     ) -> Dict[str, str]:
         """
         Download data for multiple symbols.
@@ -242,16 +239,14 @@ class YahooDataDownloader(BaseDataDownloader):
         Args:
             symbols: List of stock symbols
             interval: Data interval
-            start_date: Start date for historical data
-            end_date: End date for historical data
+            start_date: Start date as datetime.datetime
+            end_date: End date as datetime.datetime
 
         Returns:
             Dict[str, str]: Dictionary mapping symbols to file paths
         """
-
         def download_func(symbol, interval, start_date, end_date):
             return self.get_ohlcv(symbol, interval, start_date, end_date)
-
         return super().download_multiple_symbols(
             symbols, download_func, interval, start_date, end_date
         )

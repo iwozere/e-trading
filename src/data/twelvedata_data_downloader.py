@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, List, Dict
 from datetime import datetime
 import pandas as pd
 import requests
@@ -69,9 +69,9 @@ class TwelveDataDataDownloader(BaseDataDownloader):
 
     Example:
     --------
+    >>> from datetime import datetime
     >>> downloader = TwelveDataDataDownloader("YOUR_API_KEY")
-    >>> # Get OHLCV data
-    >>> df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
+    >>> df = downloader.get_ohlcv("AAPL", "1d", datetime(2023, 1, 1), datetime(2023, 12, 31))
     >>> # Get fundamental data
     >>> fundamentals = downloader.get_fundamentals("AAPL")
     >>> print(f"PE Ratio: {fundamentals.pe_ratio}")
@@ -83,15 +83,15 @@ class TwelveDataDataDownloader(BaseDataDownloader):
         self.api_key = api_key
         self.base_url = "https://api.twelvedata.com/time_series"
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: str, end_date: str) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """
         Download historical data for a given symbol from Twelve Data.
 
         Args:
             symbol: Stock symbol (e.g., 'AAPL')
             interval: Data interval ('1m', '5m', '15m', '1h', '1d')
-            start_date: Start date for historical data (YYYY-MM-DD)
-            end_date: End date for historical data (YYYY-MM-DD)
+            start_date: Start date as datetime.datetime
+            end_date: End date as datetime.datetime
 
         Returns:
             pd.DataFrame: Historical OHLCV data
@@ -105,11 +105,13 @@ class TwelveDataDataDownloader(BaseDataDownloader):
                 '1m': '1min', '5m': '5min', '15m': '15min', '1h': '1h', '1d': '1day'
             }
             td_interval = interval_map.get(interval, '1day')
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
             params = {
                 'symbol': symbol,
                 'interval': td_interval,
-                'start_date': start_date,
-                'end_date': end_date,
+                'start_date': start_str,
+                'end_date': end_str,
                 'apikey': self.api_key,
                 'format': 'JSON',
                 'outputsize': 5000  # max per request
@@ -272,3 +274,12 @@ class TwelveDataDataDownloader(BaseDataDownloader):
                 data_source="Twelve Data",
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
+
+    def download_multiple_symbols(
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
+    ) -> Dict[str, str]:
+        def download_func(symbol, interval, start_date, end_date):
+            return self.get_ohlcv(symbol, interval, start_date, end_date)
+        return super().download_multiple_symbols(
+            symbols, download_func, interval, start_date, end_date
+        )

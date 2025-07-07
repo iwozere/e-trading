@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, List, Dict
 from datetime import datetime
 import pandas as pd
 import requests
@@ -68,9 +68,9 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
     Example:
     --------
+    >>> from datetime import datetime
     >>> downloader = FinnhubDataDownloader("YOUR_API_KEY")
-    >>> # Get OHLCV data
-    >>> df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
+    >>> df = downloader.get_ohlcv("AAPL", "1d", datetime(2023, 1, 1), datetime(2023, 12, 31))
     >>> # Get fundamental data
     >>> fundamentals = downloader.get_fundamentals("AAPL")
     >>> print(f"PE Ratio: {fundamentals.pe_ratio}")
@@ -85,15 +85,15 @@ class FinnhubDataDownloader(BaseDataDownloader):
             level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
         )
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: str, end_date: str) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """
         Download historical data for a given symbol from Finnhub.
 
         Args:
             symbol: Stock symbol (e.g., 'AAPL')
             interval: Data interval ('1m', '5m', '15m', '1h', '1d')
-            start_date: Start date for historical data (YYYY-MM-DD)
-            end_date: End date for historical data (YYYY-MM-DD)
+            start_date: Start date as datetime.datetime
+            end_date: End date as datetime.datetime
 
         Returns:
             pd.DataFrame: Historical OHLCV data
@@ -108,8 +108,8 @@ class FinnhubDataDownloader(BaseDataDownloader):
             }
             finnhub_interval = interval_map.get(interval, 'D')
             # Convert dates to UNIX timestamps (seconds)
-            start_unix = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp())
-            end_unix = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp())
+            start_unix = int(start_date.timestamp())
+            end_unix = int(end_date.timestamp())
             params = {
                 'symbol': symbol,
                 'resolution': finnhub_interval,
@@ -275,3 +275,12 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 data_source="Finnhub",
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
+
+    def download_multiple_symbols(
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
+    ) -> Dict[str, str]:
+        def download_func(symbol, interval, start_date, end_date):
+            return self.get_ohlcv(symbol, interval, start_date, end_date)
+        return super().download_multiple_symbols(
+            symbols, download_func, interval, start_date, end_date
+        )

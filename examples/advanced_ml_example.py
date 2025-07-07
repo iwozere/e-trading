@@ -17,9 +17,9 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Import ML modules
-from src.ml.mlflow_integration import MLflowManager, ModelDeployer, ExperimentManager
-from src.ml.feature_engineering_pipeline import FeatureEngineeringPipeline
-from src.ml.automated_training_pipeline import (
+from src.strategy.ml.mlflow_integration import MLflowManager, ModelDeployer, ExperimentManager
+from src.strategy.ml.feature_engineering_pipeline import FeatureEngineeringPipeline
+from src.strategy.ml.automated_training_pipeline import (
     AutomatedTrainingPipeline, TrainingConfig, ModelType,
     TrainingTrigger, PerformanceMetrics
 )
@@ -101,7 +101,7 @@ def demonstrate_mlflow_integration():
     mlflow_manager.log_metrics(metrics)
 
     # Create sample model metadata
-    from src.ml.mlflow_integration import ModelMetadata
+    from src.strategy.ml.mlflow_integration import ModelMetadata
 
     metadata = ModelMetadata(
         model_name="crypto_prediction_model",
@@ -316,7 +316,7 @@ def demonstrate_ab_testing():
     target = target[valid_indices]
 
     # Initialize A/B testing framework
-    from src.ml.automated_training_pipeline import ABTestingFramework
+    from src.strategy.ml.automated_training_pipeline import ABTestingFramework
 
     ab_config = {
         "traffic_split": 0.5,

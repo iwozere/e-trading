@@ -17,33 +17,27 @@ PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
 
 def analyze_period_interval(period: str = "2y", interval: str = "1d"):
     """
-    Given a period (e.g., '2y', '6mo', '1w') and interval, return (start_date, end_date) as strings.
-
-    Args:
-        period: Period string (e.g., '1d', '7d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y')
-        interval: Interval string (e.g., '1m', '5m', '15m', '1h', '1d')
-
-    Returns:
-        tuple: (start_date, end_date) as YYYY-MM-DD strings
+    Given a period (e.g., '2y', '6mo', '1w') and interval, return (start_date, end_date) as datetime.datetime objects.
     """
+    from datetime import datetime, timedelta
     start_date = None
-    end_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    end_date = datetime.now()
 
     if period.endswith("y"):
         years = int(period[:-1])
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=365*years)).strftime("%Y-%m-%d")
+        start_date = datetime.now() - timedelta(days=365*years)
     elif period.endswith("m"):
         months = int(period[:-1])
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
+        start_date = datetime.now() - timedelta(days=30*months)
     elif period.endswith("mo"):
         months = int(period[:-2])
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=30*months)).strftime("%Y-%m-%d")
+        start_date = datetime.now() - timedelta(days=30*months)
     elif period.endswith("w"):
         weeks = int(period[:-1])
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=7*weeks)).strftime("%Y-%m-%d")
+        start_date = datetime.now() - timedelta(days=7*weeks)
     else:
         # Default to 2 years if period format is not recognized
-        start_date = (datetime.datetime.now() - datetime.timedelta(days=730)).strftime("%Y-%m-%d")
+        start_date = datetime.now() - timedelta(days=730)
 
     return start_date, end_date
 

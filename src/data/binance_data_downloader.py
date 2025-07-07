@@ -5,8 +5,8 @@ Binance Data Downloader Module
 This module provides the BinanceDataDownloader class for downloading historical OHLCV (Open, High, Low, Close, Volume) data from the Binance exchange. It supports fetching data for single or multiple symbols and saving the results as CSV files for use in backtesting and analysis workflows.
 
 Main Features:
-- Download historical candlestick data for any Binance trading pair and interval
-- Save data to CSV files in a structured format
+- Download historical candlestick data for cryptocurrencies
+- Save data to CSV files
 - Download data for multiple symbols in batch
 - Inherits common logic from BaseDataDownloader for file management
 
@@ -68,9 +68,10 @@ class BinanceDataDownloader(BaseDataDownloader):
 
     Example:
     --------
+    >>> from datetime import datetime
     >>> downloader = BinanceDataDownloader("YOUR_API_KEY", "YOUR_SECRET_KEY")
     >>> # Get OHLCV data for cryptocurrency
-    >>> df = downloader.get_ohlcv("BTCUSDT", "1d", "2023-01-01", "2023-12-31")
+    >>> df = downloader.get_ohlcv("BTCUSDT", "1d", datetime(2023, 1, 1), datetime(2023, 12, 31))
     >>> # Get fundamental data (will raise NotImplementedError)
     >>> try:
     >>>     fundamentals = downloader.get_fundamentals("AAPL")
@@ -92,8 +93,8 @@ class BinanceDataDownloader(BaseDataDownloader):
         self,
         symbol: str,
         interval: str,
-        start_date: str,
-        end_date: str,
+        start_date: datetime,
+        end_date: datetime,
         save_to_csv: bool = True,
     ) -> pd.DataFrame:
         """
@@ -102,8 +103,8 @@ class BinanceDataDownloader(BaseDataDownloader):
         Args:
             symbol: Trading pair symbol (e.g., 'BTCUSDT')
             interval: Kline interval (e.g., '1h', '4h', '1d')
-            start_date: Start date in format 'YYYY-MM-DD'
-            end_date: End date in format 'YYYY-MM-DD'
+            start_date: Start date as datetime.datetime
+            end_date: End date as datetime.datetime
             save_to_csv: Whether to save the data to a CSV file
 
         Returns:
@@ -111,10 +112,8 @@ class BinanceDataDownloader(BaseDataDownloader):
         """
         try:
             # Convert dates to timestamps
-            start_timestamp = int(
-                datetime.strptime(start_date, "%Y-%m-%d").timestamp() * 1000
-            )
-            end_timestamp = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp() * 1000)
+            start_timestamp = int(start_date.timestamp() * 1000)
+            end_timestamp = int(end_date.timestamp() * 1000)
 
             # Get klines data
             klines = self.client.get_historical_klines(
@@ -157,7 +156,7 @@ class BinanceDataDownloader(BaseDataDownloader):
             raise
 
     def download_multiple_symbols(
-        self, symbols: List[str], interval: str, start_date: str, end_date: str
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
     ):
         """Download historical data for multiple symbols."""
 
@@ -174,8 +173,8 @@ class BinanceDataDownloader(BaseDataDownloader):
         self,
         df: pd.DataFrame,
         symbol: str,
-        start_date: str = None,
-        end_date: str = None,
+        start_date: datetime = None,
+        end_date: datetime = None,
     ) -> str:
         return super().save_data(df, symbol, start_date, end_date)
 
@@ -188,7 +187,7 @@ class BinanceDataDownloader(BaseDataDownloader):
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
 
-    def get_ohlcv(self, symbol, interval, start_date, end_date, **kwargs):
+    def get_ohlcv(self, symbol, interval, start_date: datetime, end_date: datetime, **kwargs):
         # Wrapper for unified interface
         save_to_csv = kwargs.get('save_to_csv', False)
         return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=save_to_csv)

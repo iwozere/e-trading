@@ -4,6 +4,7 @@ import pandas as pd
 from abc import ABC, abstractmethod
 from src.notification.logger import setup_logger
 from src.model.telegram_bot import Fundamentals
+from datetime import datetime
 
 """
 Abstract base class for data downloaders, defining the interface for downloading historical market data from various sources.
@@ -40,19 +41,23 @@ class BaseDataDownloader(ABC):
         self,
         df: pd.DataFrame,
         symbol: str,
-        start_date: str = None,
-        end_date: str = None,
+        start_date: datetime = None,
+        end_date: datetime = None,
     ) -> str:
         """
         Save downloaded data to a CSV file.
+        start_date and end_date should be datetime.datetime objects (or None).
         """
         if start_date is None:
-            start_date = df["timestamp"].min().strftime("%Y-%m-%d")
+            start_date = df["timestamp"].min()
         if end_date is None:
-            end_date = df["timestamp"].max().strftime("%Y-%m-%d")
-        filename = f"{symbol}_{self.interval}_{start_date.replace('-', '')}"
-        if end_date:
-            filename += f"_{end_date.replace('-', '')}"
+            end_date = df["timestamp"].max()
+        # Convert to string for filename
+        start_date_str = start_date.strftime("%Y-%m-%d") if isinstance(start_date, datetime) else str(start_date)
+        end_date_str = end_date.strftime("%Y-%m-%d") if isinstance(end_date, datetime) else str(end_date)
+        filename = f"{symbol}_{self.interval}_{start_date_str.replace('-', '')}"
+        if end_date_str:
+            filename += f"_{end_date_str.replace('-', '')}"
         filename += ".csv"
         filepath = os.path.join(self.data_dir, filename)
         df.to_csv(filepath, index=False)
@@ -72,18 +77,17 @@ class BaseDataDownloader(ABC):
     ) -> Dict[str, str]:
         """
         Download data for multiple symbols using the provided download_func.
+        start_date and end_date should be datetime.datetime objects (or None).
         """
         results = {}
         for symbol in symbols:
             try:
                 df = download_func(symbol, *args, **kwargs)
                 # Assume start_date and end_date are in kwargs or args
-                start_date = kwargs.get("start_date") or args[0] if args else ""
-                end_date = kwargs.get("end_date") or (
-                    args[1] if len(args) > 1 else None
-                )
+                start_date = kwargs.get("start_date") or (args[0] if args else None)
+                end_date = kwargs.get("end_date") or (args[1] if len(args) > 1 else None)
                 filepath = self.save_data(
-                    df, symbol, str(start_date), str(end_date) if end_date else None
+                    df, symbol, start_date, end_date
                 )
                 results[symbol] = filepath
             except Exception as e:
@@ -107,8 +111,8 @@ class BaseDataDownloader(ABC):
         pass
 
     @abstractmethod
-    def get_ohlcv(self, symbol, interval, start_date, end_date, **kwargs):
-        """Download historical data for a given symbol. Must be implemented by subclasses."""
+    def get_ohlcv(self, symbol, interval, start_date: datetime, end_date: datetime, **kwargs):
+        """Download historical data for a given symbol. start_date and end_date must be datetime.datetime."""
         pass
 
     @abstractmethod

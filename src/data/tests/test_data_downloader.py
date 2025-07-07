@@ -1,7 +1,12 @@
-import os
 import sys
+import os
+
+# Add the src directory to the path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
 import pytest
 import pandas as pd
+from datetime import datetime, timedelta
 
 # Import all downloaders
 from src.data.binance_data_downloader import BinanceDataDownloader
@@ -63,9 +68,13 @@ def test_is_valid_period_interval(downloader_class, period, interval):
 ])
 @pytest.mark.network
 def test_get_ohlcv_smoke(downloader_class, symbol, interval, api_env):
-    import datetime
-    start_date = (datetime.datetime.now() - datetime.timedelta(days=2)).strftime("%Y-%m-%d")
-    end_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    # Use a bigger date range in the past for YahooDataDownloader
+    if downloader_class is YahooDataDownloader:
+        start_date = datetime(2023, 1, 1)
+        end_date = datetime(2023, 1, 7)
+    else:
+        start_date = datetime.now() - timedelta(days=30)
+        end_date = datetime.now() - timedelta(days=29)
     # API key logic
     if api_env:
         api_key = os.environ.get(api_env)

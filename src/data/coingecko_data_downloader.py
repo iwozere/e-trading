@@ -18,7 +18,7 @@ Classes:
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 import pandas as pd
 import requests
 from .base_data_downloader import BaseDataDownloader
@@ -60,9 +60,9 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
 
     Example:
     --------
+    >>> from datetime import datetime
     >>> downloader = CoinGeckoDataDownloader()
-    >>> # Get OHLCV data for cryptocurrency
-    >>> df = downloader.get_ohlcv("bitcoin", "1d", "2023-01-01", "2023-12-31")
+    >>> df = downloader.get_ohlcv("bitcoin", "1d", datetime(2023, 1, 1), datetime(2023, 12, 31))
     >>> # Get fundamental data (will raise NotImplementedError)
     >>> try:
     >>>     fundamentals = downloader.get_fundamentals("AAPL")
@@ -78,8 +78,8 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         self,
         symbol: str,
         interval: str,
-        start_date: str,
-        end_date: str,
+        start_date: datetime,
+        end_date: datetime,
         save_to_csv: bool = True,
     ) -> pd.DataFrame:
         """
@@ -88,8 +88,8 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         Args:
             symbol: Trading pair symbol (e.g., 'bitcoin', 'ethereum')
             interval: Kline interval (e.g., '1h', '4h', '1d')
-            start_date: Start date in format 'YYYY-MM-DD'
-            end_date: End date in format 'YYYY-MM-DD'
+            start_date: Start date as datetime.datetime
+            end_date: End date as datetime.datetime
             save_to_csv: Whether to save the data to a CSV file
 
         Returns:
@@ -99,8 +99,8 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         # For simplicity, we assume symbol is the CoinGecko id (e.g., 'bitcoin', 'ethereum').
         vs_currency = "usd"
         # Convert dates to UNIX timestamps (seconds)
-        start_timestamp = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp())
-        end_timestamp = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp())
+        start_timestamp = int(start_date.timestamp())
+        end_timestamp = int(end_date.timestamp())
 
         url = f"{self.base_url}/coins/{symbol}/market_chart/range"
         params = {
@@ -163,7 +163,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
 
-    def get_ohlcv(self, symbol, interval, start_date, end_date, **kwargs):
+    def get_ohlcv(self, symbol, interval, start_date: datetime, end_date: datetime, **kwargs):
         save_to_csv = kwargs.get('save_to_csv', False)
         return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=save_to_csv)
 
@@ -183,3 +183,12 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
             NotImplementedError: CoinGecko is for cryptocurrencies, not stocks
         """
         raise NotImplementedError("CoinGecko is for cryptocurrencies, not stocks")
+
+    def download_multiple_symbols(
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
+    ) -> Dict[str, str]:
+        def download_func(symbol, interval, start_date, end_date):
+            return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=False)
+        return super().download_multiple_symbols(
+            symbols, download_func, interval, start_date, end_date
+        )

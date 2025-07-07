@@ -16,14 +16,16 @@ Or to run specific test:
     pytest tests/test_live_feeds.py::TestBinanceLiveFeed::test_connection -v
 """
 
+import sys
 import os
+
+# Add the src directory to the path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
 import tempfile
 import unittest
-import threading
-import time
 from unittest.mock import patch, MagicMock, Mock
 import pandas as pd
-from datetime import datetime, timedelta
 
 # Import all live feeds
 from src.data.binance_live_feed import BinanceLiveDataFeed

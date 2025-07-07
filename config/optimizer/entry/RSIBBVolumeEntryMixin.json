@@ -4,19 +4,19 @@
         "e_rsi_period": {
             "type": "int",
             "low": 5,
-            "high": 30,
+            "high": 80,
             "default": 14
         },
         "e_rsi_oversold": {
             "type": "int",
-            "low": 20,
-            "high": 40,
+            "low": 10,
+            "high": 50,
             "default": 30
         },
         "e_bb_period": {
             "type": "int",
             "low": 10,
-            "high": 50,
+            "high": 80,
             "default": 20
         },
         "e_bb_dev": {
@@ -28,7 +28,7 @@
         "e_vol_ma_period": {
             "type": "int",
             "low": 5,
-            "high": 50,
+            "high": 100,
             "default": 20
         },
         "e_min_volume_ratio": {

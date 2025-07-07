@@ -15,8 +15,12 @@ How to run:
 Or to run specific test:
     pytest tests/test_data_downloaders.py::test_yahoo_downloader -v
 """
-
+import sys
 import os
+
+# Add the src directory to the path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
 import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
@@ -42,8 +46,8 @@ class TestDataDownloaders(unittest.TestCase):
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
         self.test_symbol = "AAPL"
-        self.start_date = "2023-01-01"
-        self.end_date = "2023-01-31"
+        self.start_date = datetime(2023, 1, 1)
+        self.end_date = datetime(2023, 1, 31)
         self.interval = "1d"
 
     def tearDown(self):

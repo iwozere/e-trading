@@ -70,9 +70,9 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
 
     Example:
     --------
-    >>> downloader = AlphaVantageDataDownloader("YOUR_API_KEY")
-    >>> # Get OHLCV data
-    >>> df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
+    >>> from datetime import datetime
+    >>> downloader = AlphaVantageDataDownloader(api_key="YOUR_API_KEY")
+    >>> df = downloader.get_ohlcv("AAPL", "1d", datetime(2023, 1, 1), datetime(2023, 12, 31))
     >>> # Get fundamental data
     >>> fundamentals = downloader.get_fundamentals("AAPL")
     >>> print(f"PE Ratio: {fundamentals.pe_ratio}")
@@ -88,7 +88,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
         )
 
     def get_ohlcv(
-        self, symbol: str, interval: str, start_date: str, end_date: str
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:
         """
         Download historical data for a given symbol from Alpha Vantage.
@@ -96,8 +96,8 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
         Args:
             symbol: Stock symbol (e.g., 'AAPL')
             interval: Data interval (e.g., '1d', '1h', '15m')
-            start_date: Start date for historical data (YYYY-MM-DD)
-            end_date: End date for historical data (YYYY-MM-DD)
+            start_date: Start date as datetime.datetime
+            end_date: End date as datetime.datetime
 
         Returns:
             pd.DataFrame: Historical OHLCV data
@@ -109,6 +109,8 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 '1d': 'daily', '1h': '60min', '1wk': 'weekly', '1mo': 'monthly'
             }
             av_interval = interval_map.get(interval, 'daily')
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
             if av_interval in ['daily', 'weekly', 'monthly']:
                 function = f'TIME_SERIES_{av_interval.upper()}'
                 params = {
@@ -157,7 +159,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             df['timestamp'] = pd.to_datetime(df.index)
             df = df.reset_index(drop=True)
             df = df.sort_values('timestamp')
-            df = df[(df['timestamp'] >= pd.to_datetime(start_date)) & (df['timestamp'] <= pd.to_datetime(end_date))]
+            df = df[(df['timestamp'] >= pd.to_datetime(start_str)) & (df['timestamp'] <= pd.to_datetime(end_str))]
             # Ensure all required columns are present
             required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
             for col in required_columns:
@@ -206,8 +208,8 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 df = self.get_ohlcv(
                     symbol,
                     interval,
-                    "2000-01-01",
-                    pd.Timestamp.today().strftime("%Y-%m-%d"),
+                    datetime.fromtimestamp(0),
+                    datetime.now(),
                 )
                 return self.save_data(df, symbol)
             latest_file = max(existing_files)
@@ -215,8 +217,8 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             existing_df = self.load_data(filepath)
             last_date = existing_df["timestamp"].max()
             new_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-            new_end = pd.Timestamp.today().strftime("%Y-%m-%d")
-            new_df = self.get_ohlcv(symbol, interval, new_start, new_end)
+            new_end = datetime.now().strftime("%Y-%m-%d")
+            new_df = self.get_ohlcv(symbol, interval, datetime.fromtimestamp(int(new_start)), datetime.fromtimestamp(int(new_end)))
             if new_df.empty:
                 _logger.info("No new data available for %s", symbol)
                 return filepath
@@ -347,3 +349,12 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 data_source="Alpha Vantage",
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
+
+    def download_multiple_symbols(
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
+    ) -> Dict[str, str]:
+        def download_func(symbol, interval, start_date, end_date):
+            return self.get_ohlcv(symbol, interval, start_date, end_date)
+        return super().download_multiple_symbols(
+            symbols, download_func, interval, start_date, end_date
+        )

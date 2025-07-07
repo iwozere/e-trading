@@ -5,6 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 import pytest
 from unittest.mock import AsyncMock, patch
 from src.frontend.telegram.screener.notifications import (
+    # process_start_command,  # REMOVED, see notification manager refactor
     process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_unknown_command, process_report_command
 )
 
