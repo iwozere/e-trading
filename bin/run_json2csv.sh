@@ -18,6 +18,6 @@ fi
 
 source "$PROJECT_ROOT/.venv/bin/activate"
 
-nohup "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/backtester/optimizer/run_json2csv.py" > "$PROJECT_ROOT/logs/log/json2csv.log" 2>&1 &
+nohup "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/backtester/optimizer/run_json2csv.py" > "$PROJECT_ROOT/logs/log/json2csv.out" 2>&1 &
 
 echo "JSON to CSV converter started in background. Check $PROJECT_ROOT/logs/log/json2csv.log for output."
