@@ -93,7 +93,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             self.cross_below_kijun = bt.indicators.CrossDown(self.strategy.data.close, self.kijun_sen)
 
         except Exception as e:
-            logger.error(f"Error initializing indicators: {e}", exc_info=e)
+            logger.error("Error initializing indicators: %s", e, exc_info=True)
             raise
 
     def should_enter(self) -> bool:
@@ -142,5 +142,5 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
 
             return return_value
         except Exception as e:
-            logger.error(f"Error in should_enter: {e}", exc_info=e)
+            logger.error("Error in should_enter: %s", e, exc_info=True)
             return False

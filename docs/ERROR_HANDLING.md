@@ -257,7 +257,7 @@ config = RetryConfig(
     backoff_factor=2.0,
     retry_on_exceptions=(NetworkException, ConnectionError),
     retry_on_result=lambda result: result is None,
-    on_retry=lambda attempt, delay: logger.info(f"Retry {attempt} after {delay}s")
+    on_retry=lambda attempt, delay: logger.info("Retry %s after %ds", attempt, delay)
 )
 ```
 
@@ -299,7 +299,7 @@ config = CircuitBreakerConfig(
     recovery_timeout=30,      # Seconds before trying half-open
     success_threshold=2,      # Successes before closing circuit
     timeout=10.0,            # Call timeout
-    on_state_change=lambda old_state, new_state: logger.info(f"Circuit {old_state} -> {new_state}")
+    on_state_change=lambda old_state, new_state: logger.info("Circuit %s -> %s", old_state, new_state)
 )
 ```
 

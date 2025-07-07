@@ -119,7 +119,7 @@ class ModelTrainer:
             return model, metrics
 
         except Exception as e:
-            logger.error(f"Error in model training: {e}")
+            logger.error("Error in model training: %s", e, exc_info=True)
             raise
 
     def _optimize_hyperparameters(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, Any]:
@@ -379,7 +379,7 @@ class DriftDetector:
             }
 
         except Exception as e:
-            logger.error(f"Error in concept drift detection: {e}")
+            logger.error("Error in concept drift detection: %s", e, exc_info=True)
             return False, {}
 
 
@@ -594,7 +594,7 @@ class AutomatedTrainingPipeline:
             logger.info("Scheduled training completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in scheduled training: {e}")
+            logger.error("Error in scheduled training: %s", e, exc_info=True)
         finally:
             self.is_training = False
 
@@ -639,7 +639,7 @@ class AutomatedTrainingPipeline:
             logger.info("Training completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in training: {e}")
+            logger.error("Error in training: %s", e, exc_info=True)
         finally:
             self.is_training = False
 
@@ -666,7 +666,7 @@ class AutomatedTrainingPipeline:
             return results
 
         except Exception as e:
-            logger.error(f"Error in A/B testing: {e}")
+            logger.error("Error in A/B testing: %s", e, exc_info=True)
             return {}
 
     def check_drift(self, current_data: pd.DataFrame) -> Dict[str, Any]:
@@ -696,7 +696,7 @@ class AutomatedTrainingPipeline:
             }
 
         except Exception as e:
-            logger.error(f"Error in drift detection: {e}")
+            logger.error("Error in drift detection: %s", e, exc_info=True)
             return {}
 
     def get_performance_report(self) -> Dict[str, Any]:
@@ -723,7 +723,7 @@ class AutomatedTrainingPipeline:
             }
 
         except Exception as e:
-            logger.error(f"Error generating performance report: {e}")
+            logger.error("Error generating performance report: %s", e, exc_info=True)
             return {}
 
     def save_pipeline_state(self, filepath: str):

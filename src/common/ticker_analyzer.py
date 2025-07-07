@@ -28,7 +28,7 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
         if provider.lower() in ["yf", "av", "fh", "td", "pg"]:
             fundamentals = get_fundamentals(ticker, provider)
 
-        logger.debug(f"Downloaded data for {ticker}")
+        logger.debug("Downloaded data for %s", ticker)
 
         # Calculate technicals and update df with indicator columns
         df, technicals = calculate_technicals_from_df(df)

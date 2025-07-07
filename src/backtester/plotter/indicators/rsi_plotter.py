@@ -1,5 +1,7 @@
 from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
 
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class RSIPlotter(BaseIndicatorPlotter):
     def plot(self, ax):
@@ -30,7 +32,7 @@ class RSIPlotter(BaseIndicatorPlotter):
 
                 # Plot RSI
                 ax.plot(dates, rsi_data, label="RSI (Entry)", color="blue", alpha=0.7)
-                self.logger.debug(f"Plotted entry RSI with {len(rsi_data)} points")
+                _logger.debug("Plotted entry RSI with %d points", len(rsi_data))
 
             # Then try to plot exit RSI if it exists
             if "exit_rsi" in self.indicators:
@@ -57,7 +59,7 @@ class RSIPlotter(BaseIndicatorPlotter):
 
                 # Plot RSI
                 ax.plot(dates, rsi_data, label="RSI (Exit)", color="red", alpha=0.7)
-                self.logger.debug(f"Plotted exit RSI with {len(rsi_data)} points")
+                _logger.debug("Plotted exit RSI with %d points", len(rsi_data))
 
             # Add overbought/oversold lines
             ax.axhline(y=70, color="r", linestyle="--", alpha=0.3)
@@ -66,11 +68,9 @@ class RSIPlotter(BaseIndicatorPlotter):
             ax.set_ylabel("RSI")
             self._apply_style(ax)
         except Exception as e:
-            self.logger.error(f"Error plotting RSI: {str(e)}", exc_info=False)
-            self.logger.error(
-                f"Indicator data: {self.indicators.get('rsi', 'Not found')}"
-            )
-            self.logger.error(f"Data feed length: {len(self.data)}")
+            _logger.error("Error plotting RSI: %s", e, exc_info=False)
+            _logger.error("Indicator data: %s", self.indicators.get('rsi', 'Not found'))
+            _logger.error("Data feed length: %d", len(self.data))
 
     @property
     def subplot_type(self):

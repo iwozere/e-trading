@@ -170,7 +170,7 @@ class EmailChannel(NotificationChannel):
                             else:
                                 prepared_attachments.append((filename, MIMEApplication(file_bytes, Name=filename)))
                     except Exception as e:
-                        _logger.error(f"Failed to attach file {filename}: {e}")
+                        _logger.error("Failed to attach file %s: %s", filename, e, exc_info=True)
             # Format message as HTML
             html_message = notification.message.replace('\n', '<br>') if notification.message else ''
             await loop.run_in_executor(
@@ -309,7 +309,7 @@ class AsyncNotificationManager:
         """
         try:
             # Set the receiver email dynamically before sending
-            _logger.debug(f"Start async send_notification {title}")
+            _logger.debug("Start async send_notification %s", title)
             if email_receiver and "email" in self.channels:
                 _logger.debug("Set email_receiver: %s", email_receiver)
                 self.channels["email"].receiver_email = email_receiver
@@ -513,7 +513,7 @@ class AsyncNotificationManager:
 
         # Send to all enabled channels
         _logger.debug("Channels: %s", self.channels)
-        _logger.debug(f"Email channel enabled: %s", 'email' in self.channels and self.channels['email'].is_enabled())
+        _logger.debug("Email channel enabled: %s", 'email' in self.channels and self.channels['email'].is_enabled())
         tasks = []
         for channel_name, channel in self.channels.items():
             channels_list = notification.data.get("channels") if notification.data else None

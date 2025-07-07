@@ -68,7 +68,7 @@ class MLflowManager:
                 mlflow.set_experiment(self.experiment_name)
                 logger.info("Using existing experiment: %s", self.experiment_name)
         except Exception as e:
-            logger.error(f"Error setting up experiment: {e}")
+            logger.error("Error setting up experiment: %s", e, exc_info=True)
             raise
 
     def start_run(self, run_name: str = None, tags: Dict[str, str] = None) -> str:
@@ -90,7 +90,7 @@ class MLflowManager:
             return run_id
 
         except Exception as e:
-            logger.error(f"Error starting MLflow run: {e}")
+            logger.error("Error starting MLflow run: %s", e, exc_info=True)
             raise
 
     def end_run(self):
@@ -99,7 +99,7 @@ class MLflowManager:
             mlflow.end_run()
             logger.info("Ended MLflow run")
         except Exception as e:
-            logger.error(f"Error ending MLflow run: {e}")
+            logger.error("Error ending MLflow run: %s", e, exc_info=True)
             raise
 
     def log_parameters(self, params: Dict[str, Any]):
@@ -108,7 +108,7 @@ class MLflowManager:
             mlflow.log_params(params)
             logger.info("Logged %d parameters", len(params))
         except Exception as e:
-            logger.error(f"Error logging parameters: {e}")
+            logger.error("Error logging parameters: %s", e, exc_info=True)
             raise
 
     def log_metrics(self, metrics: Dict[str, float], step: int = None):
@@ -117,7 +117,7 @@ class MLflowManager:
             mlflow.log_metrics(metrics, step=step)
             logger.info("Logged %d metrics", len(metrics))
         except Exception as e:
-            logger.error(f"Error logging metrics: {e}")
+            logger.error("Error logging metrics: %s", e, exc_info=True)
             raise
 
     def log_model(self,
@@ -153,7 +153,7 @@ class MLflowManager:
             logger.info("Logged model: %s (type: %s)", model_name, model_type)
 
         except Exception as e:
-            logger.error(f"Error logging model: {e}")
+            logger.error("Error logging model: %s", e, exc_info=True)
             raise
 
     def register_model(self,
@@ -187,7 +187,7 @@ class MLflowManager:
             return model_version.version
 
         except Exception as e:
-            logger.error(f"Error registering model: {e}")
+            logger.error("Error registering model: %s", e, exc_info=True)
             raise
 
     def load_model(self, model_name: str, stage: str = "Production") -> Any:
@@ -234,7 +234,7 @@ class MLflowManager:
             raise ValueError(f"Could not load model: {model_name}")
 
         except Exception as e:
-            logger.error(f"Error loading model: {e}")
+            logger.error("Error loading model: %s", e, exc_info=True)
             raise
 
     def list_models(self) -> List[Dict[str, Any]]:
@@ -260,7 +260,7 @@ class MLflowManager:
                 for model in models
             ]
         except Exception as e:
-            logger.error(f"Error listing models: {e}")
+            logger.error("Error listing models: %s", e, exc_info=True)
             return []
 
     def get_model_versions(self, model_name: str) -> List[Dict[str, Any]]:
@@ -278,7 +278,7 @@ class MLflowManager:
                 for v in versions
             ]
         except Exception as e:
-            logger.error(f"Error getting model versions: {e}")
+            logger.error("Error getting model versions: %s", e, exc_info=True)
             return []
 
     def promote_model(self, model_name: str, version: int, stage: str):
@@ -291,7 +291,7 @@ class MLflowManager:
             )
             logger.info("Promoted model %s v%s to %s", model_name, version, stage)
         except Exception as e:
-            logger.error(f"Error promoting model: {e}")
+            logger.error("Error promoting model: %s", e, exc_info=True)
             raise
 
     def archive_model(self, model_name: str, version: int):
@@ -304,7 +304,7 @@ class MLflowManager:
             )
             logger.info("Archived model %s v%s", model_name, version)
         except Exception as e:
-            logger.error(f"Error archiving model: {e}")
+            logger.error("Error archiving model: %s", e, exc_info=True)
             raise
 
     def delete_model(self, model_name: str):
@@ -313,7 +313,7 @@ class MLflowManager:
             self.client.delete_registered_model(model_name)
             logger.info("Deleted model: %s", model_name)
         except Exception as e:
-            logger.error(f"Error deleting model: {e}")
+            logger.error("Error deleting model: %s", e, exc_info=True)
             raise
 
 
@@ -344,7 +344,7 @@ class ModelDeployer:
                 raise ValueError(f"Unsupported deployment type: {deployment_type}")
 
         except Exception as e:
-            logger.error(f"Error deploying model: {e}")
+            logger.error("Error deploying model: %s", e, exc_info=True)
             return False
 
     def _rolling_deployment(self,
@@ -379,7 +379,7 @@ class ModelDeployer:
             return True
 
         except Exception as e:
-            logger.error(f"Rolling deployment failed: {e}")
+            logger.error("Rolling deployment failed: %s", e, exc_info=True)
             # Rollback
             self._rollback_deployment(model_name)
             return False
@@ -419,7 +419,7 @@ class ModelDeployer:
             return True
 
         except Exception as e:
-            logger.error(f"Blue-green deployment failed: {e}")
+            logger.error("Blue-green deployment failed: %s", e, exc_info=True)
             return False
 
     def _create_deployment_package(self,
@@ -486,7 +486,7 @@ class ModelDeployer:
                 return False
 
         except Exception as e:
-            logger.error(f"Deployment test failed: {e}")
+            logger.error("Deployment test failed: %s", e, exc_info=True)
             return False
 
     def _get_current_environment(self, model_name: str) -> str:
@@ -557,7 +557,7 @@ class ExperimentManager:
             return experiment_id
 
         except Exception as e:
-            logger.error(f"Error creating experiment: {e}")
+            logger.error("Error creating experiment: %s", e, exc_info=True)
             raise
 
     def compare_runs(self,
@@ -594,7 +594,7 @@ class ExperimentManager:
             return pd.DataFrame(comparison_data)
 
         except Exception as e:
-            logger.error(f"Error comparing runs: {e}")
+            logger.error("Error comparing runs: %s", e, exc_info=True)
             return pd.DataFrame()
 
     def get_best_run(self,
@@ -616,7 +616,7 @@ class ExperimentManager:
             }
 
         except Exception as e:
-            logger.error(f"Error getting best run: {e}")
+            logger.error("Error getting best run: %s", e, exc_info=True)
             return {}
 
     def export_experiment(self,
@@ -635,5 +635,5 @@ class ExperimentManager:
                 return False
 
         except Exception as e:
-            logger.error(f"Error exporting experiment: {e}")
+            logger.error("Error exporting experiment: %s", e, exc_info=True)
             return False

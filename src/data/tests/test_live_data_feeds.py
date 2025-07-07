@@ -164,7 +164,7 @@ def test_data_feed(data_source: str, symbol: str, interval: str, duration: int =
             data_feed.stop()
     except Exception as e:
         print(f"\nError during test: {str(e)}")
-        _logger.error(f"Test error: {str(e)}")
+        _logger.error("Test error: %s", e, exc_info=True)
 
 
 def show_available_sources():

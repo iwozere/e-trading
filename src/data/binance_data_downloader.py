@@ -153,7 +153,7 @@ class BinanceDataDownloader(BaseDataDownloader):
 
             return df
         except Exception as e:
-            _logger.error(f"Error downloading Binance data for {symbol}: {e}", exc_info=True)
+            _logger.error("Error downloading Binance data for %s: %s", symbol, e, exc_info=True)
             raise
 
     def download_multiple_symbols(

@@ -237,7 +237,7 @@ try:
         priority="critical"
     )
 except NotificationError as e:
-    logger.error(f"Failed to send notification: {e}")
+    logger.error("Failed to send notification: %s", e, exc_info=True)
     # Fallback to email or other channels
 ```
 

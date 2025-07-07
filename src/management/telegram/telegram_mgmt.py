@@ -80,7 +80,7 @@ async def start_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(f"Started bot for {strategy_name} with config: {config.bot_id}")
     except Exception as e:
-        _logger.error(f"Failed to start bot: {e}")
+        _logger.error("Failed to start bot: %s", e, exc_info=True)
         await update.message.reply_text(f"Failed to start bot: {e}")
 
 
@@ -98,7 +98,7 @@ async def stop_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del running_bots[strategy_name]
         await update.message.reply_text(f"Stopped bot for {strategy_name}.")
     except Exception as e:
-        _logger.error(f"Failed to stop bot: {e}")
+        _logger.error("Failed to stop bot: %s", e, exc_info=True)
         await update.message.reply_text(f"Failed to stop bot: {e}")
 
 

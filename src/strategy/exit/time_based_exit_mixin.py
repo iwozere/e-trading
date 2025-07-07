@@ -100,7 +100,7 @@ class TimeBasedExitMixin(BaseExitMixin):
             return return_value
 
         except Exception as e:
-            logger.error(f"Error in should_exit: {e}", exc_info=e)
+            logger.error("Error in should_exit: %s", e, exc_info=True)
             return False
 
     def next(self):

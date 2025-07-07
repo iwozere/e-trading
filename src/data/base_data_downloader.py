@@ -87,7 +87,7 @@ class BaseDataDownloader(ABC):
                 )
                 results[symbol] = filepath
             except Exception as e:
-                _logger.error(f"Error processing {symbol}: {str(e)}", exc_info=True)
+                _logger.error("Error processing %s: %s", symbol, e, exc_info=True)
                 continue
         return results
 

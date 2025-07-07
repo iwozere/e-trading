@@ -66,7 +66,7 @@ class AroonIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error(f"Error initializing AroonIndicator: {e}. Falling back to bt.indicators.AroonIndicator", exc_info=e)
+            logger.error("Error initializing AroonIndicator: %s. Falling back to bt.indicators.AroonIndicator", e, exc_info=True)
             self._impl = bt.indicators.AroonIndicator(self.data, period=self.p.period)
             self._backend = "bt"
 

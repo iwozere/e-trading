@@ -96,7 +96,7 @@ class EmailNotifier:
                     mime_part.add_header("Content-Disposition", f"attachment; filename={filename}")
                     msg.attach(mime_part)
                 except Exception as e:
-                    self.logger.error(f"Failed to attach MIME part {filename}: {e}", exc_info=True)
+                    self.logger.error("Failed to attach MIME part %s: %s", filename, e, exc_info=True)
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.ehlo()

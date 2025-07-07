@@ -66,7 +66,7 @@ class AtrIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error(f"Error initializing AtrIndicator: {e}. Falling back to bt.indicators.ATR", exc_info=e)
+            logger.error("Error initializing AtrIndicator: %s. Falling back to bt.indicators.ATR", e, exc_info=True)
             self._impl = bt.indicators.ATR(self.data, period=self.p.period)
             self._backend = "bt"
 

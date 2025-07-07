@@ -65,7 +65,7 @@ class ObvIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error(f"Error initializing ObvIndicator: {e}.")
+            logger.error("Error initializing ObvIndicator: %s.", e, exc_info=True)
             raise
 
     def next(self):
