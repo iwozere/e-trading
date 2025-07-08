@@ -24,6 +24,7 @@ from collections import defaultdict
 
 from .async_notification_manager import AsyncNotificationManager
 from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 
 class AlertSeverity(Enum):
@@ -171,7 +172,6 @@ class SmartAlertSystem:
 
     def __init__(self, notification_manager: AsyncNotificationManager):
         self.notification_manager = notification_manager
-        self.logger = setup_logger(__name__)
 
         # Alert rules and instances
         self.alert_rules: Dict[str, AlertRule] = {}
@@ -247,18 +247,18 @@ class SmartAlertSystem:
     def add_alert_rule(self, rule: AlertRule):
         """Add a new alert rule"""
         self.alert_rules[rule.name] = rule
-        self.logger.info("Added alert rule: %s", rule.name)
+        _logger.info("Added alert rule: %s", rule.name)
 
     def remove_alert_rule(self, rule_name: str):
         """Remove an alert rule"""
         if rule_name in self.alert_rules:
             del self.alert_rules[rule_name]
-            self.logger.info("Removed alert rule: %s", rule_name)
+            _logger.info("Removed alert rule: %s", rule_name)
 
     def update_performance_metrics(self, metrics: Dict[str, Any]):
         """Update performance metrics for alert evaluation"""
         self.performance_metrics.update(metrics)
-        self.logger.debug("Updated performance metrics: %s", list(metrics.keys()))
+        _logger.debug("Updated performance metrics: %s", list(metrics.keys()))
 
     async def evaluate_alerts(self):
         """Evaluate all alert rules against current metrics"""
@@ -299,7 +299,7 @@ class SmartAlertSystem:
             return eval(condition, {"__builtins__": {}}, context)
 
         except Exception as e:
-            self.logger.error("Error evaluating condition '%s': %s", condition, e, exc_info=True)
+            _logger.error("Error evaluating condition '%s': %s", condition, e, exc_info=True)
             return False
 
     async def _trigger_alert(self, rule: AlertRule):
@@ -328,7 +328,7 @@ class SmartAlertSystem:
         # Send notifications
         await self._send_alert_notifications(alert, rule)
 
-        self.logger.info("Triggered alert: %s - %s", rule.name, message)
+        _logger.info("Triggered alert: %s - %s", rule.name, message)
 
     def _format_alert_message(self, rule: AlertRule) -> str:
         """Format alert message using template"""
@@ -338,7 +338,7 @@ class SmartAlertSystem:
         try:
             return rule.template.format(**self.performance_metrics)
         except Exception as e:
-            self.logger.error("Error formatting alert template: %s", e, exc_info=True)
+            _logger.error("Error formatting alert template: %s", e, exc_info=True)
             return f"Alert: {rule.name}"
 
     async def _send_alert_notifications(self, alert: Alert, rule: AlertRule):
@@ -368,13 +368,13 @@ class SmartAlertSystem:
                     )
 
             except Exception as e:
-                self.logger.error("Error sending alert to %s: %s", channel.value, e, exc_info=True)
+                _logger.error("Error sending alert to %s: %s", channel.value, e, exc_info=True)
 
     def acknowledge_alert(self, rule_name: str):
         """Acknowledge an alert"""
         if rule_name in self.active_alerts:
             self.active_alerts[rule_name].acknowledged = True
-            self.logger.info("Acknowledged alert: %s", rule_name)
+            _logger.info("Acknowledged alert: %s", rule_name)
 
     def get_active_alerts(self) -> List[Alert]:
         """Get all active alerts"""
@@ -421,7 +421,7 @@ class SmartAlertSystem:
             alert for alert in self.alert_history
             if alert.timestamp >= cutoff_time
         ]
-        self.logger.info("Cleared alerts older than %d days", days)
+        _logger.info("Cleared alerts older than %d days", days)
 
     def export_configuration(self) -> Dict[str, Any]:
         """Export alert system configuration"""
@@ -478,7 +478,7 @@ class SmartAlertSystem:
             )
             self.escalation_rules[name] = rule
 
-        self.logger.info("Imported alert system configuration")
+        _logger.info("Imported alert system configuration")
 '''
 
 # Write the content to the file
