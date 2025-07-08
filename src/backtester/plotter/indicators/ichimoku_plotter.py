@@ -1,5 +1,7 @@
 from src.backtester.plotter.indicators.base_indicator_plotter import BaseIndicatorPlotter
 
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class IchimokuPlotter(BaseIndicatorPlotter):
     def plot(self, ax):
@@ -47,7 +49,7 @@ class IchimokuPlotter(BaseIndicatorPlotter):
 
             self._apply_style(ax)
         except Exception as e:
-            self.logger.error("Error plotting Ichimoku Cloud: %s", e)
+            _logger.error("Error plotting Ichimoku Cloud: %s", e)
 
     @property
     def subplot_type(self):

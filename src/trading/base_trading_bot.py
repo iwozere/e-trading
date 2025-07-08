@@ -25,11 +25,11 @@ from typing import Any, Dict, List, Optional
 
 
 from src.data.trade_repository import TradeRepository
-from src.risk.controller import RiskController
-from src.notification.logger import setup_logger
+from src.trading.risk.controller import RiskController
 from src.notification.async_notification_manager import initialize_notification_manager
 from config.donotshare.donotshare import (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER)
 
+from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
@@ -91,13 +91,11 @@ class BaseTradingBot:
                 )
             )
         except Exception as e:
-            self.log_message(f"Notification manager not initialized: {e}", level="error")
+            _logger.error("Notification manager not initialized: %s", e, exc_info=True)
 
         self.max_drawdown_pct = config.get("max_drawdown_pct", 20.0)
         self.max_exposure = config.get("max_exposure", 1.0)  # 1.0 = 100% of balance
-        self.position_sizing_pct = config.get(
-            "position_sizing_pct", 0.1
-        )  # 10% of balance per trade
+        self.position_sizing_pct = config.get("position_sizing_pct", 0.1)  # 10% of balance per trade
 
         # Initialize bot instance in database
         self._initialize_bot_instance()
@@ -150,7 +148,7 @@ class BaseTradingBot:
         Main bot loop. Handles signals, order management, error handling, and state persistence.
         """
         self.is_running = True
-        self.log_message(f"Starting bot for {self.trading_pair}")
+        _logger.info("Starting bot for %s", self.trading_pair)
 
         # Update bot status to running
         try:
@@ -181,7 +179,7 @@ class BaseTradingBot:
 
                 time.sleep(1)
             except Exception as e:
-                self.log_message(f"Error in bot loop: {str(e)}", level="error")
+                _logger.error("Error in bot loop: %s", e, exc_info=True)
                 self.notify_error(str(e))
                 time.sleep(5)
 
@@ -325,7 +323,7 @@ class BaseTradingBot:
                     )
 
         except Exception as e:
-            self.log_message(f"Error executing trade: {e}", level="error")
+            _logger.error("Error executing trade: %s", e, exc_info=True)
             self.notify_error(str(e))
 
     def log_order(self, order: Any) -> None:
@@ -352,7 +350,7 @@ class BaseTradingBot:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump([order], f, default=str, indent=2)
         except Exception as e:
-            self.log_message(f"Failed to log order: {e}", level="error")
+            _logger.error("Failed to log order: %s", e, exc_info=True)
 
     def log_trade(self, trade: Dict[str, Any]) -> None:
         """
@@ -378,7 +376,7 @@ class BaseTradingBot:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump([trade], f, default=str, indent=2)
         except Exception as e:
-            self.log_message(f"Failed to log trade: {e}", level="error")
+            _logger.error("Failed to log trade: %s", e, exc_info=True)
 
     def save_state(self) -> None:
         """
@@ -396,7 +394,7 @@ class BaseTradingBot:
             with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
         except Exception as e:
-            self.log_message(f"Failed to save bot state: {e}", level="error")
+            _logger.error("Failed to save bot state: %s", e, exc_info=True)
 
     def load_state(self) -> None:
         """
@@ -418,7 +416,7 @@ class BaseTradingBot:
                     )
                     self.total_pnl = state.get("total_pnl", 0.0)
             except Exception as e:
-                self.log_message(f"Failed to load legacy bot state: {e}", level="error")
+                _logger.error("Failed to load legacy bot state: %s", e, exc_info=True)
 
     def _load_open_positions_from_db(self) -> None:
         """
@@ -455,7 +453,7 @@ class BaseTradingBot:
             try:
                 asyncio.run(self.notification_manager.send_error_notification(error_msg))
             except Exception as e:
-                self.log_message(f"Failed to send error notification: {e}", level="error")
+                _logger.error("Failed to send error notification: %s", e, exc_info=True)
 
     def notify_trade_event(
         self,
@@ -490,7 +488,7 @@ class BaseTradingBot:
                     )
                 )
             except Exception as e:
-                self.log_message(f"Failed to send trade notification: {e}", level="error")
+                _logger.error("Failed to send trade notification: %s", e, exc_info=True)
         # TODO: If running in an async context, prefer 'await' over 'asyncio.run' for notification calls.
 
     def update_positions(self):
@@ -529,7 +527,7 @@ class BaseTradingBot:
         Generic stop logic: set is_running to False and close all open positions. Subclasses can override for custom behavior.
         """
         self.is_running = False
-        self.log_message(f"Stopping bot for {self.trading_pair}")
+        _logger.info("Stopping bot for %s", self.trading_pair)
 
         # Update bot status in database
         try:
@@ -555,12 +553,6 @@ class BaseTradingBot:
                 self.execute_trade(
                     "sell", current_price, self.active_positions[pair]["size"]
                 )
-
-    def log_message(self, message, level="info"):
-        if level == "error":
-            _logger.error(message)
-        else:
-            _logger.info(message)
 
     def log_bot_event(self, event: str):
         _logger.info("%s: %s", event, self.__class__.__name__)

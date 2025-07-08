@@ -4,8 +4,8 @@
         "x_rsi_period": {
             "type": "int",
             "low": 5,
-            "high": 90,
-            "default": 14
+            "high": 30,
+            "default": 20
         },
         "x_rsi_overbought": {
             "type": "float",
@@ -15,13 +15,13 @@
         },
         "x_bb_period": {
             "type": "int",
-            "low": 10,
-            "high": 100,
-            "default": 20
+            "low": 35,
+            "high": 52,
+            "default": 40
         },
         "x_bb_dev": {
             "type": "float",
-            "low": 1.0,
+            "low": 1.5,
             "high": 3.0,
             "default": 2.0
         },

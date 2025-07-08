@@ -17,6 +17,8 @@ Functions/Classes:
 import backtrader as bt
 import numpy as np
 
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 # Custom SuperTrend Indicator
 class SuperTrend(bt.Indicator):
@@ -58,7 +60,7 @@ class SuperTrend(bt.Indicator):
                     if i < len(self.atr.lines[0]):
                         self.atr.lines[0][i] = value
             except ImportError:
-                self.log("TA-Lib not available, falling back to Backtrader ATR")
+                _logger.error("TA-Lib not available, falling back to Backtrader ATR")
                 self.atr = bt.indicators.ATR(self.data, period=self.p.period)
         else:
             self.atr = bt.indicators.ATR(self.data, period=self.p.period)
@@ -116,4 +118,4 @@ class SuperTrend(bt.Indicator):
                 self.lines.direction[0] = -1
             else:
                 self.lines.super_trend[0] = self.lines.upper_band[0]
-                self.lines.direction[0] = 1 
+                self.lines.direction[0] = 1

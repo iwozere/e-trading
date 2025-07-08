@@ -11,7 +11,7 @@ class BollingerBandsPlotter(BaseIndicatorPlotter):
             if "bb" in self.indicators:
                 bb = self.indicators["bb"]
                 if not hasattr(bb, "lines"):
-                    self.logger.warning(
+                    _logger.warning(
                         "Bollinger Bands indicator has invalid data structure"
                     )
                     return
@@ -55,9 +55,7 @@ class BollingerBandsPlotter(BaseIndicatorPlotter):
             if "exit_bb" in self.indicators:
                 bb = self.indicators["exit_bb"]
                 if not hasattr(bb, "lines"):
-                    self.logger.warning(
-                        "Exit Bollinger Bands indicator has invalid data structure"
-                    )
+                    _logger.warning("Exit Bollinger Bands indicator has invalid data structure")
                     return
 
                 dates = [self.data.datetime.datetime(i) for i in range(len(self.data))]

@@ -11,8 +11,6 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from src.notification.logger import setup_logger
-from config.donotshare.donotshare import SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USER
 
 import smtplib
 from email.mime.text import MIMEText
@@ -20,6 +18,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 
+from config.donotshare.donotshare import SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USER
+from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 class EmailNotifier:
@@ -28,7 +28,6 @@ class EmailNotifier:
     EmailNotifier provides synchronous email sending for legacy code only.
     """
     def __init__(self):
-        self.logger = _logger
         self.smtp_server = SMTP_SERVER
         self.smtp_port = SMTP_PORT
         self.sender_email = SMTP_USER
@@ -96,17 +95,17 @@ class EmailNotifier:
                     mime_part.add_header("Content-Disposition", f"attachment; filename={filename}")
                     msg.attach(mime_part)
                 except Exception as e:
-                    self.logger.error("Failed to attach MIME part %s: %s", filename, e, exc_info=True)
+                    _logger.error("Failed to attach MIME part %s: %s", filename, e, exc_info=True)
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.ehlo()
                 server.starttls()
                 server.login(self.sender_email, self.sender_password)
                 server.send_message(msg)
-            self.logger.info("Email sent to %s with subject: %s", to_addr, subject)
+            _logger.info("Email sent to %s with subject: %s", to_addr, subject)
             return True
         except Exception as e:
-            self.logger.error("Failed to send email: %s", e, exc_info=True)
+            _logger.error("Failed to send email: %s", e, exc_info=True)
             return False
 
 def send_email_alert(receiver_email: str, subject: str, message: str):

@@ -15,7 +15,7 @@ class RSIPlotter(BaseIndicatorPlotter):
                 elif hasattr(rsi, "lines"):
                     rsi_data = rsi.lines[0].array
                 else:
-                    self.logger.warning("RSI indicator has invalid data structure")
+                    _logger.warning("RSI indicator has invalid data structure")
                     return
 
                 # Get dates from data feed, skipping buffer period
@@ -42,7 +42,7 @@ class RSIPlotter(BaseIndicatorPlotter):
                 elif hasattr(rsi, "lines"):
                     rsi_data = rsi.lines[0].array
                 else:
-                    self.logger.warning("Exit RSI indicator has invalid data structure")
+                    _logger.warning("Exit RSI indicator has invalid data structure")
                     return
 
                 # Get dates from data feed, skipping buffer period

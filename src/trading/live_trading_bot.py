@@ -247,7 +247,7 @@ class LiveTradingBot(BaseTradingBot):
             if self.telegram_notifier:
                 message = f"📊 New {symbol} bar: O={data['open']:.4f} H={data['high']:.4f} L={data['low']:.4f} C={data['close']:.4f}"
                 # Use BaseTradingBot's notification method
-                self.log_message(message)
+                _logger.debug(message)
         except Exception as e:
             _logger.error("Error notifying new bar: %s", e, exc_info=True)
 
