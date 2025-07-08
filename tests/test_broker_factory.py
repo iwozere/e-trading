@@ -1,9 +1,9 @@
 import pytest
-from src.broker.base_broker import MockBroker
-from src.broker.binance_broker import BinanceBroker
-from src.broker.binance_paper_broker import BinancePaperBroker
-from src.broker.broker_factory import get_broker
-from src.broker.ibkr_broker import IBKRBroker
+from src.trading.broker.base_broker import MockBroker
+from src.trading.broker.binance_broker import BinanceBroker
+from src.trading.broker.binance_paper_broker import BinancePaperBroker
+from src.trading.broker.broker_factory import get_broker
+from src.trading.broker.ibkr_broker import IBKRBroker
 from src.trading import create_trading_bot
 
 

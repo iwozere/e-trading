@@ -21,7 +21,7 @@ from typing import Dict, Any
 
 from src.trading.config_validator import validate_config_file, print_validation_results
 from src.data.data_feed_factory import DataFeedFactory
-from src.broker.broker_factory import get_broker
+from src.trading.broker.broker_factory import get_broker
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -303,4 +303,4 @@ def main():
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1) 
+    sys.exit(0 if success else 1)

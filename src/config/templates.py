@@ -7,7 +7,7 @@ Makes it easy to create new configurations with sensible defaults.
 """
 
 from typing import Dict, Any, List, Optional
-from .schemas import Environment, BrokerType, DataSourceType, StrategyType, NotificationType
+from src.model.schemas import Environment, BrokerType, DataSourceType, StrategyType, NotificationType
 
 
 class ConfigTemplates:
@@ -435,4 +435,4 @@ class ConfigTemplates:
                 "rate_limit": True,
                 "max_requests_per_minute": 100
             }
-        } 
+        }

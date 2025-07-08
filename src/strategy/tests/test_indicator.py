@@ -42,7 +42,7 @@ def make_synthetic_df(length=100):
 class IndicatorTestBase(unittest.TestCase):
     def setUp(self):
         self.df = make_synthetic_df()
-        self.bt_data = bt.feeds.PandasData(dataname=self.df)
+        self.bt_data = bt.feeds.PandasData(self.df)
 
 class TestRSIIndicator(IndicatorTestBase):
     def test_rsi_all_types(self):

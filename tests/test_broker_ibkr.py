@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from src.broker.ibkr_broker import IBKRBroker
+from src.trading.broker.ibkr_broker import IBKRBroker
 
 
 @pytest.fixture

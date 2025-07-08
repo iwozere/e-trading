@@ -87,7 +87,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
             raise ValueError("Failed to load historical data for %s", symbol)
 
         # Initialize PandasData with historical data
-        super().__init__(dataname=historical_data, **kwargs)
+        super().__init__(historical_data, **kwargs)
 
         # Start real-time updates
         self._start_realtime_updates()

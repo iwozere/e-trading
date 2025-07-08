@@ -180,7 +180,7 @@ class TestYahooLiveFeed(TestLiveFeeds):
         mock_download.return_value = mock_data
 
         feed = YahooLiveDataFeed(
-            symbol=self.test_symbol,
+            symbol="BTC-USD",
             interval=self.interval,
             lookback_bars=self.lookback_bars
         )
@@ -213,7 +213,7 @@ class TestYahooLiveFeed(TestLiveFeeds):
         mock_ticker.return_value = mock_ticker_instance
 
         feed = YahooLiveDataFeed(
-            symbol=self.test_symbol,
+            symbol="BTC-USD",
             interval=self.interval,
             polling_interval=1  # Short interval for testing
         )
@@ -235,13 +235,13 @@ class TestYahooLiveFeed(TestLiveFeeds):
         mock_download.return_value = mock_data
 
         feed = YahooLiveDataFeed(
-            symbol=self.test_symbol,
+            symbol="BTC-USD",
             interval=self.interval
         )
 
         status = feed.get_status()
         self.assert_valid_status(status)
-        self.assertEqual(status['symbol'], self.test_symbol)
+        self.assertEqual(status['symbol'], "BTC-USD")
         self.assertEqual(status['interval'], self.interval)
         self.assertEqual(status['data_source'], "Yahoo Finance")
 
@@ -535,13 +535,13 @@ class TestBaseLiveDataFeed(unittest.TestCase):
             }, index=pd.date_range('2023-01-01', periods=1, freq='D'))
 
             feed = YahooLiveDataFeed(
-                symbol="AAPL",
+                symbol="BTC-USD",
                 interval="1d",
                 lookback_bars=1
             )
 
             # Test common properties
-            self.assertEqual(feed.symbol, "AAPL")
+            self.assertEqual(feed.symbol, "BTC-USD")
             self.assertEqual(feed.interval, "1d")
             self.assertEqual(feed.lookback_bars, 1)
             self.assertFalse(feed.is_connected)

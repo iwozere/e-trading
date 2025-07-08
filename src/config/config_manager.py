@@ -21,7 +21,7 @@ from watchdog.events import FileSystemEventHandler
 from src.notification.logger import setup_logger
 
 
-from .schemas import (
+from src.model.schemas import (
     ConfigSchema,
     TradingConfig,
     OptimizerConfig,
