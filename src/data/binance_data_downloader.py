@@ -19,7 +19,7 @@ Classes:
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import pandas as pd
 from binance.client import Client
@@ -89,14 +89,31 @@ class BinanceDataDownloader(BaseDataDownloader):
         super().__init__(data_dir=data_dir, interval=interval)
         self.client = Client(api_key, api_secret)
 
-    def download_historical_data(
-        self,
-        symbol: str,
-        interval: str,
-        start_date: datetime,
-        end_date: datetime,
-        save_to_csv: bool = True,
-    ) -> pd.DataFrame:
+    def download_multiple_symbols(
+        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
+    ):
+        """Download historical data for multiple symbols."""
+
+        def download_func(symbol, interval, start_date, end_date):
+            return self.download_historical_data(
+                symbol, interval, start_date, end_date, save_to_csv=False
+            )
+
+        return super().download_multiple_symbols(
+            symbols, download_func, interval, start_date, end_date
+        )
+
+    def get_periods(self) -> list:
+        return ['1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y']
+
+    def get_intervals(self) -> list:
+        return ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
+
+    def is_valid_period_interval(self, period, interval) -> bool:
+        return interval in self.get_intervals() and period in self.get_periods()
+
+    def get_ohlcv(self, symbol, interval, start_date: datetime, end_date: datetime):
+        # Wrapper for unified interface
         """
         Download historical klines/candlestick data from Binance.
 
@@ -146,51 +163,10 @@ class BinanceDataDownloader(BaseDataDownloader):
             for col in ["open", "high", "low", "close", "volume"]:
                 df[col] = df[col].astype(float)
 
-            # Save to CSV if requested
-            if save_to_csv:
-                self.save_data(df, symbol, start_date, end_date)
-
             return df
         except Exception as e:
             _logger.error("Error downloading Binance data for %s: %s", symbol, e, exc_info=True)
             raise
-
-    def download_multiple_symbols(
-        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ):
-        """Download historical data for multiple symbols."""
-
-        def download_func(symbol, interval, start_date, end_date):
-            return self.download_historical_data(
-                symbol, interval, start_date, end_date, save_to_csv=False
-            )
-
-        return super().download_multiple_symbols(
-            symbols, download_func, interval, start_date, end_date
-        )
-
-    def save_data(
-        self,
-        df: pd.DataFrame,
-        symbol: str,
-        start_date: datetime = None,
-        end_date: datetime = None,
-    ) -> str:
-        return super().save_data(df, symbol, start_date, end_date)
-
-    def get_periods(self) -> list:
-        return ['1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y']
-
-    def get_intervals(self) -> list:
-        return ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
-
-    def is_valid_period_interval(self, period, interval) -> bool:
-        return interval in self.get_intervals() and period in self.get_periods()
-
-    def get_ohlcv(self, symbol, interval, start_date: datetime, end_date: datetime, **kwargs):
-        # Wrapper for unified interface
-        save_to_csv = kwargs.get('save_to_csv', False)
-        return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=save_to_csv)
 
     def get_fundamentals(self, symbol: str) -> Fundamentals:
         """

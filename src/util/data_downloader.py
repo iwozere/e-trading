@@ -1,5 +1,6 @@
 import os
 import sys
+import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from src.data.binance_data_downloader import BinanceDataDownloader
 
@@ -32,16 +33,19 @@ def download_all_scenarios():
                 filename = f"{symbol.upper()}_{interval}_{period['start_date'].replace("-", "")}_{period['end_date'].replace("-", "")}.csv"
                 filepath = os.path.join('dataset', filename)
 
+                # Convert date strings to datetime.datetime objects
+                start_dt = datetime.datetime.strptime(period['start_date'], "%Y%m%d")
+                end_dt = datetime.datetime.strptime(period['end_date'], "%Y%m%d")
+
                 if not os.path.exists(filepath):
                     print(f"\nDownloading {completed}/{total_combinations}: {filename}")
                     try:
-                        downloader.download_historical_data(
+                        df = downloader.get_ohlcv(
                             symbol=symbol,
                             interval=interval,
-                            start_date=period['start_date'],
-                            end_date=period['end_date'],
-                            save_to_csv=filepath
-                        )
+                            start_date=start_dt,
+                            end_date=end_dt)
+                        downloader.save_data(df, symbol, interval, start_dt, end_dt, "data")
                         print(f"Successfully downloaded {filename}")
                     except Exception as e:
                         print(f"Error downloading {filename}: {str(e)}")

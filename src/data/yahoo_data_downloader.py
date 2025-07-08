@@ -134,6 +134,7 @@ class YahooDataDownloader(BaseDataDownloader):
         self,
         df: pd.DataFrame,
         symbol: str,
+        interval: str,
         start_date: datetime = None,
         end_date: datetime = None,
     ) -> str:
@@ -143,6 +144,7 @@ class YahooDataDownloader(BaseDataDownloader):
         Args:
             df: DataFrame containing historical data
             symbol: Stock symbol
+            interval: Data interval
             start_date: Start date as datetime.datetime
             end_date: End date as datetime.datetime
 
@@ -150,7 +152,7 @@ class YahooDataDownloader(BaseDataDownloader):
             str: Path to the saved file
         """
         try:
-            return super().save_data(df, symbol, start_date, end_date)
+            return super().save_data(df, symbol, interval, start_date, end_date)
 
         except Exception as e:
             _logger.error("Error saving data for %s: %s", symbol, e, exc_info=True)
@@ -199,7 +201,7 @@ class YahooDataDownloader(BaseDataDownloader):
                     datetime.fromtimestamp(0),
                     datetime.now(),
                 )
-                return self.save_data(df, symbol)
+                return self.save_data(df, symbol, interval)
 
             # Load existing data
             latest_file = max(existing_files)
@@ -224,7 +226,7 @@ class YahooDataDownloader(BaseDataDownloader):
             combined_df = combined_df.sort_values("timestamp")
 
             # Save updated data
-            return self.save_data(combined_df, symbol)
+            return self.save_data(combined_df, symbol, interval)
 
         except Exception as e:
             _logger.error("Error updating data for %s: %s", symbol, e, exc_info=True)

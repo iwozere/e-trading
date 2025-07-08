@@ -177,15 +177,16 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
         self,
         df: pd.DataFrame,
         symbol: str,
-        start_date: str = None,
-        end_date: str = None,
+        interval: str,
+        start_date: datetime,
+        end_date: datetime,
     ) -> str:
         try:
             if start_date is None:
                 start_date = df["timestamp"].min().strftime("%Y-%m-%d")
             if end_date is None:
                 end_date = df["timestamp"].max().strftime("%Y-%m-%d")
-            return super().save_data(df, symbol, start_date, end_date)
+            return super().save_data(df, symbol, interval, start_date, end_date)
         except Exception as e:
             _logger.error("Error saving data for %s: %s", symbol, e, exc_info=True)
             raise
@@ -211,7 +212,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                     datetime.fromtimestamp(0),
                     datetime.now(),
                 )
-                return self.save_data(df, symbol)
+                return self.save_data(df, symbol, interval, datetime.fromtimestamp(0), datetime.now())
             latest_file = max(existing_files)
             filepath = os.path.join(self.data_dir, latest_file)
             existing_df = self.load_data(filepath)
@@ -225,7 +226,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             combined_df = pd.concat([existing_df, new_df])
             combined_df = combined_df.drop_duplicates(subset=["timestamp"])
             combined_df = combined_df.sort_values("timestamp")
-            return self.save_data(combined_df, symbol)
+            return self.save_data(combined_df, symbol, interval, datetime.fromtimestamp(int(new_start)), datetime.fromtimestamp(int(new_end)))
         except Exception as e:
             _logger.error("Error updating data for %s: %s", symbol, e, exc_info=True)
             raise

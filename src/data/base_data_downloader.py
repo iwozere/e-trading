@@ -41,12 +41,15 @@ class BaseDataDownloader(ABC):
         self,
         df: pd.DataFrame,
         symbol: str,
+        interval: str,
         start_date: datetime = None,
         end_date: datetime = None,
+        directory: str = None,
     ) -> str:
         """
         Save downloaded data to a CSV file.
         start_date and end_date should be datetime.datetime objects (or None).
+        directory: Optional directory to save the file. If not provided, uses self.data_dir.
         """
         if start_date is None:
             start_date = df["timestamp"].min()
@@ -55,11 +58,14 @@ class BaseDataDownloader(ABC):
         # Convert to string for filename
         start_date_str = start_date.strftime("%Y-%m-%d") if isinstance(start_date, datetime) else str(start_date)
         end_date_str = end_date.strftime("%Y-%m-%d") if isinstance(end_date, datetime) else str(end_date)
-        filename = f"{symbol}_{self.interval}_{start_date_str.replace('-', '')}"
+        filename = f"{symbol}_{interval}_{start_date_str.replace('-', '')}"
         if end_date_str:
             filename += f"_{end_date_str.replace('-', '')}"
         filename += ".csv"
-        filepath = os.path.join(self.data_dir, filename)
+        # Use provided directory or default
+        target_dir = directory if directory else self.data_dir
+        os.makedirs(target_dir, exist_ok=True)
+        filepath = os.path.join(target_dir, filename)
         df.to_csv(filepath, index=False)
         return filepath
 
@@ -87,7 +93,7 @@ class BaseDataDownloader(ABC):
                 start_date = kwargs.get("start_date") or (args[0] if args else None)
                 end_date = kwargs.get("end_date") or (args[1] if len(args) > 1 else None)
                 filepath = self.save_data(
-                    df, symbol, start_date, end_date
+                    df, symbol, self.interval, start_date, end_date
                 )
                 results[symbol] = filepath
             except Exception as e:
