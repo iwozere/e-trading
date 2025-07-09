@@ -44,6 +44,29 @@ Hybrid deep learning model (Helformer) with Optuna hyperparameter optimization:
 - Optuna-based hyperparameter search
 - Inference and trading signal generation
 
+### lstm_optuna_from_csv.py
+LSTM model training with Optuna hyperparameter optimization for time series CSV data:
+- Loads and preprocesses data from a specified CSV file (expects columns like open, high, low, close, volume)
+- Splits data into train/validation/test sets
+- Uses Optuna to tune LSTM hyperparameters
+- Retrains best model and evaluates on test set
+- Saves trained model to `src/strategy/ml/model/` as `<SYMBOL>_<PERIOD>.pt` (parsed from CSV filename)
+
+#### Usage
+
+**Train on a single CSV file:**
+```sh
+python lstm_optuna_from_csv.py path/to/ETHUSDT_15m_20220101_20250707.csv
+```
+
+**Train on all CSV files in the data directory:**
+```sh
+python lstm_optuna_from_csv.py
+```
+
+- All `.csv` files in the `data/` directory will be processed.
+- Each trained model will be saved with a name like `ETHUSDT_15m.pt` in the `model/` subdirectory.
+
 ---
 
 For more details, see the docstrings and code in each file. 
