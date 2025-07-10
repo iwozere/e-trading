@@ -62,4 +62,5 @@ logs/
 
 !config/*/*.json
 !config/*/*/*.json
+*.pt
 

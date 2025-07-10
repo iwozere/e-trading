@@ -130,6 +130,8 @@ def calculate_technicals_from_df(df, indicators: List[str] = None, indicator_par
     volume = volume[-min_length:]
     open_price = open_price[-min_length:]
 
+    df['log_return'] = np.log(df['close']).diff()
+
     all_indicators = [
         'rsi', 'bb_upper', 'bb_middle', 'bb_lower', 'macd', 'macd_signal', 'macd_hist',
         'stoch_k', 'stoch_d', 'adx', 'plus_di', 'minus_di', 'obv', 'adr', 'sma_50', 'sma_200'

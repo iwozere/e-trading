@@ -18,7 +18,7 @@ import random # ## IMPROVEMENT ##: For setting seeds
 ## IMPROVEMENT ##: Centralized configuration for clarity and easy modification
 class Config:
     FEATURE_COLUMNS = ["open", "high", "low", "close", "volume"]
-    TARGET_COLUMN = "close"
+    TARGET_COLUMN = "log_return"
     SEQ_LEN = 30  # Lookback window
     TEST_SIZE = 0.2
     VAL_SIZE = 0.25 # Validation size from the training set
