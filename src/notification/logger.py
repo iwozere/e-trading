@@ -9,6 +9,7 @@ import os
 import sys
 import traceback
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -16,8 +17,8 @@ import logging.config
 from datetime import datetime as dt
 
 # Ensure log directory exists
-log_dir = os.path.join("logs", "log")
-os.makedirs(log_dir, exist_ok=True)
+log_dir = Path("logs") / "log"
+log_dir.mkdir(parents=True, exist_ok=True)
 
 # Constants for log file configuration
 MAX_BYTES = 500 * 1024 * 1024  # 500MB
@@ -148,9 +149,9 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG) ->
     # Only add custom handlers if logger has no handlers and log_file is specified
     if not logger.hasHandlers() and log_file:
         # Ensure the log directory exists
-        log_dir = os.path.dirname(os.path.abspath(log_file))
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir, exist_ok=True)
+        log_dir = Path(log_file).resolve().parent
+        if log_dir and not log_dir.exists():
+            log_dir.mkdir(parents=True, exist_ok=True)
 
         # Create file handler with UTF-8 encoding
         file_handler = RotatingFileHandler(

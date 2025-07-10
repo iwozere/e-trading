@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from src.notification.logger import setup_logger
 from src.model.telegram_bot import Fundamentals
 from datetime import datetime
+from pathlib import Path
 
 """
 Abstract base class for data downloaders, defining the interface for downloading historical market data from various sources.
@@ -31,11 +32,9 @@ class BaseDataDownloader(ABC):
     """
 
     def __init__(self, data_dir: Optional[str] = None, interval: Optional[str] = None):
-        self.data_dir = data_dir or os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "dataset"
-        )
+        self.data_dir = Path(data_dir) if data_dir else Path(__file__).resolve().parents[2] / "dataset"
         self.interval = interval or "1d"
-        os.makedirs(self.data_dir, exist_ok=True)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
 
     def save_data(
         self,
@@ -63,11 +62,11 @@ class BaseDataDownloader(ABC):
             filename += f"_{end_date_str.replace('-', '')}"
         filename += ".csv"
         # Use provided directory or default
-        target_dir = directory if directory else self.data_dir
-        os.makedirs(target_dir, exist_ok=True)
-        filepath = os.path.join(target_dir, filename)
+        target_dir = Path(directory) if directory else self.data_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        filepath = target_dir / filename
         df.to_csv(filepath, index=False)
-        return filepath
+        return str(filepath)
 
     def load_data(self, filepath: str) -> pd.DataFrame:
         """

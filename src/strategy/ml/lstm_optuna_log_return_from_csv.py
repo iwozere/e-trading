@@ -17,7 +17,7 @@ import random # ## IMPROVEMENT ##: For setting seeds
 # --- Configuration ---
 ## IMPROVEMENT ##: Centralized configuration for clarity and easy modification
 class Config:
-    FEATURE_COLUMNS = ["open", "high", "low", "close", "volume"]
+    FEATURE_COLUMNS = ["open", "high", "low", "close", "volume", "log_return"]
     TARGET_COLUMN = "log_return"
     SEQ_LEN = 30  # Lookback window
     TEST_SIZE = 0.2
@@ -269,12 +269,12 @@ def run_experiment(csv_file: Path):
     _logger.info(f"Final Test RMSE: {np.sqrt(final_mse):.6f}")
 
     # --- Naive Reference Model ---
-    close_idx = Config.FEATURE_COLUMNS.index('close')
+    close_idx = Config.FEATURE_COLUMNS.index('log_return')
     naive_preds = X_test[:, -1, close_idx]
     naive_targets = y_test.flatten()
     naive_mse = np.mean((naive_preds - naive_targets)**2)
-    _logger.info(f"Naive (previous close) Test MSE: {naive_mse:.6f}")
-    _logger.info(f"Naive (previous close) Test RMSE: {np.sqrt(naive_mse):.6f}")
+    _logger.info(f"Naive (previous log_return) Test MSE: {naive_mse:.6f}")
+    _logger.info(f"Naive (previous log_return) Test RMSE: {np.sqrt(naive_mse):.6f}")
 
     # --- Save Model and Results ---
     symbol, period = csv_file.stem.split('_')[:2]

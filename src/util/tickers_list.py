@@ -5,6 +5,7 @@ from typing import List
 import pandas as pd
 import requests
 import yfinance as yf
+from pathlib import Path
 
 
 def get_circulating_supply(ticker):
@@ -62,12 +63,11 @@ def _load_tickers_from_csv(filename: str) -> List[str]:
     """
     try:
         # Get the path to the data/tickers directory relative to this file
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up: screener -> src -> project root
-        project_root = os.path.dirname(os.path.dirname(current_dir))
-        csv_path = os.path.join(project_root, 'src', 'data', 'tickers', filename)
+        current_dir = Path(__file__).resolve().parent
+        project_root = current_dir.parents[1]
+        csv_path = project_root / 'src' / 'data' / 'tickers' / filename
 
-        if not os.path.exists(csv_path):
+        if not csv_path.exists():
             print(f"Warning: CSV file not found: {csv_path}")
             return []
 
