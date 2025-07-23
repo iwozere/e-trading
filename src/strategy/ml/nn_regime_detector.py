@@ -10,6 +10,14 @@ Features:
 - fit, predict, save, and load methods
 - GPU support if available
 
+Uses LSTM-based deep learning architecture
+Supervised learning approach - requires pre-labeled regime data for training
+Works with multiple engineered features (returns, volatility, RSI, MACD, etc.)
+Learns complex non-linear patterns through neural networks
+More complex with multiple hyperparameters (hidden size, layers, epochs, etc.)
+
+
+
 Example usage:
 --------------
 from src.ml.nn_regime_detector import NNRegimeDetector
@@ -112,4 +120,4 @@ class NNRegimeDetector:
 
     def load(self, path):
         self.model.load_state_dict(torch.load(path, map_location=self.device))
-        self.model.to(self.device) 
+        self.model.to(self.device)

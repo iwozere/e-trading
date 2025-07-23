@@ -10,6 +10,12 @@ Features:
 - Predict regimes for new data
 - Plot detected regimes
 
+Uses Hidden Markov Models with Gaussian emissions
+Unsupervised learning approach - discovers regimes automatically from data patterns
+Works primarily with price series (computes log returns internally)
+Probabilistic model that assumes regimes follow a Markov chain
+Simpler architecture with fewer hyperparameters
+
 Dependencies:
 - numpy
 - pandas
@@ -117,4 +123,4 @@ class HMMRegimeDetector:
 #     detector = HMMRegimeDetector(n_regimes=2)
 #     detector.fit(df['close'])
 #     df['regime'] = detector.predict(df['close'])
-#     detector.plot_regimes(df['datetime'], df['close'], df['regime']) 
+#     detector.plot_regimes(df['datetime'], df['close'], df['regime'])

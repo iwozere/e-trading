@@ -265,7 +265,7 @@ def run_experiment(csv_file: Path):
     # Inverse transform predictions to original scale for MSE calculation
     test_preds = target_scaler.inverse_transform(test_preds_scaled.cpu().numpy())
     final_mse = np.mean((test_preds - y_test)**2)
-    _logger.info(f"\nFinal Test MSE: {final_mse:.6f}")
+    _logger.info(f"Final Test MSE: {final_mse:.6f}")
     _logger.info(f"Final Test RMSE: {np.sqrt(final_mse):.6f}")
 
     # --- Naive Reference Model ---
@@ -281,7 +281,7 @@ def run_experiment(csv_file: Path):
 
     model_dir = Path(__file__).parent / 'model'
     model_dir.mkdir(exist_ok=True)
-    model_path = model_dir / f"{symbol}_{period}.pt"
+    model_path = model_dir / f"LSTM_{symbol}_{period}.pt"
     torch.save(final_model.state_dict(), model_path)
     _logger.info(f"Model saved to {model_path}")
 
