@@ -172,7 +172,9 @@ def process_file(file_path: Path, output_dir: Path):
     """Runs the full HMM pipeline for a single data file."""
     try:
         filename_stem = file_path.stem
-        symbol, timeframe = filename_stem.split('_')
+        tokens = filename_stem.split('_')
+        symbol = tokens[0]
+        timeframe = tokens[1]
     except ValueError:
         logging.warning(f"Skipping {file_path.name}: Filename must be 'symbol_timeframe.csv'.")
         return
