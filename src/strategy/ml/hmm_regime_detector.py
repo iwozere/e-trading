@@ -145,7 +145,7 @@ def map_regimes_to_market_conditions(df: pd.DataFrame) -> dict:
 
 def plot_colored_prices_and_states(df: pd.DataFrame, regime_map: dict, title: str, save_path: Path):
     """Plots and saves the closing price colored by market regime."""
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 9), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(60, 9), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
 
     ax1.set_title(title)
     for regime, (label, color) in regime_map.items():
