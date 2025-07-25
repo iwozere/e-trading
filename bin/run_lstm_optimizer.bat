@@ -34,7 +34,7 @@ if errorlevel 1 (
 
 REM Run the optimizer script
 echo Running optimizer...
-python src\strategy\ml\lstm_optuna_log_return_from_csv.py
+python src\ml\lstm\lstm_optuna_log_return_from_csv.py
 
 REM Check if script ran successfully
 if errorlevel 1 (
