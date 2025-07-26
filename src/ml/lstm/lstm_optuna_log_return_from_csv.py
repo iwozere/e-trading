@@ -1,3 +1,80 @@
+"""
+End-to-End LSTM Time Series Forecasting Pipeline with Hyperparameter Optimization.
+
+This script provides a complete, automated pipeline for training, evaluating, and
+saving Long Short-Term Memory (LSTM) models for financial time series prediction.
+It leverages the Optuna library to perform extensive hyperparameter tuning,
+optimizing not only the model's architecture but also the feature engineering
+process itself by selecting the best parameters for technical indicators.
+
+Workflow:
+1.  **Data Ingestion**: The script can process a single CSV file or automatically
+    discover and iterate through all CSV files in the project's `data/` directory.
+2.  **Hyperparameter and Feature Optimization**: For each dataset, an Optuna
+    study is launched. A single trial consists of:
+    a.  Suggesting hyperparameters for technical indicators (e.g., RSI period,
+        MACD settings).
+    b.  Suggesting hyperparameters for the LSTM model (e.g., hidden size,
+        number of layers, dropout, learning rate, batch size).
+    c.  Dynamically generating features based on the trial's indicator parameters.
+    d.  Creating sequence data (lookback windows) for the LSTM.
+    e.  Splitting the data into training and validation sets.
+    f.  Scaling features (StandardScaler) and the target (MinMaxScaler).
+    g.  Training the LSTM model on the trial data and evaluating it on the
+        validation set.
+    h.  Reporting the validation loss to Optuna, which uses a MedianPruner
+        to terminate unpromising trials early.
+3.  **Final Model Training**: After the study concludes, the best hyperparameters
+    are used to train a new, final model on the complete training dataset
+    (training + validation sets).
+4.  **Evaluation**: The final model is evaluated on a hold-out test set. Its
+    performance (MSE and RMSE) is calculated and compared against a naive
+    baseline model (predicting the previous time step's log return).
+5.  **Artifact Storage**: The script saves the results of the experiment:
+    - The trained PyTorch model state dictionary (`.pt`).
+    - A detailed JSON file containing the best hyperparameters, final
+      evaluation metrics, and other metadata.
+
+Key Features:
+-   **Dual Optimization**: Simultaneously tunes model architecture and feature
+    engineering parameters for a more holistic optimization.
+-   **Automated Pipeline**: Capable of running unattended on an entire directory
+    of datasets.
+-   **Reproducibility**: Uses a fixed random seed for consistent results in
+    data splitting and model weight initialization.
+-   **Efficient Tuning**: Employs Optuna's pruners to save time by stopping
+    poor-performing trials early.
+-   **GPU Acceleration**: Automatically utilizes a CUDA-enabled GPU if available.
+-   **Robust Path Management**: Uses `pathlib` for cross-platform compatibility.
+
+Input Requirements:
+-   **Directory Structure**: Expects a `data/` directory at the project root.
+-   **File Format**: Input files must be in CSV format.
+-   **Filename Convention**: Files should be named `symbol_timeframe.csv`
+    (e.g., 'btcusdt_15m.csv') for proper parsing.
+-   **Required CSV Columns**: Each CSV must contain `timestamp`, `open`, `high`,
+    `low`, `close`, `volume`, and `log_return`.
+
+Output Artifacts:
+-   All outputs are saved to the `results/` directory at the project root.
+-   **Model File**: `LSTM_{symbol}_{timeframe}.pt` - The PyTorch state_dict of
+    the best-trained model.
+-   **Results File**: `LSTM_OPTUNA_{symbol}_{period}_{timestamp}.json` - A JSON
+    file containing:
+    - Best hyperparameters found by Optuna.
+    - Final evaluation metrics (MSE, RMSE) on the test set.
+    - Performance metrics of the naive baseline model for comparison.
+    - Metadata about the experiment (symbol, timestamp, etc.).
+
+Usage (from the command line):
+-   **Process all CSVs in the `data` directory:**
+    `python your_script_name.py --all`
+-   **Process a single, specific CSV file:**
+    `python your_script_name.py path/to/your/file.csv`
+-   **Default behavior (no arguments):**
+    Falls back to processing all CSVs in the `data` directory.
+"""
+
 import numpy as np
 import pandas as pd
 import torch
