@@ -14,6 +14,11 @@ Core Libraries:
 - TA-Lib: For calculating standard technical indicators like RSI, MACD, etc.
 """
 
+import sys
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
+sys.path.append(str(PROJECT_ROOT))
+
 import numpy as np
 import pandas as pd
 import talib

@@ -24,6 +24,11 @@ Usage:
     python your_script_name.py --csv path/to/your_regime_data.csv
 """
 
+import sys
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
+sys.path.append(str(PROJECT_ROOT))
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import os

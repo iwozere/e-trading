@@ -38,6 +38,11 @@ Usage:
   python your_script_name.py --csv data/ethusdt.csv --timeframe ethusdt_1h_pome --backend pomegranate --features rsi macd
 """
 
+import sys
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
+sys.path.append(str(PROJECT_ROOT))
+
 import pandas as pd
 import numpy as np
 import os
@@ -50,7 +55,7 @@ from hmmlearn.hmm import GaussianHMM
 from sklearn.preprocessing import StandardScaler
 
 # Assumes feature_engineering.py is in the same directory or accessible via PYTHONPATH
-from feature_engineering import generate_features
+from x_01_feature_engineering import generate_features
 
 # For optional import of pomegranate
 HiddenMarkovModel = None
@@ -94,7 +99,7 @@ def objective(trial: optuna.trial.Trial, df: pd.DataFrame, features: list[str]) 
     """
     # Suggest HMM and feature engineering parameters
     params = {
-        "n_components": trial.suggest_int("n_components", 2, 4),
+        "n_components": 3,
         "vol_window": trial.suggest_int("vol_window", 5, 50)
     }
     if "rsi" in features:
@@ -220,12 +225,11 @@ def main():
 
     # Create directories and save artifacts
     os.makedirs("results", exist_ok=True)
-    os.makedirs("models", exist_ok=True)
 
     base = args.timeframe
-    csv_out_path = f"results/{base}.csv"
-    model_out_path = f"models/{base}.pkl"
-    json_out_path = f"results/{base}.json"
+    csv_out_path = f"results/HMM_{base}.csv"
+    model_out_path = f"results/HMM_{base}.pkl"
+    json_out_path = f"results/HMM_{base}.json"
 
     labeled_df.to_csv(csv_out_path, index=False)
     joblib.dump(model, model_out_path)

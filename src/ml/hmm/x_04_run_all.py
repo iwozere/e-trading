@@ -11,12 +11,12 @@ backend library, and the features used across all runs.
 
 Workflow:
 1.  Parses command-line arguments to configure the pipeline run.
-2.  Creates the 'results' and 'models' output directories.
+2.  Creates the 'results' output directories.
 3.  Finds all CSV files in the `data/` directory.
 4.  For each CSV file, it performs a two-step process, handling errors gracefully:
-    a. **Training:** It dynamically constructs and calls `scripts/train_hmm.py`
+    a. **Training:** It dynamically constructs and calls `src/ml/hmm/x_02_train_hmm.py`
        with the parameters specified in the command line.
-    b. **Evaluation:** It passes the resulting CSV to `scripts/evaluate_hmm.py`
+    b. **Evaluation:** It passes the resulting CSV to `src/ml/hmm/x_03_evaluate_hmm.py`
        to generate a visualization plot.
 
 Assumed Project Structure:
@@ -33,11 +33,14 @@ Usage:
     python run_pipeline.py --features log_return volatility
 """
 
+import sys
 import subprocess
 from glob import glob
 from pathlib import Path
 import argparse
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
+sys.path.append(str(PROJECT_ROOT))
 
 def main(args):
     """
@@ -48,9 +51,7 @@ def main(args):
     """
     # Use pathlib for modern path handling
     output_dir_results = Path('results')
-    output_dir_models = Path('models')
     output_dir_results.mkdir(exist_ok=True)
-    output_dir_models.mkdir(exist_ok=True)
 
     csv_files = glob('data/*.csv')
     if not csv_files:
@@ -70,7 +71,7 @@ def main(args):
             # Step 1: Construct and run the training command dynamically
             print(f"  -> Running training for {symbol_tf}...")
             train_cmd = [
-                "python", "scripts/train_hmm.py",
+                "python", "src/ml/hmm/x_02_train_hmm.py",
                 "--csv", str(csv_path),
                 "--timeframe", symbol_tf,
                 "--optimize",
@@ -82,9 +83,9 @@ def main(args):
 
             # Step 2: Evaluate the results
             print(f"  -> Running evaluation for {symbol_tf}...")
-            result_csv_path = output_dir_results / f"{symbol_tf}.csv"
+            result_csv_path = output_dir_results / f"HMM_{symbol_tf}.csv"
             eval_cmd = [
-                "python", "scripts/evaluate_hmm.py",
+                "python", "src/ml/hmm/x_03_evaluate_hmm.py",
                 "--csv", str(result_csv_path)
             ]
             subprocess.run(eval_cmd, check=True, capture_output=True, text=True)
@@ -103,7 +104,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run the HMM training and evaluation pipeline.")
     parser.add_argument("--n_trials", type=int, default=50, help="Number of Optuna trials per file.")
-    parser.add_argument("--backend", choices=["gaussian", "pomegranate"], default="pomegranate", help="HMM library backend.")
+    parser.add_argument("--backend", choices=["gaussian", "pomegranate"], default="gaussian", help="HMM library backend.")
     parser.add_argument("--features", nargs="*", default=["log_return", "volatility", "rsi", "macd", "boll"], help="List of features to use.")
 
     cli_args = parser.parse_args()
