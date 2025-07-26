@@ -121,7 +121,7 @@ def main():
     # Define and create output path
     base = os.path.splitext(os.path.basename(args.csv))[0]
     # Note: The output directory is hardcoded.
-    output_dir = 'src/ml/hmm/model/'
+    output_dir = 'results/'
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, f'{base}.png')
 
