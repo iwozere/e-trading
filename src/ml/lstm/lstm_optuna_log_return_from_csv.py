@@ -6,8 +6,6 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import optuna
-import os
-import glob
 import json
 import datetime
 import sys
@@ -279,9 +277,9 @@ def run_experiment(csv_file: Path):
     # --- Save Model and Results ---
     symbol, period = csv_file.stem.split('_')[:2]
 
-    model_dir = Path(__file__).parent / 'model'
+    model_dir = PROJECT_ROOT / 'results'
     model_dir.mkdir(exist_ok=True)
-    model_path = model_dir / f"LSTM_{symbol}_{period}.pt"
+    model_path = model_dir / f"LSTM_{csv_file.stem}.pt"
     torch.save(final_model.state_dict(), model_path)
     _logger.info(f"Model saved to {model_path}")
 
@@ -291,7 +289,9 @@ def run_experiment(csv_file: Path):
     results_path = results_dir / f"LSTM_OPTUNA_{symbol}_{period}_{timestamp}.json"
 
     results_data = {
-        'symbol': symbol, 'period': period, 'timestamp': timestamp,
+        'symbol': symbol,
+        'period': period,
+        'timestamp': timestamp,
         'best_hyperparameters': best_params,
         'best_validation_mse_scaled': best_trial.value,
         'final_test_mse': float(final_mse),
