@@ -57,6 +57,10 @@ from sklearn.preprocessing import StandardScaler
 # Assumes feature_engineering.py is in the same directory or accessible via PYTHONPATH
 from x_01_feature_engineering import generate_features
 
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
 # For optional import of pomegranate
 HiddenMarkovModel = None
 NormalDistribution = None
@@ -193,21 +197,21 @@ def main():
             from pomegranate.hmm import HiddenMarkovModel
             from pomegranate.distributions import MultivariateGaussianDistribution as NormalDistribution
         except ImportError:
-            print("ERROR: 'pomegranate' backend was chosen but the library is not installed.")
-            print("Please run: pip install pomegranate")
+            _logger.error("'pomegranate' backend was chosen but the library is not installed.")
+            _logger.error("Please run: pip install pomegranate")
             return
 
     df = pd.read_csv(args.csv, parse_dates=["timestamp"])
     features = args.features
 
     if args.optimize:
-        print("Running Optuna optimization...")
+        _logger.info("Running Optuna optimization...")
         study = optuna.create_study()
         study.optimize(lambda trial: objective(trial, df, features), n_trials=args.n_trials)
         best_params = study.best_params
-        print("Optimization complete. Best parameters found:", best_params)
+        _logger.info("Optimization complete. Best parameters found: %s", best_params)
     else:
-        print("Using default parameters...")
+        _logger.info("Using default parameters...")
         best_params = {
             "n_components": 3,
             "vol_window": 20,
@@ -219,9 +223,9 @@ def main():
         }
 
     # Train the final model with the determined parameters
-    print("Training final model...")
+    _logger.info("Training final model...")
     model, labeled_df = train_model(df, features, best_params, backend=args.backend)
-    print("Model training complete.")
+    _logger.info("Model training complete.")
 
     # Create directories and save artifacts
     os.makedirs("results", exist_ok=True)
@@ -236,10 +240,10 @@ def main():
     with open(json_out_path, "w") as f:
         json.dump(best_params, f, indent=2)
 
-    print(f"\nArtifacts saved successfully:")
-    print(f"  - Labeled Data: {csv_out_path}")
-    print(f"  - Model: {model_out_path}")
-    print(f"  - Parameters: {json_out_path}")
+    _logger.info("\nArtifacts saved successfully:")
+    _logger.info(f"  - Labeled Data: {csv_out_path}")
+    _logger.info(f"  - Model: {model_out_path}")
+    _logger.info(f"  - Parameters: {json_out_path}")
 
 
 if __name__ == "__main__":

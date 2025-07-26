@@ -23,6 +23,10 @@ import numpy as np
 import pandas as pd
 import talib
 
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
 
 def add_log_return(df: pd.DataFrame) -> pd.DataFrame:
     """Calculates the logarithmic return of the 'close' price.

@@ -2,23 +2,15 @@
 Market Regime Visualization Script.
 
 This script serves as a command-line tool to visualize pre-calculated HMM
-(Hidden Markov Model) market regimes from a CSV file. It reads the data,
-maps the numerical regime labels to descriptive categories (bullish, bearish,
-sideways), and generates a price chart where data points are colored according
-to their assigned regime.
+market regimes from a CSV file. It reads the data, maps the numerical regime
+labels to descriptive categories (bullish, bearish, sideways), and generates
+a multi-panel plot.
 
-Input:
-    A CSV file specified via the command line. This file must contain at least
-    the following columns:
-    - 'timestamp': The datetime for each data point.
-    - 'close': The closing price.
-    - 'log_return': The logarithmic return, used for interpretation.
-    - 'regime': An integer (e.g., 0, 1, 2) representing the HMM state.
-
-Output:
-    A PNG image file named after the input CSV, saved to a fixed location
-    ('src/ml/hmm/model/'). The plot visualizes the price data colored by the
-    interpreted market regime.
+The output plot contains two subplots:
+1.  The top plot shows the 'close' price, with data points colored according
+    to their assigned market regime.
+2.  The bottom plot shows the regime sequence as distinct, colored dots on
+    three separate levels, making it easy to see regime changes.
 
 Usage:
     python your_script_name.py --csv path/to/your_regime_data.csv
@@ -34,6 +26,10 @@ import matplotlib.pyplot as plt
 import os
 import argparse
 
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
 
 def map_regimes(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -43,13 +39,6 @@ def map_regimes(df: pd.DataFrame) -> pd.DataFrame:
     regime. The regime with the lowest mean is labeled 'bearish', the highest
     is 'bullish', and the one in the middle is 'sideways'. This assumes
     exactly three regimes.
-
-    Args:
-        df (pd.DataFrame): DataFrame containing at least 'regime' (int) and
-                           'log_return' (float) columns.
-
-    Returns:
-        pd.DataFrame: The input DataFrame with a new 'regime_label' column added.
     """
     means = df.groupby('regime')['log_return'].mean()
     sorted_means = means.sort_values()
@@ -62,47 +51,72 @@ def map_regimes(df: pd.DataFrame) -> pd.DataFrame:
         sorted_means.index[1]: 'sideways',
         sorted_means.index[2]: 'bullish'
     }
+    label_to_numeric = {'bearish': 0, 'sideways': 1, 'bullish': 2}
+
     df['regime_label'] = df['regime'].map(regime_mapping)
+    df['regime_numeric'] = df['regime_label'].map(label_to_numeric)
+
     return df
 
 
 def plot_regimes(df: pd.DataFrame, output_path: str):
     """
-    Generates and saves a plot of market regimes.
-
-    This function plots the 'close' price over time, coloring each data point
-    based on its 'regime_label'. A predefined color map is used for consistency.
-    The resulting plot is saved to the specified output path.
+    Generates and saves a two-panel plot of market price and regimes.
 
     Args:
-        df (pd.DataFrame): DataFrame containing 'timestamp', 'close', and
-                           'regime_label' columns.
+        df (pd.DataFrame): DataFrame with 'timestamp', 'close', 'regime_label',
+                           and 'regime_numeric' columns.
         output_path (str): The file path where the plot image will be saved.
     """
     color_map = {'bullish': 'green', 'bearish': 'red', 'sideways': 'black'}
 
-    plt.figure(figsize=(16, 8))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(60, 10), sharex=True,
+                                  gridspec_kw={'height_ratios': [3, 1]})
+
+    # --- Top Subplot: Price Visualization ---
+    ax1.plot(df['timestamp'], df['close'], color='gray', alpha=0.3, linewidth=1)
+
     for label, color in color_map.items():
         subset = df[df['regime_label'] == label]
-        # Use scatter plot for individual points instead of line plot
-        plt.scatter(subset['timestamp'], subset['close'], s=1, label=label, color=color)
+        ax1.scatter(subset['timestamp'], subset['close'],
+                    s=1,  # Small dot size for price
+                    label=label.capitalize(),
+                    color=color,
+                    alpha=0.7)
 
-    plt.title('Market Regimes Visualization')
-    plt.xlabel('Timestamp')
-    plt.ylabel('Price')
-    plt.legend(markerscale=10) # Increase legend marker size for visibility
-    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+    ax1.set_title('Market Regimes Visualization')
+    ax1.set_ylabel('Price')
+    ax1.legend(markerscale=10)
+    ax1.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    # --- Bottom Subplot: Regime Sequence (with colored dots) ---
+    # Loop through the regimes again to plot colored dots on ax2
+    for label, color in color_map.items():
+        subset = df[df['regime_label'] == label]
+        # Use scatter to plot dots on their respective numeric levels
+        ax2.scatter(subset['timestamp'], subset['regime_numeric'],
+                    color=color,
+                    s=5, # Make these dots slightly larger to be visible
+                    alpha=0.7)
+
+    ax2.set_yticks([0, 1, 2])
+    ax2.set_yticklabels(['Bearish', 'Sideways', 'Bullish'])
+    ax2.set_xlabel('Timestamp')
+    ax2.set_ylabel('Regime')
+    ax2.grid(True, axis='x', linestyle='--', linewidth=0.5)
+    # Set y-limits to give a little padding around the dots
+    ax2.set_ylim(-0.5, 2.5)
+
+    # --- Final Touches ---
     plt.tight_layout()
-    plt.savefig(output_path)
+    plt.subplots_adjust(hspace=0.1)
+    plt.savefig(output_path, dpi=150)
     plt.close()
 
 
 def main():
     """
-    Main execution function to run the regime visualization pipeline.
-
-    Parses command-line arguments, reads the data, orchestrates the regime
-    mapping and plotting, and saves the final visualization.
+    Main execution function for the regime visualization pipeline.
     """
     parser = argparse.ArgumentParser(
         description="Visualize HMM market regimes from a CSV file."
@@ -110,24 +124,21 @@ def main():
     parser.add_argument(
         '--csv',
         required=True,
-        help='Path to the CSV file containing data with a pre-calculated "regime" column.'
+        help='Path to the CSV file with a pre-calculated "regime" column.'
     )
     args = parser.parse_args()
 
-    # Read and process the data
     df = pd.read_csv(args.csv, parse_dates=['timestamp'])
     df_labeled = map_regimes(df)
 
-    # Define and create output path
-    base = os.path.splitext(os.path.basename(args.csv))[0]
-    # Note: The output directory is hardcoded.
-    output_dir = 'results/'
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f'{base}.png')
+    base_name = Path(args.csv).stem
+    output_dir = Path('results')
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{base_name}.png"
 
-    print(f"Generating plot for {args.csv}...")
+    _logger.info(f"Generating plot for {args.csv}...")
     plot_regimes(df_labeled, output_path)
-    print(f"Plot saved successfully to {output_path}")
+    _logger.info(f"Plot saved successfully to {output_path}")
 
 
 if __name__ == '__main__':

@@ -42,6 +42,10 @@ import argparse
 PROJECT_ROOT = Path(__file__).resolve().parents[3] # Go up 3 levels from 'src/ml/hmm'
 sys.path.append(str(PROJECT_ROOT))
 
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
 def main(args):
     """
     Main function to orchestrate the HMM training and evaluation pipeline.
@@ -55,21 +59,21 @@ def main(args):
 
     csv_files = glob('data/*.csv')
     if not csv_files:
-        print("Error: No CSV files found in the 'data/' directory.")
+        _logger.error("Error: No CSV files found in the 'data/' directory.")
         return
 
-    print(f"Found {len(csv_files)} files to process.")
-    print(f"Running with Backend: {args.backend}, Trials: {args.n_trials}, Features: {args.features}")
+    _logger.info(f"Found {len(csv_files)} files to process.")
+    _logger.info(f"Running with Backend: {args.backend}, Trials: {args.n_trials}, Features: {args.features}")
 
     for csv_path_str in csv_files:
         csv_path = Path(csv_path_str)
         symbol_tf = csv_path.stem  # pathlib's clean way to get filename without extension
 
-        print(f"\n--- Processing {csv_path.name} ---")
+        _logger.info(f"\n--- Processing {csv_path.name} ---")
 
         try:
             # Step 1: Construct and run the training command dynamically
-            print(f"  -> Running training for {symbol_tf}...")
+            _logger.info(f"  -> Running training for {symbol_tf}...")
             train_cmd = [
                 "python", "src/ml/hmm/x_02_train_hmm.py",
                 "--csv", str(csv_path),
@@ -82,7 +86,7 @@ def main(args):
             subprocess.run(train_cmd, check=True, capture_output=True, text=True)
 
             # Step 2: Evaluate the results
-            print(f"  -> Running evaluation for {symbol_tf}...")
+            _logger.info(f"  -> Running evaluation for {symbol_tf}...")
             result_csv_path = output_dir_results / f"HMM_{symbol_tf}.csv"
             eval_cmd = [
                 "python", "src/ml/hmm/x_03_evaluate_hmm.py",
@@ -92,13 +96,13 @@ def main(args):
 
         except subprocess.CalledProcessError as e:
             # Makes the pipeline robust: if one file fails, it reports and continues
-            print(f"  -> ERROR processing {csv_path.name}.")
-            print(f"  -> Return Code: {e.returncode}")
-            print(f"  -> STDOUT: {e.stdout}")
-            print(f"  -> STDERR: {e.stderr}")
+            _logger.error(f"  -> ERROR processing {csv_path.name}.")
+            _logger.error(f"  -> Return Code: {e.returncode}")
+            _logger.error(f"  -> STDOUT: {e.stdout}")
+            _logger.error(f"  -> STDERR: {e.stderr}")
             continue # Move to the next file
 
-    print("\n--- Pipeline finished! ---")
+    _logger.info("\n--- Pipeline finished! ---")
 
 
 if __name__ == '__main__':
