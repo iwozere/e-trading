@@ -160,7 +160,7 @@ def train_model(df: pd.DataFrame, features: list[str], params: dict, backend: st
     X = StandardScaler().fit_transform(X)
 
     if backend == "gaussian":
-        model = GaussianHMM(n_components=params["n_components"], covariance_type="full", n_iter=1000)
+        model = GaussianHMM(n_components=3, covariance_type="full", n_iter=1000)
         model.fit(X)
         states = model.predict(X)
     elif backend == "pomegranate":
