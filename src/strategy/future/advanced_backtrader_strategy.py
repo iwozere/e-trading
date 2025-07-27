@@ -11,7 +11,7 @@ import pandas as pd
 from typing import Dict, Optional, Any
 from src.notification.logger import setup_logger
 
-from src.strategy.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
+from src.strategy.future.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
 from src.strategy.entry.entry_mixin_factory import EntryMixinFactory
 from src.strategy.exit.exit_mixin_factory import ExitMixinFactory
 

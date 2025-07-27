@@ -12,7 +12,7 @@ import numpy as np
 from datetime import datetime
 from unittest.mock import Mock
 
-from src.strategy.strategy_core import (
+from src.strategy.future.strategy_core import (
     BaseStrategy,
     StrategySignal,
     CompositeSignal,
@@ -202,7 +202,7 @@ class TestSignalAggregator(unittest.TestCase):
 
     def test_invalid_signal_aggregator_method(self):
         """Test that an invalid aggregation method raises ValueError."""
-        from src.strategy.strategy_core import SignalAggregator, AggregationMethod
+        from src.strategy.future.strategy_core import SignalAggregator, AggregationMethod
         aggregator = SignalAggregator(AggregationMethod.WEIGHTED_VOTING)
         aggregator.method = "invalid_method"
         with self.assertRaises(ValueError):

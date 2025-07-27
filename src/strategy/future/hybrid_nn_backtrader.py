@@ -23,7 +23,7 @@ cerebro.run()
 
 import backtrader as bt
 import pandas as pd
-from src.strategy.hybrid_nn_core import HybridNNCore
+from .hybrid_nn_core import HybridNNCore
 
 class HybridNNBacktraderStrategy(bt.Strategy):
     params = (
@@ -57,4 +57,4 @@ class HybridNNBacktraderStrategy(bt.Strategy):
                 self.buy()
         else:
             if signal == 'sell':
-                self.sell() 
+                self.sell()

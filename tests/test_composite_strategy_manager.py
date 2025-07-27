@@ -12,11 +12,11 @@ import tempfile
 import json
 import os
 
-from src.strategy.composite_strategy_manager import (
+from src.strategy.future.composite_strategy_manager import (
     StrategyComposer,
     AdvancedStrategyFramework
 )
-from src.strategy.strategy_core import (
+from src.strategy.future.strategy_core import (
     BaseStrategy,
     StrategySignal,
     AggregationMethod
@@ -329,4 +329,4 @@ class TestAdvancedStrategyFramework(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main() 
+    unittest.main()
