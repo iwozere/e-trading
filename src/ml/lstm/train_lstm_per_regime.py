@@ -198,7 +198,7 @@ if __name__ == "__main__":
                 continue
 
             # Train the model
-            model_path = f"{MODEL_DIR}/{filename}_{regime_name}.pt"
+            model_path = f"{MODEL_DIR}/{filename.replace("HMM", "LSTM")}_{regime_name}.pt"
             train_lstm(
                 X, y,
                 input_dim=X.shape[2],
