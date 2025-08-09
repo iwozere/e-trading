@@ -4,9 +4,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 
 from src.notification.logger import setup_logger
 from src.frontend.telegram.screener.business_logic import handle_command
-from src.frontend.telegram.command_parser import ParsedCommand
+from src.frontend.telegram.command_parser import ParsedCommand, parse_command
 
-logger = setup_logger("telegram_screener_bot")
+logger = setup_logger("telegram_bot")
 
 
 async def process_report_notifications(result, notification_manager, message, user_email):
@@ -81,7 +81,10 @@ async def process_report_notifications(result, notification_manager, message, us
 
 async def process_report_command(message, telegram_user_id, args, notification_manager):
     try:
-        parsed = ParsedCommand(command="report", args={"telegram_user_id": telegram_user_id, "args": args})
+        # Use the proper command parser instead of manually creating ParsedCommand
+        parsed = parse_command(message.text)
+        # Add the telegram_user_id to the args
+        parsed.args["telegram_user_id"] = telegram_user_id
         result = handle_command(parsed)
         user_email = result.get("user_email")
         if result.get("status") == "ok" and "reports" in result:

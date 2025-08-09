@@ -34,7 +34,7 @@ from src.trading.broker.broker_factory import get_broker
 from src.data.data_feed_factory import DataFeedFactory
 from src.notification.logger import setup_logger
 from src.strategy.custom_strategy import CustomStrategy
-from src.strategy.composite_strategy_manager import AdvancedStrategyFramework
+from src.strategy.future.composite_strategy_manager import AdvancedStrategyFramework
 from src.trading.base_trading_bot import BaseTradingBot
 from src.config.config_loader import load_config
 from src.model.config_models import TradingBotConfig
