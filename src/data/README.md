@@ -510,6 +510,14 @@ downloader = AlphaVantageDataDownloader(api_key="your_api_key")
 
 5. **Monitor data quality** and validate results
 
+## Documentation
+
+For detailed information about the data module:
+
+- **[Requirements.md](Requirements.md)** - Dependencies, API keys, and setup instructions
+- **[Design.md](Design.md)** - Architecture, design decisions, and technical details  
+- **[Tasks.md](Tasks.md)** - Development roadmap, known issues, and technical debt
+
 ## Contributing
 
 When adding new data sources:
@@ -517,4 +525,7 @@ When adding new data sources:
 2. Implement the `get_fundamentals()` method
 3. Add comprehensive error handling
 4. Include proper documentation
-5. Add tests for the new implementation 
+5. Add tests for the new implementation
+6. Update Requirements.md if new dependencies are needed
+7. Document design decisions in Design.md
+8. Add tasks to Tasks.md for future enhancements 

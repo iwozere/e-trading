@@ -1,9 +1,3 @@
-Perfect — I’ll append **ready-to-use templates** for `README.md`, `Requirements.md`, `Design.md`, and `Tasks.md` into your `CODING_CONVENTION.md`, so that both humans and AI can copy them when creating a new `src/` submodule.
-
-Here’s the **final, extended document**:
-
----
-
 ````markdown
 # Coding Conventions
 

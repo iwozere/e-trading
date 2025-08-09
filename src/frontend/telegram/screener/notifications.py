@@ -261,7 +261,10 @@ async def process_language_command(message, telegram_user_id, args, notification
 
 async def process_admin_command(message, telegram_user_id, args, notification_manager):
     try:
-        parsed = ParsedCommand(command="admin", args={"telegram_user_id": telegram_user_id, "args": args})
+        # Use the proper command parser instead of manually creating ParsedCommand
+        parsed = parse_command(message.text)
+        # Add the telegram_user_id to the args
+        parsed.args["telegram_user_id"] = telegram_user_id
         result = handle_command(parsed)
         channels = ["telegram"]
         if result.get("email", False):
@@ -289,7 +292,10 @@ async def process_admin_command(message, telegram_user_id, args, notification_ma
 
 async def process_alerts_command(message, telegram_user_id, args, notification_manager):
     try:
-        parsed = ParsedCommand(command="alerts", args={"telegram_user_id": telegram_user_id, "args": args})
+        # Use the proper command parser instead of manually creating ParsedCommand
+        parsed = parse_command(message.text)
+        # Add the telegram_user_id to the args
+        parsed.args["telegram_user_id"] = telegram_user_id
         result = handle_command(parsed)
         channels = ["telegram"]
         if result.get("email", False):
@@ -317,7 +323,10 @@ async def process_alerts_command(message, telegram_user_id, args, notification_m
 
 async def process_schedules_command(message, telegram_user_id, args, notification_manager):
     try:
-        parsed = ParsedCommand(command="schedules", args={"telegram_user_id": telegram_user_id, "args": args})
+        # Use the proper command parser instead of manually creating ParsedCommand
+        parsed = parse_command(message.text)
+        # Add the telegram_user_id to the args
+        parsed.args["telegram_user_id"] = telegram_user_id
         result = handle_command(parsed)
         channels = ["telegram"]
         if result.get("email", False):

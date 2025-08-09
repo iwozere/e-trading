@@ -283,6 +283,23 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 
 ---
 
+## Documentation
+
+For detailed technical information about the Telegram screener module:
+
+- **[Requirements.md](Requirements.md)** - Dependencies, API keys, database setup, and deployment requirements
+- **[Design.md](Design.md)** - Architecture, design decisions, data flow, and technical specifications
+- **[Tasks.md](Tasks.md)** - Development roadmap, known issues, technical debt, and implementation timeline
+
+## Contributing
+
+When contributing to the screener module:
+1. Follow the architecture patterns documented in Design.md
+2. Update Requirements.md if adding new dependencies
+3. Add development tasks to Tasks.md for tracking
+4. Ensure all business logic is testable and well-documented
+5. Update this README.md for user-facing changes
+
 ## References & Further Reading
 - [OpenBB Telegram Bot Docs](https://docs.openbb.co/bot/usage/telegram)
 - [CoinGecko Bot Guide](https://www.coingecko.com/learn/build-crypto-telegram-bot)

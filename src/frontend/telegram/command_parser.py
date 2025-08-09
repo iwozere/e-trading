@@ -81,7 +81,41 @@ COMMAND_SPECS = {
         },
         positional=["tickers"]
     ),
-    # Add more command specs as needed
+    "admin": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=["action", "params"]
+    ),
+    "alerts": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=["action", "params"]
+    ),
+    "schedules": CommandSpec(
+        parameters={
+            "email": bool,
+            "indicators": str,
+            "period": str,
+            "interval": str,
+            "provider": str,
+        },
+        defaults={
+            "email": False,
+            "indicators": None,
+            "period": None,
+            "interval": None,
+            "provider": None,
+        },
+        positional=["action", "params"]
+    ),
 }
 
 # For backward compatibility
