@@ -11,7 +11,8 @@ import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(PROJECT_ROOT))
 
 import logging.config
 from datetime import datetime as dt

@@ -32,7 +32,33 @@ It is intended for both human developers and AI agents contributing to the codeb
   import pandas as pd
 
   from src.utils.helpers import my_helper
-````
+  ```
+
+### 2.1 Path Setup for Project Root
+
+- When setting up the project root for imports, use **pathlib** for cleaner, more readable code.
+
+❌ **Do NOT** use complex `os.path` chains:
+```python
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")))
+```
+
+✅ **Do** use `pathlib.Path` with `.resolve().parents[n]`:
+```python
+from pathlib import Path
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.append(str(PROJECT_ROOT))
+```
+
+**Benefits:**
+- More readable and maintainable
+- Clear indication of how many parent directories to traverse
+- Cross-platform compatibility
+- Type-safe path operations
 
 ---
 

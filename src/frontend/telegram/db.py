@@ -70,6 +70,14 @@ def init_db():
         key TEXT PRIMARY KEY,
         value TEXT
     )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        type TEXT,  -- 'feedback' or 'feature_request'
+        message TEXT,
+        created TEXT,
+        status TEXT DEFAULT 'open'  -- 'open', 'in_progress', 'closed'
+    )''')
     conn.commit()
     conn.close()
 
@@ -219,6 +227,10 @@ def get_schedule(schedule_id: int) -> Optional[Dict[str, Any]]:
         return dict(zip([d[0] for d in c.description], row))
     return None
 
+def get_schedule_by_id(schedule_id: int) -> Optional[Dict[str, Any]]:
+    """Get schedule by id (alias for get_schedule)."""
+    return get_schedule(schedule_id)
+
 def list_schedules(user_id: str) -> List[Dict[str, Any]]:
     """List all schedules for a user."""
     conn = sqlite3.connect(DB_PATH)
@@ -288,12 +300,94 @@ def get_user_limit(telegram_user_id: str, limit_type: str) -> int:
     conn.close()
     return row[0] if row and row[0] is not None else None
 
-# --- USER LISTING ---
-def list_users() -> list:
-    """Return list of (telegram_user_id, email) pairs."""
+# --- USER MANAGEMENT ---
+def set_user_max_alerts(telegram_user_id: str, max_alerts: int):
+    """Set max alerts for a specific user."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT telegram_user_id, email FROM users")
+    c.execute("UPDATE users SET max_alerts=? WHERE telegram_user_id=?", (max_alerts, telegram_user_id))
+    conn.commit()
+    conn.close()
+
+def set_user_max_schedules(telegram_user_id: str, max_schedules: int):
+    """Set max schedules for a specific user."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE users SET max_schedules=? WHERE telegram_user_id=?", (max_schedules, telegram_user_id))
+    conn.commit()
+    conn.close()
+
+def set_global_setting(key: str, value: str):
+    """Set global setting (alias for set_setting)."""
+    set_setting(key, value)
+
+def update_user_email(telegram_user_id: str, email: str):
+    """Update user email (set to None to reset)."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE users SET email=? WHERE telegram_user_id=?", (email, telegram_user_id))
+    conn.commit()
+    conn.close()
+
+def update_user_verification(telegram_user_id: str, verified: bool):
+    """Update user verification status."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE users SET verified=? WHERE telegram_user_id=?", (1 if verified else 0, telegram_user_id))
+    conn.commit()
+    conn.close()
+
+# --- USER LISTING ---
+def list_users() -> List[Dict[str, Any]]:
+    """Return list of all users with full info."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT telegram_user_id, email, verified, language, is_admin, max_alerts, max_schedules FROM users")
     rows = c.fetchall()
     conn.close()
-    return [(row[0], row[1]) for row in rows]
+    return [
+        {
+            "telegram_user_id": row[0],
+            "email": row[1],
+            "verified": bool(row[2]),
+            "language": row[3],
+            "is_admin": bool(row[4]),
+            "max_alerts": row[5],
+            "max_schedules": row[6]
+        }
+        for row in rows
+    ]
+
+# --- FEEDBACK/FEATURE REQUESTS CRUD ---
+def add_feedback(user_id: str, feedback_type: str, message: str) -> int:
+    """Add feedback or feature request. Returns feedback id."""
+    created = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT INTO feedback (user_id, type, message, created, status) VALUES (?, ?, ?, ?, 'open')",
+              (user_id, feedback_type, message, created))
+    feedback_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return feedback_id
+
+def list_feedback(feedback_type: str = None) -> List[Dict[str, Any]]:
+    """List all feedback/feature requests, optionally filtered by type."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    if feedback_type:
+        c.execute("SELECT * FROM feedback WHERE type=? ORDER BY created DESC", (feedback_type,))
+    else:
+        c.execute("SELECT * FROM feedback ORDER BY created DESC")
+    rows = c.fetchall()
+    conn.close()
+    return [dict(zip([d[0] for d in c.description], row)) for row in rows]
+
+def update_feedback_status(feedback_id: int, status: str) -> bool:
+    """Update feedback status."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE feedback SET status=? WHERE id=?", (status, feedback_id))
+    conn.commit()
+    conn.close()
+    return True

@@ -19,29 +19,29 @@ The screener module follows a layered, event-driven architecture with clear sepa
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Telegram Client                        │
-│               (User Interface Layer)                       │
+│                     Telegram Client                         │
+│               (User Interface Layer)                        │
 └─────────────────────┬───────────────────────────────────────┘
                       │ Telegram Bot API
 ┌─────────────────────▼───────────────────────────────────────┐
-│                 Bot Framework Layer                        │
+│                 Bot Framework Layer                         │
 │     ┌─────────────────┐    ┌─────────────────────────────┐  │
-│     │   Command       │    │      Message              │  │
-│     │   Handlers      │    │      Routing              │  │
-│     │   (bot.py)      │    │   (aiogram dispatcher)    │  │
+│     │   Command       │    │      Message                │  │
+│     │   Handlers      │    │      Routing                │  │
+│     │   (bot.py)      │    │   (aiogram dispatcher)      │  │
 │     └─────────────────┘    └─────────────────────────────┘  │
 └─────────────────────┬───────────────────────────────────────┘
                       │ Parsed Commands
-┌─────────────────────▼───────────────────────────────────────┐
-│              Command Processing Layer                      │
-│  ┌─────────────────┐  ┌─────────────────┐ ┌──────────────┐ │
-│  │ Command Parser  │  │ Business Logic  │ │ Notification │ │
+┌─────────────────────▼────────────────────────────────────────┐
+│              Command Processing Layer                        │
+│  ┌─────────────────┐  ┌─────────────────┐ ┌────────────────┐ │
+│  │ Command Parser  │  │ Business Logic  │ │ Notification   │ │
 │  │ (command_parser)│  │ (business_logic)│ │ (notifications)│ │
-│  └─────────────────┘  └─────────────────┘ └──────────────┘ │
-└─────────────┬─────────────────┬─────────────────┬───────────┘
+│  └─────────────────┘  └─────────────────┘ └────────────────┘ │
+└─────────────┬─────────────────┬─────────────────┬────────────┘
               │                 │                 │
 ┌─────────────▼─────────────────▼─────────────────▼───────────┐
-│                   Service Layer                            │
+│                   Service Layer                             │
 │ ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐ │
 │ │  Database   │ │ Data Module │ │   Notification Manager  │ │
 │ │   (db.py)   │ │ (src.data)  │ │  (async notifications)  │ │

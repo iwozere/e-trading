@@ -1,8 +1,10 @@
 """This module runs the live trading bot."""
 import os
 import sys
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(PROJECT_ROOT))
 
 import signal
 from typing import Optional

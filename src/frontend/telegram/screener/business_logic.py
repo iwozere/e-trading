@@ -1,7 +1,12 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")))
+from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+sys.path.append(str(PROJECT_ROOT))
+
+import sqlite3
+import time
 from typing import Any, Dict, List
 from src.frontend.telegram.command_parser import ParsedCommand
 from src.common import get_ohlcv
@@ -25,6 +30,12 @@ def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
         return handle_help(parsed)
     elif parsed.command == "info":
         return handle_info(parsed)
+    elif parsed.command == "register":
+        return handle_register(parsed)
+    elif parsed.command == "verify":
+        return handle_verify(parsed)
+    elif parsed.command == "language":
+        return handle_language(parsed)
     elif parsed.command == "admin":
         return handle_admin(parsed)
     elif parsed.command == "alerts":
@@ -1004,7 +1015,8 @@ def handle_feedback(parsed: ParsedCommand) -> Dict[str, Any]:
         })
 
         # Store feedback in database for admin panel
-        # This would be processed by admin panel or notification system
+        db.init_db()
+        feedback_id = db.add_feedback(telegram_user_id, "feedback", feedback)
 
         return {
             "status": "ok",
@@ -1045,7 +1057,8 @@ def handle_feature(parsed: ParsedCommand) -> Dict[str, Any]:
         })
 
         # Store feature request in database for admin panel
-        # This would be processed by admin panel or notification system
+        db.init_db()
+        feature_id = db.add_feedback(telegram_user_id, "feature_request", feature_request)
 
         return {
             "status": "ok",
@@ -1061,3 +1074,139 @@ def handle_feature(parsed: ParsedCommand) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Error processing feature request: %s", e, exc_info=True)
         return {"status": "error", "message": f"Error processing feature request: {str(e)}"}
+
+
+def handle_register(parsed: ParsedCommand) -> Dict[str, Any]:
+    """
+    Business logic for /register command.
+    Register or update user email and send verification code.
+    """
+    try:
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        email = parsed.args.get("email")
+        language = parsed.args.get("language", "en")
+
+        if not telegram_user_id:
+            return {"status": "error", "message": "No telegram_user_id provided"}
+
+        if not email:
+            return {"status": "error", "message": "Please provide an email address. Usage: /register email@example.com [language]"}
+
+        # Validate email format
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            return {"status": "error", "message": "Please provide a valid email address."}
+
+        # Check rate limiting
+        db.init_db()
+        codes_sent = db.count_codes_last_hour(telegram_user_id)
+        if codes_sent >= 5:
+            return {"status": "error", "message": "Too many verification codes sent. Please wait an hour before requesting another."}
+
+        # Generate verification code
+        import random
+        code = f"{random.randint(100000, 999999):06d}"
+        sent_time = int(time.time())
+
+        # Store user and code
+        db.set_user_email(telegram_user_id, email, code, sent_time, language)
+
+        # Send verification code via email
+        # This will be handled by the notification system
+        return {
+            "status": "ok",
+            "title": "Email Registration",
+            "message": f"A 6-digit verification code has been sent to {email}. Use /verify CODE to verify your email.",
+            "email_verification": {
+                "email": email,
+                "code": code,
+                "user_id": telegram_user_id
+            }
+        }
+
+    except Exception as e:
+        logger.error("Error in register command: %s", e, exc_info=True)
+        return {"status": "error", "message": f"Error registering email: {str(e)}"}
+
+
+def handle_verify(parsed: ParsedCommand) -> Dict[str, Any]:
+    """
+    Business logic for /verify command.
+    Verify user email with the provided code.
+    """
+    try:
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        code = parsed.args.get("code")
+
+        if not telegram_user_id:
+            return {"status": "error", "message": "No telegram_user_id provided"}
+
+        if not code:
+            return {"status": "error", "message": "Please provide the verification code. Usage: /verify CODE"}
+
+        # Validate code format
+        if not code.isdigit() or len(code) != 6:
+            return {"status": "error", "message": "Verification code must be a 6-digit number."}
+
+        # Verify the code
+        db.init_db()
+        if db.verify_code(telegram_user_id, code, expiry_seconds=3600):
+            return {
+                "status": "ok",
+                "title": "Email Verified",
+                "message": "Your email has been successfully verified! You can now use all bot features including email reports."
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Invalid or expired verification code. Please check the code or request a new one with /register."
+            }
+
+    except Exception as e:
+        logger.error("Error in verify command: %s", e, exc_info=True)
+        return {"status": "error", "message": f"Error verifying code: {str(e)}"}
+
+
+def handle_language(parsed: ParsedCommand) -> Dict[str, Any]:
+    """
+    Business logic for /language command.
+    Update user's language preference.
+    """
+    try:
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        language = parsed.args.get("language")
+
+        if not telegram_user_id:
+            return {"status": "error", "message": "No telegram_user_id provided"}
+
+        if not language:
+            return {"status": "error", "message": "Please provide a language code. Usage: /language en (supported: en, ru)"}
+
+        # Validate language
+        supported_languages = ["en", "ru"]
+        if language.lower() not in supported_languages:
+            return {"status": "error", "message": f"Language '{language}' not supported. Supported languages: {', '.join(supported_languages)}"}
+
+        # Update user language
+        db.init_db()
+        user_status = db.get_user_status(telegram_user_id)
+        if not user_status:
+            return {"status": "error", "message": "Please register first using /register email@example.com"}
+
+        # Update language in database
+        conn = sqlite3.connect(db.DB_PATH)
+        c = conn.cursor()
+        c.execute("UPDATE users SET language=? WHERE telegram_user_id=?", (language.lower(), telegram_user_id))
+        conn.commit()
+        conn.close()
+
+        return {
+            "status": "ok",
+            "title": "Language Updated",
+            "message": f"Your language preference has been updated to {language.upper()}."
+        }
+
+    except Exception as e:
+        logger.error("Error in language command: %s", e, exc_info=True)
+        return {"status": "error", "message": f"Error updating language: {str(e)}"}
