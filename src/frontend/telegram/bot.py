@@ -20,7 +20,7 @@ from src.frontend.telegram.screener.notifications import (
 
 # Configure logging
 from src.notification.logger import setup_logger
-logger = setup_logger("telegram_bot")
+logger = setup_logger("telegram_screener_bot")
 
 
 # Initialize bot and dispatcher

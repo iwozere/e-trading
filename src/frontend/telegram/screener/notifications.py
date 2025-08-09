@@ -6,7 +6,7 @@ from src.notification.logger import setup_logger
 from src.frontend.telegram.screener.business_logic import handle_command
 from src.frontend.telegram.command_parser import ParsedCommand, parse_command
 
-logger = setup_logger("telegram_bot")
+logger = setup_logger("telegram_screener_bot")
 
 
 async def process_report_notifications(result, notification_manager, message, user_email):
