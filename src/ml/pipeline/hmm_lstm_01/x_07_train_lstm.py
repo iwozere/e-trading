@@ -22,7 +22,6 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import yaml
 from pathlib import Path
-import logging
 import json
 import pickle
 from datetime import datetime
@@ -37,16 +36,12 @@ from typing import Dict, List, Optional, Tuple, Any
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 # Set device
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-logger.info(f"Using device: {DEVICE}")
+_logger.info("Using device: %s", DEVICE)
 
 class LSTMModel(nn.Module):
     """LSTM model for time series prediction with regime awareness."""
@@ -119,7 +114,7 @@ class LSTMTrainer:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def load_optimization_results(self, symbol: str, timeframe: str) -> Tuple[Optional[Dict], Optional[Dict]]:
@@ -143,9 +138,9 @@ class LSTMTrainer:
             with open(indicator_file, 'r') as f:
                 results = json.load(f)
             indicator_params = results['best_params']
-            logger.info(f"Loaded indicator parameters from {indicator_file}")
+            _logger.info("Loaded indicator parameters from %s", indicator_file)
         else:
-            logger.warning(f"No indicator optimization results found for {symbol} {timeframe}")
+            _logger.warning("No indicator optimization results found for %s %s", symbol, timeframe)
 
         # Load LSTM optimization results
         lstm_pattern = f"lstm_params_{symbol}_{timeframe}_*.json"
@@ -157,9 +152,9 @@ class LSTMTrainer:
             with open(lstm_file, 'r') as f:
                 results = json.load(f)
             lstm_params = results['best_params']
-            logger.info(f"Loaded LSTM parameters from {lstm_file}")
+            _logger.info("Loaded LSTM parameters from %s", lstm_file)
         else:
-            logger.warning(f"No LSTM optimization results found for {symbol} {timeframe}")
+            _logger.warning("No LSTM optimization results found for %s %s", symbol, timeframe)
             # Use default parameters from config
             lstm_params = {
                 'sequence_length': self.config['lstm']['sequence_length'],
@@ -170,7 +165,7 @@ class LSTMTrainer:
                 'batch_size': self.config['lstm']['batch_size'],
                 'epochs': self.config['lstm']['epochs']
             }
-            logger.info(f"Using default LSTM parameters: {lstm_params}")
+            _logger.info("Using default LSTM parameters: %s", lstm_params)
 
         return indicator_params, lstm_params
 
@@ -264,7 +259,7 @@ class LSTMTrainer:
                 df['sma_opt'] = talib.SMA(close, timeperiod=params['sma_period'])
 
         except Exception as e:
-            logger.warning(f"Error applying optimized indicators: {str(e)}")
+            _logger.warning("Error applying optimized indicators: %s", str(e))
 
         return df
 
@@ -310,7 +305,7 @@ class LSTMTrainer:
         # Filter to only include features that exist in the DataFrame
         available_features = [feat for feat in selected_features if feat in df.columns]
 
-        logger.info(f"Selected {len(available_features)} features for LSTM: {available_features[:10]}...")
+        _logger.info("Selected %d features for LSTM: %s...", len(available_features), available_features[:10])
         return available_features
 
     def create_sequences(self, data: np.ndarray, regimes: np.ndarray, target: np.ndarray,
@@ -410,7 +405,7 @@ class LSTMTrainer:
         regime_train = regime_train[:val_split_idx]
         y_train = y_train[:val_split_idx]
 
-        logger.info(f"Data splits - Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
+        _logger.info("Data splits - Train: %d, Val: %d, Test: %d", len(X_train), len(X_val), len(X_test))
 
         return {
             'X_train': X_train,
@@ -591,11 +586,11 @@ class LSTMTrainer:
             else:
                 patience_counter += 1
                 if patience_counter >= early_stopping_patience:
-                    logger.info(f"Early stopping at epoch {epoch+1}")
+                    _logger.info("Early stopping at epoch %d", epoch+1)
                     break
 
             if (epoch + 1) % 10 == 0:
-                logger.info(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
+                _logger.info("Epoch %d/%d - Train Loss: %.6f, Val Loss: %.6f", epoch+1, epochs, train_loss, val_loss)
 
         # Load best model state
         if best_model_state is not None:
@@ -655,7 +650,7 @@ class LSTMTrainer:
         with open(filepath, 'wb') as f:
             pickle.dump(model_package, f)
 
-        logger.info(f"Saved LSTM model to {filepath}")
+        _logger.info("Saved LSTM model to %s", filepath)
         return filepath
 
     def train_lstm(self, symbol: str, timeframe: str) -> Dict:
@@ -669,7 +664,7 @@ class LSTMTrainer:
         Returns:
             Dict with training results
         """
-        logger.info(f"Training LSTM for {symbol} {timeframe}")
+        _logger.info("Training LSTM for %s %s", symbol, timeframe)
 
         try:
             # Load optimization results
@@ -684,7 +679,7 @@ class LSTMTrainer:
 
             # Use the most recent file
             csv_file = sorted(csv_files)[-1]
-            logger.info(f"Using data file: {csv_file}")
+            _logger.info("Using data file: %s", csv_file)
 
             # Load data
             df = pd.read_csv(csv_file)
@@ -718,7 +713,7 @@ class LSTMTrainer:
                 n_regimes=3  # From HMM configuration
             ).to(DEVICE)
 
-            logger.info(f"Created LSTM model with {sum(p.numel() for p in model.parameters())} parameters")
+            _logger.info("Created LSTM model with %d parameters", sum(p.numel() for p in model.parameters()))
 
             # Train model
             training_results = self.train_model(
@@ -734,9 +729,9 @@ class LSTMTrainer:
                 model, scalers, features, training_results, lstm_params, symbol, timeframe
             )
 
-            logger.info(f"[OK] LSTM training completed for {symbol} {timeframe}")
-            logger.info(f"  Best validation loss: {training_results['best_val_loss']:.6f}")
-            logger.info(f"  Training epochs: {training_results['final_epoch']}")
+            _logger.info("[OK] LSTM training completed for %s %s", symbol, timeframe)
+            _logger.info("  Best validation loss: %.6f", training_results['best_val_loss'])
+            _logger.info("  Training epochs: %d", training_results['final_epoch'])
 
             return {
                 'symbol': symbol,
@@ -751,7 +746,7 @@ class LSTMTrainer:
 
         except Exception as e:
             error_msg = f"Failed to train LSTM for {symbol} {timeframe}: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -769,7 +764,7 @@ class LSTMTrainer:
         symbols = self.config['symbols']
         timeframes = self.config['timeframes']
 
-        logger.info(f"Training LSTM models for {len(symbols)} symbols x {len(timeframes)} timeframes")
+        _logger.info("Training LSTM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
         results = {
             'total': len(symbols) * len(timeframes),
@@ -787,17 +782,17 @@ class LSTMTrainer:
                     results['failed'].append(result)
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"LSTM Training Summary:")
-        logger.info(f"  Total: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
-        logger.info(f"{'='*50}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("LSTM Training Summary:")
+        _logger.info("  Total: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed training:")
+            _logger.warning("Failed training:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['symbol']} {failure['timeframe']}: {failure['error']}")
+                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
 
         return results
 
@@ -807,10 +802,10 @@ def main():
         trainer = LSTMTrainer()
         results = trainer.train_all()
 
-        logger.info("LSTM training completed!")
+        _logger.info("LSTM training completed!")
 
     except Exception as e:
-        logger.error(f"LSTM training failed: {str(e)}")
+        _logger.error("LSTM training failed: %s", str(e))
         raise
 
 if __name__ == "__main__":

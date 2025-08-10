@@ -17,7 +17,6 @@ import pandas as pd
 import numpy as np
 import yaml
 from pathlib import Path
-import logging
 import pickle
 from datetime import datetime
 import sys
@@ -27,12 +26,9 @@ from typing import Dict, List, Optional, Tuple
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
 
 class HMMApplicator:
     def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
@@ -59,7 +55,7 @@ class HMMApplicator:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def find_latest_model(self, symbol: str, timeframe: str) -> Optional[Path]:
@@ -77,12 +73,12 @@ class HMMApplicator:
         model_files = list(self.models_dir.glob(pattern))
 
         if not model_files:
-            logger.warning(f"No HMM model found for {symbol} {timeframe}")
+            _logger.warning("No HMM model found for %s %s", symbol, timeframe)
             return None
 
         # Return the most recent model
         latest_model = sorted(model_files)[-1]
-        logger.info(f"Found latest model: {latest_model}")
+        _logger.info("Found latest model: %s", latest_model)
         return latest_model
 
     def load_model(self, model_path: Path) -> Dict:
@@ -99,14 +95,14 @@ class HMMApplicator:
             with open(model_path, 'rb') as f:
                 model_package = pickle.load(f)
 
-            logger.info(f"Loaded HMM model from {model_path}")
-            logger.info(f"Model features: {model_package['features']}")
-            logger.info(f"Model components: {model_package['config']['n_components']}")
+            _logger.info("Loaded HMM model from %s", model_path)
+            _logger.info("Model features: %s", model_package['features'])
+            _logger.info("Model components: %d", model_package['config']['n_components'])
 
             return model_package
 
         except Exception as e:
-            logger.error(f"Failed to load model from {model_path}: {str(e)}")
+            _logger.error("Failed to load model from %s: %s", model_path, str(e))
             raise
 
     def prepare_features(self, df: pd.DataFrame, required_features: List[str]) -> np.ndarray:
@@ -124,8 +120,8 @@ class HMMApplicator:
         missing_features = [feat for feat in required_features if feat not in df.columns]
 
         if missing_features:
-            logger.warning(f"Missing features: {missing_features}")
-            logger.info(f"Attempting to create missing features...")
+            _logger.warning("Missing features: %s", missing_features)
+            _logger.info("Attempting to create missing features...")
             # Try to create missing features if possible
             df = self._create_missing_features(df, missing_features)
 
@@ -174,14 +170,14 @@ class HMMApplicator:
             try:
                 if feature == 'ema_spread' and 'ema_12' in df.columns and 'ema_26' in df.columns:
                     df['ema_spread'] = (df['ema_12'] - df['ema_26']) / df['close']
-                    logger.info(f"Created missing feature: {feature}")
+                    _logger.info("Created missing feature: %s", feature)
                 elif feature == 'ema_spread':
-                    logger.warning(f"Cannot create {feature}: missing required columns 'ema_12' or 'ema_26'")
-                    logger.info(f"Available columns: {list(df.columns)}")
+                    _logger.warning("Cannot create %s: missing required columns 'ema_12' or 'ema_26'", feature)
+                    _logger.info("Available columns: %s", list(df.columns))
                 else:
-                    logger.warning(f"Cannot create missing feature: {feature}")
+                    _logger.warning("Cannot create missing feature: %s", feature)
             except Exception as e:
-                logger.warning(f"Error creating feature {feature}: {str(e)}")
+                _logger.warning("Error creating feature %s: %s", feature, str(e))
 
         return df
 
@@ -213,14 +209,14 @@ class HMMApplicator:
         try:
             posteriors = model.predict_proba(X_scaled)
         except Exception as e:
-            logger.warning(f"Could not compute posterior probabilities: {str(e)}")
+            _logger.warning("Could not compute posterior probabilities: %s", str(e))
             # Create dummy probabilities
             posteriors = np.zeros((len(regimes), model.n_components))
             for i, regime in enumerate(regimes):
                 posteriors[i, regime] = 1.0
 
-        logger.info(f"Predicted regimes for {len(regimes)} samples")
-        logger.info(f"Regime distribution: {np.bincount(regimes, minlength=model.n_components)}")
+        _logger.info("Predicted regimes for %d samples", len(regimes))
+        _logger.info("Regime distribution: %s", np.bincount(regimes, minlength=model.n_components))
 
         return regimes, posteriors
 
@@ -267,7 +263,7 @@ class HMMApplicator:
 
         df['regime_duration'] = regime_duration
 
-        logger.info(f"Added regime features: regime, regime_prob_*, regime_confidence, regime_changed, regime_duration")
+        _logger.info("Added regime features: regime, regime_prob_*, regime_confidence, regime_changed, regime_duration")
 
         return df
 
@@ -312,11 +308,11 @@ class HMMApplicator:
             'regime_balance': regime_balance
         }
 
-        logger.info(f"Regime quality metrics:")
-        logger.info(f"  Average confidence: {avg_confidence:.3f}")
-        logger.info(f"  Transition rate: {quality_metrics['transition_rate']:.4f}")
-        logger.info(f"  Average duration: {avg_duration:.2f}")
-        logger.info(f"  Regime balance: {regime_balance:.3f}")
+        _logger.info("Regime quality metrics:")
+        _logger.info("  Average confidence: %.3f", avg_confidence)
+        _logger.info("  Transition rate: %.4f", quality_metrics['transition_rate'])
+        _logger.info("  Average duration: %.2f", avg_duration)
+        _logger.info("  Regime balance: %.3f", regime_balance)
 
         return quality_metrics
 
@@ -331,7 +327,7 @@ class HMMApplicator:
         Returns:
             Dict with application results
         """
-        logger.info(f"Applying HMM for {symbol} {timeframe}")
+        _logger.info("Applying HMM for %s %s", symbol, timeframe)
 
         try:
             # Find and load model
@@ -350,7 +346,7 @@ class HMMApplicator:
 
             # Use the most recent file if multiple exist
             csv_file = sorted(csv_files)[-1]
-            logger.info(f"Using data file: {csv_file}")
+            _logger.info("Using data file: %s", csv_file)
 
             # Load data
             df = pd.read_csv(csv_file)
@@ -372,7 +368,7 @@ class HMMApplicator:
 
             df_labeled.to_csv(output_path, index=False)
 
-            logger.info(f"[OK] Saved labeled data: {original_shape} -> {df_labeled.shape} to {output_path}")
+            _logger.info("[OK] Saved labeled data: %s -> %s to %s", original_shape, df_labeled.shape, output_path)
 
             return {
                 'symbol': symbol,
@@ -388,7 +384,7 @@ class HMMApplicator:
 
         except Exception as e:
             error_msg = f"Failed to apply HMM for {symbol} {timeframe}: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -406,7 +402,7 @@ class HMMApplicator:
         symbols = self.config['symbols']
         timeframes = self.config['timeframes']
 
-        logger.info(f"Applying HMM models for {len(symbols)} symbols x {len(timeframes)} timeframes")
+        _logger.info("Applying HMM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
         results = {
             'total': len(symbols) * len(timeframes),
@@ -424,17 +420,17 @@ class HMMApplicator:
                     results['failed'].append(result)
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"HMM Application Summary:")
-        logger.info(f"  Total: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
-        logger.info(f"{'='*50}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("HMM Application Summary:")
+        _logger.info("  Total: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed applications:")
+            _logger.warning("Failed applications:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['symbol']} {failure['timeframe']}: {failure['error']}")
+                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
 
         return results
 
@@ -449,16 +445,16 @@ def main():
         applicator = HMMApplicator()
         results = applicator.apply_all()
 
-        logger.info("HMM application completed!")
+        _logger.info("HMM application completed!")
 
         # List created files
         labeled_files = applicator.list_labeled_files()
-        logger.info(f"Created {len(labeled_files)} labeled data files:")
+        _logger.info("Created %d labeled data files:", len(labeled_files))
         for file in labeled_files[-5:]:  # Show last 5 files
-            logger.info(f"  {file.name}")
+            _logger.info("  %s", file.name)
 
     except Exception as e:
-        logger.error(f"HMM application failed: {str(e)}")
+        _logger.error("HMM application failed: %s", str(e))
         raise
 
 if __name__ == "__main__":

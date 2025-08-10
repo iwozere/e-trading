@@ -18,7 +18,6 @@ import pandas as pd
 import numpy as np
 import yaml
 from pathlib import Path
-import logging
 import pickle
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -27,17 +26,14 @@ from sklearn.preprocessing import StandardScaler
 from hmmlearn import hmm
 import sys
 from typing import Dict, List, Optional, Tuple
+import talib
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class HMMTrainer:
     def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
@@ -56,7 +52,8 @@ class HMMTrainer:
         # HMM configuration
         self.n_components = self.config['hmm']['n_components']
         self.train_window_days = self.config['hmm']['train_window_days']
-        self.covariance_type = self.config['hmm'].get('covariance_type', 'diag')
+        #self.covariance_type = self.config['hmm'].get('covariance_type', 'diag')
+        self.covariance_type = self.config['hmm'].get('covariance_type', 'full')
         self.algorithm = self.config['hmm'].get('algorithm', 'viterbi')
         self.n_iter = self.config['hmm'].get('n_iter', 100)
 
@@ -68,108 +65,161 @@ class HMMTrainer:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
-    def select_features_for_hmm(self, df: pd.DataFrame) -> List[str]:
+    @staticmethod
+    def build_indicator_config(timeframe: str, normalized_timeframe_in_minutes: int = 240) -> Dict:
         """
-        Select optimal features for HMM training.
+        Build indicator_config dictionary with parameters adapted to the timeframe.
 
         Args:
-            df: Preprocessed DataFrame
+            timeframe: str, e.g. '5m', '15m', '1h', '4h', '1d'
 
         Returns:
-            List of selected feature column names
+            Dict with indicator names as keys and their parameters as nested dicts
         """
-        # Base features that are typically good for regime detection
-        base_features = ['log_return']
+        # Default periods per indicator (can be adjusted)
+        base_periods = {
+            'rsi': 14,
+            'atr': 14,
+            'ema_fast': 12,
+            'ema_slow': 26,
+            'bbands': 20
+        }
 
-        # Volume-based features
-        volume_features = []
-        if 'volume' in df.columns:
-            volume_features.extend(['volume'])
-        if 'volume_sma_5' in df.columns:
-            volume_features.extend(['volume_sma_5'])
+        # Adjust periods depending on timeframe scale
+        if timeframe.endswith('m'):
+            multiplier = int(timeframe[:-1])  # e.g. '5m' -> 5
+        elif timeframe.endswith('h'):
+            multiplier = int(timeframe[:-1]) * 60  # convert hours to minutes
+        elif timeframe.endswith('d'):
+            multiplier = int(timeframe[:-1]) * 60 * 24  # convert days to minutes
+        else:
+            multiplier = 1  # fallback
 
-        # Volatility features
-        volatility_features = []
-        if 'atr_14' in df.columns:
-            volatility_features.extend(['atr_14'])
-        if 'close_std_10' in df.columns:
-            volatility_features.extend(['close_std_10'])
+        # Scale indicator periods inversely to timeframe
+        # Shorter timeframes need longer periods, longer timeframes need shorter periods
+        # This makes sense because:
+        # - 5m bars: need more bars (larger period) to capture meaningful patterns
+        # - 1d bars: each bar already represents significant time, so smaller periods suffice
+        # Use square root scaling to avoid extreme values while maintaining the inverse relationship
+        scale_factor = (normalized_timeframe_in_minutes / multiplier) ** 0.5
 
-        # Price momentum features
-        momentum_features = []
-        if 'rsi_14' in df.columns:
-            momentum_features.extend(['rsi_14'])
-        if 'macd' in df.columns:
-            momentum_features.extend(['macd'])
+        def scaled_period(base):
+            val = max(2, int(round(base * scale_factor)))  # Minimum period of 2 for TA-Lib
+            return val
 
-        # Trend features
-        trend_features = []
-        if 'ema_12' in df.columns and 'ema_26' in df.columns:
-            # Create EMA spread feature
-            df['ema_spread'] = (df['ema_12'] - df['ema_26']) / df['close']
-            trend_features.extend(['ema_spread'])
+        config = {
+            "rsi": {"timeperiod": scaled_period(base_periods['rsi'])},
+            "atr": {"timeperiod": scaled_period(base_periods['atr'])},
+            "ema_spread": {
+                "fastperiod": scaled_period(base_periods['ema_fast']),
+                "slowperiod": scaled_period(base_periods['ema_slow']),
+            },
+            "bbands": {"timeperiod": scaled_period(base_periods['bbands']), "nbdevup": 2, "nbdevdn": 2}
+        }
 
-        # Bollinger Bands features
-        bb_features = []
-        if 'bb_position_20' in df.columns:
-            bb_features.extend(['bb_position_20'])
-        if 'bb_width_20' in df.columns:
-            bb_features.extend(['bb_width_20'])
+        return config
 
-        # Combine all features
-        selected_features = (base_features +
-                           volume_features[:1] +  # Limit volume features
-                           volatility_features[:1] +
-                           momentum_features[:1] +
-                           trend_features +
-                           bb_features)
+    def select_features_for_hmm(self, df: pd.DataFrame, indicator_config: Dict) -> List[str]:
+        """
+        Select optimal features for HMM training, adding indicators from TA-Lib if needed.
 
-        # Filter to only include features that exist in the DataFrame
+        Args:
+            df: Preprocessed DataFrame with OHLCV data
+            indicator_config: dict specifying indicators to include and their parameters
+                Example:
+                {
+                    "rsi": {"timeperiod": 14},
+                    "atr": {"timeperiod": 14},
+                    "ema_spread": {"fastperiod": 12, "slowperiod": 26},
+                    "bbands": {"timeperiod": 20, "nbdevup": 2, "nbdevdn": 2}
+                }
+
+        Returns:
+            List[str]: Selected feature column names
+        """
+
+        base_features = ["log_return"]
+
+        # === Compute indicators with TA-Lib if missing ===
+        if "rsi" in indicator_config:
+            tp = indicator_config["rsi"].get("timeperiod", 14)
+            rsi_col = f"rsi_{tp}"
+            if rsi_col not in df.columns:
+                df[rsi_col] = talib.RSI(df["close"], timeperiod=tp)
+
+        if "atr" in indicator_config:
+            tp = indicator_config["atr"].get("timeperiod", 14)
+            atr_col = f"atr_{tp}"
+            if atr_col not in df.columns:
+                df[atr_col] = talib.ATR(df["high"], df["low"], df["close"], timeperiod=tp)
+
+        if "ema_spread" in indicator_config:
+            fast = indicator_config["ema_spread"].get("fastperiod", 12)
+            slow = indicator_config["ema_spread"].get("slowperiod", 26)
+            if "ema_spread" not in df.columns:
+                ema_fast = talib.EMA(df["close"], timeperiod=fast)
+                ema_slow = talib.EMA(df["close"], timeperiod=slow)
+                df["ema_spread"] = (ema_fast - ema_slow) / df["close"]
+
+        if "bbands" in indicator_config:
+            tp = indicator_config["bbands"].get("timeperiod", 20)
+            bb_position_col = f"bb_position_{tp}"
+            bb_width_col = f"bb_width_{tp}"
+            if bb_position_col not in df.columns or bb_width_col not in df.columns:
+                up, mid, low = talib.BBANDS(
+                    df["close"],
+                    timeperiod=tp,
+                    nbdevup=indicator_config["bbands"].get("nbdevup", 2),
+                    nbdevdn=indicator_config["bbands"].get("nbdevdn", 2)
+                )
+                df[bb_position_col] = (df["close"] - low) / (up - low)
+                df[bb_width_col] = (up - low) / df["close"]
+
+        # === Feature groups ===
+        volume_features = [col for col in ["volume", "volume_sma_5"] if col in df.columns]
+        volatility_features = [col for col in df.columns if col.startswith("atr_") or col.startswith("close_std_")]
+        momentum_features = [col for col in df.columns if col.startswith("rsi_") or col.startswith("macd")]
+        trend_features = ["ema_spread"] if "ema_spread" in df.columns else []
+        bb_features = [col for col in df.columns if col.startswith("bb_position_") or col.startswith("bb_width_")]
+
+        # === Select and filter ===
+        selected_features = (
+            base_features +
+            volume_features[:1] +       # Limit volume features
+            volatility_features[:1] +
+            momentum_features[:1] +
+            trend_features +
+            bb_features
+        )
+
         available_features = [feat for feat in selected_features if feat in df.columns]
-
-        logger.info(f"Selected {len(available_features)} features for HMM: {available_features}")
+        _logger.info("Selected %d features for HMM: %s", len(available_features), available_features)
         return available_features
 
     def prepare_training_data(self, df: pd.DataFrame, features: List[str]) -> Tuple[np.ndarray, StandardScaler]:
         """
-        Prepare data for HMM training.
-
-        Args:
-            df: Preprocessed DataFrame
-            features: List of feature column names
-
-        Returns:
-            Tuple of (scaled feature matrix, fitted scaler)
+        Prepare data for HMM training with robust preprocessing for small timeframe noise.
         """
-        # Extract features
         feature_data = df[features].copy()
 
-        # Handle any remaining missing values
-        feature_data = feature_data.ffill().bfill()
-        feature_data = feature_data.fillna(0)
+        # Fill and replace infinities
+        feature_data = feature_data.replace([np.inf, -np.inf], np.nan).ffill().bfill().fillna(0)
 
-        # Handle infinite and extremely large values
-        feature_data = feature_data.replace([np.inf, -np.inf], np.nan)
-        feature_data = feature_data.ffill().bfill()
-        feature_data = feature_data.fillna(0)
-
-        # Clip extreme values to prevent numerical issues
+        # Clip extreme outliers
         for col in feature_data.columns:
-            if feature_data[col].dtype in ['float64', 'float32']:
-                # Get the 1st and 99th percentiles
+            if np.issubdtype(feature_data[col].dtype, np.number):
                 q1 = feature_data[col].quantile(0.01)
                 q99 = feature_data[col].quantile(0.99)
-                # Clip values outside this range
-                feature_data[col] = feature_data[col].clip(lower=q1, upper=q99)
+                feature_data[col] = feature_data[col].clip(q1, q99)
 
-        # Scale features for HMM
+        # Scale for HMM
         scaler = StandardScaler()
         scaled_data = scaler.fit_transform(feature_data)
 
-        logger.info(f"Prepared training data: {scaled_data.shape} with features {features}")
+        _logger.info("Prepared training data: %s samples, %d features", scaled_data.shape[0], scaled_data.shape[1])
         return scaled_data, scaler
 
     def train_hmm_model(self, X: np.ndarray) -> hmm.GaussianHMM:
@@ -182,7 +232,7 @@ class HMMTrainer:
         Returns:
             Trained HMM model
         """
-        logger.info(f"Training HMM with {self.n_components} components on {X.shape[0]} samples")
+        _logger.info("Training HMM with %d components on %d samples", self.n_components, X.shape[0])
 
         # Initialize and train HMM
         model = hmm.GaussianHMM(
@@ -197,9 +247,9 @@ class HMMTrainer:
         model.fit(X)
 
         # Log training results
-        logger.info(f"HMM training completed")
-        logger.info(f"Log likelihood: {model.score(X):.2f}")
-        logger.info(f"Converged: {model.monitor_.converged}")
+        _logger.info("HMM training completed")
+        _logger.info("Log likelihood: %.2f", model.score(X))
+        _logger.info("Converged: %s", model.monitor_.converged)
 
         return model
 
@@ -250,10 +300,10 @@ class HMMTrainer:
             'max_regime_duration': np.max(regime_durations)
         }
 
-        logger.info(f"Validation metrics:")
-        logger.info(f"  Regime distribution: {validation_metrics['regime_percentages']}")
-        logger.info(f"  Transition rate: {validation_metrics['transition_rate']:.4f}")
-        logger.info(f"  Avg regime duration: {validation_metrics['avg_regime_duration']:.2f}")
+        _logger.info("Validation metrics:")
+        _logger.info("  Regime distribution: %s", validation_metrics['regime_percentages'])
+        _logger.info("  Transition rate: %.4f", validation_metrics['transition_rate'])
+        _logger.info("  Avg regime duration: %.2f", validation_metrics['avg_regime_duration'])
 
         return validation_metrics
 
@@ -319,10 +369,10 @@ class HMMTrainer:
             labels = [f'Regime {i}' for i in range(self.n_components)]
 
         # Log regime characteristics
-        logger.info(f"Regime characteristics:")
+        _logger.info("Regime characteristics:")
         for stat in regime_stats:
-            logger.info(f"  Regime {stat['regime_id']} ({labels[stat['regime_id']]}): "
-                       f"avg_return={stat['avg_return']:.6f}, volatility={stat['volatility']:.6f}")
+            _logger.info("  Regime %d (%s): avg_return=%.6f, volatility=%.6f",
+                       stat['regime_id'], labels[stat['regime_id']], stat['avg_return'], stat['volatility'])
 
         return labels
 
@@ -408,10 +458,10 @@ class HMMTrainer:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             plt.close()
 
-            logger.info(f"Saved regime visualization to {save_path}")
+            _logger.info("Saved regime visualization to %s", save_path)
 
         except Exception as e:
-            logger.warning(f"Failed to create regime visualization: {str(e)}")
+            _logger.warning("Failed to create regime visualization: %s", str(e))
 
     def save_model(self, model: hmm.GaussianHMM, scaler: StandardScaler, features: List[str],
                    validation_metrics: Dict, symbol: str, timeframe: str) -> Path:
@@ -457,7 +507,7 @@ class HMMTrainer:
         with open(filepath, 'wb') as f:
             pickle.dump(model_package, f)
 
-        logger.info(f"Saved HMM model to {filepath}")
+        _logger.info("Saved HMM model to %s", filepath)
         return filepath
 
     def train_symbol_timeframe(self, symbol: str, timeframe: str) -> Dict:
@@ -471,7 +521,7 @@ class HMMTrainer:
         Returns:
             Dict with training results
         """
-        logger.info(f"Training HMM for {symbol} {timeframe}")
+        _logger.info("Training HMM for %s %s", symbol, timeframe)
 
         try:
             # Find processed data file
@@ -483,7 +533,7 @@ class HMMTrainer:
 
             # Use the most recent file if multiple exist
             csv_file = sorted(csv_files)[-1]
-            logger.info(f"Using data file: {csv_file}")
+            _logger.info("Using data file: %s", csv_file)
 
             # Load data
             df = pd.read_csv(csv_file)
@@ -495,10 +545,10 @@ class HMMTrainer:
                     df['timestamp'] = pd.to_datetime(df['timestamp'])
                     cutoff_date = df['timestamp'].max() - pd.Timedelta(days=self.train_window_days)
                     df = df[df['timestamp'] >= cutoff_date].copy()
-                    logger.info(f"Applied {self.train_window_days}-day training window: {len(df)} samples")
+                    _logger.info("Applied %d-day training window: %d samples", self.train_window_days, len(df))
 
             # Select features
-            features = self.select_features_for_hmm(df)
+            features = self.select_features_for_hmm(df, HMMTrainer.build_indicator_config(timeframe, 240))
 
             if not features:
                 raise ValueError("No suitable features found for HMM training")
@@ -532,7 +582,7 @@ class HMMTrainer:
 
         except Exception as e:
             error_msg = f"Failed to train HMM for {symbol} {timeframe}: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -550,12 +600,13 @@ class HMMTrainer:
         symbols = self.config['symbols']
         timeframes = self.config['timeframes']
 
-        logger.info(f"Training HMM models for {len(symbols)} symbols x {len(timeframes)} timeframes")
+        _logger.info("Training HMM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
         results = {
             'total': len(symbols) * len(timeframes),
             'successful': [],
-            'failed': []
+            'failed': [],
+            'overall_success': True
         }
 
         for symbol in symbols:
@@ -566,19 +617,22 @@ class HMMTrainer:
                     results['successful'].append(result)
                 else:
                     results['failed'].append(result)
+                    # Mark overall as failed if any training fails
+                    results['overall_success'] = False
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"HMM Training Summary:")
-        logger.info(f"  Total: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
-        logger.info(f"{'='*50}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("HMM Training Summary:")
+        _logger.info("  Total: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
+        _logger.info("  Overall success: %s", results['overall_success'])
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed training:")
+            _logger.error("Failed training:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['symbol']} {failure['timeframe']}: {failure['error']}")
+                _logger.error("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
 
         return results
 
@@ -588,10 +642,15 @@ def main():
         trainer = HMMTrainer()
         results = trainer.train_all()
 
-        logger.info("HMM training completed!")
+        if results['overall_success']:
+            _logger.info("HMM training completed successfully!")
+        else:
+            _logger.error("HMM training completed with failures!")
+            # Raise exception to signal pipeline failure
+            raise RuntimeError(f"HMM training failed: {len(results['failed'])} out of {results['total']} training tasks failed")
 
     except Exception as e:
-        logger.error(f"HMM training failed: {str(e)}")
+        _logger.exception("HMM training failed")
         raise
 
 if __name__ == "__main__":
