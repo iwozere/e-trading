@@ -33,7 +33,7 @@ class SuperTrendPlotter(BaseIndicatorPlotter):
 
             self._apply_style(ax)
         except Exception as e:
-            _logger.error("Error plotting SuperTrend: %s", e, exc_info=True)
+            _logger.exception("Error plotting SuperTrend: %s")
 
     @property
     def subplot_type(self):

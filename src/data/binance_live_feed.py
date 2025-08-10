@@ -148,10 +148,10 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             return df
 
         except BinanceAPIException as e:
-            _logger.error("Binance API error loading historical data: %s", e, exc_info=True)
+            _logger.exception("Binance API error loading historical data: %s")
             return None
         except Exception as e:
-            _logger.error("Error loading historical data for %s: %s", self.symbol, e, exc_info=True)
+            _logger.exception("Error loading historical data for %s: %s")
             return None
 
     def _get_interval_minutes(self) -> int:
@@ -204,7 +204,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             return self.ws.sock is not None and self.ws.sock.connected
 
         except Exception as e:
-            _logger.error("Error connecting to Binance WebSocket: %s", e, exc_info=True)
+            _logger.exception("Error connecting to Binance WebSocket: %s")
             return False
 
     def _disconnect_realtime(self):
@@ -224,7 +224,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
     def _on_ws_error(self, ws, error):
         """WebSocket error occurred."""
-        _logger.error("Binance WebSocket error for %s: %s", self.symbol, error, exc_info=True)
+        _logger.exception("Binance WebSocket error for %s: %s")
         self.is_connected = False
 
     def _on_ws_message(self, ws, message):
@@ -249,9 +249,9 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
                     self._process_new_data(new_data)
 
         except json.JSONDecodeError as e:
-            _logger.error("Error decoding WebSocket message: %s", e, exc_info=True)
+            _logger.exception("Error decoding WebSocket message: %s")
         except Exception as e:
-            _logger.error("Error processing WebSocket message: %s", e, exc_info=True)
+            _logger.exception("Error processing WebSocket message: %s")
 
     def _get_latest_data(self) -> Optional[pd.DataFrame]:
         """

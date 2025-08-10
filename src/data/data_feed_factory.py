@@ -81,7 +81,7 @@ class DataFeedFactory:
                 return None
 
         except Exception as e:
-            _logger.error("Error creating data feed: %s", e, exc_info=True)
+            _logger.exception("Error creating data feed: %s")
             return None
 
     @staticmethod

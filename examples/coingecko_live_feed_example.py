@@ -100,7 +100,7 @@ def main():
     except KeyboardInterrupt:
         print("\nReceived interrupt signal")
     except Exception as e:
-        _logger.error("Error in main loop: %s", e, exc_info=True)
+        _logger.exception("Error in main loop")
     finally:
         # Clean up
         if 'feed' in locals():

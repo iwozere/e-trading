@@ -54,7 +54,7 @@ class ResultPlotter:
             with open(config_path, "r") as f:
                 return json.load(f)
         except Exception as e:
-            _logger.error("Error loading config from %s: %s", config_path, e, exc_info=True)
+            _logger.exception("Error loading config from %s: %s")
             return {}
 
     def _load_mixin_config(self) -> Dict:
@@ -63,7 +63,7 @@ class ResultPlotter:
             with open("config/plotter/mixin_indicators.json", "r") as f:
                 return json.load(f)
         except Exception as e:
-            _logger.error("Error loading mixin config: %s", e, exc_info=True)
+            _logger.exception("Error loading mixin config: %s")
             return {"entry_mixins": {}, "exit_mixins": {}}
 
     def get_json_files(self, results_dir: str = "results") -> List[str]:
@@ -81,7 +81,7 @@ class ResultPlotter:
             _logger.debug("Loaded result data from %s", json_file)
             return data
         except Exception as e:
-            _logger.error("Error loading JSON file %s: %s", json_file, e, exc_info=True)
+            _logger.exception("Error loading JSON file %s: %s")
             return {}
 
     def load_price_data(self, data_file: str) -> pd.DataFrame:
@@ -109,7 +109,7 @@ class ResultPlotter:
             return df
 
         except Exception as e:
-            _logger.error("Error loading price data from %s: %s", data_file, e, exc_info=True)
+            _logger.exception("Error loading price data from %s: %s")
             return pd.DataFrame()
 
     def get_indicators_for_strategy(self, result_data: Dict) -> List[str]:
@@ -612,7 +612,7 @@ class ResultPlotter:
             )
 
         except Exception as e:
-            _logger.error("Error processing %s: %s", json_file, e, exc_info=True)
+            _logger.exception("Error processing %s: %s")
 
     def run(self, results_dir: str = "results") -> None:
         """Main method to process all JSON files"""

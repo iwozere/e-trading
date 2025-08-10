@@ -135,7 +135,7 @@ class PolygonDataDownloader(BaseDataDownloader):
             # For '1m' and '1d', no resampling needed
             return df
         except Exception as e:
-            _logger.error("Error downloading data for %s: %s", symbol, e, exc_info=True)
+            _logger.exception("Error downloading data for %s: %s")
             raise
 
     def get_periods(self) -> list:
@@ -246,7 +246,7 @@ class PolygonDataDownloader(BaseDataDownloader):
             )
 
         except Exception as e:
-            _logger.error("Failed to get fundamentals for %s: %s", symbol, e, exc_info=True)
+            _logger.exception("Failed to get fundamentals for %s: %s")
             return Fundamentals(
                 ticker=symbol.upper(),
                 company_name="Unknown",

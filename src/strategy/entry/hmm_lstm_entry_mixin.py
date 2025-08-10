@@ -136,7 +136,7 @@ class HMMLSTMEntryMixin:
         self.current_prediction = 0.0
         self.strategy = None
 
-        _logger.info(f"Initialized HMM-LSTM Entry Mixin for {self.symbol} {self.timeframe}")
+        _logger.info("Initialized HMM-LSTM Entry Mixin for %s %s", self.symbol, self.timeframe)
 
     def init_entry(self, strategy):
         """Initialize the entry mixin with strategy reference."""
@@ -146,7 +146,7 @@ class HMMLSTMEntryMixin:
             self._load_models()
             _logger.info("HMM-LSTM models loaded successfully")
         except Exception as e:
-            _logger.error(f"Failed to load models: {str(e)}")
+            _logger.exception("Failed to load models")
             # Continue without models - mixin will return False for should_enter()
 
     def _load_models(self):
@@ -164,9 +164,9 @@ class HMMLSTMEntryMixin:
                 self.hmm_model = hmm_package['model']
                 self.hmm_scaler = hmm_package['scaler']
                 self.hmm_features = hmm_package['features']
-                _logger.info(f"Loaded HMM model from {hmm_file}")
+                _logger.info("Loaded HMM model from %s", hmm_file)
             else:
-                _logger.warning(f"No HMM model found for {self.symbol} {self.timeframe}")
+                _logger.warning("No HMM model found for %s %s", self.symbol, self.timeframe)
 
             # Load LSTM model
             lstm_pattern = f"lstm_{self.symbol}_{self.timeframe}_*.pkl"
@@ -195,9 +195,9 @@ class HMMLSTMEntryMixin:
                 # Initialize LSTM sequence buffer
                 self.lstm_sequence_buffer = deque(maxlen=self.sequence_length)
 
-                _logger.info(f"Loaded LSTM model from {lstm_file}")
+                _logger.info("Loaded LSTM model from %s", lstm_file)
             else:
-                _logger.warning(f"No LSTM model found for {self.symbol} {self.timeframe}")
+                _logger.warning("No LSTM model found for %s %s", self.symbol, self.timeframe)
 
             # Load optimized indicator parameters
             indicator_pattern = f"indicators_{self.symbol}_{self.timeframe}_*.json"
@@ -209,13 +209,13 @@ class HMMLSTMEntryMixin:
                     indicator_results = json.load(f)
 
                 self.optimized_indicators = indicator_results['best_params']
-                _logger.info(f"Loaded optimized indicators from {indicator_file}")
+                _logger.info("Loaded optimized indicators from %s", indicator_file)
             else:
-                _logger.warning(f"No optimized indicators found for {self.symbol} {self.timeframe}")
+                _logger.warning("No optimized indicators found for %s %s", self.symbol, self.timeframe)
                 self.optimized_indicators = {}
 
         except Exception as e:
-            _logger.error(f"Error loading models: {str(e)}")
+            _logger.exception("Error loading models")
             raise
 
     def _calculate_indicators(self) -> Dict[str, float]:
@@ -288,7 +288,7 @@ class HMMLSTMEntryMixin:
             return indicators
 
         except Exception as e:
-            _logger.error(f"Error calculating indicators: {str(e)}")
+            _logger.exception("Error calculating indicators")
             return {}
 
     def _predict_regime(self, features: Dict[str, float]) -> Tuple[int, float]:
@@ -328,7 +328,7 @@ class HMMLSTMEntryMixin:
             return int(regime[0]), float(confidence)
 
         except Exception as e:
-            _logger.error(f"Error predicting regime: {str(e)}")
+            _logger.exception("Error predicting regime")
             return 1, 0.5  # Default to neutral regime
 
     def _predict_price(self, features: Dict[str, float], regime: int) -> float:
@@ -380,7 +380,7 @@ class HMMLSTMEntryMixin:
             return float(prediction)
 
         except Exception as e:
-            _logger.error(f"Error predicting price: {str(e)}")
+            _logger.exception("Error predicting price")
             return 0.0
 
     def next(self):
@@ -433,13 +433,13 @@ class HMMLSTMEntryMixin:
             )
 
             if entry_signal:
-                _logger.info(f"Entry signal: Regime={regime} (conf={regime_confidence:.3f}), "
-                           f"Prediction={prediction:.6f}")
+                _logger.info("Entry signal: Regime=%d (conf=%.3f), Prediction=%.6f",
+                           regime, regime_confidence, prediction)
 
             return entry_signal
 
         except Exception as e:
-            _logger.error(f"Error in should_enter: {str(e)}")
+            _logger.exception("Error in should_enter")
             return False
 
     def notify_trade(self, trade):

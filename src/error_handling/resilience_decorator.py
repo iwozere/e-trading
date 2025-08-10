@@ -129,7 +129,7 @@ def resilient(retry_config: Optional[RetryConfig] = None,
                         _logger.warning("Using fallback for %s: %s", func.__name__, e)
                         return fallback_func(*args, **kwargs)
                     except Exception as fallback_error:
-                        _logger.error("Fallback also failed for %s: %s", func.__name__, fallback_error, exc_info=True)
+                        _logger.exception("Fallback also failed for %s: %s")
                         raise fallback_error
                 else:
                     raise e

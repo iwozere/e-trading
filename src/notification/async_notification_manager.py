@@ -131,7 +131,7 @@ class TelegramChannel(NotificationChannel):
             )
             return True
         except Exception as e:
-            _logger.error("Failed to send Telegram notification: %s", e, exc_info=True)
+            _logger.exception("Failed to send Telegram notification: %s")
             return False
 
 
@@ -170,7 +170,7 @@ class EmailChannel(NotificationChannel):
                             else:
                                 prepared_attachments.append((filename, MIMEApplication(file_bytes, Name=filename)))
                     except Exception as e:
-                        _logger.error("Failed to attach file %s: %s", filename, e, exc_info=True)
+                        _logger.exception("Failed to attach file %s: %s")
             # Format message as HTML
             html_message = notification.message.replace('\n', '<br>') if notification.message else ''
             await loop.run_in_executor(
@@ -184,7 +184,7 @@ class EmailChannel(NotificationChannel):
             )
             return True
         except Exception as e:
-            _logger.error("Failed to send email notification: %s", e, exc_info=True)
+            _logger.exception("Failed to send email notification: %s")
             return False
 
 
@@ -354,7 +354,7 @@ class AsyncNotificationManager:
             _logger.warning("Notification queue is full, dropping notification")
             return False
         except Exception as e:
-            _logger.error("Error queuing notification: %s", e, exc_info=True)
+            _logger.exception("Error queuing notification: %s")
             return False
 
     async def send_trade_notification(self,
@@ -456,7 +456,7 @@ class AsyncNotificationManager:
                 _logger.error("Error in notification worker: CancelledError")
                 break
             except Exception as e:
-                _logger.error("Error in notification worker: %s", e, exc_info=True)
+                _logger.exception("Error in notification worker: %s")
 
     async def _batch_worker(self):
         """Worker task for processing batched notifications"""
@@ -493,7 +493,7 @@ class AsyncNotificationManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                _logger.error("Error in batch worker: %s", e, exc_info=True)
+                _logger.exception("Error in batch worker: %s")
 
     async def _process_notification(self, notification: Notification):
         """Process a single notification"""
@@ -588,7 +588,7 @@ class AsyncNotificationManager:
         try:
             return await channel.send(notification)
         except Exception as e:
-            _logger.error("Error sending to channel %s: %s", channel.name, e, exc_info=True)
+            _logger.exception("Error sending to channel %s: %s")
             return False
 
     async def _handle_failed_notification(self, notification: Notification):

@@ -241,9 +241,9 @@ def main():
         json.dump(best_params, f, indent=2)
 
     _logger.info("\nArtifacts saved successfully:")
-    _logger.info(f"  - Labeled Data: {csv_out_path}")
-    _logger.info(f"  - Model: {model_out_path}")
-    _logger.info(f"  - Parameters: {json_out_path}")
+    _logger.info("  - Labeled Data: %s")
+    _logger.info("  - Model: %s")
+    _logger.info("  - Parameters: %s")
 
 
 if __name__ == "__main__":

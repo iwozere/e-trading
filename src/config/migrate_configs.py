@@ -146,7 +146,7 @@ class ConfigMigrator:
                             "file": str(config_file),
                             "error": str(e)
                         })
-                        _logger.error("Failed to migrate %s: %s", config_file, e, exc_info=True)
+                        _logger.exception("Failed to migrate %s: %s")
 
         # Generate migration report
         self._generate_migration_report(env_dir)

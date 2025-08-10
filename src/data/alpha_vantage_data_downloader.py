@@ -170,7 +170,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 df[col] = pd.to_numeric(df[col], errors='coerce')
             return df
         except Exception as e:
-            _logger.error("Error downloading data for %s: %s", symbol, e, exc_info=True)
+            _logger.exception("Error downloading data for %s: %s")
             raise
 
     def save_data(
@@ -188,14 +188,14 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 end_date = df["timestamp"].max().strftime("%Y-%m-%d")
             return super().save_data(df, symbol, interval, start_date, end_date)
         except Exception as e:
-            _logger.error("Error saving data for %s: %s", symbol, e, exc_info=True)
+            _logger.exception("Error saving data for %s: %s")
             raise
 
     def load_data(self, filepath: str) -> pd.DataFrame:
         try:
             return super().load_data(filepath)
         except Exception as e:
-            _logger.error("Error loading data from %s: %s", filepath, e, exc_info=True)
+            _logger.exception("Error loading data from %s: %s")
             raise
 
     def update_data(self, symbol: str, interval: str) -> str:
@@ -228,7 +228,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             combined_df = combined_df.sort_values("timestamp")
             return self.save_data(combined_df, symbol, interval, datetime.fromtimestamp(int(new_start)), datetime.fromtimestamp(int(new_end)))
         except Exception as e:
-            _logger.error("Error updating data for %s: %s", symbol, e, exc_info=True)
+            _logger.exception("Error updating data for %s: %s")
             raise
 
     def get_periods(self) -> list:
@@ -337,7 +337,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             )
 
         except Exception as e:
-            _logger.error("Failed to get fundamentals for %s: %s", symbol, e, exc_info=True)
+            _logger.exception("Failed to get fundamentals for %s: %s")
             return Fundamentals(
                 ticker=symbol.upper(),
                 company_name="Unknown",

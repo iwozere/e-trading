@@ -59,7 +59,7 @@ class EmailNotifier:
                     )
                     msg.attach(part)
                 except Exception as e:
-                    _logger.error("Failed to attach file %s: %s", file_path, e, exc_info=True)
+                    _logger.exception("Failed to attach file %s", file_path)
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.ehlo()
@@ -69,7 +69,7 @@ class EmailNotifier:
             _logger.info("Email sent to %s with subject: %s", to_addr, subject)
             return True
         except Exception as e:
-            _logger.error("Failed to send email: %s", e, exc_info=True)
+            _logger.exception("Failed to send email")
             return False
 
     def send_notification_email(self, buy_or_sell: str, symbol: str, price: float, amount: float, to_addr: str, body: str = ""):
@@ -97,7 +97,7 @@ class EmailNotifier:
                     mime_part.add_header("Content-Disposition", f"attachment; filename={filename}")
                     msg.attach(mime_part)
                 except Exception as e:
-                    _logger.error("Failed to attach MIME part %s: %s", filename, e, exc_info=True)
+                    _logger.exception("Failed to attach MIME part %s", filename)
         try:
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.ehlo()
@@ -107,7 +107,7 @@ class EmailNotifier:
             _logger.info("Email sent to %s with subject: %s", to_addr, subject)
             return True
         except Exception as e:
-            _logger.error("Failed to send email: %s", e, exc_info=True)
+            _logger.exception("Failed to send email")
             return False
 
 def send_email_alert(receiver_email: str, subject: str, message: str):
@@ -123,7 +123,7 @@ def send_email_alert(receiver_email: str, subject: str, message: str):
         notifier.send_email(receiver_email, subject, message)
         _logger.info("System alert email sent: %s", subject)
     except Exception as e:
-        _logger.error("Failed to send system alert email: %s", e, exc_info=True)
+        _logger.exception("Failed to send system alert email")
 
 def send_async_email(subject: str, body: str, to: str) -> None:
     """Send an email asynchronously with the given subject, body, and recipient."""

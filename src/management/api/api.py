@@ -68,7 +68,7 @@ def start_bot_api() -> Response:
             {"message": f"Started bot for {strategy_name}.", "bot_id": started_bot_id}
         )
     except Exception as e:
-        _logger.error("Failed to start bot: %s", e, exc_info=True)
+        _logger.exception("Failed to start bot: %s")
         return jsonify({"error": f"Failed to start bot: {e}"}), 500
 
 
@@ -87,7 +87,7 @@ def stop_bot_api() -> Response:
         stop_bot(bot_id)
         return jsonify({"message": f"Stopped bot {bot_id}."})
     except Exception as e:
-        _logger.error("Failed to stop bot: %s", e, exc_info=True)
+        _logger.exception("Failed to stop bot: %s")
         return jsonify({"error": f"Failed to stop bot: {e}"}), 500
 
 

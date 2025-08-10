@@ -193,7 +193,7 @@ class RetryManager:
         if not self.config.log_retries:
             return
 
-        _logger.error("All %d retry attempts failed. Final error: %s: %s. ", attempt, type(exception).__name__, exception, exc_info=True)
+        _logger.exception("All %d retry attempts failed. Final error: %s: %s. ", attempt, type(exception).__name__, exception)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get retry statistics."""

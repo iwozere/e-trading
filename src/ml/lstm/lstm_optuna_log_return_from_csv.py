@@ -125,7 +125,7 @@ set_seeds(Config.RANDOM_SEED)
 
 # ## IMPROVEMENT ##: Added device handling for GPU acceleration
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_logger.info(f"Using device: {DEVICE}")
+_logger.info("Using device: %s")
 
 # --- Data Preparation ---
 def create_sequences(features: np.ndarray, target: np.ndarray, seq_len: int):
@@ -251,7 +251,7 @@ def objective(trial: optuna.trial.Trial, df: pd.DataFrame):
 
         # ## IMPROVEMENT ##: Intermediate value pruning
         if trial.should_prune():
-            _logger.info(f"Trial {trial.number} pruned at epoch {epoch+1}.")
+            _logger.info("Trial %s pruned at epoch %s.")
             raise optuna.exceptions.TrialPruned()
 
     return avg_val_loss
@@ -266,10 +266,10 @@ def run_experiment(csv_file: Path):
 
     _logger.info("\n" + "="*50 + "\nOptuna Study Complete.\n" + "="*50)
     best_trial = study.best_trial
-    _logger.info(f"Best Trial Validation MSE: {best_trial.value:.6f}")
+    _logger.info("Best Trial Validation MSE: %s")
     _logger.info("Best Hyperparameters:")
     for key, value in best_trial.params.items():
-        _logger.info(f"  {key}: {value}")
+        _logger.info("  %s: %s")
 
     # --- Retrain Best Model on Full Training Data ---
     _logger.info("\n--- Retraining model with best hyperparameters ---")
@@ -330,7 +330,7 @@ def run_experiment(csv_file: Path):
             loss.backward()
             optimizer.step()
         if (epoch + 1) % 10 == 0:
-            _logger.info(f"[Retrain] Epoch {epoch + 1}/{best_params['epochs']} complete.")
+            _logger.info("[Retrain] Epoch %s/%s complete.")
 
     # --- Final Test Evaluation ---
     final_model.eval()
@@ -340,16 +340,16 @@ def run_experiment(csv_file: Path):
     # Inverse transform predictions to original scale for MSE calculation
     test_preds = target_scaler.inverse_transform(test_preds_scaled.cpu().numpy())
     final_mse = np.mean((test_preds - y_test)**2)
-    _logger.info(f"Final Test MSE: {final_mse:.6f}")
-    _logger.info(f"Final Test RMSE: {np.sqrt(final_mse):.6f}")
+    _logger.info("Final Test MSE: %s")
+    _logger.info("Final Test RMSE: %s")
 
     # --- Naive Reference Model ---
     close_idx = Config.FEATURE_COLUMNS.index('log_return')
     naive_preds = X_test[:, -1, close_idx]
     naive_targets = y_test.flatten()
     naive_mse = np.mean((naive_preds - naive_targets)**2)
-    _logger.info(f"Naive (previous log_return) Test MSE: {naive_mse:.6f}")
-    _logger.info(f"Naive (previous log_return) Test RMSE: {np.sqrt(naive_mse):.6f}")
+    _logger.info("Naive (previous log_return) Test MSE: %s")
+    _logger.info("Naive (previous log_return) Test RMSE: %s")
 
     # --- Save Model and Results ---
     symbol, period = csv_file.stem.split('_')[:2]
@@ -358,7 +358,7 @@ def run_experiment(csv_file: Path):
     model_dir.mkdir(exist_ok=True)
     model_path = model_dir / f"LSTM_{csv_file.stem}.pt"
     torch.save(final_model.state_dict(), model_path)
-    _logger.info(f"Model saved to {model_path}")
+    _logger.info("Model saved to %s")
 
     results_dir = PROJECT_ROOT / 'results'
     results_dir.mkdir(exist_ok=True)
@@ -380,18 +380,18 @@ def run_experiment(csv_file: Path):
     }
     with open(results_path, 'w') as f:
         json.dump(results_data, f, indent=2)
-    _logger.info(f"Results saved to {results_path}")
+    _logger.info("Results saved to %s")
 
 def run_all_csvs_in_data():
     data_dir = PROJECT_ROOT / 'data'
     csv_files = list(data_dir.glob('*.csv'))
-    _logger.info(f"Found {len(csv_files)} CSV files in {data_dir}")
+    _logger.info("Found %s CSV files in %s")
     for csv_file in csv_files:
-        _logger.info(f"\n{'='*20} Processing {csv_file.name} {'='*20}")
+        _logger.info("\n%s Processing %s %s")
         try:
             run_experiment(csv_file)
         except Exception as e:
-            _logger.error(f"ERROR processing {csv_file.name}: {e}", exc_info=True)
+            _logger.exception("ERROR processing %s", csv_file.name)
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
@@ -402,7 +402,7 @@ if __name__ == "__main__":
             if csv_path.exists():
                 run_experiment(csv_path)
             else:
-                _logger.error(f"Error: File not found at {csv_path}")
+                _logger.error("Error: File not found at %s", csv_path)
     else:
         _logger.info("Usage: python your_script.py [--all | path/to/your.csv]")
         # Default to running all

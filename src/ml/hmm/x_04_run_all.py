@@ -62,18 +62,18 @@ def main(args):
         _logger.error("Error: No CSV files found in the 'data/' directory.")
         return
 
-    _logger.info(f"Found {len(csv_files)} files to process.")
-    _logger.info(f"Running with Backend: {args.backend}, Trials: {args.n_trials}, Features: {args.features}")
+    _logger.info("Found %s files to process.")
+    _logger.info("Running with Backend: %s, Trials: %s, Features: %s")
 
     for csv_path_str in csv_files:
         csv_path = Path(csv_path_str)
         symbol_tf = csv_path.stem  # pathlib's clean way to get filename without extension
 
-        _logger.info(f"\n--- Processing {csv_path.name} ---")
+        _logger.info("\n--- Processing %s ---")
 
         try:
             # Step 1: Construct and run the training command dynamically
-            _logger.info(f"  -> Running training for {symbol_tf}...")
+            _logger.info("  -> Running training for %s...")
             train_cmd = [
                 "python", "src/ml/hmm/x_02_train_hmm.py",
                 "--csv", str(csv_path),
@@ -86,7 +86,7 @@ def main(args):
             subprocess.run(train_cmd, check=True, capture_output=True, text=True)
 
             # Step 2: Evaluate the results
-            _logger.info(f"  -> Running evaluation for {symbol_tf}...")
+            _logger.info("  -> Running evaluation for %s...")
             result_csv_path = output_dir_results / f"HMM_{symbol_tf}.csv"
             eval_cmd = [
                 "python", "src/ml/hmm/x_03_evaluate_hmm.py",
@@ -96,10 +96,10 @@ def main(args):
 
         except subprocess.CalledProcessError as e:
             # Makes the pipeline robust: if one file fails, it reports and continues
-            _logger.error(f"  -> ERROR processing {csv_path.name}.")
-            _logger.error(f"  -> Return Code: {e.returncode}")
-            _logger.error(f"  -> STDOUT: {e.stdout}")
-            _logger.error(f"  -> STDERR: {e.stderr}")
+            _logger.error("  -> ERROR processing %s.", csv_path.name)
+            _logger.error("  -> Return Code: %s", e.returncode)
+            _logger.error("  -> STDOUT: %s", e.stdout)
+            _logger.error("  -> STDERR: %s", e.stderr)
             continue # Move to the next file
 
     _logger.info("\n--- Pipeline finished! ---")

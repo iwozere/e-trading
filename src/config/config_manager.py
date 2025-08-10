@@ -245,7 +245,7 @@ class ConfigManager:
                 _logger.info("Deleted configuration: %s", config_id)
                 return True
             except Exception as e:
-                _logger.error("Error deleting config %s: %s", config_id, e, exc_info=True)
+                _logger.exception("Error deleting config %s: %s")
                 return False
         return False
 

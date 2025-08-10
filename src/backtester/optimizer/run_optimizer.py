@@ -230,7 +230,7 @@ def save_results(result, data_file):
                     f"Exit={serializable_trade['exit_price']} @ {serializable_trade['exit_time']}"
                 )
             except Exception as e:
-                _logger.error("Error processing trade: %s", e, exc_info=True)
+                _logger.exception("Error processing trade: %s")
                 continue
 
         # Process analyzer results
@@ -297,7 +297,7 @@ def save_results(result, data_file):
         _logger.info("Results saved to %s", json_file)
 
     except Exception as e:
-        _logger.error("Error saving results: %s", e, exc_info=True)
+        _logger.exception("Error saving results: %s")
         raise
 
 
@@ -379,7 +379,7 @@ if __name__ == "__main__":
                             n_jobs=optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1),
                         )
                     except Exception as e:
-                        _logger.error("Error during optimization for %s + %s: %s", entry_logic_name, exit_logic_name, e, exc_info=True)
+                        _logger.exception("Error during optimization for %s + %s: %s")
                         raise
 
                     # Get best result
@@ -406,13 +406,13 @@ if __name__ == "__main__":
                         # Save results
                         save_results(best_result, data_file)
                     except Exception as e:
-                        _logger.error("Error in final backtest for%s + %s: %s", entry_logic_name, exit_logic_name, e, exc_info=True)
+                        _logger.exception("Error in final backtest for%s + %s: %s")
                         raise
 
                     _logger.info("Completed optimization %d/%d", processed_combinations, total_combinations)
 
                 except Exception as e:
-                    _logger.error("Error for %s + %s: %s", entry_logic_name, exit_logic_name, e, exc_info=True)
+                    _logger.exception("Error for %s + %s: %s")
 
     end_time = dt.now()
     duration = end_time - start_time

@@ -71,7 +71,7 @@ class BasePlotter:
                         )
                         _logger.debug("RSI plotter created successfully")
                 except Exception as e:
-                    _logger.error("Error creating RSI plotter: %s", e, exc_info=True)
+                    _logger.exception("Error creating RSI plotter: %s")
 
             # Ichimoku
             if all(
@@ -96,7 +96,7 @@ class BasePlotter:
                         )
                         _logger.debug("Ichimoku plotter created successfully")
                 except Exception as e:
-                    _logger.error("Error creating Ichimoku plotter: %s", e, exc_info=True)
+                    _logger.exception("Error creating Ichimoku plotter: %s")
 
             # Bollinger Bands
             if "bb" in indicators:
@@ -115,7 +115,7 @@ class BasePlotter:
                         )
                         _logger.debug("Bollinger Bands plotter created successfully")
                 except Exception as e:
-                    _logger.error("Error creating Bollinger Bands plotter: %s", e, exc_info=True)
+                    _logger.exception("Error creating Bollinger Bands plotter: %s")
 
             # Volume
             if "volume" in indicators:
@@ -132,7 +132,7 @@ class BasePlotter:
                         )
                         _logger.debug("Volume plotter created successfully")
                 except Exception as e:
-                    _logger.error("Error creating Volume plotter: %s", e, exc_info=True)
+                    _logger.exception("Error creating Volume plotter: %s")
 
             # SuperTrend
             if "supertrend" in indicators:
@@ -151,7 +151,7 @@ class BasePlotter:
                         )
                         _logger.debug("SuperTrend plotter created successfully")
                 except Exception as e:
-                    _logger.error("Error creating SuperTrend plotter: %s", e, exc_info=True)
+                    _logger.exception("Error creating SuperTrend plotter: %s")
 
             _logger.info("Created %d indicator plotters", len(plotters))
         else:
@@ -281,7 +281,7 @@ class BasePlotter:
                     )
                     plotter.plot(self.axes[current_ax])
             except Exception as e:
-                _logger.error("Error plotting %s: %s", plotter.__class__.__name__, e, exc_info=True)
+                _logger.exception("Error plotting %s: %s")
                 continue
 
     def _plot_trades(self):
@@ -321,7 +321,7 @@ class BasePlotter:
                         label="Sell" if trade == self.trades[0] else "",
                     )
             except Exception as e:
-                _logger.error("Error plotting trade: %s", e, exc_info=True)
+                _logger.exception("Error plotting trade: %s")
                 continue
 
     def _plot_equity(self):

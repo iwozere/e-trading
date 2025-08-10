@@ -299,7 +299,7 @@ class SmartAlertSystem:
             return eval(condition, {"__builtins__": {}}, context)
 
         except Exception as e:
-            _logger.error("Error evaluating condition '%s': %s", condition, e, exc_info=True)
+            _logger.exception("Error evaluating condition '%s'", condition)
             return False
 
     async def _trigger_alert(self, rule: AlertRule):
@@ -338,7 +338,7 @@ class SmartAlertSystem:
         try:
             return rule.template.format(**self.performance_metrics)
         except Exception as e:
-            _logger.error("Error formatting alert template: %s", e, exc_info=True)
+            _logger.exception("Error formatting alert template")
             return f"Alert: {rule.name}"
 
     async def _send_alert_notifications(self, alert: Alert, rule: AlertRule):
@@ -368,7 +368,7 @@ class SmartAlertSystem:
                     )
 
             except Exception as e:
-                _logger.error("Error sending alert to %s: %s", channel.value, e, exc_info=True)
+                _logger.exception("Error sending alert to %s", channel.value)
 
     def acknowledge_alert(self, rule_name: str):
         """Acknowledge an alert"""

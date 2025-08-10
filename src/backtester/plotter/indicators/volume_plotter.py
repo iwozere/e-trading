@@ -21,7 +21,7 @@ class VolumePlotter(BaseIndicatorPlotter):
 
             self._apply_style(ax)
         except Exception as e:
-            _logger.error("Error plotting Volume: %s", e, exc_info=True)
+            _logger.exception("Error plotting Volume: %s")
 
     @property
     def subplot_type(self):

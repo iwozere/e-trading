@@ -91,7 +91,7 @@ class BaseTradingBot:
                 )
             )
         except Exception as e:
-            _logger.error("Notification manager not initialized: %s", e, exc_info=True)
+            _logger.exception("Notification manager not initialized: %s")
 
         self.max_drawdown_pct = config.get("max_drawdown_pct", 20.0)
         self.max_exposure = config.get("max_exposure", 1.0)  # 1.0 = 100% of balance
@@ -141,7 +141,7 @@ class BaseTradingBot:
             _logger.info("Initialized bot instance: %s", self.bot_id)
 
         except Exception as e:
-            _logger.error("Error initializing bot instance: %s", e, exc_info=True)
+            _logger.exception("Error initializing bot instance: %s")
 
     def run(self) -> None:
         """
@@ -158,7 +158,7 @@ class BaseTradingBot:
                 'last_heartbeat': datetime.now(timezone.utc)
             })
         except Exception as e:
-            _logger.error("Error updating bot status: %s", e, exc_info=True)
+            _logger.exception("Error updating bot status: %s")
 
         while self.is_running:
             try:
@@ -175,11 +175,11 @@ class BaseTradingBot:
                         'total_pnl': self.total_pnl
                     })
                 except Exception as e:
-                    _logger.error("Error updating heartbeat: %s", e, exc_info=True)
+                    _logger.exception("Error updating heartbeat: %s")
 
                 time.sleep(1)
             except Exception as e:
-                _logger.error("Error in bot loop: %s", e, exc_info=True)
+                _logger.exception("Error in bot loop: %s")
                 self.notify_error(str(e))
                 time.sleep(5)
 
@@ -323,7 +323,7 @@ class BaseTradingBot:
                     )
 
         except Exception as e:
-            _logger.error("Error executing trade: %s", e, exc_info=True)
+            _logger.exception("Error executing trade: %s")
             self.notify_error(str(e))
 
     def log_order(self, order: Any) -> None:
@@ -350,7 +350,7 @@ class BaseTradingBot:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump([order], f, default=str, indent=2)
         except Exception as e:
-            _logger.error("Failed to log order: %s", e, exc_info=True)
+            _logger.exception("Failed to log order: %s")
 
     def log_trade(self, trade: Dict[str, Any]) -> None:
         """
@@ -376,7 +376,7 @@ class BaseTradingBot:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump([trade], f, default=str, indent=2)
         except Exception as e:
-            _logger.error("Failed to log trade: %s", e, exc_info=True)
+            _logger.exception("Failed to log trade: %s")
 
     def save_state(self) -> None:
         """
@@ -394,7 +394,7 @@ class BaseTradingBot:
             with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
         except Exception as e:
-            _logger.error("Failed to save bot state: %s", e, exc_info=True)
+            _logger.exception("Failed to save bot state: %s")
 
     def load_state(self) -> None:
         """
@@ -416,7 +416,7 @@ class BaseTradingBot:
                     )
                     self.total_pnl = state.get("total_pnl", 0.0)
             except Exception as e:
-                _logger.error("Failed to load legacy bot state: %s", e, exc_info=True)
+                _logger.exception("Failed to load legacy bot state: %s")
 
     def _load_open_positions_from_db(self) -> None:
         """
@@ -439,7 +439,7 @@ class BaseTradingBot:
             _logger.info("Loaded %d open positions from database for %s", len(open_trades), self.bot_id)
 
         except Exception as e:
-            _logger.error("Error loading open positions from database: %s", e, exc_info=True)
+            _logger.exception("Error loading open positions from database: %s")
             # Fall back to empty active positions
             self.active_positions = {}
 
@@ -453,7 +453,7 @@ class BaseTradingBot:
             try:
                 asyncio.run(self.notification_manager.send_error_notification(error_msg))
             except Exception as e:
-                _logger.error("Failed to send error notification: %s", e, exc_info=True)
+                _logger.exception("Failed to send error notification: %s")
 
     def notify_trade_event(
         self,
@@ -488,7 +488,7 @@ class BaseTradingBot:
                     )
                 )
             except Exception as e:
-                _logger.error("Failed to send trade notification: %s", e, exc_info=True)
+                _logger.exception("Failed to send trade notification: %s")
         # TODO: If running in an async context, prefer 'await' over 'asyncio.run' for notification calls.
 
     def update_positions(self):
@@ -538,7 +538,7 @@ class BaseTradingBot:
                 'total_pnl': self.total_pnl
             })
         except Exception as e:
-            _logger.error("Error updating bot status on stop: %s", e, exc_info=True)
+            _logger.exception("Error updating bot status on stop: %s")
 
         # Close all open positions
         for pair in list(self.active_positions.keys()):
@@ -579,7 +579,7 @@ class BaseTradingBot:
                     self.notification_manager.send_trade_notification({"message": msg})
                 )
         except Exception as e:
-            _logger.error("Failed to send notification: %s", e, exc_info=True)
+            _logger.exception("Failed to send notification: %s")
 
     def pre_run(self, data_feed):
         """

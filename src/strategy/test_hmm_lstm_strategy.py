@@ -54,7 +54,7 @@ def prepare_data(data_path: str) -> pd.DataFrame:
         df['log_return'] = (df['close'] / df['close'].shift(1)).apply(lambda x: 0 if x <= 0 else pd.np.log(x))
         df['log_return'].fillna(0, inplace=True)
 
-    _logger.info(f"Loaded data: {len(df)} rows, {df.index.min()} to {df.index.max()}")
+    _logger.info("Loaded data: %s rows, %s to %s")
     return df
 
 def create_backtrader_feed(df: pd.DataFrame, symbol: str = "BTCUSDT") -> bt.feeds.PandasData:
@@ -124,9 +124,9 @@ def run_backtest(strategy_config: dict, data_path: str, variant: str = "default"
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
 
     # Print starting conditions
-    _logger.info(f"Starting Portfolio Value: {cerebro.broker.getvalue():.2f}")
-    _logger.info(f"Strategy variant: {variant}")
-    _logger.info(f"Configuration: {config}")
+    _logger.info("Starting Portfolio Value: %s")
+    _logger.info("Strategy variant: %s")
+    _logger.info("Configuration: %s")
 
     # Run backtest
     try:
@@ -166,24 +166,24 @@ def run_backtest(strategy_config: dict, data_path: str, variant: str = "default"
             results_summary['win_rate'] = results_summary['winning_trades'] / total_trades * 100
 
         # Log results
-        _logger.info(f"\n{'='*50}")
-        _logger.info(f"BACKTEST RESULTS ({variant.upper()})")
-        _logger.info(f"{'='*50}")
-        _logger.info(f"Initial Value: ${results_summary['initial_value']:,.2f}")
-        _logger.info(f"Final Value: ${results_summary['final_value']:,.2f}")
-        _logger.info(f"Total Return: {results_summary['total_return_pct']:.2f}%")
-        _logger.info(f"Sharpe Ratio: {results_summary['sharpe_ratio']:.3f}")
-        _logger.info(f"Max Drawdown: {results_summary['max_drawdown']:.2f}%")
-        _logger.info(f"Total Trades: {results_summary['total_trades']}")
-        _logger.info(f"Win Rate: {results_summary['win_rate']:.1f}%")
-        _logger.info(f"Avg Win: ${results_summary['avg_win']:.2f}")
-        _logger.info(f"Avg Loss: ${results_summary['avg_loss']:.2f}")
-        _logger.info(f"{'='*50}")
+        _logger.info("\n%s")
+        _logger.info("BACKTEST RESULTS (%s)")
+        _logger.info("%s")
+        _logger.info("Initial Value: $%s")
+        _logger.info("Final Value: $%s")
+        _logger.info("Total Return: %s%")
+        _logger.info("Sharpe Ratio: %s")
+        _logger.info("Max Drawdown: %s%")
+        _logger.info("Total Trades: %s")
+        _logger.info("Win Rate: %s%")
+        _logger.info("Avg Win: $%s")
+        _logger.info("Avg Loss: $%s")
+        _logger.info("%s")
 
         return results_summary
 
     except Exception as e:
-        _logger.error(f"Error running backtest: {str(e)}")
+        _logger.exception("Error running backtest")
         raise
 
 def compare_variants(strategy_config: dict, data_path: str) -> dict:
@@ -197,29 +197,29 @@ def compare_variants(strategy_config: dict, data_path: str) -> dict:
     for variant in variants:
         if variant in strategy_config.get("variants", {}):
             try:
-                _logger.info(f"\nRunning {variant} variant...")
+                _logger.info("\nRunning %s variant...")
                 variant_results = run_backtest(strategy_config, data_path, variant)
                 results[variant] = variant_results
             except Exception as e:
-                _logger.error(f"Error running {variant} variant: {str(e)}")
+                _logger.exception("Error running %s variant", variant)
                 results[variant] = None
 
     # Print comparison
-    _logger.info(f"\n{'='*70}")
-    _logger.info(f"VARIANT COMPARISON")
-    _logger.info(f"{'='*70}")
-    _logger.info(f"{'Variant':<12} {'Return %':<10} {'Sharpe':<8} {'Drawdown %':<12} {'Trades':<8} {'Win Rate %':<10}")
-    _logger.info(f"{'-'*70}")
+    _logger.info("\n%s")
+    _logger.info("VARIANT COMPARISON")
+    _logger.info("%s")
+    _logger.info("%s %s %s %s %s %s")
+    _logger.info("%s")
 
     for variant, result in results.items():
         if result:
-            _logger.info(f"{variant:<12} {result['total_return_pct']:<10.2f} "
-                        f"{result['sharpe_ratio']:<8.3f} {result['max_drawdown']:<12.2f} "
-                        f"{result['total_trades']:<8} {result['win_rate']:<10.1f}")
+                        _logger.info("%-12s %-10.2f %-8.3f %-12.2f %-8d %-10.1f",
+                         variant, result['total_return_pct'], result['sharpe_ratio'],
+                         result['max_drawdown'], result['total_trades'], result['win_rate'])
         else:
-            _logger.info(f"{variant:<12} {'ERROR':<10}")
+            _logger.info("%s %s")
 
-    _logger.info(f"{'='*70}")
+    _logger.info("%s")
 
     return results
 
@@ -253,11 +253,11 @@ def main():
         return
 
     if not Path(args.config).exists():
-        _logger.error(f"Configuration file not found: {args.config}")
+        _logger.error("Configuration file not found: %s", args.config)
         return
 
     if not Path(args.data).exists():
-        _logger.error(f"Data file not found: {args.data}")
+        _logger.error("Data file not found: %s", args.data)
         return
 
     try:
@@ -272,7 +272,7 @@ def main():
             run_backtest(strategy_config, args.data, args.variant)
 
     except Exception as e:
-        _logger.error(f"Error: {str(e)}")
+        _logger.exception("Error")
         raise
 
 if __name__ == "__main__":

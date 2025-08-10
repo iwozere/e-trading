@@ -165,11 +165,11 @@ def train_lstm(X, y, input_dim, save_path, hidden_dim, num_layers):
         final_loss = total_loss / len(loader)
         # Log every 5 epochs to reduce verbosity
         if (epoch + 1) % 5 == 0:
-            _logger.info(f"Epoch {epoch+1}/{EPOCHS} - Loss: {final_loss:.4f}")
+            _logger.info("Epoch %s/%s - Loss: %s")
 
-    _logger.info(f"Final training loss: {final_loss:.4f}")
+    _logger.info("Final training loss: %s")
     torch.save(model.state_dict(), save_path)
-    _logger.info(f"✅ Saved model: {save_path}")
+    _logger.info("✅ Saved model: %s")
 
 # ---- Runner ----
 if __name__ == "__main__":
@@ -184,17 +184,17 @@ if __name__ == "__main__":
     for csv_path in csv_files:
         # Extract base filename for naming output files
         filename = os.path.splitext(os.path.basename(csv_path))[0]
-        _logger.info(f"\n📂 Processing: {filename}")
+        _logger.info("\n📂 Processing: %s")
 
         # Train a separate model for each defined regime
         for regime_id, regime_name in REGIME_NAMES.items():
-            _logger.info(f"--- Regime: {regime_name} ({regime_id}) ---")
+            _logger.info("--- Regime: %s (%s) ---")
 
             # Prepare data for the current regime
             X, y = prepare_data(csv_path, regime_id, FEATURE_COLS, window=WINDOW)
 
             if X is None or len(X) == 0:
-                _logger.warning(f"⚠️ Not enough data for regime '{regime_name}', skipping.")
+                _logger.warning("⚠️ Not enough data for regime '%s', skipping.")
                 continue
 
             # Train the model
@@ -234,4 +234,4 @@ if __name__ == "__main__":
             with open(json_path, 'w') as f:
                 json.dump(params, f, indent=4)
 
-            _logger.info(f"📄 Saved params to: {json_path}")
+            _logger.info("📄 Saved params to: %s")

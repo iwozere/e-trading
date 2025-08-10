@@ -165,9 +165,9 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
                 self.hmm_model = hmm_package['model']
                 self.hmm_scaler = hmm_package['scaler']
                 self.hmm_features = hmm_package['features']
-                _logger.info(f"Loaded HMM model from {hmm_file}")
+                _logger.info("Loaded HMM model from %s")
             else:
-                _logger.warning(f"No HMM model found for {self.symbol} {self.timeframe}")
+                _logger.warning("No HMM model found for %s %s")
 
             # Load LSTM model
             lstm_pattern = f"lstm_{self.symbol}_{self.timeframe}_*.pkl"
@@ -193,9 +193,9 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
                 self.lstm_features = lstm_package['features']
                 self.sequence_length = lstm_package['hyperparameters']['sequence_length']
 
-                _logger.info(f"Loaded LSTM model from {lstm_file}")
+                _logger.info("Loaded LSTM model from %s")
             else:
-                _logger.warning(f"No LSTM model found for {self.symbol} {self.timeframe}")
+                _logger.warning("No LSTM model found for %s %s")
 
             # Load optimized indicator parameters
             indicator_pattern = f"indicators_{self.symbol}_{self.timeframe}_*.json"
@@ -207,13 +207,13 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
                     indicator_results = json.load(f)
 
                 self.optimized_indicators = indicator_results['best_params']
-                _logger.info(f"Loaded optimized indicators from {indicator_file}")
+                _logger.info("Loaded optimized indicators from %s")
             else:
-                _logger.warning(f"No optimized indicators found for {self.symbol} {self.timeframe}")
+                _logger.warning("No optimized indicators found for %s %s")
                 self.optimized_indicators = {}
 
         except Exception as e:
-            _logger.error(f"Error loading models: {str(e)}")
+            _logger.exception("Error loading models")
             raise
 
     def _init_indicators(self):
@@ -245,10 +245,10 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
             # using the data feed. For this example, we'll assume they're calculated
             # in the next() method using the raw OHLCV data.
 
-            _logger.info(f"Initialized indicators with optimized parameters: {params}")
+            _logger.info("Initialized indicators with optimized parameters: %s")
 
         except Exception as e:
-            _logger.error(f"Error initializing indicators: {str(e)}")
+            _logger.exception("Error initializing indicators")
             raise
 
     def _calculate_indicators(self) -> Dict[str, float]:
@@ -342,7 +342,7 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
             return indicators
 
         except Exception as e:
-            _logger.error(f"Error calculating indicators: {str(e)}")
+            _logger.exception("Error calculating indicators")
             return {}
 
     def _predict_regime(self, features: Dict[str, float]) -> Tuple[int, float]:
@@ -382,7 +382,7 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
             return int(regime[0]), float(confidence)
 
         except Exception as e:
-            _logger.error(f"Error predicting regime: {str(e)}")
+            _logger.exception("Error predicting regime")
             return 1, 0.5  # Default to neutral regime
 
     def _predict_price(self, features: Dict[str, float], regime: int, regime_confidence: float) -> float:
@@ -439,7 +439,7 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
             return float(prediction)
 
         except Exception as e:
-            _logger.error(f"Error predicting price: {str(e)}")
+            _logger.exception("Error predicting price")
             return 0.0
 
     def _calculate_position_size(self, prediction: float, regime_confidence: float) -> float:
@@ -500,8 +500,8 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
             self.current_regime = regime
             self.regime_confidence = regime_confidence
 
-            _logger.debug(f"Regime: {regime} (conf: {regime_confidence:.3f}), "
-                         f"Prediction: {prediction:.6f}, Price: {self.data.close[0]:.4f}")
+            _logger.debug("Regime: %d (conf: %.3f), Prediction: %.6f, Price: %.4f",
+                         regime, regime_confidence, prediction, self.data.close[0])
 
             # Trading logic
             current_position = self.position.size
@@ -515,7 +515,7 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
                 self._check_exit_signals(prediction, regime, regime_confidence)
 
         except Exception as e:
-            _logger.error(f"Error in next(): {str(e)}")
+            _logger.exception("Error in next()")
 
     def _check_entry_signals(self, prediction: float, regime: int, regime_confidence: float):
         """Check for entry signals and execute trades."""
@@ -541,9 +541,8 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
 
             # Long signal
             if prediction > self.prediction_threshold:
-                _logger.info(f"LONG signal - Prediction: {prediction:.6f}, "
-                           f"Regime: {regime}, Confidence: {regime_confidence:.3f}, "
-                           f"Size: {position_size:.3f}")
+                _logger.info("LONG signal - Prediction: %.6f, Regime: %d, Confidence: %.3f, Size: %.3f",
+                           prediction, regime, regime_confidence, position_size)
 
                 order = self.buy(size=max_shares)
                 if order:
@@ -553,9 +552,8 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
 
             # Short signal (if enabled)
             elif prediction < -self.prediction_threshold and self.config.get('allow_short', False):
-                _logger.info(f"SHORT signal - Prediction: {prediction:.6f}, "
-                           f"Regime: {regime}, Confidence: {regime_confidence:.3f}, "
-                           f"Size: {position_size:.3f}")
+                _logger.info("SHORT signal - Prediction: %.6f, Regime: %d, Confidence: %.3f, Size: %.3f",
+                           prediction, regime, regime_confidence, position_size)
 
                 order = self.sell(size=max_shares)
                 if order:
@@ -564,7 +562,7 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
                     self.current_trade_regime = regime
 
         except Exception as e:
-            _logger.error(f"Error checking entry signals: {str(e)}")
+            _logger.exception("Error checking entry signals")
 
     def _check_exit_signals(self, prediction: float, regime: int, regime_confidence: float):
         """Check for exit signals and close positions."""
@@ -624,8 +622,8 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
 
             # Execute exit
             if exit_signal:
-                _logger.info(f"EXIT signal ({exit_reason}) - PnL: {pnl_pct:.4f}, "
-                           f"Prediction: {prediction:.6f}, Regime: {regime}")
+                _logger.info("EXIT signal (%s) - PnL: %.4f, Prediction: %.6f, Regime: %d",
+                           exit_reason, pnl_pct, prediction, regime)
 
                 self.close()
 
@@ -635,17 +633,17 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
                 self.current_trade_regime = None
 
         except Exception as e:
-            _logger.error(f"Error checking exit signals: {str(e)}")
+            _logger.exception("Error checking exit signals")
 
     def notify_trade(self, trade):
         """Handle trade notifications."""
         try:
             if trade.isclosed:
-                _logger.info(f"Trade closed - PnL: {trade.pnl:.2f}, "
-                           f"Commission: {trade.commission:.2f}")
+                _logger.info("Trade closed - PnL: %.2f, Commission: %.2f",
+                           trade.pnl, trade.commission)
 
         except Exception as e:
-            _logger.error(f"Error in notify_trade: {str(e)}")
+            _logger.exception("Error in notify_trade")
 
     def stop(self):
         """Called when strategy stops."""
@@ -657,8 +655,8 @@ class HMMLSTMPipelineStrategy(bt.Strategy):
             regimes = [p['regime'] for p in self.prediction_buffer]
             confidences = [p['confidence'] for p in self.prediction_buffer]
 
-            _logger.info(f"Performance Summary:")
-            _logger.info(f"  Total predictions: {len(predictions)}")
-            _logger.info(f"  Avg prediction magnitude: {np.mean(np.abs(predictions)):.6f}")
-            _logger.info(f"  Avg regime confidence: {np.mean(confidences):.3f}")
-            _logger.info(f"  Regime distribution: {np.bincount(regimes)}")
+            _logger.info("Performance Summary:")
+            _logger.info("  Total predictions: %s")
+            _logger.info("  Avg prediction magnitude: %s")
+            _logger.info("  Avg regime confidence: %s")
+            _logger.info("  Regime distribution: %s")

@@ -137,7 +137,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             return df
 
         except Exception as e:
-            _logger.error("Error loading historical data for %s: %s", self.symbol, e, exc_info=True)
+            _logger.exception("Error loading historical data for %s: %s")
             return None
 
     def _process_coin_data(self, data: Dict, start_timestamp: int, end_timestamp: int) -> Optional[pd.DataFrame]:
@@ -179,7 +179,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             return ohlcv
 
         except Exception as e:
-            _logger.error("Error processing CoinGecko data: %s", e, exc_info=True)
+            _logger.exception("Error processing CoinGecko data: %s")
             return None
 
     def _get_resample_rule(self) -> str:
@@ -255,10 +255,10 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             return response
 
         except requests.exceptions.RequestException as e:
-            _logger.error("Request error: %s", e, exc_info=True)
+            _logger.exception("Request error: %s")
             return None
         except Exception as e:
-            _logger.error("Unexpected error in API call: %s", e, exc_info=True)
+            _logger.exception("Unexpected error in API call: %s")
             return None
 
     def _connect_realtime(self) -> bool:
@@ -281,7 +281,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
                 return False
 
         except Exception as e:
-            _logger.error("Error connecting to CoinGecko: %s", e, exc_info=True)
+            _logger.exception("Error connecting to CoinGecko: %s")
             return False
 
     def _disconnect_realtime(self):
@@ -343,7 +343,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             return new_bar
 
         except Exception as e:
-            _logger.error("Error getting latest data for %s: %s", self.symbol, e, exc_info=True)
+            _logger.exception("Error getting latest data for %s: %s")
             return None
 
     def _get_update_interval(self) -> int:

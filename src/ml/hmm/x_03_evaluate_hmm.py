@@ -136,9 +136,9 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{base_name}.png"
 
-    _logger.info(f"Generating plot for {args.csv}...")
+    _logger.info("Generating plot for %s...")
     plot_regimes(df_labeled, output_path)
-    _logger.info(f"Plot saved successfully to {output_path}")
+    _logger.info("Plot saved successfully to %s")
 
 
 if __name__ == '__main__':

@@ -33,4 +33,4 @@ class BaseIndicatorPlotter(ABC):
             )
             ax.legend(loc=self.vis_settings.get("legend_loc", "upper left"))
         except Exception as e:
-            _logger.error("Error applying style to axis: %s", e, exc_info=True)
+            _logger.exception("Error applying style to axis: %s")

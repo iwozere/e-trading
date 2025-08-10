@@ -125,7 +125,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             return df
 
         except Exception as e:
-            _logger.error("Error loading historical data for %s: %s", self.symbol, e, exc_info=True)
+            _logger.exception("Error loading historical data for %s: %s")
             return None
 
     def _calculate_period(self) -> str:
@@ -200,7 +200,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             return True
 
         except Exception as e:
-            _logger.error("Error connecting to Yahoo Finance for %s: %s", self.symbol, e, exc_info=True)
+            _logger.exception("Error connecting to Yahoo Finance for %s: %s")
             return False
 
     def _disconnect_realtime(self):
@@ -251,7 +251,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
                 return recent_data.tail(1)
 
         except Exception as e:
-            _logger.error("Error getting latest data for %s: %s", self.symbol, e, exc_info=True)
+            _logger.exception("Error getting latest data for %s: %s")
             return None
 
     def _get_update_interval(self) -> int:

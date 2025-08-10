@@ -117,7 +117,7 @@ class DataDownloaderFactory:
             return DataDownloaderFactory._create_downloader_instance(downloader_class, normalized_provider, **kwargs)
 
         except Exception as e:
-            _logger.error("Error creating downloader for provider %s: %s", provider_code, e, exc_info=True)
+            _logger.exception("Error creating downloader for provider %s: %s")
             return None
 
     @staticmethod
