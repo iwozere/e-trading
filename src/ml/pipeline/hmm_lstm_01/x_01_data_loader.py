@@ -18,7 +18,6 @@ import numpy as np
 import yaml
 from pathlib import Path
 from datetime import datetime, timedelta
-import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 import os
@@ -28,13 +27,8 @@ project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
 from src.common import get_ohlcv, analyze_period_interval
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class DataLoader:
     def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
@@ -57,7 +51,7 @@ class DataLoader:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def _generate_filename(self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime) -> str:
@@ -84,7 +78,7 @@ class DataLoader:
 
             start_date, end_date = analyze_period_interval(period, timeframe)
 
-            logger.info(f"Downloading {symbol} {timeframe} from {start_date} to {end_date}")
+            _logger.info("Downloading %s %s from %s to %s", symbol, timeframe, start_date, end_date)
 
             # Download data using common utility
             df = get_ohlcv(
@@ -108,14 +102,14 @@ class DataLoader:
             # Save to CSV
             df.to_csv(filepath, index=False)
 
-            logger.info(f"[OK] Successfully saved {symbol} {timeframe} to {filepath}")
-            logger.info(f"  Data shape: {df.shape}, Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+            _logger.info("[OK] Successfully saved %s %s to %s", symbol, timeframe, filepath)
+            _logger.info("  Data shape: %s, Date range: %s to %s", df.shape, df['timestamp'].min(), df['timestamp'].max())
 
             return symbol, timeframe, True, str(filepath)
 
         except Exception as e:
             error_msg = f"Failed to download {symbol} {timeframe}: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
             return symbol, timeframe, False, error_msg
 
     def download_all(self, max_workers: int = 4) -> dict:
@@ -134,7 +128,7 @@ class DataLoader:
         # Create list of all symbol-timeframe combinations
         tasks = [(symbol, tf) for symbol in symbols for tf in timeframes]
 
-        logger.info(f"Starting download for {len(symbols)} symbols x {len(timeframes)} timeframes = {len(tasks)} files")
+        _logger.info("Starting download for %d symbols x %d timeframes = %d files", len(symbols), len(timeframes), len(tasks))
 
         results = {
             'successful': [],
@@ -168,17 +162,17 @@ class DataLoader:
                     })
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"Download Summary:")
-        logger.info(f"  Total: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
-        logger.info(f"{'='*50}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("Download Summary:")
+        _logger.info("  Total: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed downloads:")
+            _logger.warning("Failed downloads:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['symbol']} {failure['timeframe']}: {failure['error']}")
+                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
 
         return results
 
@@ -240,13 +234,13 @@ def main():
         results = loader.download_all(max_workers=6)
 
         # Verify data quality for successful downloads
-        logger.info("\nVerifying data quality...")
+        _logger.info("\nVerifying data quality...")
         for item in results['successful']:
             filepath = Path(item['filepath'])
             quality = loader.verify_data_quality(filepath)
 
             if 'error' in quality:
-                logger.error(f"Quality check failed for {filepath}: {quality['error']}")
+                _logger.error("Quality check failed for %s: %s", filepath, quality['error'])
             else:
                 issues = []
                 if quality['missing_columns']:
@@ -257,14 +251,14 @@ def main():
                     issues.append(f"Invalid OHLC: {quality['invalid_ohlc']}")
 
                 if issues:
-                    logger.warning(f"{filepath.name}: {', '.join(issues)}")
+                    _logger.warning("%s: %s", filepath.name, ', '.join(issues))
                 else:
-                    logger.info(f"[OK] {filepath.name}: Quality OK - {quality['shape'][0]} rows")
+                    _logger.info("[OK] %s: Quality OK - %d rows", filepath.name, quality['shape'][0])
 
-        logger.info("Data loading completed!")
+        _logger.info("Data loading completed!")
 
     except Exception as e:
-        logger.error(f"Data loading failed: {str(e)}")
+        _logger.exception("Data loading failed")
         raise
 
 if __name__ == "__main__":

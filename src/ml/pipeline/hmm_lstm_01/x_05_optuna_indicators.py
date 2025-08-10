@@ -18,7 +18,6 @@ import pandas as pd
 import numpy as np
 import yaml
 from pathlib import Path
-import logging
 import json
 from datetime import datetime
 import optuna
@@ -31,12 +30,8 @@ from concurrent.futures import ProcessPoolExecutor
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class IndicatorOptimizer:
     def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
@@ -64,7 +59,7 @@ class IndicatorOptimizer:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def calculate_indicators_with_params(self, df: pd.DataFrame, params: Dict) -> pd.DataFrame:
@@ -149,7 +144,7 @@ class IndicatorOptimizer:
                 df['mfi'] = talib.MFI(high, low, close, volume, timeperiod=params['mfi_period'])
 
         except Exception as e:
-            logger.warning(f"Error calculating indicators with params {params}: {str(e)}")
+            _logger.warning("Error calculating indicators with params %s: %s", params, str(e))
             # Return original DataFrame if calculation fails
             return df
 
@@ -392,7 +387,7 @@ class IndicatorOptimizer:
             return -objective_value  # Negative because Optuna minimizes
 
         except Exception as e:
-            logger.warning(f"Error in objective function: {str(e)}")
+            _logger.warning("Error in objective function: %s", str(e))
             return 999  # Return large positive value for failed trials
 
     def optimize_indicators(self, symbol: str, timeframe: str) -> Dict:
@@ -406,7 +401,7 @@ class IndicatorOptimizer:
         Returns:
             Dict with optimization results
         """
-        logger.info(f"Optimizing indicators for {symbol} {timeframe}")
+        _logger.info("Optimizing indicators for %s %s", symbol, timeframe)
 
         try:
             # Find labeled data file
@@ -418,7 +413,7 @@ class IndicatorOptimizer:
 
             # Use the most recent file
             csv_file = sorted(csv_files)[-1]
-            logger.info(f"Using data file: {csv_file}")
+            _logger.info("Using data file: %s", csv_file)
 
             # Load data
             df = pd.read_csv(csv_file)
@@ -428,7 +423,7 @@ class IndicatorOptimizer:
             split_idx = int(len(df) * 0.2)
             df_optimization = df.iloc[split_idx:].copy().reset_index(drop=True)
 
-            logger.info(f"Using {len(df_optimization)} samples for optimization")
+            _logger.info("Using %d samples for optimization", len(df_optimization))
 
             # Create Optuna study
             study = optuna.create_study(
@@ -449,9 +444,9 @@ class IndicatorOptimizer:
             best_params = study.best_params
             best_value = -study.best_value  # Convert back to positive
 
-            logger.info(f"Optimization completed for {symbol} {timeframe}")
-            logger.info(f"Best objective value: {best_value:.4f}")
-            logger.info(f"Best parameters: {best_params}")
+            _logger.info("Optimization completed for %s %s", symbol, timeframe)
+            _logger.info("Best objective value: %.4f", best_value)
+            _logger.info("Best parameters: %s", best_params)
 
             # Validate on the full dataset
             df_with_indicators = self.calculate_indicators_with_params(df, best_params)
@@ -495,7 +490,7 @@ class IndicatorOptimizer:
             with open(output_path, 'w') as f:
                 json.dump(results, f, indent=2)
 
-            logger.info(f"[OK] Saved optimization results to {output_path}")
+            _logger.info("[OK] Saved optimization results to %s", output_path)
 
             return {
                 'symbol': symbol,
@@ -508,7 +503,7 @@ class IndicatorOptimizer:
 
         except Exception as e:
             error_msg = f"Failed to optimize indicators for {symbol} {timeframe}: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -526,7 +521,7 @@ class IndicatorOptimizer:
         symbols = self.config['symbols']
         timeframes = self.config['timeframes']
 
-        logger.info(f"Optimizing indicators for {len(symbols)} symbols x {len(timeframes)} timeframes")
+        _logger.info("Optimizing indicators for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
         results = {
             'total': len(symbols) * len(timeframes),
@@ -544,17 +539,17 @@ class IndicatorOptimizer:
                     results['failed'].append(result)
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"Indicator Optimization Summary:")
-        logger.info(f"  Total: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
-        logger.info(f"{'='*50}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("Indicator Optimization Summary:")
+        _logger.info("  Total: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed optimizations:")
+            _logger.warning("Failed optimizations:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['symbol']} {failure['timeframe']}: {failure['error']}")
+                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
 
         return results
 
@@ -564,10 +559,10 @@ def main():
         optimizer = IndicatorOptimizer()
         results = optimizer.optimize_all()
 
-        logger.info("Indicator optimization completed!")
+        _logger.info("Indicator optimization completed!")
 
     except Exception as e:
-        logger.error(f"Indicator optimization failed: {str(e)}")
+        _logger.error("Indicator optimization failed: %s", str(e))
         raise
 
 if __name__ == "__main__":

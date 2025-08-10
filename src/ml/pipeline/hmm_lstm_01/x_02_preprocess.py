@@ -16,7 +16,6 @@ import pandas as pd
 import numpy as np
 import yaml
 from pathlib import Path
-import logging
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 import talib
 import sys
@@ -26,12 +25,9 @@ from typing import Dict, List, Optional, Tuple
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
 
 class DataPreprocessor:
     def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
@@ -55,7 +51,7 @@ class DataPreprocessor:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def add_log_returns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -166,7 +162,7 @@ class DataPreprocessor:
             df['low_close_ratio'] = (close - low) / close
 
         except Exception as e:
-            logger.warning(f"Error calculating technical indicators: {str(e)}")
+            _logger.exception("Error calculating technical indicators: %s")
             # Continue without technical indicators if calculation fails
 
         return df
@@ -314,7 +310,7 @@ class DataPreprocessor:
         Returns:
             Dict with processing statistics
         """
-        logger.info(f"Processing {input_path.name}")
+        _logger.info("Processing %s", input_path.name)
 
         try:
             # Load data
@@ -356,13 +352,13 @@ class DataPreprocessor:
                 'success': True
             }
 
-            logger.info(f"[OK] {input_path.name}: {original_shape} -> {df.shape} (+{stats['columns_added']} cols, -{stats['rows_removed']} rows)")
+            _logger.info("[OK] %s: %s -> %s (+%d cols, -%d rows)", input_path.name, original_shape, df.shape, stats['columns_added'], stats['rows_removed'])
 
             return stats
 
         except Exception as e:
-            error_msg = f"Failed to process {input_path.name}: {str(e)}"
-            logger.error(error_msg)
+            error_msg = f"Failed to process {input_path.name}"
+            _logger.exception(error_msg)
             return {
                 'input_file': str(input_path),
                 'success': False,
@@ -380,10 +376,10 @@ class DataPreprocessor:
         csv_files = list(self.raw_data_dir.glob("*.csv"))
 
         if not csv_files:
-            logger.warning(f"No CSV files found in {self.raw_data_dir}")
+            _logger.warning("No CSV files found in %s", self.raw_data_dir)
             return {'total': 0, 'successful': [], 'failed': []}
 
-        logger.info(f"Found {len(csv_files)} CSV files to process")
+        _logger.info("Found %d CSV files to process", len(csv_files))
 
         results = {
             'total': len(csv_files),
@@ -405,17 +401,17 @@ class DataPreprocessor:
                 results['failed'].append(stats)
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"Preprocessing Summary:")
-        logger.info(f"  Total files: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
-        logger.info(f"{'='*50}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("Preprocessing Summary:")
+        _logger.info("  Total files: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed processing:")
+            _logger.warning("Failed processing:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['input_file']}: {failure['error']}")
+                _logger.warning("  %s: %s", failure['input_file'], failure['error'])
 
         return results
 
@@ -425,10 +421,10 @@ def main():
         preprocessor = DataPreprocessor()
         results = preprocessor.process_all()
 
-        logger.info("Preprocessing completed!")
+        _logger.info("Preprocessing completed!")
 
     except Exception as e:
-        logger.error(f"Preprocessing failed: {str(e)}")
+        _logger.exception("Preprocessing failed")
         raise
 
 if __name__ == "__main__":

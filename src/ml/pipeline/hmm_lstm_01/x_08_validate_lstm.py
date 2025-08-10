@@ -21,7 +21,6 @@ import torch
 import torch.nn as nn
 import yaml
 from pathlib import Path
-import logging
 import json
 import pickle
 from datetime import datetime
@@ -36,12 +35,8 @@ from typing import Dict, List, Optional, Tuple, Any
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 # Set device
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -118,7 +113,7 @@ class LSTMValidator:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def find_latest_model(self, symbol: str, timeframe: str) -> Optional[Path]:
@@ -136,12 +131,12 @@ class LSTMValidator:
         model_files = list(self.models_dir.glob(pattern))
 
         if not model_files:
-            logger.warning(f"No LSTM model found for {symbol} {timeframe}")
+            _logger.warning("No LSTM model found for %s %s", symbol, timeframe)
             return None
 
         # Return the most recent model
         latest_model = sorted(model_files)[-1]
-        logger.info(f"Found latest model: {latest_model}")
+        _logger.info("Found latest model: %s", latest_model)
         return latest_model
 
     def load_model(self, model_path: Path) -> Dict:
@@ -174,13 +169,13 @@ class LSTMValidator:
 
             model_package['model'] = model
 
-            logger.info(f"Loaded LSTM model from {model_path}")
-            logger.info(f"Model features: {len(model_package['features'])}")
+            _logger.info("Loaded LSTM model from %s", model_path)
+            _logger.info("Model features: %d", len(model_package['features']))
 
             return model_package
 
         except Exception as e:
-            logger.error(f"Failed to load model from {model_path}: {str(e)}")
+            _logger.error("Failed to load model from %s: %s", model_path, str(e))
             raise
 
     def prepare_test_data(self, df: pd.DataFrame, model_package: Dict) -> Dict:
@@ -709,7 +704,7 @@ class LSTMValidator:
                 pdf.savefig(fig, bbox_inches='tight')
                 plt.close(fig)
 
-        logger.info(f"Generated PDF report: {pdf_path}")
+        _logger.info("Generated PDF report: %s", pdf_path)
         return pdf_path
 
     def validate_lstm(self, symbol: str, timeframe: str) -> Dict:
@@ -723,7 +718,7 @@ class LSTMValidator:
         Returns:
             Dict with validation results
         """
-        logger.info(f"Validating LSTM for {symbol} {timeframe}")
+        _logger.info("Validating LSTM for %s %s", symbol, timeframe)
 
         try:
             # Find and load model
@@ -742,7 +737,7 @@ class LSTMValidator:
 
             # Use the most recent file
             csv_file = sorted(csv_files)[-1]
-            logger.info(f"Using data file: {csv_file}")
+            _logger.info("Using data file: %s", csv_file)
 
             # Load data
             df = pd.read_csv(csv_file)
@@ -806,11 +801,11 @@ class LSTMValidator:
             with open(json_path, 'w') as f:
                 json.dump(results, f, indent=2)
 
-            logger.info(f"[OK] LSTM validation completed for {symbol} {timeframe}")
-            logger.info(f"  MSE improvement: {metrics['improvements']['mse_improvement_pct']:.2f}%")
-            logger.info(f"  Directional accuracy: {metrics['lstm_metrics']['directional_accuracy']:.2f}%")
-            logger.info(f"  PDF report: {pdf_path}")
-            logger.info(f"  JSON results: {json_path}")
+            _logger.info("[OK] LSTM validation completed for %s %s", symbol, timeframe)
+            _logger.info("  MSE improvement: %.2f%%", metrics['improvements']['mse_improvement_pct'])
+            _logger.info("  Directional accuracy: %.2f%%", metrics['lstm_metrics']['directional_accuracy'])
+            _logger.info("  PDF report: %s", pdf_path)
+            _logger.info("  JSON results: %s", json_path)
 
             return {
                 'symbol': symbol,
@@ -825,7 +820,7 @@ class LSTMValidator:
 
         except Exception as e:
             error_msg = f"Failed to validate LSTM for {symbol} {timeframe}: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -843,7 +838,7 @@ class LSTMValidator:
         symbols = self.config['symbols']
         timeframes = self.config['timeframes']
 
-        logger.info(f"Validating LSTM models for {len(symbols)} symbols x {len(timeframes)} timeframes")
+        _logger.info("Validating LSTM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
         results = {
             'total': len(symbols) * len(timeframes),
@@ -861,24 +856,24 @@ class LSTMValidator:
                     results['failed'].append(result)
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"LSTM Validation Summary:")
-        logger.info(f"  Total: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("LSTM Validation Summary:")
+        _logger.info("  Total: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
 
         if results['successful']:
             avg_mse_improvement = np.mean([r['mse_improvement'] for r in results['successful']])
             avg_dir_accuracy = np.mean([r['directional_accuracy'] for r in results['successful']])
-            logger.info(f"  Average MSE improvement: {avg_mse_improvement:.2f}%")
-            logger.info(f"  Average directional accuracy: {avg_dir_accuracy:.2f}%")
+            _logger.info("  Average MSE improvement: %.2f%%", avg_mse_improvement)
+            _logger.info("  Average directional accuracy: %.2f%%", avg_dir_accuracy)
 
-        logger.info(f"{'='*50}")
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed validations:")
+            _logger.warning("Failed validations:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['symbol']} {failure['timeframe']}: {failure['error']}")
+                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
 
         return results
 
@@ -888,10 +883,10 @@ def main():
         validator = LSTMValidator()
         results = validator.validate_all()
 
-        logger.info("LSTM validation completed!")
+        _logger.info("LSTM validation completed!")
 
     except Exception as e:
-        logger.error(f"LSTM validation failed: {str(e)}")
+        _logger.error("LSTM validation failed: %s", str(e))
         raise
 
 if __name__ == "__main__":

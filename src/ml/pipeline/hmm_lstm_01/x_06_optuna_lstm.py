@@ -21,7 +21,6 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import yaml
 from pathlib import Path
-import logging
 import json
 from datetime import datetime
 import optuna
@@ -35,16 +34,12 @@ import talib
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 # Set device
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-logger.info(f"Using device: {DEVICE}")
+_logger.info("Using device: %s", DEVICE)
 
 class LSTMModel(nn.Module):
     """LSTM model for time series prediction."""
@@ -116,7 +111,7 @@ class LSTMOptimizer:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def load_optimized_indicators(self, symbol: str, timeframe: str) -> Optional[Dict]:
@@ -134,7 +129,7 @@ class LSTMOptimizer:
         json_files = list(self.results_dir.glob(pattern))
 
         if not json_files:
-            logger.warning(f"No optimized indicator parameters found for {symbol} {timeframe}")
+            _logger.warning("No optimized indicator parameters found for %s %s", symbol, timeframe)
             return None
 
         # Use the most recent file
@@ -143,7 +138,7 @@ class LSTMOptimizer:
         with open(json_file, 'r') as f:
             results = json.load(f)
 
-        logger.info(f"Loaded optimized indicators from {json_file}")
+        _logger.info("Loaded optimized indicators from %s", json_file)
         return results['best_params']
 
     def apply_optimized_indicators(self, df: pd.DataFrame, params: Dict) -> pd.DataFrame:
@@ -236,7 +231,7 @@ class LSTMOptimizer:
                 df['sma_opt'] = talib.SMA(close, timeperiod=params['sma_period'])
 
         except Exception as e:
-            logger.warning(f"Error applying optimized indicators: {str(e)}")
+            _logger.warning("Error applying optimized indicators: %s", str(e))
 
         return df
 
@@ -279,7 +274,7 @@ class LSTMOptimizer:
         # Filter to only include features that exist in the DataFrame
         available_features = [feat for feat in selected_features if feat in df.columns]
 
-        logger.info(f"Selected {len(available_features)} features for LSTM: {available_features[:10]}...")
+        _logger.info("Selected %d features for LSTM: %s...", len(available_features), available_features[:10])
         return available_features
 
     def create_sequences(self, data: np.ndarray, target: np.ndarray, sequence_length: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -513,7 +508,7 @@ class LSTMOptimizer:
             else:
                 patience_counter += 1
                 if patience_counter >= early_stopping_patience:
-                    logger.info(f"Early stopping at epoch {epoch+1}")
+                    _logger.info("Early stopping at epoch %d", epoch+1)
                     break
 
         return {
@@ -625,7 +620,7 @@ class LSTMOptimizer:
             return combined_objective
 
         except Exception as e:
-            logger.warning(f"Error in LSTM objective function: {str(e)}")
+            _logger.warning("Error in LSTM objective function: %s", str(e))
             return 999.0  # Return large value for failed trials
 
     def optimize_lstm(self, symbol: str, timeframe: str) -> Dict:
@@ -639,7 +634,7 @@ class LSTMOptimizer:
         Returns:
             Dict with optimization results
         """
-        logger.info(f"Optimizing LSTM for {symbol} {timeframe}")
+        _logger.info("Optimizing LSTM for %s %s", symbol, timeframe)
 
         try:
             # Load optimized indicator parameters
@@ -654,7 +649,7 @@ class LSTMOptimizer:
 
             # Use the most recent file
             csv_file = sorted(csv_files)[-1]
-            logger.info(f"Using data file: {csv_file}")
+            _logger.info("Using data file: %s", csv_file)
 
             # Load data
             df = pd.read_csv(csv_file)
@@ -663,7 +658,7 @@ class LSTMOptimizer:
             if len(df) > 5000:
                 df = df.iloc[-5000:].copy().reset_index(drop=True)
 
-            logger.info(f"Using {len(df)} samples for LSTM optimization")
+            _logger.info("Using %d samples for LSTM optimization", len(df))
 
             # Create Optuna study
             study = optuna.create_study(
@@ -684,9 +679,9 @@ class LSTMOptimizer:
             best_params = study.best_params
             best_value = study.best_value
 
-            logger.info(f"LSTM optimization completed for {symbol} {timeframe}")
-            logger.info(f"Best objective value: {best_value:.6f}")
-            logger.info(f"Best parameters: {best_params}")
+            _logger.info("LSTM optimization completed for %s %s", symbol, timeframe)
+            _logger.info("Best objective value: %.6f", best_value)
+            _logger.info("Best parameters: %s", best_params)
 
             # Save results
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -708,7 +703,7 @@ class LSTMOptimizer:
             with open(output_path, 'w') as f:
                 json.dump(results, f, indent=2)
 
-            logger.info(f"[OK] Saved LSTM optimization results to {output_path}")
+            _logger.info("[OK] Saved LSTM optimization results to %s", output_path)
 
             return {
                 'symbol': symbol,
@@ -721,7 +716,7 @@ class LSTMOptimizer:
 
         except Exception as e:
             error_msg = f"Failed to optimize LSTM for {symbol} {timeframe}: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -739,7 +734,7 @@ class LSTMOptimizer:
         symbols = self.config['symbols']
         timeframes = self.config['timeframes']
 
-        logger.info(f"Optimizing LSTM for {len(symbols)} symbols x {len(timeframes)} timeframes")
+        _logger.info("Optimizing LSTM for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
         results = {
             'total': len(symbols) * len(timeframes),
@@ -757,17 +752,17 @@ class LSTMOptimizer:
                     results['failed'].append(result)
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"LSTM Optimization Summary:")
-        logger.info(f"  Total: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
-        logger.info(f"{'='*50}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("LSTM Optimization Summary:")
+        _logger.info("  Total: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed optimizations:")
+            _logger.warning("Failed optimizations:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['symbol']} {failure['timeframe']}: {failure['error']}")
+                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
 
         return results
 
@@ -777,10 +772,10 @@ def main():
         optimizer = LSTMOptimizer()
         results = optimizer.optimize_all()
 
-        logger.info("LSTM optimization completed!")
+        _logger.info("LSTM optimization completed!")
 
     except Exception as e:
-        logger.error(f"LSTM optimization failed: {str(e)}")
+        _logger.error("LSTM optimization failed: %s", str(e))
         raise
 
 if __name__ == "__main__":

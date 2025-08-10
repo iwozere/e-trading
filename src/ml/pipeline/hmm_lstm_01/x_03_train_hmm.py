@@ -18,7 +18,6 @@ import pandas as pd
 import numpy as np
 import yaml
 from pathlib import Path
-import logging
 import pickle
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -32,12 +31,8 @@ from typing import Dict, List, Optional, Tuple
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class HMMTrainer:
     def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
@@ -68,7 +63,7 @@ class HMMTrainer:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def select_features_for_hmm(self, df: pd.DataFrame) -> List[str]:
@@ -130,7 +125,7 @@ class HMMTrainer:
         # Filter to only include features that exist in the DataFrame
         available_features = [feat for feat in selected_features if feat in df.columns]
 
-        logger.info(f"Selected {len(available_features)} features for HMM: {available_features}")
+        _logger.info("Selected %d features for HMM: %s", len(available_features), available_features)
         return available_features
 
     def prepare_training_data(self, df: pd.DataFrame, features: List[str]) -> Tuple[np.ndarray, StandardScaler]:
@@ -169,7 +164,7 @@ class HMMTrainer:
         scaler = StandardScaler()
         scaled_data = scaler.fit_transform(feature_data)
 
-        logger.info(f"Prepared training data: {scaled_data.shape} with features {features}")
+        _logger.info("Prepared training data: %s with features %s", scaled_data.shape, features)
         return scaled_data, scaler
 
     def train_hmm_model(self, X: np.ndarray) -> hmm.GaussianHMM:
@@ -182,7 +177,7 @@ class HMMTrainer:
         Returns:
             Trained HMM model
         """
-        logger.info(f"Training HMM with {self.n_components} components on {X.shape[0]} samples")
+        _logger.info("Training HMM with %d components on %d samples", self.n_components, X.shape[0])
 
         # Initialize and train HMM
         model = hmm.GaussianHMM(
@@ -197,9 +192,9 @@ class HMMTrainer:
         model.fit(X)
 
         # Log training results
-        logger.info(f"HMM training completed")
-        logger.info(f"Log likelihood: {model.score(X):.2f}")
-        logger.info(f"Converged: {model.monitor_.converged}")
+        _logger.info("HMM training completed")
+        _logger.info("Log likelihood: %.2f", model.score(X))
+        _logger.info("Converged: %s", model.monitor_.converged)
 
         return model
 
@@ -250,10 +245,10 @@ class HMMTrainer:
             'max_regime_duration': np.max(regime_durations)
         }
 
-        logger.info(f"Validation metrics:")
-        logger.info(f"  Regime distribution: {validation_metrics['regime_percentages']}")
-        logger.info(f"  Transition rate: {validation_metrics['transition_rate']:.4f}")
-        logger.info(f"  Avg regime duration: {validation_metrics['avg_regime_duration']:.2f}")
+        _logger.info("Validation metrics:")
+        _logger.info("  Regime distribution: %s", validation_metrics['regime_percentages'])
+        _logger.info("  Transition rate: %.4f", validation_metrics['transition_rate'])
+        _logger.info("  Avg regime duration: %.2f", validation_metrics['avg_regime_duration'])
 
         return validation_metrics
 
@@ -319,10 +314,10 @@ class HMMTrainer:
             labels = [f'Regime {i}' for i in range(self.n_components)]
 
         # Log regime characteristics
-        logger.info(f"Regime characteristics:")
+        _logger.info("Regime characteristics:")
         for stat in regime_stats:
-            logger.info(f"  Regime {stat['regime_id']} ({labels[stat['regime_id']]}): "
-                       f"avg_return={stat['avg_return']:.6f}, volatility={stat['volatility']:.6f}")
+            _logger.info("  Regime %d (%s): avg_return=%.6f, volatility=%.6f",
+                       stat['regime_id'], labels[stat['regime_id']], stat['avg_return'], stat['volatility'])
 
         return labels
 
@@ -408,10 +403,10 @@ class HMMTrainer:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             plt.close()
 
-            logger.info(f"Saved regime visualization to {save_path}")
+            _logger.info("Saved regime visualization to %s", save_path)
 
         except Exception as e:
-            logger.warning(f"Failed to create regime visualization: {str(e)}")
+            _logger.warning("Failed to create regime visualization: %s", str(e))
 
     def save_model(self, model: hmm.GaussianHMM, scaler: StandardScaler, features: List[str],
                    validation_metrics: Dict, symbol: str, timeframe: str) -> Path:
@@ -457,7 +452,7 @@ class HMMTrainer:
         with open(filepath, 'wb') as f:
             pickle.dump(model_package, f)
 
-        logger.info(f"Saved HMM model to {filepath}")
+        _logger.info("Saved HMM model to %s", filepath)
         return filepath
 
     def train_symbol_timeframe(self, symbol: str, timeframe: str) -> Dict:
@@ -471,7 +466,7 @@ class HMMTrainer:
         Returns:
             Dict with training results
         """
-        logger.info(f"Training HMM for {symbol} {timeframe}")
+        _logger.info("Training HMM for %s %s", symbol, timeframe)
 
         try:
             # Find processed data file
@@ -483,7 +478,7 @@ class HMMTrainer:
 
             # Use the most recent file if multiple exist
             csv_file = sorted(csv_files)[-1]
-            logger.info(f"Using data file: {csv_file}")
+            _logger.info("Using data file: %s", csv_file)
 
             # Load data
             df = pd.read_csv(csv_file)
@@ -495,7 +490,7 @@ class HMMTrainer:
                     df['timestamp'] = pd.to_datetime(df['timestamp'])
                     cutoff_date = df['timestamp'].max() - pd.Timedelta(days=self.train_window_days)
                     df = df[df['timestamp'] >= cutoff_date].copy()
-                    logger.info(f"Applied {self.train_window_days}-day training window: {len(df)} samples")
+                    _logger.info("Applied %d-day training window: %d samples", self.train_window_days, len(df))
 
             # Select features
             features = self.select_features_for_hmm(df)
@@ -532,7 +527,7 @@ class HMMTrainer:
 
         except Exception as e:
             error_msg = f"Failed to train HMM for {symbol} {timeframe}: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -550,7 +545,7 @@ class HMMTrainer:
         symbols = self.config['symbols']
         timeframes = self.config['timeframes']
 
-        logger.info(f"Training HMM models for {len(symbols)} symbols x {len(timeframes)} timeframes")
+        _logger.info("Training HMM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
         results = {
             'total': len(symbols) * len(timeframes),
@@ -568,17 +563,17 @@ class HMMTrainer:
                     results['failed'].append(result)
 
         # Log summary
-        logger.info(f"\n{'='*50}")
-        logger.info(f"HMM Training Summary:")
-        logger.info(f"  Total: {results['total']}")
-        logger.info(f"  Successful: {len(results['successful'])}")
-        logger.info(f"  Failed: {len(results['failed'])}")
-        logger.info(f"{'='*50}")
+        _logger.info("\n%s", "="*50)
+        _logger.info("HMM Training Summary:")
+        _logger.info("  Total: %d", results['total'])
+        _logger.info("  Successful: %d", len(results['successful']))
+        _logger.info("  Failed: %d", len(results['failed']))
+        _logger.info("%s", "="*50)
 
         if results['failed']:
-            logger.warning("Failed training:")
+            _logger.warning("Failed training:")
             for failure in results['failed']:
-                logger.warning(f"  {failure['symbol']} {failure['timeframe']}: {failure['error']}")
+                _logger.warning("  %s %s: %s", failure['symbol'], failure['timeframe'], failure['error'])
 
         return results
 
@@ -588,10 +583,10 @@ def main():
         trainer = HMMTrainer()
         results = trainer.train_all()
 
-        logger.info("HMM training completed!")
+        _logger.info("HMM training completed!")
 
     except Exception as e:
-        logger.error(f"HMM training failed: {str(e)}")
+        _logger.exception("HMM training failed")
         raise
 
 if __name__ == "__main__":

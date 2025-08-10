@@ -28,7 +28,6 @@ Options:
 
 import argparse
 import sys
-import logging
 import time
 from pathlib import Path
 from datetime import datetime
@@ -40,16 +39,8 @@ from typing import List, Dict, Optional
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(f'pipeline_run_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-    ]
-)
-logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class PipelineRunner:
     def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
@@ -115,7 +106,7 @@ class PipelineRunner:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        logger.info(f"Loaded configuration from {self.config_path}")
+        _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
     def _load_module(self, module_name: str):
@@ -145,10 +136,10 @@ class PipelineRunner:
             raise ValueError(f"Invalid stage number: {stage_num}")
 
         stage = self.stages[stage_num]
-        logger.info(f"\n{'='*60}")
-        logger.info(f"STAGE {stage_num}: {stage['name']}")
-        logger.info(f"Description: {stage['description']}")
-        logger.info(f"{'='*60}")
+        _logger.info("\n%s", "="*60)
+        _logger.info("STAGE %d: %s", stage_num, stage['name'])
+        _logger.info("Description: %s", stage['description'])
+        _logger.info("%s", "="*60)
 
         start_time = time.time()
 
@@ -160,12 +151,12 @@ class PipelineRunner:
             if hasattr(module, 'main'):
                 result = module.main()
             else:
-                logger.warning(f"No main() function found in {stage['module']}")
+                _logger.warning("No main() function found in %s", stage['module'])
                 result = None
 
             execution_time = time.time() - start_time
 
-            logger.info(f"[OK] Stage {stage_num} completed successfully in {execution_time:.2f} seconds")
+            _logger.info("[OK] Stage %d completed successfully in %.2f seconds", stage_num, execution_time)
 
             return {
                 'stage': stage_num,
@@ -178,7 +169,7 @@ class PipelineRunner:
         except Exception as e:
             execution_time = time.time() - start_time
             error_msg = f"Stage {stage_num} failed: {str(e)}"
-            logger.error(error_msg)
+            _logger.error(error_msg)
 
             return {
                 'stage': stage_num,
@@ -202,17 +193,17 @@ class PipelineRunner:
         Returns:
             Dict with complete pipeline results
         """
-        logger.info("Starting HMM-LSTM Trading Pipeline")
-        logger.info(f"Configuration: {self.config_path}")
+        _logger.info("Starting HMM-LSTM Trading Pipeline")
+        _logger.info("Configuration: %s", self.config_path)
 
         if symbols:
-            logger.info(f"Override symbols: {symbols}")
+            _logger.info("Override symbols: %s", symbols)
             # Temporarily update config
             original_symbols = self.config['symbols']
             self.config['symbols'] = symbols
 
         if timeframes:
-            logger.info(f"Override timeframes: {timeframes}")
+            _logger.info("Override timeframes: %s", timeframes)
             # Temporarily update config
             original_timeframes = self.config['timeframes']
             self.config['timeframes'] = timeframes
@@ -232,7 +223,7 @@ class PipelineRunner:
         # Run each stage
         for stage_num in sorted(self.stages.keys()):
             if stage_num in skip_stages:
-                logger.info(f"Skipping Stage {stage_num}: {self.stages[stage_num]['name']}")
+                _logger.info("Skipping Stage %d: %s", stage_num, self.stages[stage_num]['name'])
                 continue
 
             stage_result = self.run_stage(stage_num)
@@ -240,12 +231,12 @@ class PipelineRunner:
 
             if not stage_result['success']:
                 results['overall_success'] = False
-                logger.error(f"Pipeline failed at Stage {stage_num}")
+                _logger.error("Pipeline failed at Stage %d", stage_num)
 
                 # Ask user if they want to continue
                 response = input(f"\nStage {stage_num} failed. Continue with remaining stages? (y/n): ")
                 if response.lower() != 'y':
-                    logger.info("Pipeline execution stopped by user")
+                    _logger.info("Pipeline execution stopped by user")
                     break
 
         # Calculate total execution time
@@ -266,35 +257,35 @@ class PipelineRunner:
 
     def _log_pipeline_summary(self, results: Dict) -> None:
         """Log pipeline execution summary."""
-        logger.info(f"\n{'='*60}")
-        logger.info("PIPELINE EXECUTION SUMMARY")
-        logger.info(f"{'='*60}")
+        _logger.info("\n%s", "="*60)
+        _logger.info("PIPELINE EXECUTION SUMMARY")
+        _logger.info("%s", "="*60)
 
         successful_stages = [r for r in results['stage_results'] if r['success']]
         failed_stages = [r for r in results['stage_results'] if not r['success']]
 
-        logger.info(f"Total execution time: {results['total_execution_time']:.2f} seconds")
-        logger.info(f"Stages completed: {len(successful_stages)}")
-        logger.info(f"Stages failed: {len(failed_stages)}")
-        logger.info(f"Overall success: {results['overall_success']}")
+        _logger.info("Total execution time: %.2f seconds", results['total_execution_time'])
+        _logger.info("Stages completed: %d", len(successful_stages))
+        _logger.info("Stages failed: %d", len(failed_stages))
+        _logger.info("Overall success: %s", results['overall_success'])
 
         if successful_stages:
-            logger.info("\nSuccessful stages:")
+            _logger.info("\nSuccessful stages:")
             for stage in successful_stages:
-                logger.info(f"  [OK] Stage {stage['stage']}: {stage['name']} ({stage['execution_time']:.2f}s)")
+                _logger.info("  [OK] Stage %d: %s (%.2fs)", stage['stage'], stage['name'], stage['execution_time'])
 
         if failed_stages:
-            logger.info("\nFailed stages:")
+            _logger.info("\nFailed stages:")
             for stage in failed_stages:
-                logger.info(f"  [FAILED] Stage {stage['stage']}: {stage['name']} - {stage['error']}")
+                _logger.info("  [FAILED] Stage %d: %s - %s", stage['stage'], stage['name'], stage['error'])
 
         if results['overall_success']:
-            logger.info("\n[SUCCESS] Pipeline completed successfully!")
-            logger.info("Check the results/ and reports/ directories for outputs.")
+            _logger.info("\n[SUCCESS] Pipeline completed successfully!")
+            _logger.info("Check the results/ and reports/ directories for outputs.")
         else:
-            logger.warning("\n[WARNING] Pipeline completed with errors.")
+            _logger.warning("\n[WARNING] Pipeline completed with errors.")
 
-        logger.info(f"{'='*60}")
+        _logger.info("%s", "="*60)
 
     def list_stages(self) -> None:
         """List all available pipeline stages."""
@@ -309,7 +300,7 @@ class PipelineRunner:
 
     def validate_requirements(self) -> bool:
         """Validate that all required components are available."""
-        logger.info("Validating pipeline requirements...")
+        _logger.info("Validating pipeline requirements...")
 
         # Check if all stage modules exist
         missing_modules = []
@@ -319,9 +310,9 @@ class PipelineRunner:
                 missing_modules.append(f"Stage {stage_num}: {stage['module']}.py")
 
         if missing_modules:
-            logger.error("Missing pipeline modules:")
+            _logger.error("Missing pipeline modules:")
             for module in missing_modules:
-                logger.error(f"  - {module}")
+                _logger.error("  - %s", module)
             return False
 
         # Check required directories
@@ -336,7 +327,7 @@ class PipelineRunner:
         for dir_path in required_dirs:
             Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-        logger.info("[OK] All requirements validated")
+        _logger.info("[OK] All requirements validated")
         return True
 
 def main():
@@ -379,11 +370,11 @@ Examples:
 
         # Validate requirements
         if not runner.validate_requirements():
-            logger.error("Requirements validation failed")
+            _logger.error("Requirements validation failed")
             sys.exit(1)
 
         if args.validate_only:
-            logger.info("Requirements validation completed successfully")
+            _logger.info("Requirements validation completed successfully")
             return
 
         # Parse arguments
@@ -410,10 +401,10 @@ Examples:
         sys.exit(0 if results['overall_success'] else 1)
 
     except KeyboardInterrupt:
-        logger.info("Pipeline execution interrupted by user")
+        _logger.info("Pipeline execution interrupted by user")
         sys.exit(1)
     except Exception as e:
-        logger.exception("Pipeline execution failed")
+        _logger.exception("Pipeline execution failed")
         sys.exit(1)
 
 if __name__ == "__main__":
