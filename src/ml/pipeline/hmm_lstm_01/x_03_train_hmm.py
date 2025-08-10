@@ -98,11 +98,16 @@ class HMMTrainer:
         else:
             multiplier = 1  # fallback
 
-        # Scale indicator periods (for example, normalize to roughly 4h = 240min)
-        scale_factor = multiplier / normalized_timeframe_in_minutes
+        # Scale indicator periods inversely to timeframe
+        # Shorter timeframes need longer periods, longer timeframes need shorter periods
+        # This makes sense because:
+        # - 5m bars: need more bars (larger period) to capture meaningful patterns
+        # - 1d bars: each bar already represents significant time, so smaller periods suffice
+        # Use square root scaling to avoid extreme values while maintaining the inverse relationship
+        scale_factor = (normalized_timeframe_in_minutes / multiplier) ** 0.5
 
         def scaled_period(base):
-            val = max(1, int(round(base * scale_factor)))
+            val = max(2, int(round(base * scale_factor)))  # Minimum period of 2 for TA-Lib
             return val
 
         config = {
@@ -139,31 +144,39 @@ class HMMTrainer:
         base_features = ["log_return"]
 
         # === Compute indicators with TA-Lib if missing ===
-        if "rsi" in indicator_config and "rsi_14" not in df.columns:
+        if "rsi" in indicator_config:
             tp = indicator_config["rsi"].get("timeperiod", 14)
-            df[f"rsi_{tp}"] = talib.RSI(df["close"], timeperiod=tp)
+            rsi_col = f"rsi_{tp}"
+            if rsi_col not in df.columns:
+                df[rsi_col] = talib.RSI(df["close"], timeperiod=tp)
 
-        if "atr" in indicator_config and "atr_14" not in df.columns:
+        if "atr" in indicator_config:
             tp = indicator_config["atr"].get("timeperiod", 14)
-            df[f"atr_{tp}"] = talib.ATR(df["high"], df["low"], df["close"], timeperiod=tp)
+            atr_col = f"atr_{tp}"
+            if atr_col not in df.columns:
+                df[atr_col] = talib.ATR(df["high"], df["low"], df["close"], timeperiod=tp)
 
         if "ema_spread" in indicator_config:
             fast = indicator_config["ema_spread"].get("fastperiod", 12)
             slow = indicator_config["ema_spread"].get("slowperiod", 26)
-            ema_fast = talib.EMA(df["close"], timeperiod=fast)
-            ema_slow = talib.EMA(df["close"], timeperiod=slow)
-            df["ema_spread"] = (ema_fast - ema_slow) / df["close"]
+            if "ema_spread" not in df.columns:
+                ema_fast = talib.EMA(df["close"], timeperiod=fast)
+                ema_slow = talib.EMA(df["close"], timeperiod=slow)
+                df["ema_spread"] = (ema_fast - ema_slow) / df["close"]
 
         if "bbands" in indicator_config:
             tp = indicator_config["bbands"].get("timeperiod", 20)
-            up, mid, low = talib.BBANDS(
-                df["close"],
-                timeperiod=tp,
-                nbdevup=indicator_config["bbands"].get("nbdevup", 2),
-                nbdevdn=indicator_config["bbands"].get("nbdevdn", 2)
-            )
-            df[f"bb_position_{tp}"] = (df["close"] - low) / (up - low)
-            df[f"bb_width_{tp}"] = (up - low) / df["close"]
+            bb_position_col = f"bb_position_{tp}"
+            bb_width_col = f"bb_width_{tp}"
+            if bb_position_col not in df.columns or bb_width_col not in df.columns:
+                up, mid, low = talib.BBANDS(
+                    df["close"],
+                    timeperiod=tp,
+                    nbdevup=indicator_config["bbands"].get("nbdevup", 2),
+                    nbdevdn=indicator_config["bbands"].get("nbdevdn", 2)
+                )
+                df[bb_position_col] = (df["close"] - low) / (up - low)
+                df[bb_width_col] = (up - low) / df["close"]
 
         # === Feature groups ===
         volume_features = [col for col in ["volume", "volume_sma_5"] if col in df.columns]
@@ -535,7 +548,7 @@ class HMMTrainer:
                     _logger.info("Applied %d-day training window: %d samples", self.train_window_days, len(df))
 
             # Select features
-            features = self.select_features_for_hmm(df, HMMTrainer.build_indicator_config(timeframe, 60 * 24))
+            features = self.select_features_for_hmm(df, HMMTrainer.build_indicator_config(timeframe, 240))
 
             if not features:
                 raise ValueError("No suitable features found for HMM training")
