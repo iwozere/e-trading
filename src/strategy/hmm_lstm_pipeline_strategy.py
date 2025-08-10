@@ -1,0 +1,664 @@
+"""
+HMM-LSTM Pipeline Trading Strategy
+
+This strategy uses the trained HMM and LSTM models from the pipeline to make
+trading decisions. It combines market regime detection with LSTM predictions
+for enhanced trading performance.
+
+Features:
+- Uses trained HMM models for regime detection
+- Employs regime-aware LSTM models for price prediction
+- Applies optimized technical indicators from the pipeline
+- Implements dynamic position sizing based on regime confidence
+- Supports multiple exit strategies based on market conditions
+"""
+
+import backtrader as bt
+import pandas as pd
+import numpy as np
+import torch
+import torch.nn as nn
+import pickle
+import json
+import talib
+from pathlib import Path
+from collections import deque
+from typing import Dict, List, Optional, Tuple, Any
+from sklearn.preprocessing import StandardScaler
+import sys
+import logging
+
+# Add project root to path
+project_root = Path(__file__).resolve().parents[2]
+sys.path.append(str(project_root))
+
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
+class LSTMModel(nn.Module):
+    """LSTM model architecture matching the pipeline implementation."""
+
+    def __init__(self, input_size: int, hidden_size: int, num_layers: int,
+                 dropout: float = 0.2, output_size: int = 1, n_regimes: int = 3):
+        super(LSTMModel, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.n_regimes = n_regimes
+
+        # LSTM layers
+        self.lstm = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout=dropout if num_layers > 1 else 0,
+            batch_first=True
+        )
+
+        # Dropout layer
+        self.dropout = nn.Dropout(dropout)
+
+        # Output layer with regime conditioning
+        self.linear = nn.Linear(hidden_size + n_regimes, output_size)
+
+    def forward(self, x, regime_onehot):
+        # Initialize hidden state
+        device = x.device
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
+
+        # LSTM forward pass
+        lstm_out, _ = self.lstm(x, (h0, c0))
+
+        # Take the output from the last time step
+        last_output = lstm_out[:, -1, :]
+
+        # Apply dropout
+        dropped = self.dropout(last_output)
+
+        # Concatenate with regime information
+        combined = torch.cat([dropped, regime_onehot], dim=1)
+
+        # Final prediction
+        output = self.linear(combined)
+
+        return output
+
+class HMMLSTMPipelineStrategy(bt.Strategy):
+    """
+    Trading strategy that uses HMM regime detection and LSTM price prediction.
+
+    Parameters:
+    -----------
+    strategy_config : dict
+        Configuration dictionary containing model paths, thresholds, and trading rules
+    """
+
+    params = (
+        ("strategy_config", None),
+        ("symbol", "BTCUSDT"),
+        ("timeframe", "1h"),
+    )
+
+    def __init__(self):
+        """Initialize the strategy with models and indicators."""
+        _logger.info("Initializing HMM-LSTM Pipeline Strategy")
+
+        # Initialize basic attributes
+        self.hmm_model = None
+        self.lstm_model = None
+        self.hmm_scaler = None
+        self.lstm_scalers = None
+        self.optimized_indicators = None
+        self.lstm_features = None
+
+        # Trading state
+        self.current_regime = None
+        self.regime_confidence = 0.0
+        self.prediction_buffer = deque(maxlen=10)
+        self.feature_buffer = deque(maxlen=100)  # For HMM and LSTM features
+
+        # Configuration
+        self.config = self.p.strategy_config or {}
+        self.symbol = self.p.symbol
+        self.timeframe = self.p.timeframe
+
+        # Trading parameters
+        self.base_position_size = self.config.get('position_size', 0.1)
+        self.prediction_threshold = self.config.get('prediction_threshold', 0.001)
+        self.regime_confidence_threshold = self.config.get('regime_confidence_threshold', 0.6)
+        self.max_position_size = self.config.get('max_position_size', 0.2)
+        self.min_position_size = self.config.get('min_position_size', 0.05)
+
+        # Exit parameters
+        self.profit_target = self.config.get('profit_target', 0.02)
+        self.stop_loss = self.config.get('stop_loss', 0.01)
+        self.trailing_stop = self.config.get('trailing_stop', 0.005)
+
+        # Load models and parameters
+        self._load_models()
+
+        # Initialize indicators
+        self._init_indicators()
+
+        # Trade tracking
+        self.entry_price = None
+        self.highest_profit = 0.0
+        self.current_trade_regime = None
+
+    def _load_models(self):
+        """Load trained HMM and LSTM models with their parameters."""
+        try:
+            models_dir = Path(self.config.get('models_dir', 'src/ml/pipeline/hmm_lstm_01/models'))
+            results_dir = Path(self.config.get('results_dir', 'results'))
+
+            # Load HMM model
+            hmm_pattern = f"hmm_{self.symbol}_{self.timeframe}_*.pkl"
+            hmm_files = list((models_dir / 'hmm').glob(hmm_pattern))
+
+            if hmm_files:
+                hmm_file = sorted(hmm_files)[-1]  # Latest model
+                with open(hmm_file, 'rb') as f:
+                    hmm_package = pickle.load(f)
+
+                self.hmm_model = hmm_package['model']
+                self.hmm_scaler = hmm_package['scaler']
+                self.hmm_features = hmm_package['features']
+                _logger.info(f"Loaded HMM model from {hmm_file}")
+            else:
+                _logger.warning(f"No HMM model found for {self.symbol} {self.timeframe}")
+
+            # Load LSTM model
+            lstm_pattern = f"lstm_{self.symbol}_{self.timeframe}_*.pkl"
+            lstm_files = list((models_dir / 'lstm').glob(lstm_pattern))
+
+            if lstm_files:
+                lstm_file = sorted(lstm_files)[-1]  # Latest model
+                with open(lstm_file, 'rb') as f:
+                    lstm_package = pickle.load(f)
+
+                # Recreate LSTM model
+                arch = lstm_package['model_architecture']
+                self.lstm_model = LSTMModel(
+                    input_size=arch['input_size'],
+                    hidden_size=arch['hidden_size'],
+                    num_layers=arch['num_layers'],
+                    n_regimes=arch['n_regimes']
+                )
+                self.lstm_model.load_state_dict(lstm_package['model_state_dict'])
+                self.lstm_model.eval()
+
+                self.lstm_scalers = lstm_package['scalers']
+                self.lstm_features = lstm_package['features']
+                self.sequence_length = lstm_package['hyperparameters']['sequence_length']
+
+                _logger.info(f"Loaded LSTM model from {lstm_file}")
+            else:
+                _logger.warning(f"No LSTM model found for {self.symbol} {self.timeframe}")
+
+            # Load optimized indicator parameters
+            indicator_pattern = f"indicators_{self.symbol}_{self.timeframe}_*.json"
+            indicator_files = list(results_dir.glob(indicator_pattern))
+
+            if indicator_files:
+                indicator_file = sorted(indicator_files)[-1]  # Latest optimization
+                with open(indicator_file, 'r') as f:
+                    indicator_results = json.load(f)
+
+                self.optimized_indicators = indicator_results['best_params']
+                _logger.info(f"Loaded optimized indicators from {indicator_file}")
+            else:
+                _logger.warning(f"No optimized indicators found for {self.symbol} {self.timeframe}")
+                self.optimized_indicators = {}
+
+        except Exception as e:
+            _logger.error(f"Error loading models: {str(e)}")
+            raise
+
+    def _init_indicators(self):
+        """Initialize technical indicators using optimized parameters."""
+        try:
+            # Use optimized parameters if available, otherwise use defaults
+            params = self.optimized_indicators
+
+            # RSI
+            rsi_period = params.get('rsi_period', 14)
+
+            # Bollinger Bands
+            bb_period = params.get('bb_period', 20)
+            bb_std = params.get('bb_std', 2.0)
+
+            # MACD
+            macd_fast = params.get('macd_fast', 12)
+            macd_slow = params.get('macd_slow', 26)
+            macd_signal = params.get('macd_signal', 9)
+
+            # EMA
+            ema_fast = params.get('ema_fast', 12)
+            ema_slow = params.get('ema_slow', 26)
+
+            # ATR
+            atr_period = params.get('atr_period', 14)
+
+            # Note: In a real implementation, you would calculate these indicators
+            # using the data feed. For this example, we'll assume they're calculated
+            # in the next() method using the raw OHLCV data.
+
+            _logger.info(f"Initialized indicators with optimized parameters: {params}")
+
+        except Exception as e:
+            _logger.error(f"Error initializing indicators: {str(e)}")
+            raise
+
+    def _calculate_indicators(self) -> Dict[str, float]:
+        """Calculate technical indicators for the current bar."""
+        try:
+            # Get recent OHLCV data
+            lookback = 100  # Enough for indicator calculations
+
+            if len(self.data) < lookback:
+                return {}
+
+            # Extract OHLCV arrays
+            high = np.array([self.data.high[-i] for i in range(lookback, 0, -1)])
+            low = np.array([self.data.low[-i] for i in range(lookback, 0, -1)])
+            close = np.array([self.data.close[-i] for i in range(lookback, 0, -1)])
+            volume = np.array([self.data.volume[-i] for i in range(lookback, 0, -1)])
+
+            indicators = {}
+            params = self.optimized_indicators
+
+            # RSI
+            rsi_period = params.get('rsi_period', 14)
+            rsi = talib.RSI(close, timeperiod=rsi_period)
+            indicators['rsi_optimized'] = rsi[-1] if not np.isnan(rsi[-1]) else 50.0
+
+            # Bollinger Bands
+            bb_period = params.get('bb_period', 20)
+            bb_std = params.get('bb_std', 2.0)
+            bb_upper, bb_middle, bb_lower = talib.BBANDS(close, timeperiod=bb_period,
+                                                        nbdevup=bb_std, nbdevdn=bb_std)
+
+            if not np.isnan(bb_upper[-1]):
+                indicators['bb_upper_opt'] = bb_upper[-1]
+                indicators['bb_middle_opt'] = bb_middle[-1]
+                indicators['bb_lower_opt'] = bb_lower[-1]
+                indicators['bb_position_opt'] = (close[-1] - bb_lower[-1]) / (bb_upper[-1] - bb_lower[-1])
+                indicators['bb_width_opt'] = (bb_upper[-1] - bb_lower[-1]) / bb_middle[-1]
+
+            # MACD
+            macd_fast = params.get('macd_fast', 12)
+            macd_slow = params.get('macd_slow', 26)
+            macd_signal = params.get('macd_signal', 9)
+
+            macd, macd_signal_line, macd_hist = talib.MACD(close, fastperiod=macd_fast,
+                                                          slowperiod=macd_slow, signalperiod=macd_signal)
+
+            if not np.isnan(macd[-1]):
+                indicators['macd_opt'] = macd[-1]
+                indicators['macd_signal_opt'] = macd_signal_line[-1]
+                indicators['macd_histogram_opt'] = macd_hist[-1]
+
+            # EMA
+            ema_fast_period = params.get('ema_fast', 12)
+            ema_slow_period = params.get('ema_slow', 26)
+
+            ema_fast = talib.EMA(close, timeperiod=ema_fast_period)
+            ema_slow = talib.EMA(close, timeperiod=ema_slow_period)
+
+            if not np.isnan(ema_fast[-1]) and not np.isnan(ema_slow[-1]):
+                indicators['ema_fast_opt'] = ema_fast[-1]
+                indicators['ema_slow_opt'] = ema_slow[-1]
+                indicators['ema_spread_opt'] = (ema_fast[-1] - ema_slow[-1]) / close[-1]
+
+            # ATR
+            atr_period = params.get('atr_period', 14)
+            atr = talib.ATR(high, low, close, timeperiod=atr_period)
+            if not np.isnan(atr[-1]):
+                indicators['atr_opt'] = atr[-1]
+
+            # Additional indicators
+            stoch_k_period = params.get('stoch_k', 14)
+            stoch_d_period = params.get('stoch_d', 3)
+
+            stoch_k, stoch_d = talib.STOCH(high, low, close, fastk_period=stoch_k_period,
+                                          slowk_period=stoch_d_period, slowd_period=stoch_d_period)
+
+            if not np.isnan(stoch_k[-1]):
+                indicators['stoch_k_opt'] = stoch_k[-1]
+                indicators['stoch_d_opt'] = stoch_d[-1]
+
+            williams_period = params.get('williams_period', 14)
+            williams_r = talib.WILLR(high, low, close, timeperiod=williams_period)
+            if not np.isnan(williams_r[-1]):
+                indicators['williams_r_opt'] = williams_r[-1]
+
+            mfi_period = params.get('mfi_period', 14)
+            mfi = talib.MFI(high, low, close, volume, timeperiod=mfi_period)
+            if not np.isnan(mfi[-1]):
+                indicators['mfi_opt'] = mfi[-1]
+
+            return indicators
+
+        except Exception as e:
+            _logger.error(f"Error calculating indicators: {str(e)}")
+            return {}
+
+    def _predict_regime(self, features: Dict[str, float]) -> Tuple[int, float]:
+        """Predict market regime using HMM model."""
+        try:
+            if not self.hmm_model or not self.hmm_features:
+                return 1, 0.5  # Default to neutral regime
+
+            # Prepare features for HMM
+            feature_values = []
+            for feature in self.hmm_features:
+                if feature in features:
+                    feature_values.append(features[feature])
+                else:
+                    feature_values.append(0.0)  # Default value
+
+            # Add to buffer and check if we have enough data
+            self.feature_buffer.append(feature_values)
+
+            if len(self.feature_buffer) < 10:  # Need some history
+                return 1, 0.5
+
+            # Scale features
+            recent_features = np.array(list(self.feature_buffer)[-10:])  # Last 10 observations
+            scaled_features = self.hmm_scaler.transform(recent_features)
+
+            # Predict regime
+            regime = self.hmm_model.predict(scaled_features[-1:])  # Predict for last observation
+
+            # Get posterior probabilities for confidence
+            try:
+                posteriors = self.hmm_model.predict_proba(scaled_features[-1:])
+                confidence = np.max(posteriors[0])
+            except:
+                confidence = 0.7  # Default confidence
+
+            return int(regime[0]), float(confidence)
+
+        except Exception as e:
+            _logger.error(f"Error predicting regime: {str(e)}")
+            return 1, 0.5  # Default to neutral regime
+
+    def _predict_price(self, features: Dict[str, float], regime: int, regime_confidence: float) -> float:
+        """Predict next price change using LSTM model."""
+        try:
+            if not self.lstm_model or not self.lstm_features:
+                return 0.0
+
+            # Prepare features for LSTM
+            feature_values = []
+            for feature in self.lstm_features:
+                if feature in features:
+                    feature_values.append(features[feature])
+                else:
+                    feature_values.append(0.0)  # Default value
+
+            # Add to buffer and check if we have enough sequence data
+            if len(feature_values) != len(self.lstm_features):
+                return 0.0
+
+            # For this example, we'll use a simplified approach
+            # In a real implementation, you'd maintain a proper sequence buffer
+            if not hasattr(self, 'lstm_sequence_buffer'):
+                self.lstm_sequence_buffer = deque(maxlen=self.sequence_length)
+
+            self.lstm_sequence_buffer.append(feature_values)
+
+            if len(self.lstm_sequence_buffer) < self.sequence_length:
+                return 0.0
+
+            # Scale features
+            sequence_data = np.array(list(self.lstm_sequence_buffer))
+            sequence_scaled = self.lstm_scalers['feature_scaler'].transform(
+                sequence_data.reshape(-1, len(self.lstm_features))
+            ).reshape(1, self.sequence_length, len(self.lstm_features))
+
+            # Create regime one-hot encoding
+            regime_onehot = np.zeros((1, 3))  # Assuming 3 regimes
+            if 0 <= regime < 3:
+                regime_onehot[0, regime] = 1
+
+            # Predict
+            with torch.no_grad():
+                sequence_tensor = torch.tensor(sequence_scaled, dtype=torch.float32)
+                regime_tensor = torch.tensor(regime_onehot, dtype=torch.float32)
+
+                prediction_scaled = self.lstm_model(sequence_tensor, regime_tensor).item()
+
+                # Inverse transform to get actual prediction
+                prediction = self.lstm_scalers['target_scaler'].inverse_transform(
+                    [[prediction_scaled]]
+                )[0][0]
+
+            return float(prediction)
+
+        except Exception as e:
+            _logger.error(f"Error predicting price: {str(e)}")
+            return 0.0
+
+    def _calculate_position_size(self, prediction: float, regime_confidence: float) -> float:
+        """Calculate position size based on prediction strength and regime confidence."""
+        # Base position size
+        base_size = self.base_position_size
+
+        # Adjust based on prediction strength
+        prediction_strength = abs(prediction)
+        prediction_multiplier = min(2.0, 1.0 + prediction_strength * 100)  # Cap at 2x
+
+        # Adjust based on regime confidence
+        confidence_multiplier = 0.5 + regime_confidence  # Range: 0.5 to 1.5
+
+        # Calculate final position size
+        position_size = base_size * prediction_multiplier * confidence_multiplier
+
+        # Apply limits
+        position_size = max(self.min_position_size, min(self.max_position_size, position_size))
+
+        return position_size
+
+    def next(self):
+        """Called for each bar - main strategy logic."""
+        try:
+            if len(self.data) < 100:  # Need sufficient data for indicators
+                return
+
+            # Calculate current features
+            current_features = {
+                'open': self.data.open[0],
+                'high': self.data.high[0],
+                'low': self.data.low[0],
+                'close': self.data.close[0],
+                'volume': self.data.volume[0],
+                'log_return': np.log(self.data.close[0] / self.data.close[-1]) if self.data.close[-1] > 0 else 0.0
+            }
+
+            # Add technical indicators
+            indicators = self._calculate_indicators()
+            current_features.update(indicators)
+
+            # Predict market regime
+            regime, regime_confidence = self._predict_regime(current_features)
+
+            # Predict price change
+            prediction = self._predict_price(current_features, regime, regime_confidence)
+
+            # Store predictions for analysis
+            self.prediction_buffer.append({
+                'regime': regime,
+                'confidence': regime_confidence,
+                'prediction': prediction,
+                'price': self.data.close[0]
+            })
+
+            # Update current state
+            self.current_regime = regime
+            self.regime_confidence = regime_confidence
+
+            _logger.debug(f"Regime: {regime} (conf: {regime_confidence:.3f}), "
+                         f"Prediction: {prediction:.6f}, Price: {self.data.close[0]:.4f}")
+
+            # Trading logic
+            current_position = self.position.size
+
+            # Entry logic
+            if current_position == 0:
+                self._check_entry_signals(prediction, regime, regime_confidence)
+
+            # Exit logic
+            elif current_position != 0:
+                self._check_exit_signals(prediction, regime, regime_confidence)
+
+        except Exception as e:
+            _logger.error(f"Error in next(): {str(e)}")
+
+    def _check_entry_signals(self, prediction: float, regime: int, regime_confidence: float):
+        """Check for entry signals and execute trades."""
+        try:
+            # Only trade if we have sufficient confidence in regime prediction
+            if regime_confidence < self.regime_confidence_threshold:
+                return
+
+            # Only trade if prediction is strong enough
+            if abs(prediction) < self.prediction_threshold:
+                return
+
+            # Calculate position size
+            position_size = self._calculate_position_size(prediction, regime_confidence)
+
+            # Calculate actual size based on available cash
+            cash = self.broker.get_cash()
+            price = self.data.close[0]
+            max_shares = (cash * position_size) / price
+
+            if max_shares < 1:  # Not enough cash
+                return
+
+            # Long signal
+            if prediction > self.prediction_threshold:
+                _logger.info(f"LONG signal - Prediction: {prediction:.6f}, "
+                           f"Regime: {regime}, Confidence: {regime_confidence:.3f}, "
+                           f"Size: {position_size:.3f}")
+
+                order = self.buy(size=max_shares)
+                if order:
+                    self.entry_price = price
+                    self.highest_profit = 0.0
+                    self.current_trade_regime = regime
+
+            # Short signal (if enabled)
+            elif prediction < -self.prediction_threshold and self.config.get('allow_short', False):
+                _logger.info(f"SHORT signal - Prediction: {prediction:.6f}, "
+                           f"Regime: {regime}, Confidence: {regime_confidence:.3f}, "
+                           f"Size: {position_size:.3f}")
+
+                order = self.sell(size=max_shares)
+                if order:
+                    self.entry_price = price
+                    self.highest_profit = 0.0
+                    self.current_trade_regime = regime
+
+        except Exception as e:
+            _logger.error(f"Error checking entry signals: {str(e)}")
+
+    def _check_exit_signals(self, prediction: float, regime: int, regime_confidence: float):
+        """Check for exit signals and close positions."""
+        try:
+            if not self.entry_price:
+                return
+
+            current_price = self.data.close[0]
+            position_size = self.position.size
+
+            # Calculate current profit/loss
+            if position_size > 0:  # Long position
+                pnl_pct = (current_price - self.entry_price) / self.entry_price
+            else:  # Short position
+                pnl_pct = (self.entry_price - current_price) / self.entry_price
+
+            # Update highest profit for trailing stop
+            if pnl_pct > self.highest_profit:
+                self.highest_profit = pnl_pct
+
+            # Exit conditions
+            exit_signal = False
+            exit_reason = ""
+
+            # 1. Profit target
+            if pnl_pct >= self.profit_target:
+                exit_signal = True
+                exit_reason = "profit_target"
+
+            # 2. Stop loss
+            elif pnl_pct <= -self.stop_loss:
+                exit_signal = True
+                exit_reason = "stop_loss"
+
+            # 3. Trailing stop
+            elif self.highest_profit > 0 and (self.highest_profit - pnl_pct) >= self.trailing_stop:
+                exit_signal = True
+                exit_reason = "trailing_stop"
+
+            # 4. Regime change with low confidence
+            elif regime != self.current_trade_regime and regime_confidence > 0.7:
+                exit_signal = True
+                exit_reason = "regime_change"
+
+            # 5. Prediction reversal
+            elif position_size > 0 and prediction < -self.prediction_threshold:
+                exit_signal = True
+                exit_reason = "prediction_reversal"
+            elif position_size < 0 and prediction > self.prediction_threshold:
+                exit_signal = True
+                exit_reason = "prediction_reversal"
+
+            # 6. Low regime confidence
+            elif regime_confidence < 0.3:
+                exit_signal = True
+                exit_reason = "low_confidence"
+
+            # Execute exit
+            if exit_signal:
+                _logger.info(f"EXIT signal ({exit_reason}) - PnL: {pnl_pct:.4f}, "
+                           f"Prediction: {prediction:.6f}, Regime: {regime}")
+
+                self.close()
+
+                # Reset trade tracking
+                self.entry_price = None
+                self.highest_profit = 0.0
+                self.current_trade_regime = None
+
+        except Exception as e:
+            _logger.error(f"Error checking exit signals: {str(e)}")
+
+    def notify_trade(self, trade):
+        """Handle trade notifications."""
+        try:
+            if trade.isclosed:
+                _logger.info(f"Trade closed - PnL: {trade.pnl:.2f}, "
+                           f"Commission: {trade.commission:.2f}")
+
+        except Exception as e:
+            _logger.error(f"Error in notify_trade: {str(e)}")
+
+    def stop(self):
+        """Called when strategy stops."""
+        _logger.info("Strategy stopped")
+
+        # Log performance summary
+        if hasattr(self, 'prediction_buffer') and self.prediction_buffer:
+            predictions = [p['prediction'] for p in self.prediction_buffer]
+            regimes = [p['regime'] for p in self.prediction_buffer]
+            confidences = [p['confidence'] for p in self.prediction_buffer]
+
+            _logger.info(f"Performance Summary:")
+            _logger.info(f"  Total predictions: {len(predictions)}")
+            _logger.info(f"  Avg prediction magnitude: {np.mean(np.abs(predictions)):.6f}")
+            _logger.info(f"  Avg regime confidence: {np.mean(confidences):.3f}")
+            _logger.info(f"  Regime distribution: {np.bincount(regimes)}")
