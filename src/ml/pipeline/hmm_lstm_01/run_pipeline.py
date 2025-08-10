@@ -59,42 +59,50 @@ class PipelineRunner:
             1: {
                 'name': 'Data Loading',
                 'module': 'x_01_data_loader',
-                'description': 'Download OHLCV data for symbols and timeframes'
+                'description': 'Download OHLCV data for symbols and timeframes',
+                'critical': True  # Critical - needed for all subsequent stages
             },
             2: {
                 'name': 'Data Preprocessing',
                 'module': 'x_02_preprocess',
-                'description': 'Add features, indicators, and normalize data'
+                'description': 'Add features, indicators, and normalize data',
+                'critical': True  # Critical - needed for all subsequent stages
             },
             3: {
                 'name': 'HMM Training',
                 'module': 'x_03_train_hmm',
-                'description': 'Train Hidden Markov Models for regime detection'
+                'description': 'Train Hidden Markov Models for regime detection',
+                'critical': True  # Critical - needed for HMM application
             },
             4: {
                 'name': 'HMM Application',
                 'module': 'x_04_apply_hmm',
-                'description': 'Apply HMM models to label data with regimes'
+                'description': 'Apply HMM models to label data with regimes',
+                'critical': True  # Critical - needed for LSTM training
             },
             5: {
                 'name': 'Indicator Optimization',
                 'module': 'x_05_optuna_indicators',
-                'description': 'Optimize technical indicator parameters with Optuna'
+                'description': 'Optimize technical indicator parameters with Optuna',
+                'critical': False  # Optional - can proceed without optimization
             },
             6: {
                 'name': 'LSTM Optimization',
                 'module': 'x_06_optuna_lstm',
-                'description': 'Optimize LSTM hyperparameters with Optuna'
+                'description': 'Optimize LSTM hyperparameters with Optuna',
+                'critical': False  # Optional - can proceed with default parameters
             },
             7: {
                 'name': 'LSTM Training',
                 'module': 'x_07_train_lstm',
-                'description': 'Train LSTM models with optimized parameters'
+                'description': 'Train LSTM models with optimized parameters',
+                'critical': True  # Critical - main model training
             },
             8: {
                 'name': 'Model Validation',
                 'module': 'x_08_validate_lstm',
-                'description': 'Validate models and generate reports'
+                'description': 'Validate models and generate reports',
+                'critical': False  # Optional - validation can be skipped
             }
         }
 
@@ -136,10 +144,11 @@ class PipelineRunner:
             raise ValueError(f"Invalid stage number: {stage_num}")
 
         stage = self.stages[stage_num]
-        _logger.info("\n%s", "="*60)
+        _logger.info("%s", "=" * 60)
         _logger.info("STAGE %d: %s", stage_num, stage['name'])
         _logger.info("Description: %s", stage['description'])
-        _logger.info("%s", "="*60)
+        _logger.info("%s", "=" * 60)
+        _logger.info("Starting stage %d: %s", stage_num, stage['name'])
 
         start_time = time.time()
 
@@ -156,7 +165,7 @@ class PipelineRunner:
 
             execution_time = time.time() - start_time
 
-            _logger.info("[OK] Stage %d completed successfully in %.2f seconds", stage_num, execution_time)
+            _logger.info("Stage %d completed successfully in %.2f seconds", stage_num, execution_time)
 
             return {
                 'stage': stage_num,
@@ -169,7 +178,7 @@ class PipelineRunner:
         except Exception as e:
             execution_time = time.time() - start_time
             error_msg = f"Stage {stage_num} failed: {str(e)}"
-            _logger.error(error_msg)
+            _logger.exception(error_msg)
 
             return {
                 'stage': stage_num,
@@ -181,7 +190,9 @@ class PipelineRunner:
 
     def run_pipeline(self, skip_stages: Optional[List[int]] = None,
                     symbols: Optional[List[str]] = None,
-                    timeframes: Optional[List[str]] = None) -> Dict:
+                    timeframes: Optional[List[str]] = None,
+                    fail_fast: bool = True,
+                    continue_on_optional_failures: bool = False) -> Dict:
         """
         Run the complete pipeline.
 
@@ -189,12 +200,16 @@ class PipelineRunner:
             skip_stages: List of stage numbers to skip
             symbols: Override symbols from config
             timeframes: Override timeframes from config
+            fail_fast: If True, stop immediately on critical stage failures
+            continue_on_optional_failures: If True, continue even if optional stages fail
 
         Returns:
             Dict with complete pipeline results
         """
         _logger.info("Starting HMM-LSTM Trading Pipeline")
         _logger.info("Configuration: %s", self.config_path)
+        _logger.info("Fail-fast mode: %s", "ENABLED" if fail_fast else "DISABLED")
+        _logger.info("Continue on optional failures: %s", "ENABLED" if continue_on_optional_failures else "DISABLED")
 
         if symbols:
             _logger.info("Override symbols: %s", symbols)
@@ -217,7 +232,9 @@ class PipelineRunner:
             'stages_to_run': [s for s in self.stages.keys() if s not in skip_stages],
             'stages_skipped': skip_stages,
             'stage_results': [],
-            'overall_success': True
+            'overall_success': True,
+            'failed_critical_stages': [],
+            'failed_optional_stages': []
         }
 
         # Run each stage
@@ -226,18 +243,46 @@ class PipelineRunner:
                 _logger.info("Skipping Stage %d: %s", stage_num, self.stages[stage_num]['name'])
                 continue
 
+            stage = self.stages[stage_num]
             stage_result = self.run_stage(stage_num)
             results['stage_results'].append(stage_result)
 
             if not stage_result['success']:
-                results['overall_success'] = False
-                _logger.error("Pipeline failed at Stage %d", stage_num)
+                if stage['critical']:
+                    # Critical stage failed
+                    results['failed_critical_stages'].append(stage_result)
+                    results['overall_success'] = False
 
-                # Ask user if they want to continue
-                response = input(f"\nStage {stage_num} failed. Continue with remaining stages? (y/n): ")
-                if response.lower() != 'y':
-                    _logger.info("Pipeline execution stopped by user")
-                    break
+                    _logger.error("CRITICAL STAGE FAILED: Stage %d (%s)", stage_num, stage['name'])
+                    _logger.error("Error: %s", stage_result['error'])
+
+                    if fail_fast:
+                        _logger.error("Pipeline stopped due to critical stage failure (fail-fast mode enabled)")
+                        _logger.error("Fix the issue and restart the pipeline from stage %d", stage_num)
+                        break
+                    else:
+                        _logger.warning("Critical stage failed but continuing (fail-fast mode disabled)")
+                        # Ask user if they want to continue
+                        response = input(f"\nCritical stage {stage_num} failed. Continue with remaining stages? (y/n): ")
+                        if response.lower() != 'y':
+                            _logger.info("Pipeline execution stopped by user")
+                            break
+                else:
+                    # Optional stage failed
+                    results['failed_optional_stages'].append(stage_result)
+
+                    _logger.warning("OPTIONAL STAGE FAILED: Stage %d (%s)", stage_num, stage['name'])
+                    _logger.warning("Error: %s", stage_result['error'])
+
+                    if not continue_on_optional_failures:
+                        _logger.warning("Optional stage failed and continue_on_optional_failures=False")
+                        # Ask user if they want to continue
+                        response = input(f"\nOptional stage {stage_num} failed. Continue with remaining stages? (y/n): ")
+                        if response.lower() != 'y':
+                            _logger.info("Pipeline execution stopped by user")
+                            break
+                    else:
+                        _logger.info("Optional stage failed but continuing (continue_on_optional_failures=True)")
 
         # Calculate total execution time
         total_time = time.time() - pipeline_start_time
@@ -262,38 +307,55 @@ class PipelineRunner:
         _logger.info("%s", "="*60)
 
         successful_stages = [r for r in results['stage_results'] if r['success']]
-        failed_stages = [r for r in results['stage_results'] if not r['success']]
+        failed_critical = results.get('failed_critical_stages', [])
+        failed_optional = results.get('failed_optional_stages', [])
 
         _logger.info("Total execution time: %.2f seconds", results['total_execution_time'])
         _logger.info("Stages completed: %d", len(successful_stages))
-        _logger.info("Stages failed: %d", len(failed_stages))
+        _logger.info("Critical stages failed: %d", len(failed_critical))
+        _logger.info("Optional stages failed: %d", len(failed_optional))
         _logger.info("Overall success: %s", results['overall_success'])
 
         if successful_stages:
             _logger.info("\nSuccessful stages:")
             for stage in successful_stages:
-                _logger.info("  [OK] Stage %d: %s (%.2fs)", stage['stage'], stage['name'], stage['execution_time'])
+                stage_info = self.stages[stage['stage']]
+                criticality = "CRITICAL" if stage_info['critical'] else "OPTIONAL"
+                _logger.info("  [OK] Stage %d (%s): %s (%.2fs)",
+                           stage['stage'], criticality, stage['name'], stage['execution_time'])
 
-        if failed_stages:
-            _logger.info("\nFailed stages:")
-            for stage in failed_stages:
-                _logger.info("  [FAILED] Stage %d: %s - %s", stage['stage'], stage['name'], stage['error'])
+        if failed_critical:
+            _logger.error("\nFailed CRITICAL stages:")
+            for stage in failed_critical:
+                _logger.error("  [CRITICAL FAILED] Stage %d: %s - %s",
+                            stage['stage'], stage['name'], stage['error'])
+
+        if failed_optional:
+            _logger.warning("\nFailed OPTIONAL stages:")
+            for stage in failed_optional:
+                _logger.warning("  [OPTIONAL FAILED] Stage %d: %s - %s",
+                              stage['stage'], stage['name'], stage['error'])
 
         if results['overall_success']:
             _logger.info("\n[SUCCESS] Pipeline completed successfully!")
             _logger.info("Check the results/ and reports/ directories for outputs.")
         else:
-            _logger.warning("\n[WARNING] Pipeline completed with errors.")
+            if failed_critical:
+                _logger.error("\n[FAILURE] Pipeline failed due to critical stage failures.")
+                _logger.error("Fix the issues and restart the pipeline from the failed stage.")
+            else:
+                _logger.warning("\n[PARTIAL SUCCESS] Pipeline completed with optional stage failures.")
 
         _logger.info("%s", "="*60)
 
     def list_stages(self) -> None:
         """List all available pipeline stages."""
         print("\nHMM-LSTM Trading Pipeline Stages:")
-        print("=" * 50)
+        print("=" * 60)
 
         for stage_num, stage in self.stages.items():
-            print(f"{stage_num}. {stage['name']}")
+            criticality = "[CRITICAL]" if stage['critical'] else "[OPTIONAL]"
+            print(f"{stage_num}. {stage['name']} {criticality}")
             print(f"   Module: {stage['module']}")
             print(f"   Description: {stage['description']}")
             print()
@@ -337,10 +399,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python run_pipeline.py                           # Run complete pipeline
+  python run_pipeline.py                           # Run complete pipeline with fail-fast
   python run_pipeline.py --skip-stages 1,2,3      # Skip first 3 stages
   python run_pipeline.py --symbols BTCUSDT,ETHUSDT # Process specific symbols
   python run_pipeline.py --list-stages             # List all stages
+  python run_pipeline.py --no-fail-fast            # Disable fail-fast mode
+  python run_pipeline.py --continue-on-optional-failures  # Continue on optional failures
         """
     )
 
@@ -356,6 +420,10 @@ Examples:
                        help='List all pipeline stages and exit')
     parser.add_argument('--validate-only', action='store_true',
                        help='Only validate requirements without running pipeline')
+    parser.add_argument('--no-fail-fast', action='store_true',
+                       help='Disable fail-fast mode (continue on critical failures)')
+    parser.add_argument('--continue-on-optional-failures', action='store_true',
+                       help='Continue pipeline even if optional stages fail')
 
     args = parser.parse_args()
 
@@ -394,7 +462,9 @@ Examples:
         results = runner.run_pipeline(
             skip_stages=skip_stages,
             symbols=symbols,
-            timeframes=timeframes
+            timeframes=timeframes,
+            fail_fast=not args.no_fail_fast,
+            continue_on_optional_failures=args.continue_on_optional_failures
         )
 
         # Exit with appropriate code
