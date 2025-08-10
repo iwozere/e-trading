@@ -316,7 +316,21 @@ class LSTMOptimizer:
             Dict with prepared data splits
         """
         # Extract features and target
-        feature_data = df[features].fillna(method='ffill').fillna(method='bfill').fillna(0)
+        feature_data = df[features].ffill().bfill().fillna(0)
+
+        # Handle infinite and extremely large values
+        feature_data = feature_data.replace([np.inf, -np.inf], np.nan)
+        feature_data = feature_data.ffill().bfill()
+        feature_data = feature_data.fillna(0)
+
+        # Clip extreme values to prevent numerical issues
+        for col in feature_data.columns:
+            if feature_data[col].dtype in ['float64', 'float32']:
+                # Get the 1st and 99th percentiles
+                q1 = feature_data[col].quantile(0.01)
+                q99 = feature_data[col].quantile(0.99)
+                # Clip values outside this range
+                feature_data[col] = feature_data[col].clip(lower=q1, upper=q99)
 
         # Target is next period's log return
         target_data = df['log_return'].shift(-1).fillna(0)  # Predict next period
@@ -461,6 +475,9 @@ class LSTMOptimizer:
 
                 optimizer.zero_grad()
                 outputs = model(batch_X).squeeze()
+                # Ensure consistent shapes for loss calculation
+                if outputs.dim() == 0:
+                    outputs = outputs.unsqueeze(0)
                 loss = criterion(outputs, batch_y)
                 loss.backward()
                 optimizer.step()
@@ -478,6 +495,9 @@ class LSTMOptimizer:
                     batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
 
                     outputs = model(batch_X).squeeze()
+                    # Ensure consistent shapes for loss calculation
+                    if outputs.dim() == 0:
+                        outputs = outputs.unsqueeze(0)
                     loss = criterion(outputs, batch_y)
                     val_loss += loss.item()
 
@@ -688,7 +708,7 @@ class LSTMOptimizer:
             with open(output_path, 'w') as f:
                 json.dump(results, f, indent=2)
 
-            logger.info(f"✓ Saved LSTM optimization results to {output_path}")
+            logger.info(f"[OK] Saved LSTM optimization results to {output_path}")
 
             return {
                 'symbol': symbol,

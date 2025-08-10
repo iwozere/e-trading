@@ -359,7 +359,22 @@ class LSTMTrainer:
             Dict with prepared data splits
         """
         # Extract features, regimes, and target
-        feature_data = df[features].fillna(method='ffill').fillna(method='bfill').fillna(0)
+        feature_data = df[features].ffill().bfill().fillna(0)
+
+        # Handle infinite and extremely large values
+        feature_data = feature_data.replace([np.inf, -np.inf], np.nan)
+        feature_data = feature_data.ffill().bfill()
+        feature_data = feature_data.fillna(0)
+
+        # Clip extreme values to prevent numerical issues
+        for col in feature_data.columns:
+            if feature_data[col].dtype in ['float64', 'float32']:
+                # Get the 1st and 99th percentiles
+                q1 = feature_data[col].quantile(0.01)
+                q99 = feature_data[col].quantile(0.99)
+                # Clip values outside this range
+                feature_data[col] = feature_data[col].clip(lower=q1, upper=q99)
+
         regime_data = df['regime'].fillna(0).astype(int)
 
         # Target is next period's log return
@@ -719,7 +734,7 @@ class LSTMTrainer:
                 model, scalers, features, training_results, lstm_params, symbol, timeframe
             )
 
-            logger.info(f"✓ LSTM training completed for {symbol} {timeframe}")
+            logger.info(f"[OK] LSTM training completed for {symbol} {timeframe}")
             logger.info(f"  Best validation loss: {training_results['best_val_loss']:.6f}")
             logger.info(f"  Training epochs: {training_results['final_epoch']}")
 

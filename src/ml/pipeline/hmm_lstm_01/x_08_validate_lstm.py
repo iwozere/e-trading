@@ -199,7 +199,22 @@ class LSTMValidator:
         sequence_length = model_package['hyperparameters']['sequence_length']
 
         # Extract features and regimes
-        feature_data = df[features].fillna(method='ffill').fillna(method='bfill').fillna(0)
+        feature_data = df[features].ffill().bfill().fillna(0)
+
+        # Handle infinite and extremely large values
+        feature_data = feature_data.replace([np.inf, -np.inf], np.nan)
+        feature_data = feature_data.ffill().bfill()
+        feature_data = feature_data.fillna(0)
+
+        # Clip extreme values to prevent numerical issues
+        for col in feature_data.columns:
+            if feature_data[col].dtype in ['float64', 'float32']:
+                # Get the 1st and 99th percentiles
+                q1 = feature_data[col].quantile(0.01)
+                q99 = feature_data[col].quantile(0.99)
+                # Clip values outside this range
+                feature_data[col] = feature_data[col].clip(lower=q1, upper=q99)
+
         regime_data = df['regime'].fillna(0).astype(int)
         target_data = df['log_return'].shift(-1).fillna(0)
 
@@ -632,7 +647,7 @@ class LSTMValidator:
                 f"  MSE: {metrics['lstm_metrics']['mse']:.6f}",
                 f"  RMSE: {metrics['lstm_metrics']['rmse']:.6f}",
                 f"  MAE: {metrics['lstm_metrics']['mae']:.6f}",
-                f"  R²: {metrics['lstm_metrics']['r2']:.4f}",
+                f"  R^2: {metrics['lstm_metrics']['r2']:.4f}",
                 f"  Directional Accuracy: {metrics['lstm_metrics']['directional_accuracy']:.2f}%",
                 f"  Hit Rate: {metrics['lstm_metrics']['hit_rate']:.2f}%",
                 f"  Sharpe Ratio: {metrics['lstm_metrics']['sharpe_ratio']:.4f}",
@@ -641,7 +656,7 @@ class LSTMValidator:
                 f"  MSE: {metrics['baseline_metrics']['mse']:.6f}",
                 f"  RMSE: {metrics['baseline_metrics']['rmse']:.6f}",
                 f"  MAE: {metrics['baseline_metrics']['mae']:.6f}",
-                f"  R²: {metrics['baseline_metrics']['r2']:.4f}",
+                f"  R^2: {metrics['baseline_metrics']['r2']:.4f}",
                 f"  Directional Accuracy: {metrics['baseline_metrics']['directional_accuracy']:.2f}%",
                 f"  Hit Rate: {metrics['baseline_metrics']['hit_rate']:.2f}%",
                 f"  Sharpe Ratio: {metrics['baseline_metrics']['sharpe_ratio']:.4f}",
@@ -649,7 +664,7 @@ class LSTMValidator:
                 "Improvements (LSTM vs Baseline):",
                 f"  MSE Improvement: {metrics['improvements']['mse_improvement_pct']:.2f}%",
                 f"  MAE Improvement: {metrics['improvements']['mae_improvement_pct']:.2f}%",
-                f"  R² Improvement: {metrics['improvements']['r2_improvement']:.4f}",
+                f"  R^2 Improvement: {metrics['improvements']['r2_improvement']:.4f}",
                 f"  Directional Accuracy Gain: {metrics['improvements']['directional_accuracy_improvement']:.2f}%",
                 f"",
                 f"Test Sample Size: {metrics['sample_size']} observations"
@@ -676,7 +691,7 @@ class LSTMValidator:
                         f"  MSE: {perf['mse']:.6f}",
                         f"  MAE: {perf['mae']:.6f}",
                         f"  Directional Accuracy: {perf['directional_accuracy']:.2f}%",
-                        f"  R²: {perf['r2']:.4f}",
+                        f"  R^2: {perf['r2']:.4f}",
                         ""
                     ]
 
@@ -791,7 +806,7 @@ class LSTMValidator:
             with open(json_path, 'w') as f:
                 json.dump(results, f, indent=2)
 
-            logger.info(f"✓ LSTM validation completed for {symbol} {timeframe}")
+            logger.info(f"[OK] LSTM validation completed for {symbol} {timeframe}")
             logger.info(f"  MSE improvement: {metrics['improvements']['mse_improvement_pct']:.2f}%")
             logger.info(f"  Directional accuracy: {metrics['lstm_metrics']['directional_accuracy']:.2f}%")
             logger.info(f"  PDF report: {pdf_path}")

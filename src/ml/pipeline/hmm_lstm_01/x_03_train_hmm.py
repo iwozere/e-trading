@@ -148,8 +148,22 @@ class HMMTrainer:
         feature_data = df[features].copy()
 
         # Handle any remaining missing values
-        feature_data = feature_data.fillna(method='ffill').fillna(method='bfill')
+        feature_data = feature_data.ffill().bfill()
         feature_data = feature_data.fillna(0)
+
+        # Handle infinite and extremely large values
+        feature_data = feature_data.replace([np.inf, -np.inf], np.nan)
+        feature_data = feature_data.ffill().bfill()
+        feature_data = feature_data.fillna(0)
+
+        # Clip extreme values to prevent numerical issues
+        for col in feature_data.columns:
+            if feature_data[col].dtype in ['float64', 'float32']:
+                # Get the 1st and 99th percentiles
+                q1 = feature_data[col].quantile(0.01)
+                q99 = feature_data[col].quantile(0.99)
+                # Clip values outside this range
+                feature_data[col] = feature_data[col].clip(lower=q1, upper=q99)
 
         # Scale features for HMM
         scaler = StandardScaler()
@@ -243,6 +257,75 @@ class HMMTrainer:
 
         return validation_metrics
 
+    def analyze_regime_characteristics(self, df: pd.DataFrame, regimes: np.ndarray) -> List[str]:
+        """
+        Analyze the characteristics of each regime to assign proper labels.
+
+        Args:
+            df: DataFrame with price data
+            regimes: Array of regime predictions
+
+        Returns:
+            List of regime labels in order of regime_id
+        """
+        regime_stats = []
+
+        for regime_id in range(self.n_components):
+            mask = regimes == regime_id
+            if not np.any(mask):
+                regime_stats.append({'regime_id': regime_id, 'avg_return': 0, 'volatility': 0})
+                continue
+
+            # Get data for this regime
+            regime_data = df.iloc[mask]
+
+            # Calculate average log return
+            if 'log_return' in regime_data.columns:
+                avg_return = regime_data['log_return'].mean()
+                volatility = regime_data['log_return'].std()
+            else:
+                # Calculate from price if log_return not available
+                price_returns = regime_data['close'].pct_change().dropna()
+                avg_return = price_returns.mean()
+                volatility = price_returns.std()
+
+            regime_stats.append({
+                'regime_id': regime_id,
+                'avg_return': avg_return,
+                'volatility': volatility
+            })
+
+        # Sort regimes by average return to assign labels
+        regime_stats.sort(key=lambda x: x['avg_return'])
+
+        # Assign labels based on sorted order
+        if self.n_components == 3:
+            labels = [''] * self.n_components
+            for i, stat in enumerate(regime_stats):
+                if i == 0:
+                    labels[stat['regime_id']] = 'Bearish'
+                elif i == 1:
+                    labels[stat['regime_id']] = 'Sideways'
+                else:
+                    labels[stat['regime_id']] = 'Bullish'
+        elif self.n_components == 2:
+            labels = [''] * self.n_components
+            for i, stat in enumerate(regime_stats):
+                if i == 0:
+                    labels[stat['regime_id']] = 'Bearish'
+                else:
+                    labels[stat['regime_id']] = 'Bullish'
+        else:
+            labels = [f'Regime {i}' for i in range(self.n_components)]
+
+        # Log regime characteristics
+        logger.info(f"Regime characteristics:")
+        for stat in regime_stats:
+            logger.info(f"  Regime {stat['regime_id']} ({labels[stat['regime_id']]}): "
+                       f"avg_return={stat['avg_return']:.6f}, volatility={stat['volatility']:.6f}")
+
+        return labels
+
     def visualize_regimes(self, model: hmm.GaussianHMM, X: np.ndarray, df: pd.DataFrame,
                          features: List[str], symbol: str, timeframe: str, save_path: Path) -> None:
         """
@@ -262,7 +345,7 @@ class HMMTrainer:
             regimes = model.predict(X)
 
             # Create figure with subplots
-            fig, axes = plt.subplots(3, 1, figsize=(15, 12))
+            fig, axes = plt.subplots(3, 1, figsize=(60, 12))
             fig.suptitle(f'HMM Regime Detection - {symbol} {timeframe}', fontsize=16)
 
             # Prepare data for plotting (use recent data to avoid overcrowding)
@@ -282,12 +365,15 @@ class HMMTrainer:
             # Color map for regimes
             colors = ['red', 'green', 'blue', 'orange', 'purple'][:self.n_components]
 
+            # Analyze regime characteristics and assign proper labels
+            regime_labels = self.analyze_regime_characteristics(df, regimes)
+
             for regime_id in range(self.n_components):
                 mask = plot_regimes == regime_id
                 if np.any(mask):
                     axes[0].scatter(x_axis[mask], plot_data['close'].iloc[mask],
-                                  c=colors[regime_id], alpha=0.6, s=10,
-                                  label=f'Regime {regime_id}')
+                                  c=colors[regime_id], alpha=0.6, s=1,
+                                  label=f'{regime_labels[regime_id]} (Regime {regime_id})')
 
             axes[0].plot(x_axis, plot_data['close'], 'k-', alpha=0.3, linewidth=0.5)
             axes[0].set_ylabel('Price')
@@ -301,8 +387,8 @@ class HMMTrainer:
                 mask = plot_regimes == regime_id
                 if np.any(mask):
                     axes[1].scatter(x_axis[mask], plot_data['log_return'].iloc[mask],
-                                  c=colors[regime_id], alpha=0.6, s=10,
-                                  label=f'Regime {regime_id}')
+                                  c=colors[regime_id], alpha=0.6, s=1,
+                                  label=f'{regime_labels[regime_id]} (Regime {regime_id})')
 
             axes[1].axhline(y=0, color='black', linestyle='-', alpha=0.3)
             axes[1].set_ylabel('Log Return')
@@ -311,11 +397,12 @@ class HMMTrainer:
 
             # Plot 3: Regime timeline
             axes[2].set_title('Regime Timeline')
-            axes[2].plot(x_axis, plot_regimes, 'o-', markersize=2, linewidth=1)
+            axes[2].plot(x_axis, plot_regimes, 'o-', markersize=1, linewidth=1)
             axes[2].set_ylabel('Regime')
             axes[2].set_xlabel('Time')
             axes[2].grid(True, alpha=0.3)
             axes[2].set_yticks(range(self.n_components))
+            axes[2].set_yticklabels(regime_labels)
 
             plt.tight_layout()
             plt.savefig(save_path, dpi=300, bbox_inches='tight')

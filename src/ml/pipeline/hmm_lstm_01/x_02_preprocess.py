@@ -110,6 +110,7 @@ class DataPreprocessor:
         high = df['high'].values
         low = df['low'].values
         close = df['close'].values
+        open_price = df['open'].values
         volume = df['volume'].values
 
         try:
@@ -160,7 +161,7 @@ class DataPreprocessor:
 
             # Price-based features
             df['hl_ratio'] = (high - low) / close
-            df['oc_ratio'] = (close - open) / open
+            df['oc_ratio'] = (close - open_price) / open_price
             df['high_close_ratio'] = (high - close) / close
             df['low_close_ratio'] = (close - low) / close
 
@@ -214,11 +215,11 @@ class DataPreprocessor:
         price_cols = ['open', 'high', 'low', 'close']
         for col in price_cols:
             if col in df.columns:
-                df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
+                df[col] = df[col].ffill().bfill()
 
         # Forward fill volume
         if 'volume' in df.columns:
-            df['volume'] = df['volume'].fillna(method='ffill').fillna(0)
+            df['volume'] = df['volume'].ffill().fillna(0)
 
         # Fill technical indicators with their median values
         numeric_cols = df.select_dtypes(include=[np.number]).columns
@@ -355,7 +356,7 @@ class DataPreprocessor:
                 'success': True
             }
 
-            logger.info(f"✓ {input_path.name}: {original_shape} → {df.shape} (+{stats['columns_added']} cols, -{stats['rows_removed']} rows)")
+            logger.info(f"[OK] {input_path.name}: {original_shape} -> {df.shape} (+{stats['columns_added']} cols, -{stats['rows_removed']} rows)")
 
             return stats
 

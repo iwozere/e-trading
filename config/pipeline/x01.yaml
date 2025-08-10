@@ -1,5 +1,5 @@
-symbols: [BTCUSDT, ETHUSDT, LTCUSDT]
-timeframes: [5m, 15m, 1h, 4h]
+symbols: [BTCUSDT]
+timeframes: [1h, 4h]
 
 hmm:
   n_components: 3

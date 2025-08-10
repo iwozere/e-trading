@@ -125,6 +125,7 @@ class HMMApplicator:
 
         if missing_features:
             logger.warning(f"Missing features: {missing_features}")
+            logger.info(f"Attempting to create missing features...")
             # Try to create missing features if possible
             df = self._create_missing_features(df, missing_features)
 
@@ -137,8 +138,22 @@ class HMMApplicator:
         feature_data = df[required_features].copy()
 
         # Handle missing values
-        feature_data = feature_data.fillna(method='ffill').fillna(method='bfill')
+        feature_data = feature_data.ffill().bfill()
         feature_data = feature_data.fillna(0)
+
+        # Handle infinite and extremely large values
+        feature_data = feature_data.replace([np.inf, -np.inf], np.nan)
+        feature_data = feature_data.ffill().bfill()
+        feature_data = feature_data.fillna(0)
+
+        # Clip extreme values to prevent numerical issues
+        for col in feature_data.columns:
+            if feature_data[col].dtype in ['float64', 'float32']:
+                # Get the 1st and 99th percentiles
+                q1 = feature_data[col].quantile(0.01)
+                q99 = feature_data[col].quantile(0.99)
+                # Clip values outside this range
+                feature_data[col] = feature_data[col].clip(lower=q1, upper=q99)
 
         return feature_data.values
 
@@ -160,6 +175,9 @@ class HMMApplicator:
                 if feature == 'ema_spread' and 'ema_12' in df.columns and 'ema_26' in df.columns:
                     df['ema_spread'] = (df['ema_12'] - df['ema_26']) / df['close']
                     logger.info(f"Created missing feature: {feature}")
+                elif feature == 'ema_spread':
+                    logger.warning(f"Cannot create {feature}: missing required columns 'ema_12' or 'ema_26'")
+                    logger.info(f"Available columns: {list(df.columns)}")
                 else:
                     logger.warning(f"Cannot create missing feature: {feature}")
             except Exception as e:
@@ -354,7 +372,7 @@ class HMMApplicator:
 
             df_labeled.to_csv(output_path, index=False)
 
-            logger.info(f"✓ Saved labeled data: {original_shape} → {df_labeled.shape} to {output_path}")
+            logger.info(f"[OK] Saved labeled data: {original_shape} -> {df_labeled.shape} to {output_path}")
 
             return {
                 'symbol': symbol,

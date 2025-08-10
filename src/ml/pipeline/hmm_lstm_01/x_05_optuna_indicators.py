@@ -460,14 +460,30 @@ class IndicatorOptimizer:
 
             # Save results
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # Convert NumPy types to native Python types for JSON serialization
+            def convert_numpy_types(obj):
+                if isinstance(obj, dict):
+                    return {key: convert_numpy_types(value) for key, value in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy_types(item) for item in obj]
+                elif isinstance(obj, (np.integer, np.int64, np.int32)):
+                    return int(obj)
+                elif isinstance(obj, (np.floating, np.float64, np.float32)):
+                    return float(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                else:
+                    return obj
+
             results = {
                 'symbol': symbol,
                 'timeframe': timeframe,
                 'optimization_timestamp': timestamp,
-                'best_params': best_params,
-                'best_objective_value': best_value,
-                'validation_metrics': validation_metrics,
-                'n_trials': study.n_trials,
+                'best_params': convert_numpy_types(best_params),
+                'best_objective_value': convert_numpy_types(best_value),
+                'validation_metrics': convert_numpy_types(validation_metrics),
+                'n_trials': len(study.trials),
                 'optimization_samples': len(df_optimization),
                 'validation_samples': len(df)
             }
@@ -479,7 +495,7 @@ class IndicatorOptimizer:
             with open(output_path, 'w') as f:
                 json.dump(results, f, indent=2)
 
-            logger.info(f"✓ Saved optimization results to {output_path}")
+            logger.info(f"[OK] Saved optimization results to {output_path}")
 
             return {
                 'symbol': symbol,

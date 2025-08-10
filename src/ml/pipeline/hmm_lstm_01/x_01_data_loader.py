@@ -14,6 +14,7 @@ Features:
 """
 
 import pandas as pd
+import numpy as np
 import yaml
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -102,12 +103,12 @@ class DataLoader:
 
             # Add log_return column if not present
             if 'log_return' not in df.columns:
-                df['log_return'] = (df['close'] / df['close'].shift(1)).apply(lambda x: 0 if x <= 0 else x).pipe(lambda x: x.apply(lambda y: 0 if y == 0 else pd.np.log(y)))
+                df['log_return'] = (df['close'] / df['close'].shift(1)).apply(lambda x: 0 if x <= 0 else x).pipe(lambda x: x.apply(lambda y: 0 if y == 0 else np.log(y)))
 
             # Save to CSV
             df.to_csv(filepath, index=False)
 
-            logger.info(f"✓ Successfully saved {symbol} {timeframe} to {filepath}")
+            logger.info(f"[OK] Successfully saved {symbol} {timeframe} to {filepath}")
             logger.info(f"  Data shape: {df.shape}, Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
 
             return symbol, timeframe, True, str(filepath)
@@ -258,7 +259,7 @@ def main():
                 if issues:
                     logger.warning(f"{filepath.name}: {', '.join(issues)}")
                 else:
-                    logger.info(f"✓ {filepath.name}: Quality OK - {quality['shape'][0]} rows")
+                    logger.info(f"[OK] {filepath.name}: Quality OK - {quality['shape'][0]} rows")
 
         logger.info("Data loading completed!")
 

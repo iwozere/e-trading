@@ -165,7 +165,7 @@ class PipelineRunner:
 
             execution_time = time.time() - start_time
 
-            logger.info(f"✓ Stage {stage_num} completed successfully in {execution_time:.2f} seconds")
+            logger.info(f"[OK] Stage {stage_num} completed successfully in {execution_time:.2f} seconds")
 
             return {
                 'stage': stage_num,
@@ -281,18 +281,18 @@ class PipelineRunner:
         if successful_stages:
             logger.info("\nSuccessful stages:")
             for stage in successful_stages:
-                logger.info(f"  ✓ Stage {stage['stage']}: {stage['name']} ({stage['execution_time']:.2f}s)")
+                logger.info(f"  [OK] Stage {stage['stage']}: {stage['name']} ({stage['execution_time']:.2f}s)")
 
         if failed_stages:
             logger.info("\nFailed stages:")
             for stage in failed_stages:
-                logger.info(f"  ✗ Stage {stage['stage']}: {stage['name']} - {stage['error']}")
+                logger.info(f"  [FAILED] Stage {stage['stage']}: {stage['name']} - {stage['error']}")
 
         if results['overall_success']:
-            logger.info("\n🎉 Pipeline completed successfully!")
+            logger.info("\n[SUCCESS] Pipeline completed successfully!")
             logger.info("Check the results/ and reports/ directories for outputs.")
         else:
-            logger.warning("\n⚠️  Pipeline completed with errors.")
+            logger.warning("\n[WARNING] Pipeline completed with errors.")
 
         logger.info(f"{'='*60}")
 
@@ -336,7 +336,7 @@ class PipelineRunner:
         for dir_path in required_dirs:
             Path(dir_path).mkdir(parents=True, exist_ok=True)
 
-        logger.info("✓ All requirements validated")
+        logger.info("[OK] All requirements validated")
         return True
 
 def main():
@@ -410,10 +410,10 @@ Examples:
         sys.exit(0 if results['overall_success'] else 1)
 
     except KeyboardInterrupt:
-        logger.info("\nPipeline execution interrupted by user")
+        logger.info("Pipeline execution interrupted by user")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Pipeline execution failed: {str(e)}")
+        logger.exception("Pipeline execution failed")
         sys.exit(1)
 
 if __name__ == "__main__":
