@@ -183,7 +183,7 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
             else:
                 bb_condition = current_price < bb_bot_value
 
-            return_value = rsi_condition and bb_condition
+            return_value = rsi_condition or bb_condition
             if return_value:
                 logger.debug(
                     f"ENTRY: Price: {current_price}, RSI: {rsi_value}, BB Lower: {bb_bot_value}"
