@@ -99,13 +99,23 @@ class HMMApplicator:
             _logger.info("Model features: %s", model_package['features'])
             _logger.info("Model components: %d", model_package['config']['n_components'])
 
+            # Check if model uses old fixed-period features
+            features = model_package['features']
+            fixed_period_features = [feat for feat in features
+                                   if any(indicator in feat for indicator in ['rsi_', 'bb_', 'macd', 'ema_', 'atr_', 'stoch', 'williams', 'mfi', 'sma'])]
+
+            if fixed_period_features:
+                _logger.warning("Model uses fixed-period indicators: %s", fixed_period_features)
+                _logger.warning("This model was trained with the old preprocessing approach.")
+                _logger.warning("Consider retraining with the new dynamic feature approach for better performance.")
+
             return model_package
 
         except Exception as e:
             _logger.error("Failed to load model from %s: %s", model_path, str(e))
             raise
 
-    def prepare_features(self, df: pd.DataFrame, required_features: List[str]) -> np.ndarray:
+    def prepare_features(self, df: pd.DataFrame, required_features: List[str], timeframe: str = "4h") -> np.ndarray:
         """
         Prepare features for HMM prediction using the same features as training.
 
@@ -121,14 +131,29 @@ class HMMApplicator:
 
         if missing_features:
             _logger.warning("Missing features: %s", missing_features)
-            _logger.info("Attempting to create missing features...")
-            # Try to create missing features if possible
-            df = self._create_missing_features(df, missing_features)
+            _logger.info("Attempting to create missing features dynamically...")
+
+            # Check if these are fixed-period indicators that we can compute dynamically
+            fixed_period_indicators = [feat for feat in missing_features
+                                     if any(indicator in feat for indicator in ['rsi_', 'bb_', 'macd', 'ema_', 'atr_', 'stoch', 'williams', 'mfi', 'sma'])]
+
+            if fixed_period_indicators:
+                # Extract timeframe from the model metadata or use a default
+                # For now, we'll need to pass timeframe to this method
+                # This is a temporary fix - in the future, timeframe should be stored in model metadata
+                _logger.info("Computing indicators dynamically using the same logic as HMM training")
+                # Note: We need to get timeframe from somewhere - for now, we'll use a default
+                # In the apply_hmm_to_file method, we'll pass the timeframe
+                df = self._compute_indicators_dynamically(df, timeframe)
+            else:
+                # Try to create other missing features if possible
+                df = self._create_missing_features(df, missing_features)
 
             # Check again
             missing_features = [feat for feat in required_features if feat not in df.columns]
             if missing_features:
-                raise ValueError(f"Cannot create missing features: {missing_features}")
+                error_msg = f"Cannot create missing features: {missing_features}"
+                raise ValueError(error_msg)
 
         # Extract features
         feature_data = df[required_features].copy()
@@ -151,11 +176,16 @@ class HMMApplicator:
                 # Clip values outside this range
                 feature_data[col] = feature_data[col].clip(lower=q1, upper=q99)
 
-        return feature_data.values
+        # Return as DataFrame to preserve feature names for StandardScaler
+        return feature_data
 
     def _create_missing_features(self, df: pd.DataFrame, missing_features: List[str]) -> pd.DataFrame:
         """
         Attempt to create missing features that might be derivable.
+
+        Note: This method is primarily for backward compatibility. The new pipeline
+        uses dynamic feature generation with optimized parameters, so fixed-period
+        indicators like 'rsi_14' should not be expected in the data.
 
         Args:
             df: DataFrame
@@ -174,6 +204,15 @@ class HMMApplicator:
                 elif feature == 'ema_spread':
                     _logger.warning("Cannot create %s: missing required columns 'ema_12' or 'ema_26'", feature)
                     _logger.info("Available columns: %s", list(df.columns))
+                elif any(indicator in feature for indicator in ['rsi_', 'bb_', 'macd', 'ema_', 'atr_', 'stoch', 'williams', 'mfi', 'sma']):
+                    # These are fixed-period indicators that are no longer generated
+                    # by the new preprocessing approach. The HMM model needs to be
+                    # retrained with the new dynamic features.
+                    _logger.error("Missing fixed-period indicator: %s", feature)
+                    _logger.error("This indicates the HMM model was trained with old fixed-period features.")
+                    _logger.error("The model needs to be retrained with the new dynamic feature approach.")
+                    _logger.error("Available features: %s", [col for col in df.columns if any(indicator in col for indicator in ['rsi', 'bb', 'macd', 'ema', 'atr', 'stoch', 'williams', 'mfi', 'sma'])])
+                    _logger.error("Please run the pipeline from stage 3 (HMM training) to regenerate models with optimized features.")
                 else:
                     _logger.warning("Cannot create missing feature: %s", feature)
             except Exception as e:
@@ -181,7 +220,92 @@ class HMMApplicator:
 
         return df
 
-    def predict_regimes(self, model_package: Dict, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+    def _compute_indicators_dynamically(self, df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
+        """
+        Compute indicators dynamically using the same logic as HMM training.
+
+        Args:
+            df: DataFrame with OHLCV data
+            timeframe: Timeframe string (e.g., '4h')
+
+        Returns:
+            DataFrame with computed indicators
+        """
+        df = df.copy()
+
+        # Convert timeframe to minutes
+        if timeframe.endswith('m'):
+            timeframe_minutes = int(timeframe[:-1])
+        elif timeframe.endswith('h'):
+            timeframe_minutes = int(timeframe[:-1]) * 60
+        elif timeframe.endswith('d'):
+            timeframe_minutes = int(timeframe[:-1]) * 60 * 24
+        else:
+            raise ValueError(f"Unsupported timeframe format: {timeframe}")
+
+        # Build indicator config using the same logic as HMM training
+        base_periods = {
+            'rsi': 14,
+            'atr': 14,
+            'ema_fast': 12,
+            'ema_slow': 26,
+            'bbands': 20
+        }
+
+        # Adjust periods depending on timeframe scale
+        if timeframe.endswith('m'):
+            multiplier = int(timeframe[:-1])
+        elif timeframe.endswith('h'):
+            multiplier = int(timeframe[:-1]) * 60
+        elif timeframe.endswith('d'):
+            multiplier = int(timeframe[:-1]) * 60 * 24
+        else:
+            multiplier = 1
+
+        # Scale indicator periods inversely to timeframe
+        scale_factor = (timeframe_minutes / multiplier) ** 0.5
+
+        def scaled_period(base):
+            val = max(2, int(round(base * scale_factor)))
+            return val
+
+        # Compute indicators
+        import talib
+
+        # RSI
+        rsi_period = scaled_period(base_periods['rsi'])
+        rsi_col = f"rsi_{rsi_period}"
+        if rsi_col not in df.columns:
+            df[rsi_col] = talib.RSI(df["close"], timeperiod=rsi_period)
+            _logger.info("Computed %s with period %d", rsi_col, rsi_period)
+
+        # Bollinger Bands
+        bb_period = scaled_period(base_periods['bbands'])
+        bb_position_col = f"bb_position_{bb_period}"
+        bb_width_col = f"bb_width_{bb_period}"
+        if bb_position_col not in df.columns or bb_width_col not in df.columns:
+            up, mid, low = talib.BBANDS(
+                df["close"],
+                timeperiod=bb_period,
+                nbdevup=2,
+                nbdevdn=2
+            )
+            df[bb_position_col] = (df["close"] - low) / (up - low)
+            df[bb_width_col] = (up - low) / df["close"]
+            _logger.info("Computed %s and %s with period %d", bb_position_col, bb_width_col, bb_period)
+
+        # EMA Spread
+        if "ema_spread" not in df.columns:
+            ema_fast_period = scaled_period(base_periods['ema_fast'])
+            ema_slow_period = scaled_period(base_periods['ema_slow'])
+            ema_fast = talib.EMA(df["close"], timeperiod=ema_fast_period)
+            ema_slow = talib.EMA(df["close"], timeperiod=ema_slow_period)
+            df["ema_spread"] = (ema_fast - ema_slow) / df["close"]
+            _logger.info("Computed ema_spread with periods %d, %d", ema_fast_period, ema_slow_period)
+
+        return df
+
+    def predict_regimes(self, model_package: Dict, df: pd.DataFrame, timeframe: str = "4h") -> Tuple[np.ndarray, np.ndarray]:
         """
         Predict regimes using the trained HMM model.
 
@@ -197,9 +321,10 @@ class HMMApplicator:
         features = model_package['features']
 
         # Prepare features
-        X = self.prepare_features(df, features)
+        X = self.prepare_features(df, features, timeframe)
 
         # Scale features using the same scaler as training
+        # X is now a DataFrame, so we pass it directly to preserve feature names
         X_scaled = scaler.transform(X)
 
         # Predict regimes
@@ -353,7 +478,7 @@ class HMMApplicator:
             original_shape = df.shape
 
             # Predict regimes
-            regimes, posteriors = self.predict_regimes(model_package, df)
+            regimes, posteriors = self.predict_regimes(model_package, df, timeframe)
 
             # Add regime features
             df_labeled = self.add_regime_features(df, regimes, posteriors)
@@ -392,6 +517,90 @@ class HMMApplicator:
                 'error': error_msg
             }
 
+    def apply_hmm_to_file_multi_provider(self, symbol: str, timeframe: str, provider: str) -> Dict:
+        """
+        Apply HMM model to a specific symbol-timeframe combination with provider information.
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe
+            provider: Data provider (e.g., 'binance', 'yfinance')
+
+        Returns:
+            Dict with application results
+        """
+        _logger.info("Applying HMM for %s %s from %s", symbol, timeframe, provider)
+
+        try:
+            # Find processed data file with provider prefix
+            pattern = f"processed_{provider}_{symbol}_{timeframe}_*.csv"
+            csv_files = list(self.processed_data_dir.glob(pattern))
+
+            if not csv_files:
+                # Try legacy pattern without provider prefix
+                pattern = f"processed_{symbol}_{timeframe}_*.csv"
+                csv_files = list(self.processed_data_dir.glob(pattern))
+
+                if not csv_files:
+                    raise FileNotFoundError(f"No processed data found for {provider} {symbol} {timeframe}")
+
+            # Use the most recent file if multiple exist
+            csv_file = sorted(csv_files)[-1]
+            _logger.info("Using data file: %s", csv_file)
+
+            # Find and load the corresponding HMM model
+            model_path = self.find_latest_model(symbol, timeframe)
+            if not model_path:
+                raise FileNotFoundError(f"No HMM model found for {provider} {symbol} {timeframe}")
+
+            model_package = self.load_model(model_path)
+            _logger.info("Loaded HMM model: %s", model_path)
+
+            # Load processed data
+            df = pd.read_csv(csv_file)
+            original_shape = df.shape
+            _logger.info("Loaded data: %s", original_shape)
+
+            # Predict regimes
+            regimes, posteriors = self.predict_regimes(model_package, df, timeframe)
+
+            # Add regime features
+            df_labeled = self.add_regime_features(df, regimes, posteriors)
+
+            # Validate regime quality
+            quality_metrics = self.validate_regime_quality(df_labeled)
+
+            # Save labeled data with provider prefix
+            output_filename = f"labeled_{provider}_{symbol}_{timeframe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            output_path = self.labeled_data_dir / output_filename
+            df_labeled.to_csv(output_path, index=False)
+
+            _logger.info("[OK] Saved labeled data: %s -> %s to %s", original_shape, df_labeled.shape, output_path)
+
+            return {
+                'symbol': symbol,
+                'timeframe': timeframe,
+                'provider': provider,
+                'success': True,
+                'input_file': str(csv_file),
+                'output_file': str(output_path),
+                'model_file': str(model_path),
+                'original_shape': original_shape,
+                'labeled_shape': df_labeled.shape,
+                'quality_metrics': quality_metrics
+            }
+
+        except Exception as e:
+            error_msg = f"Failed to apply HMM for {provider} {symbol} {timeframe}: {str(e)}"
+            _logger.error(error_msg)
+            return {
+                'symbol': symbol,
+                'timeframe': timeframe,
+                'provider': provider,
+                'success': False,
+                'error': error_msg
+            }
+
     def apply_all(self) -> Dict:
         """
         Apply HMM models to all symbol-timeframe combinations.
@@ -399,9 +608,69 @@ class HMMApplicator:
         Returns:
             Dict with summary of application results
         """
-        symbols = self.config['symbols']
-        timeframes = self.config['timeframes']
+        # Check if using multi-provider configuration
+        if 'data_sources' in self.config:
+            _logger.info("Using multi-provider configuration")
+            results = self._apply_all_multi_provider()
+        else:
+            # Legacy configuration
+            _logger.info("Using legacy configuration")
+            symbols = self.config['symbols']
+            timeframes = self.config['timeframes']
+            results = self._apply_all_legacy(symbols, timeframes)
 
+        return results
+
+    def _apply_all_multi_provider(self) -> Dict:
+        """
+        Apply HMM models using multi-provider configuration.
+
+        Returns:
+            Dict with summary of application results
+        """
+        data_sources = self.config['data_sources']
+        total_tasks = 0
+        all_tasks = []
+
+        # Count total tasks and collect all symbol-timeframe-provider combinations
+        for provider, config in data_sources.items():
+            symbols = config['symbols']
+            timeframes = config['timeframes']
+            total_tasks += len(symbols) * len(timeframes)
+
+            for symbol in symbols:
+                for timeframe in timeframes:
+                    all_tasks.append((symbol, timeframe, provider))
+
+        _logger.info("Applying HMM models for %d tasks across %d providers", total_tasks, len(data_sources))
+
+        results = {
+            'total': total_tasks,
+            'successful': [],
+            'failed': []
+        }
+
+        for symbol, timeframe, provider in all_tasks:
+            result = self.apply_hmm_to_file_multi_provider(symbol, timeframe, provider)
+
+            if result['success']:
+                results['successful'].append(result)
+            else:
+                results['failed'].append(result)
+
+        return results
+
+    def _apply_all_legacy(self, symbols: List[str], timeframes: List[str]) -> Dict:
+        """
+        Apply HMM models using legacy configuration.
+
+        Args:
+            symbols: List of symbols
+            timeframes: List of timeframes
+
+        Returns:
+            Dict with summary of application results
+        """
         _logger.info("Applying HMM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
         results = {
@@ -418,6 +687,8 @@ class HMMApplicator:
                     results['successful'].append(result)
                 else:
                     results['failed'].append(result)
+
+        return results
 
         # Log summary
         _logger.info("\n%s", "="*50)
@@ -445,7 +716,13 @@ def main():
         applicator = HMMApplicator()
         results = applicator.apply_all()
 
-        _logger.info("HMM application completed!")
+        # Check if any applications failed
+        if results['failed']:
+            error_msg = f"HMM application failed: {len(results['failed'])} out of {results['total']} applications failed"
+            _logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        _logger.info("HMM application completed successfully!")
 
         # List created files
         labeled_files = applicator.list_labeled_files()

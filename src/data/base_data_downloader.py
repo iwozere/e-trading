@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Dict, List, Optional
 import pandas as pd
 from abc import ABC, abstractmethod
@@ -19,12 +20,14 @@ Main Features:
 - Save pandas DataFrames to CSV files with standardized naming
 - Load data from CSV files and parse timestamps
 - Download and save data for multiple symbols using a provided download function
+- Rate limiting support for batch operations
 
 Classes:
 - BaseDataDownloader: Abstract base class for data downloaders
 """
 
 _logger = setup_logger(__name__)
+
 
 class BaseDataDownloader(ABC):
     """
@@ -35,6 +38,19 @@ class BaseDataDownloader(ABC):
         self.data_dir = Path(data_dir) if data_dir else Path(__file__).resolve().parents[2] / "dataset"
         self.interval = interval or "1d"
         self.data_dir.mkdir(parents=True, exist_ok=True)
+
+        # Default rate limiting (can be overridden by subclasses)
+        self.min_request_interval = 0.1  # 100ms default
+        self.last_request_time = 0
+
+    def _rate_limit(self):
+        """Ensure minimum time between requests to respect rate limits."""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        if time_since_last < self.min_request_interval:
+            sleep_time = self.min_request_interval - time_since_last
+            time.sleep(sleep_time)
+        self.last_request_time = time.time()
 
     def save_data(
         self,
@@ -83,10 +99,15 @@ class BaseDataDownloader(ABC):
         """
         Download data for multiple symbols using the provided download_func.
         start_date and end_date should be datetime.datetime objects (or None).
+        Includes rate limiting between symbol processing.
         """
         results = {}
-        for symbol in symbols:
+        total_symbols = len(symbols)
+
+        for i, symbol in enumerate(symbols):
             try:
+                _logger.info("Processing symbol %s (%d/%d)", symbol, i + 1, total_symbols)
+
                 df = download_func(symbol, *args, **kwargs)
                 # Assume start_date and end_date are in kwargs or args
                 start_date = kwargs.get("start_date") or (args[0] if args else None)
@@ -95,8 +116,13 @@ class BaseDataDownloader(ABC):
                     df, symbol, self.interval, start_date, end_date
                 )
                 results[symbol] = filepath
+
+                # Rate limiting between symbols (don't sleep after the last symbol)
+                if i < total_symbols - 1:
+                    self._rate_limit()
+
             except Exception as e:
-                _logger.exception("Error processing %s: %s")
+                _logger.exception("Error processing %s: %s", symbol, str(e))
                 continue
         return results
 

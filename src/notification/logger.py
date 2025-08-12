@@ -17,8 +17,8 @@ sys.path.append(str(PROJECT_ROOT))
 import logging.config
 from datetime import datetime as dt
 
-# Ensure log directory exists
-log_dir = Path("logs") / "log"
+# Ensure log directory exists relative to project root
+log_dir = PROJECT_ROOT / "logs" / "log"
 log_dir.mkdir(parents=True, exist_ok=True)
 
 # Constants for log file configuration
@@ -60,7 +60,7 @@ LOG_CONFIG = {
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/log/app.log",
+            "filename": str(PROJECT_ROOT / "logs" / "log" / "app.log"),
             "maxBytes": MAX_BYTES,
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
@@ -68,7 +68,7 @@ LOG_CONFIG = {
         },
         "trade_file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/log/trades.log",
+            "filename": str(PROJECT_ROOT / "logs" / "log" / "trades.log"),
             "maxBytes": MAX_BYTES,
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
@@ -76,7 +76,7 @@ LOG_CONFIG = {
         },
         "telegram_bot_file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/log/telegram_bot.log",
+            "filename": str(PROJECT_ROOT / "logs" / "log" / "telegram_bot.log"),
             "maxBytes": MAX_BYTES,
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
@@ -84,7 +84,7 @@ LOG_CONFIG = {
         },
         "telegram_screener_bot_file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/log/telegram_screener_bot.log",
+            "filename": str(PROJECT_ROOT / "logs" / "log" / "telegram_screener_bot.log"),
             "maxBytes": MAX_BYTES,
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
@@ -92,7 +92,7 @@ LOG_CONFIG = {
         },
         "error_file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/log/app_errors.log",
+            "filename": str(PROJECT_ROOT / "logs" / "log" / "app_errors.log"),
             "maxBytes": MAX_BYTES,
             "backupCount": BACKUP_COUNT,
             "level": "ERROR",

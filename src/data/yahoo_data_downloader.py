@@ -1,16 +1,3 @@
-import logging
-import os
-from typing import Dict, List
-from datetime import datetime
-
-import pandas as pd
-import yfinance as yf
-from src.notification.logger import setup_logger
-from src.model.telegram_bot import Fundamentals
-_logger = setup_logger(__name__)
-
-from .base_data_downloader import BaseDataDownloader
-
 """
 Data downloader implementation for Yahoo Finance, fetching historical market data for analysis and backtesting.
 
@@ -30,6 +17,20 @@ Valid values:
 Classes:
 - YahooDataDownloader: Main class for interacting with Yahoo Finance and managing data downloads
 """
+import os
+import logging
+import time
+from datetime import datetime
+from typing import List, Dict
+
+import pandas as pd
+import yfinance as yf
+
+from src.notification.logger import setup_logger
+from src.model.telegram_bot import Fundamentals
+from .base_data_downloader import BaseDataDownloader
+
+_logger = setup_logger(__name__)
 
 
 class YahooDataDownloader(BaseDataDownloader):
@@ -53,7 +54,7 @@ class YahooDataDownloader(BaseDataDownloader):
     - ✅ Valuation Metrics (beta, PEG ratio, price-to-sales, enterprise value)
 
     **Data Quality:** High - Yahoo Finance provides comprehensive fundamental data
-    **Rate Limits:** None for basic usage
+    **Rate Limits:** 1 request per second recommended to avoid rate limiting
     **Coverage:** Global stocks and ETFs
 
     Parameters:
@@ -80,6 +81,20 @@ class YahooDataDownloader(BaseDataDownloader):
             level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
         )
 
+        # Rate limiting: 1 request per second
+        self.min_request_interval = 1.0
+        self.last_request_time = 0
+
+    def _rate_limit(self):
+        """Ensure minimum time between requests to respect rate limits."""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        if time_since_last < self.min_request_interval:
+            sleep_time = self.min_request_interval - time_since_last
+            _logger.debug("Rate limiting: sleeping for %.2f seconds", sleep_time)
+            time.sleep(sleep_time)
+        self.last_request_time = time.time()
+
     def get_ohlcv(
         self, symbol: str, interval: str, start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:
@@ -96,9 +111,15 @@ class YahooDataDownloader(BaseDataDownloader):
             pd.DataFrame: Historical OHLCV data
         """
         try:
+            # Apply rate limiting
+            self._rate_limit()
+
             ticker = yf.Ticker(symbol)
             start_str = start_date.strftime("%Y-%m-%d")
             end_str = end_date.strftime("%Y-%m-%d")
+
+            _logger.debug("Downloading %s %s from %s to %s", symbol, interval, start_str, end_str)
+
             df = ticker.history(start=start_str, end=end_str, interval=interval)
 
             # Rename columns to match standard format
@@ -124,10 +145,11 @@ class YahooDataDownloader(BaseDataDownloader):
                 if col not in df.columns:
                     raise ValueError(f"Missing required column: {col}")
 
+            _logger.debug("Successfully downloaded %d bars for %s %s", len(df), symbol, interval)
             return df
 
         except Exception as e:
-            _logger.exception("Error downloading data for %s: %s")
+            _logger.exception("Error downloading data for %s: %s", symbol, str(e))
             raise
 
     def save_data(
@@ -155,7 +177,7 @@ class YahooDataDownloader(BaseDataDownloader):
             return super().save_data(df, symbol, interval, start_date, end_date)
 
         except Exception as e:
-            _logger.exception("Error saving data for %s: %s")
+            _logger.exception("Error saving data for %s: %s", symbol, str(e))
             raise
 
     def load_data(self, filepath: str) -> pd.DataFrame:
@@ -172,7 +194,7 @@ class YahooDataDownloader(BaseDataDownloader):
             return super().load_data(filepath)
 
         except Exception as e:
-            _logger.exception("Error loading data from %s: %s")
+            _logger.exception("Error loading data from %s: %s", filepath, str(e))
             raise
 
     def update_data(self, symbol: str, interval: str) -> str:
@@ -198,45 +220,40 @@ class YahooDataDownloader(BaseDataDownloader):
                 df = self.get_ohlcv(
                     symbol,
                     interval,
-                    datetime.fromtimestamp(0),
+                    datetime(2020, 1, 1),  # Default start date
                     datetime.now(),
                 )
                 return self.save_data(df, symbol, interval)
 
             # Load existing data
-            latest_file = max(existing_files)
-            filepath = os.path.join(self.data_dir, latest_file)
-            existing_df = self.load_data(filepath)
+            existing_file = sorted(existing_files)[-1]  # Get most recent file
+            existing_path = os.path.join(self.data_dir, existing_file)
+            existing_df = self.load_data(existing_path)
 
-            # Get last date in existing data
-            last_date = existing_df["timestamp"].max()
+            # Get latest date from existing data
+            latest_date = existing_df["timestamp"].max()
 
-            # Download new data from last date
-            new_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-            new_end = pd.Timestamp.today().strftime("%Y-%m-%d")
-            new_df = self.get_ohlcv(symbol, interval, datetime.fromtimestamp(int(new_start)), datetime.fromtimestamp(int(new_end)))
+            # Download new data from latest date
+            new_df = self.get_ohlcv(
+                symbol, interval, latest_date, datetime.now()
+            )
 
-            if new_df.empty:
-                _logger.info("No new data available for %s", symbol)
-                return filepath
-
-            # Combine existing and new data
-            combined_df = pd.concat([existing_df, new_df])
+            # Combine old and new data
+            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
             combined_df = combined_df.drop_duplicates(subset=["timestamp"])
-            combined_df = combined_df.sort_values("timestamp")
+            combined_df = combined_df.sort_values("timestamp").reset_index(drop=True)
 
-            # Save updated data
             return self.save_data(combined_df, symbol, interval)
 
         except Exception as e:
-            _logger.exception("Error updating data for %s: %s")
+            _logger.exception("Error updating data for %s: %s", symbol, str(e))
             raise
 
     def download_multiple_symbols(
         self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
     ) -> Dict[str, str]:
         """
-        Download data for multiple symbols.
+        Download data for multiple symbols with rate limiting.
 
         Args:
             symbols: List of stock symbols
@@ -249,9 +266,25 @@ class YahooDataDownloader(BaseDataDownloader):
         """
         def download_func(symbol, interval, start_date, end_date):
             return self.get_ohlcv(symbol, interval, start_date, end_date)
-        return super().download_multiple_symbols(
-            symbols, download_func, interval, start_date, end_date
-        )
+
+        # Override the base method to add rate limiting between symbols
+        results = {}
+        for symbol in symbols:
+            try:
+                _logger.info("Processing symbol %s (%d/%d)", symbol, len(results) + 1, len(symbols))
+
+                df = download_func(symbol, interval, start_date, end_date)
+                filepath = self.save_data(df, symbol, interval, start_date, end_date)
+                results[symbol] = filepath
+
+                # Rate limiting between symbols (already handled in get_ohlcv, but extra safety)
+                if len(results) < len(symbols):  # Don't sleep after the last symbol
+                    self._rate_limit()
+
+            except Exception as e:
+                _logger.exception("Error processing %s: %s", symbol, str(e))
+                continue
+        return results
 
     def get_periods(self) -> list:
         return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
@@ -273,6 +306,9 @@ class YahooDataDownloader(BaseDataDownloader):
             Fundamentals: Comprehensive fundamental data for the stock
         """
         try:
+            # Apply rate limiting
+            self._rate_limit()
+
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
@@ -335,16 +371,5 @@ class YahooDataDownloader(BaseDataDownloader):
             )
 
         except Exception as e:
-            _logger.exception("Failed to get fundamentals for %s: %s")
-            return Fundamentals(
-                ticker=symbol.upper(),
-                company_name="Unknown",
-                current_price=0.0,
-                market_cap=0.0,
-                pe_ratio=0.0,
-                forward_pe=0.0,
-                dividend_yield=0.0,
-                earnings_per_share=0.0,
-                data_source="Yahoo Finance",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            )
+            _logger.exception("Error getting fundamentals for %s: %s", symbol, str(e))
+            raise

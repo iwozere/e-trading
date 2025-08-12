@@ -2,11 +2,11 @@
 Data Preprocessing for HMM-LSTM Trading Pipeline
 
 This module preprocesses raw OHLCV data by adding features, computing technical
-indicators, normalizing data, and preparing it for HMM training and LSTM modeling.
+indicators using TA-Lib, normalizing data, and preparing it for HMM training and LSTM modeling.
 
 Features:
 - Computes log returns and rolling statistics
-- Adds technical indicators with default parameters
+- Adds TA-Lib technical indicators with timeframe-optimized parameters
 - Normalizes features using configurable methods
 - Handles missing values and outliers
 - Saves processed data for next pipeline stage
@@ -28,6 +28,146 @@ sys.path.append(str(project_root))
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+
+def build_indicator_config(timeframe: str) -> Dict[str, Dict[str, int]]:
+    """
+    Build timeframe-specific indicator configuration for optimal HMM feature extraction.
+
+    Args:
+        timeframe (str): Timeframe string (e.g., '5m', '15m', '1h', '4h', '1d')
+
+    Returns:
+        Dict: Configuration for each indicator with optimized parameters
+    """
+    # Base configuration for different timeframes
+    configs = {
+        # Intraday timeframes (5m, 15m, 1h) - shorter periods for responsiveness
+        '5m': {
+            'RSI': {'timeperiod': 14},
+            'ATR': {'timeperiod': 14},
+            'BB': {'timeperiod': 20, 'nbdevup': 2, 'nbdevdn': 2},
+            'EMA_SPREAD': {'fast': 12, 'slow': 26},
+            'VOL_ZSCORE': {'window': 20}
+        },
+        '15m': {
+            'RSI': {'timeperiod': 14},
+            'ATR': {'timeperiod': 14},
+            'BB': {'timeperiod': 20, 'nbdevup': 2, 'nbdevdn': 2},
+            'EMA_SPREAD': {'fast': 12, 'slow': 26},
+            'VOL_ZSCORE': {'window': 20}
+        },
+        '1h': {
+            'RSI': {'timeperiod': 14},
+            'ATR': {'timeperiod': 14},
+            'BB': {'timeperiod': 20, 'nbdevup': 2, 'nbdevdn': 2},
+            'EMA_SPREAD': {'fast': 12, 'slow': 26},
+            'VOL_ZSCORE': {'window': 20}
+        },
+        # Daily timeframe - longer periods for trend detection
+        '1d': {
+            'RSI': {'timeperiod': 14},
+            'ATR': {'timeperiod': 14},
+            'BB': {'timeperiod': 20, 'nbdevup': 2, 'nbdevdn': 2},
+            'EMA_SPREAD': {'fast': 12, 'slow': 26},
+            'VOL_ZSCORE': {'window': 20}
+        },
+        # 4h timeframe - medium-term analysis
+        '4h': {
+            'RSI': {'timeperiod': 14},
+            'ATR': {'timeperiod': 14},
+            'BB': {'timeperiod': 20, 'nbdevup': 2, 'nbdevdn': 2},
+            'EMA_SPREAD': {'fast': 12, 'slow': 26},
+            'VOL_ZSCORE': {'window': 20}
+        }
+    }
+
+    # Return configuration for the specified timeframe, or default to 1h
+    return configs.get(timeframe, configs['1h'])
+
+
+def select_features_for_hmm(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
+    """
+    Select and calculate features for HMM from OHLCV + log_return data using TA-Lib.
+
+    Args:
+        df (pd.DataFrame): Must contain ['open', 'high', 'low', 'close', 'volume', 'log_return']
+        timeframe (str): e.g. '5m', '15m', '1h', '4h', '1d'
+
+    Returns:
+        pd.DataFrame: Numeric features for HMM
+    """
+    # Ensure column names are lowercase
+    df = df.rename(columns=str.lower).copy()
+
+    # Validate that log_return already exists
+    if "log_return" not in df.columns:
+        raise ValueError("Expected 'log_return' column in input data, but it was not found.")
+
+    # Build indicator configuration for this timeframe
+    indicator_config = build_indicator_config(timeframe)
+
+    # RSI
+    df["rsi"] = talib.RSI(
+        df["close"],
+        timeperiod=indicator_config["RSI"]["timeperiod"]
+    )
+
+    # ATR
+    df["atr"] = talib.ATR(
+        df["high"], df["low"], df["close"],
+        timeperiod=indicator_config["ATR"]["timeperiod"]
+    )
+
+    # ATR as % of close (volatility normalization)
+    df["atr_pct"] = (df["atr"] / df["close"]) * 100
+
+    # Bollinger Bands
+    upper, middle, lower = talib.BBANDS(
+        df["close"],
+        timeperiod=indicator_config["BB"]["timeperiod"],
+        nbdevup=indicator_config["BB"]["nbdevup"],
+        nbdevdn=indicator_config["BB"]["nbdevdn"],
+        matype=0
+    )
+    df["bb_upper"] = upper
+    df["bb_middle"] = middle
+    df["bb_lower"] = lower
+
+    # EMA Spread (fast EMA - slow EMA)
+    fast_ema = talib.EMA(df["close"], timeperiod=indicator_config["EMA_SPREAD"]["fast"])
+    slow_ema = talib.EMA(df["close"], timeperiod=indicator_config["EMA_SPREAD"]["slow"])
+    df["ema_spread"] = fast_ema - slow_ema
+
+    # Volume Z-Score (liquidity abnormality detection)
+    df["volume_zscore"] = (
+        (df["volume"] - df["volume"].rolling(indicator_config["VOL_ZSCORE"]["window"]).mean())
+        / df["volume"].rolling(indicator_config["VOL_ZSCORE"]["window"]).std()
+    )
+
+    # Drop rows with NaN (from indicator warm-up period)
+    df = df.dropna()
+
+    # Only keep numeric columns, but exclude old rolling statistics
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+
+    # Filter out old rolling statistics columns
+    exclude_patterns = [
+        'close_sma_', 'volume_sma_', 'close_std_', 'volume_std_',
+        'high_max_', 'low_min_'
+    ]
+
+    filtered_cols = []
+    for col in numeric_cols:
+        should_exclude = any(pattern in col for pattern in exclude_patterns)
+        if not should_exclude:
+            filtered_cols.append(col)
+
+    _logger.info("Selected %d features for HMM (excluded %d rolling statistics columns)",
+                len(filtered_cols), len(numeric_cols) - len(filtered_cols))
+
+    return df[filtered_cols]
+
 
 class DataPreprocessor:
     def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
@@ -91,81 +231,26 @@ class DataPreprocessor:
 
         return df
 
-    def add_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+    def add_technical_indicators(self, df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         """
-        Add technical indicators with default parameters.
-        These parameters will be optimized later by Optuna.
+        Add TA-Lib technical indicators optimized for the given timeframe.
 
         Args:
             df: Input DataFrame with OHLCV data
+            timeframe: Timeframe string (e.g., '5m', '15m', '1h', '4h', '1d')
 
         Returns:
-            DataFrame with additional technical indicator columns
+            DataFrame with technical indicators added
         """
-        # Convert to numpy arrays for talib
-        high = df['high'].values
-        low = df['low'].values
-        close = df['close'].values
-        open_price = df['open'].values
-        volume = df['volume'].values
-
         try:
-            # RSI (Relative Strength Index)
-            df['rsi_14'] = talib.RSI(close, timeperiod=14)
-            df['rsi_21'] = talib.RSI(close, timeperiod=21)
-
-            # Bollinger Bands
-            bb_upper, bb_middle, bb_lower = talib.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2)
-            df['bb_upper_20'] = bb_upper
-            df['bb_middle_20'] = bb_middle
-            df['bb_lower_20'] = bb_lower
-            df['bb_width_20'] = (bb_upper - bb_lower) / bb_middle
-            df['bb_position_20'] = (close - bb_lower) / (bb_upper - bb_lower)
-
-            # MACD
-            macd, macd_signal, macd_hist = talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
-            df['macd'] = macd
-            df['macd_signal'] = macd_signal
-            df['macd_histogram'] = macd_hist
-
-            # Moving Averages
-            df['ema_12'] = talib.EMA(close, timeperiod=12)
-            df['ema_26'] = talib.EMA(close, timeperiod=26)
-            df['sma_50'] = talib.SMA(close, timeperiod=50)
-            df['sma_200'] = talib.SMA(close, timeperiod=200)
-
-            # Average True Range (ATR)
-            df['atr_14'] = talib.ATR(high, low, close, timeperiod=14)
-
-            # Stochastic
-            stoch_k, stoch_d = talib.STOCH(high, low, close, fastk_period=14, slowk_period=3, slowd_period=3)
-            df['stoch_k'] = stoch_k
-            df['stoch_d'] = stoch_d
-
-            # Williams %R
-            df['williams_r'] = talib.WILLR(high, low, close, timeperiod=14)
-
-            # Commodity Channel Index
-            df['cci_14'] = talib.CCI(high, low, close, timeperiod=14)
-
-            # Money Flow Index
-            df['mfi_14'] = talib.MFI(high, low, close, volume, timeperiod=14)
-
-            # Volume indicators
-            df['ad'] = talib.AD(high, low, close, volume)  # Accumulation/Distribution
-            df['obv'] = talib.OBV(close, volume)  # On-Balance Volume
-
-            # Price-based features
-            df['hl_ratio'] = (high - low) / close
-            df['oc_ratio'] = (close - open_price) / open_price
-            df['high_close_ratio'] = (high - close) / close
-            df['low_close_ratio'] = (close - low) / close
-
+            # Use the new TA-Lib based feature selection
+            df_with_indicators = select_features_for_hmm(df, timeframe)
+            _logger.info("Added TA-Lib technical indicators for timeframe %s", timeframe)
+            return df_with_indicators
         except Exception as e:
-            _logger.exception("Error calculating technical indicators: %s")
-            # Continue without technical indicators if calculation fails
-
-        return df
+            _logger.exception("Error adding technical indicators: %s", str(e))
+            # Return original dataframe if technical indicators fail
+            return df
 
     def add_time_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -207,23 +292,26 @@ class DataPreprocessor:
         Returns:
             DataFrame with handled missing values
         """
+        # Create a copy to avoid SettingWithCopyWarning
+        df_clean = df.copy()
+
         # Forward fill then backward fill for price data
         price_cols = ['open', 'high', 'low', 'close']
         for col in price_cols:
-            if col in df.columns:
-                df[col] = df[col].ffill().bfill()
+            if col in df_clean.columns:
+                df_clean.loc[:, col] = df_clean[col].ffill().bfill()
 
         # Forward fill volume
-        if 'volume' in df.columns:
-            df['volume'] = df['volume'].ffill().fillna(0)
+        if 'volume' in df_clean.columns:
+            df_clean.loc[:, 'volume'] = df_clean['volume'].ffill().fillna(0)
 
         # Fill technical indicators with their median values
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
         for col in numeric_cols:
             if col not in price_cols + ['volume', 'timestamp']:
-                df[col] = df[col].fillna(df[col].median())
+                df_clean.loc[:, col] = df_clean[col].fillna(df_clean[col].median())
 
-        return df
+        return df_clean
 
     def remove_outliers(self, df: pd.DataFrame, method: str = 'iqr', factor: float = 1.5) -> pd.DataFrame:
         """
@@ -237,27 +325,31 @@ class DataPreprocessor:
         Returns:
             DataFrame with outliers handled
         """
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        # Create a copy to avoid SettingWithCopyWarning
+        df_clean = df.copy()
+        numeric_cols = df_clean.select_dtypes(include=[np.number]).columns
 
         for col in numeric_cols:
             if col in ['timestamp']:
                 continue
 
             if method == 'iqr':
-                Q1 = df[col].quantile(0.25)
-                Q3 = df[col].quantile(0.75)
+                Q1 = df_clean[col].quantile(0.25)
+                Q3 = df_clean[col].quantile(0.75)
                 IQR = Q3 - Q1
                 lower_bound = Q1 - factor * IQR
                 upper_bound = Q3 + factor * IQR
 
                 # Cap outliers instead of removing them to preserve time series structure
-                df[col] = df[col].clip(lower=lower_bound, upper=upper_bound)
+                # Ensure dtype compatibility before clipping
+                clipped_values = df_clean[col].clip(lower=lower_bound, upper=upper_bound)
+                df_clean.loc[:, col] = clipped_values.astype(df_clean[col].dtype)
 
             elif method == 'zscore':
-                z_scores = np.abs((df[col] - df[col].mean()) / df[col].std())
-                df[col] = df[col].mask(z_scores > factor, df[col].median())
+                z_scores = np.abs((df_clean[col] - df_clean[col].mean()) / df_clean[col].std())
+                df_clean.loc[:, col] = df_clean[col].mask(z_scores > factor, df_clean[col].median())
 
-        return df
+        return df_clean
 
     def normalize_features(self, df: pd.DataFrame, method: str = 'minmax') -> Tuple[pd.DataFrame, Dict]:
         """
@@ -299,6 +391,28 @@ class DataPreprocessor:
 
         return df_normalized, scalers
 
+    def extract_timeframe_from_filename(self, filename: str) -> str:
+        """
+        Extract timeframe from filename.
+
+        Args:
+            filename: Filename (e.g., 'binance_BTCUSDT_1h_20230801_20240801.csv')
+
+        Returns:
+            Timeframe string (e.g., '1h', '4h', '1d')
+        """
+        # Split filename by underscores and look for timeframe
+        parts = filename.replace('.csv', '').split('_')
+
+        # Look for timeframe in the parts
+        for part in parts:
+            if part in ['5m', '15m', '30m', '1h', '4h', '1d', '1wk', '1mo']:
+                return part
+
+        # Default to 1h if not found
+        _logger.warning("Could not extract timeframe from filename %s, using default '1h'", filename)
+        return '1h'
+
     def process_file(self, input_path: Path, output_path: Path) -> Dict:
         """
         Process a single CSV file through the preprocessing pipeline.
@@ -317,6 +431,10 @@ class DataPreprocessor:
             df = pd.read_csv(input_path)
             original_shape = df.shape
 
+            # Extract timeframe from filename for technical indicators
+            timeframe = self.extract_timeframe_from_filename(input_path.name)
+            _logger.info("Extracted timeframe '%s' from filename %s", timeframe, input_path.name)
+
             # Apply preprocessing steps
             df = self.add_log_returns(df)
 
@@ -324,7 +442,7 @@ class DataPreprocessor:
                 df = self.add_rolling_statistics(df)
 
             if self.config['features']['technical_indicators']:
-                df = self.add_technical_indicators(df)
+                df = self.add_technical_indicators(df, timeframe)
 
             df = self.add_time_features(df)
             df = self.handle_missing_values(df)
@@ -349,10 +467,13 @@ class DataPreprocessor:
                 'processed_shape': df.shape,
                 'columns_added': df.shape[1] - original_shape[1],
                 'rows_removed': original_shape[0] - df.shape[0],
+                'timeframe': timeframe,
                 'success': True
             }
 
-            _logger.info("[OK] %s: %s -> %s (+%d cols, -%d rows)", input_path.name, original_shape, df.shape, stats['columns_added'], stats['rows_removed'])
+            _logger.info("[OK] %s (%s): %s -> %s (+%d cols, -%d rows)",
+                        input_path.name, timeframe, original_shape, df.shape,
+                        stats['columns_added'], stats['rows_removed'])
 
             return stats
 

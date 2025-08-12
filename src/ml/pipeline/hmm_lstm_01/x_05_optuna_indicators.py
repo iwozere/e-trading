@@ -97,51 +97,19 @@ class IndicatorOptimizer:
                 df['bb_upper'] = bb_upper
                 df['bb_middle'] = bb_middle
                 df['bb_lower'] = bb_lower
-                df['bb_position'] = (close - bb_lower) / (bb_upper - bb_lower)
-                df['bb_width'] = (bb_upper - bb_lower) / bb_middle
+                # Avoid division by zero in bb_position calculation
+                bb_range = bb_upper - bb_lower
+                # Use masked arrays to avoid division by zero warnings
+                mask = bb_range != 0
+                bb_position = np.full_like(close, 0.5)  # Default value
+                bb_position[mask] = (close[mask] - bb_lower[mask]) / bb_range[mask]
+                df['bb_position'] = bb_position
 
-            # MACD
-            if all(param in params for param in ['macd_fast', 'macd_slow', 'macd_signal']):
-                macd, macd_signal, macd_hist = talib.MACD(
-                    close,
-                    fastperiod=params['macd_fast'],
-                    slowperiod=params['macd_slow'],
-                    signalperiod=params['macd_signal']
-                )
-                df['macd'] = macd
-                df['macd_signal'] = macd_signal
-                df['macd_histogram'] = macd_hist
-
-            # Moving Averages
-            if 'ema_fast' in params:
-                df['ema_fast'] = talib.EMA(close, timeperiod=params['ema_fast'])
-            if 'ema_slow' in params:
-                df['ema_slow'] = talib.EMA(close, timeperiod=params['ema_slow'])
-            if 'sma_period' in params:
-                df['sma'] = talib.SMA(close, timeperiod=params['sma_period'])
-
-            # ATR
-            if 'atr_period' in params:
-                df['atr'] = talib.ATR(high, low, close, timeperiod=params['atr_period'])
-
-            # Stochastic
-            if 'stoch_k' in params and 'stoch_d' in params:
-                stoch_k, stoch_d = talib.STOCH(
-                    high, low, close,
-                    fastk_period=params['stoch_k'],
-                    slowk_period=params['stoch_d'],
-                    slowd_period=params['stoch_d']
-                )
-                df['stoch_k'] = stoch_k
-                df['stoch_d'] = stoch_d
-
-            # Williams %R
-            if 'williams_period' in params:
-                df['williams_r'] = talib.WILLR(high, low, close, timeperiod=params['williams_period'])
-
-            # Money Flow Index
-            if 'mfi_period' in params:
-                df['mfi'] = talib.MFI(high, low, close, volume, timeperiod=params['mfi_period'])
+                # Avoid division by zero in bb_width calculation
+                mask_width = bb_middle != 0
+                bb_width = np.full_like(close, 0)  # Default value
+                bb_width[mask_width] = bb_range[mask_width] / bb_middle[mask_width]
+                df['bb_width'] = bb_width
 
         except Exception as e:
             _logger.warning("Error calculating indicators with params %s: %s", params, str(e))
@@ -166,7 +134,7 @@ class IndicatorOptimizer:
         for i in range(len(df)):
             signal = 0  # 0: hold, 1: buy, -1: sell
 
-            # Multi-indicator strategy
+            # Simple RSI + Bollinger Bands strategy
             buy_signals = 0
             sell_signals = 0
 
@@ -186,46 +154,10 @@ class IndicatorOptimizer:
                 elif bb_pos > 0.8:  # Near upper band
                     sell_signals += 1
 
-            # MACD signals
-            if all(col in df.columns for col in ['macd', 'macd_signal']):
-                if (not pd.isna(df['macd'].iloc[i]) and not pd.isna(df['macd_signal'].iloc[i])):
-                    macd = df['macd'].iloc[i]
-                    macd_signal = df['macd_signal'].iloc[i]
-
-                    if i > 0:  # Check for crossover
-                        prev_macd = df['macd'].iloc[i-1]
-                        prev_signal = df['macd_signal'].iloc[i-1]
-
-                        # Bullish crossover
-                        if macd > macd_signal and prev_macd <= prev_signal:
-                            buy_signals += 1
-                        # Bearish crossover
-                        elif macd < macd_signal and prev_macd >= prev_signal:
-                            sell_signals += 1
-
-            # EMA signals
-            if all(col in df.columns for col in ['ema_fast', 'ema_slow']):
-                if (not pd.isna(df['ema_fast'].iloc[i]) and not pd.isna(df['ema_slow'].iloc[i])):
-                    if df['ema_fast'].iloc[i] > df['ema_slow'].iloc[i]:
-                        buy_signals += 0.5
-                    else:
-                        sell_signals += 0.5
-
-            # Stochastic signals
-            if all(col in df.columns for col in ['stoch_k', 'stoch_d']):
-                if (not pd.isna(df['stoch_k'].iloc[i]) and not pd.isna(df['stoch_d'].iloc[i])):
-                    stoch_k = df['stoch_k'].iloc[i]
-                    stoch_d = df['stoch_d'].iloc[i]
-
-                    if stoch_k < 20 and stoch_d < 20:
-                        buy_signals += 1
-                    elif stoch_k > 80 and stoch_d > 80:
-                        sell_signals += 1
-
-            # Generate final signal
-            if buy_signals > sell_signals and buy_signals >= 2:
+            # Generate final signal - simpler logic
+            if buy_signals >= 1:  # At least one buy signal
                 signal = 1
-            elif sell_signals > buy_signals and sell_signals >= 2:
+            elif sell_signals >= 1:  # At least one sell signal
                 signal = -1
 
             signals.append(signal)
@@ -259,6 +191,9 @@ class IndicatorOptimizer:
 
         strategy_returns = df['strategy_return']
 
+        # Handle NaN values in strategy returns
+        strategy_returns = strategy_returns.fillna(0)
+
         # Calculate cumulative returns
         cumulative_returns = (1 + strategy_returns).cumprod()
 
@@ -283,8 +218,11 @@ class IndicatorOptimizer:
         drawdown = (cumulative_returns - peak) / peak
         max_drawdown = abs(drawdown.min())
 
-        # Total Return
-        total_return = cumulative_returns.iloc[-1] - 1
+        # Total Return - handle edge cases
+        if len(cumulative_returns) > 0:
+            total_return = cumulative_returns.iloc[-1] - 1
+        else:
+            total_return = 0
 
         # Win Rate
         win_rate = (strategy_returns > 0).mean()
@@ -315,7 +253,7 @@ class IndicatorOptimizer:
             Objective value (negative because Optuna minimizes)
         """
         try:
-            # Suggest indicator parameters
+            # Suggest indicator parameters - Start with just RSI and Bollinger Bands
             params = {}
 
             # RSI
@@ -324,38 +262,6 @@ class IndicatorOptimizer:
             # Bollinger Bands
             params['bb_period'] = trial.suggest_int('bb_period', 10, 50)
             params['bb_std'] = trial.suggest_float('bb_std', 1.0, 3.0)
-
-            # MACD
-            params['macd_fast'] = trial.suggest_int('macd_fast', 5, 20)
-            params['macd_slow'] = trial.suggest_int('macd_slow', 20, 50)
-            params['macd_signal'] = trial.suggest_int('macd_signal', 5, 20)
-
-            # EMA
-            params['ema_fast'] = trial.suggest_int('ema_fast', 5, 30)
-            params['ema_slow'] = trial.suggest_int('ema_slow', 20, 100)
-
-            # ATR
-            params['atr_period'] = trial.suggest_int('atr_period', 5, 30)
-
-            # Stochastic
-            params['stoch_k'] = trial.suggest_int('stoch_k', 5, 25)
-            params['stoch_d'] = trial.suggest_int('stoch_d', 3, 15)
-
-            # Williams %R
-            params['williams_period'] = trial.suggest_int('williams_period', 5, 30)
-
-            # MFI
-            params['mfi_period'] = trial.suggest_int('mfi_period', 5, 30)
-
-            # SMA
-            params['sma_period'] = trial.suggest_int('sma_period', 10, 100)
-
-            # Ensure logical constraints
-            if params['macd_fast'] >= params['macd_slow']:
-                params['macd_fast'] = params['macd_slow'] - 1
-
-            if params['ema_fast'] >= params['ema_slow']:
-                params['ema_fast'] = params['ema_slow'] - 1
 
             # Calculate indicators with suggested parameters
             df_with_indicators = self.calculate_indicators_with_params(df, params)
@@ -366,23 +272,35 @@ class IndicatorOptimizer:
             # Calculate performance metrics
             metrics = self.calculate_performance_metrics(df_with_signals)
 
-            # Multi-objective: combine Sharpe ratio, profit factor, and drawdown
-            sharpe_ratio = metrics['sharpe_ratio']
+                        # Focus on profit and drawdown instead of Sharpe ratio
+            total_return = metrics['total_return']
             profit_factor = metrics['profit_factor']
             max_drawdown = metrics['max_drawdown']
 
-            # Normalize and combine metrics
-            # Higher Sharpe ratio is better
-            # Higher profit factor is better
-            # Lower max drawdown is better
+            # Handle NaN and infinite values
+            if np.isnan(total_return) or np.isinf(total_return):
+                total_return = 0
+            if np.isnan(profit_factor) or np.isinf(profit_factor):
+                profit_factor = 1
+            if np.isnan(max_drawdown) or np.isinf(max_drawdown):
+                max_drawdown = 1
 
-            if sharpe_ratio < -10 or profit_factor < 0.5 or max_drawdown > 0.5:
-                return -999  # Penalize poor strategies
+            # Debug logging for first few trials
+            # Note: study is not available in objective scope, so we'll log without trial number
+            _logger.debug("Trial - Total Return: %.3f, Profit Factor: %.3f, Max DD: %.3f",
+                       total_return, profit_factor, max_drawdown)
 
-            # Combined objective (to be maximized, so we'll return negative)
-            objective_value = (sharpe_ratio * 0.5 +
-                             np.log(profit_factor) * 0.3 -
-                             max_drawdown * 0.2)
+            # More realistic thresholds for initial optimization
+            if total_return < -0.5 or profit_factor < 0.3 or max_drawdown > 0.8:
+                return -999  # Penalize extremely poor strategies
+
+            # Focus on profit-based objective function
+            # Total return is the primary metric (what we actually care about)
+            profit_component = total_return * 0.6  # 60% weight on total return
+            profit_factor_component = np.log(max(0.1, profit_factor)) * 0.3  # 30% weight on profit factor
+            drawdown_component = max_drawdown * 0.1  # 10% penalty for drawdown
+
+            objective_value = profit_component + profit_factor_component - drawdown_component
 
             return -objective_value  # Negative because Optuna minimizes
 
@@ -390,22 +308,28 @@ class IndicatorOptimizer:
             _logger.warning("Error in objective function: %s", str(e))
             return 999  # Return large positive value for failed trials
 
-    def optimize_indicators(self, symbol: str, timeframe: str) -> Dict:
+    def optimize_indicators(self, symbol: str, timeframe: str, provider: str = None) -> Dict:
         """
         Optimize indicator parameters for a specific symbol-timeframe combination.
 
         Args:
             symbol: Trading symbol
             timeframe: Timeframe
+            provider: Data provider (e.g., 'binance', 'yfinance')
 
         Returns:
             Dict with optimization results
         """
-        _logger.info("Optimizing indicators for %s %s", symbol, timeframe)
+        _logger.info("Optimizing indicators for %s %s (provider: %s)", symbol, timeframe, provider)
 
         try:
-            # Find labeled data file
-            pattern = f"labeled_{symbol}_{timeframe}_*.csv"
+            # Find labeled data file with provider prefix
+            if provider:
+                pattern = f"labeled_{provider}_{symbol}_{timeframe}_*.csv"
+            else:
+                # Fallback to old pattern for backward compatibility
+                pattern = f"labeled_{symbol}_{timeframe}_*.csv"
+
             csv_files = list(self.labeled_data_dir.glob(pattern))
 
             if not csv_files:
@@ -518,25 +442,49 @@ class IndicatorOptimizer:
         Returns:
             Dict with summary of optimization results
         """
-        symbols = self.config['symbols']
-        timeframes = self.config['timeframes']
+                # Check if using new multi-provider format
+        if 'data_sources' in self.config:
+            _logger.info("Using multi-provider configuration format")
+            symbols = []
+            timeframes = []
+            providers = []
 
-        _logger.info("Optimizing indicators for %d symbols x %d timeframes", len(symbols), len(timeframes))
+            for provider, provider_config in self.config['data_sources'].items():
+                provider_symbols = provider_config['symbols']
+                provider_timeframes = provider_config['timeframes']
+
+                for symbol in provider_symbols:
+                    for timeframe in provider_timeframes:
+                        symbols.append(symbol)
+                        timeframes.append(timeframe)
+                        providers.append(provider)
+
+            _logger.info("Multi-provider symbols: %s", symbols)
+            _logger.info("Multi-provider timeframes: %s", timeframes)
+            _logger.info("Multi-provider providers: %s", providers)
+        else:
+            # Legacy format
+            symbols = self.config['symbols']
+            timeframes = self.config['timeframes']
+            providers = [None] * len(symbols)  # No provider info for legacy format
+            _logger.info("Using legacy configuration format")
+
+        _logger.info("Optimizing indicators for %d symbol-timeframe combinations", len(symbols))
 
         results = {
-            'total': len(symbols) * len(timeframes),
+            'total': len(symbols),
             'successful': [],
             'failed': []
         }
 
-        for symbol in symbols:
-            for timeframe in timeframes:
-                result = self.optimize_indicators(symbol, timeframe)
+        for i, (symbol, timeframe, provider) in enumerate(zip(symbols, timeframes, providers)):
+            _logger.info("Processing %d/%d: %s %s (provider: %s)", i+1, len(symbols), symbol, timeframe, provider)
+            result = self.optimize_indicators(symbol, timeframe, provider)
 
-                if result['success']:
-                    results['successful'].append(result)
-                else:
-                    results['failed'].append(result)
+            if result['success']:
+                results['successful'].append(result)
+            else:
+                results['failed'].append(result)
 
         # Log summary
         _logger.info("\n%s", "="*50)

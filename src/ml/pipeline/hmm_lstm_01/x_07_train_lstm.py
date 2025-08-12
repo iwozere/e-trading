@@ -266,6 +266,7 @@ class LSTMTrainer:
     def prepare_lstm_features(self, df: pd.DataFrame, exclude_regime: bool = False) -> List[str]:
         """
         Prepare feature columns for LSTM training.
+        Only uses optimized indicators to avoid timeframe noise from baseline indicators.
 
         Args:
             df: DataFrame with all features
@@ -288,19 +289,20 @@ class LSTMTrainer:
         # Time features
         time_features = [col for col in df.columns if any(t in col for t in ['hour_sin', 'hour_cos', 'day_of_week_sin', 'day_of_week_cos'])]
 
-        # Additional technical features (fallback if optimized not available)
+        # Only use optimized indicators - no baseline indicators to avoid timeframe noise
+        # Additional technical features (only if they're optimized)
         additional_features = []
         for col in df.columns:
             if any(indicator in col for indicator in ['rsi', 'bb_', 'macd', 'ema_', 'atr', 'stoch', 'williams', 'mfi', 'sma']):
-                if not col.endswith('_opt') and col not in optimized_features:
+                if col.endswith('_opt') and col not in optimized_features:
                     additional_features.append(col)
 
-        # Combine features (prioritize optimized indicators)
+        # Combine features (only optimized indicators to avoid timeframe noise)
         selected_features = (base_features +
                            regime_features +
                            optimized_features +
                            time_features +
-                           additional_features[:5])  # Limit additional features
+                           additional_features[:5])  # Limit additional optimized features
 
         # Filter to only include features that exist in the DataFrame
         available_features = [feat for feat in selected_features if feat in df.columns]

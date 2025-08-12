@@ -198,8 +198,8 @@ class PipelineRunner:
 
         Args:
             skip_stages: List of stage numbers to skip
-            symbols: Override symbols from config
-            timeframes: Override timeframes from config
+            symbols: Override symbols from config (legacy support)
+            timeframes: Override timeframes from config (legacy support)
             fail_fast: If True, stop immediately on critical stage failures
             continue_on_optional_failures: If True, continue even if optional stages fail
 
@@ -211,17 +211,23 @@ class PipelineRunner:
         _logger.info("Fail-fast mode: %s", "ENABLED" if fail_fast else "DISABLED")
         _logger.info("Continue on optional failures: %s", "ENABLED" if continue_on_optional_failures else "DISABLED")
 
-        if symbols:
-            _logger.info("Override symbols: %s", symbols)
-            # Temporarily update config
-            original_symbols = self.config['symbols']
-            self.config['symbols'] = symbols
+        # Check for multi-provider configuration
+        if 'data_sources' in self.config:
+            _logger.info("Using multi-provider configuration")
+            self._log_multi_provider_config()
+        else:
+            _logger.info("Using legacy configuration")
+            if symbols:
+                _logger.info("Override symbols: %s", symbols)
+                # Temporarily update config
+                original_symbols = self.config['symbols']
+                self.config['symbols'] = symbols
 
-        if timeframes:
-            _logger.info("Override timeframes: %s", timeframes)
-            # Temporarily update config
-            original_timeframes = self.config['timeframes']
-            self.config['timeframes'] = timeframes
+            if timeframes:
+                _logger.info("Override timeframes: %s", timeframes)
+                # Temporarily update config
+                original_timeframes = self.config['timeframes']
+                self.config['timeframes'] = timeframes
 
         skip_stages = skip_stages or []
         pipeline_start_time = time.time()
@@ -234,7 +240,8 @@ class PipelineRunner:
             'stage_results': [],
             'overall_success': True,
             'failed_critical_stages': [],
-            'failed_optional_stages': []
+            'failed_optional_stages': [],
+            'multi_provider': 'data_sources' in self.config
         }
 
         # Run each stage
@@ -360,6 +367,30 @@ class PipelineRunner:
             print(f"   Description: {stage['description']}")
             print()
 
+    def _log_multi_provider_config(self) -> None:
+        """
+        Log the multi-provider configuration details.
+        """
+        data_sources = self.config['data_sources']
+        _logger.info("Multi-provider configuration:")
+
+        total_symbols = 0
+        total_timeframes = 0
+
+        for provider, config in data_sources.items():
+            symbols = config.get('symbols', [])
+            timeframes = config.get('timeframes', [])
+            total_symbols += len(symbols)
+            total_timeframes += len(timeframes)
+
+            _logger.info("  %s:", provider)
+            _logger.info("    Symbols: %s", symbols)
+            _logger.info("    Timeframes: %s", timeframes)
+            _logger.info("    Total combinations: %d", len(symbols) * len(timeframes))
+
+        _logger.info("Total symbols across all providers: %d", total_symbols)
+        _logger.info("Total timeframes across all providers: %d", total_timeframes)
+
     def validate_requirements(self) -> bool:
         """Validate that all required components are available."""
         _logger.info("Validating pipeline requirements...")
@@ -449,6 +480,8 @@ Examples:
         skip_stages = []
         if args.skip_stages:
             skip_stages = [int(s.strip()) for s in args.skip_stages.split(',')]
+        else:
+            skip_stages = [1,2]
 
         symbols = None
         if args.symbols:
