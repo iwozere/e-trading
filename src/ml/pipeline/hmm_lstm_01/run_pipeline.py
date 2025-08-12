@@ -7,13 +7,12 @@ comprehensive logging and error handling.
 
 Pipeline Stages:
 1. Data Loading (x_01_data_loader.py)
-2. Data Preprocessing (x_02_preprocess.py)
-3. HMM Training (x_03_train_hmm.py)
-4. HMM Application (x_04_apply_hmm.py)
-5. Indicator Optimization (x_05_optuna_indicators.py)
-6. LSTM Optimization (x_06_optuna_lstm.py)
-7. LSTM Training (x_07_train_lstm.py)
-8. Model Validation (x_08_validate_lstm.py)
+2. HMM Training (x_02_train_hmm.py) - with parameter optimization
+3. HMM Application (x_03_apply_hmm.py)
+4. Indicator Optimization (x_04_optuna_indicators.py)
+5. LSTM Optimization (x_05_optuna_lstm.py)
+6. LSTM Training (x_06_train_lstm.py)
+7. Model Validation (x_07_validate_lstm.py)
 
 Usage:
     python run_pipeline.py [options]
@@ -63,44 +62,38 @@ class PipelineRunner:
                 'critical': True  # Critical - needed for all subsequent stages
             },
             2: {
-                'name': 'Data Preprocessing',
-                'module': 'x_02_preprocess',
-                'description': 'Add features, indicators, and normalize data',
-                'critical': True  # Critical - needed for all subsequent stages
-            },
-            3: {
                 'name': 'HMM Training',
-                'module': 'x_03_train_hmm',
-                'description': 'Train Hidden Markov Models for regime detection',
+                'module': 'x_02_train_hmm',
+                'description': 'Train Hidden Markov Models for regime detection with parameter optimization',
                 'critical': True  # Critical - needed for HMM application
             },
-            4: {
+            3: {
                 'name': 'HMM Application',
-                'module': 'x_04_apply_hmm',
+                'module': 'x_03_apply_hmm',
                 'description': 'Apply HMM models to label data with regimes',
                 'critical': True  # Critical - needed for LSTM training
             },
-            5: {
+            4: {
                 'name': 'Indicator Optimization',
-                'module': 'x_05_optuna_indicators',
+                'module': 'x_04_optuna_indicators',
                 'description': 'Optimize technical indicator parameters with Optuna',
                 'critical': False  # Optional - can proceed without optimization
             },
-            6: {
+            5: {
                 'name': 'LSTM Optimization',
-                'module': 'x_06_optuna_lstm',
+                'module': 'x_05_optuna_lstm',
                 'description': 'Optimize LSTM hyperparameters with Optuna',
                 'critical': False  # Optional - can proceed with default parameters
             },
-            7: {
+            6: {
                 'name': 'LSTM Training',
-                'module': 'x_07_train_lstm',
+                'module': 'x_06_train_lstm',
                 'description': 'Train LSTM models with optimized parameters',
                 'critical': True  # Critical - main model training
             },
-            8: {
+            7: {
                 'name': 'Model Validation',
-                'module': 'x_08_validate_lstm',
+                'module': 'x_07_validate_lstm',
                 'description': 'Validate models and generate reports',
                 'critical': False  # Optional - validation can be skipped
             }
