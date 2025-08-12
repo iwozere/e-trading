@@ -1,7 +1,52 @@
 #!/usr/bin/env python3
 """
-Basic Flask-based admin panel for Telegram Screener Bot.
-Provides web interface for user management, alerts, schedules, and feedback.
+Telegram Screener Bot - Admin Panel
+
+A Flask-based web interface for managing the Telegram Screener Bot system.
+Provides comprehensive administrative tools for user management, alerts, schedules, and feedback.
+
+Features:
+- Dashboard with real-time statistics
+- User management (verification, email reset, admin privileges)
+- Alert management (create, toggle, delete price alerts)
+- Schedule management (daily/weekly reports)
+- Feedback and feature request handling
+- Broadcast messaging to all users
+
+Usage:
+1. Run the script: python admin_panel.py
+2. Open your web browser and navigate to: http://localhost:5001
+3. Login with admin credentials (configured in environment variables)
+4. Use the navigation menu to access different admin functions
+
+URL Structure:
+- Login: http://localhost:5001/login
+- Dashboard: http://localhost:5001/
+- Users: http://localhost:5001/users
+- Alerts: http://localhost:5001/alerts
+- Schedules: http://localhost:5001/schedules
+- Feedback: http://localhost:5001/feedback
+- Broadcast: http://localhost:5001/broadcast
+- Logout: http://localhost:5001/logout
+
+Configuration:
+- Default port: 5001
+- Host: 0.0.0.0 (accessible from any IP)
+- Debug mode: Enabled for development
+- Secret key: 'alkotrader' (change in production)
+- Admin credentials: Set ADMIN_USERNAME and ADMIN_PASSWORD environment variables
+
+Security Note:
+- Change the secret key in production
+- Set strong admin credentials in environment variables
+- Use HTTPS in production environments
+- All admin routes are protected with login authentication
+
+Dependencies:
+- Flask
+- SQLite3 (for database operations)
+- Custom database module (src.frontend.telegram.db)
+- Custom logger (src.notification.logger)
 """
 
 import os
@@ -11,18 +56,88 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, session
 import sqlite3
 from datetime import datetime
 from src.frontend.telegram import db
+from config.donotshare.donotshare import WEBGUI_LOGIN, WEBGUI_PASSWORD, WEBGUI_PORT, ADMIN_USERNAME, ADMIN_PASSWORD
+
 from src.notification.logger import setup_logger
 
 logger = setup_logger("telegram_admin_panel")
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-this-in-production'
+
+# Authentication functions
+def login_required(f):
+    """Decorator to require login for protected routes"""
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
+
+def check_credentials(username, password):
+    """Check if provided credentials match admin credentials from config"""
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+        logger.error("Admin credentials not configured in environment variables")
+        return False
+
+    return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
+
+# TODO: Change this to a random secret key in production and put it into the .env file
+app.secret_key = 'alkotrader'
 
 # HTML Templates
+LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Telegram Screener Bot - Admin Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        .login-header { text-align: center; margin-bottom: 30px; }
+        .login-header h1 { color: #333; margin: 0; font-size: 24px; }
+        .login-header p { color: #666; margin: 10px 0 0 0; }
+        .form-group { margin: 20px 0; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #333; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; box-sizing: border-box; }
+        .form-group input:focus { outline: none; border-color: #007bff; box-shadow: 0 0 0 2px rgba(0,123,255,0.25); }
+        .btn-login { width: 100%; background: #007bff; color: white; padding: 12px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+        .btn-login:hover { background: #0056b3; }
+        .alert { padding: 12px; margin: 10px 0; border-radius: 4px; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>Admin Panel</h1>
+            <p>Telegram Screener Bot</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn-login">Login</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+
 ADMIN_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -31,9 +146,13 @@ ADMIN_TEMPLATE = """
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
         .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .nav { background: #333; color: white; padding: 15px; margin: -20px -20px 20px -20px; border-radius: 8px 8px 0 0; }
+        .nav { background: #333; color: white; padding: 15px; margin: -20px -20px 20px -20px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
+        .nav-left { display: flex; }
+        .nav-right { display: flex; align-items: center; }
         .nav a { color: white; text-decoration: none; margin-right: 20px; }
         .nav a:hover { text-decoration: underline; }
+        .nav .logout { color: #ff6b6b; }
+        .nav .logout:hover { color: #ff5252; }
         table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #f8f9fa; font-weight: bold; }
@@ -44,6 +163,8 @@ ADMIN_TEMPLATE = """
         .btn-danger:hover { background: #c82333; }
         .btn-success { background: #28a745; }
         .btn-success:hover { background: #218838; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a6268; }
         .stats { display: flex; gap: 20px; margin: 20px 0; }
         .stat-card { background: #f8f9fa; padding: 20px; border-radius: 8px; flex: 1; text-align: center; }
         .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }
@@ -58,14 +179,18 @@ ADMIN_TEMPLATE = """
 <body>
     <div class="container">
         <div class="nav">
-            <h2 style="margin: 0; display: inline;">Telegram Screener Bot - Admin Panel</h2>
-            <div style="float: right;">
+            <div class="nav-left">
+                <h2 style="margin: 0;">Telegram Screener Bot - Admin Panel</h2>
+            </div>
+            <div class="nav-right">
                 <a href="{{ url_for('dashboard') }}">Dashboard</a>
                 <a href="{{ url_for('users') }}">Users</a>
                 <a href="{{ url_for('alerts') }}">Alerts</a>
                 <a href="{{ url_for('schedules') }}">Schedules</a>
                 <a href="{{ url_for('feedback') }}">Feedback</a>
                 <a href="{{ url_for('broadcast') }}">Broadcast</a>
+                <span style="color: #ccc; margin: 0 15px;">Welcome, {{ session.get('username', 'Admin') }}</span>
+                <a href="{{ url_for('logout') }}" class="logout">Logout</a>
             </div>
         </div>
 
@@ -83,7 +208,33 @@ ADMIN_TEMPLATE = """
 </html>
 """
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Handle admin login"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        if check_credentials(username, password):
+            session['logged_in'] = True
+            session['username'] = username
+            logger.info("Admin login successful for user: %s", username)
+            return redirect(url_for('dashboard'))
+        else:
+            logger.warning("Failed login attempt for username: %s", username)
+            return render_template_string(LOGIN_TEMPLATE, error="Invalid username or password")
+
+    return render_template_string(LOGIN_TEMPLATE)
+
+@app.route('/logout')
+def logout():
+    """Handle admin logout"""
+    session.clear()
+    logger.info("Admin logout successful")
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def dashboard():
     """Admin dashboard with statistics."""
     try:
@@ -145,6 +296,7 @@ def dashboard():
         return f"Error: {str(e)}", 500
 
 @app.route('/users')
+@login_required
 def users():
     """User management page."""
     try:
@@ -175,6 +327,12 @@ def users():
             admin_badge = "👑" if user['is_admin'] else "👤"
             email = user['email'] or "(no email)"
 
+            # Show Verify button only if user is not verified
+            verify_button = f'<a href="/users/{user["telegram_user_id"]}/verify" class="btn btn-success">Verify</a>' if not user['verified'] else '<span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">Already Verified</span>'
+
+            # Show Reset Email button only if user has an email set
+            reset_button = f'<a href="/users/{user["telegram_user_id"]}/reset" class="btn btn-danger">Reset Email</a>' if user['email'] else '<span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">No Email</span>'
+
             content += f"""
                 <tr>
                     <td>{user['telegram_user_id']}</td>
@@ -185,8 +343,8 @@ def users():
                     <td>{user['max_alerts']}</td>
                     <td>{user['max_schedules']}</td>
                     <td>
-                        <a href="/users/{user['telegram_user_id']}/verify" class="btn btn-success">Verify</a>
-                        <a href="/users/{user['telegram_user_id']}/reset" class="btn btn-danger">Reset Email</a>
+                        {verify_button}
+                        {reset_button}
                     </td>
                 </tr>
             """
@@ -203,10 +361,22 @@ def users():
         return f"Error: {str(e)}", 500
 
 @app.route('/users/<user_id>/verify')
+@login_required
 def verify_user(user_id):
     """Manually verify a user."""
     try:
         db.init_db()
+
+        # Get current user status
+        user = db.get_user(user_id)
+        if not user:
+            flash(f"User {user_id} not found.")
+            return redirect(url_for('users'))
+
+        if user['verified']:
+            flash(f"User {user_id} is already verified.")
+            return redirect(url_for('users'))
+
         db.update_user_verification(user_id, True)
         flash(f"User {user_id} has been manually verified.")
         return redirect(url_for('users'))
@@ -215,10 +385,22 @@ def verify_user(user_id):
         return redirect(url_for('users'))
 
 @app.route('/users/<user_id>/reset')
+@login_required
 def reset_user_email(user_id):
     """Reset a user's email."""
     try:
         db.init_db()
+
+        # Get current user status
+        user = db.get_user(user_id)
+        if not user:
+            flash(f"User {user_id} not found.")
+            return redirect(url_for('users'))
+
+        if not user['email']:
+            flash(f"User {user_id} has no email to reset.")
+            return redirect(url_for('users'))
+
         db.update_user_email(user_id, None)
         db.update_user_verification(user_id, False)
         flash(f"Email reset for user {user_id}.")
@@ -228,6 +410,7 @@ def reset_user_email(user_id):
         return redirect(url_for('users'))
 
 @app.route('/alerts')
+@login_required
 def alerts():
     """Alert management page."""
     try:
@@ -288,6 +471,7 @@ def alerts():
         return f"Error: {str(e)}", 500
 
 @app.route('/schedules')
+@login_required
 def schedules():
     """Schedule management page."""
     try:
@@ -351,6 +535,7 @@ def schedules():
         return f"Error: {str(e)}", 500
 
 @app.route('/feedback')
+@login_required
 def feedback():
     """Feedback management page."""
     try:
@@ -405,6 +590,7 @@ def feedback():
         return f"Error: {str(e)}", 500
 
 @app.route('/broadcast', methods=['GET', 'POST'])
+@login_required
 def broadcast():
     """Broadcast message page."""
     if request.method == 'POST':
@@ -436,6 +622,7 @@ def broadcast():
     return render_template_string(ADMIN_TEMPLATE, content=content)
 
 @app.route('/alerts/<int:alert_id>/toggle')
+@login_required
 def toggle_alert(alert_id):
     """Toggle alert active status."""
     try:
@@ -452,6 +639,7 @@ def toggle_alert(alert_id):
         return redirect(url_for('alerts'))
 
 @app.route('/alerts/<int:alert_id>/delete')
+@login_required
 def delete_alert(alert_id):
     """Delete an alert."""
     try:
@@ -463,6 +651,7 @@ def delete_alert(alert_id):
         return redirect(url_for('alerts'))
 
 @app.route('/schedules/<int:schedule_id>/toggle')
+@login_required
 def toggle_schedule(schedule_id):
     """Toggle schedule active status."""
     try:
@@ -479,6 +668,7 @@ def toggle_schedule(schedule_id):
         return redirect(url_for('schedules'))
 
 @app.route('/schedules/<int:schedule_id>/delete')
+@login_required
 def delete_schedule(schedule_id):
     """Delete a schedule."""
     try:
@@ -490,6 +680,7 @@ def delete_schedule(schedule_id):
         return redirect(url_for('schedules'))
 
 @app.route('/feedback/<int:feedback_id>/close')
+@login_required
 def close_feedback(feedback_id):
     """Close a feedback item."""
     try:
@@ -501,4 +692,14 @@ def close_feedback(feedback_id):
         return redirect(url_for('feedback'))
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    logger.info("Starting Telegram Screener Bot Admin Panel...")
+
+    # Check if admin credentials are configured
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+        logger.error("Admin credentials not configured! Please set ADMIN_USERNAME and ADMIN_PASSWORD environment variables.")
+        logger.error("You can set them in config/donotshare/.env file")
+        sys.exit(1)
+
+    logger.info("Admin panel will be available at: http://localhost:%s", WEBGUI_PORT)
+    logger.info("Login with username: %s", ADMIN_USERNAME)
+    app.run(debug=True, host='0.0.0.0', port=WEBGUI_PORT)

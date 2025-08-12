@@ -1,5 +1,3 @@
-Sure! Here’s a structured **design/requirements document** for organizing the **two-step optimization** of a trading system combining HMM regime detection and LSTM predictive model — clearly separating indicator optimization and LSTM hyperparameter tuning, with a step-by-step workflow.
-
 ---
 
 # Design Document: Two-Stage Optimization for HMM + LSTM Trading System
@@ -136,6 +134,3 @@ The trading system has two main components:
 * Monitor overfitting with walk-forward or rolling-window validation.
 
 ---
-
-If you want, I can also draft a **concrete folder & file structure**, or help with code skeletons for each step.
-Would that be helpful?

@@ -1,4 +1,90 @@
-﻿# Runner Scripts
+﻿# Script Launcher
+
+This directory contains a convenient script launcher that allows you to easily run any of the available scripts in the Crypto Trading Platform.
+
+## Files
+
+- `run_script_launcher.bat` - Windows batch file launcher
+- `run_script_launcher.sh` - Linux/Mac shell script launcher
+
+## Usage
+
+### Windows
+```bash
+# Double-click the file or run from command prompt
+run_script_launcher.bat
+```
+
+### Linux/Mac
+```bash
+# Make sure the script is executable
+chmod +x run_script_launcher.sh
+
+# Run the launcher
+./run_script_launcher.sh
+```
+
+## Available Scripts
+
+The launcher provides access to the following scripts:
+
+1. **Telegram Bot** - Main Telegram bot for user interactions
+2. **Telegram Admin Panel** - Web-based admin interface (http://localhost:5001)
+3. **Telegram Screener Bot** - Screener bot functionality
+4. **Telegram Background Services** - Background alert and schedule processing
+5. **JSON to CSV Converter** - Convert optimization results from JSON to CSV
+6. **Optimizer** - Run strategy optimization
+7. **Plotter** - Generate performance plots
+8. **LSTM Optimizer** - Run LSTM model optimization
+
+## Features
+
+- **Virtual Environment Management**: Automatically activates the `.venv` environment
+- **Error Handling**: Checks for virtual environment existence and provides helpful error messages
+- **Interactive Menu**: Easy-to-use numbered menu system
+- **Return to Menu**: After each script execution, returns to the main menu
+- **Cross-Platform**: Works on Windows, Linux, and Mac
+
+## Requirements
+
+- Python virtual environment (`.venv`) must be set up
+- All dependencies must be installed (`pip install -r requirements.txt`)
+- Proper file permissions (for shell script on Unix systems)
+
+## Troubleshooting
+
+### Virtual Environment Not Found
+If you get an error about the virtual environment not being found:
+1. Create the virtual environment: `python -m venv .venv`
+2. Install dependencies: `pip install -r requirements.txt`
+
+### Permission Denied (Linux/Mac)
+If you get a permission denied error on the shell script:
+```bash
+chmod +x run_script_launcher.sh
+```
+
+### Script Execution Fails
+- Check that all dependencies are installed
+- Verify that the virtual environment is properly set up
+- Check the individual script logs for specific error messages
+
+## Individual Scripts
+
+If you prefer to run scripts individually, you can still use the original script files:
+
+- `run_telegram_bot.bat/.sh`
+- `run_telegram_admin_panel.bat/.sh`
+- `run_telegram_screener_bot.bat/.sh`
+- `run_telegram_screener_background.bat/.sh`
+- `run_json2csv.bat/.sh`
+- `run_optimizer.bat/.sh`
+- `run_plotter.bat/.sh`
+- `run_lstm_optimizer.bat/.sh`
+
+All individual scripts also include virtual environment activation and error handling.
+
+# Runner Scripts
 
 This directory contains convenient batch files (Windows) and shell scripts (Linux/macOS) to run the Python scripts without needing to start an IDE or manually activate the virtual environment.
 

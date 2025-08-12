@@ -53,7 +53,6 @@ features:
 
 paths:
   data_raw: "data/raw"
-  data_processed: "data/processed"
   data_labeled: "data/labeled"
   models_hmm: "src/ml/pipeline/hmm_lstm_01/models/hmm"
   models_lstm: "src/ml/pipeline/hmm_lstm_01/models/lstm"

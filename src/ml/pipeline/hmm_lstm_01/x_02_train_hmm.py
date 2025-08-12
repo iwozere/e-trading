@@ -143,9 +143,9 @@ class HMMTrainer:
         return aic, bic, model
 
     def map_states_to_regimes(self, df: pd.DataFrame, state_col: str = 'state',
-                             ret_col: str = 'log_return', atr_col: str = 'atr') -> Tuple[Dict, pd.DataFrame]:
+                              ret_col: str = 'log_return', atr_col: str = 'atr') -> Tuple[Dict, pd.DataFrame]:
         """
-        Map HMM states into bull, bear, and sideways regimes.
+        Map HMM states to individual regime labels (up to 8 regimes).
 
         Args:
             df: DataFrame with HMM states
@@ -168,45 +168,24 @@ class HMMTrainer:
 
         stats_df = pd.DataFrame(stats, columns=['state', 'mean_r', 'std_r', 'mean_atr', 'count'])
 
-        if len(states) <= 3:
-            stats_df = stats_df.sort_values('mean_r').reset_index(drop=True)
-            labels = ['bear', 'sideways', 'bull']
-            mapping = {int(row['state']): labels[i] if i < 3 else labels[-1]
-                       for i, row in stats_df.iterrows()}
-            df['regime'] = df[state_col].map(mapping)
-            return mapping, df
+        # Sort by mean return to assign regime labels
+        stats_df = stats_df.sort_values('mean_r').reset_index(drop=True)
 
-        # For more than 3 states, use KMeans clustering with enhanced features
-        # Use both return and volatility characteristics for better clustering
-        features_for_clustering = ['mean_r', 'std_r']
-        if 'mean_atr' in stats_df.columns and not stats_df['mean_atr'].isna().all():
-            features_for_clustering.append('mean_atr')
+        # Define regime labels for up to 8 states
+        regime_labels = ['regime_0', 'regime_1', 'regime_2', 'regime_3',
+                        'regime_4', 'regime_5', 'regime_6', 'regime_7']
 
-        X = stats_df[features_for_clustering].fillna(0).values
+        # Create mapping: state -> regime_label
+        mapping = {int(row['state']): regime_labels[i] if i < len(regime_labels) else regime_labels[-1]
+                   for i, row in stats_df.iterrows()}
 
-        # Normalize features for better clustering
-        X_normalized = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-8)
-
-        kmeans = KMeans(n_clusters=3, random_state=42, n_init=10).fit(X_normalized)
-        stats_df['cluster'] = kmeans.labels_
-
-        # Sort clusters by mean return to assign labels
-        cluster_mean = stats_df.groupby('cluster')['mean_r'].mean().sort_values()
-        cluster_to_label = {cluster_idx: label
-                            for cluster_idx, label in zip(cluster_mean.index, ['bear', 'sideways', 'bull'])}
-
-        # Create mapping and add debugging info
-        mapping = {int(row['state']): cluster_to_label[row['cluster']]
-                   for _, row in stats_df.iterrows()}
-
-        # Log clustering results for debugging
-        _logger.info("Clustered %d HMM states into 3 regimes:", len(states))
-        for cluster_id in sorted(cluster_to_label.keys()):
-            cluster_states = stats_df[stats_df['cluster'] == cluster_id]['state'].tolist()
-            regime_label = cluster_to_label[cluster_id]
-            cluster_mean_return = cluster_mean[cluster_id]
-            _logger.info("  Cluster %d (%s): States %s, Mean Return: %.6f",
-                        cluster_id, regime_label, cluster_states, cluster_mean_return)
+        # Log regime mapping results
+        _logger.info("Mapped %d HMM states to individual regimes:", len(states))
+        for i, row in stats_df.iterrows():
+            state_id = int(row['state'])
+            regime_label = mapping[state_id]
+            mean_return = row['mean_r']
+            _logger.info("  State %d -> %s: Mean Return: %.6f", state_id, regime_label, mean_return)
 
         df['regime'] = df[state_col].map(mapping)
         return mapping, df
@@ -223,8 +202,11 @@ class HMMTrainer:
         fig, axes = plt.subplots(4, 1, figsize=(80, 20), sharex=True)
         fig.suptitle(f'HMM Regime Detection - {file_name} (Dataset: {len(df)} points)', fontsize=18)
 
-        # Color mapping for regimes
-        color_map = {'bull': 'green', 'bear': 'red', 'sideways': 'blue'}
+        # Color mapping for individual regimes (up to 8)
+        regime_colors = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'brown', 'pink']
+        unique_regimes = sorted(df['regime'].unique())
+        color_map = {regime: regime_colors[i] if i < len(regime_colors) else 'gray'
+                    for i, regime in enumerate(unique_regimes)}
 
         # Plot 1: Price with Bollinger Bands and regime overlay
         axes[0].set_title('Price with Bollinger Bands and Regimes')
@@ -233,17 +215,17 @@ class HMMTrainer:
         axes[0].plot(df.index, df['close'], 'k-', alpha=0.3, linewidth=0.5, label='Close Price')
 
         # Plot Bollinger Bands with more visible lines
-        axes[0].plot(df.index, df['bb_upper'], color='orange', alpha=0.8, linewidth=0.5, label='BB Upper')
-        #axes[0].plot(df.index, df['bb_middle'], color='grey', alpha=0.8, linewidth=0.5, label='BB Middle')
-        axes[0].plot(df.index, df['bb_lower'], color='orange', alpha=0.8, linewidth=0.5, label='BB Lower')
+        axes[0].plot(df.index, df['bb_upper'], color='orange', alpha=0.8, linewidth=0.2, label='BB Upper')
+        #axes[0].plot(df.index, df['bb_middle'], color='grey', alpha=0.8, linewidth=0.2, label='BB Middle')
+        axes[0].plot(df.index, df['bb_lower'], color='orange', alpha=0.8, linewidth=0.2, label='BB Lower')
 
         # Scatter regime points with small dots like in backup
-        for regime in ['bull', 'bear', 'sideways']:
+        for regime in unique_regimes:
             mask = df['regime'] == regime
             if mask.any():
                 axes[0].scatter(df.index[mask], df['close'][mask],
-                              c=color_map[regime], alpha=0.6, s=1,
-                              label=f'{regime.capitalize()} Regime')
+                              c=color_map[regime], alpha=0.6, s=0.5,
+                              label=f'{regime.replace("_", " ").title()}')
 
         axes[0].set_ylabel('Price')
         axes[0].legend()
@@ -261,16 +243,16 @@ class HMMTrainer:
         # Plot 3: Log returns with regime overlay
         axes[2].set_title('Log Returns with Regimes')
 
-        # Plot log returns line
-        axes[2].plot(df.index, df['log_return'], 'k-', alpha=0.3, linewidth=0.5, label='Log Returns')
+        # Plot log returns line (removed to avoid confusion with regime dots)
+        # axes[2].plot(df.index, df['log_return'], 'k-', alpha=0.3, linewidth=0.5, label='Log Returns')
 
         # Scatter regime points with small dots
-        for regime in ['bull', 'bear', 'sideways']:
+        for regime in unique_regimes:
             mask = df['regime'] == regime
             if mask.any():
                 axes[2].scatter(df.index[mask], df['log_return'][mask],
-                              c=color_map[regime], alpha=0.6, s=1,
-                              label=f'{regime.capitalize()} Regime')
+                              c=color_map[regime], alpha=0.6, s=0.5,
+                              label=f'{regime.replace("_", " ").title()}')
 
         axes[2].axhline(y=0, color='black', linestyle='-', alpha=0.3)
         axes[2].set_ylabel('Log Return')
@@ -281,15 +263,15 @@ class HMMTrainer:
         axes[3].set_title('Regime Timeline')
 
         # Create regime mapping for timeline
-        regime_mapping = {'bull': 2, 'sideways': 1, 'bear': 0}
+        regime_mapping = {regime: i for i, regime in enumerate(unique_regimes)}
         regime_values = df['regime'].map(regime_mapping)
 
-        axes[3].plot(df.index, regime_values, 'o-', markersize=1, linewidth=1, alpha=0.7)
+        axes[3].plot(df.index, regime_values, 'o', markersize=1, alpha=0.7)
         axes[3].set_ylabel('Regime')
         axes[3].set_xlabel('Time')
         axes[3].grid(True, alpha=0.3)
-        axes[3].set_yticks([0, 1, 2])
-        axes[3].set_yticklabels(['Bear', 'Sideways', 'Bull'])
+        axes[3].set_yticks(range(len(unique_regimes)))
+        axes[3].set_yticklabels([regime.replace('_', ' ').title() for regime in unique_regimes])
 
         plt.tight_layout()
         plt.savefig(file_name, dpi=300, bbox_inches='tight')
@@ -513,10 +495,10 @@ class HMMTrainer:
             report_file = self.hmm_dir / f"hmm_optimization_{file_base}_{self.run_timestamp}.csv"
             pd.DataFrame(report_rows).to_csv(report_file, index=False)
 
-            # Get clustering details for n_states > 3
-            clustering_details = None
-            if best_params[4] > 3:  # n_states > 3
-                # Recreate the clustering analysis for JSON output
+            # Get regime mapping details for JSON output
+            regime_details = None
+            if best_params[4] > 1:  # n_states > 1
+                # Recreate the regime mapping analysis for JSON output
                 stats = []
                 states = sorted(best_df['state'].unique())
                 for s in states:
@@ -527,11 +509,11 @@ class HMMTrainer:
                     stats.append((s, mean_r, std_r, mean_atr, len(sub)))
 
                 stats_df = pd.DataFrame(stats, columns=['state', 'mean_r', 'std_r', 'mean_atr', 'count'])
-                clustering_details = {
+                regime_details = {
                     'n_states': len(states),
                     'state_statistics': stats_df.to_dict('records'),
-                    'clustering_method': 'KMeans with normalized features',
-                    'features_used': ['mean_return', 'std_return', 'mean_atr'] if 'mean_atr' in stats_df.columns else ['mean_return', 'std_return']
+                    'regime_mapping_method': 'Sort by mean return',
+                    'regime_labels': ['regime_0', 'regime_1', 'regime_2', 'regime_3', 'regime_4', 'regime_5', 'regime_6', 'regime_7']
                 }
 
             # Save best parameters in JSON format
@@ -550,7 +532,7 @@ class HMMTrainer:
                     'bic': best_bic
                 },
                 'regime_counts': best_df['regime'].value_counts().to_dict(),
-                'clustering_details': clustering_details,
+                'regime_details': regime_details,
                 'total_trials': len(report_rows),
                 'timestamp': datetime.now().isoformat(),
                 'run_timestamp': self.run_timestamp
