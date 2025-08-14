@@ -17,6 +17,8 @@ async def process_report_notifications(result, notification_manager, message, us
     if result.get("email", False):
         channels.append("email")
 
+    logger.info("Processing %d reports for channels: %s", len(result["reports"]), channels)
+
     # Email notifications
     if "email" in channels:
         for report in result["reports"]:
@@ -42,45 +44,80 @@ async def process_report_notifications(result, notification_manager, message, us
                     channels=["email"],
                     email_receiver=user_email
                 )
-    # Telegram notifications
-    for report in result["reports"]:
+    # Telegram notifications - Send directly to avoid queue issues
+    logger.info("Starting Telegram notifications for %d reports", len(result["reports"]))
+    for i, report in enumerate(result["reports"]):
+        logger.info("Sending Telegram notification %d/%d for ticker: %s", i+1, len(result["reports"]), report.get("ticker"))
         if "telegram" in channels:
             attachments = None
             if report.get("chart_bytes"):
                 attachments = {f"{report['ticker']}_chart.png": report["chart_bytes"]}
-            if report.get("error"):
-                await notification_manager.send_notification(
-                    notification_type="ERROR",
-                    title=f"Report Error for {report['ticker']}",
-                    message=f"No data for {report['ticker']}: {report['error']}",
-                    priority="NORMAL",
-                    channels=["telegram"],
-                    telegram_chat_id=message.chat.id,
-                    reply_to_message_id=message.message_id
-                )
-            else:
+
+            try:
+                if report.get("error"):
+                    # Send error notification directly
+                    await notification_manager.channels["telegram"].send(
+                        notification_manager._create_notification(
+                            notification_type="ERROR",
+                            title=f"Report Error for {report['ticker']}",
+                            message=f"No data for {report['ticker']}: {report['error']}",
+                            data={
+                                "channels": ["telegram"],
+                                "telegram_chat_id": message.chat.id,
+                                "reply_to_message_id": message.message_id
+                            }
+                        )
+                    )
+                    logger.info("Successfully sent error notification for %s", report['ticker'])
+                else:
+                    # Send success notification directly
+                    await notification_manager.channels["telegram"].send(
+                        notification_manager._create_notification(
+                            notification_type="INFO",
+                            title=f"Report for {report['ticker']}",
+                            message=report["message"],
+                            data={
+                                "channels": ["telegram"],
+                                "telegram_chat_id": message.chat.id,
+                                "reply_to_message_id": message.message_id,
+                                "attachments": attachments
+                            }
+                        )
+                    )
+                    logger.info("Successfully sent Telegram notification for %s", report['ticker'])
+            except Exception as e:
+                logger.exception("Error sending notification for %s: ", report['ticker'])
+                # Try fallback without attachment
                 try:
-                    await notification_manager.send_notification(
-                        notification_type="INFO",
-                        title=f"Report for {report['ticker']}",
-                        message=report["message"],
-                        attachments=attachments,
-                        priority="NORMAL",
-                        channels=["telegram"],
-                        telegram_chat_id=message.chat.id,
-                        reply_to_message_id=message.message_id
+                    await notification_manager.channels["telegram"].send(
+                        notification_manager._create_notification(
+                            notification_type="INFO",
+                            title=f"Report for {report['ticker']}",
+                            message=report["message"] + "\n\n[Chart could not be sent due to an error.]",
+                            data={
+                                "channels": ["telegram"],
+                                "telegram_chat_id": message.chat.id,
+                                "reply_to_message_id": message.message_id
+                            }
+                        )
                     )
-                except Exception as e:
-                    logger.exception("Error sending notification with attachment: ")
-                    await notification_manager.send_notification(
-                        notification_type="INFO",
-                        title=f"Report for {report['ticker']}",
-                        message=report["message"] + "\n\n[Chart could not be sent due to an error.]",
-                        priority="NORMAL",
-                        channels=["telegram"],
-                        telegram_chat_id=message.chat.id,
-                        reply_to_message_id=message.message_id
-                    )
+                    logger.info("Successfully sent fallback Telegram notification for %s", report['ticker'])
+                except Exception as e2:
+                    logger.exception("Error sending fallback notification for %s: ", report['ticker'])
+
+            # Add a small delay between notifications to avoid rate limiting
+            if i < len(result["reports"]) - 1:  # Don't delay after the last notification
+                import asyncio
+                logger.info("Waiting 500ms before next notification...")
+                await asyncio.sleep(0.5)  # 500ms delay between notifications
+                logger.info("Delay completed, continuing with next notification")
+
+    logger.info("Completed processing all %d reports", len(result["reports"]))
+
+    # Wait a bit to ensure all notifications are processed
+    import asyncio
+    await asyncio.sleep(1.0)
+    logger.info("Final wait completed, all notifications should be sent")
 
 async def process_report_command(message, telegram_user_id, args, notification_manager):
     try:

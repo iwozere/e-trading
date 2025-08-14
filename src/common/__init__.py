@@ -63,7 +63,7 @@ def get_ohlcv(ticker: str, interval: str, period: str, provider: str = None, **k
     """
     # Infer provider if not specified
     if provider is None:
-        provider = "yf" if len(ticker) < 5 else "bnc"
+        provider = "yf" if len(ticker) < 6 else "bnc"
 
     # Get downloader
     downloader = DataDownloaderFactory.create_downloader(provider, **kwargs)

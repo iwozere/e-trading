@@ -591,6 +591,17 @@ class AsyncNotificationManager:
             _logger.exception("Error sending to channel %s: %s")
             return False
 
+    def _create_notification(self, notification_type: NotificationType, title: str, message: str, data: Optional[Dict[str, Any]] = None) -> Notification:
+        """Create a notification object"""
+        return Notification(
+            type=notification_type,
+            priority=NotificationPriority.NORMAL,
+            title=title,
+            message=message,
+            data=data or {},
+            source="trading_bot"
+        )
+
     async def _handle_failed_notification(self, notification: Notification):
         """Handle failed notification (retry logic)"""
         if notification.retry_count < notification.max_retries:
