@@ -12,7 +12,7 @@ The HMM-LSTM strategy combines:
 
 ## Implementation Approaches
 
-### 1. Standalone Strategy (`hmm_lstm_pipeline_strategy.py`)
+### 1. Standalone Strategy (`hmm_lstm_strategy.py`)
 
 A complete standalone strategy that directly uses the trained models.
 

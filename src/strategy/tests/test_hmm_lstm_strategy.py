@@ -19,7 +19,7 @@ import backtrader as bt
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
-from src.strategy.hmm_lstm_pipeline_strategy import HMMLSTMPipelineStrategy
+from src.strategy.hmm_lstm_strategy import HMMLSTMPipelineStrategy
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
