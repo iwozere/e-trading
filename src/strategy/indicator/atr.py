@@ -66,7 +66,7 @@ class AtrIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing AtrIndicator: %s. Falling back to bt.indicators.ATR", e, exc_info=True)
+            logger.exception("Error initializing AtrIndicator: Falling back to bt.indicators.ATR")
             self._impl = bt.indicators.ATR(self.data, period=self.p.period)
             self._backend = "bt"
 
@@ -78,4 +78,4 @@ class AtrIndicator(bt.Indicator):
             if self._talib_result is not None and len(self) - 1 < len(self._talib_result):
                 self.lines[atr][0] = self._talib_result[len(self) - 1]
             else:
-                self.lines[atr][0] = float("nan") 
+                self.lines[atr][0] = float("nan")

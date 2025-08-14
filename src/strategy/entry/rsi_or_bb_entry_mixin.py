@@ -117,7 +117,7 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
                 self.register_indicator(self.bb_name, self.bb)
 
         except Exception as e:
-            logger.error("Error initializing indicators: %s", e, exc_info=True)
+            logger.exception("Error initializing indicators: ")
             raise
 
     def are_indicators_ready(self) -> bool:
@@ -190,5 +190,5 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
                 )
             return return_value
         except Exception as e:
-            logger.error("Error in should_enter: %s", e, exc_info=True)
+            logger.exception("Error in should_enter: ")
             return False

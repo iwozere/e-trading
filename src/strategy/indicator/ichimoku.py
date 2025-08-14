@@ -74,7 +74,7 @@ class IchimokuIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing IchimokuIndicator: %s. Falling back to bt.indicators.Ichimoku", e, exc_info=True)
+            logger.exception("Error initializing IchimokuIndicator: Falling back to bt.indicators.Ichimoku")
             self._impl = bt.indicators.Ichimoku(
                 self.data,
                 tenkan=self.p.tenkan_period,
@@ -96,4 +96,4 @@ class IchimokuIndicator(bt.Indicator):
             self.lines[kijun][0] = float("nan")
             self.lines[senkou_a][0] = float("nan")
             self.lines[senkou_b][0] = float("nan")
-            self.lines[chikou][0] = float("nan") 
+            self.lines[chikou][0] = float("nan")

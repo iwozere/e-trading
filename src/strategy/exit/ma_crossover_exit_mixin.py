@@ -80,7 +80,7 @@ class MACrossoverExitMixin(BaseExitMixin):
             self.register_indicator(self.slow_ma_name, self.slow_ma)
 
         except Exception as e:
-            logger.error("Error initializing indicators: %s", e, exc_info=True)
+            logger.exception("Error initializing indicators: ")
             raise
 
     def should_exit(self) -> bool:
@@ -125,5 +125,5 @@ class MACrossoverExitMixin(BaseExitMixin):
                 self.strategy.current_exit_reason = f"{ma_type}_crossover"
             return return_value
         except Exception as e:
-            logger.error("Error in should_exit: %s", e, exc_info=True)
+            logger.exception("Error in should_exit: ")
             return False

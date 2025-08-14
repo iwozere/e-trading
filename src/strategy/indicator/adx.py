@@ -67,7 +67,7 @@ class AdxIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing AdxIndicator: %s. Falling back to bt.indicators.ADX", e, exc_info=True)
+            logger.exception("Error initializing AdxIndicator: Falling back to bt.indicators.ADX")
             self._impl = bt.indicators.ADX(self.data, period=self.p.period)
             self._backend = "bt"
 
@@ -79,4 +79,4 @@ class AdxIndicator(bt.Indicator):
             if self._talib_result is not None and len(self) - 1 < len(self._talib_result):
                 self.lines[adx][0] = self._talib_result[len(self) - 1]
             else:
-                self.lines[adx][0] = float("nan") 
+                self.lines[adx][0] = float("nan")

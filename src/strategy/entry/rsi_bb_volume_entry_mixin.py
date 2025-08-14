@@ -109,7 +109,7 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             self.register_indicator(self.bb_name, self.bb)
             self.register_indicator(self.vol_ma_name, self.sma)
         except Exception as e:
-            logger.error("Error initializing indicators: %s", e, exc_info=True)
+            logger.exception("Error initializing indicators: ")
             raise
 
     def should_enter(self) -> bool:
@@ -158,5 +158,5 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
                 )
             return return_value
         except Exception as e:
-            logger.error("Error in should_enter: %s", e, exc_info=True)
+            logger.exception("Error in should_enter: ")
             return False

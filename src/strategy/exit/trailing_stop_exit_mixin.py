@@ -78,7 +78,7 @@ class TrailingStopExitMixin(BaseExitMixin):
                 )
             self.register_indicator(self.atr_name, self.atr)
         except Exception as e:
-            logger.error("Error initializing indicators: %s", e, exc_info=True)
+            logger.exception("Error initializing indicators: ")
             raise
 
     def should_exit(self) -> bool:
@@ -130,7 +130,7 @@ class TrailingStopExitMixin(BaseExitMixin):
                 self.strategy.current_exit_reason = "trailing_stop"
             return return_value
         except Exception as e:
-            logger.error("Error in should_exit: %s", e, exc_info=True)
+            logger.exception("Error in should_exit: ")
             return False
 
     def get_exit_reason(self) -> str:

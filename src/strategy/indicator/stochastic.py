@@ -77,7 +77,7 @@ class StochasticIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing StochasticIndicator: %s. Falling back to bt.indicators.Stochastic", e, exc_info=True)
+            logger.exception("Error initializing StochasticIndicator: Falling back to bt.indicators.Stochastic")
             self._impl = bt.indicators.Stochastic(
                 self.data,
                 period=self.p.k_period,
@@ -99,4 +99,4 @@ class StochasticIndicator(bt.Indicator):
                 self.lines[d][0] = self._talib_result[1][len(self) - 1]
             else:
                 self.lines[k][0] = float("nan")
-                self.lines[d][0] = float("nan") 
+                self.lines[d][0] = float("nan")

@@ -66,7 +66,7 @@ class AroonIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing AroonIndicator: %s. Falling back to bt.indicators.AroonIndicator", e, exc_info=True)
+            logger.exception("Error initializing AroonIndicator: Falling back to bt.indicators.AroonIndicator")
             self._impl = bt.indicators.AroonIndicator(self.data, period=self.p.period)
             self._backend = "bt"
 
@@ -84,4 +84,4 @@ class AroonIndicator(bt.Indicator):
                 self.lines[aroondown][0] = self._talib_result[1][len(self) - 1]
             else:
                 self.lines[aroonup][0] = float("nan")
-                self.lines[aroondown][0] = float("nan") 
+                self.lines[aroondown][0] = float("nan")

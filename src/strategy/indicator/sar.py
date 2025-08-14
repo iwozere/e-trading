@@ -74,7 +74,7 @@ class SarIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing SarIndicator: %s. Falling back to bt.indicators.ParabolicSAR", e, exc_info=True)
+            logger.exception("Error initializing SarIndicator: Falling back to bt.indicators.ParabolicSAR")
             self._impl = bt.indicators.ParabolicSAR(
                 self.data,
                 af=self.p.acceleration,
@@ -90,4 +90,4 @@ class SarIndicator(bt.Indicator):
             if self._talib_result is not None and len(self) - 1 < len(self._talib_result):
                 self.lines[sar][0] = self._talib_result[len(self) - 1]
             else:
-                self.lines[sar][0] = float("nan") 
+                self.lines[sar][0] = float("nan")

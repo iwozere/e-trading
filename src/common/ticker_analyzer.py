@@ -50,7 +50,7 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
             df=df
         )
     except Exception as e:
-        logger.error("Error in analyze_ticker: %s", e, exc_info=True)
+        logger.exception("Error in analyze_ticker: ")
         raise
 
 def format_ticker_report(analysis: TickerAnalysis) -> dict:
@@ -72,7 +72,7 @@ def format_ticker_report(analysis: TickerAnalysis) -> dict:
             chart_bytes = generate_chart(analysis)
             analysis.chart_image = chart_bytes
         except Exception as e:
-            logger.error("generate_chart: %s", e, exc_info=True)
+            logger.exception("generate_chart: ")
             chart_bytes = None
             analysis.chart_image = None
 

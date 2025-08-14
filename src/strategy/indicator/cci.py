@@ -66,7 +66,7 @@ class CciIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing CciIndicator: %s. Falling back to bt.indicators.CCI", e, exc_info=True)
+            logger.exception("Error initializing CciIndicator: Falling back to bt.indicators.CCI")
             self._impl = bt.indicators.CCI(self.data, period=self.p.period)
             self._backend = "bt"
 
@@ -78,4 +78,4 @@ class CciIndicator(bt.Indicator):
             if self._talib_result is not None and len(self) - 1 < len(self._talib_result):
                 self.lines[cci][0] = self._talib_result[len(self) - 1]
             else:
-                self.lines[cci][0] = float("nan") 
+                self.lines[cci][0] = float("nan")

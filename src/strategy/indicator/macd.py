@@ -77,7 +77,7 @@ class MacdIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing MacdIndicator: %s. Falling back to bt.indicators.MACD", e, exc_info=True)
+            logger.exception("Error initializing MacdIndicator: Falling back to bt.indicators.MACD")
             self._impl = bt.indicators.MACD(
                 self.data.close,
                 period_me1=self.p.fast_period,
@@ -103,4 +103,4 @@ class MacdIndicator(bt.Indicator):
             else:
                 self.lines.macd[0] = float("nan")
                 self.lines.signal[0] = float("nan")
-                self.lines.histo[0] = float("nan") 
+                self.lines.histo[0] = float("nan")

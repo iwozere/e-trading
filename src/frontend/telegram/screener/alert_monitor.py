@@ -35,7 +35,7 @@ class AlertMonitor:
                 await self.check_alerts()
                 await asyncio.sleep(60)  # Check every minute
             except Exception as e:
-                logger.error("Error in alert monitor: %s", e, exc_info=True)
+                logger.exception("Error in alert monitor: ")
                 await asyncio.sleep(30)  # Shorter sleep on error
 
     def stop(self):
@@ -65,7 +65,7 @@ class AlertMonitor:
                 await self.check_single_alert(alert)
 
         except Exception as e:
-            logger.error("Error checking alerts: %s", e, exc_info=True)
+            logger.exception("Error checking alerts: ")
 
     async def check_single_alert(self, alert: Dict[str, Any]):
         """Check a single alert and trigger notification if condition is met."""
@@ -103,7 +103,7 @@ class AlertMonitor:
                 await self.trigger_alert(alert, current_price)
 
         except Exception as e:
-            logger.error("Error checking alert %s: %s", alert.get("id"), e, exc_info=True)
+            logger.exception("Error checking alert %s: ", alert.get("id"))
 
     async def trigger_alert(self, alert: Dict[str, Any], current_price: float):
         """Trigger an alert notification and deactivate the alert."""
@@ -164,7 +164,7 @@ class AlertMonitor:
                        alert_id, user_id, ticker, condition, target_price, current_price)
 
         except Exception as e:
-            logger.error("Error triggering alert %s: %s", alert.get("id"), e, exc_info=True)
+            logger.exception("Error triggering alert %s: ", alert.get("id"))
 
 
 async def main():
@@ -186,7 +186,7 @@ async def main():
     except KeyboardInterrupt:
         logger.info("Alert monitor stopped by user")
     except Exception as e:
-        logger.error("Error in alert monitor main: %s", e, exc_info=True)
+        logger.exception("Error in alert monitor main: ")
 
 
 if __name__ == "__main__":

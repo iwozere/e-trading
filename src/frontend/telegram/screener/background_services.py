@@ -48,7 +48,7 @@ async def main():
     except KeyboardInterrupt:
         logger.info("Background services stopped by user")
     except Exception as e:
-        logger.error("Error in background services: %s", e, exc_info=True)
+        logger.exception("Error in background services: ")
 
 
 if __name__ == "__main__":

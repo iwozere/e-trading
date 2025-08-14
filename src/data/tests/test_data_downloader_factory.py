@@ -10,6 +10,9 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from src.data.data_downloader_factory import DataDownloaderFactory
+from src.notification.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 def test_provider_codes():
     """Test provider code mapping."""
@@ -100,9 +103,7 @@ def main():
         print("\nDataDownloaderFactory is working correctly!")
 
     except Exception as e:
-        print(f"\n✗ Test failed: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Test failed: %s", str(e))
         return 1
 
     return 0

@@ -115,7 +115,7 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
             )
             self.register_indicator(self.supertrend_name, supertrend)
         except Exception as e:
-            logger.error("Error initializing indicators: %s", e, exc_info=True)
+            logger.exception("Error initializing indicators: ")
             raise
 
     def should_enter(self) -> bool:
@@ -164,5 +164,5 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
                 )
             return return_value
         except Exception as e:
-            logger.error("Error in should_enter: %s", e, exc_info=True)
+            logger.exception("Error in should_enter: ")
             return False

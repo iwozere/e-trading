@@ -228,7 +228,7 @@ class BasePlotter:
                     )
                     break  # Stop if we hit an error
         except Exception as e:
-            _logger.error("Error accessing data: %s", e, exc_info=False)
+            _logger.exception("Error accessing data: ")
             return
 
         # Ensure we have data to plot

@@ -288,7 +288,7 @@ class DataLoader:
                         error_result = (symbol, timeframe, provider, False, str(e))
                         provider_results['failed'].append(error_result)
                         results['failed'].append(error_result)
-                        _logger.error("✗ Exception downloading %s %s from %s: %s", symbol, timeframe, provider, e)
+                        _logger.exception("✗ Exception downloading %s %s from %s: ", symbol, timeframe, provider)
                         provider_results['success'] = False
                         results['overall_success'] = False
 

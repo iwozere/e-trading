@@ -112,7 +112,7 @@ class HMMApplicator:
             return model_package
 
         except Exception as e:
-            _logger.error("Failed to load model from %s: %s", model_path, str(e))
+            _logger.exception("Failed to load model from %s: ", model_path)
             raise
 
     def prepare_features(self, df: pd.DataFrame, required_features: List[str], timeframe: str = "4h") -> np.ndarray:
@@ -731,7 +731,7 @@ def main():
             _logger.info("  %s", file.name)
 
     except Exception as e:
-        _logger.error("HMM application failed: %s", str(e))
+        _logger.exception("HMM application failed: ")
         raise
 
 if __name__ == "__main__":

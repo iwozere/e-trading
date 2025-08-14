@@ -171,11 +171,10 @@ class HMMTrainer:
         # Sort by mean return to assign regime labels
         stats_df = stats_df.sort_values('mean_r').reset_index(drop=True)
 
-        # Define regime labels for up to 8 states
-        regime_labels = ['regime_0', 'regime_1', 'regime_2', 'regime_3',
-                        'regime_4', 'regime_5', 'regime_6', 'regime_7']
+        # Define regime labels for up to 8 states (numeric values)
+        regime_labels = list(range(8))  # [0, 1, 2, 3, 4, 5, 6, 7]
 
-        # Create mapping: state -> regime_label
+        # Create mapping: state -> regime_number
         mapping = {int(row['state']): regime_labels[i] if i < len(regime_labels) else regime_labels[-1]
                    for i, row in stats_df.iterrows()}
 
@@ -183,9 +182,9 @@ class HMMTrainer:
         _logger.info("Mapped %d HMM states to individual regimes:", len(states))
         for i, row in stats_df.iterrows():
             state_id = int(row['state'])
-            regime_label = mapping[state_id]
+            regime_number = mapping[state_id]
             mean_return = row['mean_r']
-            _logger.info("  State %d -> %s: Mean Return: %.6f", state_id, regime_label, mean_return)
+            _logger.info("  State %d -> Regime %d: Mean Return: %.6f", state_id, regime_number, mean_return)
 
         df['regime'] = df[state_col].map(mapping)
         return mapping, df
@@ -205,8 +204,8 @@ class HMMTrainer:
         # Color mapping for individual regimes (up to 8)
         regime_colors = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'brown', 'pink']
         unique_regimes = sorted(df['regime'].unique())
-        color_map = {regime: regime_colors[i] if i < len(regime_colors) else 'gray'
-                    for i, regime in enumerate(unique_regimes)}
+        color_map = {regime: regime_colors[int(regime)] if int(regime) < len(regime_colors) else 'gray'
+                    for regime in unique_regimes}
 
         # Plot 1: Price with Bollinger Bands and regime overlay
         axes[0].set_title('Price with Bollinger Bands and Regimes')
@@ -225,7 +224,7 @@ class HMMTrainer:
             if mask.any():
                 axes[0].scatter(df.index[mask], df['close'][mask],
                               c=color_map[regime], alpha=0.6, s=0.5,
-                              label=f'{regime.replace("_", " ").title()}')
+                              label=f'Regime {int(regime)}')
 
         axes[0].set_ylabel('Price')
         axes[0].legend()
@@ -513,7 +512,7 @@ class HMMTrainer:
                     'n_states': len(states),
                     'state_statistics': stats_df.to_dict('records'),
                     'regime_mapping_method': 'Sort by mean return',
-                    'regime_labels': ['regime_0', 'regime_1', 'regime_2', 'regime_3', 'regime_4', 'regime_5', 'regime_6', 'regime_7']
+                    'regime_labels': list(range(8))  # [0, 1, 2, 3, 4, 5, 6, 7]
                 }
 
             # Save best parameters in JSON format

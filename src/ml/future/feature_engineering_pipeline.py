@@ -466,7 +466,7 @@ class FeatureSelector:
                 raise ValueError(f"Unknown selection method: {method}")
 
         except Exception as e:
-            logger.error("Error in feature selection: %s", e, exc_info=True)
+            logger.exception("Error in feature selection: ")
             return X
 
     def _mutual_info_selection(self,
@@ -664,7 +664,7 @@ class FeatureEngineeringPipeline:
             return features_df
 
         except Exception as e:
-            logger.error("Error in feature generation: %s", e, exc_info=True)
+            logger.exception("Error in feature generation: ")
             return data
 
     def select_features(self,
@@ -684,7 +684,7 @@ class FeatureEngineeringPipeline:
             return selected_X
 
         except Exception as e:
-            logger.error("Error in feature selection: %s", e, exc_info=True)
+            logger.exception("Error in feature selection: ")
             return X
 
     def scale_features(self,
@@ -714,7 +714,7 @@ class FeatureEngineeringPipeline:
             return pd.DataFrame(scaled_X, columns=X.columns, index=X.index)
 
         except Exception as e:
-            logger.error("Error in feature scaling: %s", e, exc_info=True)
+            logger.exception("Error in feature scaling: ")
             return X
 
     def get_feature_importance(self) -> Dict[str, float]:

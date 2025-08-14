@@ -65,7 +65,7 @@ class ObvIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing ObvIndicator: %s.", e, exc_info=True)
+            logger.exception("Error initializing ObvIndicator: ")
             raise
 
     def next(self):
@@ -76,4 +76,4 @@ class ObvIndicator(bt.Indicator):
             if self._talib_result is not None and len(self) - 1 < len(self._talib_result):
                 self.lines[obv][0] = self._talib_result[len(self) - 1]
             else:
-                self.lines[obv][0] = float("nan") 
+                self.lines[obv][0] = float("nan")

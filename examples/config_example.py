@@ -302,9 +302,7 @@ def main():
         print("\n📁 Check the 'config/' directory for generated configuration files.")
 
     except Exception as e:
-        print(f"❌ Error running examples: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("❌ Error running examples: %s", str(e))
 
 
 if __name__ == "__main__":

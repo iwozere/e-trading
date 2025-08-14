@@ -79,7 +79,7 @@ def handle_help(parsed: ParsedCommand) -> Dict[str, Any]:
             "is_admin": is_admin
         }
     except Exception as e:
-        logger.error("Error: %s", e, exc_info=True)
+        logger.exception("Error generating help: ")
         return {"status": "error", "message": f"Error generating help: {str(e)}"}
 
 
@@ -291,7 +291,7 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
             return {"status": "error", "message": f"Unknown admin command: {action}"}
 
     except Exception as e:
-        logger.error("Error in admin command: %s", e, exc_info=True)
+        logger.exception("Error in admin command: ")
         return {"status": "error", "message": f"Error processing admin command: {str(e)}"}
 
 
@@ -313,7 +313,7 @@ def handle_admin_users() -> Dict[str, Any]:
         return {"status": "ok", "title": "All Users", "message": message}
 
     except Exception as e:
-        logger.error("Error listing users: %s", e, exc_info=True)
+        logger.exception("Error listing users: ")
         return {"status": "error", "message": f"Error listing users: {str(e)}"}
 
 
@@ -333,7 +333,7 @@ def handle_admin_listusers() -> Dict[str, Any]:
         return {"status": "ok", "title": "User List", "message": message}
 
     except Exception as e:
-        logger.error("Error listing users: %s", e, exc_info=True)
+        logger.exception("Error listing users: ")
         return {"status": "error", "message": f"Error listing users: {str(e)}"}
 
 
@@ -356,7 +356,7 @@ def handle_admin_resetemail(user_id: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error resetting email: %s", e, exc_info=True)
+        logger.exception("Error resetting email: ")
         return {"status": "error", "message": f"Error resetting email: {str(e)}"}
 
 
@@ -381,7 +381,7 @@ def handle_admin_verify(user_id: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error verifying user: %s", e, exc_info=True)
+        logger.exception("Error verifying user: ")
         return {"status": "error", "message": f"Error verifying user: {str(e)}"}
 
 
@@ -427,7 +427,7 @@ def handle_admin_setlimit(limit_type: str, limit_value: str, user_id: str = None
             }
 
     except Exception as e:
-        logger.error("Error setting limit: %s", e, exc_info=True)
+        logger.exception("Error setting limit: ")
         return {"status": "error", "message": f"Error setting limit: {str(e)}"}
 
 
@@ -453,7 +453,7 @@ def handle_admin_broadcast(message_text: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error scheduling broadcast: %s", e, exc_info=True)
+        logger.exception("Error scheduling broadcast: ")
         return {"status": "error", "message": f"Error scheduling broadcast: {str(e)}"}
 
 
@@ -513,7 +513,7 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
             }
 
     except Exception as e:
-        logger.error("Error in alerts command: %s", e, exc_info=True)
+        logger.exception("Error in alerts command: ")
         return {"status": "error", "message": f"Error processing alerts command: {str(e)}"}
 
 
@@ -535,7 +535,7 @@ def handle_alerts_list(telegram_user_id: str) -> Dict[str, Any]:
         return {"status": "ok", "title": "Your Alerts", "message": message}
 
     except Exception as e:
-        logger.error("Error listing alerts: %s", e, exc_info=True)
+        logger.exception("Error listing alerts: ")
         return {"status": "error", "message": f"Error listing alerts: {str(e)}"}
 
 
@@ -575,7 +575,7 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
         }
 
     except Exception as e:
-        logger.error("Error adding alert: %s", e, exc_info=True)
+        logger.exception("Error adding alert: ")
         return {"status": "error", "message": f"Error adding alert: {str(e)}"}
 
 
@@ -627,7 +627,7 @@ def handle_alerts_edit(telegram_user_id: str, alert_id_str: str, new_price_str: 
         }
 
     except Exception as e:
-        logger.error("Error editing alert: %s", e, exc_info=True)
+        logger.exception("Error editing alert: ")
         return {"status": "error", "message": f"Error editing alert: {str(e)}"}
 
 
@@ -655,7 +655,7 @@ def handle_alerts_delete(telegram_user_id: str, alert_id_str: str) -> Dict[str, 
         }
 
     except Exception as e:
-        logger.error("Error deleting alert: %s", e, exc_info=True)
+        logger.exception("Error deleting alert: ")
         return {"status": "error", "message": f"Error deleting alert: {str(e)}"}
 
 
@@ -683,7 +683,7 @@ def handle_alerts_pause(telegram_user_id: str, alert_id_str: str) -> Dict[str, A
         }
 
     except Exception as e:
-        logger.error("Error pausing alert: %s", e, exc_info=True)
+        logger.exception("Error pausing alert: ")
         return {"status": "error", "message": f"Error pausing alert: {str(e)}"}
 
 
@@ -711,7 +711,7 @@ def handle_alerts_resume(telegram_user_id: str, alert_id_str: str) -> Dict[str, 
         }
 
     except Exception as e:
-        logger.error("Error resuming alert: %s", e, exc_info=True)
+        logger.exception("Error resuming alert: ")
         return {"status": "error", "message": f"Error resuming alert: {str(e)}"}
 
 
@@ -777,7 +777,7 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
             }
 
     except Exception as e:
-        logger.error("Error in schedules command: %s", e, exc_info=True)
+        logger.exception("Error in schedules command: ")
         return {"status": "error", "message": f"Error processing schedules command: {str(e)}"}
 
 
@@ -801,7 +801,7 @@ def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
         return {"status": "ok", "title": "Your Schedules", "message": message}
 
     except Exception as e:
-        logger.error("Error listing schedules: %s", e, exc_info=True)
+        logger.exception("Error listing schedules: ")
         return {"status": "error", "message": f"Error listing schedules: {str(e)}"}
 
 
@@ -848,7 +848,7 @@ def handle_schedules_add(telegram_user_id: str, ticker: str, time: str, email: b
         }
 
     except Exception as e:
-        logger.error("Error adding schedule: %s", e, exc_info=True)
+        logger.exception("Error adding schedule: ")
         return {"status": "error", "message": f"Error adding schedule: {str(e)}"}
 
 
@@ -904,7 +904,7 @@ def handle_schedules_edit(telegram_user_id: str, schedule_id_str: str, new_time:
         }
 
     except Exception as e:
-        logger.error("Error editing schedule: %s", e, exc_info=True)
+        logger.exception("Error editing schedule: ")
         return {"status": "error", "message": f"Error editing schedule: {str(e)}"}
 
 
@@ -932,7 +932,7 @@ def handle_schedules_delete(telegram_user_id: str, schedule_id_str: str) -> Dict
         }
 
     except Exception as e:
-        logger.error("Error deleting schedule: %s", e, exc_info=True)
+        logger.exception("Error deleting schedule: ")
         return {"status": "error", "message": f"Error deleting schedule: {str(e)}"}
 
 
@@ -960,7 +960,7 @@ def handle_schedules_pause(telegram_user_id: str, schedule_id_str: str) -> Dict[
         }
 
     except Exception as e:
-        logger.error("Error pausing schedule: %s", e, exc_info=True)
+        logger.exception("Error pausing schedule: ")
         return {"status": "error", "message": f"Error pausing schedule: {str(e)}"}
 
 
@@ -988,7 +988,7 @@ def handle_schedules_resume(telegram_user_id: str, schedule_id_str: str) -> Dict
         }
 
     except Exception as e:
-        logger.error("Error resuming schedule: %s", e, exc_info=True)
+        logger.exception("Error resuming schedule: ")
         return {"status": "error", "message": f"Error resuming schedule: {str(e)}"}
 
 
@@ -1030,7 +1030,7 @@ def handle_feedback(parsed: ParsedCommand) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error processing feedback: %s", e, exc_info=True)
+        logger.exception("Error processing feedback: ")
         return {"status": "error", "message": f"Error processing feedback: {str(e)}"}
 
 
@@ -1072,7 +1072,7 @@ def handle_feature(parsed: ParsedCommand) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error processing feature request: %s", e, exc_info=True)
+        logger.exception("Error processing feature request: ")
         return {"status": "error", "message": f"Error processing feature request: {str(e)}"}
 
 
@@ -1126,7 +1126,7 @@ def handle_register(parsed: ParsedCommand) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error in register command: %s", e, exc_info=True)
+        logger.exception("Error in register command: ")
         return {"status": "error", "message": f"Error registering email: {str(e)}"}
 
 
@@ -1164,7 +1164,7 @@ def handle_verify(parsed: ParsedCommand) -> Dict[str, Any]:
             }
 
     except Exception as e:
-        logger.error("Error in verify command: %s", e, exc_info=True)
+        logger.exception("Error in verify command: ")
         return {"status": "error", "message": f"Error verifying code: {str(e)}"}
 
 
@@ -1208,5 +1208,5 @@ def handle_language(parsed: ParsedCommand) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error in language command: %s", e, exc_info=True)
+        logger.exception("Error in language command: ")
         return {"status": "error", "message": f"Error updating language: {str(e)}"}

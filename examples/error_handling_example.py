@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 from src.error_handling import RecoveryConfig
+from src.notification.logger import setup_logger
 
 
 # Add src to path for imports
@@ -57,6 +58,9 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+
+# Setup logger for this example
+logger = setup_logger(__name__)
 
 
 def example_custom_exceptions():
@@ -409,10 +413,8 @@ def main():
         print("6. Easy-to-use decorators for resilience")
 
     except Exception as e:
-        print(f"\nError running examples: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error running examples: %s", str(e))
 
 
 if __name__ == "__main__":
-    main() 
+    main()

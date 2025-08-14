@@ -10,6 +10,9 @@ sys.path.append(os.path.abspath('.'))
 import yfinance as yf
 import numpy as np
 import pandas as pd
+from src.notification.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 def test_yq_ticker():
     """Test the YQ ticker specifically"""
@@ -87,9 +90,7 @@ def test_yq_ticker():
         print("YQ ticker test completed successfully!")
 
     except Exception as e:
-        print(f"Error testing YQ ticker: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error testing YQ ticker: %s", str(e))
 
 if __name__ == "__main__":
-    test_yq_ticker() 
+    test_yq_ticker()

@@ -37,7 +37,7 @@ class ScheduleProcessor:
                 await self.process_schedules()
                 await asyncio.sleep(60)  # Check every minute
             except Exception as e:
-                logger.error("Error in schedule processor: %s", e, exc_info=True)
+                logger.exception("Error in schedule processor: ")
                 await asyncio.sleep(30)  # Shorter sleep on error
 
     def stop(self):
@@ -72,7 +72,7 @@ class ScheduleProcessor:
                 await self.check_single_schedule(schedule, current_time_str, current_date)
 
         except Exception as e:
-            logger.error("Error processing schedules: %s", e, exc_info=True)
+            logger.exception("Error processing schedules: ")
 
     async def check_single_schedule(self, schedule: Dict[str, Any], current_time_str: str, current_date):
         """Check if a schedule should be triggered and process it."""
@@ -113,7 +113,7 @@ class ScheduleProcessor:
                 db.set_setting(last_run_key, str(current_date))
 
         except Exception as e:
-            logger.error("Error checking schedule %s: %s", schedule.get("id"), e, exc_info=True)
+            logger.exception("Error checking schedule %s: ", schedule.get("id"))
 
     async def execute_schedule(self, schedule: Dict[str, Any]):
         """Execute a scheduled report."""
@@ -193,7 +193,7 @@ class ScheduleProcessor:
                        schedule_id, user_id, ticker, period)
 
         except Exception as e:
-            logger.error("Error executing schedule %s: %s", schedule.get("id"), e, exc_info=True)
+            logger.exception("Error executing schedule %s: ", schedule.get("id"))
 
 
 async def main():
@@ -215,7 +215,7 @@ async def main():
     except KeyboardInterrupt:
         logger.info("Schedule processor stopped by user")
     except Exception as e:
-        logger.error("Error in schedule processor main: %s", e, exc_info=True)
+        logger.exception("Error in schedule processor main: ")
 
 
 if __name__ == "__main__":

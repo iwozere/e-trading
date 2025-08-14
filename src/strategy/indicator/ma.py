@@ -79,7 +79,7 @@ class MaIndicator(bt.Indicator):
             else:
                 raise ValueError(f"Unknown indicator_type: {self._backend}")
         except Exception as e:
-            logger.error("Error initializing MaIndicator: %s. Falling back to bt.indicators.SimpleMovingAverage", e, exc_info=True)
+            logger.exception("Error initializing MaIndicator: Falling back to bt.indicators.SimpleMovingAverage")
             self._impl = bt.indicators.SimpleMovingAverage(self.data.close, period=self.p.period)
             self._backend = "bt"
             self._ma_type = "sma"
@@ -100,4 +100,4 @@ class MaIndicator(bt.Indicator):
                 if self._ma_type == "sma":
                     self.lines.sma[0] = float("nan")
                 elif self._ma_type == "ema":
-                    self.lines.ema[0] = float("nan") 
+                    self.lines.ema[0] = float("nan")

@@ -68,7 +68,7 @@ class RSIPlotter(BaseIndicatorPlotter):
             ax.set_ylabel("RSI")
             self._apply_style(ax)
         except Exception as e:
-            _logger.error("Error plotting RSI: %s", e, exc_info=False)
+            _logger.exception("Error plotting RSI: ")
             _logger.error("Indicator data: %s", self.indicators.get('rsi', 'Not found'))
             _logger.error("Data feed length: %d", len(self.data))
 

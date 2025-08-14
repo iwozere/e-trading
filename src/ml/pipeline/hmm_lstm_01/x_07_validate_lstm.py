@@ -175,7 +175,7 @@ class LSTMValidator:
             return model_package
 
         except Exception as e:
-            _logger.error("Failed to load model from %s: %s", model_path, str(e))
+            _logger.exception("Failed to load model from %s: ", model_path)
             raise
 
     def prepare_test_data(self, df: pd.DataFrame, model_package: Dict) -> Dict:
@@ -886,7 +886,7 @@ def main():
         _logger.info("LSTM validation completed!")
 
     except Exception as e:
-        _logger.error("LSTM validation failed: %s", str(e))
+        _logger.exception("LSTM validation failed: ")
         raise
 
 if __name__ == "__main__":

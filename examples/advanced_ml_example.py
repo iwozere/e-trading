@@ -586,7 +586,7 @@ def main():
         logger.info("✓ Performance Monitoring - Real-time performance tracking")
 
     except Exception as e:
-        logger.error("Error in demonstration: %s", e, exc_info=True)
+        logger.exception("Error in demonstration: ")
         raise
 
 

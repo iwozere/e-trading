@@ -102,7 +102,7 @@ class LSTMTrainer:
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self.labeled_data_dir = Path(self.config['paths']['data_labeled'])
-        self.results_dir = Path(self.config['paths']['results'])
+        self.results_dir = Path(self.config['paths']['models_lstm'])
         self.models_dir = Path(self.config['paths']['models_lstm'])
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
@@ -807,7 +807,7 @@ def main():
         _logger.info("LSTM training completed!")
 
     except Exception as e:
-        _logger.error("LSTM training failed: %s", str(e))
+        _logger.exception("LSTM training failed: ")
         raise
 
 if __name__ == "__main__":

@@ -208,7 +208,7 @@ def calculate_technicals_from_df(df, indicators: List[str] = None, indicator_par
         if 'sma_200' in indicators:
             results['sma_200'] = talib.SMA(close, **params['sma_200'])
     except Exception as e:
-        logger.error("TA-Lib calculation failed for data: %s", e, exc_info=True)
+        logger.exception("TA-Lib calculation failed for data: ")
         return None, None
 
     df = df.copy()

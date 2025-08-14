@@ -58,7 +58,7 @@ class StrategyComposer:
                 signals.append(signal)
                 logger.debug("Generated signal from %s: %s (confidence: %s)", strategy.name, signal.signal_type, signal.confidence)
             except Exception as e:
-                logger.error("Error generating signal from %s: %s", strategy.name, e, exc_info=True)
+                logger.exception("Error generating signal from %s: ", strategy.name)
                 # Add a hold signal with zero confidence for failed strategies
                 signals.append(StrategySignal(
                     strategy_name=strategy.name,
@@ -84,7 +84,7 @@ class StrategyComposer:
                 signal = strategy.generate_signal()
                 signals[strategy.name] = signal
             except Exception as e:
-                logger.error("Error getting signal from %s: %s", strategy.name, e, exc_info=True)
+                logger.exception("Error getting signal from %s: ", strategy.name)
                 signals[strategy.name] = StrategySignal(
                     strategy_name=strategy.name,
                     signal_type="hold",
@@ -165,7 +165,7 @@ class AdvancedStrategyFramework:
                         configs[config_file.replace('.json', '')] = json.load(f)
                     logger.info("Loaded configuration from %s", config_file)
                 except Exception as e:
-                    logger.error("Error loading%s: %s", config_file, e, exc_info=True)
+                    logger.exception("Error loading%s: ", config_file)
             else:
                 logger.warning("Configuration file not found: %s", config_file)
 
@@ -204,7 +204,7 @@ class AdvancedStrategyFramework:
                 logger.info("Initialized composite strategy: %s", strategy_name)
 
             except Exception as e:
-                logger.error("Error initializing composite strategy %s: %s", strategy.name, e, exc_info=True)
+                logger.exception("Error initializing composite strategy %s: ", strategy.name)
 
     def initialize_multi_timeframe_strategies(self):
         """Initialize multi-timeframe strategies from configuration."""
@@ -235,7 +235,7 @@ class AdvancedStrategyFramework:
                 logger.info("Initialized multi-timeframe strategy: %s", strategy_name)
 
             except Exception as e:
-                logger.error("Error initializing multi-timeframe strategy%s: %s", strategy.name, e, exc_info=True)
+                logger.exception("Error initializing multi-timeframe strategy%s: ", strategy.name)
 
     def initialize_dynamic_switching(self):
         """Initialize dynamic strategy switching configuration."""
@@ -625,7 +625,7 @@ class AdvancedStrategyFramework:
         try:
             return self.get_composite_signal(strategy_name, data_feeds)
         except Exception as e:
-            logger.error("Error executing strategy %s: %s", strategy_name, e, exc_info=True)
+            logger.exception("Error executing strategy %s: ", strategy_name)
             return CompositeSignal(
                 signal_type="hold",
                 confidence=0.0,

@@ -117,7 +117,7 @@ class ConfigManager:
             return config
 
         except Exception as e:
-            _logger.error("Error loading config file %s: %s", config_path, e)
+            _logger.exception("Error loading config file %s: ", config_path)
             return None
 
     def _validate_and_cache_config(self, config: Dict[str, Any], config_path: Path):
@@ -147,7 +147,7 @@ class ConfigManager:
             _logger.info("Loaded and validated config: %s", config_id)
 
         except Exception as e:
-            _logger.error("Configuration validation failed for %s: %s", config_path, e)
+            _logger.exception("Configuration validation failed for %s: ", config_path)
             raise
 
     def _detect_config_type(self, config: Dict[str, Any]) -> str:

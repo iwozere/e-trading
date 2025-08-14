@@ -44,7 +44,7 @@ class IndicatorOptimizer:
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self.labeled_data_dir = Path(self.config['paths']['data_labeled'])
-        self.results_dir = Path(self.config['paths']['results'])
+        self.results_dir = Path(self.config['paths']['models_lstm'])
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
         # Optuna configuration
@@ -325,10 +325,10 @@ class IndicatorOptimizer:
         try:
             # Find labeled data file with provider prefix
             if provider:
-                pattern = f"labeled_{provider}_{symbol}_{timeframe}_*.csv"
+                pattern = f"{provider}_{symbol}_{timeframe}_*_labeled.csv"
             else:
                 # Fallback to old pattern for backward compatibility
-                pattern = f"labeled_{symbol}_{timeframe}_*.csv"
+                pattern = f"{symbol}_{timeframe}_*_labeled.csv"
 
             csv_files = list(self.labeled_data_dir.glob(pattern))
 
@@ -510,7 +510,7 @@ def main():
         _logger.info("Indicator optimization completed!")
 
     except Exception as e:
-        _logger.error("Indicator optimization failed: %s", str(e))
+        _logger.exception("Indicator optimization failed: ")
         raise
 
 if __name__ == "__main__":

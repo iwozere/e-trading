@@ -15,26 +15,26 @@ Features:
 
 Usage:
 1. Run the script: python admin_panel.py
-2. Open your web browser and navigate to: http://localhost:5001
+2. Open your web browser and navigate to: http://localhost:5000
 3. Login with admin credentials (configured in environment variables)
 4. Use the navigation menu to access different admin functions
 
 URL Structure:
-- Login: http://localhost:5001/login
-- Dashboard: http://localhost:5001/
-- Users: http://localhost:5001/users
-- Alerts: http://localhost:5001/alerts
-- Schedules: http://localhost:5001/schedules
-- Feedback: http://localhost:5001/feedback
-- Broadcast: http://localhost:5001/broadcast
-- Logout: http://localhost:5001/logout
+- Login: http://localhost:5000/login
+- Dashboard: http://localhost:5000/
+- Users: http://localhost:5000/users
+- Alerts: http://localhost:5000/alerts
+- Schedules: http://localhost:5000/schedules
+- Feedback: http://localhost:5000/feedback
+- Broadcast: http://localhost:5000/broadcast
+- Logout: http://localhost:5000/logout
 
 Configuration:
-- Default port: 5001
+- Default port: 5000
 - Host: 0.0.0.0 (accessible from any IP)
 - Debug mode: Enabled for development
 - Secret key: 'alkotrader' (change in production)
-- Admin credentials: Set ADMIN_USERNAME and ADMIN_PASSWORD environment variables
+- Admin credentials: Set WEBGUI_LOGIN and WEBGUI_PASSWORD environment variables
 
 Security Note:
 - Change the secret key in production
@@ -60,7 +60,7 @@ from flask import Flask, render_template_string, request, jsonify, redirect, url
 import sqlite3
 from datetime import datetime
 from src.frontend.telegram import db
-from config.donotshare.donotshare import WEBGUI_LOGIN, WEBGUI_PASSWORD, WEBGUI_PORT, ADMIN_USERNAME, ADMIN_PASSWORD
+from config.donotshare.donotshare import WEBGUI_LOGIN, WEBGUI_PASSWORD, WEBGUI_PORT
 
 from src.notification.logger import setup_logger
 
@@ -80,11 +80,11 @@ def login_required(f):
 
 def check_credentials(username, password):
     """Check if provided credentials match admin credentials from config"""
-    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+    if not WEBGUI_LOGIN or not WEBGUI_PASSWORD:
         logger.error("Admin credentials not configured in environment variables")
         return False
 
-    return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
+    return username == WEBGUI_LOGIN and password == WEBGUI_PASSWORD
 
 # TODO: Change this to a random secret key in production and put it into the .env file
 app.secret_key = 'alkotrader'
@@ -292,7 +292,7 @@ def dashboard():
         return render_template_string(ADMIN_TEMPLATE, content=content)
 
     except Exception as e:
-        logger.error("Error in dashboard: %s", e, exc_info=True)
+        logger.exception("Error in dashboard: ")
         return f"Error: {str(e)}", 500
 
 @app.route('/users')
@@ -357,7 +357,7 @@ def users():
         return render_template_string(ADMIN_TEMPLATE, content=content)
 
     except Exception as e:
-        logger.error("Error in users page: %s", e, exc_info=True)
+        logger.exception("Error in users page: ")
         return f"Error: {str(e)}", 500
 
 @app.route('/users/<user_id>/verify')
@@ -467,7 +467,7 @@ def alerts():
         return render_template_string(ADMIN_TEMPLATE, content=content)
 
     except Exception as e:
-        logger.error("Error in alerts page: %s", e, exc_info=True)
+        logger.exception("Error in alerts page: ")
         return f"Error: {str(e)}", 500
 
 @app.route('/schedules')
@@ -531,7 +531,7 @@ def schedules():
         return render_template_string(ADMIN_TEMPLATE, content=content)
 
     except Exception as e:
-        logger.error("Error in schedules page: %s", e, exc_info=True)
+        logger.exception("Error in schedules page: ")
         return f"Error: {str(e)}", 500
 
 @app.route('/feedback')
@@ -586,7 +586,7 @@ def feedback():
         return render_template_string(ADMIN_TEMPLATE, content=content)
 
     except Exception as e:
-        logger.error("Error in feedback page: %s", e, exc_info=True)
+        logger.exception("Error in feedback page: ")
         return f"Error: {str(e)}", 500
 
 @app.route('/broadcast', methods=['GET', 'POST'])
@@ -695,11 +695,11 @@ if __name__ == '__main__':
     logger.info("Starting Telegram Screener Bot Admin Panel...")
 
     # Check if admin credentials are configured
-    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
-        logger.error("Admin credentials not configured! Please set ADMIN_USERNAME and ADMIN_PASSWORD environment variables.")
+    if not WEBGUI_LOGIN or not WEBGUI_PASSWORD:
+        logger.error("Admin credentials not configured! Please set WEBGUI_LOGIN and WEBGUI_PASSWORD environment variables.")
         logger.error("You can set them in config/donotshare/.env file")
         sys.exit(1)
 
     logger.info("Admin panel will be available at: http://localhost:%s", WEBGUI_PORT)
-    logger.info("Login with username: %s", ADMIN_USERNAME)
+    logger.info("Login with username: %s", WEBGUI_LOGIN)
     app.run(debug=True, host='0.0.0.0', port=WEBGUI_PORT)

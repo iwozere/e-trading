@@ -96,7 +96,7 @@ class LSTMOptimizer:
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self.labeled_data_dir = Path(self.config['paths']['data_labeled'])
-        self.results_dir = Path(self.config['paths']['results'])
+        self.results_dir = Path(self.config['paths']['models_lstm'])
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
         # Optuna configuration
@@ -178,8 +178,19 @@ class LSTMOptimizer:
                 df['bb_upper_opt'] = bb_upper
                 df['bb_middle_opt'] = bb_middle
                 df['bb_lower_opt'] = bb_lower
-                df['bb_position_opt'] = (close - bb_lower) / (bb_upper - bb_lower)
-                df['bb_width_opt'] = (bb_upper - bb_lower) / bb_middle
+
+                # Avoid division by zero in bb_position calculation
+                bb_range = bb_upper - bb_lower
+                mask = bb_range != 0
+                bb_position = np.full_like(close, 0.5)  # Default value
+                bb_position[mask] = (close[mask] - bb_lower[mask]) / bb_range[mask]
+                df['bb_position_opt'] = bb_position
+
+                # Avoid division by zero in bb_width calculation
+                mask_width = bb_middle != 0
+                bb_width = np.full_like(close, 0)  # Default value
+                bb_width[mask_width] = bb_range[mask_width] / bb_middle[mask_width]
+                df['bb_width_opt'] = bb_width
 
             # MACD
             if all(param in params for param in ['macd_fast', 'macd_slow', 'macd_signal']):
@@ -231,7 +242,7 @@ class LSTMOptimizer:
                 df['sma_opt'] = talib.SMA(close, timeperiod=params['sma_period'])
 
         except Exception as e:
-            _logger.warning("Error applying optimized indicators: %s", str(e))
+            _logger.exception("Error applying optimized indicators: %s", str(e))
 
         return df
 
@@ -310,8 +321,9 @@ class LSTMOptimizer:
         Returns:
             Dict with prepared data splits
         """
-        # Extract features and target
-        feature_data = df[features].ffill().bfill().fillna(0)
+                # Extract features and target
+        feature_data = df[features].copy()
+        feature_data = feature_data.ffill().bfill().fillna(0)
 
         # Handle infinite and extremely large values
         feature_data = feature_data.replace([np.inf, -np.inf], np.nan)
@@ -552,7 +564,9 @@ class LSTMOptimizer:
         try:
             # Apply optimized indicators if available
             if optimized_indicators:
+                _logger.debug("Applying optimized indicators with params: %s", optimized_indicators)
                 df = self.apply_optimized_indicators(df, optimized_indicators)
+                _logger.debug("Applied optimized indicators successfully")
 
             # Suggest hyperparameters
             sequence_length = trial.suggest_int('sequence_length', 10, 120)
@@ -564,7 +578,9 @@ class LSTMOptimizer:
             epochs = trial.suggest_int('epochs', 20, 100)
 
             # Prepare features
+            _logger.debug("Preparing LSTM features...")
             features = self.prepare_lstm_features(df)
+            _logger.debug("Selected %d features: %s", len(features), features[:5])
 
             # Prepare data
             data_dict = self.prepare_data(df, features, sequence_length)
@@ -619,29 +635,37 @@ class LSTMOptimizer:
 
             return combined_objective
 
+        except optuna.exceptions.TrialPruned:
+            # This is normal pruning behavior, not an error
+            raise  # Re-raise to let Optuna handle it properly
         except Exception as e:
-            _logger.warning("Error in LSTM objective function: %s", str(e))
+            _logger.exception("Error in LSTM objective function: %s", str(e))
             return 999.0  # Return large value for failed trials
 
-    def optimize_lstm(self, symbol: str, timeframe: str) -> Dict:
+    def optimize_lstm(self, symbol: str, timeframe: str, provider: str = None) -> Dict:
         """
         Optimize LSTM hyperparameters for a specific symbol-timeframe combination.
 
         Args:
             symbol: Trading symbol
             timeframe: Timeframe
+            provider: Data provider (e.g., 'binance', 'yfinance')
 
         Returns:
             Dict with optimization results
         """
-        _logger.info("Optimizing LSTM for %s %s", symbol, timeframe)
+        _logger.info("Optimizing LSTM for %s %s (provider: %s)", symbol, timeframe, provider)
 
         try:
             # Load optimized indicator parameters
             optimized_indicators = self.load_optimized_indicators(symbol, timeframe)
 
-            # Find labeled data file
-            pattern = f"labeled_{symbol}_{timeframe}_*.csv"
+            # Find labeled data file with provider prefix
+            if provider:
+                pattern = f"{provider}_{symbol}_{timeframe}_*_labeled.csv"
+            else:
+                # Fallback to old pattern for backward compatibility
+                pattern = f"{symbol}_{timeframe}_*_labeled.csv"
             csv_files = list(self.labeled_data_dir.glob(pattern))
 
             if not csv_files:
@@ -668,12 +692,22 @@ class LSTMOptimizer:
             )
 
             # Optimize
+            _logger.info("Starting optimization with %d trials, timeout: %d seconds", self.n_trials, self.timeout)
             study.optimize(
                 lambda trial: self.objective(trial, df, optimized_indicators),
                 n_trials=self.n_trials,
                 timeout=self.timeout,
                 show_progress_bar=True
             )
+            _logger.info("Optimization completed. Trials run: %d", len(study.trials))
+
+            # Check if optimization completed successfully
+            n_trials = len(study.trials)
+            if n_trials == 0:
+                raise ValueError("Optimization failed - no trials completed")
+
+            if not hasattr(study, 'best_params') or study.best_params is None:
+                raise ValueError("Optimization failed - no best parameters found")
 
             # Get best parameters
             best_params = study.best_params
@@ -691,7 +725,7 @@ class LSTMOptimizer:
                 'optimization_timestamp': timestamp,
                 'best_params': best_params,
                 'best_objective_value': best_value,
-                'n_trials': study.n_trials,
+                'n_trials': n_trials,  # Use the safe value we already calculated
                 'optimization_samples': len(df),
                 'optimized_indicators_used': optimized_indicators is not None
             }
@@ -716,7 +750,7 @@ class LSTMOptimizer:
 
         except Exception as e:
             error_msg = f"Failed to optimize LSTM for {symbol} {timeframe}: {str(e)}"
-            _logger.error(error_msg)
+            _logger.exception(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -731,25 +765,49 @@ class LSTMOptimizer:
         Returns:
             Dict with summary of optimization results
         """
-        symbols = self.config['symbols']
-        timeframes = self.config['timeframes']
+        # Check if using new multi-provider format
+        if 'data_sources' in self.config:
+            _logger.info("Using multi-provider configuration format")
+            symbols = []
+            timeframes = []
+            providers = []
 
-        _logger.info("Optimizing LSTM for %d symbols x %d timeframes", len(symbols), len(timeframes))
+            for provider, provider_config in self.config['data_sources'].items():
+                provider_symbols = provider_config['symbols']
+                provider_timeframes = provider_config['timeframes']
+
+                for symbol in provider_symbols:
+                    for timeframe in provider_timeframes:
+                        symbols.append(symbol)
+                        timeframes.append(timeframe)
+                        providers.append(provider)
+
+            _logger.info("Multi-provider symbols: %s", symbols)
+            _logger.info("Multi-provider timeframes: %s", timeframes)
+            _logger.info("Multi-provider providers: %s", providers)
+        else:
+            # Legacy format
+            symbols = self.config['symbols']
+            timeframes = self.config['timeframes']
+            providers = [None] * len(symbols)  # No provider info for legacy format
+            _logger.info("Using legacy configuration format")
+
+        _logger.info("Optimizing LSTM for %d symbol-timeframe combinations", len(symbols))
 
         results = {
-            'total': len(symbols) * len(timeframes),
+            'total': len(symbols),
             'successful': [],
             'failed': []
         }
 
-        for symbol in symbols:
-            for timeframe in timeframes:
-                result = self.optimize_lstm(symbol, timeframe)
+        for i, (symbol, timeframe, provider) in enumerate(zip(symbols, timeframes, providers)):
+            _logger.info("Processing %d/%d: %s %s (provider: %s)", i+1, len(symbols), symbol, timeframe, provider)
+            result = self.optimize_lstm(symbol, timeframe, provider)
 
-                if result['success']:
-                    results['successful'].append(result)
-                else:
-                    results['failed'].append(result)
+            if result['success']:
+                results['successful'].append(result)
+            else:
+                results['failed'].append(result)
 
         # Log summary
         _logger.info("\n%s", "="*50)
@@ -775,7 +833,7 @@ def main():
         _logger.info("LSTM optimization completed!")
 
     except Exception as e:
-        _logger.error("LSTM optimization failed: %s", str(e))
+        _logger.exception("LSTM optimization failed: ")
         raise
 
 if __name__ == "__main__":
