@@ -12,7 +12,6 @@ numpy==2.3.2
 openpyxl==3.1.5
 optuna>=4.4.0
 pandas==2.3.1
-pomegranate==1.1.2
 pydantic==2.11.7
 python_binance>=1.0.29
 reportlab==4.4.2
