@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 DB_PATH = "db/telegram_screener.sqlite3"
 
 # --- DB Schema ---
-# users: telegram_user_id TEXT PRIMARY KEY, email TEXT, verification_code TEXT, code_sent_time INTEGER, verified INTEGER, language TEXT, is_admin INTEGER DEFAULT 0
+# users: telegram_user_id TEXT PRIMARY KEY, email TEXT, verification_code TEXT, code_sent_time INTEGER, verified INTEGER, approved INTEGER DEFAULT 0, language TEXT, is_admin INTEGER DEFAULT 0
 # codes: telegram_user_id TEXT, code TEXT, sent_time INTEGER
 # alerts: id INTEGER PRIMARY KEY AUTOINCREMENT, ticker TEXT, user_id TEXT, price REAL, condition TEXT, active INTEGER DEFAULT 1, created TEXT
 # schedules: id INTEGER PRIMARY KEY AUTOINCREMENT, ticker TEXT, user_id TEXT, scheduled_time TEXT, period TEXT, active INTEGER DEFAULT 1, email INTEGER, indicators TEXT, interval TEXT, provider TEXT, created TEXT
@@ -20,6 +20,7 @@ def init_db():
         verification_code TEXT,
         code_sent_time INTEGER,
         verified INTEGER DEFAULT 0,
+        approved INTEGER DEFAULT 0,
         language TEXT,
         is_admin INTEGER DEFAULT 0,
         max_alerts INTEGER DEFAULT 5,
@@ -32,6 +33,8 @@ def init_db():
         c.execute("ALTER TABLE users ADD COLUMN language TEXT")
     if "is_admin" not in columns:
         c.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+    if "approved" not in columns:
+        c.execute("ALTER TABLE users ADD COLUMN approved INTEGER DEFAULT 0")
     if "max_alerts" not in columns:
         c.execute("ALTER TABLE users ADD COLUMN max_alerts INTEGER DEFAULT 5")
     if "max_schedules" not in columns:
@@ -105,14 +108,14 @@ def set_user_email(telegram_user_id: str, email: str, code: str, sent_time: int,
     conn.close()
 
 def get_user_status(telegram_user_id: str):
-    """Get user's email, verification status, language, and is_admin."""
+    """Get user's email, verification status, approval status, language, and is_admin."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT email, verified, code_sent_time, language, is_admin FROM users WHERE telegram_user_id=?", (telegram_user_id,))
+    c.execute("SELECT email, verified, approved, code_sent_time, language, is_admin FROM users WHERE telegram_user_id=?", (telegram_user_id,))
     row = c.fetchone()
     conn.close()
     if row:
-        return {"email": row[0], "verified": bool(row[1]), "code_sent_time": row[2], "language": row[3], "is_admin": bool(row[4])}
+        return {"email": row[0], "verified": bool(row[1]), "approved": bool(row[2]), "code_sent_time": row[3], "language": row[4], "is_admin": bool(row[5])}
     return None
 
 def get_verification_code(telegram_user_id: str) -> Optional[str]:
@@ -137,6 +140,33 @@ def verify_code(telegram_user_id: str, code: str, expiry_seconds: int = 3600) ->
         conn.close()
         return True
     return False
+
+def approve_user(telegram_user_id: str) -> bool:
+    """Approve a user for access to restricted features. Returns True if successful."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE users SET approved=1 WHERE telegram_user_id=?", (telegram_user_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+def reject_user(telegram_user_id: str) -> bool:
+    """Reject a user's approval request. Returns True if successful."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE users SET approved=0 WHERE telegram_user_id=?", (telegram_user_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+def get_pending_approvals() -> List[Dict[str, Any]]:
+    """Get list of users who are verified but not approved."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT telegram_user_id, email, code_sent_time FROM users WHERE verified=1 AND approved=0")
+    rows = c.fetchall()
+    conn.close()
+    return [{"telegram_user_id": row[0], "email": row[1], "code_sent_time": row[2]} for row in rows]
 
 def count_codes_last_hour(telegram_user_id: str) -> int:
     """Count how many codes were sent to this user in the last hour (rate limiting)."""

@@ -64,7 +64,9 @@ def format_ticker_report(analysis: TickerAnalysis) -> dict:
     # Format technicals
     technicals_msg = ""
     if analysis.technicals is not None:
-        technicals_msg = format_technical_analysis(analysis.ticker, analysis.technicals)
+        # Use the current_price from the analysis if available
+        current_price = getattr(analysis, 'current_price', None)
+        technicals_msg = format_technical_analysis(analysis.ticker, analysis.technicals, current_price)
     # Generate chart as bytes
     chart_bytes = None
     if analysis.ohlcv is not None:

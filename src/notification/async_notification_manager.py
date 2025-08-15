@@ -64,8 +64,15 @@ class TelegramChannel(NotificationChannel):
     async def send(self, notification: Notification) -> bool:
         """Send notification via Telegram using aiogram"""
         try:
+            # Use dynamic chat_id if provided, otherwise fall back to default
+            target_chat_id = notification.data.get('telegram_chat_id') if notification.data else None
+            if target_chat_id is None:
+                target_chat_id = self.chat_id
+                _logger.debug("Using default chat_id: %s", target_chat_id)
+            else:
+                _logger.debug("Using dynamic chat_id: %s", target_chat_id)
+
             # If attachments are present, send as photo
-            print(f"[DEBUG] TelegramChannel.send called for: {notification.title}")
             attachments = None
             if notification.data and "attachments" in notification.data:
                 attachments = notification.data["attachments"]
@@ -74,61 +81,136 @@ class TelegramChannel(NotificationChannel):
                     if isinstance(value, bytes):
                         from aiogram.types import BufferedInputFile
                         # If message is too long for caption, send text first
+                        # Get reply_to_message_id, but only use it if it's valid
+                        reply_to_message_id = notification.data.get('reply_to_message_id')
+
                         if len(notification.message) > 1024:
-                            await self.bot.send_message(
-                                chat_id=self.chat_id,
-                                text=notification.message,
-                                parse_mode=None,
-                                reply_to_message_id=notification.data.get('reply_to_message_id')
-                            )
-                            await self.bot.send_photo(
-                                chat_id=self.chat_id,
-                                photo=BufferedInputFile(value, filename=filename),
-                                caption=f"Chart for {filename}",
-                                parse_mode=None,
-                                reply_to_message_id=notification.data.get('reply_to_message_id')
-                            )
+                            # Try to send with reply first, fall back to regular message if reply fails
+                            try:
+                                await self.bot.send_message(
+                                    chat_id=target_chat_id,
+                                    text=notification.message,
+                                    parse_mode=None,
+                                    reply_to_message_id=reply_to_message_id
+                                )
+                            except Exception as reply_error:
+                                _logger.warning("Failed to send message with reply, sending without reply: %s", reply_error)
+                                await self.bot.send_message(
+                                    chat_id=target_chat_id,
+                                    text=notification.message,
+                                    parse_mode=None
+                                )
+
+                            try:
+                                await self.bot.send_photo(
+                                    chat_id=target_chat_id,
+                                    photo=BufferedInputFile(value, filename=filename),
+                                    caption=f"Chart for {filename}",
+                                    parse_mode=None,
+                                    reply_to_message_id=reply_to_message_id
+                                )
+                            except Exception as reply_error:
+                                _logger.warning("Failed to send photo with reply, sending without reply: %s", reply_error)
+                                await self.bot.send_photo(
+                                    chat_id=target_chat_id,
+                                    photo=BufferedInputFile(value, filename=filename),
+                                    caption=f"Chart for {filename}",
+                                    parse_mode=None
+                                )
                         else:
-                            await self.bot.send_photo(
-                                chat_id=self.chat_id,
-                                photo=BufferedInputFile(value, filename=filename),
-                                caption=notification.message,
-                                parse_mode=None,
-                                reply_to_message_id=notification.data.get('reply_to_message_id')
-                            )
+                            try:
+                                await self.bot.send_photo(
+                                    chat_id=target_chat_id,
+                                    photo=BufferedInputFile(value, filename=filename),
+                                    caption=notification.message,
+                                    parse_mode=None,
+                                    reply_to_message_id=reply_to_message_id
+                                )
+                            except Exception as reply_error:
+                                _logger.warning("Failed to send photo with reply, sending without reply: %s", reply_error)
+                                await self.bot.send_photo(
+                                    chat_id=target_chat_id,
+                                    photo=BufferedInputFile(value, filename=filename),
+                                    caption=notification.message,
+                                    parse_mode=None
+                                )
                         return True
                     elif isinstance(value, str):
-                        from aiogram.types import FSInputFile
-                        if len(notification.message) > 1024:
-                            await self.bot.send_message(
-                                chat_id=self.chat_id,
-                                text=notification.message,
-                                parse_mode=None,
-                                reply_to_message_id=notification.data.get('reply_to_message_id')
-                            )
-                            await self.bot.send_photo(
-                                chat_id=self.chat_id,
-                                photo=FSInputFile(value, filename=filename),
-                                caption=f"Chart for {filename}",
-                                parse_mode=None,
-                                reply_to_message_id=notification.data.get('reply_to_message_id')
-                            )
-                        else:
-                            await self.bot.send_photo(
-                                chat_id=self.chat_id,
-                                photo=FSInputFile(value, filename=filename),
-                                caption=notification.message,
-                                parse_mode=None,
-                                reply_to_message_id=notification.data.get('reply_to_message_id')
-                            )
-                        return True
+                         from aiogram.types import FSInputFile
+                         # Get reply_to_message_id, but only use it if it's valid
+                         reply_to_message_id = notification.data.get('reply_to_message_id')
+
+                         if len(notification.message) > 1024:
+                             # Try to send with reply first, fall back to regular message if reply fails
+                             try:
+                                 await self.bot.send_message(
+                                     chat_id=target_chat_id,
+                                     text=notification.message,
+                                     parse_mode=None,
+                                     reply_to_message_id=reply_to_message_id
+                                 )
+                             except Exception as reply_error:
+                                 _logger.warning("Failed to send message with reply, sending without reply: %s", reply_error)
+                                 await self.bot.send_message(
+                                     chat_id=self.chat_id,
+                                     text=notification.message,
+                                     parse_mode=None
+                                 )
+
+                             try:
+                                 await self.bot.send_photo(
+                                     chat_id=target_chat_id,
+                                     photo=FSInputFile(value, filename=filename),
+                                     caption=f"Chart for {filename}",
+                                     parse_mode=None,
+                                     reply_to_message_id=reply_to_message_id
+                                 )
+                             except Exception as reply_error:
+                                 _logger.warning("Failed to send photo with reply, sending without reply: %s", reply_error)
+                                 await self.bot.send_photo(
+                                     chat_id=self.chat_id,
+                                     photo=FSInputFile(value, filename=filename),
+                                     caption=f"Chart for {filename}",
+                                     parse_mode=None
+                                 )
+                         else:
+                             try:
+                                 await self.bot.send_photo(
+                                     chat_id=target_chat_id,
+                                     photo=FSInputFile(value, filename=filename),
+                                     caption=notification.message,
+                                     parse_mode=None,
+                                     reply_to_message_id=reply_to_message_id
+                                 )
+                             except Exception as reply_error:
+                                 _logger.warning("Failed to send photo with reply, sending without reply: %s", reply_error)
+                                 await self.bot.send_photo(
+                                     chat_id=self.chat_id,
+                                     photo=FSInputFile(value, filename=filename),
+                                     caption=notification.message,
+                                     parse_mode=None
+                                 )
+                         return True
                 # If no valid attachment, fall through to text
-            await self.bot.send_message(
-                chat_id=self.chat_id,
-                text=notification.message,
-                parse_mode=None,
-                reply_to_message_id=notification.data.get('reply_to_message_id')
-            )
+            # Get reply_to_message_id, but only use it if it's valid
+            reply_to_message_id = notification.data.get('reply_to_message_id')
+
+            # Try to send with reply first, fall back to regular message if reply fails
+            try:
+                await self.bot.send_message(
+                    chat_id=target_chat_id,
+                    text=notification.message,
+                    parse_mode=None,
+                    reply_to_message_id=reply_to_message_id
+                )
+            except Exception as reply_error:
+                # If reply fails, send without reply
+                _logger.warning("Failed to send message with reply, sending without reply: %s", reply_error)
+                await self.bot.send_message(
+                    chat_id=target_chat_id,
+                    text=notification.message,
+                    parse_mode=None
+                )
             return True
         except Exception as e:
             _logger.exception("Failed to send Telegram notification: %s")

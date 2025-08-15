@@ -95,6 +95,7 @@ CREATE TABLE users (
     verification_code TEXT,
     code_sent_time INTEGER,
     verified INTEGER DEFAULT 0,
+    approved INTEGER DEFAULT 0,  -- New: Admin approval status
     language TEXT DEFAULT 'en',
     is_admin INTEGER DEFAULT 0,
     max_alerts INTEGER DEFAULT 5,
@@ -178,6 +179,11 @@ CREATE TABLE settings (
 ### Authentication and Authorization
 - **User Verification**: Email-based verification with 6-digit codes
 - **Admin Access**: Role-based access control for admin functions
+- **User Approval**: Admin approval workflow for restricted features
+- **Access Control**: 
+  - Admin commands require `is_admin=1` role
+  - Restricted commands require `approved=1` status
+  - Public commands available to all users
 - **Rate Limiting**: Protection against spam and abuse
 
 ### Privacy Compliance
@@ -247,7 +253,16 @@ python src/frontend/telegram/bot.py
    - Configure command menu
    - Set privacy mode if needed
 
-3. **Test bot deployment:**
+3. **Set up admin user:**
+```bash
+# Create admin user with full privileges
+python src/util/create_admin.py <telegram_user_id> <email>
+
+# Example:
+python src/util/create_admin.py 123456789 admin@example.com
+```
+
+4. **Test bot deployment:**
 ```bash
 # Run bot in development mode
 python src/frontend/telegram/bot.py
@@ -298,8 +313,9 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 
 ### Telegram Bot API
 - **Version**: Bot API 6.0+
-- **Features**: Message handling, inline keyboards, file uploads
+- **Features**: Message handling, inline keyboards, file uploads, dynamic chat routing
 - **Rate Limits**: 30 messages per second, 20 requests per minute per chat
+- **Reply Handling**: Robust reply mechanism with fallback for invalid message IDs
 
 ### Data Provider APIs
 - **Integration**: Via `src.data` module
@@ -317,6 +333,8 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 - **Coverage**: 90%+ code coverage for business logic
 - **Framework**: pytest with async support
 - **Mocking**: Mock external APIs and services
+- **Access Control**: Test admin and user permission scenarios
+- **Approval Workflow**: Test user approval and rejection flows
 
 ### Integration Testing
 - **Database**: Test all CRUD operations
@@ -324,9 +342,10 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 - **Email**: Test email delivery with mock SMTP
 
 ### End-to-End Testing
-- **User Flows**: Complete command workflows
+- **User Flows**: Complete command workflows including registration, verification, and approval
 - **Error Handling**: API failures and edge cases
 - **Performance**: Load testing with concurrent users
+- **Access Control**: Test restricted command access and admin workflows
 
 ## Deployment Requirements
 
@@ -357,14 +376,16 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 - **Retention**: 30-day retention policy
 
 ### Metrics and Monitoring
-- **User Metrics**: Active users, command usage, error rates
+- **User Metrics**: Active users, command usage, error rates, approval status
 - **System Metrics**: Memory usage, database connections, response times
 - **Business Metrics**: Reports generated, alerts triggered, email deliveries
+- **Admin Metrics**: Approval requests, user management actions, admin command usage
 
 ### Error Tracking
 - **Exception Handling**: Comprehensive error catching and logging
-- **User Notifications**: Friendly error messages for users
+- **User Notifications**: Friendly error messages for users with clear next steps
 - **Admin Alerts**: Critical error notifications to administrators
+- **Access Denied**: Clear messaging for unauthorized command attempts
 
 ## Backup and Recovery
 
@@ -377,6 +398,65 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 - **Recovery Time**: Target 4-hour recovery time
 - **Data Loss**: Maximum 24-hour data loss acceptable
 - **Failover**: Automated failover to backup instances
+
+## Access Control and User Management
+
+### User Registration Workflow
+1. **Registration**: User sends `/register email@example.com`
+2. **Verification**: User receives 6-digit code via email and verifies with `/verify CODE`
+3. **Approval Request**: User sends `/request_approval` to request access to restricted features
+4. **Admin Review**: Admin receives notification and reviews the request
+5. **Approval/Rejection**: Admin uses `/admin approve USER_ID` or `/admin reject USER_ID`
+6. **Access Granted**: User receives notification and can use restricted commands
+
+### Command Access Levels
+- **Public Commands** (No restrictions):
+  - `/start`, `/help` - Show welcome and help messages
+  - `/info` - Show user status and approval information
+  - `/register`, `/verify` - Email registration and verification
+  - `/request_approval` - Request admin approval
+  - `/feedback`, `/feature` - Send feedback and feature requests
+
+- **Restricted Commands** (Require `approved=1`):
+  - `/report` - Generate ticker reports
+  - `/alerts` - Manage price alerts
+  - `/schedules` - Manage scheduled reports
+  - `/language` - Change language preference
+
+- **Admin Commands** (Require `is_admin=1`):
+  - `/admin users` - List all users
+  - `/admin approve USER_ID` - Approve user for restricted features
+  - `/admin reject USER_ID` - Reject user's approval request
+  - `/admin pending` - List users waiting for approval
+  - `/admin broadcast MESSAGE` - Send broadcast message to all users
+
+### Admin Management
+- **Admin Setup**: Use `src/util/create_admin.py` script to create admin users
+- **User Management**: Admins can approve, reject, and manage user access
+- **System Monitoring**: Admins receive notifications for approval requests and system events
+
+## Recent Architectural Improvements
+
+### Dynamic Chat Routing
+- **Problem Solved**: Bot responses were sent to fixed admin chat instead of user's chat
+- **Solution**: Implemented dynamic chat ID routing in notification system
+- **Benefits**: Users receive responses in their own chat, improved user experience
+
+### Robust Reply Handling
+- **Problem Solved**: Telegram API errors when replying to invalid message IDs
+- **Solution**: Implemented try-catch fallback mechanism for reply operations
+- **Benefits**: Graceful error handling, no more bot crashes from reply failures
+
+### Price Consistency Fix
+- **Problem Solved**: Price discrepancy between fundamental and technical analysis sections
+- **Solution**: Updated technical analysis to use actual current price instead of moving average
+- **Benefits**: Consistent pricing information across all report sections
+
+### Access Control System
+- **Problem Solved**: No user approval workflow for restricted features
+- **Solution**: Implemented multi-tier access control with admin approval workflow
+- **Benefits**: Secure access to restricted features, admin oversight
+- **Technical Details**: See `Design.md` for complete architecture documentation
 
 ## Compliance and Legal
 

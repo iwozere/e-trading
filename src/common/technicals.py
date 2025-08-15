@@ -294,10 +294,15 @@ def calculate_technicals_from_df(df, indicators: List[str] = None, indicator_par
     technicals = Technicals(**technicals_kwargs)
     return df, technicals
 
-def format_technical_analysis(ticker: str, technicals: Technicals) -> str:
+def format_technical_analysis(ticker: str, technicals: Technicals, current_price: float = None) -> str:
     if not technicals:
         return f"❌ Unable to analyze {ticker}"
-    close = technicals.bb_middle  # Or use another field for price if preferred
+
+    # Use the actual current price if provided, otherwise fall back to bb_middle
+    if current_price is not None:
+        close = current_price
+    else:
+        close = technicals.bb_middle  # Fallback to Bollinger Bands middle line
     rsi = technicals.rsi
     trend = technicals.trend
     overall_rec = technicals.recommendations.get("overall", {}) if technicals.recommendations else {}

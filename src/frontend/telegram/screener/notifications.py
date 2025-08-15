@@ -283,6 +283,62 @@ async def process_verify_command(message, telegram_user_id, args, notification_m
             reply_to_message_id=message.message_id
         )
 
+async def process_request_approval_command(message, telegram_user_id, args, notification_manager):
+    """Process /request_approval command"""
+    try:
+        # Parse command
+        command_text = " ".join(args)
+        parsed = parse_command(command_text)
+        parsed.args["telegram_user_id"] = telegram_user_id
+
+        # Process command
+        result = handle_command(parsed)
+
+        # Send response to user
+        if result["status"] == "ok":
+            await notification_manager.send_notification(
+                notification_type="INFO",
+                title=result.get("title", "Approval Request"),
+                message=result["message"],
+                priority="NORMAL",
+                channels=["telegram"],
+                telegram_chat_id=message.chat.id,
+                reply_to_message_id=message.message_id
+            )
+
+            # Notify admins about the approval request
+            if result.get("notify_admins"):
+                await notification_manager.send_notification(
+                    notification_type="INFO",
+                    title="New Approval Request",
+                    message=f"User {result['user_id']} ({result['email']}) has requested approval for restricted features.",
+                    priority="HIGH",
+                    channels=["telegram"],
+                    telegram_chat_id=message.chat.id  # Send to admin chat
+                )
+        else:
+            await notification_manager.send_notification(
+                notification_type="ERROR",
+                title="Approval Request Error",
+                message=result["message"],
+                priority="NORMAL",
+                channels=["telegram"],
+                telegram_chat_id=message.chat.id,
+                reply_to_message_id=message.message_id
+            )
+
+    except Exception as e:
+        logger.exception("Error processing approval request: ")
+        await notification_manager.send_notification(
+            notification_type="ERROR",
+            title="Error",
+            message="An error occurred while processing your approval request.",
+            priority="NORMAL",
+            channels=["telegram"],
+            telegram_chat_id=message.chat.id,
+            reply_to_message_id=message.message_id
+        )
+
 async def process_language_command(message, telegram_user_id, args, notification_manager):
     try:
         lang = args[1].strip().lower() if len(args) > 1 else None

@@ -34,6 +34,8 @@ def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
         return handle_register(parsed)
     elif parsed.command == "verify":
         return handle_verify(parsed)
+    elif parsed.command == "request_approval":
+        return handle_request_approval(parsed)
     elif parsed.command == "language":
         return handle_language(parsed)
     elif parsed.command == "admin":
@@ -89,6 +91,60 @@ def is_admin_user(telegram_user_id: str) -> bool:
     status = db.get_user_status(telegram_user_id)
     return status and status.get("is_admin", False)
 
+def is_approved_user(telegram_user_id: str) -> bool:
+    """Check if user is approved for restricted features."""
+    db.init_db()
+    status = db.get_user_status(telegram_user_id)
+    return status and status.get("approved", False)
+
+def check_admin_access(telegram_user_id: str) -> Dict[str, Any]:
+    """Check if user has admin access. Returns error dict if not."""
+    if not is_admin_user(telegram_user_id):
+        return {"status": "error", "message": "Access denied. Admin privileges required."}
+    return {"status": "ok"}
+
+def check_approved_access(telegram_user_id: str) -> Dict[str, Any]:
+    """Check if user has approved access for restricted features. Returns error dict if not."""
+    if not is_approved_user(telegram_user_id):
+        return {"status": "error", "message": "Access denied, please contact chat's admin or send request for approval using command /request_approval"}
+    return {"status": "ok"}
+
+
+def handle_request_approval(parsed: ParsedCommand) -> Dict[str, Any]:
+    """
+    Business logic for /request_approval command.
+    User requests admin approval after email verification.
+    """
+    try:
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        if not telegram_user_id:
+            return {"status": "error", "message": "No telegram_user_id provided"}
+
+        db.init_db()
+        status = db.get_user_status(telegram_user_id)
+
+        if not status:
+            return {"status": "error", "message": "Please register first using /register email@example.com"}
+
+        if not status.get("verified", False):
+            return {"status": "error", "message": "Please verify your email first using /verify CODE"}
+
+        if status.get("approved", False):
+            return {"status": "error", "message": "You are already approved for restricted features"}
+
+        # Check if user already has a pending request (optional - could add a separate table for requests)
+        # For now, we'll just notify admins about the request
+
+        return {
+            "status": "ok",
+            "message": "Your approval request has been submitted. Admins will review your request and notify you of the decision.",
+            "user_id": telegram_user_id,
+            "email": status.get("email"),
+            "notify_admins": True
+        }
+    except Exception as e:
+        logger.exception("Error processing approval request: ")
+        return {"status": "error", "message": f"Error processing approval request: {str(e)}"}
 
 def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     """
@@ -98,6 +154,12 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
       - Use format_ticker_report to generate message and chart
     """
     args = parsed.args
+
+    # Check if user has approved access
+    telegram_user_id = args.get("telegram_user_id")
+    access_check = check_approved_access(telegram_user_id)
+    if access_check["status"] != "ok":
+        return access_check
     tickers_raw = args.get("tickers")
     if isinstance(tickers_raw, str):
         tickers = [tickers_raw]
@@ -227,17 +289,19 @@ def handle_info(parsed: ParsedCommand) -> Dict[str, Any]:
     if status:
         email = status["email"] or "(not set)"
         verified = "Yes" if status["verified"] else "No"
+        approved = "Yes" if status["approved"] else "No"
+        admin = "Yes" if status["is_admin"] else "No"
         language = status["language"] or "(not set)"
         return {
             "status": "ok",
             "title": "Your Info",
-            "message": f"Email: {email}\nVerified: {verified}\nLanguage: {language}"
+            "message": f"Email: {email}\nVerified: {verified}\nApproved: {approved}\nAdmin: {admin}\nLanguage: {language}"
         }
     else:
         return {
             "status": "ok",
             "title": "Your Info",
-            "message": "Email: (not set)\nVerified: No\nLanguage: (not set)"
+            "message": "Email: (not set)\nVerified: No\nApproved: No\nAdmin: No\nLanguage: (not set)"
         }
 
 
@@ -253,9 +317,10 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
 
         db.init_db()
 
-        # Check if user is admin
-        if not is_admin_user(telegram_user_id):
-            return {"status": "error", "message": "Access denied. Admin privileges required."}
+        # Check if user has admin access
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
 
         # Get action and parameters from positionals
         action = parsed.positionals[0] if len(parsed.positionals) > 0 else None
@@ -270,6 +335,9 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
                            "/admin listusers - List users with emails\n"
                            "/admin resetemail USER_ID - Reset user email\n"
                            "/admin verify USER_ID - Manually verify user\n"
+                           "/admin approve USER_ID - Approve user for restricted features\n"
+                           "/admin reject USER_ID - Reject user's approval request\n"
+                           "/admin pending - List users waiting for approval\n"
                            "/admin setlimit alerts N [USER_ID] - Set alert limits\n"
                            "/admin setlimit schedules N [USER_ID] - Set schedule limits\n"
                            "/admin broadcast MESSAGE - Send broadcast message")
@@ -283,6 +351,12 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
             return handle_admin_resetemail(params[0])
         elif action == "verify" and len(params) >= 1:
             return handle_admin_verify(params[0])
+        elif action == "approve" and len(params) >= 1:
+            return handle_admin_approve(params[0])
+        elif action == "reject" and len(params) >= 1:
+            return handle_admin_reject(params[0])
+        elif action == "pending":
+            return handle_admin_pending()
         elif action == "setlimit" and len(params) >= 2:
             return handle_admin_setlimit(params[0], params[1], params[2] if len(params) > 2 else None)
         elif action == "broadcast" and len(params) >= 1:
@@ -456,6 +530,87 @@ def handle_admin_broadcast(message_text: str) -> Dict[str, Any]:
         logger.exception("Error scheduling broadcast: ")
         return {"status": "error", "message": f"Error scheduling broadcast: {str(e)}"}
 
+def handle_admin_approve(user_id: str) -> Dict[str, Any]:
+    """Approve a user for access to restricted features."""
+    try:
+        db.init_db()
+        user_status = db.get_user_status(user_id)
+
+        if not user_status:
+            return {"status": "error", "message": f"User {user_id} not found."}
+
+        if not user_status.get("verified", False):
+            return {"status": "error", "message": f"User {user_id} has not verified their email yet."}
+
+        if user_status.get("approved", False):
+            return {"status": "error", "message": f"User {user_id} is already approved."}
+
+        db.approve_user(user_id)
+
+        return {
+            "status": "ok",
+            "title": "User Approved",
+            "message": f"User {user_id} ({user_status.get('email', 'no email')}) has been approved for restricted features.",
+            "notify_user": {
+                "user_id": user_id,
+                "message": "Your account has been approved! You can now use all bot features including /report, /alerts, /schedules, and /language commands."
+            }
+        }
+
+    except Exception as e:
+        logger.exception("Error approving user: ")
+        return {"status": "error", "message": f"Error approving user: {str(e)}"}
+
+def handle_admin_reject(user_id: str) -> Dict[str, Any]:
+    """Reject a user's approval request."""
+    try:
+        db.init_db()
+        user_status = db.get_user_status(user_id)
+
+        if not user_status:
+            return {"status": "error", "message": f"User {user_id} not found."}
+
+        if not user_status.get("verified", False):
+            return {"status": "error", "message": f"User {user_id} has not verified their email yet."}
+
+        if not user_status.get("approved", False):
+            return {"status": "error", "message": f"User {user_id} is not approved (no change needed)."}
+
+        db.reject_user(user_id)
+
+        return {
+            "status": "ok",
+            "title": "User Rejected",
+            "message": f"User {user_id} ({user_status.get('email', 'no email')}) has been rejected for restricted features.",
+            "notify_user": {
+                "user_id": user_id,
+                "message": "Your approval request has been rejected. Please contact an admin for more information."
+            }
+        }
+
+    except Exception as e:
+        logger.exception("Error rejecting user: ")
+        return {"status": "error", "message": f"Error rejecting user: {str(e)}"}
+
+def handle_admin_pending() -> Dict[str, Any]:
+    """List users waiting for approval."""
+    try:
+        pending_users = db.get_pending_approvals()
+
+        if not pending_users:
+            return {"status": "ok", "title": "Pending Approvals", "message": "No users waiting for approval."}
+
+        user_list = []
+        for user in pending_users:
+            user_list.append(f"{user['telegram_user_id']} - {user['email']}")
+
+        message = f"Users waiting for approval ({len(pending_users)}):\n\n" + "\n".join(user_list)
+        return {"status": "ok", "title": "Pending Approvals", "message": message}
+
+    except Exception as e:
+        logger.exception("Error listing pending approvals: ")
+        return {"status": "error", "message": f"Error listing pending approvals: {str(e)}"}
+
 
 def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
     """
@@ -469,10 +624,10 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
 
         db.init_db()
 
-        # Check if user is verified
-        user_status = db.get_user_status(telegram_user_id)
-        if not user_status or not user_status.get("verified"):
-            return {"status": "error", "message": "Please verify your email first using /register and /verify commands."}
+        # Check if user has approved access
+        access_check = check_approved_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
 
         # Get action and parameters from positionals
         action = parsed.positionals[0] if len(parsed.positionals) > 0 else None
@@ -727,10 +882,10 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
 
         db.init_db()
 
-        # Check if user is verified
-        user_status = db.get_user_status(telegram_user_id)
-        if not user_status or not user_status.get("verified"):
-            return {"status": "error", "message": "Please verify your email first using /register and /verify commands."}
+        # Check if user has approved access
+        access_check = check_approved_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
 
         # Get action and parameters from positionals
         action = parsed.positionals[0] if len(parsed.positionals) > 0 else None
@@ -1187,6 +1342,11 @@ def handle_language(parsed: ParsedCommand) -> Dict[str, Any]:
         supported_languages = ["en", "ru"]
         if language.lower() not in supported_languages:
             return {"status": "error", "message": f"Language '{language}' not supported. Supported languages: {', '.join(supported_languages)}"}
+
+        # Check if user has approved access
+        access_check = check_approved_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
 
         # Update user language
         db.init_db()

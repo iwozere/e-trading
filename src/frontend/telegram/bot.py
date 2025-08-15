@@ -18,7 +18,7 @@ from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, S
 from src.frontend.telegram.command_parser import parse_command, ParsedCommand
 from src.frontend.telegram.screener.business_logic import handle_command, is_admin_user
 from src.frontend.telegram.screener.notifications import (
-    process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_unknown_command
+    process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
 )
 
 # Configure logging
@@ -37,6 +37,7 @@ HELP_TEXT = (
     "/info - Show your registered email and verification status\n"
     "/register email@example.com - Register or update your email for reports\n"
     "/verify CODE - Verify your email with the code sent\n"
+    "/request_approval - Request admin approval after email verification (required for restricted features)\n"
     "/report TICKER1 TICKER2 ... [flags] - Get a report for specified tickers (stock or crypto). Flags:\n"
     "    -email: Send the report to your registered email\n"
     "    -indicators=...: Comma-separated list of indicators (e.g., RSI,MACD,MA50,PE,EPS)\n"
@@ -72,6 +73,9 @@ ADMIN_HELP_TEXT = (
     "/admin setlimit schedules N TELEGRAM_USER_ID - Set per-user max schedules\n"
     "/admin resetemail TELEGRAM_USER_ID - Reset a user's email\n"
     "/admin verify TELEGRAM_USER_ID - Manually verify a user's email\n"
+    "/admin approve TELEGRAM_USER_ID - Approve a user for access to restricted features\n"
+    "/admin reject TELEGRAM_USER_ID - Reject a user's approval request\n"
+    "/admin pending - List users waiting for approval\n"
     "/admin broadcast MESSAGE - Send a broadcast message to all users\n"
 )
 
@@ -104,6 +108,12 @@ async def cmd_verify(message: Message):
     telegram_user_id = str(message.from_user.id)
     args = message.text.split()
     await process_verify_command(message, telegram_user_id, args, notification_manager)
+
+@dp.message(Command("request_approval"))
+async def cmd_request_approval(message: Message):
+    telegram_user_id = str(message.from_user.id)
+    args = message.text.split()
+    await process_request_approval_command(message, telegram_user_id, args, notification_manager)
 
 @dp.message(Command("language"))
 async def cmd_language(message: Message):

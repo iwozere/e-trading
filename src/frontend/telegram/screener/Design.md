@@ -650,3 +650,212 @@ Current Monolith → Future Microservices:
 - Database connection pooling
 - Load balancing across instances
 - Rolling deployments
+
+## Access Control and Security Architecture
+
+### Multi-Tier Access Control System
+
+The bot implements a comprehensive access control system with three distinct levels:
+
+#### 1. Public Commands (No restrictions)
+- `/start`, `/help` - Show welcome and help messages
+- `/info` - Show user status and approval information
+- `/register`, `/verify` - Email registration and verification
+- `/request_approval` - Request admin approval
+- `/feedback`, `/feature` - Send feedback and feature requests
+
+#### 2. Restricted Commands (Require `approved=1`)
+- `/report` - Generate ticker reports
+- `/alerts` - Manage price alerts
+- `/schedules` - Manage scheduled reports
+- `/language` - Change language preference
+
+#### 3. Admin Commands (Require `is_admin=1`)
+- `/admin users` - List all users
+- `/admin approve USER_ID` - Approve user for restricted features
+- `/admin reject USER_ID` - Reject user's approval request
+- `/admin pending` - List users waiting for approval
+- `/admin broadcast MESSAGE` - Send broadcast message to all users
+
+### User Registration and Approval Workflow
+
+**Complete User Journey:**
+```
+1. User sends `/register email@example.com`
+2. User receives 6-digit verification code via email
+3. User sends `/verify CODE` to verify email
+4. User sends `/request_approval` to request access
+5. Admin receives notification of approval request
+6. Admin sends `/admin approve USER_ID` to approve user
+7. User receives notification of approval
+8. User can now use restricted commands
+```
+
+### Database Schema for Access Control
+
+**Enhanced Users Table:**
+```sql
+CREATE TABLE users (
+    telegram_user_id TEXT PRIMARY KEY,
+    email TEXT,
+    verification_code TEXT,
+    code_sent_time INTEGER,
+    verified INTEGER DEFAULT 0,
+    approved INTEGER DEFAULT 0,  -- New: Admin approval status
+    language TEXT DEFAULT 'en',
+    is_admin INTEGER DEFAULT 0,
+    max_alerts INTEGER DEFAULT 5,
+    max_schedules INTEGER DEFAULT 5
+);
+```
+
+### Access Control Implementation
+
+**Business Logic Functions:**
+```python
+def is_approved_user(telegram_user_id: str) -> bool:
+    """Check if user is approved for restricted features."""
+    
+def check_admin_access(telegram_user_id: str) -> Dict[str, Any]:
+    """Check if user has admin access. Returns error dict if not."""
+    
+def check_approved_access(telegram_user_id: str) -> Dict[str, Any]:
+    """Check if user has approved access for restricted features."""
+```
+
+**Command Handler Integration:**
+```python
+def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
+    # Check if user has approved access
+    telegram_user_id = args.get("telegram_user_id")
+    access_check = check_approved_access(telegram_user_id)
+    if access_check["status"] != "ok":
+        return access_check
+    # ... rest of handler logic
+```
+
+### Admin Management System
+
+**Admin Setup Script:**
+- `src/util/create_admin.py` - Automated admin user creation
+- Registers, verifies, and approves admin users automatically
+- Usage: `python src/util/create_admin.py <telegram_user_id> <email>`
+
+**Admin Commands:**
+- User approval/rejection workflow
+- User management (list, verify, reset email)
+- System settings and limits configuration
+- Broadcast messaging to all users
+
+### Security Features
+
+**Authentication and Authorization:**
+- Email verification required for full functionality
+- Admin role verification for admin commands
+- User approval workflow for restricted features
+- Rate limiting on verification code requests
+- Input validation and sanitization
+- User data isolation and permission checking
+
+## Reply Architecture and Message Routing
+
+### Problem Analysis
+
+**Original Architecture Issues:**
+1. **Fixed Chat ID**: The `TelegramChannel` was hardcoded to send all responses to `TELEGRAM_CHAT_ID` (admin chat)
+2. **Reply Mismatch**: Bot tried to reply to messages in the admin chat, but the original messages were in user chats
+3. **User Experience**: Users sending commands didn't receive responses in their own chat
+
+**Root Cause:**
+```
+User Chat: [User sends: "/help"] → Bot receives message ID 123
+Admin Chat: [Bot tries to reply to message ID 123] → ❌ FAILS (message 123 doesn't exist in admin chat)
+Admin Chat: [Bot sends without reply] → ✅ SUCCESS (but user doesn't see it)
+```
+
+### Solution: Dynamic Chat ID Routing
+
+**Implemented Solution:**
+```python
+# Use dynamic chat_id if provided, otherwise fall back to default
+target_chat_id = notification.data.get('telegram_chat_id') if notification.data else None
+if target_chat_id is None:
+    target_chat_id = self.chat_id  # Fallback to admin chat
+    _logger.debug("Using default chat_id: %s", target_chat_id)
+else:
+    _logger.debug("Using dynamic chat_id: %s", target_chat_id)
+```
+
+**New Flow:**
+```
+User Chat: [User sends: "/help"] → Bot receives message ID 123
+User Chat: [Bot replies to message ID 123] → ✅ SUCCESS (same chat, message exists)
+```
+
+### Data Flow Architecture
+
+**Complete Message Routing:**
+1. **Command Handler**: Extracts `message.chat.id` from incoming message
+2. **Notification Processing**: Passes `telegram_chat_id=message.chat.id` to notification
+3. **TelegramChannel**: Uses dynamic `target_chat_id` from notification data
+4. **Reply Success**: Bot can now reply to the original message in the same chat
+
+**Notification Data Structure:**
+```python
+data={
+    "channels": ["telegram"],
+    "telegram_chat_id": message.chat.id,  # ✅ Dynamic chat ID
+    "reply_to_message_id": message.message_id  # ✅ Original message ID
+}
+```
+
+### Robust Reply Handling
+
+**Fallback Mechanism:**
+```python
+# Try to send with reply first, fall back to regular message if reply fails
+try:
+    await self.bot.send_message(
+        chat_id=target_chat_id,
+        text=notification.message,
+        parse_mode=None,
+        reply_to_message_id=reply_to_message_id
+    )
+except Exception as reply_error:
+    _logger.warning("Failed to send message with reply, sending without reply: %s", reply_error)
+    await self.bot.send_message(
+        chat_id=target_chat_id,
+        text=notification.message,
+        parse_mode=None
+    )
+```
+
+### Benefits of New Architecture
+
+**1. Improved User Experience:**
+- Users receive responses in their own chat
+- Replies work correctly (no more "message not found" errors)
+- Natural conversation flow
+
+**2. Maintained Security:**
+- Admin chat still receives all notifications (if needed)
+- No changes to authentication or authorization
+- Backward compatibility preserved
+
+**3. Better Debugging:**
+- Clear logging shows which chat ID is being used
+- Easier to troubleshoot notification issues
+
+### Testing and Validation
+
+**Test Scenarios:**
+1. **User sends command** → Response appears in user's chat ✅
+2. **Reply functionality** → Bot can reply to original message ✅
+3. **Admin notifications** → Still work (fallback to admin chat) ✅
+4. **Multiple users** → Each gets responses in their own chat ✅
+
+**Expected Behavior:**
+- ✅ No more "message to be replied not found" errors
+- ✅ Users see bot responses in their chat
+- ✅ Replies work correctly
+- ✅ Admin monitoring still possible
