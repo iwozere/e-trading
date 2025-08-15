@@ -526,7 +526,7 @@ class LSTMTrainer:
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         criterion = nn.MSELoss()
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=5, verbose=True
+            optimizer, mode='min', factor=0.5, patience=5
         )
 
         train_losses = []
@@ -672,9 +672,24 @@ class LSTMTrainer:
             # Load optimization results
             indicator_params, lstm_params = self.load_optimization_results(symbol, timeframe)
 
-            # Find labeled data file
-            pattern = f"labeled_{symbol}_{timeframe}_*.csv"
-            csv_files = list(self.labeled_data_dir.glob(pattern))
+            # Find labeled data file - try multiple patterns
+            csv_files = []
+
+            # Try provider-specific patterns first
+            for provider in ['binance', 'yfinance']:
+                pattern = f"{provider}_{symbol}_{timeframe}_*_labeled.csv"
+                provider_files = list(self.labeled_data_dir.glob(pattern))
+                csv_files.extend(provider_files)
+
+            # Try legacy pattern as fallback
+            if not csv_files:
+                pattern = f"labeled_{symbol}_{timeframe}_*.csv"
+                csv_files = list(self.labeled_data_dir.glob(pattern))
+
+            # Try any file containing the symbol and timeframe
+            if not csv_files:
+                pattern = f"*{symbol}_{timeframe}*_labeled.csv"
+                csv_files = list(self.labeled_data_dir.glob(pattern))
 
             if not csv_files:
                 raise FileNotFoundError(f"No labeled data found for {symbol} {timeframe}")
@@ -756,32 +771,138 @@ class LSTMTrainer:
                 'error': error_msg
             }
 
+    def _get_symbols_and_timeframes(self) -> Tuple[List[str], List[str]]:
+        """
+        Extract symbols and timeframes from config, supporting both legacy and multi-provider formats.
+
+        Returns:
+            Tuple of (symbols, timeframes) lists
+        """
+        if 'data_sources' in self.config:
+            # New multi-provider format
+            symbols = []
+            timeframes = []
+
+            for provider, config in self.config['data_sources'].items():
+                provider_symbols = config.get('symbols', [])
+                provider_timeframes = config.get('timeframes', [])
+
+                symbols.extend(provider_symbols)
+                timeframes.extend(provider_timeframes)
+
+            # Remove duplicates while preserving order
+            symbols = list(dict.fromkeys(symbols))
+            timeframes = list(dict.fromkeys(timeframes))
+
+            _logger.info("Using multi-provider configuration")
+            _logger.info("  Symbols: %s", symbols)
+            _logger.info("  Timeframes: %s", timeframes)
+
+        else:
+            # Legacy format
+            symbols = self.config['symbols']
+            timeframes = self.config['timeframes']
+            _logger.info("Using legacy configuration")
+
+        return symbols, timeframes
+
+    def get_available_combinations(self) -> List[Tuple[str, str]]:
+        """
+        Get available symbol-timeframe combinations that have BOTH labeled data AND LSTM optimization results.
+
+        Returns:
+            List of (symbol, timeframe) tuples that have both data and LSTM params
+        """
+        available_combinations = []
+
+        # Check all possible combinations by looking at actual files
+        # First, get all labeled data files
+        labeled_files = list(self.labeled_data_dir.glob("*_labeled.csv"))
+
+        for labeled_file in labeled_files:
+            # Extract symbol and timeframe from filename
+            filename = labeled_file.name
+
+            # Parse provider_symbol_timeframe pattern
+            if filename.startswith(('binance_', 'yfinance_')):
+                # Format: provider_symbol_timeframe_date_labeled.csv
+                parts = filename.replace('_labeled.csv', '').split('_')
+                if len(parts) >= 3:
+                    provider = parts[0]
+                    symbol = parts[1]
+                    timeframe = parts[2]
+
+                    # Check if LSTM params exist for this combination
+                    lstm_pattern = f"lstm_params_{symbol}_{timeframe}_*.json"
+                    lstm_files = list(self.results_dir.glob(lstm_pattern))
+
+                    if lstm_files:
+                        available_combinations.append((symbol, timeframe))
+                        _logger.info("Found complete setup for %s %s: data=%s, lstm_params=%s",
+                                   symbol, timeframe, labeled_file.name, lstm_files[0].name)
+                    else:
+                        _logger.debug("Missing LSTM params for %s %s (has data: %s)",
+                                    symbol, timeframe, labeled_file.name)
+            else:
+                # Try legacy pattern: labeled_symbol_timeframe_date.csv
+                if filename.startswith('labeled_'):
+                    parts = filename.replace('labeled_', '').replace('.csv', '').split('_')
+                    if len(parts) >= 2:
+                        symbol = parts[0]
+                        timeframe = parts[1]
+
+                        # Check if LSTM params exist
+                        lstm_pattern = f"lstm_params_{symbol}_{timeframe}_*.json"
+                        lstm_files = list(self.results_dir.glob(lstm_pattern))
+
+                        if lstm_files:
+                            available_combinations.append((symbol, timeframe))
+                            _logger.info("Found complete setup for %s %s: data=%s, lstm_params=%s",
+                                       symbol, timeframe, labeled_file.name, lstm_files[0].name)
+
+        # Remove duplicates while preserving order
+        unique_combinations = []
+        seen = set()
+        for combo in available_combinations:
+            if combo not in seen:
+                unique_combinations.append(combo)
+                seen.add(combo)
+
+        return unique_combinations
+
     def train_all(self) -> Dict:
         """
-        Train LSTM models for all symbol-timeframe combinations.
+        Train LSTM models for all available symbol-timeframe combinations.
 
         Returns:
             Dict with summary of training results
         """
-        symbols = self.config['symbols']
-        timeframes = self.config['timeframes']
+        available_combinations = self.get_available_combinations()
 
-        _logger.info("Training LSTM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
+        if not available_combinations:
+            _logger.error("No labeled data found for any symbol-timeframe combination")
+            return {
+                'total': 0,
+                'successful': [],
+                'failed': [],
+                'error': 'No labeled data available'
+            }
+
+        _logger.info("Training LSTM models for %d available combinations", len(available_combinations))
 
         results = {
-            'total': len(symbols) * len(timeframes),
+            'total': len(available_combinations),
             'successful': [],
             'failed': []
         }
 
-        for symbol in symbols:
-            for timeframe in timeframes:
-                result = self.train_lstm(symbol, timeframe)
+        for symbol, timeframe in available_combinations:
+            result = self.train_lstm(symbol, timeframe)
 
-                if result['success']:
-                    results['successful'].append(result)
-                else:
-                    results['failed'].append(result)
+            if result['success']:
+                results['successful'].append(result)
+            else:
+                results['failed'].append(result)
 
         # Log summary
         _logger.info("\n%s", "="*50)

@@ -292,7 +292,7 @@ class IndicatorOptimizer:
 
             # More realistic thresholds for initial optimization
             if total_return < -0.5 or profit_factor < 0.3 or max_drawdown > 0.8:
-                return -999  # Penalize extremely poor strategies
+                return 999  # Penalize extremely poor strategies
 
             # Focus on profit-based objective function
             # Total return is the primary metric (what we actually care about)
