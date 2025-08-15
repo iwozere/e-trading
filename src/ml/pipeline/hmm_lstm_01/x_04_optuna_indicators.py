@@ -487,7 +487,7 @@ class IndicatorOptimizer:
                 results['failed'].append(result)
 
         # Log summary
-        _logger.info("\n%s", "="*50)
+        _logger.info("%s", "="*50)
         _logger.info("Indicator Optimization Summary:")
         _logger.info("  Total: %d", results['total'])
         _logger.info("  Successful: %d", len(results['successful']))
