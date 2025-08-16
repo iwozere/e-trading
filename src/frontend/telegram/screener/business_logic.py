@@ -253,7 +253,7 @@ def analyze_ticker_business(
 
         return TickerAnalysis(
             ticker=ticker.upper(),
-            provider=provider or ("yf" if len(ticker) < 5 else "bnc"),
+            provider=provider or ("yf" if len(ticker) <= 5 else "bnc"),
             period=period,
             interval=interval,
             ohlcv=df_with_technicals,
@@ -267,7 +267,7 @@ def analyze_ticker_business(
     except Exception as e:
         return TickerAnalysis(
             ticker=ticker.upper(),
-            provider=provider or ("yf" if len(ticker) < 5 else "bnc"),
+            provider=provider or ("yf" if len(ticker) <= 5 else "bnc"),
             period=period,
             interval=interval,
             ohlcv=None,

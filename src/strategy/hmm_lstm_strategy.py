@@ -96,7 +96,43 @@ class HMMLSTMStrategy(BaseStrategy):
     - LSTM model loading and price prediction
     - Technical indicator calculation
     - Strategy-specific entry/exit logic
+
+    Can be used for both backtesting (with pre-loaded models) and live trading (loading from files).
     """
+
+    def __init__(self,
+                 hmm_model=None,
+                 hmm_scaler=None,
+                 hmm_features=None,
+                 lstm_model=None,
+                 lstm_scalers=None,
+                 lstm_features=None,
+                 sequence_length=None,
+                 **kwargs):
+        """
+        Initialize the HMM-LSTM strategy.
+
+        Args:
+            hmm_model: Pre-loaded HMM model (for backtesting)
+            hmm_scaler: HMM feature scaler (for backtesting)
+            hmm_features: List of HMM feature names (for backtesting)
+            lstm_model: Pre-loaded LSTM model (for backtesting)
+            lstm_scalers: LSTM scalers (for backtesting)
+            lstm_features: List of LSTM feature names (for backtesting)
+            sequence_length: LSTM sequence length (for backtesting)
+            **kwargs: Additional arguments passed to BaseStrategy
+        """
+        # Store pre-loaded models if provided (for backtesting)
+        self.hmm_model_param = hmm_model
+        self.hmm_scaler_param = hmm_scaler
+        self.hmm_features_param = hmm_features
+        self.lstm_model_param = lstm_model
+        self.lstm_scalers_param = lstm_scalers
+        self.lstm_features_param = lstm_features
+        self.sequence_length_param = sequence_length
+
+        # Initialize base strategy
+        super().__init__(**kwargs)
 
     def _initialize_strategy(self):
         """Initialize HMM and LSTM models and indicators."""
@@ -126,8 +162,20 @@ class HMMLSTMStrategy(BaseStrategy):
             self.stop_loss = self.config.get('stop_loss', 0.01)
             self.trailing_stop = self.config.get('trailing_stop', 0.005)
 
-            # Load models and parameters
-            self._load_models()
+            # Check if models are passed as parameters (for backtesting)
+            if hasattr(self, 'hmm_model_param') and self.hmm_model_param is not None:
+                # Use pre-loaded models from backtesting
+                self.hmm_model = self.hmm_model_param
+                self.hmm_scaler = self.hmm_scaler_param
+                self.hmm_features = self.hmm_features_param
+                self.lstm_model = self.lstm_model_param
+                self.lstm_scalers = self.lstm_scalers_param
+                self.lstm_features = self.lstm_features_param
+                self.sequence_length = self.sequence_length_param
+                self._logger.info("Using pre-loaded models for backtesting")
+            else:
+                # Load models from files (for live trading)
+                self._load_models()
 
             # Initialize indicators
             self._init_indicators()

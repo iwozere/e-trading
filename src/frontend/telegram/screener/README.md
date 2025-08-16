@@ -53,7 +53,7 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 - `-indicators=...`: Comma-separated indicators (e.g., RSI,MACD,MA50,PE,EPS).
 - `-period=...`: Data period (e.g., 3mo, 1y, 2y). Default: 2y.
 - `-interval=...`: Data interval (e.g., 1d, 15m). Default: 1d.
-- `-provider=...`: Data provider (e.g., yf for Yahoo, bnc for Binance).
+- `-provider=...`: Data provider (e.g., yf for Yahoo, bnc for Binance). If not specified: yf for tickers ≤5 chars, bnc for crypto (>5 chars).
 
 ### Alerts
 

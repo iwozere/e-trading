@@ -16,7 +16,7 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
     try:
         # Infer provider if not specified
         if not provider:
-            provider = "yf" if len(ticker) < 5 else "bnc"
+            provider = "yf" if len(ticker) <= 5 else "bnc"
 
         logger.debug("provider: %s", provider)
 

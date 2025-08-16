@@ -1,5 +1,6 @@
 aiogram==3.21.0
 backtrader==1.9.78.123
+dotenv>=0.9.9
 Flask==3.1.1
 hmmlearn==0.3.3
 ib_insync==0.9.86

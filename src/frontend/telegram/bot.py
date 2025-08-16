@@ -43,7 +43,7 @@ HELP_TEXT = (
     "    -indicators=...: Comma-separated list of indicators (e.g., RSI,MACD,MA50,PE,EPS)\n"
     "    -period=...: Data period (e.g., 3mo, 1y, 2y). Optional, default: 2y\n"
     "    -interval=...: Data interval (e.g., 1d, 15m). Optional, default: 1d\n"
-    "    -provider=...: Data provider (e.g., yf for Yahoo, bnc for Binance). Optional. If not set: use yf for tickers <5 chars, bnc otherwise\n"
+    "    -provider=...: Data provider (e.g., yf for Yahoo, bnc for Binance). Optional. If not set: use yf for tickers ≤5 chars, bnc for crypto (>5 chars)\n"
     "/alerts - List all your active price alerts\n"
     "/alerts add TICKER PRICE CONDITION - Add a new price alert (CONDITION: above/below)\n"
     "/alerts edit ALERT_ID [params] - Edit an existing alert\n"
