@@ -57,6 +57,10 @@ class EnterpriseCommandParser:
         # Special case: if the only positional is 'tickers', assign all positionals as a list
         if spec.positional == ["tickers"]:
             args["tickers"] = positionals
+        # Special case: for alerts command, keep all positionals available
+        elif command == "alerts" and len(spec.positional) == 2:
+            args["action"] = positionals[0] if len(positionals) > 0 else None
+            args["params"] = positionals[1:] if len(positionals) > 1 else []
         return ParsedCommand(
             command=command,
             args=args,

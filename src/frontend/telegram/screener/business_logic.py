@@ -637,21 +637,21 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
             # List all alerts for user
             return handle_alerts_list(telegram_user_id)
 
-        if action == "add" and len(params) >= 3:
+        if action and action.lower() == "add" and len(params) >= 3:
             ticker, price, condition = params[0], params[1], params[2]
             return handle_alerts_add(telegram_user_id, ticker, price, condition)
-        elif action == "edit" and len(params) >= 1:
+        elif action and action.lower() == "edit" and len(params) >= 1:
             alert_id = params[0]
             new_price = params[1] if len(params) > 1 else None
             new_condition = params[2] if len(params) > 2 else None
             return handle_alerts_edit(telegram_user_id, alert_id, new_price, new_condition)
-        elif action == "delete" and len(params) >= 1:
+        elif action and action.lower() == "delete" and len(params) >= 1:
             alert_id = params[0]
             return handle_alerts_delete(telegram_user_id, alert_id)
-        elif action == "pause" and len(params) >= 1:
+        elif action and action.lower() == "pause" and len(params) >= 1:
             alert_id = params[0]
             return handle_alerts_pause(telegram_user_id, alert_id)
-        elif action == "resume" and len(params) >= 1:
+        elif action and action.lower() == "resume" and len(params) >= 1:
             alert_id = params[0]
             return handle_alerts_resume(telegram_user_id, alert_id)
         else:
