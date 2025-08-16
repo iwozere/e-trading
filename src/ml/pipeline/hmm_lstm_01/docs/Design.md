@@ -367,14 +367,18 @@ Validates trained LSTM models against naive baselines and generates comprehensiv
 
 1. **`predictions_time_series.png`** - Time Series Comparison
    - **Purpose**: Shows how well the LSTM predictions track actual log returns over time
+   - **Colors**: Red (Actual), Blue (LSTM Prediction), Orange (Naive Baseline)
+   - **Font Sizes**: Legend 16pt, Titles 24pt, Axis labels 20pt
    - **What to Look For**:
-     - **Good**: LSTM line (blue) closely follows actual line (orange) with minimal lag
+     - **Good**: LSTM line (blue) closely follows actual line (red) with minimal lag
      - **Concerning**: Large gaps between predicted and actual values, or systematic bias
-     - **Baseline Comparison**: Naive baseline (green) should generally be worse than LSTM
+     - **Baseline Comparison**: Naive baseline (orange) should generally be worse than LSTM
    - **Interpretation**: If LSTM predictions are consistently far from actual values, the model may be overfitting or using inappropriate features
 
 2. **`predictions_scatter.png`** - Scatter Plot Analysis
    - **Purpose**: Shows the correlation between predicted and actual log returns
+   - **Colors**: Blue dots (LSTM), Red dots (Baseline), Black dashed line (Perfect Prediction)
+   - **Font Sizes**: Legend 16pt, Titles 24pt, Axis labels 20pt
    - **What to Look For**:
      - **Good**: Points cluster tightly around the diagonal line (perfect prediction)
      - **Concerning**: Points scattered widely, or clustering in specific regions
@@ -383,6 +387,8 @@ Validates trained LSTM models against naive baselines and generates comprehensiv
 
 3. **`error_distribution.png`** - Error Distribution Analysis
    - **Purpose**: Shows the distribution of prediction errors (predicted - actual)
+   - **Colors**: Blue histogram (LSTM Errors), Red histogram (Baseline Errors)
+   - **Font Sizes**: Legend 16pt, Titles 24pt, Axis labels 20pt
    - **What to Look For**:
      - **Good**: Bell-shaped curve centered near zero with small standard deviation
      - **Concerning**: Skewed distribution, multiple peaks, or wide spread
@@ -391,6 +397,8 @@ Validates trained LSTM models against naive baselines and generates comprehensiv
 
 4. **`error_over_time.png`** - Error Tracking Over Time
    - **Purpose**: Shows how prediction accuracy varies over the test period
+   - **Colors**: Blue line (LSTM |Error|), Red line (Baseline |Error|)
+   - **Font Sizes**: Legend 16pt, Titles 24pt, Axis labels 20pt
    - **What to Look For**:
      - **Good**: Consistent, low error levels with occasional spikes
      - **Concerning**: Increasing error trends, or periods of consistently high errors
@@ -399,6 +407,8 @@ Validates trained LSTM models against naive baselines and generates comprehensiv
 
 5. **`cumulative_error.png`** - Cumulative Squared Error
    - **Purpose**: Shows the cumulative prediction error over time
+   - **Colors**: Blue line (LSTM Cumulative SE), Red line (Baseline Cumulative SE)
+   - **Font Sizes**: Legend 16pt, Titles 24pt, Axis labels 20pt
    - **What to Look For**:
      - **Good**: LSTM line grows more slowly than baseline line
      - **Concerning**: LSTM line growing as fast or faster than baseline
@@ -407,6 +417,8 @@ Validates trained LSTM models against naive baselines and generates comprehensiv
 
 6. **`predictions_by_regime.png`** - Regime-Specific Performance
    - **Purpose**: Shows prediction accuracy broken down by market regime
+   - **Colors**: Multi-color scheme (Red, Green, Blue, Orange, Purple, Brown, Pink, Gray) for different regimes
+   - **Font Sizes**: Legend 16pt, Titles 24pt, Axis labels 20pt
    - **What to Look For**:
      - **Good**: Consistent accuracy across all regimes, or better performance in volatile regimes
      - **Concerning**: Poor performance in specific regimes, or regime-dependent bias
@@ -415,6 +427,8 @@ Validates trained LSTM models against naive baselines and generates comprehensiv
 
 7. **`rolling_performance.png`** - Rolling Performance Metrics
    - **Purpose**: Shows how model performance varies over rolling windows
+   - **Colors**: Blue line (LSTM Rolling MSE), Red line (Baseline Rolling MSE)
+   - **Font Sizes**: Legend 16pt, Titles 24pt, Axis labels 20pt
    - **What to Look For**:
      - **Good**: Consistent performance with occasional dips
      - **Concerning**: Declining performance trends, or high volatility in performance
@@ -525,6 +539,22 @@ The validation script uses the 'Agg' backend to prevent file handle issues on Wi
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend
 ```
+
+#### Visualization Improvements
+The validation script has been optimized for better visual clarity and distinguishability:
+
+- **Color Scheme**: Optimized colors for better distinguishability:
+  - Blue: LSTM predictions/errors (consistent across all charts)
+  - Red: Baseline predictions/errors (consistent across all charts)
+  - Orange: Naive baseline in time series
+  - Multi-color: Different regimes in regime analysis (Red, Green, Blue, Orange, Purple, Brown, Pink, Gray)
+- **Font Sizes**: Enhanced readability with larger fonts:
+  - Legend: 16pt (twice the default size)
+  - Titles: 24pt
+  - Axis labels: 20pt
+- **Figure Quality**: High DPI (300) PNG output for crisp visualizations
+- **Line Widths**: Increased to 1.5 for better visibility
+- **Point Sizes**: Increased scatter plot point sizes to 30 for better visibility
 
 #### Error Handling
 - Robust error handling for PNG file generation

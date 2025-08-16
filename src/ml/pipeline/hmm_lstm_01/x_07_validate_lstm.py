@@ -47,7 +47,7 @@ _logger = setup_logger(__name__)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class LSTMModel(nn.Module):
-    """LSTM model for time series prediction with regime awareness."""
+    """Enhanced LSTM model for time series prediction with regime awareness."""
 
     def __init__(self, input_size: int, hidden_size: int, num_layers: int,
                  dropout: float = 0.2, output_size: int = 1, n_regimes: int = 3):
@@ -63,14 +63,24 @@ class LSTMModel(nn.Module):
             hidden_size=hidden_size,
             num_layers=num_layers,
             dropout=dropout if num_layers > 1 else 0,
-            batch_first=True
+            batch_first=True,
+            bidirectional=False
         )
 
-        # Dropout layer
-        self.dropout = nn.Dropout(dropout)
+        # Additional dense layers for better feature extraction
+        self.dense1 = nn.Linear(hidden_size + n_regimes, hidden_size // 2)
+        self.dense2 = nn.Linear(hidden_size // 2, hidden_size // 4)
 
-        # Output layer with regime conditioning
-        self.linear = nn.Linear(hidden_size + n_regimes, output_size)
+        # Dropout layers
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout * 0.5)
+
+        # Output layer
+        self.linear = nn.Linear(hidden_size // 4, output_size)
+
+        # Activation functions
+        self.relu = nn.ReLU()
+        self.tanh = nn.Tanh()
 
     def forward(self, x, regime_onehot):
         # Initialize hidden state
@@ -83,14 +93,15 @@ class LSTMModel(nn.Module):
         # Take the output from the last time step
         last_output = lstm_out[:, -1, :]
 
-        # Apply dropout
-        dropped = self.dropout(last_output)
+        # Concatenate with regime information early
+        combined = torch.cat([last_output, regime_onehot], dim=1)
 
-        # Concatenate with regime information
-        combined = torch.cat([dropped, regime_onehot], dim=1)
+        # Apply dense layers with activation and dropout
+        dense1_out = self.dropout1(self.relu(self.dense1(combined)))
+        dense2_out = self.dropout2(self.relu(self.dense2(dense1_out)))
 
         # Final prediction
-        output = self.linear(combined)
+        output = self.linear(dense2_out)
 
         return output
 
@@ -797,7 +808,7 @@ class LSTMValidator:
                 png_files[figure_name] = str(png_path)
                 _logger.info("Saved PNG: %s", png_path)
             except Exception as e:
-                _logger.error("Failed to save PNG %s: %s", png_path, str(e))
+                _logger.exception("Failed to save PNG %s: %s", png_path, str(e))
             finally:
                 # Ensure figure is closed even if save fails
                 plt.close(fig)

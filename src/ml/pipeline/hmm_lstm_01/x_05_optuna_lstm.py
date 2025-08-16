@@ -42,7 +42,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 _logger.info("Using device: %s", DEVICE)
 
 class LSTMModel(nn.Module):
-    """LSTM model for time series prediction."""
+    """Enhanced LSTM model for time series prediction."""
 
     def __init__(self, input_size: int, hidden_size: int, num_layers: int,
                  dropout: float = 0.2, output_size: int = 1):
@@ -51,20 +51,30 @@ class LSTMModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
 
-        # LSTM layers
+        # LSTM layers with bidirectional option
         self.lstm = nn.LSTM(
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             dropout=dropout if num_layers > 1 else 0,
-            batch_first=True
+            batch_first=True,
+            bidirectional=False  # Keep unidirectional for now
         )
 
-        # Dropout layer
-        self.dropout = nn.Dropout(dropout)
+        # Additional dense layers for better feature extraction
+        self.dense1 = nn.Linear(hidden_size, hidden_size // 2)
+        self.dense2 = nn.Linear(hidden_size // 2, hidden_size // 4)
+
+        # Dropout layers
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout * 0.5)
 
         # Output layer
-        self.linear = nn.Linear(hidden_size, output_size)
+        self.linear = nn.Linear(hidden_size // 4, output_size)
+
+        # Activation functions
+        self.relu = nn.ReLU()
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
         # Initialize hidden state
@@ -77,11 +87,12 @@ class LSTMModel(nn.Module):
         # Take the output from the last time step
         last_output = lstm_out[:, -1, :]
 
-        # Apply dropout
-        dropped = self.dropout(last_output)
+        # Apply dense layers with activation and dropout
+        dense1_out = self.dropout1(self.relu(self.dense1(last_output)))
+        dense2_out = self.dropout2(self.relu(self.dense2(dense1_out)))
 
         # Final prediction
-        output = self.linear(dropped)
+        output = self.linear(dense2_out)
 
         return output
 
@@ -248,7 +259,7 @@ class LSTMOptimizer:
 
     def prepare_lstm_features(self, df: pd.DataFrame) -> List[str]:
         """
-        Prepare feature columns for LSTM training.
+        Prepare feature columns for LSTM training with enhanced feature engineering.
 
         Args:
             df: DataFrame with all features
@@ -275,12 +286,31 @@ class LSTMOptimizer:
                 if not col.endswith('_opt') and col not in optimized_features:
                     additional_features.append(col)
 
-        # Combine features (prioritize optimized indicators)
+        # Price-based features (add more price-derived features)
+        price_features = []
+        if 'close' in df.columns:
+            # Add price momentum features
+            price_features.extend([
+                'price_change_1d', 'price_change_3d', 'price_change_7d',
+                'volume_change_1d', 'volume_change_3d',
+                'high_low_ratio', 'open_close_ratio'
+            ])
+
+        # Volatility features
+        volatility_features = []
+        if 'close' in df.columns:
+            volatility_features.extend([
+                'volatility_5d', 'volatility_10d', 'volatility_20d'
+            ])
+
+        # Combine features with better prioritization
         selected_features = (base_features +
                            regime_features +
                            optimized_features +
+                           price_features +
+                           volatility_features +
                            time_features +
-                           additional_features[:5])  # Limit additional features
+                           additional_features[:10])  # Increased limit
 
         # Filter to only include features that exist in the DataFrame
         available_features = [feat for feat in selected_features if feat in df.columns]
@@ -464,8 +494,11 @@ class LSTMOptimizer:
         Returns:
             Dict with training history and metrics
         """
-        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-        criterion = nn.MSELoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+
+        # Use Huber loss for better robustness to outliers
+        criterion = nn.HuberLoss(delta=0.1)
 
         train_losses = []
         val_losses = []
@@ -512,6 +545,9 @@ class LSTMOptimizer:
 
             train_losses.append(train_loss)
             val_losses.append(val_loss)
+
+            # Learning rate scheduling
+            scheduler.step(val_loss)
 
             # Early stopping
             if val_loss < best_val_loss:
@@ -569,13 +605,13 @@ class LSTMOptimizer:
                 _logger.debug("Applied optimized indicators successfully")
 
             # Suggest hyperparameters
-            sequence_length = trial.suggest_int('sequence_length', 10, 120)
-            hidden_size = trial.suggest_int('hidden_size', 32, 256)
-            num_layers = trial.suggest_int('num_layers', 1, 4)
-            dropout = trial.suggest_float('dropout', 0.0, 0.5)
-            learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
-            batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128])
-            epochs = trial.suggest_int('epochs', 20, 100)
+            sequence_length = trial.suggest_int('sequence_length', 20, 200)
+            hidden_size = trial.suggest_int('hidden_size', 64, 512)
+            num_layers = trial.suggest_int('num_layers', 2, 6)
+            dropout = trial.suggest_float('dropout', 0.1, 0.6)
+            learning_rate = trial.suggest_float('learning_rate', 1e-4, 5e-3, log=True)
+            batch_size = trial.suggest_categorical('batch_size', [32, 64, 128, 256])
+            epochs = trial.suggest_int('epochs', 50, 200)
 
             # Prepare features
             _logger.debug("Preparing LSTM features...")
