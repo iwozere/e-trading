@@ -639,12 +639,16 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
 
         if action and action.lower() == "add" and len(params) >= 3:
             ticker, price, condition = params[0], params[1], params[2]
-            return handle_alerts_add(telegram_user_id, ticker, price, condition)
+            # Get email flag from parsed args
+            email = parsed.args.get("email", False)
+            return handle_alerts_add(telegram_user_id, ticker, price, condition, email)
         elif action and action.lower() == "edit" and len(params) >= 1:
             alert_id = params[0]
             new_price = params[1] if len(params) > 1 else None
             new_condition = params[2] if len(params) > 2 else None
-            return handle_alerts_edit(telegram_user_id, alert_id, new_price, new_condition)
+            # Get email flag from parsed args
+            email = parsed.args.get("email")
+            return handle_alerts_edit(telegram_user_id, alert_id, new_price, new_condition, email)
         elif action and action.lower() == "delete" and len(params) >= 1:
             alert_id = params[0]
             return handle_alerts_delete(telegram_user_id, alert_id)
@@ -660,11 +664,13 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
                 "title": "Alerts Help",
                 "message": ("Available alert commands:\n"
                            "/alerts - List all alerts\n"
-                           "/alerts add TICKER PRICE CONDITION - Add alert\n"
+                           "/alerts add TICKER PRICE CONDITION [flags] - Add alert\n"
                            "  CONDITION: above or below\n"
-                           "  Example: /alerts add BTCUSDT 65000 above\n"
-                           "/alerts edit ALERT_ID [PRICE] [CONDITION] - Edit alert\n"
-                           "  Example: /alerts edit 1 70000 below\n"
+                           "  Example: /alerts add BTCUSDT 65000 above -email\n"
+                           "Flags:\n"
+                           "  -email: Send alert notification to email\n"
+                           "/alerts edit ALERT_ID [PRICE] [CONDITION] [flags] - Edit alert\n"
+                           "  Example: /alerts edit 1 70000 below -email\n"
                            "/alerts delete ALERT_ID - Delete alert\n"
                            "/alerts pause ALERT_ID - Pause alert\n"
                            "/alerts resume ALERT_ID - Resume alert")
@@ -685,8 +691,9 @@ def handle_alerts_list(telegram_user_id: str) -> Dict[str, Any]:
         alert_list = []
         for alert in alerts:
             status = "🟢 Active" if alert.get("active") else "🔴 Paused"
+            email_flag = "📧" if alert.get("email") else "💬"
             alert_list.append(
-                f"#{alert['id']}: {alert['ticker']} {alert['condition']} ${alert['price']:.2f} - {status}"
+                f"#{alert['id']}: {alert['ticker']} {alert['condition']} ${alert['price']:.2f} {email_flag} - {status}"
             )
 
         message = f"Your alerts ({len(alerts)}):\n\n" + "\n".join(alert_list)
@@ -697,7 +704,7 @@ def handle_alerts_list(telegram_user_id: str) -> Dict[str, Any]:
         return {"status": "error", "message": f"Error listing alerts: {str(e)}"}
 
 
-def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condition: str) -> Dict[str, Any]:
+def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condition: str, email: bool = False) -> Dict[str, Any]:
     """Add a new price alert."""
     try:
         # Validate condition
@@ -724,12 +731,13 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
             }
 
         # Add the alert
-        alert_id = db.add_alert(telegram_user_id, ticker.upper(), price, condition.lower())
+        alert_id = db.add_alert(telegram_user_id, ticker.upper(), price, condition.lower(), email)
 
+        email_text = " and email" if email else ""
         return {
             "status": "ok",
             "title": "Alert Added",
-            "message": f"Alert #{alert_id} created: {ticker.upper()} {condition.lower()} ${price:.2f}"
+            "message": f"Alert #{alert_id} created: {ticker.upper()} {condition.lower()} ${price:.2f}{email_text}"
         }
 
     except Exception as e:
@@ -737,7 +745,7 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
         return {"status": "error", "message": f"Error adding alert: {str(e)}"}
 
 
-def handle_alerts_edit(telegram_user_id: str, alert_id_str: str, new_price_str: str = None, new_condition: str = None) -> Dict[str, Any]:
+def handle_alerts_edit(telegram_user_id: str, alert_id_str: str, new_price_str: str = None, new_condition: str = None, email: bool = None) -> Dict[str, Any]:
     """Edit an existing alert."""
     try:
         # Validate alert ID
@@ -769,8 +777,12 @@ def handle_alerts_edit(telegram_user_id: str, alert_id_str: str, new_price_str: 
                 return {"status": "error", "message": "Condition must be 'above' or 'below'"}
             updates["condition"] = new_condition.lower()
 
+        # Validate and set email flag
+        if email is not None:
+            updates["email"] = 1 if email else 0
+
         if not updates:
-            return {"status": "error", "message": "No updates provided. Specify new price and/or condition."}
+            return {"status": "error", "message": "No updates provided. Specify new price, condition, and/or email flag."}
 
         # Update the alert
         db.update_alert(alert_id, **updates)

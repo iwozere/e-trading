@@ -54,6 +54,7 @@ def init_db():
         price REAL,
         condition TEXT,
         active INTEGER DEFAULT 1,
+        email INTEGER DEFAULT 0,
         created TEXT
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS schedules (
@@ -179,13 +180,13 @@ def count_codes_last_hour(telegram_user_id: str) -> int:
     return count
 
 # --- ALERTS CRUD ---
-def add_alert(user_id: str, ticker: str, price: float, condition: str) -> int:
+def add_alert(user_id: str, ticker: str, price: float, condition: str, email: bool = False) -> int:
     """Add a new alert. Returns alert id."""
     created = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO alerts (ticker, user_id, price, condition, active, created) VALUES (?, ?, ?, ?, 1, ?)",
-              (ticker, user_id, price, condition, created))
+    c.execute("INSERT INTO alerts (ticker, user_id, price, condition, active, email, created) VALUES (?, ?, ?, ?, 1, ?, ?)",
+              (ticker, user_id, price, condition, 1 if email else 0, created))
     alert_id = c.lastrowid
     conn.commit()
     conn.close()

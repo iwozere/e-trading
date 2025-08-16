@@ -94,8 +94,12 @@ COMMAND_SPECS = {
         positional=["action", "params"]
     ),
     "alerts": CommandSpec(
-        parameters={},
-        defaults={},
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
         positional=["action", "params"]
     ),
     "schedules": CommandSpec(
