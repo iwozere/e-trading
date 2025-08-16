@@ -56,5 +56,5 @@ paths:
   data_labeled: "data/labeled"
   models_hmm: "src/ml/pipeline/hmm_lstm_01/models/hmm"
   models_lstm: "src/ml/pipeline/hmm_lstm_01/models/lstm"
-  results: "results"
-  reports: "reports"
+  results: "src/ml/pipeline/hmm_lstm_01/models/results"
+  reports: "src/ml/pipeline/hmm_lstm_01/models/results"

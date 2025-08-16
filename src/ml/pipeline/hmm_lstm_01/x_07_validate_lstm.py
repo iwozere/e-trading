@@ -15,6 +15,10 @@ Features:
 - Saves results in JSON format for tracking
 """
 
+# Set matplotlib backend to non-interactive to prevent file handle issues
+import matplotlib
+matplotlib.use('Agg')
+
 import pandas as pd
 import numpy as np
 import torch
@@ -26,10 +30,11 @@ import pickle
 from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
-from matplotlib.backends.backend_pdf import PdfPages
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import sys
 from typing import Dict, List, Optional, Tuple, Any
+import talib # Added for technical indicators
+import re # Added for regex
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]
@@ -101,7 +106,7 @@ class LSTMValidator:
         self.config = self._load_config()
         self.labeled_data_dir = Path(self.config['paths']['data_labeled'])
         self.models_dir = Path(self.config['paths']['models_lstm'])
-        self.results_dir = Path(self.config['paths']['results'])
+        self.results_dir = Path(self.config['paths']['models_lstm'])  # Optimization results are stored with models
         self.reports_dir = Path(self.config['paths']['reports'])
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -178,6 +183,155 @@ class LSTMValidator:
             _logger.exception("Failed to load model from %s: ", model_path)
             raise
 
+    def load_optimization_parameters(self, symbol: str, timeframe: str) -> Optional[Dict]:
+        """
+        Load optimization parameters for indicators and LSTM.
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe
+
+        Returns:
+            Dict with optimization parameters or None if not found
+        """
+        # Load indicator optimization results
+        indicator_pattern = f"indicators_{symbol}_{timeframe}_*.json"
+        indicator_files = list(self.results_dir.glob(indicator_pattern))
+
+        indicator_params = None
+        if indicator_files:
+            indicator_file = sorted(indicator_files)[-1]
+            with open(indicator_file, 'r') as f:
+                results = json.load(f)
+            indicator_params = results['best_params']
+            _logger.info("Loaded indicator parameters from %s", indicator_file)
+        else:
+            _logger.warning("No indicator optimization results found for %s %s", symbol, timeframe)
+
+        # Load LSTM optimization results
+        lstm_pattern = f"lstm_params_{symbol}_{timeframe}_*.json"
+        lstm_files = list(self.results_dir.glob(lstm_pattern))
+
+        lstm_params = None
+        if lstm_files:
+            lstm_file = sorted(lstm_files)[-1]
+            with open(lstm_file, 'r') as f:
+                results = json.load(f)
+            lstm_params = results['best_params']
+            _logger.info("Loaded LSTM parameters from %s", lstm_file)
+        else:
+            _logger.warning("No LSTM optimization results found for %s %s", symbol, timeframe)
+
+        return {
+            'indicator_params': indicator_params,
+            'lstm_params': lstm_params
+        }
+
+    def apply_optimized_indicators(self, df: pd.DataFrame, params: Dict) -> pd.DataFrame:
+        """
+        Apply optimized technical indicators to the data.
+
+        Args:
+            df: DataFrame with OHLCV data
+            params: Optimized indicator parameters
+
+        Returns:
+            DataFrame with optimized indicators
+        """
+        df = df.copy()
+
+        # Extract OHLCV arrays
+        high = df['high'].values
+        low = df['low'].values
+        close = df['close'].values
+        volume = df['volume'].values
+
+        try:
+            # Apply optimized indicators
+
+            # RSI
+            if 'rsi_period' in params:
+                df['rsi_optimized'] = talib.RSI(close, timeperiod=params['rsi_period'])
+
+            # Bollinger Bands
+            if 'bb_period' in params and 'bb_std' in params:
+                bb_upper, bb_middle, bb_lower = talib.BBANDS(
+                    close,
+                    timeperiod=params['bb_period'],
+                    nbdevup=params['bb_std'],
+                    nbdevdn=params['bb_std']
+                )
+                df['bb_upper_opt'] = bb_upper
+                df['bb_middle_opt'] = bb_middle
+                df['bb_lower_opt'] = bb_lower
+
+                # Avoid division by zero in bb_position calculation
+                bb_range = bb_upper - bb_lower
+                mask = bb_range != 0
+                bb_position = np.full_like(close, 0.5)  # Default value
+                bb_position[mask] = (close[mask] - bb_lower[mask]) / bb_range[mask]
+                df['bb_position_opt'] = bb_position
+
+                # Avoid division by zero in bb_width calculation
+                mask_width = bb_middle != 0
+                bb_width = np.full_like(close, 0)  # Default value
+                bb_width[mask_width] = bb_range[mask_width] / bb_middle[mask_width]
+                df['bb_width_opt'] = bb_width
+
+            # MACD
+            if all(param in params for param in ['macd_fast', 'macd_slow', 'macd_signal']):
+                macd, macd_signal, macd_hist = talib.MACD(
+                    close,
+                    fastperiod=params['macd_fast'],
+                    slowperiod=params['macd_slow'],
+                    signalperiod=params['macd_signal']
+                )
+                df['macd_opt'] = macd
+                df['macd_signal_opt'] = macd_signal
+                df['macd_histogram_opt'] = macd_hist
+
+            # EMAs
+            if 'ema_fast' in params:
+                df['ema_fast_opt'] = talib.EMA(close, timeperiod=params['ema_fast'])
+            if 'ema_slow' in params:
+                df['ema_slow_opt'] = talib.EMA(close, timeperiod=params['ema_slow'])
+
+            # EMA spread
+            if 'ema_fast_opt' in df.columns and 'ema_slow_opt' in df.columns:
+                df['ema_spread_opt'] = (df['ema_fast_opt'] - df['ema_slow_opt']) / df['close']
+
+            # ATR
+            if 'atr_period' in params:
+                df['atr_opt'] = talib.ATR(high, low, close, timeperiod=params['atr_period'])
+
+            # Stochastic
+            if 'stoch_k' in params and 'stoch_d' in params:
+                stoch_k, stoch_d = talib.STOCH(
+                    high, low, close,
+                    fastk_period=params['stoch_k'],
+                    slowk_period=params['stoch_d'],
+                    slowd_period=params['stoch_d']
+                )
+                df['stoch_k_opt'] = stoch_k
+                df['stoch_d_opt'] = stoch_d
+
+            # Williams %R
+            if 'williams_period' in params:
+                df['williams_r_opt'] = talib.WILLR(high, low, close, timeperiod=params['williams_period'])
+
+            # MFI
+            if 'mfi_period' in params:
+                df['mfi_opt'] = talib.MFI(high, low, close, volume, timeperiod=params['mfi_period'])
+
+            # SMA
+            if 'sma_period' in params:
+                df['sma_opt'] = talib.SMA(close, timeperiod=params['sma_period'])
+
+        except Exception as e:
+            _logger.exception("Error applying optimized indicators: %s", str(e))
+
+        return df
+
     def prepare_test_data(self, df: pd.DataFrame, model_package: Dict) -> Dict:
         """
         Prepare test data for validation.
@@ -192,6 +346,37 @@ class LSTMValidator:
         features = model_package['features']
         scalers = model_package['scalers']
         sequence_length = model_package['hyperparameters']['sequence_length']
+
+        # Load optimization parameters and apply optimized indicators
+        symbol = model_package.get('symbol', 'UNKNOWN')
+        timeframe = model_package.get('timeframe', 'UNKNOWN')
+
+        # Try to extract symbol and timeframe from model path if not in metadata
+        if symbol == 'UNKNOWN' or timeframe == 'UNKNOWN':
+            model_path = model_package.get('model_path', '')
+            if model_path:
+                # Extract from filename like "lstm_BTCUSDT_1h_20250815_123456.pkl"
+                # Updated pattern to handle various symbol formats (including numbers)
+                match = re.search(r'lstm_([A-Z0-9]+)_([0-9a-z]+)_', str(model_path))
+                if match:
+                    symbol = match.group(1)
+                    timeframe = match.group(2)
+                    _logger.info("Extracted symbol=%s, timeframe=%s from model path", symbol, timeframe)
+
+        optimization_params = self.load_optimization_parameters(symbol, timeframe)
+
+        if optimization_params and optimization_params['indicator_params']:
+            _logger.info("Applying optimized indicators for %s %s", symbol, timeframe)
+            df = self.apply_optimized_indicators(df, optimization_params['indicator_params'])
+        else:
+            _logger.warning("No optimization parameters found, using existing features")
+
+        # Check if all required features are available
+        missing_features = [feat for feat in features if feat not in df.columns]
+        if missing_features:
+            _logger.warning("Missing features after applying optimized indicators: %s", missing_features)
+            _logger.warning("Available features: %s", [col for col in df.columns if any(indicator in col for indicator in ['rsi', 'bb_', 'macd', 'ema_', 'atr', 'stoch', 'williams', 'mfi', 'sma'])])
+            raise ValueError(f"Missing required features: {missing_features}")
 
         # Extract features and regimes
         feature_data = df[features].ffill().bfill().fillna(0)
@@ -441,7 +626,7 @@ class LSTMValidator:
 
     def create_visualizations(self, df: pd.DataFrame, predictions: np.ndarray, actual: np.ndarray,
                             baseline_predictions: np.ndarray, regimes: np.ndarray,
-                            test_start_idx: int, symbol: str, timeframe: str) -> List[plt.Figure]:
+                            test_start_idx: int, symbol: str, timeframe: str) -> Dict[str, plt.Figure]:
         """
         Create comprehensive visualizations.
 
@@ -456,9 +641,9 @@ class LSTMValidator:
             timeframe: Timeframe
 
         Returns:
-            List of matplotlib figures
+            Dict with figure names as keys and matplotlib figures as values
         """
-        figures = []
+        figures = {}
 
         # Align data for plotting
         min_len = min(len(predictions), len(actual), len(baseline_predictions))
@@ -474,238 +659,150 @@ class LSTMValidator:
         else:
             time_index = range(len(test_data))
 
-        # Figure 1: Predictions vs Actual
-        fig1, axes = plt.subplots(2, 1, figsize=(15, 10))
-        fig1.suptitle(f'LSTM Predictions vs Actual - {symbol} {timeframe}', fontsize=16)
+        # Figure 1: Predictions vs Actual - Time Series
+        fig1, ax = plt.subplots(1, 1, figsize=(60, 30))
+        ax.plot(time_index, act, label='Actual', color='red', alpha=0.8, linewidth=1.5)
+        ax.plot(time_index, pred, label='LSTM Prediction', color='blue', alpha=0.8, linewidth=1.5)
+        ax.plot(time_index, base, label='Naive Baseline', color='orange', alpha=0.7, linewidth=1.5)
+        ax.set_title(f'Log Return Predictions Over Time - {symbol} {timeframe}', fontsize=24)
+        ax.set_ylabel('Log Return', fontsize=20)
+        ax.set_xlabel('Time', fontsize=20)
+        ax.legend(fontsize=16)  # Twice bigger than default (8)
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        figures['predictions_time_series'] = fig1
 
-        # Plot 1: Time series comparison
-        axes[0].plot(time_index, act, label='Actual', alpha=0.7, linewidth=1)
-        axes[0].plot(time_index, pred, label='LSTM Prediction', alpha=0.8, linewidth=1)
-        axes[0].plot(time_index, base, label='Naive Baseline', alpha=0.6, linewidth=1)
-        axes[0].set_title('Log Return Predictions Over Time')
-        axes[0].set_ylabel('Log Return')
-        axes[0].legend()
-        axes[0].grid(True, alpha=0.3)
-
-        # Plot 2: Scatter plot
-        axes[1].scatter(act, pred, alpha=0.6, label='LSTM', s=10)
-        axes[1].scatter(act, base, alpha=0.4, label='Baseline', s=10)
+        # Figure 2: Scatter Plot
+        fig2, ax = plt.subplots(1, 1, figsize=(60, 30))
+        ax.scatter(act, pred, alpha=0.7, label='LSTM', s=30, color='blue')
+        ax.scatter(act, base, alpha=0.6, label='Baseline', s=30, color='red')
 
         # Perfect prediction line
         min_val, max_val = min(np.min(act), np.min(pred)), max(np.max(act), np.max(pred))
-        axes[1].plot([min_val, max_val], [min_val, max_val], 'r--', alpha=0.5, label='Perfect Prediction')
+        ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.7, linewidth=2, label='Perfect Prediction')
 
-        axes[1].set_xlabel('Actual Log Return')
-        axes[1].set_ylabel('Predicted Log Return')
-        axes[1].set_title('Prediction Accuracy Scatter Plot')
-        axes[1].legend()
-        axes[1].grid(True, alpha=0.3)
-
+        ax.set_xlabel('Actual Log Return', fontsize=20)
+        ax.set_ylabel('Predicted Log Return', fontsize=20)
+        ax.set_title(f'Prediction Accuracy Scatter Plot - {symbol} {timeframe}', fontsize=24)
+        ax.legend(fontsize=16)  # Twice bigger than default (8)
+        ax.grid(True, alpha=0.3)
         plt.tight_layout()
-        figures.append(fig1)
+        figures['predictions_scatter'] = fig2
 
-        # Figure 2: Error Analysis
-        fig2, axes = plt.subplots(2, 2, figsize=(15, 10))
-        fig2.suptitle(f'Error Analysis - {symbol} {timeframe}', fontsize=16)
-
+        # Figure 3: Error Distribution
+        fig3, ax = plt.subplots(1, 1, figsize=(60, 30))
         lstm_errors = pred - act
         baseline_errors = base - act
 
-        # Error distribution
-        axes[0, 0].hist(lstm_errors, bins=50, alpha=0.7, label='LSTM Errors', density=True)
-        axes[0, 0].hist(baseline_errors, bins=50, alpha=0.5, label='Baseline Errors', density=True)
-        axes[0, 0].set_title('Error Distribution')
-        axes[0, 0].set_xlabel('Prediction Error')
-        axes[0, 0].set_ylabel('Density')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
+        ax.hist(lstm_errors, bins=50, alpha=0.7, label='LSTM Errors', density=True, color='blue')
+        ax.hist(baseline_errors, bins=50, alpha=0.5, label='Baseline Errors', density=True, color='red')
+        ax.set_title(f'Error Distribution - {symbol} {timeframe}', fontsize=24)
+        ax.set_xlabel('Prediction Error', fontsize=20)
+        ax.set_ylabel('Density', fontsize=20)
+        ax.legend(fontsize=16)  # Twice bigger than default (8)
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        figures['error_distribution'] = fig3
 
-        # Error over time
-        axes[0, 1].plot(time_index, np.abs(lstm_errors), label='LSTM |Error|', alpha=0.7)
-        axes[0, 1].plot(time_index, np.abs(baseline_errors), label='Baseline |Error|', alpha=0.7)
-        axes[0, 1].set_title('Absolute Error Over Time')
-        axes[0, 1].set_ylabel('Absolute Error')
-        axes[0, 1].legend()
-        axes[0, 1].grid(True, alpha=0.3)
+        # Figure 4: Error Over Time
+        fig4, ax = plt.subplots(1, 1, figsize=(60, 30))
+        ax.plot(time_index, np.abs(lstm_errors), label='LSTM |Error|', alpha=0.8, linewidth=1.5, color='blue')
+        ax.plot(time_index, np.abs(baseline_errors), label='Baseline |Error|', alpha=0.8, linewidth=1.5, color='red')
+        ax.set_title(f'Absolute Error Over Time - {symbol} {timeframe}', fontsize=24)
+        ax.set_xlabel('Time', fontsize=20)
+        ax.set_ylabel('Absolute Error', fontsize=20)
+        ax.legend(fontsize=16)  # Twice bigger than default (8)
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        figures['error_over_time'] = fig4
 
-        # Cumulative squared error
+        # Figure 5: Cumulative Squared Error
+        fig5, ax = plt.subplots(1, 1, figsize=(60, 30))
         cumulative_lstm_error = np.cumsum(lstm_errors ** 2)
         cumulative_baseline_error = np.cumsum(baseline_errors ** 2)
 
-        axes[1, 0].plot(time_index, cumulative_lstm_error, label='LSTM Cumulative SE')
-        axes[1, 0].plot(time_index, cumulative_baseline_error, label='Baseline Cumulative SE')
-        axes[1, 0].set_title('Cumulative Squared Error')
-        axes[1, 0].set_ylabel('Cumulative Squared Error')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3)
+        ax.plot(time_index, cumulative_lstm_error, label='LSTM Cumulative SE', linewidth=1.5, color='blue')
+        ax.plot(time_index, cumulative_baseline_error, label='Baseline Cumulative SE', linewidth=1.5, color='red')
+        ax.set_title(f'Cumulative Squared Error - {symbol} {timeframe}', fontsize=24)
+        ax.set_xlabel('Time', fontsize=20)
+        ax.set_ylabel('Cumulative Squared Error', fontsize=20)
+        ax.legend(fontsize=16)  # Twice bigger than default (8)
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        figures['cumulative_error'] = fig5
 
-        # Regime-colored predictions
-        colors = ['red', 'green', 'blue', 'orange', 'purple']
+        # Figure 6: Predictions by Market Regime
+        fig6, ax = plt.subplots(1, 1, figsize=(60, 30))
+        colors = ['red', 'green', 'blue', 'orange', 'purple', 'brown', 'pink', 'gray']
         for regime_id in np.unique(reg):
             regime_mask = reg == regime_id
             if np.sum(regime_mask) > 0:
                 color = colors[int(regime_id) % len(colors)]
-                axes[1, 1].scatter(act[regime_mask], pred[regime_mask],
-                                 c=color, alpha=0.6, s=10, label=f'Regime {int(regime_id)}')
+                ax.scatter(act[regime_mask], pred[regime_mask],
+                          c=color, alpha=0.7, s=30, label=f'Regime {int(regime_id)}')
 
-        axes[1, 1].plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.5)
-        axes[1, 1].set_xlabel('Actual')
-        axes[1, 1].set_ylabel('Predicted')
-        axes[1, 1].set_title('Predictions by Market Regime')
-        axes[1, 1].legend()
-        axes[1, 1].grid(True, alpha=0.3)
-
+        ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.7, linewidth=2)
+        ax.set_xlabel('Actual', fontsize=20)
+        ax.set_ylabel('Predicted', fontsize=20)
+        ax.set_title(f'Predictions by Market Regime - {symbol} {timeframe}', fontsize=24)
+        ax.legend(fontsize=16)  # Twice bigger than default (8)
+        ax.grid(True, alpha=0.3)
         plt.tight_layout()
-        figures.append(fig2)
+        figures['predictions_by_regime'] = fig6
 
-        # Figure 3: Performance Metrics
-        fig3, ax = plt.subplots(1, 1, figsize=(12, 8))
-        fig3.suptitle(f'Performance Comparison - {symbol} {timeframe}', fontsize=16)
-
-        # Calculate rolling metrics
+        # Figure 7: Rolling Performance Metrics
+        fig7, ax = plt.subplots(1, 1, figsize=(60, 30))
         window = min(50, len(pred) // 10)
         rolling_mse_lstm = pd.Series(lstm_errors ** 2).rolling(window).mean()
         rolling_mse_baseline = pd.Series(baseline_errors ** 2).rolling(window).mean()
 
-        ax.plot(time_index, rolling_mse_lstm, label=f'LSTM Rolling MSE (window={window})')
-        ax.plot(time_index, rolling_mse_baseline, label=f'Baseline Rolling MSE (window={window})')
-        ax.set_title('Rolling Mean Squared Error Comparison')
-        ax.set_ylabel('Rolling MSE')
-        ax.legend()
+        ax.plot(time_index, rolling_mse_lstm, label=f'LSTM Rolling MSE (window={window})', linewidth=1.5, color='blue')
+        ax.plot(time_index, rolling_mse_baseline, label=f'Baseline Rolling MSE (window={window})', linewidth=1.5, color='red')
+        ax.set_title(f'Rolling Mean Squared Error Comparison - {symbol} {timeframe}', fontsize=24)
+        ax.set_xlabel('Time', fontsize=20)
+        ax.set_ylabel('Rolling MSE', fontsize=20)
+        ax.legend(fontsize=16)  # Twice bigger than default (8)
         ax.grid(True, alpha=0.3)
-
         plt.tight_layout()
-        figures.append(fig3)
+        figures['rolling_performance'] = fig7
 
         return figures
 
-    def generate_pdf_report(self, metrics: Dict, regime_performance: Dict, figures: List[plt.Figure],
-                          symbol: str, timeframe: str, model_metadata: Dict) -> Path:
+    def save_png_files(self, figures: Dict[str, plt.Figure], symbol: str, timeframe: str) -> Dict[str, str]:
         """
-        Generate comprehensive PDF report.
+        Save individual PNG files for each visualization.
 
         Args:
-            metrics: Performance metrics
-            regime_performance: Regime-specific performance
-            figures: List of matplotlib figures
+            figures: Dict with figure names as keys and matplotlib figures as values
             symbol: Trading symbol
             timeframe: Timeframe
-            model_metadata: Model metadata
 
         Returns:
-            Path to generated PDF report
+            Dict with figure names as keys and PNG file paths as values
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        pdf_filename = f"lstm_validation_{symbol}_{timeframe}_{timestamp}.pdf"
-        pdf_path = self.reports_dir / pdf_filename
+        png_files = {}
 
-        with PdfPages(pdf_path) as pdf:
-            # Title page
-            fig_title = plt.figure(figsize=(8.5, 11))
-            fig_title.text(0.5, 0.7, f'LSTM Model Validation Report',
-                          ha='center', va='center', fontsize=24, weight='bold')
-            fig_title.text(0.5, 0.6, f'{symbol} - {timeframe}',
-                          ha='center', va='center', fontsize=18)
-            fig_title.text(0.5, 0.5, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
-                          ha='center', va='center', fontsize=12)
+        # Create a subdirectory for this validation run
+        validation_dir = self.reports_dir / f"lstm_validation_{symbol}_{timeframe}_{timestamp}"
+        validation_dir.mkdir(parents=True, exist_ok=True)
 
-            # Model information
-            model_info = [
-                f"Model Architecture:",
-                f"  - Input Size: {model_metadata['model_architecture']['input_size']}",
-                f"  - Hidden Size: {model_metadata['model_architecture']['hidden_size']}",
-                f"  - Layers: {model_metadata['model_architecture']['num_layers']}",
-                f"  - Regimes: {model_metadata['model_architecture']['n_regimes']}",
-                f"",
-                f"Training Information:",
-                f"  - Best Validation Loss: {model_metadata['training_results']['best_val_loss']:.6f}",
-                f"  - Training Epochs: {model_metadata['training_results']['final_epoch']}",
-                f"  - Features Used: {len(model_metadata['features'])}",
-            ]
+        for figure_name, fig in figures.items():
+            png_filename = f"{figure_name}_{symbol}_{timeframe}_{timestamp}.png"
+            png_path = validation_dir / png_filename
 
-            y_pos = 0.4
-            for line in model_info:
-                fig_title.text(0.1, y_pos, line, ha='left', va='top', fontsize=10, family='monospace')
-                y_pos -= 0.03
-
-            pdf.savefig(fig_title, bbox_inches='tight')
-            plt.close(fig_title)
-
-            # Performance metrics page
-            fig_metrics = plt.figure(figsize=(8.5, 11))
-            fig_metrics.text(0.5, 0.95, 'Performance Metrics', ha='center', va='top',
-                           fontsize=18, weight='bold')
-
-            # LSTM vs Baseline comparison
-            metrics_text = [
-                "LSTM Model Performance:",
-                f"  MSE: {metrics['lstm_metrics']['mse']:.6f}",
-                f"  RMSE: {metrics['lstm_metrics']['rmse']:.6f}",
-                f"  MAE: {metrics['lstm_metrics']['mae']:.6f}",
-                f"  R^2: {metrics['lstm_metrics']['r2']:.4f}",
-                f"  Directional Accuracy: {metrics['lstm_metrics']['directional_accuracy']:.2f}%",
-                f"  Hit Rate: {metrics['lstm_metrics']['hit_rate']:.2f}%",
-                f"  Sharpe Ratio: {metrics['lstm_metrics']['sharpe_ratio']:.4f}",
-                "",
-                "Naive Baseline Performance:",
-                f"  MSE: {metrics['baseline_metrics']['mse']:.6f}",
-                f"  RMSE: {metrics['baseline_metrics']['rmse']:.6f}",
-                f"  MAE: {metrics['baseline_metrics']['mae']:.6f}",
-                f"  R^2: {metrics['baseline_metrics']['r2']:.4f}",
-                f"  Directional Accuracy: {metrics['baseline_metrics']['directional_accuracy']:.2f}%",
-                f"  Hit Rate: {metrics['baseline_metrics']['hit_rate']:.2f}%",
-                f"  Sharpe Ratio: {metrics['baseline_metrics']['sharpe_ratio']:.4f}",
-                "",
-                "Improvements (LSTM vs Baseline):",
-                f"  MSE Improvement: {metrics['improvements']['mse_improvement_pct']:.2f}%",
-                f"  MAE Improvement: {metrics['improvements']['mae_improvement_pct']:.2f}%",
-                f"  R^2 Improvement: {metrics['improvements']['r2_improvement']:.4f}",
-                f"  Directional Accuracy Gain: {metrics['improvements']['directional_accuracy_improvement']:.2f}%",
-                f"",
-                f"Test Sample Size: {metrics['sample_size']} observations"
-            ]
-
-            y_pos = 0.85
-            for line in metrics_text:
-                weight = 'bold' if line.endswith(':') else 'normal'
-                fig_metrics.text(0.1, y_pos, line, ha='left', va='top', fontsize=10,
-                               family='monospace', weight=weight)
-                y_pos -= 0.03
-
-            # Regime performance
-            if regime_performance:
-                y_pos -= 0.05
-                fig_metrics.text(0.1, y_pos, "Performance by Market Regime:",
-                               ha='left', va='top', fontsize=12, weight='bold')
-                y_pos -= 0.04
-
-                for regime, perf in regime_performance.items():
-                    regime_text = [
-                        f"{regime.replace('_', ' ').title()}:",
-                        f"  Samples: {perf['sample_count']}",
-                        f"  MSE: {perf['mse']:.6f}",
-                        f"  MAE: {perf['mae']:.6f}",
-                        f"  Directional Accuracy: {perf['directional_accuracy']:.2f}%",
-                        f"  R^2: {perf['r2']:.4f}",
-                        ""
-                    ]
-
-                    for line in regime_text:
-                        weight = 'bold' if line.endswith(':') else 'normal'
-                        fig_metrics.text(0.1, y_pos, line, ha='left', va='top', fontsize=9,
-                                       family='monospace', weight=weight)
-                        y_pos -= 0.025
-
-            pdf.savefig(fig_metrics, bbox_inches='tight')
-            plt.close(fig_metrics)
-
-            # Add all visualization figures
-            for fig in figures:
-                pdf.savefig(fig, bbox_inches='tight')
+            try:
+                # Save with high DPI for better quality
+                fig.savefig(png_path, dpi=300, bbox_inches='tight', format='png')
+                png_files[figure_name] = str(png_path)
+                _logger.info("Saved PNG: %s", png_path)
+            except Exception as e:
+                _logger.error("Failed to save PNG %s: %s", png_path, str(e))
+            finally:
+                # Ensure figure is closed even if save fails
                 plt.close(fig)
 
-        _logger.info("Generated PDF report: %s", pdf_path)
-        return pdf_path
+        return png_files
 
     def validate_lstm(self, symbol: str, timeframe: str) -> Dict:
         """
@@ -727,10 +824,19 @@ class LSTMValidator:
                 raise FileNotFoundError(f"No trained LSTM model found for {symbol} {timeframe}")
 
             model_package = self.load_model(model_path)
+            # Store symbol and timeframe in model package for later use
+            model_package['symbol'] = symbol
+            model_package['timeframe'] = timeframe
 
-            # Find labeled data file
-            pattern = f"labeled_{symbol}_{timeframe}_*.csv"
-            csv_files = list(self.labeled_data_dir.glob(pattern))
+            # Find labeled data file - look for both patterns
+            patterns = [
+                f"labeled_{symbol}_{timeframe}_*.csv",  # Original pattern
+                f"*_{symbol}_{timeframe}_*_labeled.csv"  # New pattern with provider prefix
+            ]
+
+            csv_files = []
+            for pattern in patterns:
+                csv_files.extend(list(self.labeled_data_dir.glob(pattern)))
 
             if not csv_files:
                 raise FileNotFoundError(f"No labeled data found for {symbol} {timeframe}")
@@ -772,10 +878,8 @@ class LSTMValidator:
                 symbol, timeframe
             )
 
-            # Generate PDF report
-            pdf_path = self.generate_pdf_report(
-                metrics, regime_performance, figures, symbol, timeframe, model_package
-            )
+            # Save PNG files
+            png_files = self.save_png_files(figures, symbol, timeframe)
 
             # Save results to JSON
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -787,6 +891,7 @@ class LSTMValidator:
                 'data_file': str(csv_file),
                 'performance_metrics': metrics,
                 'regime_performance': regime_performance,
+                'png_files': png_files,
                 'model_metadata': {
                     'architecture': model_package['model_architecture'],
                     'hyperparameters': model_package['hyperparameters'],
@@ -798,20 +903,38 @@ class LSTMValidator:
             json_filename = f"lstm_validation_{symbol}_{timeframe}_{timestamp}.json"
             json_path = self.results_dir / json_filename
 
+            # Convert numpy types to Python types for JSON serialization
+            def convert_numpy_types(obj):
+                if isinstance(obj, np.integer):
+                    return int(obj)
+                elif isinstance(obj, np.floating):
+                    return float(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, dict):
+                    return {key: convert_numpy_types(value) for key, value in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy_types(item) for item in obj]
+                else:
+                    return obj
+
+            # Convert results for JSON serialization
+            json_results = convert_numpy_types(results)
+
             with open(json_path, 'w') as f:
-                json.dump(results, f, indent=2)
+                json.dump(json_results, f, indent=2)
 
             _logger.info("[OK] LSTM validation completed for %s %s", symbol, timeframe)
             _logger.info("  MSE improvement: %.2f%%", metrics['improvements']['mse_improvement_pct'])
             _logger.info("  Directional accuracy: %.2f%%", metrics['lstm_metrics']['directional_accuracy'])
-            _logger.info("  PDF report: %s", pdf_path)
+            _logger.info("  PNG files: %d files saved", len(png_files))
             _logger.info("  JSON results: %s", json_path)
 
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
                 'success': True,
-                'pdf_report': str(pdf_path),
+                'png_files': png_files,
                 'json_results': str(json_path),
                 'mse_improvement': metrics['improvements']['mse_improvement_pct'],
                 'directional_accuracy': metrics['lstm_metrics']['directional_accuracy'],
@@ -820,7 +943,7 @@ class LSTMValidator:
 
         except Exception as e:
             error_msg = f"Failed to validate LSTM for {symbol} {timeframe}: {str(e)}"
-            _logger.error(error_msg)
+            _logger.exception(error_msg)
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
@@ -835,8 +958,17 @@ class LSTMValidator:
         Returns:
             Dict with summary of validation results
         """
-        symbols = self.config['symbols']
-        timeframes = self.config['timeframes']
+        # Extract symbols and timeframes from data_sources configuration
+        symbols = []
+        timeframes = []
+
+        for provider, config in self.config.get('data_sources', {}).items():
+            symbols.extend(config.get('symbols', []))
+            timeframes.extend(config.get('timeframes', []))
+
+        # Remove duplicates while preserving order
+        symbols = list(dict.fromkeys(symbols))
+        timeframes = list(dict.fromkeys(timeframes))
 
         _logger.info("Validating LSTM models for %d symbols x %d timeframes", len(symbols), len(timeframes))
 
