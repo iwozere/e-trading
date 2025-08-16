@@ -702,4 +702,4 @@ if __name__ == '__main__':
 
     logger.info("Admin panel will be available at: http://localhost:%s", WEBGUI_PORT)
     logger.info("Login with username: %s", WEBGUI_LOGIN)
-    app.run(debug=True, host='0.0.0.0', port=WEBGUI_PORT)
+    app.run(debug=False, host='0.0.0.0', port=WEBGUI_PORT)

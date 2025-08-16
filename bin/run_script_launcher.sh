@@ -34,13 +34,12 @@ show_menu() {
     echo
     echo "[1]  Telegram Bot"
     echo "[2]  Telegram Admin Panel"
-    echo "[3]  Telegram Screener Bot"
-    echo "[4]  Telegram Background Services"
-    echo "[5]  JSON to CSV Converter"
-    echo "[6]  Optimizer"
-    echo "[7]  Plotter"
-    echo "[8]  LSTM Optimizer"
-    echo "[9]  Exit"
+    echo "[3]  Telegram Background Services"
+    echo "[4]  JSON to CSV Converter"
+    echo "[5]  Optimizer"
+    echo "[6]  Plotter"
+    echo "[7]  LSTM Optimizer"
+    echo "[8]  Exit"
     echo
 }
 
@@ -57,20 +56,19 @@ run_telegram_bot() {
 run_admin_panel() {
     echo
     echo "Starting Telegram Admin Panel..."
-    echo "Admin panel will be available at http://localhost:5001"
+    echo "The admin panel will start a web server."
+    echo "Once it's running, open your web browser and go to:"
+    echo "  http://localhost:5000 (or check the console for the correct port)"
+    echo
+    echo "Login credentials are configured in config/donotshare/.env"
+    echo "Press Ctrl+C to stop the admin panel when done."
+    echo
     "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/frontend/telegram/screener/admin_panel.py"
     echo
     read -p "Press Enter to continue..."
 }
 
-# Function to run screener bot
-run_screener_bot() {
-    echo
-    echo "Starting Telegram Screener Bot..."
-    "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/frontend/telegram/bot.py"
-    echo
-    read -p "Press Enter to continue..."
-}
+
 
 # Function to run background services
 run_background_services() {
@@ -120,7 +118,7 @@ run_lstm_optimizer() {
 # Main menu loop
 while true; do
     show_menu
-    read -p "Select a script to run (1-9): " choice
+    read -p "Select a script to run (1-8): " choice
     
     case $choice in
         1)
@@ -130,24 +128,21 @@ while true; do
             run_admin_panel
             ;;
         3)
-            run_screener_bot
-            ;;
-        4)
             run_background_services
             ;;
-        5)
+        4)
             run_json2csv
             ;;
-        6)
+        5)
             run_optimizer
             ;;
-        7)
+        6)
             run_plotter
             ;;
-        8)
+        7)
             run_lstm_optimizer
             ;;
-        9)
+        8)
             echo
             echo "Goodbye!"
             exit 0
