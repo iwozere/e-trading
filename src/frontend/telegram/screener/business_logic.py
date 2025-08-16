@@ -331,16 +331,16 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
                 "status": "error",
                 "title": "Admin Help",
                 "message": ("Available admin commands:\n"
-                           "/admin users - List all users\n"
-                           "/admin listusers - List users with emails\n"
-                           "/admin resetemail USER_ID - Reset user email\n"
-                           "/admin verify USER_ID - Manually verify user\n"
+                           "/admin users - List all registered users\n"
+                           "/admin listusers - List users as telegram_user_id - email pairs\n"
+                           "/admin pending - List users waiting for approval\n"
                            "/admin approve USER_ID - Approve user for restricted features\n"
                            "/admin reject USER_ID - Reject user's approval request\n"
-                           "/admin pending - List users waiting for approval\n"
-                           "/admin setlimit alerts N [USER_ID] - Set alert limits\n"
-                           "/admin setlimit schedules N [USER_ID] - Set schedule limits\n"
-                           "/admin broadcast MESSAGE - Send broadcast message")
+                           "/admin verify USER_ID - Manually verify user's email\n"
+                           "/admin resetemail USER_ID - Reset user's email\n"
+                           "/admin setlimit alerts N [USER_ID] - Set max alerts (global or per-user)\n"
+                           "/admin setlimit schedules N [USER_ID] - Set max schedules (global or per-user)\n"
+                           "/admin broadcast MESSAGE - Send broadcast message to all users")
             }
 
         if action == "users":
@@ -660,8 +660,11 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
                 "title": "Alerts Help",
                 "message": ("Available alert commands:\n"
                            "/alerts - List all alerts\n"
-                           "/alerts add TICKER PRICE above|below - Add alert\n"
+                           "/alerts add TICKER PRICE CONDITION - Add alert\n"
+                           "  CONDITION: above or below\n"
+                           "  Example: /alerts add BTCUSDT 65000 above\n"
                            "/alerts edit ALERT_ID [PRICE] [CONDITION] - Edit alert\n"
+                           "  Example: /alerts edit 1 70000 below\n"
                            "/alerts delete ALERT_ID - Delete alert\n"
                            "/alerts pause ALERT_ID - Pause alert\n"
                            "/alerts resume ALERT_ID - Resume alert")
@@ -923,12 +926,19 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
                 "title": "Schedules Help",
                 "message": ("Available schedule commands:\n"
                            "/schedules - List all schedules\n"
-                           "/schedules add TICKER TIME [flags] - Add schedule\n"
-                           "/schedules edit SCHEDULE_ID [TIME] - Edit schedule\n"
+                           "/schedules add TICKER TIME [flags] - Schedule daily report\n"
+                           "  TIME: HH:MM format (24h UTC)\n"
+                           "  Example: /schedules add AAPL 09:00 -email\n"
+                           "Flags:\n"
+                           "  -email: Send report to email\n"
+                           "  -indicators=RSI,MACD: Specify indicators\n"
+                           "  -period=1y: Data period\n"
+                           "  -interval=1d: Data interval\n"
+                           "  -provider=yf: Data provider\n"
+                           "/schedules edit SCHEDULE_ID [TIME] [flags] - Edit schedule\n"
                            "/schedules delete SCHEDULE_ID - Delete schedule\n"
                            "/schedules pause SCHEDULE_ID - Pause schedule\n"
-                           "/schedules resume SCHEDULE_ID - Resume schedule\n\n"
-                           "Flags: -email -indicators=RSI,MACD -period=1y -interval=1d -provider=yf")
+                           "/schedules resume SCHEDULE_ID - Resume schedule")
             }
 
     except Exception as e:
