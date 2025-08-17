@@ -110,6 +110,8 @@ show_status() {
         "telegram_bot:src/frontend/telegram/bot.py"
         "admin_panel:src/frontend/telegram/screener/admin_panel.py"
         "background_services:src/frontend/telegram/screener/background_services.py"
+        "alert_monitor:src/frontend/telegram/screener/alert_monitor.py"
+        "schedule_processor:src/frontend/telegram/screener/schedule_processor.py"
         "json2csv:src/backtester/optimizer/run_json2csv.py"
         "optimizer:src/backtester/optimizer/run_optimizer.py"
         "plotter:src/backtester/plotter/run_plotter.py"

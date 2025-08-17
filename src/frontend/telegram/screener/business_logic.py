@@ -17,7 +17,7 @@ from src.frontend.telegram import db
 from src.common.ticker_analyzer import format_ticker_report
 
 from src.notification.logger import setup_logger
-logger = setup_logger("telegram_screener_bot")
+logger = setup_logger(__name__)
 
 def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
     """

@@ -6,7 +6,7 @@ from src.notification.logger import setup_logger
 from src.model.telegram_bot import Technicals
 from src.common import get_ohlcv
 
-logger = setup_logger("telegram_bot")
+logger = setup_logger(__name__)
 
 
 def get_rsi_recommendation(rsi: float) -> Tuple[str, str]:

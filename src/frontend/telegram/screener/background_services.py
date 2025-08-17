@@ -17,13 +17,16 @@ from src.frontend.telegram.screener.schedule_processor import ScheduleProcessor
 from src.notification.async_notification_manager import initialize_notification_manager
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
 
-from src.notification.logger import setup_logger
+from src.notification.logger import setup_logger, set_logging_context
 logger = setup_logger("telegram_background_services")
 
 
 async def main():
     """Main function to run all background services."""
     try:
+        # Set logging context so that notification manager logs go to background services log file
+        set_logging_context("telegram_background_services")
+
         # Initialize notification manager
         notification_manager = await initialize_notification_manager(
             telegram_token=TELEGRAM_BOT_TOKEN,

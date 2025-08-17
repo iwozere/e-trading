@@ -13,7 +13,7 @@ from src.common import get_ohlcv
 from src.notification.async_notification_manager import initialize_notification_manager
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
 
-from src.notification.logger import setup_logger
+from src.notification.logger import setup_logger, set_logging_context
 logger = setup_logger("telegram_alert_monitor")
 
 
@@ -29,6 +29,10 @@ class AlertMonitor:
     async def start(self):
         """Start the alert monitoring loop."""
         self.running = True
+
+        # Set logging context for notification manager
+        set_logging_context("telegram_alert_monitor")
+
         logger.info("Alert monitor started")
         while self.running:
             try:

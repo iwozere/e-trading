@@ -15,7 +15,7 @@ from src.common.ticker_analyzer import format_ticker_report
 from src.notification.async_notification_manager import initialize_notification_manager
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
 
-from src.notification.logger import setup_logger
+from src.notification.logger import setup_logger, set_logging_context
 logger = setup_logger("telegram_schedule_processor")
 
 
@@ -31,6 +31,10 @@ class ScheduleProcessor:
     async def start(self):
         """Start the schedule processing loop."""
         self.running = True
+
+        # Set logging context for notification manager
+        set_logging_context("telegram_schedule_processor")
+
         logger.info("Schedule processor started")
         while self.running:
             try:

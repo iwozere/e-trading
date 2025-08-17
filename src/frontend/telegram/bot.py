@@ -12,17 +12,14 @@ from aiogram.filters import Command, CommandObject
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 import asyncio
 import random
-from src.frontend.telegram import db
-from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
+from src.notification.async_notification_manager import initialize_notification_manager
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
-from src.frontend.telegram.command_parser import parse_command, ParsedCommand
-from src.frontend.telegram.screener.business_logic import handle_command, is_admin_user
 from src.frontend.telegram.screener.notifications import (
     process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
 )
 
 # Configure logging
-from src.notification.logger import setup_logger
+from src.notification.logger import setup_logger, set_logging_context
 logger = setup_logger("telegram_screener_bot")
 
 
@@ -185,6 +182,10 @@ async def unknown_command(message: Message):
 
 async def main():
     global notification_manager
+
+    # Set logging context so that notification manager logs go to telegram bot log file
+    set_logging_context("telegram_screener_bot")
+
     notification_manager = await initialize_notification_manager(
         telegram_token=TELEGRAM_BOT_TOKEN,
         telegram_chat_id=TELEGRAM_CHAT_ID,

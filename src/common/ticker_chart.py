@@ -10,7 +10,7 @@ from matplotlib.gridspec import GridSpec
 from src.notification.logger import setup_logger
 from src.model.telegram_bot import TickerAnalysis
 
-logger = setup_logger("telegram_bot")
+logger = setup_logger(__name__)
 
 
 def generate_chart(analysis : TickerAnalysis) -> bytes:
