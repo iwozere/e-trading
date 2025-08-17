@@ -495,7 +495,7 @@ class LSTMOptimizer:
             Dict with training history and metrics
         """
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
         # Use Huber loss for better robustness to outliers
         criterion = nn.HuberLoss(delta=0.1)
@@ -846,7 +846,7 @@ class LSTMOptimizer:
                 results['failed'].append(result)
 
         # Log summary
-        _logger.info("\n%s", "="*50)
+        _logger.info("%s", "="*50)
         _logger.info("LSTM Optimization Summary:")
         _logger.info("  Total: %d", results['total'])
         _logger.info("  Successful: %d", len(results['successful']))
