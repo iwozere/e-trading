@@ -9,6 +9,7 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 ## Features
 
 - **Share & Crypto Reports:** On-demand and scheduled reports for stocks and crypto pairs, with technical and fundamental indicators.
+- **Fundamental Screener:** Automated screening for undervalued stocks across different market cap categories and custom lists.
 - **Email Delivery:** Send reports and alerts to verified user emails.
 - **Price Alerts:** Set, pause, resume, and delete price alerts for any supported ticker.
 - **Scheduling:** Schedule recurring reports (daily/weekly/monthly) at user-defined times.
@@ -55,6 +56,53 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 - `-interval=...`: Data interval (e.g., 1d, 15m). Default: 1d.
 - `-provider=...`: Data provider (e.g., yf for Yahoo, bnc for Binance). If not specified: yf for tickers ≤5 chars, bnc for crypto (>5 chars).
 
+### Fundamental Screener
+
+| Command                                 | Description                                               | Example Usage                  |
+|-----------------------------------------|-----------------------------------------------------------|-------------------------------|
+| `/schedules screener LIST_TYPE [flags]` | Schedule fundamental screener for undervalued stocks.     | `/schedules screener us_small_cap -email` |
+|                                         |                                                           | `/schedules screener us_large_cap 09:00` |
+|                                         |                                                           | `/schedules screener custom_list 14:00 -indicators=PE,PB,ROE` |
+
+**Supported List Types:**
+- `us_small_cap`: US Small Cap stocks
+- `us_medium_cap`: US Medium Cap stocks  
+- `us_large_cap`: US Large Cap stocks
+- `swiss_shares`: Swiss SIX exchange stocks
+- `custom_list`: Custom ticker list (specified during creation)
+
+**Screener Flags:**
+- `-email`: Send screener report to your registered email.
+- `-indicators=...`: Comma-separated fundamental indicators to include (e.g., PE,PB,ROE,ROA,DY).
+- `-thresholds=...`: Custom screening thresholds (e.g., PE<15,PB<1.5,ROE>15).
+
+**Fundamental Indicators Available:**
+- **Valuation**: PE (P/E Ratio), Forward_PE, PB (P/B Ratio), PS (P/S Ratio), PEG
+- **Financial Health**: Debt_Equity, Current_Ratio, Quick_Ratio
+- **Profitability**: ROE (Return on Equity), ROA (Return on Assets), Operating_Margin, Profit_Margin
+- **Growth**: Revenue_Growth, Net_Income_Growth
+- **Cash Flow**: Free_Cash_Flow
+- **Dividends**: Dividend_Yield, Payout_Ratio
+- **DCF**: Discounted Cash Flow valuation
+
+**Screening Criteria:**
+- P/E Ratio < 15 (undervalued)
+- P/B Ratio < 1.5 (undervalued)
+- ROE > 15% (good profitability)
+- Debt/Equity < 0.5 (low debt)
+- Current Ratio > 1.5 (good liquidity)
+- Positive Free Cash Flow
+- Composite undervaluation score based on multiple factors
+
+**Report Format:**
+1. **Summary**: List of top 10 undervalued tickers with key metrics
+2. **Detailed Analysis**: Individual analysis for each ticker including:
+   - Company overview and sector
+   - Key financial ratios and their interpretation
+   - Buy/Sell/Hold recommendation with reasoning
+   - DCF valuation and fair value estimate
+   - Risk assessment
+
 ### Alerts
 
 | Command                                 | Description                                               | Example Usage                  |
@@ -98,6 +146,159 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 |-----------------------------------------|-----------------------------------------------------------|-------------------------------|
 | `/feedback MESSAGE`                     | Send feedback or bug report to admin/developer.           | `/feedback Please add MA!`    |
 | `/feature MESSAGE`                      | Suggest a new feature.                                    | `/feature Support for EURUSD` |
+
+---
+
+## Fundamental Screener Examples
+
+### Basic Usage
+```
+/schedules screener us_small_cap
+```
+Schedules a daily fundamental screener for US small cap stocks at default time (09:00 UTC).
+
+### With Email Delivery
+```
+/schedules screener us_large_cap -email
+```
+Schedules a screener for US large cap stocks and sends results to your registered email.
+
+### Custom Indicators
+```
+/schedules screener us_medium_cap -indicators=PE,PB,ROE,ROA,Dividend_Yield
+```
+Schedules a screener focusing on specific fundamental indicators.
+
+### Custom Time
+```
+/schedules screener swiss_shares 14:00 -email
+```
+Schedules a screener for Swiss shares at 2 PM UTC with email delivery.
+
+### Custom List
+```
+/schedules screener custom_list 08:00 -indicators=PE,PB,ROE
+```
+Schedules a screener for a custom ticker list (you'll be prompted to specify the list during creation).
+
+---
+
+## Fundamental Analysis Guide
+
+### Key Ratios Explained
+
+**Valuation Ratios:**
+- **P/E Ratio**: Price-to-Earnings ratio. Lower values suggest undervaluation.
+  - < 15: Undervalued
+  - 15-25: Fair value
+  - > 25: Potentially overvalued
+
+- **P/B Ratio**: Price-to-Book ratio. Measures market value vs book value.
+  - < 1: Undervalued
+  - 1-3: Fair value
+  - > 3: Potentially overvalued
+
+- **P/S Ratio**: Price-to-Sales ratio. Useful for companies with no earnings.
+  - < 1: Undervalued
+  - 1-3: Fair value
+  - > 3: Potentially overvalued
+
+**Financial Health:**
+- **Debt/Equity**: Total debt divided by shareholders' equity.
+  - < 0.5: Low debt (good)
+  - 0.5-1.0: Moderate debt
+  - > 1.0: High debt (risky)
+
+- **Current Ratio**: Current assets divided by current liabilities.
+  - > 1.5: Good liquidity
+  - 1.0-1.5: Adequate liquidity
+  - < 1.0: Poor liquidity
+
+**Profitability:**
+- **ROE**: Return on Equity. Higher values indicate better profitability.
+  - > 15%: Excellent
+  - 10-15%: Good
+  - < 10%: Poor
+
+- **ROA**: Return on Assets. Measures efficiency of asset utilization.
+  - > 5%: Good
+  - 2-5%: Average
+  - < 2%: Poor
+
+**Growth:**
+- **Revenue Growth**: Year-over-year revenue growth rate.
+  - > 10%: Strong growth
+  - 5-10%: Moderate growth
+  - < 5%: Slow growth
+
+**Dividends:**
+- **Dividend Yield**: Annual dividend as percentage of stock price.
+  - > 4%: High yield
+  - 2-4%: Moderate yield
+  - < 2%: Low yield
+
+### Buy/Sell/Hold Recommendations
+
+**BUY Criteria:**
+- P/E < 15 and P/B < 1.5
+- ROE > 15% and ROA > 5%
+- Debt/Equity < 0.5
+- Positive revenue and earnings growth
+- Positive free cash flow
+- Composite score > 7/10
+
+**HOLD Criteria:**
+- Fair valuation metrics
+- Stable financials
+- Moderate growth prospects
+- Composite score 5-7/10
+
+**SELL Criteria:**
+- P/E > 25 or P/B > 3
+- ROE < 10% or ROA < 2%
+- High debt levels
+- Declining revenue/earnings
+- Negative free cash flow
+- Composite score < 5/10
+
+---
+
+## Technical Details
+
+### Data Sources
+- **Fundamental Data**: Yahoo Finance (yfinance)
+- **Ticker Lists**: CSV files for US stocks, SIX API for Swiss shares
+- **Rate Limits**: Standard yfinance rate limits (sequential processing)
+
+### Error Handling
+- Tickers with missing fundamental data are skipped
+- Errors are logged to the system log file
+- Partial failures don't stop the entire screening process
+
+### Performance
+- Sequential processing to respect API rate limits
+- Future enhancements planned for caching and parallel processing
+- Sector-average comparisons planned for future releases
+
+---
+
+## Future Enhancements
+
+### Planned Features
+- **Sector Comparison**: Compare metrics against sector averages
+- **Percentile Rankings**: Rank stocks within their peer group
+- **Caching**: Cache fundamental data to reduce API calls
+- **Custom Thresholds**: User-defined screening criteria
+- **Portfolio Integration**: Track screened stocks in user portfolios
+- **Alert Integration**: Price alerts for screened stocks
+- **Export Options**: CSV/Excel export of screening results
+
+### Advanced Screening
+- **Multi-factor Models**: Composite scoring systems
+- **Technical + Fundamental**: Combined technical and fundamental analysis
+- **Risk Assessment**: Volatility and beta analysis
+- **ESG Screening**: Environmental, Social, and Governance factors
+- **International Markets**: Support for additional markets beyond US and Switzerland
 
 ---
 

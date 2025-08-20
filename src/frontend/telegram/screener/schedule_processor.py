@@ -120,6 +120,19 @@ class ScheduleProcessor:
             logger.exception("Error checking schedule %s: ", schedule.get("id"))
 
     async def execute_schedule(self, schedule: Dict[str, Any]):
+        """Execute a scheduled report or screener."""
+        try:
+            schedule_type = schedule.get("schedule_type", "report")
+
+            if schedule_type == "screener":
+                await self.execute_screener_schedule(schedule)
+            else:
+                await self.execute_report_schedule(schedule)
+
+        except Exception as e:
+            logger.exception("Error executing schedule %s: ", schedule.get("id"))
+
+    async def execute_report_schedule(self, schedule: Dict[str, Any]):
         """Execute a scheduled report."""
         try:
             ticker = schedule["ticker"]
@@ -193,11 +206,83 @@ class ScheduleProcessor:
                     email_receiver=user_email
                 )
 
-            logger.info("Executed schedule #%d for user %s: %s (%s)",
+            logger.info("Executed report schedule #%d for user %s: %s (%s)",
                        schedule_id, user_id, ticker, period)
 
         except Exception as e:
-            logger.exception("Error executing schedule %s: ", schedule.get("id"))
+            logger.exception("Error executing report schedule %s: ", schedule.get("id"))
+
+    async def execute_screener_schedule(self, schedule: Dict[str, Any]):
+        """Execute a scheduled fundamental screener."""
+        try:
+            user_id = schedule["user_id"]
+            schedule_id = schedule["id"]
+            send_email = schedule.get("email", 0)
+            list_type = schedule.get("list_type", "us_small_cap")
+            period = schedule.get("period", "daily")
+
+            # Get user info
+            user_status = db.get_user_status(user_id)
+            if not user_status:
+                logger.warning("User %s not found for schedule %d", user_id, schedule_id)
+                return
+
+            user_email = user_status.get("email") if user_status.get("verified") else None
+
+            # Import screener module
+            from src.frontend.telegram.screener.fundamental_screener import screener
+
+            # Run the screener
+            logger.info("Starting scheduled screener for user %s, list_type: %s", user_id, list_type)
+
+            screener_report = screener.run_screener(list_type)
+
+            if screener_report.error:
+                # Send error notification
+                error_message = f"❌ Scheduled Screener Error\n\nSchedule #{schedule_id}\nList Type: {list_type}\nError: {screener_report.error}"
+
+                await self.notification_manager.send_notification(
+                    notification_type="ERROR",
+                    title=f"Scheduled Screener Error for {list_type}",
+                    message=error_message,
+                    priority="NORMAL",
+                    channels=["telegram"],
+                    telegram_chat_id=int(user_id)
+                )
+                return
+
+            # Format the screener report for Telegram
+            screener_message = screener.format_telegram_message(screener_report)
+
+            # Send Telegram notification
+            await self.notification_manager.send_notification(
+                notification_type="INFO",
+                title=f"Fundamental Screener Report - {list_type.replace('_', ' ').title()}",
+                message=screener_message,
+                priority="NORMAL",
+                channels=["telegram"],
+                telegram_chat_id=int(user_id)
+            )
+
+            # Send email notification if requested and user has verified email
+            if send_email and user_email:
+                # For email, we might want to format it differently
+                email_message = screener_message.replace("**", "").replace("*", "")  # Remove markdown
+
+                await self.notification_manager.send_notification(
+                    notification_type="INFO",
+                    title=f"Alkotrader Fundamental Screener Report - {list_type.replace('_', ' ').title()}",
+                    message=email_message,
+                    priority="NORMAL",
+                    channels=["email"],
+                    email_receiver=user_email
+                )
+
+            logger.info("Executed screener schedule #%d for user %s: %s (%s)",
+                       schedule_id, user_id, list_type, period)
+
+        except Exception as e:
+            logger.exception("Error executing screener schedule %s: ", schedule.get("id"))
 
 
 async def main():

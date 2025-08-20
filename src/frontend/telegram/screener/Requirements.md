@@ -68,6 +68,12 @@ from src.notification.logger import setup_logger  # Logging infrastructure
   - Registration: [BotFather](https://t.me/botfather)
   - Scope: Bot creation, message sending, command handling
 
+### Financial Data APIs
+- **Yahoo Finance (yfinance)** - For fundamental and market data
+  - No API key required (free tier)
+  - Rate limits: Sequential processing to respect limits
+  - Data: OHLCV, fundamentals, company info
+
 ### Email Service Configuration
 - **SMTP Server Credentials** - For email verification and report delivery
   - Environment variables: `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_HOST`, `SMTP_PORT`
@@ -392,6 +398,117 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 ### Data Backup
 - **Database**: Daily automated backups
 - **Configuration**: Version-controlled configuration files
+
+## Fundamental Screener Requirements
+
+### Core Screening Functionality
+1. **Ticker List Support**
+   - US Small Cap stocks (from CSV files)
+   - US Medium Cap stocks (from CSV files)
+   - US Large Cap stocks (from CSV files)
+   - Swiss Shares (SIX exchange via API)
+   - Custom ticker lists (user-defined)
+
+2. **Fundamental Data Collection**
+   - Sequential processing to respect API rate limits
+   - Yahoo Finance (yfinance) as primary data source
+   - Comprehensive fundamental metrics collection
+   - Error handling for missing or invalid data
+   - Skip tickers with insufficient fundamental data
+
+3. **Screening Criteria**
+   - **Valuation Ratios**: P/E < 15, P/B < 1.5, P/S < 1, PEG < 1.5
+   - **Financial Health**: Debt/Equity < 0.5, Current Ratio > 1.5, Quick Ratio > 1
+   - **Profitability**: ROE > 15%, ROA > 5%, Operating Margin > 10%, Profit Margin > 5%
+   - **Growth**: Revenue Growth > 5%, Net Income Growth > 5%
+   - **Cash Flow**: Positive Free Cash Flow
+   - **Dividends**: Dividend Yield > 2% (optional), Payout Ratio < 60%
+
+4. **DCF Valuation**
+   - Discounted Cash Flow calculation for fair value estimation
+   - Growth rate assumptions based on historical data
+   - Discount rate calculation using risk-free rate + beta
+   - Terminal value calculation
+   - Fair value comparison with current price
+
+5. **Composite Scoring**
+   - Multi-factor scoring system (0-10 scale)
+   - Weighted combination of valuation, financial health, profitability, and growth metrics
+   - Sector-relative scoring (future enhancement)
+   - Risk-adjusted scoring
+
+### Report Generation
+1. **Summary Report**
+   - Top 10 undervalued tickers with key metrics
+   - Composite scores and rankings
+   - Sector distribution analysis
+   - Overall market sentiment summary
+
+2. **Detailed Analysis**
+   - Individual company analysis for each top 10 ticker
+   - Company overview and sector information
+   - Key financial ratios with interpretation
+   - Buy/Sell/Hold recommendation with detailed reasoning
+   - DCF valuation and fair value estimate
+   - Risk assessment and considerations
+
+3. **Report Format**
+   - Telegram message formatting with proper markdown
+   - Email delivery with HTML formatting
+   - Chart generation for key metrics visualization
+   - Export options (future enhancement)
+
+### Command Interface
+1. **Screener Command Structure**
+   - `/schedules screener LIST_TYPE [TIME] [flags]`
+   - Support for all existing schedule flags (-email, -indicators, etc.)
+   - Custom indicator selection for focused screening
+   - Custom threshold specification (future enhancement)
+
+2. **List Type Support**
+   - `us_small_cap`: US Small Cap stocks
+   - `us_medium_cap`: US Medium Cap stocks
+   - `us_large_cap`: US Large Cap stocks
+   - `swiss_shares`: Swiss SIX exchange stocks
+   - `custom_list`: Custom ticker list (prompted during creation)
+
+### Performance and Scalability
+1. **Processing Strategy**
+   - Sequential processing to respect API rate limits
+   - Progress tracking and user feedback
+   - Timeout handling for long-running operations
+   - Partial result reporting for large lists
+
+2. **Caching Strategy** (Future Enhancement)
+   - Cache fundamental data to reduce API calls
+   - Cache screening results for repeated requests
+   - Cache invalidation based on data freshness
+   - Redis-based caching for distributed deployments
+
+3. **Error Handling**
+   - Graceful handling of API failures
+   - Skip tickers with missing data
+   - Log errors for debugging and monitoring
+   - User-friendly error messages
+
+### Future Enhancements
+1. **Advanced Screening**
+   - Sector-average comparisons
+   - Percentile rankings within peer groups
+   - Custom user-defined screening criteria
+   - Multi-factor model integration
+
+2. **Portfolio Integration**
+   - Track screened stocks in user portfolios
+   - Performance monitoring of screened stocks
+   - Rebalancing recommendations
+   - Risk-adjusted return analysis
+
+3. **Export and Integration**
+   - CSV/Excel export of screening results
+   - API endpoints for external integrations
+   - Webhook notifications for new opportunities
+   - Third-party portfolio management integration
 - **Logs**: Archive to long-term storage
 
 ### Disaster Recovery

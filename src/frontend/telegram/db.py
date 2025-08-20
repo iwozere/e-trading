@@ -68,8 +68,17 @@ def init_db():
         indicators TEXT,
         interval TEXT,
         provider TEXT,
-        created TEXT
+        created TEXT,
+        schedule_type TEXT DEFAULT 'report',
+        list_type TEXT
     )''')
+    # Migration: add new columns if missing
+    c.execute("PRAGMA table_info(schedules)")
+    columns = [row[1] for row in c.fetchall()]
+    if "schedule_type" not in columns:
+        c.execute("ALTER TABLE schedules ADD COLUMN schedule_type TEXT DEFAULT 'report'")
+    if "list_type" not in columns:
+        c.execute("ALTER TABLE schedules ADD COLUMN list_type TEXT")
     c.execute('''CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -240,8 +249,36 @@ def add_schedule(user_id: str, ticker: str, scheduled_time: str, period: str = N
     created = datetime.now(timezone.utc).isoformat()
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO schedules (ticker, user_id, scheduled_time, period, active, email, indicators, interval, provider, created) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)",
+    c.execute("INSERT INTO schedules (ticker, user_id, scheduled_time, period, active, email, indicators, interval, provider, created, schedule_type, list_type) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'report', NULL)",
               (ticker, user_id, scheduled_time, period, email, indicators, interval, provider, created))
+    schedule_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return schedule_id
+
+
+def create_schedule(schedule_data: Dict[str, Any]) -> int:
+    """Create a new schedule with full data dictionary. Returns schedule id."""
+    created = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    # Extract fields from schedule_data
+    ticker = schedule_data.get('ticker')
+    user_id = schedule_data.get('telegram_user_id')
+    scheduled_time = schedule_data.get('scheduled_time')
+    period = schedule_data.get('period', 'daily')
+    email = 1 if schedule_data.get('email', False) else 0
+    indicators = schedule_data.get('indicators')
+    interval = schedule_data.get('interval', '1d')
+    provider = schedule_data.get('provider', 'yf')
+    schedule_type = schedule_data.get('schedule_type', 'report')
+    list_type = schedule_data.get('list_type')
+
+    c.execute("""INSERT INTO schedules
+                 (ticker, user_id, scheduled_time, period, active, email, indicators, interval, provider, created, schedule_type, list_type)
+                 VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)""",
+              (ticker, user_id, scheduled_time, period, email, indicators, interval, provider, created, schedule_type, list_type))
     schedule_id = c.lastrowid
     conn.commit()
     conn.close()

@@ -5,6 +5,7 @@ Includes:
 - Fundamentals and technicals data structures
 - Ticker analysis result encapsulation
 - Command specification and parsing models
+- Fundamental screener data models
 """
 from typing import Any, Dict, List, Optional, Type
 from dataclasses import dataclass, field
@@ -91,6 +92,44 @@ class TickerAnalysis:
     error: Optional[str] = None
     current_price: Optional[float] = None
     change_percentage: Optional[float] = None
+
+
+@dataclass
+class DCFResult:
+    """Discounted Cash Flow valuation result."""
+    ticker: str
+    fair_value: Optional[float] = None
+    growth_rate: Optional[float] = None
+    discount_rate: Optional[float] = None
+    terminal_value: Optional[float] = None
+    assumptions: Optional[Dict[str, float]] = None
+    confidence_level: Optional[str] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class ScreenerResult:
+    """Result of fundamental screening for a single ticker."""
+    ticker: str
+    fundamentals: Optional[Fundamentals] = None
+    dcf_valuation: Optional[DCFResult] = None
+    composite_score: Optional[float] = None
+    screening_status: Optional[Dict[str, bool]] = None
+    recommendation: Optional[str] = None  # "BUY", "HOLD", "SELL"
+    reasoning: Optional[str] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class ScreenerReport:
+    """Complete fundamental screener report."""
+    list_type: str
+    total_tickers_processed: int
+    total_tickers_with_data: int
+    top_results: List[ScreenerResult]
+    summary_stats: Optional[Dict[str, Any]] = None
+    generated_at: Optional[str] = None
+    error: Optional[str] = None
 
 
 @dataclass

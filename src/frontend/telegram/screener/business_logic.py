@@ -910,7 +910,14 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
             # List all schedules for user
             return handle_schedules_list(telegram_user_id)
 
-        if action == "add" and len(params) >= 2:
+        if action == "screener" and len(params) >= 1:
+            list_type = params[0]
+            time = params[1] if len(params) > 1 else "09:00"  # Default time
+            # Get flags from parsed args
+            email = parsed.args.get("email", False)
+            indicators = parsed.args.get("indicators")
+            return handle_schedules_screener(telegram_user_id, list_type, time, email, indicators)
+        elif action == "add" and len(params) >= 2:
             ticker, time = params[0], params[1]
             # Get flags from parsed args
             email = parsed.args.get("email", False)
@@ -947,6 +954,11 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
                            "  -period=1y: Data period\n"
                            "  -interval=1d: Data interval\n"
                            "  -provider=yf: Data provider\n"
+                           "/schedules screener LIST_TYPE [TIME] [flags] - Schedule fundamental screener\n"
+                           "  LIST_TYPE: us_small_cap, us_medium_cap, us_large_cap, swiss_shares, custom_list\n"
+                           "  TIME: HH:MM format (24h UTC)\n"
+                           "  Example: /schedules screener us_small_cap 09:00 -email\n"
+                           "  Example: /schedules screener us_large_cap -indicators=PE,PB,ROE\n"
                            "/schedules edit SCHEDULE_ID [TIME] [flags] - Edit schedule\n"
                            "/schedules delete SCHEDULE_ID - Delete schedule\n"
                            "/schedules pause SCHEDULE_ID - Pause schedule\n"
@@ -1167,6 +1179,91 @@ def handle_schedules_resume(telegram_user_id: str, schedule_id_str: str) -> Dict
     except Exception as e:
         logger.exception("Error resuming schedule: ")
         return {"status": "error", "message": f"Error resuming schedule: {str(e)}"}
+
+
+def handle_schedules_screener(telegram_user_id: str, list_type: str, time: str,
+                            email: bool = False, indicators: str = None) -> Dict[str, Any]:
+    """Handle screener schedule creation."""
+    try:
+        # Validate list type
+        valid_list_types = ['us_small_cap', 'us_medium_cap', 'us_large_cap', 'swiss_shares', 'custom_list']
+        if list_type not in valid_list_types:
+            return {
+                'success': False,
+                'message': f"Invalid list type. Valid types: {', '.join(valid_list_types)}"
+            }
+
+        # Validate time format
+        try:
+            # Simple time validation (HH:MM format)
+            hour, minute = map(int, time.split(':'))
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError("Invalid time")
+        except (ValueError, AttributeError):
+            return {
+                'success': False,
+                'message': "Invalid time format. Use HH:MM (24-hour format, UTC)"
+            }
+
+        # Check user limits
+        current_schedules = db.list_schedules(telegram_user_id)
+        user_limit = db.get_user_limit(telegram_user_id, 'schedules')
+
+        if len(current_schedules) >= user_limit:
+            return {
+                'success': False,
+                'message': f"You have reached your limit of {user_limit} scheduled reports. Delete some schedules first."
+            }
+
+        # Create screener schedule
+        schedule_data = {
+            'telegram_user_id': telegram_user_id,
+            'ticker': f"SCREENER_{list_type.upper()}",  # Special ticker format for screeners
+            'scheduled_time': time,
+            'email': email,
+            'indicators': indicators,
+            'period': 'daily',  # Screeners run daily
+            'interval': '1d',
+            'provider': 'yf',
+            'active': True,
+            'schedule_type': 'screener',  # New field to distinguish screeners
+            'list_type': list_type  # Store the list type
+        }
+
+        schedule_id = db.create_schedule(schedule_data)
+
+        if schedule_id:
+            message = f"✅ Fundamental screener scheduled successfully!\n"
+            message += f"📊 **List Type**: {list_type.replace('_', ' ').title()}\n"
+            message += f"⏰ **Time**: {time} UTC (daily)\n"
+            message += f"📧 **Email**: {'Yes' if email else 'No'}\n"
+            if indicators:
+                message += f"📈 **Indicators**: {indicators}\n"
+            message += f"🆔 **Schedule ID**: {schedule_id}\n\n"
+            message += "The screener will analyze stocks for undervaluation based on:\n"
+            message += "• P/E < 15, P/B < 1.5, P/S < 1\n"
+            message += "• ROE > 15%, Debt/Equity < 0.5\n"
+            message += "• Positive Free Cash Flow\n"
+            message += "• Composite scoring (0-10 scale)\n"
+            message += "• DCF valuation analysis"
+
+            return {
+                'success': True,
+                'title': "Screener Scheduled",
+                'message': message
+            }
+        else:
+            return {
+                'success': False,
+                'message': "Failed to create screener schedule. Please try again."
+            }
+
+    except Exception as e:
+        logger.exception("Error creating screener schedule: ")
+        return {
+            'success': False,
+            'message': f"Error creating screener schedule: {str(e)}"
+        }
 
 
 def handle_feedback(parsed: ParsedCommand) -> Dict[str, Any]:

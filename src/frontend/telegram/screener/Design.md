@@ -64,13 +64,110 @@ The screener module follows a layered, event-driven architecture with clear sepa
 # Message Handlers
 @dp.message(Command("report"))  # Report generation
 @dp.message(Command("alerts"))  # Alert management
-@dp.message(Command("schedules"))  # Schedule management
+@dp.message(Command("schedules"))  # Schedule management (includes screener)
 @dp.message(Command("admin"))  # Administrative functions
 
 # Middleware & Filters
 - User authentication middleware
 - Rate limiting middleware
 - Admin privilege checking
+```
+
+#### 2. Fundamental Screener Architecture
+
+**Screener Component (`fundamental_screener.py`):**
+- Core screening logic and data processing
+- Ticker list management and data collection
+- Fundamental analysis and scoring algorithms
+- Report generation and formatting
+
+```python
+FundamentalScreener:
+├── load_ticker_list(list_type: str) -> List[str]
+├── collect_fundamentals(tickers: List[str]) -> Dict[str, Fundamentals]
+├── apply_screening_criteria(fundamentals: Dict) -> List[ScreenerResult]
+├── calculate_dcf_valuation(fundamentals: Fundamentals) -> DCFResult
+├── generate_composite_score(fundamentals: Fundamentals) -> float
+├── generate_report(results: List[ScreenerResult]) -> ScreenerReport
+└── format_telegram_message(report: ScreenerReport) -> str
+
+ScreenerResult:
+├── ticker: str
+├── fundamentals: Fundamentals
+├── dcf_valuation: DCFResult
+├── composite_score: float
+├── screening_status: Dict[str, bool]
+├── recommendation: str
+└── reasoning: str
+
+DCFResult:
+├── fair_value: float
+├── growth_rate: float
+├── discount_rate: float
+├── terminal_value: float
+├── assumptions: Dict[str, float]
+└── confidence_level: str
+```
+
+**Ticker List Manager:**
+- Integration with existing ticker list functions
+- Support for custom list creation and management
+- List validation and error handling
+
+```python
+TickerListManager:
+├── get_us_small_cap_tickers() -> List[str]
+├── get_us_medium_cap_tickers() -> List[str]
+├── get_us_large_cap_tickers() -> List[str]
+├── get_swiss_shares_tickers() -> List[str]
+├── get_custom_list_tickers(list_name: str) -> List[str]
+└── validate_ticker_list(tickers: List[str]) -> bool
+```
+
+**Fundamental Data Collector:**
+- Sequential data collection with rate limiting
+- Error handling and data validation
+- Progress tracking and user feedback
+
+```python
+FundamentalDataCollector:
+├── collect_fundamentals_sequential(tickers: List[str]) -> Dict[str, Fundamentals]
+├── validate_fundamental_data(fundamentals: Fundamentals) -> bool
+├── handle_api_errors(ticker: str, error: Exception) -> None
+├── track_progress(current: int, total: int) -> None
+└── respect_rate_limits() -> None
+```
+
+**Screening Engine:**
+- Multi-criteria screening with configurable thresholds
+- Composite scoring algorithm
+- Buy/Sell/Hold recommendation logic
+
+```python
+ScreeningEngine:
+├── apply_valuation_criteria(fundamentals: Fundamentals) -> Dict[str, bool]
+├── apply_financial_health_criteria(fundamentals: Fundamentals) -> Dict[str, bool]
+├── apply_profitability_criteria(fundamentals: Fundamentals) -> Dict[str, bool]
+├── apply_growth_criteria(fundamentals: Fundamentals) -> Dict[str, bool]
+├── apply_cash_flow_criteria(fundamentals: Fundamentals) -> Dict[str, bool]
+├── calculate_composite_score(criteria_results: Dict) -> float
+├── generate_recommendation(score: float, fundamentals: Fundamentals) -> str
+└── generate_reasoning(criteria_results: Dict, score: float) -> str
+```
+
+**DCF Valuation Engine:**
+- Discounted Cash Flow calculation
+- Growth rate estimation
+- Risk-adjusted discount rate calculation
+
+```python
+DCFEngine:
+├── calculate_free_cash_flow(fundamentals: Fundamentals) -> float
+├── estimate_growth_rate(fundamentals: Fundamentals) -> float
+├── calculate_discount_rate(fundamentals: Fundamentals) -> float
+├── calculate_terminal_value(fcf: float, growth: float, discount: float) -> float
+├── calculate_fair_value(fcf_series: List[float], terminal_value: float, discount: float) -> float
+└── assess_confidence_level(assumptions: Dict) -> str
 ```
 
 #### 2. Command Processing Layer
