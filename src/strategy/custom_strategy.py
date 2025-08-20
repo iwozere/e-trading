@@ -8,7 +8,6 @@ tracking, position management, and performance monitoring.
 
 from typing import Any, Dict
 
-import backtrader as bt
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.strategy.base_strategy import BaseStrategy
