@@ -73,7 +73,43 @@ The screener module follows a layered, event-driven architecture with clear sepa
 - Admin privilege checking
 ```
 
-#### 2. Fundamental Screener Architecture
+#### 2. Command Processing Architecture
+
+**Command Parser (`command_parser.py`):**
+- Intelligent case-insensitive command parsing
+- Smart argument type handling and conversion
+- Support for flags, positional arguments, and named parameters
+
+```python
+CommandParser:
+├── parse_command(command_text: str) -> ParsedCommand
+├── handle_case_conversion(command: str, args: List[str]) -> Tuple[str, List[str]]
+├── process_flags(tokens: List[str]) -> Dict[str, Any]
+└── validate_command_structure(parsed: ParsedCommand) -> bool
+
+ParsedCommand:
+├── command: str (lowercase)
+├── positionals: List[str] (tickers -> uppercase, actions -> lowercase)
+├── args: Dict[str, Any] (flags and named parameters)
+└── raw_args: List[str] (original arguments)
+```
+
+**Business Logic (`business_logic.py`):**
+- Centralized command handling and routing
+- User access control and approval checking
+- Integration with all bot features (reports, alerts, schedules, screener)
+
+```python
+BusinessLogic:
+├── handle_command(telegram_user_id: str, command: str, positionals: List[str], args: Dict) -> Dict
+├── check_approved_access(telegram_user_id: str) -> Dict[str, Any]
+├── handle_report(parsed: ParsedCommand) -> Dict[str, Any]
+├── handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]
+├── handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]
+└── handle_admin(parsed: ParsedCommand) -> Dict[str, Any]
+```
+
+#### 3. Fundamental Screener Architecture
 
 **Screener Component (`fundamental_screener.py`):**
 - Core screening logic and data processing
@@ -170,7 +206,54 @@ DCFEngine:
 └── assess_confidence_level(assumptions: Dict) -> str
 ```
 
-#### 2. Command Processing Layer
+#### 4. Admin Panel Architecture
+
+**Web-Based Admin Interface (`admin_panel.py`):**
+- Flask-based web application for administrative tasks
+- User management and approval workflow
+- System monitoring and statistics dashboard
+
+```python
+AdminPanel:
+├── Authentication & Security
+│   ├── login_required decorator for route protection
+│   ├── session management with Flask sessions
+│   └── environment variable-based credentials
+├── User Management
+│   ├── list_users() -> Display all users with status
+│   ├── approve_user(user_id) -> Grant access to restricted features
+│   ├── reject_user(user_id) -> Revoke access
+│   ├── verify_user(user_id) -> Manual verification
+│   └── reset_user_email(user_id) -> Email reset
+├── Dashboard
+│   ├── system_statistics() -> User counts, alerts, schedules
+│   ├── pending_approvals() -> Users waiting for approval
+│   └── recent_activity() -> System activity overview
+└── System Management
+    ├── alerts_management() -> View/edit all user alerts
+    ├── schedules_management() -> View/edit all schedules
+    ├── broadcast_messaging() -> Send messages to users
+    └── feedback_management() -> Handle user feedback
+```
+
+**Admin Panel Routes:**
+```python
+Routes:
+├── /login - Admin authentication
+├── /logout - Session termination
+├── / - Dashboard with statistics
+├── /users - User management interface
+├── /users/<user_id>/approve - User approval
+├── /users/<user_id>/reject - User rejection
+├── /users/<user_id>/verify - Manual verification
+├── /users/<user_id>/reset - Email reset
+├── /alerts - Alert management
+├── /schedules - Schedule management
+├── /feedback - Feedback management
+└── /broadcast - Broadcast messaging
+```
+
+#### 5. Command Processing Layer
 
 **Command Parser (`command_parser.py`):**
 - Advanced command parsing with flag support

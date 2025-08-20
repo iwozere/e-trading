@@ -46,8 +46,8 @@ class EnterpriseCommandParser:
                 else:
                     extra_flags[flag] = value if value is not None else True
             elif not token.startswith("-"):
-                # Only tickers should be upper case
-                positionals.append(token.upper())
+                # Keep positionals in original case for now, will handle case conversion in business logic
+                positionals.append(token)
             i += 1
         # Assign positionals to named fields if defined
         for idx, pname in enumerate(spec.positional):
@@ -56,10 +56,10 @@ class EnterpriseCommandParser:
                 args[pname] = positionals[idx]
         # Special case: if the only positional is 'tickers', assign all positionals as a list
         if spec.positional == ["tickers"]:
-            args["tickers"] = positionals
-        # Special case: for alerts command, keep all positionals available
-        elif command == "alerts" and len(spec.positional) == 2:
-            args["action"] = positionals[0] if len(positionals) > 0 else None
+            args["tickers"] = [p.upper() for p in positionals]  # Convert tickers to uppercase
+        # Special case: for alerts, schedules, and admin commands, convert action to lowercase
+        elif command in ["alerts", "schedules", "admin"] and len(spec.positional) == 2:
+            args["action"] = positionals[0].lower() if len(positionals) > 0 else None  # Convert action to lowercase
             args["params"] = positionals[1:] if len(positionals) > 1 else []
         return ParsedCommand(
             command=command,

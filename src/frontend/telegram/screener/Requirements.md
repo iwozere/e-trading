@@ -68,6 +68,12 @@ from src.notification.logger import setup_logger  # Logging infrastructure
   - Registration: [BotFather](https://t.me/botfather)
   - Scope: Bot creation, message sending, command handling
 
+### Admin Panel Configuration
+- **Admin Login Credentials** - For web-based admin panel access
+  - Environment variables: `WEBGUI_LOGIN`, `WEBGUI_PASSWORD`
+  - Purpose: Secure access to admin panel for user management and approvals
+  - Default: Set strong credentials in production environment
+
 ### Financial Data APIs
 - **Yahoo Finance (yfinance)** - For fundamental and market data
   - No API key required (free tier)
@@ -553,6 +559,24 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 - **System Monitoring**: Admins receive notifications for approval requests and system events
 
 ## Recent Architectural Improvements
+
+### Case-Insensitive Command Processing
+- **Problem Solved**: Commands were case-sensitive, causing user confusion and errors
+- **Solution**: Implemented intelligent case-insensitive command parsing
+- **Benefits**: 
+  - All commands work regardless of case (e.g., `/REPORT`, `/Report`, `/report`)
+  - Tickers automatically converted to uppercase for consistency
+  - Actions converted to lowercase for internal processing
+  - Improved user experience and reduced support requests
+
+### Web-Based Admin Panel
+- **Problem Solved**: Admin functions only available via Telegram commands
+- **Solution**: Implemented comprehensive web-based admin interface
+- **Benefits**:
+  - User-friendly approval workflow with visual interface
+  - Real-time dashboard with system statistics
+  - Bulk user management capabilities
+  - Enhanced monitoring and reporting features
 
 ### Dynamic Chat Routing
 - **Problem Solved**: Bot responses were sent to fixed admin chat instead of user's chat

@@ -230,14 +230,19 @@ These rules are binding for any AI agent generating code for this project:
 1. **Always** read and follow this `CODING_CONVENTION.md` before generating or modifying code.
 2. Apply **PEP 8** plus all custom conventions listed here.
 3. Use the provided **logger initialization** and **lazy logging** format.
-4. Ensure that each new or modified `src/` submodule contains:
-
-   * Its own `tests/` folder
-   * `README.md`, `Requirements.md`, `Design.md`, and `Tasks.md`
+4. **CRITICAL**: Ensure that each new or modified `src/` module contains:
+   - `README.md` - Module overview and usage examples
+   - `docs/` subfolder containing:
+     - `Requirements.md` - Technical requirements and dependencies
+     - `Design.md` - Architecture and design decisions
+     - `Tasks.md` - Implementation tasks and roadmap
+   - `tests/` subfolder with module-specific tests
 5. When creating functions, **always include** type hints and docstrings in the specified format.
 6. Prefer clear, maintainable code over clever one-liners.
 7. Write unit tests for any new functionality and place them in the corresponding `tests/` folder.
 8. Ensure commit messages follow the Git rules in section 11.
+9. **Document cross-module dependencies** in `Requirements.md` when modules interact.
+10. **Use absolute imports** from the project root (e.g., `from src.data import ...`).
 
 ---
 
@@ -245,27 +250,41 @@ These rules are binding for any AI agent generating code for this project:
 
 ### 13.1 README.md Template
 
-````markdown
-# <Submodule Name>
+```markdown
+# <Module Name>
 
 ## Overview
-Short description of the module's purpose and responsibilities.
+Short description of the module's purpose and responsibilities within the e-trading platform.
 
-## Usage
-Example code showing how to use this module.
+## Features
+- Key feature 1
+- Key feature 2
+- Key feature 3
+
+## Quick Start
+Example code showing how to use this module:
 
 ```python
-from src.<submodule> import some_function
+from src.<module_name> import some_function
 
 result = some_function()
 print(result)
-````
+```
 
-## Related Modules
+## Integration
+This module integrates with:
+- `src.data` - For data retrieval
+- `src.notification` - For user notifications
+- Other relevant modules
 
-* Link to other submodules or components that interact with this one.
+## Configuration
+Basic configuration instructions and environment variables.
 
-````
+## Related Documentation
+- [Requirements](docs/Requirements.md) - Technical requirements
+- [Design](docs/Design.md) - Architecture and design
+- [Tasks](docs/Tasks.md) - Implementation roadmap
+```
 
 ---
 
@@ -273,11 +292,34 @@ print(result)
 ```markdown
 # Requirements
 
-## Dependencies
+## Python Dependencies
 - `package_name` >= version
+- `another_package` >= version
+
+## External Dependencies
+- `src.data` - For market data retrieval
+- `src.notification` - For user notifications
+- `src.common` - For shared utilities
 
 ## External Services
-- List any APIs, databases, or external systems this module depends on.
+- API service name and requirements
+- Database requirements
+- Authentication services
+
+## System Requirements
+- Memory requirements
+- CPU requirements
+- Storage requirements
+
+## Security Requirements
+- API key management
+- Data encryption
+- Access control
+
+## Performance Requirements
+- Response time targets
+- Throughput requirements
+- Scalability considerations
 ````
 
 ---
@@ -288,16 +330,37 @@ print(result)
 # Design
 
 ## Purpose
-Describe why this module exists.
+Describe why this module exists and its role in the e-trading platform.
 
 ## Architecture
 Explain the structure of the module and how it interacts with the rest of the system.
 
+### High-Level Architecture
+- Component diagram
+- Module interactions
+- Data flow patterns
+
+### Component Design
+- Individual components and their responsibilities
+- Interfaces between components
+- Error handling strategies
+
 ## Data Flow
-(Include diagrams if helpful.)
+- Input/output data structures
+- Processing pipelines
+- Integration points with other modules
 
 ## Design Decisions
-List important choices made during development and why.
+List important choices made during development and why:
+- Technology choices
+- Architecture patterns
+- Performance considerations
+- Security decisions
+
+## Integration Patterns
+- How this module integrates with other modules
+- API design principles
+- Error handling and recovery
 ```
 
 ---
@@ -307,20 +370,96 @@ List important choices made during development and why.
 ```markdown
 # Tasks
 
-## TODO
-- [ ] Task 1
-- [ ] Task 2
+## Implementation Status
 
-## In Progress
-- [ ] Task 3
+### ✅ COMPLETED FEATURES
+- [x] Feature 1 - Description
+- [x] Feature 2 - Description
 
-## Done
-- [x] Task 4
+### 🔄 IN PROGRESS
+- [ ] Feature 3 - Description
+- [ ] Feature 4 - Description
+
+### 🚀 PLANNED ENHANCEMENTS
+- [ ] Enhancement 1 - Description
+- [ ] Enhancement 2 - Description
+
+## Technical Debt
+- [ ] Refactor component X
+- [ ] Improve error handling
+- [ ] Add missing tests
+
+## Known Issues
+- Issue 1 - Description and impact
+- Issue 2 - Description and impact
+
+## Testing Requirements
+- [ ] Unit tests for component X
+- [ ] Integration tests for feature Y
+- [ ] Performance testing
+
+## Documentation Updates
+- [ ] Update API documentation
+- [ ] Add usage examples
+- [ ] Create troubleshooting guide
 ```
 
 ---
 
-*Last updated: 2025-08-09*
+## 14. Project Structure Reference
+
+### 14.1 Module Organization Principles
+
+1. **Each module in `src/` is self-contained** with its own documentation and tests
+2. **Cross-module dependencies are explicitly documented** in `Requirements.md`
+3. **Consistent structure** across all modules for maintainability
+4. **Clear separation of concerns** between modules
+
+### 14.2 Module Categories
+
+#### Core Modules
+- `src/data/` - Data providers and market data
+- `src/common/` - Shared utilities and fundamentals
+- `src/model/` - Data models and schemas
+- `src/config/` - Configuration management
+
+#### Feature Modules
+- `src/strategy/` - Trading strategies
+- `src/backtester/` - Backtesting framework
+- `src/trading/` - Trading execution
+- `src/analytics/` - Advanced analytics
+
+#### Interface Modules
+- `src/frontend/` - User interfaces (Telegram, Web)
+- `src/notification/` - Notification system
+- `src/management/` - Admin tools
+
+#### Infrastructure Modules
+- `src/error_handling/` - Error handling
+- `src/ml/` - Machine learning
+- `src/util/` - Utility scripts
+
+### 14.3 Documentation Hierarchy
+
+```
+Module Level:
+├── README.md (User-facing overview)
+└── docs/
+    ├── Requirements.md (Technical requirements)
+    ├── Design.md (Architecture and design)
+    └── Tasks.md (Implementation tracking)
+```
+
+### 14.4 Import Guidelines
+
+- **Use absolute imports** from project root: `from src.data import ...`
+- **Document dependencies** in `Requirements.md`
+- **Avoid circular dependencies** between modules
+- **Create clear interfaces** for cross-module communication
+
+---
+
+*Last updated: 2025-01-27*
 
 ```
 

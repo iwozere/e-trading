@@ -244,6 +244,8 @@ def dashboard():
         users = db.list_users()
         total_users = len(users)
         verified_users = sum(1 for user in users if user['verified'])
+        approved_users = sum(1 for user in users if user['approved'])
+        pending_approvals = sum(1 for user in users if user['verified'] and not user['approved'])
 
         conn = sqlite3.connect(db.DB_PATH)
         c = conn.cursor()
@@ -272,6 +274,14 @@ def dashboard():
                 <div>Verified Users</div>
             </div>
             <div class="stat-card">
+                <div class="stat-number">{approved_users}</div>
+                <div>Approved Users</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{pending_approvals}</div>
+                <div>Pending Approvals</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-number">{active_alerts}</div>
                 <div>Active Alerts</div>
             </div>
@@ -287,6 +297,32 @@ def dashboard():
 
         <h4>Recent Activity</h4>
         <p>Welcome to the Telegram Screener Bot Admin Panel. Use the navigation above to manage users, alerts, schedules, and feedback.</p>
+
+        {f'''
+        <h4>Pending Approvals ({pending_approvals})</h4>
+        <p>Users waiting for approval to access restricted features:</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Telegram ID</th>
+                    <th>Email</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+        ''' + ''.join([f'''
+                <tr>
+                    <td>{user['telegram_user_id']}</td>
+                    <td>{user['email'] or '(no email)'}</td>
+                    <td>
+                        <a href="/users/{user['telegram_user_id']}/approve" class="btn btn-success">Approve</a>
+                        <a href="/users/{user['telegram_user_id']}/reject" class="btn btn-danger">Reject</a>
+                    </td>
+                </tr>
+        ''' for user in users if user['verified'] and not user['approved']]) + '''
+            </tbody>
+        </table>
+        ''' if pending_approvals > 0 else '<p>No pending approvals.</p>'}
         """
 
         return render_template_string(ADMIN_TEMPLATE, content=content)
@@ -312,6 +348,7 @@ def users():
                     <th>Telegram ID</th>
                     <th>Email</th>
                     <th>Verified</th>
+                    <th>Approved</th>
                     <th>Language</th>
                     <th>Admin</th>
                     <th>Max Alerts</th>
@@ -324,11 +361,23 @@ def users():
 
         for user in users_list:
             verified_badge = "✅" if user['verified'] else "❌"
+            approved_badge = "✅" if user['approved'] else "❌"
             admin_badge = "👑" if user['is_admin'] else "👤"
             email = user['email'] or "(no email)"
 
             # Show Verify button only if user is not verified
             verify_button = f'<a href="/users/{user["telegram_user_id"]}/verify" class="btn btn-success">Verify</a>' if not user['verified'] else '<span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">Already Verified</span>'
+
+            # Show Approve/Reject buttons only if user is verified but not approved
+            if user['verified'] and not user['approved']:
+                approve_button = f'<a href="/users/{user["telegram_user_id"]}/approve" class="btn btn-success">Approve</a>'
+                reject_button = f'<a href="/users/{user["telegram_user_id"]}/reject" class="btn btn-danger">Reject</a>'
+            elif user['approved']:
+                approve_button = '<span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">Already Approved</span>'
+                reject_button = f'<a href="/users/{user["telegram_user_id"]}/reject" class="btn btn-danger">Revoke</a>'
+            else:
+                approve_button = '<span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">Not Verified</span>'
+                reject_button = '<span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">Not Verified</span>'
 
             # Show Reset Email button only if user has an email set
             reset_button = f'<a href="/users/{user["telegram_user_id"]}/reset" class="btn btn-danger">Reset Email</a>' if user['email'] else '<span class="btn btn-secondary" style="opacity: 0.5; cursor: not-allowed;">No Email</span>'
@@ -338,12 +387,15 @@ def users():
                     <td>{user['telegram_user_id']}</td>
                     <td>{email}</td>
                     <td>{verified_badge}</td>
+                    <td>{approved_badge}</td>
                     <td>{user['language'] or 'en'}</td>
                     <td>{admin_badge}</td>
                     <td>{user['max_alerts']}</td>
                     <td>{user['max_schedules']}</td>
                     <td>
                         {verify_button}
+                        {approve_button}
+                        {reject_button}
                         {reset_button}
                     </td>
                 </tr>
@@ -407,6 +459,58 @@ def reset_user_email(user_id):
         return redirect(url_for('users'))
     except Exception as e:
         flash(f"Error resetting email: {str(e)}")
+        return redirect(url_for('users'))
+
+@app.route('/users/<user_id>/approve')
+@login_required
+def approve_user(user_id):
+    """Approve a user for access to restricted features."""
+    try:
+        db.init_db()
+
+        # Get current user status
+        user = db.get_user(user_id)
+        if not user:
+            flash(f"User {user_id} not found.")
+            return redirect(url_for('users'))
+
+        if not user['verified']:
+            flash(f"User {user_id} must be verified before approval.")
+            return redirect(url_for('users'))
+
+        if user['approved']:
+            flash(f"User {user_id} is already approved.")
+            return redirect(url_for('users'))
+
+        db.approve_user(user_id)
+        flash(f"User {user_id} ({user.get('email', 'no email')}) has been approved for restricted features.")
+        return redirect(url_for('users'))
+    except Exception as e:
+        flash(f"Error approving user: {str(e)}")
+        return redirect(url_for('users'))
+
+@app.route('/users/<user_id>/reject')
+@login_required
+def reject_user(user_id):
+    """Reject or revoke a user's approval."""
+    try:
+        db.init_db()
+
+        # Get current user status
+        user = db.get_user(user_id)
+        if not user:
+            flash(f"User {user_id} not found.")
+            return redirect(url_for('users'))
+
+        if not user['approved']:
+            flash(f"User {user_id} is not approved.")
+            return redirect(url_for('users'))
+
+        db.reject_user(user_id)
+        flash(f"User {user_id} ({user.get('email', 'no email')}) approval has been revoked.")
+        return redirect(url_for('users'))
+    except Exception as e:
+        flash(f"Error rejecting user: {str(e)}")
         return redirect(url_for('users'))
 
 @app.route('/alerts')

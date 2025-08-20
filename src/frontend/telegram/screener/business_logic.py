@@ -162,11 +162,11 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
         return access_check
     tickers_raw = args.get("tickers")
     if isinstance(tickers_raw, str):
-        tickers = [tickers_raw]
+        tickers = [tickers_raw.upper()]
     elif isinstance(tickers_raw, list):
-        tickers = tickers_raw
+        tickers = [t.upper() for t in tickers_raw]
     else:
-        tickers = parsed.positionals
+        tickers = [t.upper() for t in parsed.positionals]
     if not tickers:
         return {"status": "error", "title": "Report Error", "message": "No tickers specified"}
     period = args.get("period") or "2y"
@@ -637,25 +637,25 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
             # List all alerts for user
             return handle_alerts_list(telegram_user_id)
 
-        if action and action.lower() == "add" and len(params) >= 3:
+        if action == "add" and len(params) >= 3:
             ticker, price, condition = params[0], params[1], params[2]
             # Get email flag from parsed args
             email = parsed.args.get("email", False)
             return handle_alerts_add(telegram_user_id, ticker, price, condition, email)
-        elif action and action.lower() == "edit" and len(params) >= 1:
+        elif action == "edit" and len(params) >= 1:
             alert_id = params[0]
             new_price = params[1] if len(params) > 1 else None
             new_condition = params[2] if len(params) > 2 else None
             # Get email flag from parsed args
             email = parsed.args.get("email")
             return handle_alerts_edit(telegram_user_id, alert_id, new_price, new_condition, email)
-        elif action and action.lower() == "delete" and len(params) >= 1:
+        elif action == "delete" and len(params) >= 1:
             alert_id = params[0]
             return handle_alerts_delete(telegram_user_id, alert_id)
-        elif action and action.lower() == "pause" and len(params) >= 1:
+        elif action == "pause" and len(params) >= 1:
             alert_id = params[0]
             return handle_alerts_pause(telegram_user_id, alert_id)
-        elif action and action.lower() == "resume" and len(params) >= 1:
+        elif action == "resume" and len(params) >= 1:
             alert_id = params[0]
             return handle_alerts_resume(telegram_user_id, alert_id)
         else:
@@ -730,7 +730,7 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
                 "message": f"Alert limit reached ({max_alerts}). Delete some alerts first or contact admin."
             }
 
-        # Add the alert
+        # Add the alert (convert ticker to uppercase)
         alert_id = db.add_alert(telegram_user_id, ticker.upper(), price, condition.lower(), email)
 
         email_text = " and email" if email else ""
@@ -1015,7 +1015,7 @@ def handle_schedules_add(telegram_user_id: str, ticker: str, time: str, email: b
                 "message": f"Schedule limit reached ({max_schedules}). Delete some schedules first or contact admin."
             }
 
-        # Add the schedule
+        # Add the schedule (convert ticker to uppercase)
         schedule_id = db.add_schedule(
             telegram_user_id,
             ticker.upper(),
@@ -1185,13 +1185,16 @@ def handle_schedules_screener(telegram_user_id: str, list_type: str, time: str,
                             email: bool = False, indicators: str = None) -> Dict[str, Any]:
     """Handle screener schedule creation."""
     try:
-        # Validate list type
+        # Validate list type (case-insensitive)
         valid_list_types = ['us_small_cap', 'us_medium_cap', 'us_large_cap', 'swiss_shares', 'custom_list']
-        if list_type not in valid_list_types:
+        if list_type.lower() not in [lt.lower() for lt in valid_list_types]:
             return {
-                'success': False,
+                'status': 'error',
                 'message': f"Invalid list type. Valid types: {', '.join(valid_list_types)}"
             }
+
+        # Convert list_type to lowercase for consistency
+        list_type = list_type.lower()
 
         # Validate time format
         try:
@@ -1201,17 +1204,21 @@ def handle_schedules_screener(telegram_user_id: str, list_type: str, time: str,
                 raise ValueError("Invalid time")
         except (ValueError, AttributeError):
             return {
-                'success': False,
+                'status': 'error',
                 'message': "Invalid time format. Use HH:MM (24-hour format, UTC)"
             }
 
         # Check user limits
         current_schedules = db.list_schedules(telegram_user_id)
-        user_limit = db.get_user_limit(telegram_user_id, 'schedules')
+        user_limit = db.get_user_limit(telegram_user_id, 'max_schedules')
+
+        # Default to 5 if no limit is set
+        if user_limit is None:
+            user_limit = 5
 
         if len(current_schedules) >= user_limit:
             return {
-                'success': False,
+                'status': 'error',
                 'message': f"You have reached your limit of {user_limit} scheduled reports. Delete some schedules first."
             }
 
@@ -1248,20 +1255,20 @@ def handle_schedules_screener(telegram_user_id: str, list_type: str, time: str,
             message += "• DCF valuation analysis"
 
             return {
-                'success': True,
+                'status': 'ok',
                 'title': "Screener Scheduled",
                 'message': message
             }
         else:
             return {
-                'success': False,
+                'status': 'error',
                 'message': "Failed to create screener schedule. Please try again."
             }
 
     except Exception as e:
         logger.exception("Error creating screener schedule: ")
         return {
-            'success': False,
+            'status': 'error',
             'message': f"Error creating screener schedule: {str(e)}"
         }
 

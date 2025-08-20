@@ -62,7 +62,26 @@
   - ✅ Update requirements documentation with access control
   - ✅ Create comprehensive implementation documentation
 
-### 🔄 IN PROGRESS - FUNDAMENTAL SCREENER
+#### Recent Improvements (Latest Updates)
+- [x] **Case-insensitive command processing**
+  - ✅ Implement intelligent command parsing that works regardless of case
+  - ✅ Smart argument type handling (tickers → uppercase, actions → lowercase)
+  - ✅ Fix command parser to handle all argument types correctly
+  - ✅ Update business logic to remove redundant case-insensitive checks
+
+- [x] **Web-based admin panel enhancements**
+  - ✅ Add user approval functionality to admin panel
+  - ✅ Implement approve/reject buttons for user management
+  - ✅ Add pending approvals section to dashboard
+  - ✅ Create approval and rejection routes with proper validation
+  - ✅ Add approval status column to user management table
+
+- [x] **Database error fixes**
+  - ✅ Fix `get_user_limit` parameter mismatch (`'schedules'` → `'max_schedules'`)
+  - ✅ Add proper null handling for user limits in business logic
+  - ✅ Ensure consistent return format across all business logic functions
+
+### ✅ COMPLETED - FUNDAMENTAL SCREENER
 
 #### Core Screener Implementation
 - [x] **Create fundamental screener module**

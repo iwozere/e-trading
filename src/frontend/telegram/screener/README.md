@@ -13,7 +13,9 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 - **Email Delivery:** Send reports and alerts to verified user emails.
 - **Price Alerts:** Set, pause, resume, and delete price alerts for any supported ticker.
 - **Scheduling:** Schedule recurring reports (daily/weekly/monthly) at user-defined times.
-- **Admin Panel:** Manage users, alerts, schedules, and view logs/statistics via Telegram or web interface.
+- **Admin Panel:** Web-based interface for user management, approvals, alerts, schedules, and system monitoring.
+- **Case-Insensitive Commands:** All bot commands work regardless of case (e.g., `/REPORT`, `/Report`, `/report`).
+- **User Approval System:** Secure workflow for approving users to access restricted features.
 - **Localization-ready:** All user-facing text is localizable (English default).
 - **Robust Logging:** Logs all user commands, API errors, email delivery, and admin actions (30-day retention).
 - **Extensible:** Modular data provider and command handler architecture.
@@ -424,15 +426,35 @@ Schedules a screener for a custom ticker list (you'll be prompted to specify the
 
 ## Admin Panel Features & UI
 
-- **Authentication:** Admin login, session management.
-- **User Management:** View/edit/delete users, export, manual verification.
-- **Alerts/Schedules:** View/edit/pause/resume/delete, add for user, view history.
-- **Broadcast:** Send to all/segment, direct message, view history.
-- **Logs:** View/filter/download logs (user commands, API errors, email delivery, admin actions).
-- **Statistics:** User/usage/API stats, charts.
-- **Settings:** Set global/per-user limits, manage API keys, feature toggles.
-- **Feedback:** View/respond to user feedback/feature requests.
-- **Audit Trail:** All admin actions logged.
+### Web-Based Admin Interface
+- **URL:** `http://localhost:5000` (when running `admin_panel.py`)
+- **Authentication:** Admin login with username/password (set via environment variables)
+- **Session Management:** Secure login/logout with session tracking
+
+### User Management
+- **User List:** View all users with Telegram ID, email, verification status, approval status
+- **User Approval:** Approve/reject users who have verified their email but need access to restricted features
+- **Manual Verification:** Verify users manually if needed
+- **Email Reset:** Reset user emails and revoke verification
+- **User Limits:** View and manage user limits for alerts and schedules
+
+### Dashboard Features
+- **Statistics Cards:** Total users, verified users, approved users, pending approvals, active alerts, active schedules, open feedback
+- **Pending Approvals Section:** Quick view of users waiting for approval with direct approve/reject buttons
+- **Recent Activity:** Overview of system activity
+
+### System Management
+- **Alerts Management:** View, edit, pause, resume, or delete all user alerts
+- **Schedules Management:** View, edit, pause, resume, or delete all scheduled reports
+- **Broadcast Messaging:** Send messages to all users or specific segments
+- **Feedback Management:** View and respond to user feedback and feature requests
+- **Logs & Monitoring:** View system logs, API errors, email delivery status, admin actions
+- **Settings:** Configure global limits, API keys, and system settings
+
+### Security & Audit
+- **Access Control:** All admin routes protected with login authentication
+- **Audit Trail:** All admin actions logged with timestamps and user information
+- **User Approval Workflow:** Secure process for granting access to restricted features
 
 ---
 
@@ -448,14 +470,28 @@ Schedules a screener for a custom ticker list (you'll be prompted to specify the
 
 ## Technical Notes & Code Reuse
 
-- **Reuse existing modules:** Data downloaders, emailer, logger, screener_db, notification manager.
-- **Separation of concerns:** Business logic separate from Telegram API handling.
-- **Unit tests:** Required for business logic and command parsing.
-- **Error handling:** All exceptions logged, user-friendly messages.
-- **Caching:** API responses cached per ticker/provider/interval.
-- **Downloader interface:** All providers implement a common interface.
-- **Command handler registry:** Dynamic registration for extensibility.
-- **Notification logging:** All outgoing notifications logged.
+### Command Processing
+- **Case-Insensitive Commands:** All bot commands work regardless of case (e.g., `/REPORT`, `/Report`, `/report`)
+- **Smart Parsing:** Command parser intelligently handles different argument types:
+  - **Tickers:** Automatically converted to uppercase (e.g., `aapl` → `AAPL`)
+  - **Actions:** Converted to lowercase for consistency (e.g., `SCREENER` → `screener`)
+  - **Parameters:** Preserved in original case for flexibility
+- **Command Handler Registry:** Dynamic registration for extensibility
+
+### Architecture
+- **Reuse existing modules:** Data downloaders, emailer, logger, screener_db, notification manager
+- **Separation of concerns:** Business logic separate from Telegram API handling
+- **Unit tests:** Required for business logic and command parsing
+- **Error handling:** All exceptions logged, user-friendly messages
+- **Caching:** API responses cached per ticker/provider/interval
+- **Downloader interface:** All providers implement a common interface
+- **Notification logging:** All outgoing notifications logged
+
+### User Approval System
+- **Secure Workflow:** Users must register, verify email, and be approved by admin
+- **Access Control:** Restricted commands require approval (`/report`, `/alerts`, `/schedules`)
+- **Admin Interface:** Web-based approval system with real-time notifications
+- **Audit Trail:** All approval actions logged with timestamps
 
 ---
 
