@@ -192,7 +192,7 @@ class LiveTradingBot:
         # Add notification handlers
         telegram_handler = TelegramHandler(
             bot_token=self.config.telegram_bot_token,
-            chat_id=self.config.telegram_chat_id
+            # chat_id=self.config.telegram_chat_id  # No longer needed - admin notifications use HTTP API
         )
         self.notification_manager.add_handler(telegram_handler)
         

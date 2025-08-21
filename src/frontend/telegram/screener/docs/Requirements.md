@@ -88,7 +88,7 @@ from src.notification.logger import setup_logger  # Logging infrastructure
 
 ### Telegram Configuration
 - **Chat ID** - For admin notifications and broadcasts
-  - Environment variable: `TELEGRAM_CHAT_ID`
+  - Environment variable: `TELEGRAM_CHAT_ID` (no longer needed - admin notifications use HTTP API)
   - Purpose: Admin notifications, error reporting, system alerts
 
 ### Optional Services
@@ -317,7 +317,7 @@ python src/frontend/telegram/bot.py
 ```bash
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_CHAT_ID=your_admin_chat_id
+# TELEGRAM_CHAT_ID is no longer needed - admin notifications use HTTP API
 
 # Email Configuration
 SMTP_HOST=smtp.gmail.com

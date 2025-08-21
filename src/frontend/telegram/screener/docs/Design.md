@@ -723,7 +723,7 @@ def analyze_ticker_business(ticker, provider, period, interval):
 # Multi-channel notification delivery
 notification_manager = await initialize_notification_manager(
     telegram_token=TELEGRAM_BOT_TOKEN,
-    telegram_chat_id=TELEGRAM_CHAT_ID,
+    # telegram_chat_id=TELEGRAM_CHAT_ID,  # No longer needed - admin notifications use HTTP API
     email_api_key=SMTP_PASSWORD,
     email_sender=SMTP_USER
 )
@@ -743,7 +743,7 @@ await notification_manager.send_notification(
 # Environment-based configuration
 from config.donotshare.donotshare import (
     TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID,
+    # TELEGRAM_CHAT_ID,  # No longer needed - admin notifications use HTTP API
     SMTP_USER,
     SMTP_PASSWORD
 )
@@ -993,7 +993,7 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
 ### Problem Analysis
 
 **Original Architecture Issues:**
-1. **Fixed Chat ID**: The `TelegramChannel` was hardcoded to send all responses to `TELEGRAM_CHAT_ID` (admin chat)
+1. **Fixed Chat ID**: The `TelegramChannel` was hardcoded to send all responses to a fixed admin chat ID (no longer needed - admin notifications use HTTP API)
 2. **Reply Mismatch**: Bot tried to reply to messages in the admin chat, but the original messages were in user chats
 3. **User Experience**: Users sending commands didn't receive responses in their own chat
 
