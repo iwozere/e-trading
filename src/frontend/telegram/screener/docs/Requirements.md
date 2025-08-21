@@ -38,6 +38,7 @@
 ### Data Validation and Serialization
 - `dataclasses` - Data structure definitions (Python 3.7+ standard library)
 - `typing` - Type hints and annotations (Python standard library)
+- `json` - JSON parsing and validation (Python standard library)
 
 ## External Dependencies
 
@@ -58,11 +59,31 @@ from src.common.fundamentals import get_fundamentals  # Fundamental data
 from src.common.technicals import calculate_technicals_from_df  # Technical indicators
 from src.common.ticker_analyzer import format_ticker_report  # Report formatting
 from src.notification.logger import setup_logger  # Logging infrastructure
+
+# JSON Configuration Dependencies
+from src.frontend.telegram.screener.report_config_parser import ReportConfigParser, ReportConfig
 ```
 
-## External Services
+## JSON Configuration Requirements
 
-### Required API Keys (Production)
+### Report Command JSON Configuration
+- **JSON Schema Validation**: Comprehensive validation of all JSON configuration fields
+- **Supported Report Types**: "analysis", "screener", "custom"
+- **Data Periods**: "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"
+- **Data Intervals**: "1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"
+- **Data Providers**: "yf", "alpha_vantage", "polygon"
+- **Technical Indicators**: RSI, MACD, BollingerBands, SMA, EMA, ADX, ATR, Stochastic, WilliamsR
+- **Fundamental Indicators**: PE, PB, ROE, ROA, DebtEquity, CurrentRatio, EPS, Revenue, ProfitMargin
+- **Fallback Support**: Traditional flag-based parsing when JSON config not provided
+
+### JSON Configuration Features
+- **Validation**: Comprehensive field validation with detailed error messages
+- **Parsing**: Robust JSON parsing with error handling
+- **Summary Generation**: Human-readable configuration summaries
+- **Default Configuration**: Helper functions for creating default configurations
+- **Example Configurations**: Pre-built examples for common use cases
+
+## External Services
 - **Telegram Bot Token** - For Telegram Bot API access
   - Environment variable: `TELEGRAM_BOT_TOKEN`
   - Registration: [BotFather](https://t.me/botfather)

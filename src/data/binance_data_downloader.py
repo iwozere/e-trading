@@ -25,10 +25,9 @@ from typing import List, Optional, Union
 import pandas as pd
 from binance.client import Client
 from src.notification.logger import setup_logger
-import logging
 import time
 
-from .base_data_downloader import BaseDataDownloader
+from src.data   .base_data_downloader import BaseDataDownloader
 from src.model.telegram_bot import Fundamentals
 
 _logger = setup_logger(__name__)

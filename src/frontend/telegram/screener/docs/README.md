@@ -50,6 +50,7 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 |                                         |                                                           | `/report MSFT -email`         |
 |                                         |                                                           | `/report TSLA -indicators=RSI,MACD,MA50 -email` |
 |                                         |                                                           | `/report BTCUSDT -provider=bnc -period=1y`      |
+|                                         |                                                           | `/report -config='{"report_type":"analysis","tickers":["AAPL","MSFT"],"period":"1y","indicators":["RSI","MACD"],"email":true}'` |
 | `/reportlist`                           | List your recent or scheduled reports.                    | `/reportlist`                 |
 
 **Supported Flags:**
@@ -58,6 +59,39 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 - `-period=...`: Data period (e.g., 3mo, 1y, 2y). Default: 2y.
 - `-interval=...`: Data interval (e.g., 1d, 15m). Default: 1d.
 - `-provider=...`: Data provider (e.g., yf for Yahoo, bnc for Binance). If not specified: yf for tickers ≤5 chars, bnc for crypto (>5 chars).
+- `-config=JSON_STRING`: Use JSON configuration for advanced options.
+
+**JSON Configuration:**
+The `/report` command supports advanced JSON configuration for complex report requirements:
+
+```json
+{
+  "report_type": "analysis",
+  "tickers": ["AAPL", "MSFT"],
+  "period": "1y",
+  "interval": "1d",
+  "provider": "yf",
+  "indicators": ["RSI", "MACD", "BollingerBands"],
+  "fundamental_indicators": ["PE", "PB", "ROE"],
+  "email": true,
+  "include_chart": true,
+  "include_fundamentals": true,
+  "include_technicals": true
+}
+```
+
+**Supported JSON Fields:**
+- `report_type`: "analysis", "screener", or "custom"
+- `tickers`: Array of ticker symbols
+- `period`: Data period ("1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max")
+- `interval`: Data interval ("1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo")
+- `provider`: Data provider ("yf", "alpha_vantage", "polygon")
+- `indicators`: Array of technical indicators
+- `fundamental_indicators`: Array of fundamental indicators
+- `email`: Boolean to send to email
+- `include_chart`: Boolean to include charts
+- `include_fundamentals`: Boolean to include fundamental analysis
+- `include_technicals`: Boolean to include technical analysis
 
 ### Fundamental Screener
 

@@ -234,12 +234,17 @@ Examples:
 • /report BTCUSDT -indicators=RSI,MACD -period=6mo
 • /report MSFT -interval=1h -provider=yf
 
+JSON Configuration (Advanced):
+• /report -config='{"report_type":"analysis","tickers":["AAPL","MSFT"],"period":"1y","indicators":["RSI","MACD"],"email":true}'
+• /report -config='{"report_type":"analysis","tickers":["TSLA"],"period":"6mo","interval":"1h","indicators":["RSI","MACD","BollingerBands"],"include_fundamentals":false}'
+
 Flags:
 • -email - Send report to your verified email
 • -indicators=RSI,MACD,BollingerBands - Specify indicators
 • -period=1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max
 • -interval=1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo
 • -provider=yf,alpha_vantage,polygon
+• -config=JSON_STRING - Use JSON configuration for advanced options
 
 🚨 ALERT COMMANDS
 Price Alerts:
@@ -290,11 +295,11 @@ Account Management:
 • /info - Show account information
 
 📈 TECHNICAL INDICATORS
-Available: RSI, MACD, Bollinger Bands, SMA
-Fundamental: P/E, P/B, ROE, ROA, Debt/Equity, Current Ratio
+Available: RSI, MACD, Bollinger Bands, SMA, EMA, ADX, ATR, Stochastic, WilliamsR
+Fundamental: P/E, P/B, ROE, ROA, Debt/Equity, Current Ratio, EPS, Revenue, Profit Margin
 
 ⚙️ ADVANCED FEATURES
-JSON configurations for complex alerts and schedules
+JSON configurations for complex reports, alerts and schedules
 Multiple timeframe support (5m, 15m, 1h, 4h, 1d)
 Fundamental screening for undervalued stocks
 Email notifications for all features
@@ -310,26 +315,55 @@ Email notifications for all features
 • Set up daily schedules for regular monitoring
 • Use fundamental screener for stock discovery
 • Configure alerts with specific timeframes
+• Use JSON configuration for complex report setups
 
 For more detailed help, visit the admin panel help page!
 """
 
 async def process_info_command(message, telegram_user_id, notification_manager):
     try:
-        parsed = ParsedCommand(command="info", args={"telegram_user_id": telegram_user_id})
+        # Parse command to check for -email flag
+        parsed = parse_command(message.text)
+        email_flag = parsed.args.get("email", False)
+
+        # Get user info for email
+        user_email = None
+        if email_flag:
+            user_status = db.get_user_status(telegram_user_id)
+            if user_status and user_status.get("verified"):
+                user_email = user_status.get("email")
+            else:
+                email_flag = False  # Don't send email if user not verified
+
+        # Get info content
         result = handle_command(parsed)
+
         channels = ["telegram"]
-        if result.get("email", False):
+        if email_flag and user_email:
             channels.append("email")
+
+        # Send Telegram notification
         await notification_manager.send_notification(
             notification_type="INFO" if result["status"] == "ok" else "ERROR",
             title=result.get("title", "Info"),
             message=result.get("message", "No message"),
             priority="NORMAL",
-            channels=channels,
+            channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
+
+        # Send email if requested and user is verified
+        if email_flag and user_email:
+            await notification_manager.send_notification(
+                notification_type="INFO" if result["status"] == "ok" else "ERROR",
+                title=result.get("title", "Info"),
+                message=result.get("message", "No message"),
+                priority="NORMAL",
+                channels=["email"],
+                email_receiver=user_email
+            )
+
     except Exception as e:
         _logger.exception("Error in info command: ")
         await notification_manager.send_notification(

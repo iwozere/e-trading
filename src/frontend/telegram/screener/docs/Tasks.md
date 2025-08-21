@@ -505,6 +505,13 @@ The implementation includes:
   - Integration with src.data module for market data
   - Basic fundamental and technical analysis
 
+- [x] **JSON Configuration Support** (August 2025)
+  - Added JSON configuration support for /report command
+  - Created ReportConfigParser for validation and parsing
+  - Implemented comprehensive JSON schema validation
+  - Added fallback to traditional flag-based parsing
+  - Updated documentation across all relevant files
+
 - [x] **Multi-Provider Data Integration** (December 2024)
   - Support for multiple data providers through data module
   - Automatic provider selection based on ticker type

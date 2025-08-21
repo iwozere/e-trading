@@ -160,18 +160,51 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     access_check = check_approved_access(telegram_user_id)
     if access_check["status"] != "ok":
         return access_check
-    tickers_raw = args.get("tickers")
-    if isinstance(tickers_raw, str):
-        tickers = [tickers_raw.upper()]
-    elif isinstance(tickers_raw, list):
-        tickers = [t.upper() for t in tickers_raw]
+
+    # Check if JSON configuration is provided
+    config_json = args.get("config")
+    if config_json:
+        # Validate and parse JSON configuration
+        try:
+            from src.frontend.telegram.screener.report_config_parser import ReportConfigParser
+            is_valid, errors = ReportConfigParser.validate_report_config(config_json)
+            if not is_valid:
+                return {"status": "error", "title": "Report Error", "message": f"Invalid report configuration: {'; '.join(errors)}"}
+
+            report_config = ReportConfigParser.parse_report_config(config_json)
+            if not report_config:
+                return {"status": "error", "title": "Report Error", "message": "Failed to parse report configuration"}
+
+            # Use configuration from JSON
+            tickers = [t.upper() for t in report_config.tickers]
+            period = report_config.period
+            interval = report_config.interval
+            provider = report_config.provider
+            indicators = ",".join(report_config.indicators) if report_config.indicators else None
+            email = report_config.email
+
+        except Exception as e:
+            _logger.exception("Error processing JSON configuration: %s", e)
+            return {"status": "error", "title": "Report Error", "message": f"Error processing JSON configuration: {str(e)}"}
     else:
-        tickers = [t.upper() for t in parsed.positionals]
-    if not tickers:
-        return {"status": "error", "title": "Report Error", "message": "No tickers specified"}
-    period = args.get("period") or "2y"
-    interval = args.get("interval") or "1d"
-    provider = args.get("provider")
+        # Use traditional command-line parameters
+        tickers_raw = args.get("tickers")
+        if isinstance(tickers_raw, str):
+            tickers = [tickers_raw.upper()]
+        elif isinstance(tickers_raw, list):
+            tickers = [t.upper() for t in tickers_raw]
+        else:
+            tickers = [t.upper() for t in parsed.positionals]
+
+        if not tickers:
+            return {"status": "error", "title": "Report Error", "message": "No tickers specified"}
+
+        period = args.get("period") or "2y"
+        interval = args.get("interval") or "1d"
+        provider = args.get("provider")
+        indicators = args.get("indicators")
+        email = args.get("email", False)
+
     reports = []
 
     # Fetch the registered email for the current user
@@ -215,7 +248,7 @@ def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     return {
         "status": "ok",
         "reports": reports,
-        "email": args.get("email", False),
+        "email": email,
         "user_email": user_email,
         "title": f"Report for {', '.join(tickers)}",
         "message": "Report generated successfully."

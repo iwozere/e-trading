@@ -399,6 +399,28 @@ Notification Processors:
    └── Send to both channels
 ```
 
+#### JSON Configuration Flow
+
+```
+1. /report -config='{"report_type":"analysis","tickers":["AAPL","MSFT"],"period":"1y","indicators":["RSI","MACD"],"email":true}'
+2. Parse → {config: JSON_STRING}
+3. Business Logic:
+   ├── Validate JSON configuration using ReportConfigParser
+   ├── Extract parameters from validated config
+   ├── Process report with extracted parameters
+   └── Return reports array
+4. Notification Processing:
+   ├── Generate Telegram messages with charts
+   ├── Generate HTML email with embedded charts
+   └── Send to both channels
+```
+
+**JSON Configuration Architecture:**
+- **ReportConfigParser**: Validates and parses JSON configuration strings
+- **ReportConfig**: Dataclass defining the structure for report configurations
+- **Validation**: Comprehensive validation of all JSON fields and values
+- **Fallback**: Traditional flag-based parsing if no JSON config provided
+
 #### Alert Management Flow
 
 ```

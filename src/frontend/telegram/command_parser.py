@@ -71,6 +71,33 @@ class EnterpriseCommandParser:
 
 # Example command specs for extensibility
 COMMAND_SPECS = {
+    "start": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=[]
+    ),
+    "help": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=[]
+    ),
+    "info": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=[]
+    ),
     "report": CommandSpec(
         parameters={
             "email": bool,
@@ -78,6 +105,7 @@ COMMAND_SPECS = {
             "period": str,
             "interval": str,
             "provider": str,
+            "config": str,
         },
         defaults={
             "email": False,
@@ -85,6 +113,7 @@ COMMAND_SPECS = {
             "period": None,
             "interval": None,
             "provider": None,
+            "config": None,
         },
         positional=["tickers"]
     ),

@@ -1,12 +1,10 @@
-import logging
-import os
 from typing import Optional, List, Dict
 from datetime import datetime
 import pandas as pd
 import requests
 from src.notification.logger import setup_logger
 from src.model.telegram_bot import Fundamentals
-from .base_data_downloader import BaseDataDownloader
+from src.data.base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
 
@@ -81,9 +79,6 @@ class FinnhubDataDownloader(BaseDataDownloader):
         super().__init__(data_dir=data_dir)
         self.api_key = api_key
         self.base_url = "https://finnhub.io/api/v1/stock/candle"
-        logging.basicConfig(
-            level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-        )
 
     def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """

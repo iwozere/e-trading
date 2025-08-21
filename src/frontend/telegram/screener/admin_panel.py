@@ -217,6 +217,12 @@ ADMIN_TEMPLATE = """
         .user-table .actions-cell { min-width: 200px; }
         .user-table .status-cell { text-align: center; }
         .user-table .id-cell { font-family: monospace; font-size: 12px; }
+        .user-table .json-cell { font-family: monospace; font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .user-table .json-cell:hover { white-space: normal; word-break: break-all; }
+        .json-expandable { cursor: pointer; color: #007bff; text-decoration: underline; }
+        .json-expandable:hover { color: #0056b3; }
+        .json-full { display: none; background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; }
+        .json-full.show { display: block; }
         .stats { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
         .stat-card { background: #f8f9fa; padding: 20px; border-radius: 8px; flex: 1; text-align: center; min-width: 200px; }
         .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }
@@ -261,6 +267,35 @@ ADMIN_TEMPLATE = """
 
         {{ content | safe }}
     </div>
+
+    <script>
+        // JSON expansion functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add click handlers to JSON cells
+            document.querySelectorAll('.json-cell').forEach(function(cell) {
+                const jsonData = cell.getAttribute('title');
+                if (jsonData && jsonData !== 'No JSON config') {
+                    cell.classList.add('json-expandable');
+                    cell.addEventListener('click', function() {
+                        // Create or toggle full JSON display
+                        let fullJson = cell.querySelector('.json-full');
+                        if (!fullJson) {
+                            fullJson = document.createElement('div');
+                            fullJson.className = 'json-full';
+                            try {
+                                const parsed = JSON.parse(jsonData);
+                                fullJson.textContent = JSON.stringify(parsed, null, 2);
+                            } catch (e) {
+                                fullJson.textContent = jsonData;
+                            }
+                            cell.appendChild(fullJson);
+                        }
+                        fullJson.classList.toggle('show');
+                    });
+                }
+            });
+        });
+    </script>
 </body>
 </html>
 """
@@ -651,6 +686,8 @@ def alerts():
         filter_type = request.args.get('filter', '')
         if filter_type == 'active':
             alerts_list = [a for a in alerts_list if a[5]]  # a[5] is the active field
+        elif filter_type == 'advanced':
+            alerts_list = [a for a in alerts_list if len(a) > 10 and a[10]]  # config_json field
 
         filter_info = ""
         if filter_type:
@@ -662,18 +699,23 @@ def alerts():
         <div style="margin-bottom: 20px;">
             <a href="/alerts" class="btn btn-secondary">All Alerts</a>
             <a href="/alerts?filter=active" class="btn btn-secondary">Active Only</a>
+            <a href="/alerts?filter=advanced" class="btn btn-secondary">JSON Alerts</a>
         </div>
 
-        <table>
+        <table class="user-table">
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>User ID</th>
                     <th>Ticker</th>
-                    <th>Price</th>
-                    <th>Condition</th>
+                    <th>Type</th>
+                    <th>Price/Condition</th>
+                    <th>Timeframe</th>
+                    <th>Action</th>
+                    <th>Email</th>
                     <th>Status</th>
                     <th>Created</th>
+                    <th>JSON Config</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -682,16 +724,62 @@ def alerts():
 
         for alert in alerts_list:
             status_badge = "🟢 Active" if alert[5] else "🔴 Inactive"
+            email_badge = "📧" if alert[6] else "💬"
+
+            # Get alert type and additional fields
+            alert_type = alert[8] if len(alert) > 8 else "price"  # alert_type field
+            timeframe = alert[9] if len(alert) > 9 else "15m"  # timeframe field
+            config_json = alert[10] if len(alert) > 10 else None  # config_json field
+            alert_action = alert[11] if len(alert) > 11 else "notify"  # alert_action field
+
+            # Determine display values based on alert type
+            if alert_type == "price":
+                type_badge = "💰 Price"
+                price_condition = f"${alert[3]:.2f} {alert[4]}"
+            else:
+                type_badge = "⚙️ Indicator"
+                price_condition = "Complex"
+
+            # Format JSON config for display
+            json_display = ""
+            if config_json:
+                try:
+                    import json
+                    parsed_json = json.loads(config_json)
+                    # Create a compact summary
+                    if isinstance(parsed_json, dict):
+                        summary_parts = []
+                        if 'indicator' in parsed_json:
+                            summary_parts.append(f"Indicator: {parsed_json['indicator']}")
+                        if 'parameters' in parsed_json:
+                            params = parsed_json['parameters']
+                            if isinstance(params, dict):
+                                param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
+                                summary_parts.append(f"Params: {param_str}")
+                        if 'condition' in parsed_json:
+                            cond = parsed_json['condition']
+                            if isinstance(cond, dict):
+                                if 'operator' in cond and 'value' in cond:
+                                    summary_parts.append(f"Condition: {cond['operator']} {cond['value']}")
+                        json_display = " | ".join(summary_parts)
+                    else:
+                        json_display = str(parsed_json)[:50] + "..." if len(str(parsed_json)) > 50 else str(parsed_json)
+                except Exception as e:
+                    json_display = f"Error parsing JSON: {str(e)[:30]}..."
 
             content += f"""
                 <tr>
                     <td>#{alert[0]}</td>
-                    <td>{alert[2]}</td>
+                    <td class="id-cell">{alert[2]}</td>
                     <td>{alert[1]}</td>
-                    <td>${alert[3]:.2f}</td>
-                    <td>{alert[4]}</td>
-                    <td>{status_badge}</td>
-                    <td>{alert[6]}</td>
+                    <td>{type_badge}</td>
+                    <td>{price_condition}</td>
+                    <td>{timeframe}</td>
+                    <td>{alert_action}</td>
+                    <td class="status-cell">{email_badge}</td>
+                    <td class="status-cell">{status_badge}</td>
+                    <td>{alert[7]}</td>
+                    <td class="json-cell" title="{config_json or 'No JSON config'}">{json_display or 'N/A'}{' 🔍' if config_json else ''}</td>
                     <td>
                         <a href="/alerts/{alert[0]}/toggle" class="btn">Toggle</a>
                         <a href="/alerts/{alert[0]}/delete" class="btn btn-danger">Delete</a>
@@ -727,7 +815,7 @@ def schedules():
         if filter_type == 'active':
             schedules_list = [s for s in schedules_list if s[5]]  # s[5] is the active field
         elif filter_type == 'advanced':
-            schedules_list = [s for s in schedules_list if len(s) > 12 and s[12] == "advanced"]  # schedule_config field
+            schedules_list = [s for s in schedules_list if len(s) > 13 and s[13]]  # config_json field
 
         filter_info = ""
         if filter_type:
@@ -742,7 +830,7 @@ def schedules():
             <a href="/schedules?filter=advanced" class="btn btn-secondary">JSON Schedules</a>
         </div>
 
-        <table>
+        <table class="user-table">
             <thead>
                 <tr>
                     <th>ID</th>
@@ -750,9 +838,13 @@ def schedules():
                     <th>Type</th>
                     <th>Details</th>
                     <th>Time</th>
+                    <th>Period</th>
+                    <th>Interval</th>
+                    <th>Provider</th>
                     <th>Email</th>
                     <th>Status</th>
                     <th>Created</th>
+                    <th>JSON Config</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -764,12 +856,14 @@ def schedules():
             email_badge = "📧" if schedule[6] else "💬"
 
             # Handle different schedule types
-            schedule_config = schedule[12] if len(schedule) > 12 else "simple"  # schedule_config field
+            schedule_config = schedule[14] if len(schedule) > 14 else "simple"  # schedule_config field
             config_json = schedule[13] if len(schedule) > 13 else None  # config_json field
+            schedule_type = schedule[11] if len(schedule) > 11 else "report"  # schedule_type field
+            list_type = schedule[12] if len(schedule) > 12 else None  # list_type field
 
             if schedule_config == "simple":
                 # Simple schedule
-                schedule_type = "📊 Report"
+                schedule_type_display = "📊 Report"
                 details = f"{schedule[1] or 'N/A'}"
                 time = schedule[3] or 'N/A'
             else:
@@ -779,7 +873,7 @@ def schedules():
                     if config_json:
                         summary = get_schedule_summary(config_json)
                         if "error" not in summary:
-                            schedule_type = f"⚙️ {summary.get('type', 'Unknown').title()}"
+                            schedule_type_display = f"⚙️ {summary.get('type', 'Unknown').title()}"
                             if summary.get('type') == 'report':
                                 details = f"{summary.get('ticker', 'N/A')}"
                             elif summary.get('type') == 'screener':
@@ -788,28 +882,65 @@ def schedules():
                                 details = "Custom"
                             time = summary.get('scheduled_time', 'N/A')
                         else:
-                            schedule_type = "⚙️ JSON"
+                            schedule_type_display = "⚙️ JSON"
                             details = "Error parsing"
                             time = schedule[3] or 'N/A'
                     else:
-                        schedule_type = "⚙️ JSON"
+                        schedule_type_display = "⚙️ JSON"
                         details = "No config"
                         time = schedule[3] or 'N/A'
                 except Exception as e:
-                    schedule_type = "⚙️ JSON"
+                    schedule_type_display = "⚙️ JSON"
                     details = "Parse error"
                     time = schedule[3] or 'N/A'
+
+            # Format JSON config for display
+            json_display = ""
+            if config_json:
+                try:
+                    import json
+                    parsed_json = json.loads(config_json)
+                    # Create a compact summary
+                    if isinstance(parsed_json, dict):
+                        summary_parts = []
+                        if 'type' in parsed_json:
+                            summary_parts.append(f"Type: {parsed_json['type']}")
+                        if 'ticker' in parsed_json:
+                            summary_parts.append(f"Ticker: {parsed_json['ticker']}")
+                        if 'list_type' in parsed_json:
+                            summary_parts.append(f"List: {parsed_json['list_type']}")
+                        if 'scheduled_time' in parsed_json:
+                            summary_parts.append(f"Time: {parsed_json['scheduled_time']}")
+                        if 'period' in parsed_json:
+                            summary_parts.append(f"Period: {parsed_json['period']}")
+                        if 'interval' in parsed_json:
+                            summary_parts.append(f"Interval: {parsed_json['interval']}")
+                        if 'indicators' in parsed_json:
+                            indicators = parsed_json['indicators']
+                            if isinstance(indicators, list):
+                                summary_parts.append(f"Indicators: {', '.join(indicators)}")
+                            elif isinstance(indicators, str):
+                                summary_parts.append(f"Indicators: {indicators}")
+                        json_display = " | ".join(summary_parts)
+                    else:
+                        json_display = str(parsed_json)[:50] + "..." if len(str(parsed_json)) > 50 else str(parsed_json)
+                except Exception as e:
+                    json_display = f"Error parsing JSON: {str(e)[:30]}..."
 
             content += f"""
                 <tr>
                     <td>#{schedule[0]}</td>
-                    <td>{schedule[2]}</td>
-                    <td>{schedule_type}</td>
+                    <td class="id-cell">{schedule[2]}</td>
+                    <td>{schedule_type_display}</td>
                     <td>{details}</td>
                     <td>{time}</td>
-                    <td>{email_badge}</td>
-                    <td>{status_badge}</td>
+                    <td>{schedule[4] or 'N/A'}</td>
+                    <td>{schedule[8] or 'N/A'}</td>
+                    <td>{schedule[9] or 'N/A'}</td>
+                    <td class="status-cell">{email_badge}</td>
+                    <td class="status-cell">{status_badge}</td>
                     <td>{schedule[10]}</td>
+                    <td class="json-cell" title="{config_json or 'No JSON config'}">{json_display or 'N/A'}{' 🔍' if config_json else ''}</td>
                     <td>
                         <a href="/schedules/{schedule[0]}/toggle" class="btn">Toggle</a>
                         <a href="/schedules/{schedule[0]}/delete" class="btn btn-danger">Delete</a>
@@ -859,6 +990,31 @@ def help_page():
                 <li><code>/report BTCUSDT -indicators=RSI,MACD -period=6mo</code> - Custom indicators and period</li>
                 <li><code>/report MSFT -interval=1h -provider=yf</code> - Hourly data from Yahoo Finance</li>
             </ul>
+
+            <h4>JSON Configuration (Advanced)</h4>
+            <p><code>/report -config=JSON_STRING</code></p>
+            <p><strong>Examples:</strong></p>
+            <ul>
+                <li><code>/report -config='{"report_type":"analysis","tickers":["AAPL","MSFT"],"period":"1y","indicators":["RSI","MACD"],"email":true}'</code></li>
+                <li><code>/report -config='{"report_type":"analysis","tickers":["TSLA"],"period":"6mo","interval":"1h","indicators":["RSI","MACD","BollingerBands"],"include_fundamentals":false}'</code></li>
+                <li><code>/report -config='{"report_type":"analysis","tickers":["BTCUSDT","ETHUSDT"],"period":"3mo","interval":"4h","indicators":["RSI","MACD","BollingerBands"],"include_fundamentals":false,"email":true}'</code></li>
+            </ul>
+
+            <h4>JSON Configuration Schema</h4>
+            <p><strong>Supported Fields:</strong></p>
+            <ul>
+                <li><code>report_type</code> - "analysis", "screener", or "custom"</li>
+                <li><code>tickers</code> - Array of ticker symbols ["AAPL", "MSFT"]</li>
+                <li><code>period</code> - Data period: "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"</li>
+                <li><code>interval</code> - Data interval: "1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"</li>
+                <li><code>provider</code> - Data provider: "yf", "alpha_vantage", "polygon"</li>
+                <li><code>indicators</code> - Array of technical indicators: ["RSI", "MACD", "BollingerBands", "SMA", "EMA", "ADX", "ATR", "Stochastic", "WilliamsR"]</li>
+                <li><code>fundamental_indicators</code> - Array of fundamental indicators: ["PE", "PB", "ROE", "ROA", "DebtEquity", "CurrentRatio", "EPS", "Revenue", "ProfitMargin"]</li>
+                <li><code>email</code> - Boolean: true/false to send to email</li>
+                <li><code>include_chart</code> - Boolean: true/false to include charts</li>
+                <li><code>include_fundamentals</code> - Boolean: true/false to include fundamental analysis</li>
+                <li><code>include_technicals</code> - Boolean: true/false to include technical analysis</li>
+            </ul>
             <p><strong>Flags:</strong></p>
             <ul>
                 <li><code>-email</code> - Send report to your verified email</li>
@@ -866,7 +1022,12 @@ def help_page():
                 <li><code>-period=1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max</code> - Data period</li>
                 <li><code>-interval=1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo</code> - Data interval</li>
                 <li><code>-provider=yf,alpha_vantage,polygon</code> - Data provider</li>
+                <li><code>-config=JSON_STRING</code> - Use JSON configuration for advanced options</li>
             </ul>
+
+            <h4>Supported Indicators</h4>
+            <p><strong>Technical Indicators:</strong> RSI, MACD, BollingerBands, SMA, EMA, ADX, ATR, Stochastic, WilliamsR</p>
+            <p><strong>Fundamental Indicators:</strong> PE, PB, ROE, ROA, DebtEquity, CurrentRatio, EPS, Revenue, ProfitMargin</p>
         </div>
 
         <h3>🚨 Alert Commands</h3>
@@ -988,7 +1149,36 @@ def help_page():
         <h3>⚙️ Advanced Features</h3>
         <div style="background: #d4edda; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
             <h4>JSON Configuration</h4>
-            <p>For advanced users, you can use JSON configurations for complex alerts and schedules:</p>
+            <p>For advanced users, you can use JSON configurations for complex reports, alerts and schedules:</p>
+
+            <h5>Report Configuration Examples:</h5>
+            <pre style="background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto;">
+{
+  "report_type": "analysis",
+  "tickers": ["AAPL", "MSFT"],
+  "period": "1y",
+  "interval": "1d",
+  "provider": "yf",
+  "indicators": ["RSI", "MACD"],
+  "fundamental_indicators": ["PE", "PB", "ROE"],
+  "email": true,
+  "include_chart": true,
+  "include_fundamentals": true,
+  "include_technicals": true
+}</pre>
+
+            <h5>Technical Analysis Report:</h5>
+            <pre style="background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto;">
+{
+  "report_type": "analysis",
+  "tickers": ["TSLA"],
+  "period": "6mo",
+  "interval": "1h",
+  "provider": "yf",
+  "indicators": ["RSI", "MACD", "BollingerBands", "SMA"],
+  "include_fundamentals": false,
+  "email": false
+}</pre>
 
             <h5>Indicator Alert Examples:</h5>
             <pre style="background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto;">

@@ -22,7 +22,7 @@ from src.frontend.telegram import db
 
 # Configure logging
 from src.notification.logger import setup_logger, set_logging_context
-logger = setup_logger("telegram_screener_bot")
+_logger = setup_logger("telegram_screener_bot")
 
 # HTTP API support
 from aiohttp import web
@@ -65,7 +65,7 @@ async def api_send_message(request: web.Request) -> web.Response:
         })
 
     except Exception as e:
-        logger.exception("Error in api_send_message: ")
+        _logger.exception("Error in api_send_message: ")
         return web.json_response({
             'success': False,
             'error': str(e)
@@ -118,7 +118,7 @@ async def api_broadcast(request: web.Request) -> web.Response:
         })
 
     except Exception as e:
-        logger.exception("Error in api_broadcast: ")
+        _logger.exception("Error in api_broadcast: ")
         return web.json_response({
             'success': False,
             'error': str(e)
@@ -143,7 +143,7 @@ async def api_status(request: web.Request) -> web.Response:
         })
 
     except Exception as e:
-        logger.exception("Error in api_status: ")
+        _logger.exception("Error in api_status: ")
         return web.json_response({
             'success': False,
             'error': str(e)
@@ -174,7 +174,11 @@ HELP_TEXT = (
     "  -indicators=RSI,MACD,MA50,PE,EPS: Specify technical indicators\n"
     "  -period=3mo,1y,2y: Data period (default: 2y)\n"
     "  -interval=1d,15m,1h: Data interval (default: 1d)\n"
-    "  -provider=yf,bnc: Data provider (yf=Yahoo, bnc=Binance)\n\n"
+    "  -provider=yf,bnc: Data provider (yf=Yahoo, bnc=Binance)\n"
+    "  -config=JSON_STRING: Use JSON configuration for advanced options\n\n"
+    "JSON Configuration Examples:\n"
+    "  /report -config='{\"report_type\":\"analysis\",\"tickers\":[\"AAPL\",\"MSFT\"],\"period\":\"1y\",\"indicators\":[\"RSI\",\"MACD\"],\"email\":true}'\n"
+    "  /report -config='{\"report_type\":\"analysis\",\"tickers\":[\"TSLA\"],\"period\":\"6mo\",\"interval\":\"1h\",\"indicators\":[\"RSI\",\"MACD\",\"BollingerBands\"],\"include_fundamentals\":false}'\n\n"
 
     "Alert Commands:\n"
     "/alerts - List all your active price alerts\n"
@@ -291,7 +295,14 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_manager)
+    _logger.info("Received /start command from user %s", message.from_user.id)
+    try:
+        await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_manager)
+        _logger.info("Successfully processed /start command for user %s", message.from_user.id)
+    except Exception as e:
+        _logger.exception("Error processing /start command for user %s", message.from_user.id)
+        # Send a simple error message directly
+        await message.answer("Sorry, there was an error processing your command. Please try again.")
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
@@ -353,25 +364,47 @@ async def cmd_feature(message: Message):
 
 @dp.message(lambda message: message.text and message.text.startswith("/"))
 async def unknown_command(message: Message):
-    await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_manager, HELP_TEXT)
+    _logger.info("Received unknown command: %s from user %s", message.text, message.from_user.id)
+    try:
+        await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_manager, HELP_TEXT)
+    except Exception as e:
+        _logger.exception("Error processing unknown command for user %s", message.from_user.id)
+        await message.answer("Sorry, there was an error processing your command. Please try again.")
+
+@dp.message()
+async def all_messages(message: Message):
+    """Catch all messages for debugging"""
+    _logger.info("Received message: %s from user %s", message.text, message.from_user.id)
 
 async def main():
     global notification_manager
 
+    _logger.info("Starting bot initialization...")
+    if TELEGRAM_BOT_TOKEN:
+        _logger.info("Bot token: %s...", TELEGRAM_BOT_TOKEN[:10])
+    else:
+        _logger.error("Bot token is None!")
+
     # Set logging context so that notification manager logs go to telegram bot log file
     set_logging_context("telegram_screener_bot")
 
-    # Initialize notification manager without admin chat ID
-    # Admin notifications will be sent via HTTP API to admin users
+    # Initialize notification manager with a dummy chat ID for Telegram channel creation
+    # The actual chat ID will be provided dynamically in each message
+    _logger.info("Initializing notification manager...")
     notification_manager = await initialize_notification_manager(
         telegram_token=TELEGRAM_BOT_TOKEN,
-        telegram_chat_id=None,  # Not needed - admin notifications use HTTP API
+        telegram_chat_id="0",  # Dummy chat ID - actual chat ID provided dynamically
         email_api_key=SMTP_PASSWORD,
         email_sender=SMTP_USER,
         email_receiver=SMTP_USER  # or dummy
     )
 
-    logger.info("Starting Telegram Screener Bot with HTTP API...")
+    # Disable batching for immediate processing in bot context
+    notification_manager.batch_size = 1
+    notification_manager.batch_timeout = 0.1
+    _logger.info("Notification manager initialized successfully")
+
+    _logger.info("Starting Telegram Screener Bot with HTTP API...")
 
     # Start both bot polling and HTTP API server
     bot_runner = web.AppRunner(api_app)
@@ -381,14 +414,16 @@ async def main():
     api_site = web.TCPSite(bot_runner, 'localhost', 8080)
     await api_site.start()
 
-    logger.info("HTTP API server started on http://localhost:8080")
-    logger.info("Available endpoints:")
-    logger.info("  POST /api/send_message - Send message to specific user")
-    logger.info("  POST /api/broadcast - Broadcast message to all users")
-    logger.info("  GET  /api/status - Health check and status")
+    _logger.info("HTTP API server started on http://localhost:8080")
+    _logger.info("Available endpoints:")
+    _logger.info("  POST /api/send_message - Send message to specific user")
+    _logger.info("  POST /api/broadcast - Broadcast message to all users")
+    _logger.info("  GET  /api/status - Health check and status")
 
     # Start bot polling
+    _logger.info("Starting bot polling...")
     await dp.start_polling(bot)
+    _logger.info("Bot polling started successfully")
 
 if __name__ == "__main__":
     asyncio.run(main())

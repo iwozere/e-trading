@@ -50,6 +50,10 @@ The data module follows a layered architecture with clear separation of concerns
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
 │  │   CSV Files     │  │   SQLite DB     │  │  PostgreSQL │ │
 │  │  (Historical)   │  │    (Trades)     │  │ (Production)│ │
+│  │  ┌─────────────┐ │  └─────────────────┘  └─────────────┘ │
+│  │  │ VIX Data    │ │                                         │
+│  │  │ (Volatility)│ │                                         │
+│  │  └─────────────┘ │                                         │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -79,7 +83,8 @@ Concrete Implementations:
 ├── PolygonDataDownloader
 ├── TwelveDataDataDownloader
 ├── BinanceDataDownloader
-└── CoinGeckoDataDownloader
+├── CoinGeckoDataDownloader
+└── VIXDataManager (Specialized)
 ```
 
 #### 2. Live Data Feeds (Real-time Data)
@@ -218,6 +223,29 @@ DataFrame columns:
 - close: float
 - volume: float
 - (optional) adj_close: float
+```
+
+#### VIX Data Model
+
+Specialized data structure for CBOE VIX (Volatility Index) data:
+
+```python
+# File-based storage in data/vix/vix.csv
+DataFrame columns:
+- Date: pd.Timestamp (index)
+- Open: float
+- High: float
+- Low: float
+- Close: float
+- Adj Close: float
+- Volume: float
+
+# Key Features:
+- Automatic directory creation (data/vix/)
+- Incremental updates (only new data)
+- Deduplication of overlapping data
+- Local CSV storage for offline access
+- Historical data from 1990 to present
 ```
 
 ### Database Schema

@@ -21,10 +21,8 @@ from datetime import datetime
 from typing import Optional, List, Dict
 import pandas as pd
 import requests
-from .base_data_downloader import BaseDataDownloader
+from src.data.base_data_downloader import BaseDataDownloader
 from src.notification.logger import setup_logger
-import logging
-import os
 from src.model.telegram_bot import Fundamentals
 
 _logger = setup_logger(__name__)

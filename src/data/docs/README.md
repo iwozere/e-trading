@@ -20,6 +20,38 @@ All data downloaders inherit from `BaseDataDownloader` which provides:
 - Error handling and logging
 - Abstract `get_fundamentals()` method
 
+### VIX Data Management
+
+The VIX (Volatility Index) data module provides functionality for downloading and managing CBOE VIX data:
+
+**Features:**
+- ✅ **Automatic Directory Creation**: Creates `data/vix/` directory if it doesn't exist
+- ✅ **Incremental Updates**: Only downloads new data since last update
+- ✅ **Data Deduplication**: Removes duplicate entries automatically
+- ✅ **Local Storage**: Stores data in CSV format for offline access
+
+**Usage:**
+```python
+from src.data.vix import update_vix
+
+# Update VIX data (creates directory if needed)
+update_vix()
+```
+
+**Data Format:**
+- **File Location**: `data/vix/vix.csv`
+- **Columns**: Date, Open, High, Low, Close, Adj Close, Volume
+- **Index**: Date (datetime)
+- **Frequency**: Daily data from 1990 to present
+
+**Directory Structure:**
+```
+data/
+├── vix/
+│   └── vix.csv          # VIX historical data
+└── ...
+```
+
 ### Available Data Sources
 
 #### 1. Yahoo Finance Data Downloader (`YahooDataDownloader`)

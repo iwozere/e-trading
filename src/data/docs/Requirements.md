@@ -7,7 +7,7 @@
 - `numpy >= 1.24.0` - Numerical computations and array operations
 
 ### Financial Data APIs
-- `yfinance >= 0.2.18` - Yahoo Finance API for stock and ETF data
+- `yfinance >= 0.2.18` - Yahoo Finance API for stock and ETF data (includes VIX data)
 - `alpha_vantage >= 2.3.1` - Alpha Vantage API wrapper for financial data
 - `finnhub-python >= 2.4.15` - Finnhub API client for real-time market data
 - `polygon-api-client >= 1.12.5` - Polygon.io API for US market data
@@ -77,6 +77,7 @@
 ### No API Key Required
 - **Yahoo Finance** - Basic stock and ETF data (rate limited)
 - **CoinGecko** - Cryptocurrency data (50 calls/minute free tier)
+- **VIX Data** - CBOE VIX volatility index data via Yahoo Finance
 
 ## System Requirements
 
@@ -88,6 +89,7 @@
 ### Hardware Requirements
 - **Memory**: Minimum 4GB RAM (8GB+ recommended for live trading)
 - **Storage**: 10GB+ available space for historical data storage
+  - VIX data: ~50MB for complete historical dataset (1990-present)
 - **CPU**: Multi-core processor recommended for parallel data processing
 
 ### Operating System Compatibility

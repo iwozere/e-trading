@@ -18,7 +18,6 @@ Classes:
 - YahooDataDownloader: Main class for interacting with Yahoo Finance and managing data downloads
 """
 import os
-import logging
 import time
 from datetime import datetime
 from typing import List, Dict
@@ -28,7 +27,7 @@ import yfinance as yf
 
 from src.notification.logger import setup_logger
 from src.model.telegram_bot import Fundamentals
-from .base_data_downloader import BaseDataDownloader
+from src.data.base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
 
@@ -75,11 +74,6 @@ class YahooDataDownloader(BaseDataDownloader):
 
     def __init__(self, data_dir: str = "data"):
         super().__init__(data_dir=data_dir)
-
-        # Set up logging
-        logging.basicConfig(
-            level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-        )
 
         # Rate limiting: 1 request per second
         self.min_request_interval = 1.0
