@@ -45,6 +45,8 @@ SMTP_PASSWORD=os.getenv("SMTP_PASSWORD")
 
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# DEPRECATED: No longer needed - admin notifications now use HTTP API to send to admin users
+# This can be removed from environment variables
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 WEBGUI_PORT = os.getenv("WEBGUI_PORT")

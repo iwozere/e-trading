@@ -3,6 +3,9 @@ import time
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
+
 DB_PATH = "db/telegram_screener.sqlite3"
 
 # --- DB Schema ---
@@ -55,8 +58,23 @@ def init_db():
         condition TEXT,
         active INTEGER DEFAULT 1,
         email INTEGER DEFAULT 0,
-        created TEXT
+        created TEXT,
+        alert_type TEXT DEFAULT 'price',
+        timeframe TEXT DEFAULT '15m',
+        config_json TEXT,
+        alert_action TEXT DEFAULT 'notify'
     )''')
+    # Migration: add new columns if missing
+    c.execute("PRAGMA table_info(alerts)")
+    columns = [row[1] for row in c.fetchall()]
+    if "alert_type" not in columns:
+        c.execute("ALTER TABLE alerts ADD COLUMN alert_type TEXT DEFAULT 'price'")
+    if "timeframe" not in columns:
+        c.execute("ALTER TABLE alerts ADD COLUMN timeframe TEXT DEFAULT '15m'")
+    if "config_json" not in columns:
+        c.execute("ALTER TABLE alerts ADD COLUMN config_json TEXT")
+    if "alert_action" not in columns:
+        c.execute("ALTER TABLE alerts ADD COLUMN alert_action TEXT DEFAULT 'notify'")
     c.execute('''CREATE TABLE IF NOT EXISTS schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ticker TEXT,
@@ -70,7 +88,9 @@ def init_db():
         provider TEXT,
         created TEXT,
         schedule_type TEXT DEFAULT 'report',
-        list_type TEXT
+        list_type TEXT,
+        config_json TEXT,
+        schedule_config TEXT DEFAULT 'simple'
     )''')
     # Migration: add new columns if missing
     c.execute("PRAGMA table_info(schedules)")
@@ -79,6 +99,10 @@ def init_db():
         c.execute("ALTER TABLE schedules ADD COLUMN schedule_type TEXT DEFAULT 'report'")
     if "list_type" not in columns:
         c.execute("ALTER TABLE schedules ADD COLUMN list_type TEXT")
+    if "config_json" not in columns:
+        c.execute("ALTER TABLE schedules ADD COLUMN config_json TEXT")
+    if "schedule_config" not in columns:
+        c.execute("ALTER TABLE schedules ADD COLUMN schedule_config TEXT DEFAULT 'simple'")
     c.execute('''CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -91,6 +115,33 @@ def init_db():
         created TEXT,
         status TEXT DEFAULT 'open'  -- 'open', 'in_progress', 'closed'
     )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS command_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        telegram_user_id TEXT NOT NULL,
+        command TEXT NOT NULL,
+        full_message TEXT,
+        is_registered_user INTEGER DEFAULT 0,
+        user_email TEXT,
+        success INTEGER DEFAULT 1,
+        error_message TEXT,
+        response_time_ms INTEGER,
+        created TEXT DEFAULT CURRENT_TIMESTAMP
+    )''')
+    # Create index for better query performance
+    c.execute('''CREATE INDEX IF NOT EXISTS idx_command_audit_user_id ON command_audit(telegram_user_id)''')
+    c.execute('''CREATE INDEX IF NOT EXISTS idx_command_audit_created ON command_audit(created)''')
+    c.execute('''CREATE INDEX IF NOT EXISTS idx_command_audit_command ON command_audit(command)''')
+
+    # Broadcast log table
+    c.execute('''CREATE TABLE IF NOT EXISTS broadcast_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message TEXT NOT NULL,
+        sent_by TEXT NOT NULL,
+        success_count INTEGER DEFAULT 0,
+        total_count INTEGER DEFAULT 0,
+        created TEXT DEFAULT CURRENT_TIMESTAMP
+    )''')
+
     conn.commit()
     conn.close()
 
@@ -243,6 +294,42 @@ def delete_alert(alert_id: int) -> bool:
     conn.close()
     return True
 
+def add_indicator_alert(user_id: str, ticker: str, config_json: str, alert_action: str = "notify",
+                       timeframe: str = "15m", email: bool = False) -> int:
+    """Add a new indicator-based alert. Returns alert id."""
+    created = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""INSERT INTO alerts
+                 (ticker, user_id, alert_type, config_json, alert_action, timeframe, active, email, created)
+                 VALUES (?, ?, 'indicator', ?, ?, ?, 1, ?, ?)""",
+              (ticker, user_id, config_json, alert_action, timeframe, 1 if email else 0, created))
+    alert_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return alert_id
+
+def get_active_alerts() -> List[Dict[str, Any]]:
+    """Get all active alerts (both price and indicator)."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT * FROM alerts WHERE active=1")
+    rows = c.fetchall()
+    conn.close()
+    return [dict(zip([d[0] for d in c.description], row)) for row in rows]
+
+def get_alerts_by_type(alert_type: str = None) -> List[Dict[str, Any]]:
+    """Get alerts filtered by type (price, indicator, or all if None)."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    if alert_type:
+        c.execute("SELECT * FROM alerts WHERE alert_type=?", (alert_type,))
+    else:
+        c.execute("SELECT * FROM alerts")
+    rows = c.fetchall()
+    conn.close()
+    return [dict(zip([d[0] for d in c.description], row)) for row in rows]
+
 # --- SCHEDULES CRUD ---
 def add_schedule(user_id: str, ticker: str, scheduled_time: str, period: str = None, email: int = 0, indicators: str = None, interval: str = None, provider: str = None) -> int:
     """Add a new schedule. Returns schedule id."""
@@ -330,6 +417,41 @@ def delete_schedule(schedule_id: int) -> bool:
     conn.close()
     return True
 
+def add_json_schedule(user_id: str, config_json: str, schedule_config: str = "advanced") -> int:
+    """Add a new JSON-based schedule. Returns schedule id."""
+    created = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""INSERT INTO schedules
+                 (user_id, config_json, schedule_config, active, created)
+                 VALUES (?, ?, ?, 1, ?)""",
+              (user_id, config_json, schedule_config, created))
+    schedule_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return schedule_id
+
+def get_active_schedules() -> List[Dict[str, Any]]:
+    """Get all active schedules."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT * FROM schedules WHERE active=1")
+    rows = c.fetchall()
+    conn.close()
+    return [dict(zip([d[0] for d in c.description], row)) for row in rows]
+
+def get_schedules_by_config(schedule_config: str = None) -> List[Dict[str, Any]]:
+    """Get schedules filtered by configuration type."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    if schedule_config:
+        c.execute("SELECT * FROM schedules WHERE schedule_config=?", (schedule_config,))
+    else:
+        c.execute("SELECT * FROM schedules")
+    rows = c.fetchall()
+    conn.close()
+    return [dict(zip([d[0] for d in c.description], row)) for row in rows]
+
 # --- SETTINGS CRUD ---
 def set_setting(key: str, value: str):
     """Set a global setting (key-value)."""
@@ -410,7 +532,7 @@ def list_users() -> List[Dict[str, Any]]:
     """Return list of all users with full info."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT telegram_user_id, email, verified, language, is_admin, max_alerts, max_schedules FROM users")
+    c.execute("SELECT telegram_user_id, email, verified, approved, language, is_admin, max_alerts, max_schedules FROM users")
     rows = c.fetchall()
     conn.close()
     return [
@@ -418,10 +540,11 @@ def list_users() -> List[Dict[str, Any]]:
             "telegram_user_id": row[0],
             "email": row[1],
             "verified": bool(row[2]),
-            "language": row[3],
-            "is_admin": bool(row[4]),
-            "max_alerts": row[5],
-            "max_schedules": row[6]
+            "approved": bool(row[3]),
+            "language": row[4],
+            "is_admin": bool(row[5]),
+            "max_alerts": row[6],
+            "max_schedules": row[7]
         }
         for row in rows
     ]
@@ -459,3 +582,202 @@ def update_feedback_status(feedback_id: int, status: str) -> bool:
     conn.commit()
     conn.close()
     return True
+
+# --- COMMAND AUDIT FUNCTIONS ---
+
+def log_command_audit(telegram_user_id: str, command: str, full_message: str = None,
+                     is_registered_user: bool = False, user_email: str = None,
+                     success: bool = True, error_message: str = None,
+                     response_time_ms: int = None) -> int:
+    """Log a command audit entry. Returns audit id."""
+    created = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""INSERT INTO command_audit
+                 (telegram_user_id, command, full_message, is_registered_user, user_email,
+                  success, error_message, response_time_ms, created)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+              (telegram_user_id, command, full_message, 1 if is_registered_user else 0,
+               user_email, 1 if success else 0, error_message, response_time_ms, created))
+    audit_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return audit_id
+
+def get_user_command_history(telegram_user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """Get command history for a specific user."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""SELECT id, command, full_message, is_registered_user, user_email,
+                        success, error_message, response_time_ms, created
+                 FROM command_audit
+                 WHERE telegram_user_id=?
+                 ORDER BY created DESC
+                 LIMIT ?""", (telegram_user_id, limit))
+    rows = c.fetchall()
+    conn.close()
+    return [
+        {
+            "id": row[0],
+            "command": row[1],
+            "full_message": row[2],
+            "is_registered_user": bool(row[3]),
+            "user_email": row[4],
+            "success": bool(row[5]),
+            "error_message": row[6],
+            "response_time_ms": row[7],
+            "created": row[8]
+        }
+        for row in rows
+    ]
+
+def get_all_command_audit(limit: int = 100, offset: int = 0,
+                         user_id: str = None, command: str = None,
+                         success_only: bool = None,
+                         start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
+    """Get all command audit entries with filtering options."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    # Build query with filters
+    query = """SELECT id, telegram_user_id, command, full_message, is_registered_user,
+                      user_email, success, error_message, response_time_ms, created
+               FROM command_audit WHERE 1=1"""
+    params = []
+
+    if user_id:
+        query += " AND telegram_user_id=?"
+        params.append(user_id)
+
+    if command:
+        query += " AND command LIKE ?"
+        params.append(f"%{command}%")
+
+    if success_only is not None:
+        query += " AND success=?"
+        params.append(1 if success_only else 0)
+
+    if start_date:
+        query += " AND created >= ?"
+        params.append(start_date)
+
+    if end_date:
+        query += " AND created <= ?"
+        params.append(end_date)
+
+    query += " ORDER BY created DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    c.execute(query, params)
+    rows = c.fetchall()
+    conn.close()
+
+    return [
+        {
+            "id": row[0],
+            "telegram_user_id": row[1],
+            "command": row[2],
+            "full_message": row[3],
+            "is_registered_user": bool(row[4]),
+            "user_email": row[5],
+            "success": bool(row[6]),
+            "error_message": row[7],
+            "response_time_ms": row[8],
+            "created": row[9]
+        }
+        for row in rows
+    ]
+
+def get_command_audit_stats() -> Dict[str, Any]:
+    """Get command audit statistics."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    # Total commands
+    c.execute("SELECT COUNT(*) FROM command_audit")
+    total_commands = c.fetchone()[0]
+
+    # Successful commands
+    c.execute("SELECT COUNT(*) FROM command_audit WHERE success=1")
+    successful_commands = c.fetchone()[0]
+
+    # Failed commands
+    c.execute("SELECT COUNT(*) FROM command_audit WHERE success=0")
+    failed_commands = c.fetchone()[0]
+
+    # Registered vs non-registered users
+    c.execute("SELECT COUNT(DISTINCT telegram_user_id) FROM command_audit WHERE is_registered_user=1")
+    registered_users = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(DISTINCT telegram_user_id) FROM command_audit WHERE is_registered_user=0")
+    non_registered_users = c.fetchone()[0]
+
+    # Most used commands
+    c.execute("""SELECT command, COUNT(*) as count
+                 FROM command_audit
+                 GROUP BY command
+                 ORDER BY count DESC
+                 LIMIT 10""")
+    top_commands = [{"command": row[0], "count": row[1]} for row in c.fetchall()]
+
+    # Recent activity (last 24 hours)
+    c.execute("""SELECT COUNT(*) FROM command_audit
+                 WHERE created >= datetime('now', '-1 day')""")
+    recent_activity = c.fetchone()[0]
+
+    conn.close()
+
+    return {
+        "total_commands": total_commands,
+        "successful_commands": successful_commands,
+        "failed_commands": failed_commands,
+        "registered_users": registered_users,
+        "non_registered_users": non_registered_users,
+        "top_commands": top_commands,
+        "recent_activity_24h": recent_activity,
+        "success_rate": (successful_commands / total_commands * 100) if total_commands > 0 else 0
+    }
+
+def get_unique_users_command_history() -> List[Dict[str, Any]]:
+    """Get list of unique users with their command statistics."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("""SELECT telegram_user_id,
+                        COUNT(*) as total_commands,
+                        COUNT(CASE WHEN success=1 THEN 1 END) as successful_commands,
+                        COUNT(CASE WHEN is_registered_user=1 THEN 1 END) as registered_commands,
+                        MAX(created) as last_command,
+                        MIN(created) as first_command
+                 FROM command_audit
+                 GROUP BY telegram_user_id
+                 ORDER BY total_commands DESC""")
+
+    rows = c.fetchall()
+    conn.close()
+
+    return [
+        {
+            "telegram_user_id": row[0],
+            "total_commands": row[1],
+            "successful_commands": row[2],
+            "registered_commands": row[3],
+            "last_command": row[4],
+            "first_command": row[5],
+            "success_rate": (row[2] / row[1] * 100) if row[1] > 0 else 0
+        }
+        for row in rows
+    ]
+
+def get_admin_user_ids() -> List[str]:
+    """Get all admin user IDs from the database."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT telegram_user_id FROM users WHERE is_admin=1")
+        admin_ids = [row[0] for row in c.fetchall()]
+        conn.close()
+        return admin_ids
+    except Exception as e:
+        _logger.error("Error getting admin user IDs: %s", e)
+        return []

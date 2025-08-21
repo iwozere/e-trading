@@ -96,9 +96,15 @@ COMMAND_SPECS = {
     "alerts": CommandSpec(
         parameters={
             "email": bool,
+            "timeframe": str,
+            "action_type": str,
+            "config": str,
         },
         defaults={
             "email": False,
+            "timeframe": "15m",
+            "action_type": "notify",
+            "config": None,
         },
         positional=["action", "params"]
     ),
@@ -109,6 +115,7 @@ COMMAND_SPECS = {
             "period": str,
             "interval": str,
             "provider": str,
+            "config": str,
         },
         defaults={
             "email": False,
@@ -116,6 +123,7 @@ COMMAND_SPECS = {
             "period": None,
             "interval": None,
             "provider": None,
+            "config": None,
         },
         positional=["action", "params"]
     ),

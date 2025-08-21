@@ -5,11 +5,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.frontend.telegram.screener.business_logic import handle_command
 from src.frontend.telegram.command_parser import ParsedCommand, parse_command
-
-logger = setup_logger("telegram_screener_bot")
+from src.frontend.telegram import db
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 
 async def process_report_notifications(result, notification_manager, message, user_email):
@@ -17,7 +17,7 @@ async def process_report_notifications(result, notification_manager, message, us
     if result.get("email", False):
         channels.append("email")
 
-    logger.info("Processing %d reports for channels: %s", len(result["reports"]), channels)
+    _logger.info("Processing %d reports for channels: %s", len(result["reports"]), channels)
 
     # Email notifications
     if "email" in channels:
@@ -45,9 +45,9 @@ async def process_report_notifications(result, notification_manager, message, us
                     email_receiver=user_email
                 )
     # Telegram notifications - Send directly to avoid queue issues
-    logger.info("Starting Telegram notifications for %d reports", len(result["reports"]))
+    _logger.info("Starting Telegram notifications for %d reports", len(result["reports"]))
     for i, report in enumerate(result["reports"]):
-        logger.info("Sending Telegram notification %d/%d for ticker: %s", i+1, len(result["reports"]), report.get("ticker"))
+        _logger.info("Sending Telegram notification %d/%d for ticker: %s", i+1, len(result["reports"]), report.get("ticker"))
         if "telegram" in channels:
             attachments = None
             if report.get("chart_bytes"):
@@ -68,7 +68,7 @@ async def process_report_notifications(result, notification_manager, message, us
                             }
                         )
                     )
-                    logger.info("Successfully sent error notification for %s", report['ticker'])
+                    _logger.info("Successfully sent error notification for %s", report['ticker'])
                 else:
                     # Send success notification directly
                     await notification_manager.channels["telegram"].send(
@@ -84,9 +84,9 @@ async def process_report_notifications(result, notification_manager, message, us
                             }
                         )
                     )
-                    logger.info("Successfully sent Telegram notification for %s", report['ticker'])
+                    _logger.info("Successfully sent Telegram notification for %s", report['ticker'])
             except Exception as e:
-                logger.exception("Error sending notification for %s: ", report['ticker'])
+                _logger.exception("Error sending notification for %s: ", report['ticker'])
                 # Try fallback without attachment
                 try:
                     await notification_manager.channels["telegram"].send(
@@ -101,23 +101,23 @@ async def process_report_notifications(result, notification_manager, message, us
                             }
                         )
                     )
-                    logger.info("Successfully sent fallback Telegram notification for %s", report['ticker'])
+                    _logger.info("Successfully sent fallback Telegram notification for %s", report['ticker'])
                 except Exception as e2:
-                    logger.exception("Error sending fallback notification for %s: ", report['ticker'])
+                    _logger.exception("Error sending fallback notification for %s: ", report['ticker'])
 
             # Add a small delay between notifications to avoid rate limiting
             if i < len(result["reports"]) - 1:  # Don't delay after the last notification
                 import asyncio
-                logger.info("Waiting 500ms before next notification...")
+                _logger.info("Waiting 500ms before next notification...")
                 await asyncio.sleep(0.5)  # 500ms delay between notifications
-                logger.info("Delay completed, continuing with next notification")
+                _logger.info("Delay completed, continuing with next notification")
 
-    logger.info("Completed processing all %d reports", len(result["reports"]))
+    _logger.info("Completed processing all %d reports", len(result["reports"]))
 
     # Wait a bit to ensure all notifications are processed
     import asyncio
     await asyncio.sleep(1.0)
-    logger.info("Final wait completed, all notifications should be sent")
+    _logger.info("Final wait completed, all notifications should be sent")
 
 async def process_report_command(message, telegram_user_id, args, notification_manager):
     try:
@@ -144,7 +144,7 @@ async def process_report_command(message, telegram_user_id, args, notification_m
                 email_receiver=user_email if "email" in channels else None
             )
     except Exception as e:
-        logger.exception("Error in report command: ")
+        _logger.exception("Error in report command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Report Command Error",
@@ -155,24 +155,55 @@ async def process_report_command(message, telegram_user_id, args, notification_m
             reply_to_message_id=message.message_id
         )
 
-async def process_help_command(message, telegram_user_id, notification_manager):
+async def process_help_command(message, telegram_user_id, message_text=None, notification_manager=None):
     try:
-        parsed = ParsedCommand(command="help", args={"telegram_user_id": telegram_user_id})
-        result = handle_command(parsed)
+        # Parse command to check for -email flag
+        if message_text:
+            parsed = parse_command(message_text)
+            email_flag = parsed.args.get("email", False)
+        else:
+            email_flag = False
+
+        # Get user info for email
+        user_email = None
+        if email_flag:
+            user_status = db.get_user_status(telegram_user_id)
+            if user_status and user_status.get("verified"):
+                user_email = user_status.get("email")
+            else:
+                email_flag = False  # Don't send email if user not verified
+
+        # Get help content
+        help_content = get_comprehensive_help_content()
+
         channels = ["telegram"]
-        if result.get("email", False):
+        if email_flag and user_email:
             channels.append("email")
+
+        # Send Telegram notification
         await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Help"),
-            message=result.get("help_text", result.get("message", "No message")),
+            notification_type="INFO",
+            title="Alkotrader Bot - Complete Help Guide",
+            message=help_content,
             priority="NORMAL",
-            channels=channels,
+            channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
+
+        # Send email if requested and user is verified
+        if email_flag and user_email:
+            await notification_manager.send_notification(
+                notification_type="INFO",
+                title="Alkotrader Bot - Complete Help Guide",
+                message=help_content,
+                priority="NORMAL",
+                channels=["email"],
+                email_receiver=user_email
+            )
+
     except Exception as e:
-        logger.exception("Error in help command: ")
+        _logger.exception("Error in help command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Help Command Error",
@@ -182,6 +213,106 @@ async def process_help_command(message, telegram_user_id, notification_manager):
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
+
+def get_comprehensive_help_content():
+    """Get comprehensive help content for the bot."""
+    return """
+🤖 ALKOTRADER BOT - COMPLETE COMMAND GUIDE
+
+📋 QUICK START
+1. Send /start to begin
+2. Register with /register your@email.com
+3. Verify your email with the code sent to you
+4. Request approval with /request_approval
+5. Start using the bot's features!
+
+📊 REPORT COMMANDS
+/report TICKER [flags] - Generate comprehensive analysis
+Examples:
+• /report AAPL - Basic report for Apple
+• /report TSLA -email - Report sent to email
+• /report BTCUSDT -indicators=RSI,MACD -period=6mo
+• /report MSFT -interval=1h -provider=yf
+
+Flags:
+• -email - Send report to your verified email
+• -indicators=RSI,MACD,BollingerBands - Specify indicators
+• -period=1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max
+• -interval=1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo
+• -provider=yf,alpha_vantage,polygon
+
+🚨 ALERT COMMANDS
+Price Alerts:
+• /alerts add TICKER PRICE CONDITION [flags]
+• /alerts add AAPL 150.00 above -email
+• /alerts add BTCUSDT 50000 below
+
+Indicator Alerts (Advanced):
+• /alerts add_indicator TICKER CONFIG_JSON [flags]
+• /alerts add_indicator AAPL '{"type":"indicator","indicator":"RSI","parameters":{"period":14},"condition":{"operator":"<","value":30},"alert_action":"BUY","timeframe":"15m"}' -email
+
+Alert Management:
+• /alerts - List all alerts
+• /alerts edit ALERT_ID [PRICE] [CONDITION] [flags]
+• /alerts delete ALERT_ID
+• /alerts pause ALERT_ID
+• /alerts resume ALERT_ID
+
+⏰ SCHEDULE COMMANDS
+Simple Schedules:
+• /schedules add TICKER TIME [flags]
+• /schedules add AAPL 09:00 -email
+• /schedules add TSLA 16:30 -indicators=RSI,MACD
+
+JSON Schedules (Advanced):
+• /schedules add_json CONFIG_JSON
+• /schedules add_json '{"type":"report","ticker":"AAPL","scheduled_time":"09:00","period":"1y","interval":"1d","email":true}'
+
+Screener Schedules:
+• /schedules screener LIST_TYPE [TIME] [flags]
+• /schedules screener us_small_cap 09:00 -email
+• /schedules screener us_large_cap -indicators=PE,PB,ROE
+
+Schedule Management:
+• /schedules - List all schedules
+• /schedules edit SCHEDULE_ID [TIME] [flags]
+• /schedules delete SCHEDULE_ID
+• /schedules pause SCHEDULE_ID
+• /schedules resume SCHEDULE_ID
+
+🔧 UTILITY COMMANDS
+Account Management:
+• /start - Start the bot
+• /help - Show this help message
+• /register your@email.com - Register email
+• /verify CODE - Verify email
+• /request_approval - Request admin approval
+• /info - Show account information
+
+📈 TECHNICAL INDICATORS
+Available: RSI, MACD, Bollinger Bands, SMA
+Fundamental: P/E, P/B, ROE, ROA, Debt/Equity, Current Ratio
+
+⚙️ ADVANCED FEATURES
+JSON configurations for complex alerts and schedules
+Multiple timeframe support (5m, 15m, 1h, 4h, 1d)
+Fundamental screening for undervalued stocks
+Email notifications for all features
+
+📞 SUPPORT
+• Use /help command in the bot
+• Contact admin for account issues
+• Check admin panel for detailed help
+
+🎯 PRO TIPS:
+• Use -email flag for reports and alerts
+• Combine multiple indicators for better analysis
+• Set up daily schedules for regular monitoring
+• Use fundamental screener for stock discovery
+• Configure alerts with specific timeframes
+
+For more detailed help, visit the admin panel help page!
+"""
 
 async def process_info_command(message, telegram_user_id, notification_manager):
     try:
@@ -200,7 +331,7 @@ async def process_info_command(message, telegram_user_id, notification_manager):
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.exception("Error in info command: ")
+        _logger.exception("Error in info command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Info Command Error",
@@ -243,7 +374,7 @@ async def process_register_command(message, telegram_user_id, args, notification
             )
 
     except Exception as e:
-        logger.exception("Error in register command: ")
+        _logger.exception("Error in register command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Register Command Error",
@@ -272,7 +403,7 @@ async def process_verify_command(message, telegram_user_id, args, notification_m
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.exception("Error in verify command: ")
+        _logger.exception("Error in verify command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Verify Command Error",
@@ -328,7 +459,7 @@ async def process_request_approval_command(message, telegram_user_id, args, noti
             )
 
     except Exception as e:
-        logger.exception("Error processing approval request: ")
+        _logger.exception("Error processing approval request: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Error",
@@ -357,7 +488,7 @@ async def process_language_command(message, telegram_user_id, args, notification
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.exception("Error in language command: ")
+        _logger.exception("Error in language command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Language Command Error",
@@ -408,10 +539,10 @@ async def process_admin_command(message, telegram_user_id, args, notification_ma
                         telegram_chat_id=int(user_id)
                     )
                 except Exception as e:
-                    logger.error("Error sending broadcast to user %s: %s", user_id, e)
+                    _logger.error("Error sending broadcast to user %s: %s", user_id, e)
 
     except Exception as e:
-        logger.exception("Error in admin command: ")
+        _logger.exception("Error in admin command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Admin Command Error",
@@ -442,7 +573,7 @@ async def process_alerts_command(message, telegram_user_id, args, notification_m
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.exception("Error in alerts command: ")
+        _logger.exception("Error in alerts command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Alerts Command Error",
@@ -473,7 +604,7 @@ async def process_schedules_command(message, telegram_user_id, args, notificatio
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.exception("Error in schedules command: ")
+        _logger.exception("Error in schedules command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Schedules Command Error",
@@ -502,7 +633,7 @@ async def process_feedback_command(message, telegram_user_id, args, notification
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.exception("Error in feedback command: ")
+        _logger.exception("Error in feedback command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Feedback Command Error",
@@ -531,7 +662,7 @@ async def process_feature_command(message, telegram_user_id, args, notification_
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.exception("Error in feature command: ")
+        _logger.exception("Error in feature command: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Feature Command Error",
@@ -555,7 +686,7 @@ async def process_unknown_command(message, telegram_user_id, notification_manage
             reply_to_message_id=message.message_id
         )
     except Exception as e:
-        logger.exception("Error in unknown command handler: ")
+        _logger.exception("Error in unknown command handler: ")
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Unknown Command Error",

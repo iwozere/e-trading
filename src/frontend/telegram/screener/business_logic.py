@@ -17,7 +17,7 @@ from src.frontend.telegram import db
 from src.common.ticker_analyzer import format_ticker_report
 
 from src.notification.logger import setup_logger
-logger = setup_logger(__name__)
+_logger = setup_logger(__name__)
 
 def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
     """
@@ -81,7 +81,7 @@ def handle_help(parsed: ParsedCommand) -> Dict[str, Any]:
             "is_admin": is_admin
         }
     except Exception as e:
-        logger.exception("Error generating help: ")
+        _logger.exception("Error generating help: ")
         return {"status": "error", "message": f"Error generating help: {str(e)}"}
 
 
@@ -143,7 +143,7 @@ def handle_request_approval(parsed: ParsedCommand) -> Dict[str, Any]:
             "notify_admins": True
         }
     except Exception as e:
-        logger.exception("Error processing approval request: ")
+        _logger.exception("Error processing approval request: ")
         return {"status": "error", "message": f"Error processing approval request: {str(e)}"}
 
 def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
@@ -365,7 +365,7 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
             return {"status": "error", "message": f"Unknown admin command: {action}"}
 
     except Exception as e:
-        logger.exception("Error in admin command: ")
+        _logger.exception("Error in admin command: ")
         return {"status": "error", "message": f"Error processing admin command: {str(e)}"}
 
 
@@ -387,7 +387,7 @@ def handle_admin_users() -> Dict[str, Any]:
         return {"status": "ok", "title": "All Users", "message": message}
 
     except Exception as e:
-        logger.exception("Error listing users: ")
+        _logger.exception("Error listing users: ")
         return {"status": "error", "message": f"Error listing users: {str(e)}"}
 
 
@@ -407,7 +407,7 @@ def handle_admin_listusers() -> Dict[str, Any]:
         return {"status": "ok", "title": "User List", "message": message}
 
     except Exception as e:
-        logger.exception("Error listing users: ")
+        _logger.exception("Error listing users: ")
         return {"status": "error", "message": f"Error listing users: {str(e)}"}
 
 
@@ -430,7 +430,7 @@ def handle_admin_resetemail(user_id: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error resetting email: ")
+        _logger.exception("Error resetting email: ")
         return {"status": "error", "message": f"Error resetting email: {str(e)}"}
 
 
@@ -455,7 +455,7 @@ def handle_admin_verify(user_id: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error verifying user: ")
+        _logger.exception("Error verifying user: ")
         return {"status": "error", "message": f"Error verifying user: {str(e)}"}
 
 
@@ -501,7 +501,7 @@ def handle_admin_setlimit(limit_type: str, limit_value: str, user_id: str = None
             }
 
     except Exception as e:
-        logger.exception("Error setting limit: ")
+        _logger.exception("Error setting limit: ")
         return {"status": "error", "message": f"Error setting limit: {str(e)}"}
 
 
@@ -527,7 +527,7 @@ def handle_admin_broadcast(message_text: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error scheduling broadcast: ")
+        _logger.exception("Error scheduling broadcast: ")
         return {"status": "error", "message": f"Error scheduling broadcast: {str(e)}"}
 
 def handle_admin_approve(user_id: str) -> Dict[str, Any]:
@@ -558,7 +558,7 @@ def handle_admin_approve(user_id: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error approving user: ")
+        _logger.exception("Error approving user: ")
         return {"status": "error", "message": f"Error approving user: {str(e)}"}
 
 def handle_admin_reject(user_id: str) -> Dict[str, Any]:
@@ -589,7 +589,7 @@ def handle_admin_reject(user_id: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error rejecting user: ")
+        _logger.exception("Error rejecting user: ")
         return {"status": "error", "message": f"Error rejecting user: {str(e)}"}
 
 def handle_admin_pending() -> Dict[str, Any]:
@@ -608,7 +608,7 @@ def handle_admin_pending() -> Dict[str, Any]:
         return {"status": "ok", "title": "Pending Approvals", "message": message}
 
     except Exception as e:
-        logger.exception("Error listing pending approvals: ")
+        _logger.exception("Error listing pending approvals: ")
         return {"status": "error", "message": f"Error listing pending approvals: {str(e)}"}
 
 
@@ -642,6 +642,13 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
             # Get email flag from parsed args
             email = parsed.args.get("email", False)
             return handle_alerts_add(telegram_user_id, ticker, price, condition, email)
+        elif action == "add_indicator" and len(params) >= 2:
+            ticker, config_json = params[0], params[1]
+            # Get additional parameters from parsed args
+            email = parsed.args.get("email", False)
+            timeframe = parsed.args.get("timeframe", "15m")
+            alert_action = parsed.args.get("action_type", "notify")
+            return handle_alerts_add_indicator(telegram_user_id, ticker, config_json, timeframe, alert_action, email)
         elif action == "edit" and len(params) >= 1:
             alert_id = params[0]
             new_price = params[1] if len(params) > 1 else None
@@ -664,20 +671,28 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
                 "title": "Alerts Help",
                 "message": ("Available alert commands:\n"
                            "/alerts - List all alerts\n"
-                           "/alerts add TICKER PRICE CONDITION [flags] - Add alert\n"
+                           "/alerts add TICKER PRICE CONDITION [flags] - Add price alert\n"
                            "  CONDITION: above or below\n"
                            "  Example: /alerts add BTCUSDT 65000 above -email\n"
+                           "/alerts add_indicator TICKER CONFIG_JSON [flags] - Add indicator alert\n"
+                           "  Example: /alerts add_indicator AAPL '{\"type\":\"indicator\",\"indicator\":\"RSI\",\"parameters\":{\"period\":14},\"condition\":{\"operator\":\"<\",\"value\":30},\"alert_action\":\"BUY\",\"timeframe\":\"15m\"}' -email\n"
                            "Flags:\n"
                            "  -email: Send alert notification to email\n"
+                           "  -timeframe=15m: Set timeframe (5m, 15m, 1h, 4h, 1d)\n"
+                           "  -action_type=notify: Set action (BUY, SELL, HOLD, notify)\n"
                            "/alerts edit ALERT_ID [PRICE] [CONDITION] [flags] - Edit alert\n"
                            "  Example: /alerts edit 1 70000 below -email\n"
                            "/alerts delete ALERT_ID - Delete alert\n"
                            "/alerts pause ALERT_ID - Pause alert\n"
-                           "/alerts resume ALERT_ID - Resume alert")
+                           "/alerts resume ALERT_ID - Resume alert\n\n"
+                           "Indicator Alert Examples:\n"
+                           "• RSI oversold: {\"type\":\"indicator\",\"indicator\":\"RSI\",\"parameters\":{\"period\":14},\"condition\":{\"operator\":\"<\",\"value\":30}}\n"
+                           "• Bollinger Bands: {\"type\":\"indicator\",\"indicator\":\"BollingerBands\",\"parameters\":{\"period\":20},\"condition\":{\"operator\":\"below_lower_band\"}}\n"
+                           "• MACD crossover: {\"type\":\"indicator\",\"indicator\":\"MACD\",\"condition\":{\"operator\":\"crossover\"}}")
             }
 
     except Exception as e:
-        logger.exception("Error in alerts command: ")
+        _logger.exception("Error in alerts command: ")
         return {"status": "error", "message": f"Error processing alerts command: {str(e)}"}
 
 
@@ -692,15 +707,36 @@ def handle_alerts_list(telegram_user_id: str) -> Dict[str, Any]:
         for alert in alerts:
             status = "🟢 Active" if alert.get("active") else "🔴 Paused"
             email_flag = "📧" if alert.get("email") else "💬"
-            alert_list.append(
-                f"#{alert['id']}: {alert['ticker']} {alert['condition']} ${alert['price']:.2f} {email_flag} - {status}"
-            )
+
+            # Handle different alert types
+            alert_type = alert.get("alert_type", "price")
+            if alert_type == "price":
+                alert_list.append(
+                    f"#{alert['id']}: {alert['ticker']} {alert['condition']} ${alert['price']:.2f} {email_flag} - {status}"
+                )
+            else:
+                # Indicator alert
+                from src.frontend.telegram.screener.alert_logic_evaluator import get_alert_summary
+                summary = get_alert_summary(alert)
+                alert_type_icon = "📊" if alert_type == "indicator" else "❓"
+                timeframe = alert.get("timeframe", "15m")
+                action = alert.get("alert_action", "notify")
+
+                if "indicators" in summary:
+                    indicators_text = ", ".join(summary["indicators"])
+                    alert_list.append(
+                        f"#{alert['id']}: {alert['ticker']} {alert_type_icon} {indicators_text} ({timeframe}, {action}) {email_flag} - {status}"
+                    )
+                else:
+                    alert_list.append(
+                        f"#{alert['id']}: {alert['ticker']} {alert_type_icon} Indicator Alert ({timeframe}, {action}) {email_flag} - {status}"
+                    )
 
         message = f"Your alerts ({len(alerts)}):\n\n" + "\n".join(alert_list)
         return {"status": "ok", "title": "Your Alerts", "message": message}
 
     except Exception as e:
-        logger.exception("Error listing alerts: ")
+        _logger.exception("Error listing alerts: ")
         return {"status": "error", "message": f"Error listing alerts: {str(e)}"}
 
 
@@ -741,7 +777,7 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
         }
 
     except Exception as e:
-        logger.exception("Error adding alert: ")
+        _logger.exception("Error adding alert: ")
         return {"status": "error", "message": f"Error adding alert: {str(e)}"}
 
 
@@ -797,8 +833,80 @@ def handle_alerts_edit(telegram_user_id: str, alert_id_str: str, new_price_str: 
         }
 
     except Exception as e:
-        logger.exception("Error editing alert: ")
+        _logger.exception("Error editing alert: ")
         return {"status": "error", "message": f"Error editing alert: {str(e)}"}
+
+
+def handle_alerts_add_indicator(telegram_user_id: str, ticker: str, config_json: str, timeframe: str = "15m",
+                               alert_action: str = "notify", email: bool = False) -> Dict[str, Any]:
+    """Add a new indicator-based alert."""
+    try:
+        # Validate ticker
+        if not ticker or len(ticker.strip()) == 0:
+            return {"status": "error", "message": "Ticker is required"}
+
+        # Validate timeframe
+        valid_timeframes = ["5m", "15m", "1h", "4h", "1d"]
+        if timeframe not in valid_timeframes:
+            return {"status": "error", "message": f"Invalid timeframe. Must be one of: {', '.join(valid_timeframes)}"}
+
+        # Validate alert action
+        valid_actions = ["BUY", "SELL", "HOLD", "notify"]
+        if alert_action not in valid_actions:
+            return {"status": "error", "message": f"Invalid action. Must be one of: {', '.join(valid_actions)}"}
+
+        # Validate JSON configuration
+        try:
+            from src.frontend.telegram.screener.alert_config_parser import validate_alert_config
+            is_valid, errors = validate_alert_config(config_json)
+            if not is_valid:
+                return {"status": "error", "message": f"Invalid alert configuration: {'; '.join(errors)}"}
+        except Exception as e:
+            return {"status": "error", "message": f"Error validating alert configuration: {str(e)}"}
+
+        # Check user limits
+        user_status = db.get_user_status(telegram_user_id)
+        max_alerts = user_status.get("max_alerts", 5)
+        current_alerts = len(db.list_alerts(telegram_user_id))
+
+        if current_alerts >= max_alerts:
+            return {
+                "status": "error",
+                "message": f"Alert limit reached ({max_alerts}). Delete some alerts first or contact admin."
+            }
+
+        # Add the indicator alert
+        alert_id = db.add_indicator_alert(
+            user_id=telegram_user_id,
+            ticker=ticker.upper(),
+            config_json=config_json,
+            alert_action=alert_action,
+            timeframe=timeframe,
+            email=email
+        )
+
+        # Get alert summary for display
+        from src.frontend.telegram.screener.alert_logic_evaluator import get_alert_summary
+        alert_data = {
+            "id": alert_id,
+            "ticker": ticker.upper(),
+            "alert_type": "indicator",
+            "config_json": config_json,
+            "timeframe": timeframe,
+            "alert_action": alert_action
+        }
+        summary = get_alert_summary(alert_data)
+
+        email_text = " and email" if email else ""
+        return {
+            "status": "ok",
+            "title": "Indicator Alert Added",
+            "message": f"Alert #{alert_id} created: {ticker.upper()} - {summary.get('type', 'Indicator Alert')} ({timeframe}){email_text}"
+        }
+
+    except Exception as e:
+        _logger.exception("Error adding indicator alert: ")
+        return {"status": "error", "message": f"Error adding indicator alert: {str(e)}"}
 
 
 def handle_alerts_delete(telegram_user_id: str, alert_id_str: str) -> Dict[str, Any]:
@@ -825,7 +933,7 @@ def handle_alerts_delete(telegram_user_id: str, alert_id_str: str) -> Dict[str, 
         }
 
     except Exception as e:
-        logger.exception("Error deleting alert: ")
+        _logger.exception("Error deleting alert: ")
         return {"status": "error", "message": f"Error deleting alert: {str(e)}"}
 
 
@@ -853,7 +961,7 @@ def handle_alerts_pause(telegram_user_id: str, alert_id_str: str) -> Dict[str, A
         }
 
     except Exception as e:
-        logger.exception("Error pausing alert: ")
+        _logger.exception("Error pausing alert: ")
         return {"status": "error", "message": f"Error pausing alert: {str(e)}"}
 
 
@@ -881,7 +989,7 @@ def handle_alerts_resume(telegram_user_id: str, alert_id_str: str) -> Dict[str, 
         }
 
     except Exception as e:
-        logger.exception("Error resuming alert: ")
+        _logger.exception("Error resuming alert: ")
         return {"status": "error", "message": f"Error resuming alert: {str(e)}"}
 
 
@@ -939,6 +1047,9 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
         elif action == "resume" and len(params) >= 1:
             schedule_id = params[0]
             return handle_schedules_resume(telegram_user_id, schedule_id)
+        elif action == "add_json" and len(params) >= 1:
+            config_json = params[0]
+            return handle_schedules_add_json(telegram_user_id, config_json)
         else:
             return {
                 "status": "error",
@@ -954,6 +1065,8 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
                            "  -period=1y: Data period\n"
                            "  -interval=1d: Data interval\n"
                            "  -provider=yf: Data provider\n"
+                           "/schedules add_json CONFIG_JSON - Add advanced schedule with JSON config\n"
+                           "  Example: /schedules add_json '{\"type\":\"report\",\"ticker\":\"AAPL\",\"scheduled_time\":\"09:00\",\"period\":\"1y\",\"interval\":\"1d\",\"email\":true}'\n"
                            "/schedules screener LIST_TYPE [TIME] [flags] - Schedule fundamental screener\n"
                            "  LIST_TYPE: us_small_cap, us_medium_cap, us_large_cap, swiss_shares, custom_list\n"
                            "  TIME: HH:MM format (24h UTC)\n"
@@ -962,12 +1075,64 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
                            "/schedules edit SCHEDULE_ID [TIME] [flags] - Edit schedule\n"
                            "/schedules delete SCHEDULE_ID - Delete schedule\n"
                            "/schedules pause SCHEDULE_ID - Pause schedule\n"
-                           "/schedules resume SCHEDULE_ID - Resume schedule")
+                           "/schedules resume SCHEDULE_ID - Resume schedule\n\n"
+                           "JSON Schedule Examples:\n"
+                           "• Simple Report: {\"type\":\"report\",\"ticker\":\"AAPL\",\"scheduled_time\":\"09:00\",\"period\":\"1y\",\"interval\":\"1d\",\"email\":true}\n"
+                           "• Advanced Report: {\"type\":\"report\",\"ticker\":\"TSLA\",\"scheduled_time\":\"16:30\",\"period\":\"6mo\",\"interval\":\"1h\",\"indicators\":\"RSI,MACD,BollingerBands\",\"email\":true}\n"
+                           "• Screener: {\"type\":\"screener\",\"list_type\":\"us_small_cap\",\"scheduled_time\":\"08:00\",\"period\":\"1y\",\"interval\":\"1d\",\"indicators\":\"PE,PB,ROE\",\"email\":true}")
             }
 
     except Exception as e:
-        logger.exception("Error in schedules command: ")
+        _logger.exception("Error in schedules command: ")
         return {"status": "error", "message": f"Error processing schedules command: {str(e)}"}
+
+
+def handle_schedules_add_json(telegram_user_id: str, config_json: str) -> Dict[str, Any]:
+    """Add a new JSON-based schedule."""
+    try:
+        # Validate JSON configuration
+        try:
+            from src.frontend.telegram.screener.schedule_config_parser import validate_schedule_config
+            is_valid, errors = validate_schedule_config(config_json)
+            if not is_valid:
+                return {"status": "error", "message": f"Invalid schedule configuration: {'; '.join(errors)}"}
+        except Exception as e:
+            return {"status": "error", "message": f"Error validating schedule configuration: {str(e)}"}
+
+        # Check user limits
+        user_status = db.get_user_status(telegram_user_id)
+        max_schedules = user_status.get("max_schedules", 5)
+        current_schedules = len(db.list_schedules(telegram_user_id))
+
+        if current_schedules >= max_schedules:
+            return {
+                "status": "error",
+                "message": f"Schedule limit reached ({max_schedules}). Delete some schedules first or contact admin."
+            }
+
+        # Add the JSON schedule
+        schedule_id = db.add_json_schedule(
+            user_id=telegram_user_id,
+            config_json=config_json,
+            schedule_config="advanced"
+        )
+
+        # Get schedule summary for display
+        from src.frontend.telegram.screener.schedule_config_parser import get_schedule_summary
+        summary = get_schedule_summary(config_json)
+
+        if "error" in summary:
+            return {"status": "error", "message": f"Error creating schedule: {summary['error']}"}
+
+        return {
+            "status": "ok",
+            "title": "Schedule Added",
+            "message": f"Schedule #{schedule_id} created: {summary.get('type', 'Unknown')} at {summary.get('scheduled_time', 'Unknown')}"
+        }
+
+    except Exception as e:
+        _logger.exception("Error adding JSON schedule: ")
+        return {"status": "error", "message": f"Error adding JSON schedule: {str(e)}"}
 
 
 def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
@@ -981,16 +1146,52 @@ def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
         for schedule in schedules:
             status = "🟢 Active" if schedule.get("active") else "🔴 Paused"
             email_flag = "📧" if schedule.get("email") else "💬"
-            period = schedule.get("period", "daily")
-            schedule_list.append(
-                f"#{schedule['id']}: {schedule['ticker']} at {schedule['scheduled_time']} ({period}) {email_flag} - {status}"
-            )
+
+            # Handle different schedule types
+            schedule_config = schedule.get("schedule_config", "simple")
+            if schedule_config == "simple":
+                period = schedule.get("period", "daily")
+                schedule_list.append(
+                    f"#{schedule['id']}: {schedule['ticker']} at {schedule['scheduled_time']} ({period}) {email_flag} - {status}"
+                )
+            else:
+                # JSON-based schedule
+                from src.frontend.telegram.screener.schedule_config_parser import get_schedule_summary
+                config_json = schedule.get("config_json")
+                if config_json:
+                    summary = get_schedule_summary(config_json)
+                    if "error" not in summary:
+                        schedule_type = summary.get("type", "Unknown")
+                        scheduled_time = summary.get("scheduled_time", "Unknown")
+                        ticker = summary.get("ticker", "")
+                        list_type = summary.get("list_type", "")
+
+                        if schedule_type == "report":
+                            schedule_list.append(
+                                f"#{schedule['id']}: 📊 {ticker} Report at {scheduled_time} {email_flag} - {status}"
+                            )
+                        elif schedule_type == "screener":
+                            schedule_list.append(
+                                f"#{schedule['id']}: 🔍 {list_type} Screener at {scheduled_time} {email_flag} - {status}"
+                            )
+                        else:
+                            schedule_list.append(
+                                f"#{schedule['id']}: ⚙️ {schedule_type} at {scheduled_time} {email_flag} - {status}"
+                            )
+                    else:
+                        schedule_list.append(
+                            f"#{schedule['id']}: ⚙️ JSON Schedule at {schedule.get('scheduled_time', 'Unknown')} {email_flag} - {status}"
+                        )
+                else:
+                    schedule_list.append(
+                        f"#{schedule['id']}: ⚙️ JSON Schedule at {schedule.get('scheduled_time', 'Unknown')} {email_flag} - {status}"
+                    )
 
         message = f"Your scheduled reports ({len(schedules)}):\n\n" + "\n".join(schedule_list)
         return {"status": "ok", "title": "Your Schedules", "message": message}
 
     except Exception as e:
-        logger.exception("Error listing schedules: ")
+        _logger.exception("Error listing schedules: ")
         return {"status": "error", "message": f"Error listing schedules: {str(e)}"}
 
 
@@ -1037,7 +1238,7 @@ def handle_schedules_add(telegram_user_id: str, ticker: str, time: str, email: b
         }
 
     except Exception as e:
-        logger.exception("Error adding schedule: ")
+        _logger.exception("Error adding schedule: ")
         return {"status": "error", "message": f"Error adding schedule: {str(e)}"}
 
 
@@ -1093,7 +1294,7 @@ def handle_schedules_edit(telegram_user_id: str, schedule_id_str: str, new_time:
         }
 
     except Exception as e:
-        logger.exception("Error editing schedule: ")
+        _logger.exception("Error editing schedule: ")
         return {"status": "error", "message": f"Error editing schedule: {str(e)}"}
 
 
@@ -1121,7 +1322,7 @@ def handle_schedules_delete(telegram_user_id: str, schedule_id_str: str) -> Dict
         }
 
     except Exception as e:
-        logger.exception("Error deleting schedule: ")
+        _logger.exception("Error deleting schedule: ")
         return {"status": "error", "message": f"Error deleting schedule: {str(e)}"}
 
 
@@ -1149,7 +1350,7 @@ def handle_schedules_pause(telegram_user_id: str, schedule_id_str: str) -> Dict[
         }
 
     except Exception as e:
-        logger.exception("Error pausing schedule: ")
+        _logger.exception("Error pausing schedule: ")
         return {"status": "error", "message": f"Error pausing schedule: {str(e)}"}
 
 
@@ -1177,7 +1378,7 @@ def handle_schedules_resume(telegram_user_id: str, schedule_id_str: str) -> Dict
         }
 
     except Exception as e:
-        logger.exception("Error resuming schedule: ")
+        _logger.exception("Error resuming schedule: ")
         return {"status": "error", "message": f"Error resuming schedule: {str(e)}"}
 
 
@@ -1266,7 +1467,7 @@ def handle_schedules_screener(telegram_user_id: str, list_type: str, time: str,
             }
 
     except Exception as e:
-        logger.exception("Error creating screener schedule: ")
+        _logger.exception("Error creating screener schedule: ")
         return {
             'status': 'error',
             'message': f"Error creating screener schedule: {str(e)}"
@@ -1289,7 +1490,7 @@ def handle_feedback(parsed: ParsedCommand) -> Dict[str, Any]:
             return {"status": "error", "message": "Please provide feedback message. Usage: /feedback Your message here"}
 
         # Log feedback for admin review
-        logger.info("User feedback", extra={
+        _logger.info("User feedback", extra={
             "user_id": telegram_user_id,
             "feedback": feedback,
             "type": "feedback"
@@ -1311,7 +1512,7 @@ def handle_feedback(parsed: ParsedCommand) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error processing feedback: ")
+        _logger.exception("Error processing feedback: ")
         return {"status": "error", "message": f"Error processing feedback: {str(e)}"}
 
 
@@ -1331,7 +1532,7 @@ def handle_feature(parsed: ParsedCommand) -> Dict[str, Any]:
             return {"status": "error", "message": "Please provide feature request. Usage: /feature Your feature idea here"}
 
         # Log feature request for admin review
-        logger.info("Feature request", extra={
+        _logger.info("Feature request", extra={
             "user_id": telegram_user_id,
             "feature_request": feature_request,
             "type": "feature_request"
@@ -1353,7 +1554,7 @@ def handle_feature(parsed: ParsedCommand) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error processing feature request: ")
+        _logger.exception("Error processing feature request: ")
         return {"status": "error", "message": f"Error processing feature request: {str(e)}"}
 
 
@@ -1407,7 +1608,7 @@ def handle_register(parsed: ParsedCommand) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error in register command: ")
+        _logger.exception("Error in register command: ")
         return {"status": "error", "message": f"Error registering email: {str(e)}"}
 
 
@@ -1445,7 +1646,7 @@ def handle_verify(parsed: ParsedCommand) -> Dict[str, Any]:
             }
 
     except Exception as e:
-        logger.exception("Error in verify command: ")
+        _logger.exception("Error in verify command: ")
         return {"status": "error", "message": f"Error verifying code: {str(e)}"}
 
 
@@ -1494,5 +1695,5 @@ def handle_language(parsed: ParsedCommand) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.exception("Error in language command: ")
+        _logger.exception("Error in language command: ")
         return {"status": "error", "message": f"Error updating language: {str(e)}"}

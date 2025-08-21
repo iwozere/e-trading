@@ -241,16 +241,67 @@ AdminPanel:
 Routes:
 ├── /login - Admin authentication
 ├── /logout - Session termination
-├── / - Dashboard with statistics
-├── /users - User management interface
+├── / - Dashboard with statistics and navigation links
+├── /users - User management interface with filtering
 ├── /users/<user_id>/approve - User approval
 ├── /users/<user_id>/reject - User rejection
 ├── /users/<user_id>/verify - Manual verification
 ├── /users/<user_id>/reset - Email reset
-├── /alerts - Alert management
-├── /schedules - Schedule management
-├── /feedback - Feedback management
-└── /broadcast - Broadcast messaging
+├── /alerts - Alert management with filtering
+├── /schedules - Schedule management with filtering
+├── /feedback - Feedback management with filtering
+├── /broadcast - Broadcast messaging
+├── /audit - Command audit dashboard with comprehensive filtering
+├── /audit/user/<user_id> - User-specific command history
+└── /audit/non-registered - Non-registered users audit view
+```
+
+**Command Audit System Architecture:**
+```python
+AuditSystem:
+├── Database Layer
+│   ├── command_audit table with comprehensive tracking
+│   ├── Indexed queries for performance optimization
+│   └── Data retention and cleanup policies
+├── Bot Integration
+│   ├── audit_command_wrapper() - Automatic command logging
+│   ├── Performance tracking with response times
+│   ├── Error handling and detailed error logging
+│   └── User classification (registered vs non-registered)
+├── Admin Panel Integration
+│   ├── /audit - Main audit dashboard with statistics
+│   ├── /audit/user/<user_id> - Individual user history
+│   ├── /audit/non-registered - Non-registered users view
+│   └── Enhanced filtering and search capabilities
+└── Statistics and Analytics
+    ├── System health monitoring
+    ├── User activity analysis
+    ├── Performance metrics
+    └── Error rate tracking
+```
+
+**Enhanced Navigation System:**
+```python
+NavigationFeatures:
+├── Dashboard Navigation
+│   ├── Stat card navigation links
+│   ├── Direct access to filtered views
+│   └── Visual feedback and indicators
+├── Filter Support
+│   ├── URL-based filtering for all pages
+│   ├── Quick filter buttons
+│   ├── Advanced filter combinations
+│   └── Filter state persistence
+├── User Management Navigation
+│   ├── Verified users filter
+│   ├── Approved users filter
+│   ├── Pending approvals filter
+│   └── User history integration
+└── Audit Navigation
+    ├── Time-based filtering (24h, custom range)
+    ├── User type filtering (registered/non-registered)
+    ├── Success/failure filtering
+    └── Command-specific filtering
 ```
 
 #### 5. Command Processing Layer

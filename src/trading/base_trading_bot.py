@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 from src.data.trade_repository import TradeRepository
 from src.trading.risk.controller import RiskController
 from src.notification.async_notification_manager import initialize_notification_manager
-from config.donotshare.donotshare import (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER)
+from config.donotshare.donotshare import (TELEGRAM_BOT_TOKEN, SMTP_USER)
 
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
@@ -82,10 +82,12 @@ class BaseTradingBot:
         try:
             # Email API key is not used, so pass SMTP_USER as sender, SMTP_USER as receiver for now
             # (If you use SendGrid or similar, adapt accordingly)
+            # Initialize notification manager for system-level trading notifications
+            # Admin notifications will be sent via HTTP API to admin users
             self.notification_manager = asyncio.run(
                 initialize_notification_manager(
                     telegram_token=TELEGRAM_BOT_TOKEN,
-                    telegram_chat_id=TELEGRAM_CHAT_ID,
+                    telegram_chat_id=None,  # Not needed - admin notifications use HTTP API
                     email_sender=SMTP_USER,
                     email_receiver=SMTP_USER  # Or set to a config value for recipient
                 )
@@ -445,15 +447,30 @@ class BaseTradingBot:
 
     def notify_error(self, error_msg: str) -> None:
         """
-        Send error notification via async notification manager (Telegram and email).
+        Send error notification to admin users via HTTP API.
         Args:
             error_msg: Error message string
         """
-        if self.notification_manager:
-            try:
-                asyncio.run(self.notification_manager.send_error_notification(error_msg))
-            except Exception as e:
-                _logger.exception("Failed to send error notification: %s")
+        try:
+            # Import here to avoid circular imports
+            from src.frontend.telegram.screener.http_api_client import send_notification_to_admins
+
+            # Create error message
+            error_message = (
+                f"⚠️ Trading Bot Error\n\n"
+                f"Bot ID: {self.bot_id}\n"
+                f"Trading Pair: {self.trading_pair}\n"
+                f"Error: {error_msg}\n\n"
+                f"Please check the bot configuration and system logs."
+            )
+
+            # Send to admin users
+            asyncio.run(send_notification_to_admins(
+                message=error_message,
+                title="Trading Bot Error"
+            ))
+        except Exception as e:
+            _logger.exception("Failed to send error notification: %s")
 
     def notify_trade_event(
         self,
@@ -465,7 +482,7 @@ class BaseTradingBot:
         pnl: Optional[float] = None,
     ) -> None:
         """
-        Send trade event notification via async notification manager (Telegram and email).
+        Send trade event notification to admin users via HTTP API.
         Args:
             side: 'BUY' or 'SELL'
             price: Trade price
@@ -474,22 +491,31 @@ class BaseTradingBot:
             entry_price: Entry price (optional)
             pnl: Profit/loss (optional)
         """
-        if self.notification_manager:
-            try:
-                # For BUY, treat as entry; for SELL, as exit
-                asyncio.run(
-                    self.notification_manager.send_trade_notification(
-                        symbol=self.trading_pair,
-                        side=side,
-                        price=price,
-                        quantity=size,
-                        entry_price=entry_price,
-                        pnl=pnl
-                    )
-                )
-            except Exception as e:
-                _logger.exception("Failed to send trade notification: %s")
-        # TODO: If running in an async context, prefer 'await' over 'asyncio.run' for notification calls.
+        try:
+            # Import here to avoid circular imports
+            from src.frontend.telegram.screener.http_api_client import send_notification_to_admins
+
+            # Create trade message
+            emoji = "🟢" if side == "BUY" else "🔴"
+            pnl_text = f"PnL: {pnl:.2f}%" if pnl is not None else ""
+
+            trade_message = (
+                f"{emoji} Trade {side}\n\n"
+                f"Bot ID: {self.bot_id}\n"
+                f"Trading Pair: {self.trading_pair}\n"
+                f"Price: ${price:.2f}\n"
+                f"Size: {size}\n"
+                f"{pnl_text}\n"
+                f"Time: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+
+            # Send to admin users
+            asyncio.run(send_notification_to_admins(
+                message=trade_message,
+                title=f"Trading Bot - {side}"
+            ))
+        except Exception as e:
+            _logger.exception("Failed to send trade notification: %s")
 
     def update_positions(self):
         """
@@ -565,19 +591,23 @@ class BaseTradingBot:
 
     def notify_bot_event(self, event: str, emoji: str):
         msg = (
-            f"{emoji} *Bot {event.lower()}*\n"
-            f"Class: `{self.__class__.__name__}`\n"
-            f"Pair: `{self.trading_pair}`\n"
-            f"Initial balance: `{self.initial_balance}`\n"
-            f"Strategy: `{getattr(self, 'strategy_class', type(self.strategy_class).__name__)}`\n"
-            f"Parameters: `{getattr(self, 'parameters', {})}`\n"
-            f"Broker: `{self.broker.__class__.__name__ if self.broker else 'None'}`"
+            f"{emoji} Bot {event.lower()}\n\n"
+            f"Class: {self.__class__.__name__}\n"
+            f"Pair: {self.trading_pair}\n"
+            f"Initial balance: {self.initial_balance}\n"
+            f"Strategy: {getattr(self, 'strategy_class', type(self.strategy_class).__name__)}\n"
+            f"Parameters: {getattr(self, 'parameters', {})}\n"
+            f"Broker: {self.broker.__class__.__name__ if self.broker else 'None'}"
         )
         try:
-            if hasattr(self, "notification_manager") and self.notification_manager:
-                asyncio.run(
-                    self.notification_manager.send_trade_notification({"message": msg})
-                )
+            # Import here to avoid circular imports
+            from src.frontend.telegram.screener.http_api_client import send_notification_to_admins
+
+            # Send to admin users
+            asyncio.run(send_notification_to_admins(
+                message=msg,
+                title=f"Trading Bot - {event.title()}"
+            ))
         except Exception as e:
             _logger.exception("Failed to send notification: %s")
 

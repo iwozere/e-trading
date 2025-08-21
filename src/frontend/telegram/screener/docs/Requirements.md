@@ -156,6 +156,25 @@ CREATE TABLE settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Command audit system
+CREATE TABLE command_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_user_id TEXT NOT NULL,
+    command TEXT NOT NULL,
+    full_message TEXT,
+    is_registered_user INTEGER DEFAULT 0,
+    user_email TEXT,
+    success INTEGER DEFAULT 1,
+    error_message TEXT,
+    response_time_ms INTEGER,
+    created TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for audit system performance
+CREATE INDEX idx_command_audit_user_id ON command_audit(telegram_user_id);
+CREATE INDEX idx_command_audit_created ON command_audit(created);
+CREATE INDEX idx_command_audit_command ON command_audit(command);
 ```
 
 ### PostgreSQL Support (Production Scale)
@@ -197,6 +216,15 @@ CREATE TABLE settings (
   - Restricted commands require `approved=1` status
   - Public commands available to all users
 - **Rate Limiting**: Protection against spam and abuse
+
+### Audit and Compliance
+- **Command Audit**: Complete tracking of all user commands (registered and non-registered)
+- **Performance Monitoring**: Response time tracking for all commands
+- **Error Tracking**: Detailed error logging and analysis
+- **User Classification**: Distinguish between registered and non-registered users
+- **Data Retention**: Audit logs maintained for compliance and debugging
+- **Admin Access**: Audit data accessible only through admin panel
+- **Privacy Protection**: Email addresses only stored for registered users
 
 ### Privacy Compliance
 - **Data Retention**: 30-day log retention policy
@@ -592,6 +620,12 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 - **Problem Solved**: Price discrepancy between fundamental and technical analysis sections
 - **Solution**: Updated technical analysis to use actual current price instead of moving average
 - **Benefits**: Consistent pricing information across all report sections
+
+### Access Control System
+- **Problem Solved**: No user approval workflow for restricted features
+- **Solution**: Implemented multi-tier access control with admin approval workflow
+- **Benefits**: Secure access to restricted features, admin oversight
+- **Technical Details**: See `Design.md` for complete architecture documentation
 
 ### Access Control System
 - **Problem Solved**: No user approval workflow for restricted features

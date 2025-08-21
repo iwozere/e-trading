@@ -38,7 +38,7 @@ export IBKR_PAPER_SECRET="your_ibkr_paper_secret"
 #### Telegram
 ```bash
 export TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
-export TELEGRAM_CHAT_ID="your_chat_id"
+# TELEGRAM_CHAT_ID is no longer needed - admin notifications use HTTP API
 ```
 
 #### Email (Optional)
@@ -115,7 +115,7 @@ You can create a `.env` file in the `config/donotshare/` directory:
 BINANCE_KEY=your_api_key
 BINANCE_SECRET=your_api_secret
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
+# TELEGRAM_CHAT_ID is no longer needed - admin notifications use HTTP API
 ```
 
 The system automatically loads this file through the `donotshare.py` module.
@@ -160,7 +160,7 @@ print(f"Binance API Secret: {'SET' if os.getenv('BINANCE_SECRET') else 'NOT SET'
 
 # Test notification credentials
 print(f"Telegram Bot Token: {'SET' if os.getenv('TELEGRAM_BOT_TOKEN') else 'NOT SET'}")
-print(f"Telegram Chat ID: {'SET' if os.getenv('TELEGRAM_CHAT_ID') else 'NOT SET'}")
+print(f"Telegram Chat ID: {'DEPRECATED - No longer needed'}")
 ```
 
 ## Troubleshooting

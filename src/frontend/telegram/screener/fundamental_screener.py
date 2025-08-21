@@ -28,7 +28,7 @@ from src.util.tickers_list import (
 )
 from src.notification.logger import setup_logger
 
-logger = setup_logger(__name__)
+_logger = setup_logger(__name__)
 
 
 class FundamentalScreener:
@@ -79,13 +79,13 @@ class FundamentalScreener:
             elif list_type == 'custom_list':
                 # For custom lists, we'll need to implement storage/retrieval
                 # For now, return an empty list
-                logger.warning("Custom list support not yet implemented")
+                _logger.warning("Custom list support not yet implemented")
                 return []
             else:
-                logger.error(f"Unknown list type: {list_type}")
+                _logger.error("Unknown list type: %s", list_type)
                 return []
         except Exception as e:
-            logger.error(f"Error loading ticker list {list_type}: {e}")
+            _logger.error("Error loading ticker list %s: %s", list_type, e)
             return []
 
     def collect_fundamentals(self, tickers: List[str]) -> Dict[str, Fundamentals]:
@@ -93,29 +93,29 @@ class FundamentalScreener:
         fundamentals_data = {}
         total_tickers = len(tickers)
 
-        logger.info(f"Starting fundamental data collection for {total_tickers} tickers")
+        _logger.info("Starting fundamental data collection for %d tickers", total_tickers)
 
         for i, ticker in enumerate(tickers, 1):
             try:
-                logger.info(f"Processing {ticker} ({i}/{total_tickers})")
+                _logger.info("Processing %s (%d/%d)", ticker, i, total_tickers)
 
                 # Get fundamental data using yfinance
                 fundamentals = self._get_ticker_fundamentals(ticker)
 
                 if fundamentals and self._validate_fundamental_data(fundamentals):
                     fundamentals_data[ticker] = fundamentals
-                    logger.info(f"Successfully collected data for {ticker}")
+                    _logger.info("Successfully collected data for %s", ticker)
                 else:
-                    logger.warning(f"Insufficient data for {ticker}, skipping")
+                    _logger.warning("Insufficient data for %s, skipping", ticker)
 
                 # Rate limiting - sleep between requests
                 time.sleep(0.1)  # 100ms delay between requests
 
             except Exception as e:
-                logger.error(f"Error collecting data for {ticker}: {e}")
+                _logger.error("Error collecting data for %s: %s", ticker, e)
                 continue
 
-        logger.info(f"Fundamental data collection completed. {len(fundamentals_data)}/{total_tickers} tickers processed successfully")
+        _logger.info("Fundamental data collection completed. %d/%d tickers processed successfully", len(fundamentals_data), total_tickers)
         return fundamentals_data
 
     def _get_ticker_fundamentals(self, ticker: str) -> Optional[Fundamentals]:
@@ -179,7 +179,7 @@ class FundamentalScreener:
             return fundamentals
 
         except Exception as e:
-            logger.error(f"Error getting fundamentals for {ticker}: {e}")
+            _logger.error("Error getting fundamentals for %s: %s", ticker, e)
             return None
 
     def _calculate_additional_metrics(self, fundamentals: Fundamentals,
@@ -216,7 +216,7 @@ class FundamentalScreener:
                         fundamentals.free_cash_flow = fcf_data.iloc[0]
 
         except Exception as e:
-            logger.warning(f"Error calculating additional metrics: {e}")
+            _logger.warning("Error calculating additional metrics: %s", e)
 
         return fundamentals
 
@@ -237,7 +237,7 @@ class FundamentalScreener:
         """Apply screening criteria to fundamental data and return top results."""
         screener_results = []
 
-        logger.info(f"Applying screening criteria to {len(fundamentals_data)} tickers")
+        _logger.info("Applying screening criteria to %d tickers", len(fundamentals_data))
 
         for ticker, fundamentals in fundamentals_data.items():
             try:
@@ -267,7 +267,7 @@ class FundamentalScreener:
                 screener_results.append(result)
 
             except Exception as e:
-                logger.error(f"Error screening {ticker}: {e}")
+                _logger.exception("Error screening %s:", ticker)
                 result = ScreenerResult(
                     ticker=ticker,
                     error=str(e)
@@ -386,7 +386,7 @@ class FundamentalScreener:
             )
 
         except Exception as e:
-            logger.error(f"Error calculating DCF for {fundamentals.ticker}: {e}")
+            _logger.error(f"Error calculating DCF for {fundamentals.ticker}: {e}")
             return DCFResult(
                 ticker=fundamentals.ticker,
                 error=str(e)
@@ -456,7 +456,7 @@ class FundamentalScreener:
             return report
 
         except Exception as e:
-            logger.error(f"Error generating report: {e}")
+            _logger.error(f"Error generating report: {e}")
             return ScreenerReport(
                 list_type=list_type,
                 total_tickers_processed=total_processed,
@@ -578,7 +578,7 @@ class FundamentalScreener:
 
     def run_screener(self, list_type: str) -> ScreenerReport:
         """Run complete fundamental screener workflow."""
-        logger.info(f"Starting fundamental screener for {list_type}")
+        _logger.info(f"Starting fundamental screener for {list_type}")
 
         try:
             # Load ticker list
@@ -609,11 +609,11 @@ class FundamentalScreener:
             # Generate report
             report = self.generate_report(list_type, results, len(tickers))
 
-            logger.info(f"Screener completed successfully. Found {len(results)} undervalued stocks")
+            _logger.info(f"Screener completed successfully. Found {len(results)} undervalued stocks")
             return report
 
         except Exception as e:
-            logger.error(f"Error running screener: {e}")
+            _logger.error(f"Error running screener: {e}")
             return ScreenerReport(
                 list_type=list_type,
                 total_tickers_processed=0,

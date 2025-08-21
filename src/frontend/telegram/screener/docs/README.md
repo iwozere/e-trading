@@ -40,6 +40,7 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 | `/myregister user@email.xyz [lang]`     | Register/update email (and language). Sends 6-digit code. | `/myregister john@x.com en`   |
 | `/myverify CODE`                        | Verify your email with the 6-digit code.                  | `/myverify 123456`            |
 | `/language LANG`                        | Update your language preference.                          | `/language ru`                |
+| `/request_approval`                     | Request admin approval after email verification.          | `/request_approval`            |
 
 ### Reports
 
@@ -135,6 +136,9 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 | `/admin listusers`                      | List all users as telegram_user_id - email pairs.         | `/admin listusers`            |
 | `/admin resetemail TELEGRAM_USER_ID`    | Reset a user's email.                                     | `/admin resetemail 123456789` |
 | `/admin verify TELEGRAM_USER_ID`        | Manually verify a user's email.                           | `/admin verify 123456789`     |
+| `/admin approve TELEGRAM_USER_ID`       | Approve a user for access to restricted features.         | `/admin approve 123456789`    |
+| `/admin reject TELEGRAM_USER_ID`        | Reject a user's approval request.                         | `/admin reject 123456789`     |
+| `/admin pending`                        | List users waiting for approval.                          | `/admin pending`              |
 | `/admin setlimit alerts N`              | Set global default max alerts per user.                   | `/admin setlimit alerts 10`   |
 | `/admin setlimit alerts N TELEGRAM_USER_ID` | Set per-user max alerts.                              | `/admin setlimit alerts 5 123456789` |
 | `/admin setlimit schedules N`           | Set global default max scheduled reports per user.        | `/admin setlimit schedules 10`|
@@ -148,6 +152,16 @@ The Telegram Screener Bot is a feature-rich Telegram bot for real-time and sched
 |-----------------------------------------|-----------------------------------------------------------|-------------------------------|
 | `/feedback MESSAGE`                     | Send feedback or bug report to admin/developer.           | `/feedback Please add MA!`    |
 | `/feature MESSAGE`                      | Suggest a new feature.                                    | `/feature Support for EURUSD` |
+
+---
+
+## Command Processing Notes
+
+**Important:** All commands are case-insensitive for improved user experience:
+- **Commands**: `/REPORT`, `/Report`, `/report` all work the same
+- **Tickers**: Automatically converted to uppercase (e.g., `aapl` → `AAPL`)
+- **Actions**: Converted to lowercase for consistency (e.g., `SCREENER` → `screener`)
+- **Parameters**: Preserved in original case for flexibility
 
 ---
 
@@ -281,6 +295,37 @@ Schedules a screener for a custom ticker list (you'll be prompted to specify the
 - Sequential processing to respect API rate limits
 - Future enhancements planned for caching and parallel processing
 - Sector-average comparisons planned for future releases
+
+---
+
+## Command Processing & User Experience
+
+### Case-Insensitive Commands
+All bot commands work regardless of case for improved user experience:
+- **Commands**: `/REPORT`, `/Report`, `/report` all work the same
+- **Tickers**: Automatically converted to uppercase (e.g., `aapl` → `AAPL`)
+- **Actions**: Converted to lowercase for consistency (e.g., `SCREENER` → `screener`)
+- **Parameters**: Preserved in original case for flexibility
+
+### Smart Command Parsing
+The command parser intelligently handles different argument types:
+- **Tickers**: Automatically converted to uppercase for consistency
+- **Actions**: Converted to lowercase for internal processing
+- **Flags**: Preserved in original case for flexibility
+- **Validation**: Comprehensive parameter validation and error handling
+
+### User Approval System
+Secure multi-tier access control system:
+- **Public Commands**: Available to all users (`/start`, `/help`, `/register`, `/verify`)
+- **Restricted Commands**: Require email verification + admin approval (`/report`, `/alerts`, `/schedules`)
+- **Admin Commands**: Require admin role (`/admin` commands)
+- **Approval Workflow**: Users must register, verify email, and be approved by admin
+
+### Error Handling & User Feedback
+- **Friendly Messages**: Clear, actionable error messages for users
+- **Access Denied**: Clear messaging for unauthorized command attempts
+- **Logging**: All errors logged for admin review and debugging
+- **Recovery**: Graceful error handling with fallback mechanisms
 
 ---
 
@@ -451,10 +496,27 @@ Schedules a screener for a custom ticker list (you'll be prompted to specify the
 - **Logs & Monitoring:** View system logs, API errors, email delivery status, admin actions
 - **Settings:** Configure global limits, API keys, and system settings
 
+### Command Audit System
+- **Complete Tracking:** Every command logged with full context (registered and non-registered users)
+- **Performance Monitoring:** Response times measured and stored for all commands
+- **Error Analysis:** Detailed error tracking and reporting for failed commands
+- **User Classification:** Distinguishes between registered and non-registered users
+- **Statistics Dashboard:** Comprehensive analytics and reporting on system usage
+- **Filtering Capabilities:** Time-based, user-based, command-based, and status-based filtering
+- **User History:** Individual user command timelines and analysis
+
+### Enhanced Navigation
+- **Dashboard Navigation:** Direct access to filtered views from dashboard stat cards
+- **Quick Filters:** One-click access to common filter combinations
+- **Smart Filtering:** Automatic application of relevant filters based on navigation
+- **Visual Indicators:** Clear indication of current filter status and navigation state
+- **Non-Registered Users:** Dedicated view for monitoring unregistered user activity
+
 ### Security & Audit
 - **Access Control:** All admin routes protected with login authentication
 - **Audit Trail:** All admin actions logged with timestamps and user information
 - **User Approval Workflow:** Secure process for granting access to restricted features
+- **Complete Visibility:** Track all bot interactions for security and compliance
 
 ---
 
@@ -492,6 +554,21 @@ Schedules a screener for a custom ticker list (you'll be prompted to specify the
 - **Access Control:** Restricted commands require approval (`/report`, `/alerts`, `/schedules`)
 - **Admin Interface:** Web-based approval system with real-time notifications
 - **Audit Trail:** All approval actions logged with timestamps
+
+### Command Audit System
+- **Automatic Logging:** All commands automatically logged via wrapper function in `bot.py`
+- **Database Schema:** `command_audit` table with comprehensive tracking fields
+- **Performance Tracking:** Response times measured and stored for all commands
+- **Error Handling:** Failed commands logged with detailed error messages
+- **User Classification:** Distinguishes between registered and non-registered users
+- **Admin Integration:** Complete audit dashboard with filtering and statistics
+
+### Enhanced Navigation System
+- **Dashboard Links:** Each stat card includes navigation links to relevant filtered views
+- **Filter Support:** All management pages support URL-based filtering
+- **Quick Filters:** Common filter combinations available as one-click buttons
+- **Visual Feedback:** Clear indication of current filter status and navigation state
+- **Non-Registered Users:** Dedicated audit page for monitoring unregistered user activity
 
 ---
 

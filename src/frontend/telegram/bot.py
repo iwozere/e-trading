@@ -6,6 +6,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 import tempfile
+import time
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import Command, CommandObject
@@ -13,19 +14,147 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 import asyncio
 import random
 from src.notification.async_notification_manager import initialize_notification_manager
-from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_USER, SMTP_PASSWORD
+from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PASSWORD
 from src.frontend.telegram.screener.notifications import (
     process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
 )
+from src.frontend.telegram import db
 
 # Configure logging
 from src.notification.logger import setup_logger, set_logging_context
 logger = setup_logger("telegram_screener_bot")
 
+# HTTP API support
+from aiohttp import web
+import json
+from typing import Dict, Any, Optional
+
 
 # Initialize bot and dispatcher
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
+
+# HTTP API routes
+async def api_send_message(request: web.Request) -> web.Response:
+    """API endpoint to send message to specific user"""
+    try:
+        data = await request.json()
+        user_id = data.get('user_id')
+        message = data.get('message')
+        title = data.get('title', 'Alkotrader Notification')
+
+        if not user_id or not message:
+            return web.json_response({
+                'success': False,
+                'error': 'Missing user_id or message'
+            }, status=400)
+
+        # Use notification manager to send message
+        success = await notification_manager.send_notification(
+            notification_type="INFO",
+            title=title,
+            message=message,
+            priority="NORMAL",
+            channels=["telegram"],
+            telegram_chat_id=int(user_id)
+        )
+
+        return web.json_response({
+            'success': success,
+            'message': 'Message queued for delivery' if success else 'Failed to queue message'
+        })
+
+    except Exception as e:
+        logger.exception("Error in api_send_message: ")
+        return web.json_response({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+async def api_broadcast(request: web.Request) -> web.Response:
+    """API endpoint to broadcast message to all users"""
+    try:
+        data = await request.json()
+        message = data.get('message')
+        title = data.get('title', 'Alkotrader Announcement')
+
+        if not message:
+            return web.json_response({
+                'success': False,
+                'error': 'Missing message'
+            }, status=400)
+
+        # Get all registered users
+        users = db.list_users()
+        if not users:
+            return web.json_response({
+                'success': False,
+                'error': 'No registered users found'
+            }, status=404)
+
+        success_count = 0
+        total_count = len(users)
+
+        # Queue messages for all users
+        for user in users:
+            user_id = user["telegram_user_id"]
+            if user_id and user_id.isdigit():
+                success = await notification_manager.send_notification(
+                    notification_type="INFO",
+                    title=title,
+                    message=message,
+                    priority="NORMAL",
+                    channels=["telegram"],
+                    telegram_chat_id=int(user_id)
+                )
+                if success:
+                    success_count += 1
+
+        return web.json_response({
+            'success': True,
+            'message': f'Broadcast queued for {success_count}/{total_count} users',
+            'success_count': success_count,
+            'total_count': total_count
+        })
+
+    except Exception as e:
+        logger.exception("Error in api_broadcast: ")
+        return web.json_response({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+async def api_status(request: web.Request) -> web.Response:
+    """API endpoint for health check and status"""
+    try:
+        # Get notification manager stats
+        stats = notification_manager.stats if notification_manager else {}
+
+        # Get user count
+        users = db.list_users()
+        user_count = len(users)
+
+        return web.json_response({
+            'success': True,
+            'status': 'healthy',
+            'notification_stats': stats,
+            'user_count': user_count,
+            'queue_size': notification_manager.notification_queue.qsize() if notification_manager else 0
+        })
+
+    except Exception as e:
+        logger.exception("Error in api_status: ")
+        return web.json_response({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+# Create HTTP app
+api_app = web.Application()
+api_app.router.add_post('/api/send_message', api_send_message)
+api_app.router.add_post('/api/broadcast', api_broadcast)
+api_app.router.add_get('/api/status', api_status)
+api_app.router.add_get('/api/test', lambda r: web.json_response({'status': 'ok', 'message': 'Bot API is working!'}))
 
 HELP_TEXT = (
     "Welcome to the Telegram Screener Bot!\n\n"
@@ -109,85 +238,122 @@ ADMIN_HELP_TEXT = (
 def generate_code():
     return f"{random.randint(100000, 999999):06d}"
 
+async def audit_command_wrapper(message: Message, command_func, *args, **kwargs):
+    """Wrapper function to audit all commands."""
+    start_time = time.time()
+    telegram_user_id = str(message.from_user.id)
+    command = message.text.split()[0] if message.text else ""
+    full_message = message.text
+
+    # Check if user is registered
+    user_status = db.get_user_status(telegram_user_id)
+    is_registered_user = user_status is not None
+    user_email = user_status.get('email') if user_status else None
+
+    try:
+        # Execute the command
+        result = await command_func(message, *args, **kwargs)
+
+        # Calculate response time
+        response_time_ms = int((time.time() - start_time) * 1000)
+
+        # Log successful command
+        db.log_command_audit(
+            telegram_user_id=telegram_user_id,
+            command=command,
+            full_message=full_message,
+            is_registered_user=is_registered_user,
+            user_email=user_email,
+            success=True,
+            response_time_ms=response_time_ms
+        )
+
+        return result
+
+    except Exception as e:
+        # Calculate response time
+        response_time_ms = int((time.time() - start_time) * 1000)
+
+        # Log failed command
+        db.log_command_audit(
+            telegram_user_id=telegram_user_id,
+            command=command,
+            full_message=full_message,
+            is_registered_user=is_registered_user,
+            user_email=user_email,
+            success=False,
+            error_message=str(e),
+            response_time_ms=response_time_ms
+        )
+
+        # Re-raise the exception
+        raise
+
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    telegram_user_id = str(message.from_user.id)
-    await process_help_command(message, telegram_user_id, notification_manager)
+    await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_manager)
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
-    telegram_user_id = str(message.from_user.id)
-    await process_help_command(message, telegram_user_id, notification_manager)
+    await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_manager)
 
 @dp.message(Command("info"))
 async def cmd_info(message: Message):
-    telegram_user_id = str(message.from_user.id)
-    await process_info_command(message, telegram_user_id, notification_manager)
+    await audit_command_wrapper(message, process_info_command, str(message.from_user.id), notification_manager)
 
 @dp.message(Command("register"))
 async def cmd_register(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split()
-    await process_register_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_register_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("verify"))
 async def cmd_verify(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split()
-    await process_verify_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_verify_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("request_approval"))
 async def cmd_request_approval(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split()
-    await process_request_approval_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_request_approval_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("language"))
 async def cmd_language(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split()
-    await process_language_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_language_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("admin"))
 async def cmd_admin(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split()
-    await process_admin_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_admin_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("report"))
 async def cmd_report(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split()
-    await process_report_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_report_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("alerts"))
 async def cmd_alerts(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split()
-    await process_alerts_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_alerts_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("schedules"))
 async def cmd_schedules(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split()
-    await process_schedules_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_schedules_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("feedback"))
 async def cmd_feedback(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split(maxsplit=1)
-    await process_feedback_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_feedback_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(Command("feature"))
 async def cmd_feature(message: Message):
-    telegram_user_id = str(message.from_user.id)
     args = message.text.split(maxsplit=1)
-    await process_feature_command(message, telegram_user_id, args, notification_manager)
+    await audit_command_wrapper(message, process_feature_command, str(message.from_user.id), args, notification_manager)
 
 @dp.message(lambda message: message.text and message.text.startswith("/"))
 async def unknown_command(message: Message):
-    telegram_user_id = str(message.from_user.id)
-    await process_unknown_command(message, telegram_user_id, notification_manager, HELP_TEXT)
+    await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_manager, HELP_TEXT)
 
 async def main():
     global notification_manager
@@ -195,14 +361,33 @@ async def main():
     # Set logging context so that notification manager logs go to telegram bot log file
     set_logging_context("telegram_screener_bot")
 
+    # Initialize notification manager without admin chat ID
+    # Admin notifications will be sent via HTTP API to admin users
     notification_manager = await initialize_notification_manager(
         telegram_token=TELEGRAM_BOT_TOKEN,
-        telegram_chat_id=TELEGRAM_CHAT_ID,
+        telegram_chat_id=None,  # Not needed - admin notifications use HTTP API
         email_api_key=SMTP_PASSWORD,
         email_sender=SMTP_USER,
         email_receiver=SMTP_USER  # or dummy
     )
-    logger.info("Starting Telegram Screener Bot...")
+
+    logger.info("Starting Telegram Screener Bot with HTTP API...")
+
+    # Start both bot polling and HTTP API server
+    bot_runner = web.AppRunner(api_app)
+    await bot_runner.setup()
+
+    # Start HTTP API server on port 8080
+    api_site = web.TCPSite(bot_runner, 'localhost', 8080)
+    await api_site.start()
+
+    logger.info("HTTP API server started on http://localhost:8080")
+    logger.info("Available endpoints:")
+    logger.info("  POST /api/send_message - Send message to specific user")
+    logger.info("  POST /api/broadcast - Broadcast message to all users")
+    logger.info("  GET  /api/status - Health check and status")
+
+    # Start bot polling
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
