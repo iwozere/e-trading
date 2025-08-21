@@ -94,6 +94,13 @@ def update_vix() -> None:
     try:
         vix_new = yf.download("^VIX", start=last_date, end=today)
         vix_new.reset_index(inplace=True)
+
+        # Handle multi-index columns from yfinance
+        if isinstance(vix_new.columns, pd.MultiIndex):
+            # Flatten multi-index columns by taking the first level
+            vix_new.columns = vix_new.columns.droplevel(1)
+            _logger.debug("Flattened multi-index columns: %s", list(vix_new.columns))
+
     except Exception as e:
         _logger.exception("Failed to download VIX data from Yahoo Finance")
         return
@@ -113,7 +120,13 @@ def update_vix() -> None:
 
         # Reset index to make date a column and save to CSV
         vix_all.reset_index(inplace=True)
-        vix_all.rename(columns={"Date": "date"}, inplace=True)
+
+        # Ensure the date column is named correctly
+        if "Date" in vix_all.columns:
+            vix_all.rename(columns={"Date": "date"}, inplace=True)
+        elif "date" not in vix_all.columns:
+            # If the index name is different, rename it
+            vix_all.rename(columns={vix_all.columns[0]: "date"}, inplace=True)
 
         # Save to CSV in normalized format with only the required columns
         vix_all[["date", "vix", "regime"]].to_csv(VIX_FILE, index=False)
