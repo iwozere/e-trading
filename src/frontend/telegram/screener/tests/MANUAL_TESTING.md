@@ -2,6 +2,28 @@
 
 This guide provides step-by-step instructions for manually testing all features of the Telegram Screener Bot. Follow these instructions to thoroughly test the bot's functionality.
 
+## Quick Start - Required Scripts
+
+**Before starting any testing, launch these scripts:**
+
+```bash
+# Terminal 1: Start main bot (REQUIRED for all testing)
+cd /path/to/e-trading
+python src/frontend/telegram/bot.py
+
+# Terminal 2: Start admin panel (REQUIRED for Phase 6 testing)
+cd /path/to/e-trading
+python src/frontend/telegram/screener/admin_panel.py
+
+# Terminal 3: Create admin user (ONE-TIME setup)
+cd /path/to/e-trading
+python src/util/create_admin.py YOUR_TELEGRAM_USER_ID your.email@example.com
+```
+
+**Service Status Check:**
+- Bot API: http://localhost:8080/api/test
+- Admin Panel: http://localhost:5000/login
+
 ## Prerequisites
 
 ### 1. Environment Setup
@@ -25,6 +47,119 @@ Before testing, ensure you have:
 2. Get the bot token and add it to your environment variables
 3. Start a conversation with your bot in Telegram
 
+## Required Scripts and Services
+
+### Core Services to Launch
+
+#### 1. Main Telegram Bot (Required for all testing)
+```bash
+# Start the main Telegram bot
+cd /path/to/e-trading
+python src/frontend/telegram/bot.py
+```
+**Purpose**: Handles all Telegram commands and user interactions
+**Port**: 8080 (HTTP API for admin panel integration)
+**Status**: Must be running for all Telegram bot testing
+
+#### 2. Web Admin Panel (Required for Phase 6 testing)
+```bash
+# Start the web-based admin panel
+cd /path/to/e-trading
+python src/frontend/telegram/screener/admin_panel.py
+```
+**Purpose**: Web interface for admin functions, user management, and system monitoring
+**Port**: 5000 (configurable via WEBGUI_PORT)
+**Status**: Required for Phase 6 (Web Admin Panel) testing
+
+#### 3. Admin User Creation Script (One-time setup)
+```bash
+# Create admin user (run once before testing)
+cd /path/to/e-trading
+python src/util/create_admin.py YOUR_TELEGRAM_USER_ID your.email@example.com
+```
+**Purpose**: Creates admin user with full privileges
+**Status**: Run once before testing admin features
+
+### Optional Testing Scripts
+
+#### 4. Fundamental Screener Test Script
+```bash
+# Test screener functionality independently
+cd /path/to/e-trading
+python src/frontend/telegram/screener/tests/test_screener.py
+```
+**Purpose**: Test screener functionality without full bot
+**Status**: Optional - for debugging screener issues
+
+#### 5. Notification Commands Test Script
+```bash
+# Run automated tests for notification commands
+cd /path/to/e-trading
+python -m pytest src/frontend/telegram/screener/tests/test_notifications_commands.py -v
+```
+**Purpose**: Automated testing of notification command processing
+**Status**: Optional - for regression testing
+
+### Service Management
+
+#### Starting All Services
+```bash
+# Terminal 1: Start main bot
+cd /path/to/e-trading
+python src/frontend/telegram/bot.py
+
+# Terminal 2: Start admin panel (for Phase 6 testing)
+cd /path/to/e-trading
+python src/frontend/telegram/screener/admin_panel.py
+```
+
+#### Service Dependencies
+- **Bot depends on**: Database (auto-created), environment variables
+- **Admin Panel depends on**: Bot API (port 8080), database, admin credentials
+- **Both services share**: Same SQLite database file
+
+#### Health Checks
+```bash
+# Check if bot API is running
+curl http://localhost:8080/api/test
+
+# Check if admin panel is running
+curl http://localhost:5000/login
+```
+
+### Troubleshooting Service Startup
+
+#### Common Issues:
+1. **Port already in use**:
+   ```bash
+   # Check what's using the port
+   netstat -tulpn | grep :8080  # For bot API
+   netstat -tulpn | grep :5000  # For admin panel
+   
+   # Kill process if needed
+   kill -9 <PID>
+   ```
+
+2. **Database permissions**:
+   ```bash
+   # Ensure write permissions to db directory
+   chmod 755 db/
+   chmod 644 db/*.sqlite3
+   ```
+
+3. **Environment variables not loaded**:
+   ```bash
+   # Check if variables are set
+   echo $TELEGRAM_BOT_TOKEN
+   echo $SMTP_USER
+   echo $WEBGUI_LOGIN
+   ```
+
+#### Service Logs
+- **Bot logs**: Check console output for errors
+- **Admin panel logs**: Check console output for Flask errors
+- **Database logs**: Check for SQLite errors in console
+
 ## Testing Structure
 
 ### Phase 1: Basic Bot Functionality
@@ -45,11 +180,12 @@ Before testing, ensure you have:
 **Objective**: Verify the bot starts correctly and responds to basic commands.
 
 **Steps**:
-1. **Start the bot**:
+1. **Start the bot** (if not already running):
    ```bash
    cd /path/to/e-trading
    python src/frontend/telegram/bot.py
    ```
+   **Note**: The bot must be running for all Telegram testing. See "Required Scripts and Services" section above.
 
 2. **Test `/start` command**:
    - Send `/start` to your bot
@@ -225,8 +361,10 @@ Before testing, ensure you have:
 **Steps**:
 1. **Create admin user** (if not already done):
    ```bash
+   cd /path/to/e-trading
    python src/util/create_admin.py YOUR_TELEGRAM_USER_ID your.email@example.com
    ```
+   **Note**: This script creates an admin user with full privileges. Run this once before testing admin features.
 
 2. **Approve user**:
    - Send `/admin approve YOUR_TELEGRAM_USER_ID` to your bot
@@ -430,10 +568,12 @@ Before testing, ensure you have:
 **Objective**: Test the web-based admin panel.
 
 **Steps**:
-1. **Start admin panel**:
+1. **Start admin panel** (if not already running):
    ```bash
+   cd /path/to/e-trading
    python src/frontend/telegram/screener/admin_panel.py
    ```
+   **Note**: The admin panel must be running for Phase 6 testing. See "Required Scripts and Services" section above.
 
 2. **Access admin panel**:
    - Open browser and go to `http://localhost:5000`
