@@ -146,10 +146,115 @@ The `/report` command supports advanced JSON configuration for complex report re
 |-----------------------------------------|-----------------------------------------------------------|-------------------------------|
 | `/alerts`                               | List all your active price alerts.                        | `/alerts`                     |
 | `/alerts add TICKER PRICE CONDITION`    | Add a price alert (CONDITION: above/below).               | `/alerts add BTCUSDT 65000 above` |
+| `/alerts add_indicator TICKER CONFIG_JSON [flags]` | Add indicator-based alert with JSON configuration.    | `/alerts add_indicator AAPL '{"type":"indicator","indicator":"RSI","parameters":{"period":14},"condition":{"operator":"<","value":30},"alert_action":"BUY","timeframe":"15m"}' -email` |
 | `/alerts edit ALERT_ID [params]`        | Edit an alert (price/condition).                          | `/alerts edit 2 70000 below`  |
 | `/alerts delete ALERT_ID`               | Delete an alert by ID.                                    | `/alerts delete 2`            |
 | `/alerts pause ALERT_ID`                | Pause a specific alert.                                   | `/alerts pause 2`             |
 | `/alerts resume ALERT_ID`               | Resume a paused alert.                                    | `/alerts resume 2`            |
+
+**Alert Flags:**
+- `-email`: Send alert notification to email.
+- `-timeframe=...`: Set timeframe (5m, 15m, 1h, 4h, 1d). Default: 15m.
+- `-action_type=...`: Set action (BUY, SELL, HOLD, notify). Default: notify.
+
+**JSON Configuration for Indicator Alerts:**
+The `/alerts add_indicator` command supports advanced JSON configuration for complex indicator-based alerts:
+
+```json
+{
+  "type": "indicator",
+  "indicator": "RSI",
+  "parameters": {"period": 14},
+  "condition": {"operator": "<", "value": 30},
+  "alert_action": "BUY",
+  "timeframe": "15m"
+}
+```
+
+**Supported JSON Fields:**
+- `type`: "indicator" or "price"
+- `indicator`: Technical indicator name ("RSI", "MACD", "BollingerBands", "SMA", "EMA", "ADX", "ATR", "Stochastic", "WilliamsR")
+- `parameters`: Indicator-specific parameters (e.g., {"period": 14} for RSI)
+- `condition`: Alert condition with operator and value
+- `alert_action`: Action to take ("BUY", "SELL", "HOLD", "notify")
+- `timeframe`: Data timeframe ("5m", "15m", "1h", "4h", "1d")
+
+**Complex Alert Examples:**
+
+**RSI Oversold Alert:**
+```json
+{
+  "type": "indicator",
+  "indicator": "RSI",
+  "parameters": {"period": 14},
+  "condition": {"operator": "<", "value": 30},
+  "alert_action": "BUY",
+  "timeframe": "15m"
+}
+```
+
+**Bollinger Bands Alert:**
+```json
+{
+  "type": "indicator",
+  "indicator": "BollingerBands",
+  "parameters": {"period": 20, "deviation": 2},
+  "condition": {"operator": "below_lower_band"},
+  "alert_action": "BUY",
+  "timeframe": "1h"
+}
+```
+
+**MACD Crossover Alert:**
+```json
+{
+  "type": "indicator",
+  "indicator": "MACD",
+  "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+  "condition": {"operator": "crossover"},
+  "alert_action": "BUY",
+  "timeframe": "4h"
+}
+```
+
+**Complex AND Logic Alert:**
+```json
+{
+  "type": "indicator",
+  "logic": "AND",
+  "conditions": [
+    {
+      "indicator": "RSI",
+      "parameters": {"period": 14},
+      "condition": {"operator": "<", "value": 30}
+    },
+    {
+      "indicator": "BollingerBands",
+      "parameters": {"period": 20, "deviation": 2},
+      "condition": {"operator": "below_lower_band"}
+    }
+  ],
+  "alert_action": "BUY",
+  "timeframe": "15m"
+}
+```
+
+**Price Alert with JSON:**
+```json
+{
+  "type": "price",
+  "threshold": 150.00,
+  "condition": "below",
+  "alert_action": "notify",
+  "timeframe": "15m"
+}
+```
+
+**Supported Condition Operators:**
+- **Comparison**: `<`, `<=`, `>`, `>=`, `==`, `!=`
+- **Bollinger Bands**: `above_upper_band`, `below_lower_band`, `between_bands`
+- **MACD**: `crossover`, `crossunder`, `above_signal`, `below_signal`
+- **Moving Averages**: `above_ma`, `below_ma`, `ma_crossover`, `ma_crossunder`
 
 ### Scheduled Reports
 
@@ -157,10 +262,123 @@ The `/report` command supports advanced JSON configuration for complex report re
 |-----------------------------------------|-----------------------------------------------------------|-------------------------------|
 | `/schedules`                            | List all your scheduled reports.                          | `/schedules`                  |
 | `/schedules add TICKER TIME [flags]`    | Schedule a report at a specific time (UTC, 24h).          | `/schedules add AAPL 09:00 -email` |
+| `/schedules add_json CONFIG_JSON`       | Schedule with advanced JSON configuration.                | `/schedules add_json '{"type":"report","ticker":"AAPL","scheduled_time":"09:00","period":"1y","interval":"1d","email":true}'` |
 | `/schedules edit SCHEDULE_ID [params]`  | Edit a scheduled report.                                  | `/schedules edit 1 10:00`     |
 | `/schedules delete SCHEDULE_ID`         | Delete a scheduled report by ID.                          | `/schedules delete 1`         |
 | `/schedules pause SCHEDULE_ID`          | Pause a scheduled report.                                 | `/schedules pause 1`          |
 | `/schedules resume SCHEDULE_ID`         | Resume a paused scheduled report.                         | `/schedules resume 1`         |
+
+**Schedule Flags:**
+- `-email`: Send report to email.
+- `-indicators=...`: Comma-separated indicators (e.g., RSI,MACD,MA50,PE,EPS).
+- `-period=...`: Data period (e.g., 3mo, 1y, 2y). Default: 2y.
+- `-interval=...`: Data interval (e.g., 1d, 15m). Default: 1d.
+- `-provider=...`: Data provider (e.g., yf for Yahoo, bnc for Binance).
+
+**JSON Configuration for Schedules:**
+The `/schedules add_json` command supports advanced JSON configuration for complex scheduling requirements:
+
+```json
+{
+  "type": "report",
+  "ticker": "AAPL",
+  "scheduled_time": "09:00",
+  "period": "1y",
+  "interval": "1d",
+  "indicators": ["RSI", "MACD", "BollingerBands"],
+  "email": true
+}
+```
+
+**Supported JSON Fields:**
+- `type`: "report" or "screener"
+- `ticker`: Ticker symbol (for reports) or list_type (for screeners)
+- `scheduled_time`: Time in HH:MM format (24h UTC)
+- `period`: Data period ("1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max")
+- `interval`: Data interval ("1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo")
+- `indicators`: Array of indicators or comma-separated string
+- `email`: Boolean to send to email
+- `provider`: Data provider ("yf", "alpha_vantage", "polygon")
+
+**Schedule Examples:**
+
+**Simple Report Schedule:**
+```json
+{
+  "type": "report",
+  "ticker": "AAPL",
+  "scheduled_time": "09:00",
+  "period": "1y",
+  "interval": "1d",
+  "email": true
+}
+```
+
+**Advanced Report Schedule:**
+```json
+{
+  "type": "report",
+  "ticker": "TSLA",
+  "scheduled_time": "16:30",
+  "period": "6mo",
+  "interval": "1h",
+  "indicators": ["RSI", "MACD", "BollingerBands"],
+  "email": true
+}
+```
+
+**Crypto Report Schedule:**
+```json
+{
+  "type": "report",
+  "ticker": "BTCUSDT",
+  "scheduled_time": "08:00",
+  "period": "3mo",
+  "interval": "4h",
+  "indicators": ["RSI", "MACD", "BollingerBands"],
+  "provider": "bnc",
+  "email": true
+}
+```
+
+**Fundamental Screener Schedule:**
+```json
+{
+  "type": "screener",
+  "list_type": "us_small_cap",
+  "scheduled_time": "08:00",
+  "period": "1y",
+  "interval": "1d",
+  "indicators": "PE,PB,ROE",
+  "email": true
+}
+```
+
+**Custom List Screener Schedule:**
+```json
+{
+  "type": "screener",
+  "list_type": "custom_list",
+  "scheduled_time": "09:30",
+  "period": "1y",
+  "interval": "1d",
+  "indicators": "PE,PB,ROE,ROA,Dividend_Yield",
+  "email": true
+}
+```
+
+**Multiple Ticker Report Schedule:**
+```json
+{
+  "type": "report",
+  "tickers": ["AAPL", "MSFT", "GOOGL"],
+  "scheduled_time": "10:00",
+  "period": "1y",
+  "interval": "1d",
+  "indicators": ["RSI", "MACD"],
+  "email": true
+}
+```
 
 ### Admin Commands (restricted)
 
