@@ -1058,6 +1058,9 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
             email = parsed.args.get("email", False)
             indicators = parsed.args.get("indicators")
             return handle_schedules_screener(telegram_user_id, list_type, time, email, indicators)
+        elif action == "enhanced_screener" and len(params) >= 1:
+            config_json = params[0]
+            return handle_schedules_enhanced_screener(telegram_user_id, config_json)
         elif action == "add" and len(params) >= 2:
             ticker, time = params[0], params[1]
             # Get flags from parsed args
@@ -1105,6 +1108,8 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
                            "  TIME: HH:MM format (24h UTC)\n"
                            "  Example: /schedules screener us_small_cap 09:00 -email\n"
                            "  Example: /schedules screener us_large_cap -indicators=PE,PB,ROE\n"
+                           "/schedules enhanced_screener CONFIG_JSON - Schedule enhanced screener with JSON config\n"
+                           "  Example: /schedules enhanced_screener '{\"screener_type\":\"hybrid\",\"list_type\":\"us_medium_cap\",\"fundamental_criteria\":[{\"indicator\":\"PE\",\"operator\":\"max\",\"value\":15,\"weight\":1.0,\"required\":true}],\"technical_criteria\":[{\"indicator\":\"RSI\",\"parameters\":{\"period\":14},\"condition\":{\"operator\":\"<\",\"value\":70},\"weight\":0.6,\"required\":false}],\"max_results\":10,\"min_score\":7.0,\"email\":true}'\n"
                            "/schedules edit SCHEDULE_ID [TIME] [flags] - Edit schedule\n"
                            "/schedules delete SCHEDULE_ID - Delete schedule\n"
                            "/schedules pause SCHEDULE_ID - Pause schedule\n"
@@ -1166,6 +1171,78 @@ def handle_schedules_add_json(telegram_user_id: str, config_json: str) -> Dict[s
     except Exception as e:
         _logger.exception("Error adding JSON schedule: ")
         return {"status": "error", "message": f"Error adding JSON schedule: {str(e)}"}
+
+
+def handle_schedules_enhanced_screener(telegram_user_id: str, config_json: str) -> Dict[str, Any]:
+    """Handle enhanced screener schedule creation with JSON configuration."""
+    try:
+        # Validate JSON configuration
+        try:
+            from src.frontend.telegram.screener.screener_config_parser import validate_screener_config
+            is_valid, errors = validate_screener_config(config_json)
+            if not is_valid:
+                return {"status": "error", "message": f"Invalid screener configuration: {'; '.join(errors)}"}
+        except Exception as e:
+            return {"status": "error", "message": f"Error validating screener configuration: {str(e)}"}
+
+        # Check user limits
+        user_status = db.get_user_status(telegram_user_id)
+        max_schedules = user_status.get("max_schedules", 5)
+        current_schedules = len(db.list_schedules(telegram_user_id))
+
+        if current_schedules >= max_schedules:
+            return {
+                "status": "error",
+                "message": f"Schedule limit reached ({max_schedules}). Delete some schedules first or contact admin."
+            }
+
+        # Parse the configuration to get summary
+        from src.frontend.telegram.screener.screener_config_parser import get_screener_summary
+        summary = get_screener_summary(config_json)
+
+        if "error" in summary:
+            return {"status": "error", "message": f"Error parsing screener configuration: {summary['error']}"}
+
+        # Add the enhanced screener schedule
+        schedule_id = db.add_json_schedule(
+            user_id=telegram_user_id,
+            config_json=config_json,
+            schedule_config="enhanced_screener"
+        )
+
+        # Create success message
+        screener_type = summary.get("screener_type", "Unknown")
+        list_type = summary.get("list_type", "Unknown")
+        fundamental_count = summary.get("fundamental_criteria_count", 0)
+        technical_count = summary.get("technical_criteria_count", 0)
+        max_results = summary.get("max_results", 10)
+        min_score = summary.get("min_score", 7.0)
+
+        message = f"✅ Enhanced screener scheduled successfully!\n\n"
+        message += f"📊 **Screener Type**: {screener_type.title()}\n"
+        message += f"🔍 **List Type**: {list_type.replace('_', ' ').title()}\n"
+        message += f"📈 **Fundamental Criteria**: {fundamental_count} indicators\n"
+        message += f"📊 **Technical Criteria**: {technical_count} indicators\n"
+        message += f"🎯 **Max Results**: {max_results}\n"
+        message += f"📊 **Min Score**: {min_score}/10\n"
+        message += f"🆔 **Schedule ID**: {schedule_id}\n\n"
+
+        if screener_type == "fundamental":
+            message += "This screener will analyze stocks based on fundamental metrics only."
+        elif screener_type == "technical":
+            message += "This screener will analyze stocks based on technical indicators only."
+        elif screener_type == "hybrid":
+            message += "This screener will combine fundamental and technical analysis for comprehensive screening."
+
+        return {
+            "status": "ok",
+            "title": "Enhanced Screener Scheduled",
+            "message": message
+        }
+
+    except Exception as e:
+        _logger.exception("Error adding enhanced screener schedule: ")
+        return {"status": "error", "message": f"Error adding enhanced screener schedule: {str(e)}"}
 
 
 def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:

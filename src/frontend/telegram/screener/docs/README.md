@@ -122,6 +122,33 @@ The `/report` command supports advanced JSON configuration for complex report re
 - **Dividends**: Dividend_Yield, Payout_Ratio
 - **DCF**: Discounted Cash Flow valuation
 
+### Enhanced Screener (JSON Configuration)
+
+| Command                                 | Description                                               | Example Usage                  |
+|-----------------------------------------|-----------------------------------------------------------|-------------------------------|
+| `/schedules enhanced_screener CONFIG_JSON` | Schedule enhanced screener with JSON configuration.       | `/schedules enhanced_screener '{"screener_type":"hybrid","list_type":"us_medium_cap",...}'` |
+
+**Enhanced Screener Types:**
+- `fundamental`: Fundamental analysis only (P/E, ROE, etc.)
+- `technical`: Technical analysis only (RSI, MACD, etc.)
+- `hybrid`: Combined fundamental and technical analysis
+
+**Supported Fundamental Criteria:**
+- **Operators**: `max`, `min`, `range`
+- **Indicators**: PE, Forward_PE, PB, PS, PEG, Debt_Equity, Current_Ratio, Quick_Ratio, ROE, ROA, Operating_Margin, Profit_Margin, Revenue_Growth, Net_Income_Growth, Free_Cash_Flow, Dividend_Yield, Payout_Ratio
+
+**Supported Technical Criteria:**
+- **Indicators**: RSI, MACD, BollingerBands, SMA, EMA, ADX, ATR, Stochastic, WilliamsR, CCI, ROC, MFI
+- **Conditions**: `<`, `>`, `range`, `above`, `below_lower_band`, `not_above_upper_band`, `between_bands`
+
+**Enhanced Screener Features:**
+- **Weighted Scoring**: Each criterion has a weight (0.0-1.0) for fine-tuned control
+- **Required vs Optional**: Mark criteria as required or optional
+- **Composite Scoring**: 0-10 scale with configurable minimum score
+- **DCF Valuation**: Automatic discounted cash flow calculations
+- **Buy/Sell/Hold Recommendations**: Based on composite scores
+- **Flexible Timeframes**: Configurable periods and intervals
+
 **Screening Criteria:**
 - P/E Ratio < 15 (undervalued)
 - P/B Ratio < 1.5 (undervalued)
@@ -354,6 +381,84 @@ The `/schedules add_json` command supports advanced JSON configuration for compl
 }
 ```
 
+**Enhanced Screener Schedule (Hybrid):**
+```json
+{
+  "screener_type": "hybrid",
+  "list_type": "us_medium_cap",
+  "fundamental_criteria": [
+    {
+      "indicator": "PE",
+      "operator": "max",
+      "value": 15,
+      "weight": 1.0,
+      "required": true
+    },
+    {
+      "indicator": "ROE",
+      "operator": "min",
+      "value": 12,
+      "weight": 0.8,
+      "required": false
+    }
+  ],
+  "technical_criteria": [
+    {
+      "indicator": "RSI",
+      "parameters": {"period": 14},
+      "condition": {"operator": "<", "value": 70},
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "BollingerBands",
+      "parameters": {"period": 20, "deviation": 2},
+      "condition": {"operator": "not_above_upper_band"},
+      "weight": 0.5,
+      "required": false
+    }
+  ],
+  "period": "6mo",
+  "interval": "1d",
+  "max_results": 15,
+  "min_score": 6.5,
+  "include_technical_analysis": true,
+  "include_fundamental_analysis": true,
+  "email": true
+}
+```
+
+**Technical-Only Screener:**
+```json
+{
+  "screener_type": "technical",
+  "list_type": "us_large_cap",
+  "technical_criteria": [
+    {
+      "indicator": "RSI",
+      "parameters": {"period": 14},
+      "condition": {"operator": "<", "value": 30},
+      "weight": 1.0,
+      "required": true
+    },
+    {
+      "indicator": "MACD",
+      "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+      "condition": {"operator": "above_signal"},
+      "weight": 0.8,
+      "required": false
+    }
+  ],
+  "period": "3mo",
+  "interval": "1d",
+  "max_results": 8,
+  "min_score": 7.5,
+  "include_technical_analysis": true,
+  "include_fundamental_analysis": false,
+  "email": false
+}
+```
+
 **Custom List Screener Schedule:**
 ```json
 {
@@ -448,6 +553,665 @@ Schedules a screener for Swiss shares at 2 PM UTC with email delivery.
 /schedules screener custom_list 08:00 -indicators=PE,PB,ROE
 ```
 Schedules a screener for a custom ticker list (you'll be prompted to specify the list during creation).
+
+## Enhanced Screener Examples
+
+### 1. Conservative Value Screener (Fundamental-Only)
+**Purpose**: Find undervalued stocks with strong fundamentals and low debt
+```bash
+/schedules enhanced_screener '{
+  "screener_type": "fundamental",
+  "list_type": "us_medium_cap",
+  "fundamental_criteria": [
+    {
+      "indicator": "PE",
+      "operator": "max",
+      "value": 15,
+      "weight": 1.0,
+      "required": true
+    },
+    {
+      "indicator": "PB",
+      "operator": "max",
+      "value": 1.5,
+      "weight": 0.9,
+      "required": true
+    },
+    {
+      "indicator": "PS",
+      "operator": "max",
+      "value": 1.0,
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "ROE",
+      "operator": "min",
+      "value": 15,
+      "weight": 0.9,
+      "required": false
+    },
+    {
+      "indicator": "ROA",
+      "operator": "min",
+      "value": 8,
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "Debt_Equity",
+      "operator": "max",
+      "value": 0.5,
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "Current_Ratio",
+      "operator": "min",
+      "value": 1.5,
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "Free_Cash_Flow",
+      "operator": "min",
+      "value": 0,
+      "weight": 0.8,
+      "required": true
+    },
+    {
+      "indicator": "Operating_Margin",
+      "operator": "min",
+      "value": 10,
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "Revenue_Growth",
+      "operator": "min",
+      "value": 5,
+      "weight": 0.6,
+      "required": false
+    }
+  ],
+  "period": "2y",
+  "interval": "1d",
+  "provider": "yf",
+  "max_results": 20,
+  "min_score": 7.5,
+  "include_fundamental_analysis": true,
+  "include_technical_analysis": false,
+  "email": true
+}'
+```
+
+### 2. Growth + Momentum Screener (Hybrid)
+**Purpose**: Find growth stocks with positive technical momentum
+```bash
+/schedules enhanced_screener '{
+  "screener_type": "hybrid",
+  "list_type": "us_large_cap",
+  "fundamental_criteria": [
+    {
+      "indicator": "PEG",
+      "operator": "max",
+      "value": 1.5,
+      "weight": 1.0,
+      "required": true
+    },
+    {
+      "indicator": "Revenue_Growth",
+      "operator": "min",
+      "value": 15,
+      "weight": 0.9,
+      "required": true
+    },
+    {
+      "indicator": "Net_Income_Growth",
+      "operator": "min",
+      "value": 10,
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "ROE",
+      "operator": "min",
+      "value": 12,
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "Operating_Margin",
+      "operator": "min",
+      "value": 8,
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "Free_Cash_Flow",
+      "operator": "min",
+      "value": 0,
+      "weight": 0.8,
+      "required": true
+    }
+  ],
+  "technical_criteria": [
+    {
+      "indicator": "RSI",
+      "parameters": {"period": 14},
+      "condition": {"operator": "range", "min": 40, "max": 80},
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "MACD",
+      "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+      "condition": {"operator": "above_signal"},
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "SMA",
+      "parameters": {"period": 20},
+      "condition": {"operator": "above", "value": "close"},
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "EMA",
+      "parameters": {"period": 50},
+      "condition": {"operator": "above", "value": "close"},
+      "weight": 0.5,
+      "required": false
+    },
+    {
+      "indicator": "BollingerBands",
+      "parameters": {"period": 20, "deviation": 2},
+      "condition": {"operator": "not_above_upper_band"},
+      "weight": 0.6,
+      "required": false
+    }
+  ],
+  "period": "1y",
+  "interval": "1d",
+  "provider": "yf",
+  "max_results": 15,
+  "min_score": 7.0,
+  "include_fundamental_analysis": true,
+  "include_technical_analysis": true,
+  "email": true
+}'
+```
+
+### 3. Dividend Aristocrat Screener (Fundamental-Only)
+**Purpose**: Find high-quality dividend-paying stocks
+```bash
+/schedules enhanced_screener '{
+  "screener_type": "fundamental",
+  "list_type": "us_large_cap",
+  "fundamental_criteria": [
+    {
+      "indicator": "Dividend_Yield",
+      "operator": "min",
+      "value": 3.0,
+      "weight": 1.0,
+      "required": true
+    },
+    {
+      "indicator": "Payout_Ratio",
+      "operator": "max",
+      "value": 60,
+      "weight": 0.9,
+      "required": true
+    },
+    {
+      "indicator": "ROE",
+      "operator": "min",
+      "value": 12,
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "ROA",
+      "operator": "min",
+      "value": 6,
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "Debt_Equity",
+      "operator": "max",
+      "value": 0.6,
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "Current_Ratio",
+      "operator": "min",
+      "value": 1.2,
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "Operating_Margin",
+      "operator": "min",
+      "value": 12,
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "Profit_Margin",
+      "operator": "min",
+      "value": 8,
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "Free_Cash_Flow",
+      "operator": "min",
+      "value": 0,
+      "weight": 0.9,
+      "required": true
+    },
+    {
+      "indicator": "Revenue_Growth",
+      "operator": "min",
+      "value": 3,
+      "weight": 0.5,
+      "required": false
+    }
+  ],
+  "period": "2y",
+  "interval": "1d",
+  "provider": "yf",
+  "max_results": 25,
+  "min_score": 8.0,
+  "include_fundamental_analysis": true,
+  "include_technical_analysis": false,
+  "email": true
+}'
+```
+
+### 4. Technical Momentum Screener (Technical-Only)
+**Purpose**: Find stocks with strong technical momentum signals
+```bash
+/schedules enhanced_screener '{
+  "screener_type": "technical",
+  "list_type": "us_medium_cap",
+  "technical_criteria": [
+    {
+      "indicator": "RSI",
+      "parameters": {"period": 14},
+      "condition": {"operator": "range", "min": 50, "max": 75},
+      "weight": 1.0,
+      "required": true
+    },
+    {
+      "indicator": "MACD",
+      "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+      "condition": {"operator": "above_signal"},
+      "weight": 0.9,
+      "required": true
+    },
+    {
+      "indicator": "SMA",
+      "parameters": {"period": 20},
+      "condition": {"operator": "above", "value": "close"},
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "EMA",
+      "parameters": {"period": 50},
+      "condition": {"operator": "above", "value": "close"},
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "BollingerBands",
+      "parameters": {"period": 20, "deviation": 2},
+      "condition": {"operator": "between_bands"},
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "ADX",
+      "parameters": {"period": 14},
+      "condition": {"operator": ">", "value": 25},
+      "weight": 0.5,
+      "required": false
+    },
+    {
+      "indicator": "ATR",
+      "parameters": {"period": 14},
+      "condition": {"operator": ">", "value": 0},
+      "weight": 0.4,
+      "required": false
+    },
+    {
+      "indicator": "Stochastic",
+      "parameters": {"k_period": 14, "d_period": 3},
+      "condition": {"operator": "range", "min": 20, "max": 80},
+      "weight": 0.5,
+      "required": false
+    },
+    {
+      "indicator": "WilliamsR",
+      "parameters": {"period": 14},
+      "condition": {"operator": "range", "min": -80, "max": -20},
+      "weight": 0.4,
+      "required": false
+    },
+    {
+      "indicator": "CCI",
+      "parameters": {"period": 20},
+      "condition": {"operator": "range", "min": -100, "max": 100},
+      "weight": 0.3,
+      "required": false
+    }
+  ],
+  "period": "6mo",
+  "interval": "1d",
+  "provider": "yf",
+  "max_results": 30,
+  "min_score": 7.5,
+  "include_fundamental_analysis": false,
+  "include_technical_analysis": true,
+  "email": false
+}'
+```
+
+### 5. Deep Value + Oversold Screener (Hybrid)
+**Purpose**: Find deeply undervalued stocks that are technically oversold
+```bash
+/schedules enhanced_screener '{
+  "screener_type": "hybrid",
+  "list_type": "us_small_cap",
+  "fundamental_criteria": [
+    {
+      "indicator": "PE",
+      "operator": "max",
+      "value": 10,
+      "weight": 1.0,
+      "required": true
+    },
+    {
+      "indicator": "PB",
+      "operator": "max",
+      "value": 1.0,
+      "weight": 1.0,
+      "required": true
+    },
+    {
+      "indicator": "PS",
+      "operator": "max",
+      "value": 0.8,
+      "weight": 0.9,
+      "required": false
+    },
+    {
+      "indicator": "PEG",
+      "operator": "max",
+      "value": 1.0,
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "ROE",
+      "operator": "min",
+      "value": 10,
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "ROA",
+      "operator": "min",
+      "value": 5,
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "Debt_Equity",
+      "operator": "max",
+      "value": 0.4,
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "Current_Ratio",
+      "operator": "min",
+      "value": 1.3,
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "Quick_Ratio",
+      "operator": "min",
+      "value": 1.0,
+      "weight": 0.5,
+      "required": false
+    },
+    {
+      "indicator": "Operating_Margin",
+      "operator": "min",
+      "value": 8,
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "Profit_Margin",
+      "operator": "min",
+      "value": 5,
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "Free_Cash_Flow",
+      "operator": "min",
+      "value": 0,
+      "weight": 0.9,
+      "required": true
+    },
+    {
+      "indicator": "Revenue_Growth",
+      "operator": "min",
+      "value": 3,
+      "weight": 0.5,
+      "required": false
+    },
+    {
+      "indicator": "Net_Income_Growth",
+      "operator": "min",
+      "value": 2,
+      "weight": 0.5,
+      "required": false
+    }
+  ],
+  "technical_criteria": [
+    {
+      "indicator": "RSI",
+      "parameters": {"period": 14},
+      "condition": {"operator": "<", "value": 35},
+      "weight": 0.8,
+      "required": false
+    },
+    {
+      "indicator": "BollingerBands",
+      "parameters": {"period": 20, "deviation": 2},
+      "condition": {"operator": "below_lower_band"},
+      "weight": 0.7,
+      "required": false
+    },
+    {
+      "indicator": "Stochastic",
+      "parameters": {"k_period": 14, "d_period": 3},
+      "condition": {"operator": "<", "value": 20},
+      "weight": 0.6,
+      "required": false
+    },
+    {
+      "indicator": "WilliamsR",
+      "parameters": {"period": 14},
+      "condition": {"operator": "<", "value": -80},
+      "weight": 0.5,
+      "required": false
+    },
+    {
+      "indicator": "CCI",
+      "parameters": {"period": 20},
+      "condition": {"operator": "<", "value": -100},
+      "weight": 0.4,
+      "required": false
+    },
+    {
+      "indicator": "MACD",
+      "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+      "condition": {"operator": "below_signal"},
+      "weight": 0.3,
+      "required": false
+    }
+  ],
+  "period": "1y",
+  "interval": "1d",
+  "provider": "yf",
+  "max_results": 20,
+  "min_score": 6.5,
+  "include_fundamental_analysis": true,
+  "include_technical_analysis": true,
+  "email": true
+}'
+```
+
+---
+
+## Enhanced Screener Reference Guide
+
+### JSON Configuration Parameters
+
+#### Core Parameters
+- **`screener_type`**: `"fundamental"`, `"technical"`, or `"hybrid"`
+- **`list_type`**: `"us_small_cap"`, `"us_medium_cap"`, `"us_large_cap"`, `"swiss_shares"`, `"custom_list"`
+- **`period`**: `"1d"`, `"5d"`, `"1mo"`, `"3mo"`, `"6mo"`, `"1y"`, `"2y"`, `"5y"`, `"10y"`, `"ytd"`, `"max"`
+- **`interval`**: `"1m"`, `"2m"`, `"5m"`, `"15m"`, `"30m"`, `"60m"`, `"90m"`, `"1h"`, `"1d"`, `"5d"`, `"1wk"`, `"1mo"`, `"3mo"`
+- **`provider`**: `"yf"`, `"alpha_vantage"`, `"polygon"`
+- **`max_results`**: Number of stocks to return (1-50)
+- **`min_score`**: Minimum composite score (0-10)
+- **`email`**: `true`/`false` to send results via email
+
+#### Fundamental Criteria Parameters
+- **`indicator`**: Fundamental metric to evaluate
+- **`operator`**: `"min"`, `"max"`, or `"range"`
+- **`value`**: Single value or range object `{"min": x, "max": y}`
+- **`weight`**: Importance weight (0.0-1.0)
+- **`required`**: `true`/`false` - if true, stock must meet this criterion
+
+#### Technical Criteria Parameters
+- **`indicator`**: Technical indicator to evaluate
+- **`parameters`**: Indicator-specific parameters (periods, etc.)
+- **`condition`**: Evaluation condition with operator and values
+- **`weight`**: Importance weight (0.0-1.0)
+- **`required`**: `true`/`false` - if true, stock must meet this criterion
+
+### Supported Fundamental Indicators
+
+#### Valuation Metrics
+- **`PE`**: Price-to-Earnings ratio
+- **`Forward_PE`**: Forward P/E ratio
+- **`PB`**: Price-to-Book ratio
+- **`PS`**: Price-to-Sales ratio
+- **`PEG`**: Price/Earnings-to-Growth ratio
+
+#### Financial Health
+- **`Debt_Equity`**: Debt-to-Equity ratio
+- **`Current_Ratio`**: Current ratio
+- **`Quick_Ratio`**: Quick ratio
+
+#### Profitability
+- **`ROE`**: Return on Equity
+- **`ROA`**: Return on Assets
+- **`Operating_Margin`**: Operating margin
+- **`Profit_Margin`**: Profit margin
+
+#### Growth
+- **`Revenue_Growth`**: Revenue growth rate
+- **`Net_Income_Growth`**: Net income growth rate
+
+#### Cash Flow & Dividends
+- **`Free_Cash_Flow`**: Free cash flow
+- **`Dividend_Yield`**: Dividend yield
+- **`Payout_Ratio`**: Dividend payout ratio
+
+### Supported Technical Indicators
+
+#### Momentum Indicators
+- **`RSI`**: Relative Strength Index
+  - Parameters: `{"period": 14}`
+  - Conditions: `<`, `>`, `range`
+- **`MACD`**: Moving Average Convergence Divergence
+  - Parameters: `{"fast_period": 12, "slow_period": 26, "signal_period": 9}`
+  - Conditions: `above_signal`, `below_signal`
+- **`Stochastic`**: Stochastic Oscillator
+  - Parameters: `{"k_period": 14, "d_period": 3}`
+  - Conditions: `<`, `>`, `range`
+
+#### Moving Averages
+- **`SMA`**: Simple Moving Average
+  - Parameters: `{"period": 20}`
+  - Conditions: `above`, `below`
+- **`EMA`**: Exponential Moving Average
+  - Parameters: `{"period": 50}`
+  - Conditions: `above`, `below`
+
+#### Volatility Indicators
+- **`BollingerBands`**: Bollinger Bands
+  - Parameters: `{"period": 20, "deviation": 2}`
+  - Conditions: `below_lower_band`, `not_above_upper_band`, `between_bands`
+- **`ATR`**: Average True Range
+  - Parameters: `{"period": 14}`
+  - Conditions: `<`, `>`
+
+#### Trend Indicators
+- **`ADX`**: Average Directional Index
+  - Parameters: `{"period": 14}`
+  - Conditions: `<`, `>`
+- **`WilliamsR`**: Williams %R
+  - Parameters: `{"period": 14}`
+  - Conditions: `<`, `>`, `range`
+- **`CCI`**: Commodity Channel Index
+  - Parameters: `{"period": 20}`
+  - Conditions: `<`, `>`, `range`
+- **`ROC`**: Rate of Change
+  - Parameters: `{"period": 10}`
+  - Conditions: `<`, `>`, `range`
+- **`MFI`**: Money Flow Index
+  - Parameters: `{"period": 14}`
+  - Conditions: `<`, `>`, `range`
+
+### Scoring System
+
+#### Fundamental Scoring
+- Each criterion is evaluated on a 0-1 scale
+- Scores are weighted by the `weight` parameter
+- Required criteria must be met (score > 0)
+- Final score is normalized to 0-10 scale
+
+#### Technical Scoring
+- Each indicator condition is evaluated as pass/fail (1.0/0.0)
+- Scores are weighted by the `weight` parameter
+- Required criteria must be met (score > 0)
+- Final score is normalized to 0-10 scale
+
+#### Composite Scoring (Hybrid)
+- Fundamental weight: 70% (default)
+- Technical weight: 30% (default)
+- Weights can be adjusted via `include_fundamental_analysis` and `include_technical_analysis`
+
+### Recommendations
+- **STRONG_BUY**: Score ≥ 8.0
+- **BUY**: Score ≥ 7.0
+- **HOLD**: Score ≥ 6.0
+- **WEAK_HOLD**: Score ≥ 5.0
+- **SELL**: Score < 5.0
 
 ---
 
