@@ -335,6 +335,9 @@ async def process_info_command(message, telegram_user_id, notification_manager):
             else:
                 email_flag = False  # Don't send email if user not verified
 
+        # Add telegram_user_id to parsed command arguments
+        parsed.args["telegram_user_id"] = telegram_user_id
+
         # Get info content
         result = handle_command(parsed)
 
@@ -710,10 +713,15 @@ async def process_feature_command(message, telegram_user_id, args, notification_
 async def process_unknown_command(message, telegram_user_id, notification_manager, help_text):
     try:
         parsed = ParsedCommand(command="unknown", args={"telegram_user_id": telegram_user_id, "text": message.text})
+
+        # Create a user-friendly unknown command message
+        unknown_command = message.text.split()[0] if message.text else "unknown"
+        unknown_message = f"❓ Unknown command: {unknown_command}\n\nI don't recognize this command. Please use /help to see all available commands and their usage."
+
         await notification_manager.send_notification(
             notification_type="ERROR",
             title="Unknown Command",
-            message=help_text,
+            message=unknown_message,
             priority="NORMAL",
             channels=["telegram"],
             telegram_chat_id=message.chat.id,

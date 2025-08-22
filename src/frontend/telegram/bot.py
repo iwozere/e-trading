@@ -365,6 +365,39 @@ async def cmd_feature(message: Message):
 @dp.message(lambda message: message.text and message.text.startswith("/"))
 async def unknown_command(message: Message):
     _logger.info("Received unknown command: %s from user %s", message.text, message.from_user.id)
+
+    # Handle case-insensitive commands
+    command_text = message.text.strip()
+    command_name = command_text.split()[0].lstrip("/").lower()
+
+    # Map common case variations to their handlers
+    command_handlers = {
+        "info": cmd_info,
+        "help": cmd_help,
+        "start": cmd_start,
+        "report": cmd_report,
+        "alerts": cmd_alerts,
+        "schedules": cmd_schedules,
+        "admin": cmd_admin,
+        "register": cmd_register,
+        "verify": cmd_verify,
+        "request_approval": cmd_request_approval,
+        "language": cmd_language,
+        "feedback": cmd_feedback,
+        "feature": cmd_feature,
+    }
+
+    if command_name in command_handlers:
+        _logger.info("Handling case-insensitive command: %s -> %s", command_text, command_name)
+        try:
+            await command_handlers[command_name](message)
+            return
+        except Exception as e:
+            _logger.exception("Error processing case-insensitive command %s for user %s", command_name, message.from_user.id)
+            await message.answer("Sorry, there was an error processing your command. Please try again.")
+            return
+
+    # If not a case variation, process as unknown command
     try:
         await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_manager, HELP_TEXT)
     except Exception as e:
