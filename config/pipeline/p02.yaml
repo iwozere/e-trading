@@ -23,7 +23,7 @@ cnn_lstm:
   kernel_size: 3
   validation_split: 0.2
   early_stopping_patience: 10
-  model_save_path: "src/ml/pipeline/cnn_lstm_xgboost_02/models/cnn_lstm/checkpoints"
+  model_save_path: "src/ml/pipeline/p_02_cnn_lstm_xgboost/models/cnn_lstm/checkpoints"
 
 # XGBoost model configuration
 xgboost:
@@ -37,7 +37,7 @@ xgboost:
   reg_lambda_range: [0, 1000]
   early_stopping_rounds: 50
   validation_split: 0.2
-  model_save_path: "src/ml/pipeline/cnn_lstm_xgboost_02/models/xgboost/models"
+  model_save_path: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/xgboost/models"
 
 # Technical indicators configuration
 technical_indicators:
@@ -96,12 +96,12 @@ evaluation:
 paths:
   data_raw: "data/raw"
   data_labeled: "data/labeled"
-  models_cnn_lstm: "src/ml/pipeline/cnn_lstm_xgboost_02/models/cnn_lstm"
-  models_xgboost: "src/ml/pipeline/cnn_lstm_xgboost_02/models/xgboost"
-  results: "src/ml/pipeline/cnn_lstm_xgboost_02/models/results"
-  reports: "src/ml/pipeline/cnn_lstm_xgboost_02/models/results/reports"
-  visualizations: "src/ml/pipeline/cnn_lstm_xgboost_02/models/results/visualizations"
-  predictions: "src/ml/pipeline/cnn_lstm_xgboost_02/models/results/predictions"
+  models_cnn_lstm: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/cnn_lstm"
+  models_xgboost: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/xgboost"
+  results: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/results"
+  reports: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/results/reports"
+  visualizations: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/results/visualizations"
+  predictions: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/results/predictions"
 
 # Logging configuration
 logging:

@@ -29,7 +29,6 @@ import json
 import pickle
 from datetime import datetime
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import sys
 from typing import Dict, List, Optional, Tuple, Any

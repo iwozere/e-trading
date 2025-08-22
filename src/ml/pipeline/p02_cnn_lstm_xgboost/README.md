@@ -95,13 +95,13 @@ evaluation:
 
 ```bash
 # Run complete pipeline
-python src/ml/pipeline/cnn_lstm_xgboost_02/run_pipeline.py
+python src/ml/pipeline/p02_cnn_lstm_xgboost/run_pipeline.py
 
 # Run specific stages
-python src/ml/pipeline/cnn_lstm_xgboost_02/run_pipeline.py --skip-stages "3,4,5,6,7,8"
+python src/ml/pipeline/p02_cnn_lstm_xgboost/run_pipeline.py --skip-stages "3,4,5,6,7,8"
 
 # Run with custom configuration
-python src/ml/pipeline/cnn_lstm_xgboost_02/run_pipeline.py --config config/pipeline/x02_custom.yaml
+python src/ml/pipeline/p02_cnn_lstm_xgboost/run_pipeline.py --config config/pipeline/x02_custom.yaml
 ```
 
 ## Model Architecture
@@ -168,7 +168,7 @@ class HybridCNNLSTM(nn.Module):
 ## File Structure
 
 ```
-src/ml/pipeline/cnn_lstm_xgboost_02/
+src/ml/pipeline/p02_cnn_lstm_xgboost/
 ├── docs/
 │   ├── Requirements.md
 │   ├── Design.md
@@ -243,7 +243,7 @@ src/ml/pipeline/cnn_lstm_xgboost_02/
 ### Basic Usage
 
 ```python
-from src.ml.pipeline.cnn_lstm_xgboost_02.run_pipeline import PipelineRunner
+from src.ml.pipeline.p02_cnn_lstm_xgboost.run_pipeline import PipelineRunner
 
 # Initialize pipeline
 pipeline = PipelineRunner("config/pipeline/x02.yaml")
@@ -281,8 +281,8 @@ pipeline.run()
 
 ```python
 # Run individual stages
-from src.ml.pipeline.cnn_lstm_xgboost_02.x_01_data_loader import DataLoader
-from src.ml.pipeline.cnn_lstm_xgboost_02.x_02_feature_engineering import FeatureEngineer
+from src.ml.pipeline.p02_cnn_lstm_xgboost.x_01_data_loader import DataLoader
+from src.ml.pipeline.p02_cnn_lstm_xgboost.x_02_feature_engineering import FeatureEngineer
 
 # Load data
 data_loader = DataLoader("config/pipeline/x02.yaml")
@@ -339,13 +339,13 @@ feature_engineer.run()
 
 ```bash
 # Run with debug logging
-python src/ml/pipeline/cnn_lstm_xgboost_02/run_pipeline.py --debug
+python src/ml/pipeline/p02_cnn_lstm_xgboost/run_pipeline.py --debug
 
 # Run individual stage with debug
 python -c "
 import logging
 logging.basicConfig(level=logging.DEBUG)
-from src.ml.pipeline.cnn_lstm_xgboost_02.x_01_data_loader import DataLoader
+from src.ml.pipeline.p02_cnn_lstm_xgboost.x_01_data_loader import DataLoader
 DataLoader('config/pipeline/x02.yaml').run()
 "
 ```

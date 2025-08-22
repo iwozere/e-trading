@@ -5,7 +5,7 @@
 ### Phase 1: Foundation Setup
 
 #### Task 1.1: Create Pipeline Structure
-- [x] Create `src/ml/pipeline/cnn_lstm_xgboost_02/` directory
+- [x] Create `src/ml/pipeline/p02_cnn_lstm_xgboost/` directory
 - [x] Create `docs/` subdirectory with documentation files
 - [x] Create `models/` subdirectory with subfolders:
   - [x] `cnn_lstm/` (checkpoints, studies, configs)

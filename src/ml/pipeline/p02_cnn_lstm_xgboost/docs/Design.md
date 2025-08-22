@@ -211,7 +211,7 @@ evaluation:
 ## File Structure
 
 ```
-src/ml/pipeline/cnn_lstm_xgboost_02/
+src/ml/pipeline/p02_cnn_lstm_xgboost/
 ├── docs/
 │   ├── Requirements.md
 │   ├── Design.md

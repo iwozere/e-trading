@@ -31,7 +31,7 @@ class ModelValidator:
         self.logger = setup_logging(__name__)
 
         # Create directories
-        self.models_dir = Path("src/ml/pipeline/cnn_lstm_xgboost_02/models")
+        self.models_dir = Path("src/ml/pipeline/p02_cnn_lstm_xgboost/models")
         self.results_dir = self.models_dir / "results"
         self.reports_dir = self.results_dir / "reports"
         self.predictions_dir = self.results_dir / "predictions"

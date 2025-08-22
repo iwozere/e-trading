@@ -33,7 +33,7 @@ class XGBoostTrainer:
         self.logger = setup_logging(__name__)
 
         # Create directories
-        self.models_dir = Path("src/ml/pipeline/cnn_lstm_xgboost_02/models")
+        self.models_dir = Path("src/ml/pipeline/p02_cnn_lstm_xgboost/models")
         self.xgboost_dir = self.models_dir / "xgboost"
         self.models_path = self.xgboost_dir / "models"
         self.configs_dir = self.xgboost_dir / "configs"
