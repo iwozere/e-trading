@@ -83,7 +83,7 @@ Goal — to build a trading pipeline where:
 ---
 
 ## 4. Configuration & Parameters
-Example config (`config/pipeline/x01.yaml`):
+Example config (`config/pipeline/p01.yaml`):
 
 ```yaml
 symbols: [BTCUSDT, ETHUSDT, LTCUSDT]
@@ -440,7 +440,7 @@ The pipeline provides comprehensive logging:
 Error handling behavior can be configured in the pipeline configuration file:
 
 ```yaml
-# config/pipeline/x01.yaml
+# config/pipeline/p01.yaml
 pipeline:
   fail_fast: true  # Default: true
   continue_on_optional_failures: false  # Default: false

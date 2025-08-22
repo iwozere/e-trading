@@ -25,7 +25,7 @@ The HMM-LSTM pipeline is a comprehensive machine learning system for financial t
 Downloads historical OHLCV data for multiple symbols and timeframes from various data providers.
 
 ### Input
-- **Configuration**: `config/pipeline/x01.yaml`
+- **Configuration**: `config/pipeline/p01.yaml`
 - **Data Sources**: Multi-provider configuration (Binance, Yahoo Finance, etc.)
 
 ### Output
@@ -95,7 +95,7 @@ scaled_period = max(2, int(round(base_period * scale_factor)))
 - **Training Window**: 730 days (2 years)
 
 ### Output
-**Model Files**: `src/ml/pipeline/hmm_lstm_01/models/hmm/hmm_{symbol}_{timeframe}_{timestamp}.pkl`
+**Model Files**: `src/ml/pipeline/p01_hmm_lstm/models/hmm/hmm_{symbol}_{timeframe}_{timestamp}.pkl`
 
 **Model Package Contents**:
 - `model`: Trained GaussianHMM object
@@ -177,7 +177,7 @@ Simple rule-based strategy:
 - **Hold**: No clear signal
 
 ### Output
-**Parameter Files**: `src/ml/pipeline/hmm_lstm_01/models/lstm/indicators_{symbol}_{timeframe}_{timestamp}.json`
+**Parameter Files**: `src/ml/pipeline/p01_hmm_lstm/models/lstm/indicators_{symbol}_{timeframe}_{timestamp}.json`
 
 **JSON Structure**:
 ```json
@@ -257,7 +257,7 @@ Multi-objective optimization:
 - **Sharpe Ratio**: Risk-adjusted returns
 
 ### Output
-**Parameter Files**: `src/ml/pipeline/hmm_lstm_01/models/lstm/lstm_params_{symbol}_{timeframe}_{timestamp}.json`
+**Parameter Files**: `src/ml/pipeline/p01_hmm_lstm/models/lstm/lstm_params_{symbol}_{timeframe}_{timestamp}.json`
 
 **JSON Structure**:
 ```json
@@ -315,7 +315,7 @@ class LSTMModel(nn.Module):
 6. **Learning Rate Scheduling**: Reduce on plateau
 
 ### Output
-**Model Files**: `src/ml/pipeline/hmm_lstm_01/models/lstm/lstm_{symbol}_{timeframe}_{timestamp}.pkl`
+**Model Files**: `src/ml/pipeline/p01_hmm_lstm/models/lstm/lstm_{symbol}_{timeframe}_{timestamp}.pkl`
 
 **Model Package Contents**:
 - `model_state_dict`: PyTorch model weights
@@ -468,7 +468,7 @@ If your validation results don't look good, consider these factors:
 5. **Market Regime Analysis**: Focus on specific regimes where the model performs well
 
 #### JSON Results
-**Location**: `src/ml/pipeline/hmm_lstm_01/models/lstm/lstm_validation_{symbol}_{timeframe}_{timestamp}.json`
+**Location**: `src/ml/pipeline/p01_hmm_lstm/models/lstm/lstm_validation_{symbol}_{timeframe}_{timestamp}.json`
 
 **Structure**:
 ```json

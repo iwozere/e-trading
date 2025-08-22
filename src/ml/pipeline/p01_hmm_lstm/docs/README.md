@@ -100,7 +100,7 @@ This color mapping is determined by analyzing regime characteristics and ensures
 ## Configuration
 
 ### Main Configuration File
-`config/pipeline/x01.yaml`
+`config/pipeline/p01.yaml`
 
 ### Key Parameters
 - `data_sources`: Multi-provider configuration
@@ -112,11 +112,11 @@ This color mapping is determined by analyzing regime characteristics and ensures
 
 ### Basic Usage
 ```bash
-python src/ml/pipeline/hmm_lstm_01/run_pipeline.py
+python src/ml/pipeline/p01_hmm_lstm/run_pipeline.py
 ```
 
 ### Configuration
-1. Edit `config/pipeline/x01.yaml`
+1. Edit `config/pipeline/p01.yaml`
 2. Set your data sources and symbols
 3. Configure HMM parameters
 4. Run the pipeline

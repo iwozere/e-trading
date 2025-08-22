@@ -43,7 +43,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 class HMMTrainer:
-    def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
+    def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
         """
         Initialize HMM trainer with configuration.
 
@@ -59,8 +59,8 @@ class HMMTrainer:
                 # Directory setup
         self.raw_data_dir = Path("data/raw")
         self.labeled_data_dir = Path("data/labeled")
-        self.models_dir = Path("src/ml/pipeline/hmm_lstm_01/models/hmm")
-        self.hmm_dir = Path("src/ml/pipeline/hmm_lstm_01/models/hmm")  # New directory for HMM-specific files
+        self.models_dir = Path("src/ml/pipeline/p01_hmm_lstm/models/hmm")
+        self.hmm_dir = Path("src/ml/pipeline/p01_hmm_lstm/models/hmm")  # New directory for HMM-specific files
 
         # Create directories if they don't exist
         self.labeled_data_dir.mkdir(parents=True, exist_ok=True)

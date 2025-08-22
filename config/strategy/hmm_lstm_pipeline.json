@@ -12,7 +12,7 @@
             "symbol": "BTCUSDT",
             "timeframe": "1h",
             "strategy_config": {
-                "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
                 "results_dir": "results",
                 
                 "position_sizing": {
@@ -87,7 +87,7 @@
             "symbol": "BTCUSDT",
             "timeframe": "1h",
             "strategy_config": {
-                "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
                 "results_dir": "results",
                 
                 "position_sizing": {
@@ -162,7 +162,7 @@
             "symbols": ["BTCUSDT", "ETHUSDT", "LTCUSDT"],
             "timeframe": "1h",
             "strategy_config": {
-                "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
                 "results_dir": "results",
                 
                 "portfolio_management": {
@@ -232,7 +232,7 @@
                 "execution": "15m"
             },
             "strategy_config": {
-                "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
                 "results_dir": "results",
                 
                 "timeframe_analysis": {

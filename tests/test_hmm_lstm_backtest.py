@@ -37,9 +37,9 @@ class TestHMMLSTMBacktest(unittest.TestCase):
             "output_dir": "test_results",
 
             "ml_models": {
-                "pipeline_dir": "src/ml/pipeline/hmm_lstm_01",
-                "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
-                "config_file": "config/pipeline/x01.yaml"
+                    "pipeline_dir": "src/ml/pipeline/p01_hmm_lstm",
+    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                "config_file": "config/pipeline/p01.yaml"
             },
 
             "strategy": {
@@ -119,8 +119,8 @@ class TestHMMLSTMBacktest(unittest.TestCase):
         # Create mock pipeline config
         mock_pipeline_config = {
             'paths': {
-                'data_labeled': 'src/ml/pipeline/hmm_lstm_01/data_labeled',
-                'models_hmm': 'src/ml/pipeline/hmm_lstm_01/models'
+                            'data_labeled': 'src/ml/pipeline/p01_hmm_lstm/data_labeled',
+            'models_hmm': 'src/ml/pipeline/p01_hmm_lstm/models'
             }
         }
 
@@ -158,12 +158,12 @@ class TestHMMLSTMBacktest(unittest.TestCase):
         """Test model discovery with mock files."""
         # Mock model files
         mock_hmm_files = [
-            Path("src/ml/pipeline/hmm_lstm_01/models/hmm_BTCUSDT_1h_20240101.pkl"),
-            Path("src/ml/pipeline/hmm_lstm_01/models/hmm_BTCUSDT_1h_20240102.pkl")
+                    Path("src/ml/pipeline/p01_hmm_lstm/models/hmm_BTCUSDT_1h_20240101.pkl"),
+        Path("src/ml/pipeline/p01_hmm_lstm/models/hmm_BTCUSDT_1h_20240102.pkl")
         ]
         mock_lstm_files = [
-            Path("src/ml/pipeline/hmm_lstm_01/models/lstm_BTCUSDT_1h_20240101.pkl"),
-            Path("src/ml/pipeline/hmm_lstm_01/models/lstm_BTCUSDT_1h_20240102.pkl")
+                    Path("src/ml/pipeline/p01_hmm_lstm/models/lstm_BTCUSDT_1h_20240101.pkl"),
+        Path("src/ml/pipeline/p01_hmm_lstm/models/lstm_BTCUSDT_1h_20240102.pkl")
         ]
 
         def mock_glob_side_effect(pattern):
@@ -387,7 +387,7 @@ def run_integration_tests():
     print("Running integration tests...")
 
     # Check if pipeline directory exists
-    pipeline_dir = Path("src/ml/pipeline/hmm_lstm_01")
+    pipeline_dir = Path("src/ml/pipeline/p01_hmm_lstm")
     if not pipeline_dir.exists():
         print("❌ Pipeline directory not found. Skipping integration tests.")
         return False

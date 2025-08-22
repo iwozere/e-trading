@@ -17,7 +17,7 @@ Before running HMM-LSTM backtesting, ensure you have:
 
 1. **Trained Models**: Complete the HMM-LSTM pipeline training:
    ```bash
-   cd src/ml/pipeline/hmm_lstm_01
+   cd src/ml/pipeline/p01_hmm_lstm
    python run_pipeline.py
    ```
 
@@ -29,14 +29,14 @@ Before running HMM-LSTM backtesting, ensure you have:
 
 3. **Model Files**: Trained models should be available in:
    ```
-   src/ml/pipeline/hmm_lstm_01/models/
+   src/ml/pipeline/p01_hmm_lstm/models/
    ├── hmm_{symbol}_{timeframe}_{timestamp}.pkl
    └── lstm_{symbol}_{timeframe}_{timestamp}.pkl
    ```
 
 ## Configuration
 
-The backtesting system uses a JSON configuration file: `config/optimizer/hmm_lstm_01.json`
+The backtesting system uses a JSON configuration file: `config/optimizer/p01_hmm_lstm.json`
 
 ### Key Configuration Sections
 
@@ -44,9 +44,9 @@ The backtesting system uses a JSON configuration file: `config/optimizer/hmm_lst
 ```json
 {
   "ml_models": {
-    "pipeline_dir": "src/ml/pipeline/hmm_lstm_01",
-    "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
-    "config_file": "config/pipeline/x01.yaml"
+    "pipeline_dir": "src/ml/pipeline/p01_hmm_lstm",
+    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+    "config_file": "config/pipeline/p01.yaml"
   }
 }
 ```

@@ -28,7 +28,7 @@ A complete standalone strategy that directly uses the trained models.
 strategy_config = {
     "symbol": "BTCUSDT",
     "timeframe": "1h",
-    "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+            "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
     "prediction_threshold": 0.001,
     "regime_confidence_threshold": 0.6
 }

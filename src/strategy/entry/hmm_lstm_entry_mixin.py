@@ -14,7 +14,7 @@ Usage:
             "timeframe": "1h",
             "prediction_threshold": 0.001,
             "regime_confidence_threshold": 0.6,
-            "models_dir": "src/ml/pipeline/hmm_lstm_01/models"
+            "models_dir": "src/ml/pipeline/p01_hmm_lstm/models"
         }
     }
 """
@@ -113,7 +113,7 @@ class HMMLSTMEntryMixin:
         self.timeframe = params.get('timeframe', '1h')
         self.prediction_threshold = params.get('prediction_threshold', 0.001)
         self.regime_confidence_threshold = params.get('regime_confidence_threshold', 0.6)
-        self.models_dir = Path(params.get('models_dir', 'src/ml/pipeline/hmm_lstm_01/models'))
+        self.models_dir = Path(params.get('models_dir', 'src/ml/pipeline/p01_hmm_lstm/models'))
         self.results_dir = Path(params.get('results_dir', 'results'))
 
         # Model components

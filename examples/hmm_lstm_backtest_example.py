@@ -6,7 +6,7 @@ programmatically to evaluate trained models on historical data.
 
 Prerequisites:
 1. Complete HMM-LSTM pipeline training
-2. Trained models available in src/ml/pipeline/hmm_lstm_01/models/
+2. Trained models available in src/ml/pipeline/p01_hmm_lstm/models/
 3. OHLCV data available in data/{symbol}_{timeframe}.csv
 
 Usage:
@@ -36,9 +36,9 @@ def create_custom_config():
         "output_dir": "results",
 
         "ml_models": {
-            "pipeline_dir": "src/ml/pipeline/hmm_lstm_01",
-            "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
-            "config_file": "config/pipeline/x01.yaml"
+                "pipeline_dir": "src/ml/pipeline/p01_hmm_lstm",
+    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+            "config_file": "config/pipeline/p01.yaml"
         },
 
         "strategy": {
@@ -162,7 +162,7 @@ def check_prerequisites():
     print("=== Checking Prerequisites ===")
 
     # Check if models directory exists
-    models_dir = Path("src/ml/pipeline/hmm_lstm_01/models")
+    models_dir = Path("src/ml/pipeline/p01_hmm_lstm/models")
     if not models_dir.exists():
         print("❌ Models directory not found. Please run the HMM-LSTM pipeline first.")
         return False
@@ -199,7 +199,7 @@ def main():
     # Check prerequisites
     if not check_prerequisites():
         print("\nPlease complete the HMM-LSTM pipeline training first:")
-        print("cd src/ml/pipeline/hmm_lstm_01")
+        print("cd src/ml/pipeline/p01_hmm_lstm")
         print("python run_pipeline.py")
         return
 

@@ -7,7 +7,7 @@ This document provides a complete guide to the HMM-LSTM backtesting system I've 
 ## What I've Created
 
 ### 1. Configuration System
-- **`config/optimizer/hmm_lstm_01.json`** - Main configuration file for HMM-LSTM backtesting
+- **`config/optimizer/p01_hmm_lstm.json`** - Main configuration file for HMM-LSTM backtesting
 - Supports multiple symbols, timeframes, and strategy parameters
 - Includes risk management and optimization settings
 
@@ -61,12 +61,12 @@ This document provides a complete guide to the HMM-LSTM backtesting system I've 
 ### Prerequisites
 1. **Complete HMM-LSTM Pipeline Training**:
    ```bash
-   cd src/ml/pipeline/hmm_lstm_01
+   cd src/ml/pipeline/p01_hmm_lstm
    python run_pipeline.py
    ```
 
 2. **Verify Models and Data**:
-   - Models: `src/ml/pipeline/hmm_lstm_01/models/`
+   - Models: `src/ml/pipeline/p01_hmm_lstm/models/`
    - OHLCV data: `data/{symbol}_{timeframe}.csv`
 
 ### Basic Usage
@@ -102,7 +102,7 @@ python src/backtester/optimizer/hmm_lstm.py --config config/optimizer/my_config.
 The optimizer automatically discovers all available symbol-timeframe combinations from the data directory. No need to specify symbols or timeframes manually.
 
 #### Enable Parameter Optimization
-Edit `config/optimizer/hmm_lstm_01.json`:
+   Edit `config/optimizer/p01_hmm_lstm.json`:
 ```json
 {
   "optimization": {
@@ -118,9 +118,9 @@ Edit `config/optimizer/hmm_lstm_01.json`:
 ```json
 {
   "ml_models": {
-    "pipeline_dir": "src/ml/pipeline/hmm_lstm_01",
-    "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
-    "config_file": "config/pipeline/x01.yaml"
+           "pipeline_dir": "src/ml/pipeline/p01_hmm_lstm",
+       "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+    "config_file": "config/pipeline/p01.yaml"
   }
 }
 ```

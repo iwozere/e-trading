@@ -34,7 +34,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 class IndicatorOptimizer:
-    def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
+    def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
         """
         Initialize indicator optimizer with configuration.
 

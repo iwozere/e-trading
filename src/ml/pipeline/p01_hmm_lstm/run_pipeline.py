@@ -18,7 +18,7 @@ Usage:
     python run_pipeline.py [options]
 
 Options:
-    --config: Path to configuration file (default: config/pipeline/x01.yaml)
+    --config: Path to configuration file (default: config/pipeline/p01.yaml)
     --skip-stages: Comma-separated list of stages to skip (e.g., "1,2,3")
     --symbols: Comma-separated list of symbols to process (overrides config)
     --timeframes: Comma-separated list of timeframes to process (overrides config)
@@ -42,7 +42,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 class PipelineRunner:
-    def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
+    def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
         """
         Initialize pipeline runner.
 
@@ -432,7 +432,7 @@ Examples:
         """
     )
 
-    parser.add_argument('--config', type=str, default='config/pipeline/x01.yaml',
+    parser.add_argument('--config', type=str, default='config/pipeline/p01.yaml',
                        help='Path to configuration file')
     parser.add_argument('--skip-stages', type=str,
                        help='Comma-separated list of stages to skip (e.g., "1,2,3")')

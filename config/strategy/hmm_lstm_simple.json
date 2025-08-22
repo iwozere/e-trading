@@ -8,7 +8,7 @@
         "symbol": "BTCUSDT",
         "timeframe": "1h",
         
-        "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+        "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
         "results_dir": "results",
         
         "position_size": 0.1,

@@ -103,7 +103,7 @@ class LSTMModel(nn.Module):
         return output
 
 class LSTMTrainer:
-    def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
+    def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
         """
         Initialize LSTM trainer with configuration.
 

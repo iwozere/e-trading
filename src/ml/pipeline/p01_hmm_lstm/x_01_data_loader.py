@@ -32,7 +32,7 @@ from src.data.data_downloader_factory import DataDownloaderFactory
 _logger = setup_logger(__name__)
 
 class DataLoader:
-    def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
+    def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
         """
         Initialize DataLoader with configuration.
 

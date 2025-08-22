@@ -97,7 +97,7 @@ class LSTMModel(nn.Module):
         return output
 
 class LSTMOptimizer:
-    def __init__(self, config_path: str = "config/pipeline/x01.yaml"):
+    def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
         """
         Initialize LSTM optimizer with configuration.
 

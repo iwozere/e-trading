@@ -12,7 +12,7 @@
                 "timeframe": "1h",
                 "prediction_threshold": 0.001,
                 "regime_confidence_threshold": 0.6,
-                "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
                 "results_dir": "results"
             }
         },
@@ -36,7 +36,7 @@
                     "timeframe": "1h",
                     "prediction_threshold": 0.002,
                     "regime_confidence_threshold": 0.75,
-                    "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+                    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
                     "results_dir": "results"
                 }
             },
@@ -58,7 +58,7 @@
                     "timeframe": "1h",
                     "prediction_threshold": 0.0005,
                     "regime_confidence_threshold": 0.5,
-                    "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+                    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
                     "results_dir": "results"
                 }
             },
@@ -80,7 +80,7 @@
                     "timeframe": "1h",
                     "prediction_threshold": 0.001,
                     "regime_confidence_threshold": 0.65,
-                    "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
+                    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
                     "results_dir": "results"
                 }
             },

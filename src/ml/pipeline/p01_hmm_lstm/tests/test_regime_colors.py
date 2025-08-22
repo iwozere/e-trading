@@ -16,7 +16,7 @@ import pandas as pd
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-from src.ml.pipeline.hmm_lstm_01.x_03_train_hmm import HMMTrainer
+from src.ml.pipeline.p01_hmm_lstm.x_03_train_hmm import HMMTrainer
 
 def test_regime_labeling():
     """Test the regime labeling logic with different scenarios."""

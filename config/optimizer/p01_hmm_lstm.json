@@ -8,9 +8,9 @@
   "output_dir": "results",
   
   "ml_models": {
-    "pipeline_dir": "src/ml/pipeline/hmm_lstm_01",
-    "models_dir": "src/ml/pipeline/hmm_lstm_01/models",
-    "config_file": "config/pipeline/x01.yaml"
+      "pipeline_dir": "src/ml/pipeline/p01_hmm_lstm",
+  "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+    "config_file": "config/pipeline/p01.yaml"
   },
   
   "strategy": {

@@ -52,7 +52,7 @@ class HMMLSTMOptimizer:
     including model loading, data preparation, strategy execution, and result analysis.
     """
 
-    def __init__(self, config_path: str = "config/optimizer/hmm_lstm_01.json"):
+    def __init__(self, config_path: str = "config/optimizer/p01_hmm_lstm.json"):
         """
         Initialize the HMM-LSTM optimizer.
 
@@ -601,7 +601,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='HMM-LSTM Backtesting Optimizer')
-    parser.add_argument('--config', default='config/optimizer/hmm_lstm_01.json',
+    parser.add_argument('--config', default='config/optimizer/p01_hmm_lstm.json',
                        help='Path to configuration file')
 
     args = parser.parse_args()

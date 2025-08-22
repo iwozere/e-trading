@@ -190,7 +190,7 @@ class HMMLSTMStrategy(BaseStrategy):
     def _load_models(self):
         """Load trained HMM and LSTM models with their parameters."""
         try:
-            models_dir = Path(self.config.get('models_dir', 'src/ml/pipeline/hmm_lstm_01/models'))
+            models_dir = Path(self.config.get('models_dir', 'src/ml/pipeline/p01_hmm_lstm/models'))
             results_dir = Path(self.config.get('results_dir', 'results'))
 
             # Load HMM model
