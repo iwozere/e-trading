@@ -41,7 +41,7 @@ class ScheduleProcessor:
                 await self.process_schedules()
                 await asyncio.sleep(60)  # Check every minute
             except Exception as e:
-                _logger.exception("Error in schedule processor: ")
+                _logger.exception("Error in schedule processor")
                 await asyncio.sleep(30)  # Shorter sleep on error
 
     def stop(self):
@@ -76,7 +76,7 @@ class ScheduleProcessor:
                 await self.check_single_schedule(schedule, current_time_str, current_date)
 
         except Exception as e:
-            _logger.exception("Error processing schedules: ")
+            _logger.exception("Error processing schedules")
 
     async def check_single_schedule(self, schedule: Dict[str, Any], current_time_str: str, current_date):
         """Check if a schedule should be triggered and process it."""
@@ -117,225 +117,159 @@ class ScheduleProcessor:
                 db.set_setting(last_run_key, str(current_date))
 
         except Exception as e:
-            _logger.exception("Error checking schedule %s: ", schedule.get("id"))
+            _logger.exception("Error checking schedule %s", schedule.get("id"))
 
     async def execute_schedule(self, schedule: Dict[str, Any]):
         """Execute a scheduled report or screener."""
         try:
             schedule_type = schedule.get("schedule_type", "report")
+            schedule_config = schedule.get("schedule_config", "simple")
 
-            if schedule_type == "screener":
+            if schedule_config == "enhanced_screener":
+                await self.execute_enhanced_screener_schedule(schedule)
+            elif schedule_type == "screener":
                 await self.execute_screener_schedule(schedule)
             else:
                 await self.execute_report_schedule(schedule)
 
         except Exception as e:
-            _logger.exception("Error executing schedule %s: ", schedule.get("id"))
+            _logger.exception("Error executing schedule %s", schedule.get("id"))
+            return
 
     async def execute_report_schedule(self, schedule: Dict[str, Any]):
         """Execute a scheduled report."""
         try:
-            ticker = schedule["ticker"]
-            user_id = schedule["user_id"]
             schedule_id = schedule["id"]
-            send_email = schedule.get("email", 0)
-            indicators = schedule.get("indicators")
-            interval = schedule.get("interval", "1d")
-            provider = schedule.get("provider")
-            period = schedule.get("period", "daily")
+            user_id = schedule["user_id"]
+            ticker = schedule.get("ticker", "").upper()
+            report_type = schedule.get("report_type", "simple")
 
-            # Get user info
-            user_status = db.get_user_status(user_id)
-            if not user_status:
-                _logger.warning("User %s not found for schedule %d", user_id, schedule_id)
-                return
+            _logger.info("Executing report schedule %s for user %s, ticker %s", schedule_id, user_id, ticker)
 
-            user_email = user_status.get("email") if user_status.get("verified") else None
-
-            # Generate the report
-            analysis = analyze_ticker_business(
-                ticker=ticker,
-                provider=provider,
-                period="2y",  # Default period for scheduled reports
-                interval=interval
-            )
-
-            report = format_ticker_report(analysis)
-
-            if analysis.error:
-                # Send error notification via HTTP API
-                error_message = f"❌ Scheduled Report Error\n\nSchedule #{schedule_id}\nTicker: {ticker}\nError: {analysis.error}"
-
-                success = await send_notification_via_api(
-                    user_id=user_id,
-                    message=error_message,
-                    title=f"Scheduled Report Error for {ticker}"
-                )
-
-                if success:
-                    _logger.info("Error notification sent for schedule #%d", schedule_id)
-                else:
-                    _logger.error("Failed to send error notification for schedule #%d", schedule_id)
-                return
-
-            # Prepare success message
-            scheduled_message = f"📊 Scheduled Report ({period})\n\n{report['message']}"
-
-            # Send Telegram notification via HTTP API
-            success = await send_notification_via_api(
-                user_id=user_id,
-                message=scheduled_message,
-                title=f"Scheduled Report for {ticker}"
-            )
-
-            if success:
-                _logger.info("Executed report schedule #%d for user %s: %s (%s)",
-                           schedule_id, user_id, ticker, period)
+            # Generate report
+            if report_type == "simple":
+                result = analyze_ticker_business(ticker, user_id)
             else:
-                _logger.error("Failed to send report notification for schedule #%d", schedule_id)
+                # For advanced reports, we might need to parse additional config
+                result = analyze_ticker_business(ticker, user_id)
 
-            # Send email notification if requested and user has verified email
-            if send_email and user_email:
-                # For email, we'll use the notification manager directly since the HTTP API doesn't support email yet
-                try:
-                    from src.notification.async_notification_manager import initialize_notification_manager
-                    from config.donotshare.donotshare import SMTP_USER, SMTP_PASSWORD
+            if result["status"] == "ok":
+                # Format report for Telegram
+                message = format_ticker_report(result["data"])
 
-                    notification_manager = await initialize_notification_manager(
-                        telegram_token=None,  # Not needed for email-only
-                        telegram_chat_id=None,  # Not needed for email-only
-                        email_api_key=SMTP_PASSWORD,
-                        email_sender=SMTP_USER,
-                        email_receiver=SMTP_USER
-                    )
+                # Send via HTTP API
+                if self.api_client:
+                    await self.api_client.send_message_to_user(user_id, message)
+                    _logger.info("Report sent successfully for schedule %s", schedule_id)
+                else:
+                    _logger.warning("No API client available for schedule %s", schedule_id)
 
-                    attachments = None
-                    if report.get("chart_bytes"):
-                        attachments = {f"{ticker}_chart.png": report["chart_bytes"]}
-
-                    await notification_manager.send_notification(
-                        notification_type="INFO",
-                        title=f"Alkotrader Scheduled Report for {ticker}",
-                        message=report["message"],
-                        attachments=attachments,
-                        priority="NORMAL",
-                        channels=["email"],
-                        email_receiver=user_email
-                    )
-
-                    _logger.info("Email report sent to %s for schedule #%d", user_email, schedule_id)
-                except Exception as e:
-                    _logger.error("Failed to send email report to %s: %s", user_email, e)
+            else:
+                _logger.error("Report generation failed for schedule %s: %s", schedule_id, result.get("message", "Unknown error"))
 
         except Exception as e:
-            _logger.exception("Error executing report schedule %s: ", schedule.get("id"))
+            _logger.exception("Error executing report schedule %s", schedule.get("id"))
+            return
 
     async def execute_screener_schedule(self, schedule: Dict[str, Any]):
-        """Execute a scheduled fundamental screener."""
+        """Execute a scheduled screener."""
         try:
-            user_id = schedule["user_id"]
             schedule_id = schedule["id"]
-            send_email = schedule.get("email", 0)
-            list_type = schedule.get("list_type", "us_small_cap")
-            period = schedule.get("period", "daily")
+            user_id = schedule["user_id"]
+            list_type = schedule.get("list_type", "us_medium_cap")
+            screener_type = schedule.get("screener_type", "fundamental")
 
-            # Get user info
-            user_status = db.get_user_status(user_id)
-            if not user_status:
-                _logger.warning("User %s not found for schedule %d", user_id, schedule_id)
-                return
+            _logger.info("Executing screener schedule %s for user %s, list %s", schedule_id, user_id, list_type)
 
-            user_email = user_status.get("email") if user_status.get("verified") else None
-
-            # Import screener module
-            from src.frontend.telegram.screener.fundamental_screener import screener
-
-            # Run the screener
-            _logger.info("Starting scheduled screener for user %s, list_type: %s", user_id, list_type)
-
-            screener_report = screener.run_screener(list_type)
-
-            if screener_report.error:
-                # Send error notification via HTTP API
-                error_message = f"❌ Scheduled Screener Error\n\nSchedule #{schedule_id}\nList Type: {list_type}\nError: {screener_report.error}"
-
-                success = await send_notification_via_api(
-                    user_id=user_id,
-                    message=error_message,
-                    title=f"Scheduled Screener Error for {list_type}"
-                )
-
-                if success:
-                    _logger.info("Error notification sent for screener schedule #%d", schedule_id)
-                else:
-                    _logger.error("Failed to send error notification for screener schedule #%d", schedule_id)
-                return
-
-            # Format the screener report for Telegram
-            screener_message = screener.format_telegram_message(screener_report)
-
-            # Send Telegram notification via HTTP API
-            success = await send_notification_via_api(
-                user_id=user_id,
-                message=screener_message,
-                title=f"Fundamental Screener Report - {list_type.replace('_', ' ').title()}"
-            )
-
-            if success:
-                _logger.info("Executed screener schedule #%d for user %s: %s (%s)",
-                           schedule_id, user_id, list_type, period)
+            # Import screener based on type
+            if screener_type == "fundamental":
+                from src.frontend.telegram.screener.fundamental_screener import FundamentalScreener
+                screener = FundamentalScreener()
+                report = screener.run_screener(list_type)
             else:
-                _logger.error("Failed to send screener notification for schedule #%d", schedule_id)
+                _logger.error("Unsupported screener type %s for schedule %s", screener_type, schedule_id)
+                return
 
-            # Send email notification if requested and user has verified email
-            if send_email and user_email:
-                # For email, we'll use the notification manager directly since the HTTP API doesn't support email yet
-                try:
-                    from src.notification.async_notification_manager import initialize_notification_manager
-                    from config.donotshare.donotshare import SMTP_USER, SMTP_PASSWORD
+            if report.error:
+                _logger.error("Screener failed for schedule %s: %s", schedule_id, report.error)
+                return
 
-                    notification_manager = await initialize_notification_manager(
-                        telegram_token=None,  # Not needed for email-only
-                        telegram_chat_id=None,  # Not needed for email-only
-                        email_api_key=SMTP_PASSWORD,
-                        email_sender=SMTP_USER,
-                        email_receiver=SMTP_USER
-                    )
+            # Format screener report for Telegram
+            from src.frontend.telegram.screener.enhanced_screener import format_enhanced_telegram_message
+            message = format_enhanced_telegram_message(report)
 
-                    # For email, we might want to format it differently
-                    email_message = screener_message.replace("**", "").replace("*", "")  # Remove markdown
-
-                    await notification_manager.send_notification(
-                        notification_type="INFO",
-                        title=f"Alkotrader Fundamental Screener Report - {list_type.replace('_', ' ').title()}",
-                        message=email_message,
-                        priority="NORMAL",
-                        channels=["email"],
-                        email_receiver=user_email
-                    )
-
-                    _logger.info("Email screener report sent to %s for schedule #%d", user_email, schedule_id)
-                except Exception as e:
-                    _logger.error("Failed to send email screener report to %s: %s", user_email, e)
+            # Send via HTTP API
+            if self.api_client:
+                await self.api_client.send_message_to_user(user_id, message)
+                _logger.info("Screener report sent successfully for schedule %s", schedule_id)
+            else:
+                _logger.warning("No API client available for schedule %s", schedule_id)
 
         except Exception as e:
-            _logger.exception("Error executing screener schedule %s: ", schedule.get("id"))
+            _logger.exception("Error executing screener schedule %s", schedule.get("id"))
+            return
+
+    async def execute_enhanced_screener_schedule(self, schedule: Dict[str, Any]):
+        """Execute a scheduled enhanced screener with JSON configuration."""
+        try:
+            schedule_id = schedule["id"]
+            user_id = schedule["user_id"]
+            config_json = schedule.get("config_json")
+
+            if not config_json:
+                _logger.error("No config_json found for enhanced screener schedule %s", schedule_id)
+                return
+
+            _logger.info("Executing enhanced screener schedule %s for user %s", schedule_id, user_id)
+
+            # Parse configuration
+            from src.frontend.telegram.screener.screener_config_parser import parse_screener_config
+            try:
+                screener_config = parse_screener_config(config_json)
+            except Exception as e:
+                _logger.error("Failed to parse config for schedule %s: %s", schedule_id, e)
+                return
+
+            # Run enhanced screener
+            from src.frontend.telegram.screener.enhanced_screener import EnhancedScreener
+            screener = EnhancedScreener()
+            report = screener.run_enhanced_screener(screener_config)
+
+            if report.error:
+                _logger.error("Enhanced screener failed for schedule %s: %s", schedule_id, report.error)
+                return
+
+            # Format report for Telegram
+            from src.frontend.telegram.screener.enhanced_screener import format_enhanced_telegram_message
+            message = format_enhanced_telegram_message(report)
+
+            # Send via HTTP API
+            if self.api_client:
+                await self.api_client.send_message_to_user(user_id, message)
+                _logger.info("Enhanced screener report sent successfully for schedule %s", schedule_id)
+            else:
+                _logger.warning("No API client available for schedule %s", schedule_id)
+
+        except Exception as e:
+            _logger.exception("Error executing enhanced screener schedule %s", schedule.get("id"))
+            return
 
 
 async def main():
-    """Main function to run the schedule processor as a standalone service."""
+    """Main function to run the schedule processor."""
     try:
-        # Create HTTP API client
+        # Initialize HTTP API client
         api_client = BotHttpApiClient()
 
         # Create and start schedule processor
         processor = ScheduleProcessor(api_client)
+
+        _logger.info("Starting schedule processor...")
         await processor.start()
 
-    except KeyboardInterrupt:
-        _logger.info("Schedule processor stopped by user")
     except Exception as e:
-        _logger.exception("Error in schedule processor main: ")
+        _logger.exception("Error in schedule processor main")
+        return
 
 
 if __name__ == "__main__":

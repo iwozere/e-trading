@@ -32,6 +32,7 @@ ALPHA_VANTAGE_KEY=os.getenv("ALPHA_VANTAGE_KEY")
 FINNHUB_KEY=os.getenv("FINNHUB_KEY")
 TWELVE_DATA_KEY=os.getenv("TWELVE_DATA_KEY")
 POLYGON_KEY=os.getenv("POLYGON_KEY")
+FMP_API_KEY=os.getenv("FMP_API_KEY")
 
 
 #gmail_password = os.getenv("gmail_password")

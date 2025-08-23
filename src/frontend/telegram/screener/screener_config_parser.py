@@ -70,6 +70,8 @@ class ScreenerConfig:
     list_type: str
     fundamental_criteria: Optional[List[FundamentalCriteria]] = None
     technical_criteria: Optional[List[TechnicalCriteria]] = None
+    fmp_criteria: Optional[Dict[str, Any]] = None  # FMP screening criteria
+    fmp_strategy: Optional[str] = None  # Predefined FMP strategy name
     period: str = "1y"
     interval: str = "1d"
     provider: str = "yf"
@@ -129,11 +131,17 @@ class ScreenerConfigParser:
                 config_dict["technical_criteria"]
             )
 
+        # Parse FMP criteria
+        fmp_criteria = config_dict.get("fmp_criteria")
+        fmp_strategy = config_dict.get("fmp_strategy")
+
         return ScreenerConfig(
             screener_type=screener_type,
             list_type=list_type,
             fundamental_criteria=fundamental_criteria,
             technical_criteria=technical_criteria,
+            fmp_criteria=fmp_criteria,
+            fmp_strategy=fmp_strategy,
             period=config_dict.get("period", "1y"),
             interval=config_dict.get("interval", "1d"),
             provider=config_dict.get("provider", "yf"),
@@ -235,6 +243,17 @@ class ScreenerConfigParser:
             )
             errors.extend(technical_errors)
 
+        # Validate FMP criteria
+        if "fmp_criteria" in config_dict:
+            fmp_errors = self._validate_fmp_criteria(config_dict["fmp_criteria"])
+            errors.extend(fmp_errors)
+
+        # Validate FMP strategy
+        if "fmp_strategy" in config_dict:
+            fmp_strategy = config_dict["fmp_strategy"]
+            if not isinstance(fmp_strategy, str):
+                errors.append("fmp_strategy must be a string")
+
         # Validate optional fields
         if "period" in config_dict and config_dict["period"] not in SUPPORTED_PERIODS:
             errors.append(f"Unsupported period: {config_dict['period']}")
@@ -327,6 +346,44 @@ class ScreenerConfigParser:
                     errors.append(f"Weight must be non-negative in technical criteria {i}")
             except (ValueError, TypeError):
                 errors.append(f"Weight must be a number in technical criteria {i}")
+
+        return errors
+
+    def _validate_fmp_criteria(self, fmp_criteria: Dict[str, Any]) -> List[str]:
+        """Validate FMP criteria."""
+        errors = []
+
+        if not isinstance(fmp_criteria, dict):
+            return ["fmp_criteria must be a dictionary"]
+
+        # Import FMP integration for validation
+        try:
+            from src.frontend.telegram.screener.fmp_integration import validate_fmp_criteria
+            is_valid, fmp_errors = validate_fmp_criteria(fmp_criteria)
+            if not is_valid:
+                errors.extend(fmp_errors)
+        except ImportError:
+            # Fallback validation if FMP integration is not available
+            supported_criteria = {
+                "marketCapMoreThan", "marketCapLowerThan",
+                "peRatioLessThan", "peRatioMoreThan",
+                "priceToBookRatioLessThan", "priceToBookRatioMoreThan",
+                "priceToSalesRatioLessThan", "priceToSalesRatioMoreThan",
+                "debtToEquityLessThan", "debtToEquityMoreThan",
+                "currentRatioMoreThan", "currentRatioLessThan",
+                "quickRatioMoreThan", "quickRatioLessThan",
+                "returnOnEquityMoreThan", "returnOnEquityLessThan",
+                "returnOnAssetsMoreThan", "returnOnAssetsLessThan",
+                "returnOnCapitalEmployedMoreThan", "returnOnCapitalEmployedLessThan",
+                "dividendYieldMoreThan", "dividendYieldLessThan",
+                "payoutRatioLessThan", "payoutRatioMoreThan",
+                "betaLessThan", "betaMoreThan",
+                "exchange", "limit"
+            }
+
+            invalid_criteria = set(fmp_criteria.keys()) - supported_criteria
+            if invalid_criteria:
+                errors.append(f"Unsupported FMP criteria: {', '.join(invalid_criteria)}")
 
         return errors
 
@@ -500,6 +557,81 @@ class ScreenerConfigParser:
                 "include_technical_analysis": True,
                 "include_fundamental_analysis": True,
                 "email": True
+            }, indent=2),
+
+            "fmp_enhanced_screener": json.dumps({
+                "screener_type": "hybrid",
+                "list_type": "us_medium_cap",
+                "fmp_criteria": {
+                    "marketCapMoreThan": 2000000000,
+                    "peRatioLessThan": 20,
+                    "returnOnEquityMoreThan": 0.12,
+                    "debtToEquityLessThan": 0.5,
+                    "limit": 50
+                },
+                "fundamental_criteria": [
+                    {
+                        "indicator": "PE",
+                        "operator": "max",
+                        "value": 15,
+                        "weight": 1.0,
+                        "required": True
+                    },
+                    {
+                        "indicator": "ROE",
+                        "operator": "min",
+                        "value": 15,
+                        "weight": 0.9,
+                        "required": False
+                    }
+                ],
+                "technical_criteria": [
+                    {
+                        "indicator": "RSI",
+                        "parameters": {"period": 14},
+                        "condition": {"operator": "<", "value": 70},
+                        "weight": 0.6,
+                        "required": False
+                    }
+                ],
+                "period": "6mo",
+                "interval": "1d",
+                "max_results": 15,
+                "min_score": 7.0,
+                "include_technical_analysis": True,
+                "include_fundamental_analysis": True,
+                "email": True
+            }, indent=2),
+
+            "fmp_strategy_screener": json.dumps({
+                "screener_type": "hybrid",
+                "list_type": "us_large_cap",
+                "fmp_strategy": "conservative_value",
+                "fundamental_criteria": [
+                    {
+                        "indicator": "PE",
+                        "operator": "max",
+                        "value": 12,
+                        "weight": 1.0,
+                        "required": True
+                    }
+                ],
+                "technical_criteria": [
+                    {
+                        "indicator": "BollingerBands",
+                        "parameters": {"period": 20, "deviation": 2},
+                        "condition": {"operator": "between_bands"},
+                        "weight": 0.5,
+                        "required": False
+                    }
+                ],
+                "period": "1y",
+                "interval": "1d",
+                "max_results": 10,
+                "min_score": 7.5,
+                "include_technical_analysis": True,
+                "include_fundamental_analysis": True,
+                "email": True
             }, indent=2)
         }
         return samples
@@ -549,7 +681,7 @@ def get_screener_summary(config_json: str) -> Dict[str, Any]:
     """Get a summary of the screener configuration."""
     try:
         config = parse_screener_config(config_json)
-        return {
+        summary = {
             "screener_type": config.screener_type,
             "list_type": config.list_type,
             "fundamental_criteria_count": len(config.fundamental_criteria) if config.fundamental_criteria else 0,
@@ -562,5 +694,15 @@ def get_screener_summary(config_json: str) -> Dict[str, Any]:
             "include_fundamental_analysis": config.include_fundamental_analysis,
             "email": config.email
         }
+
+        # Add FMP information if available
+        if config.fmp_criteria:
+            summary["fmp_criteria_count"] = len(config.fmp_criteria)
+            summary["fmp_criteria_keys"] = list(config.fmp_criteria.keys())
+
+        if config.fmp_strategy:
+            summary["fmp_strategy"] = config.fmp_strategy
+
+        return summary
     except Exception as e:
         return {"error": str(e)}

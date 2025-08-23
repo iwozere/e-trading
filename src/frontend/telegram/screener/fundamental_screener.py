@@ -386,11 +386,8 @@ class FundamentalScreener:
             )
 
         except Exception as e:
-            _logger.error(f"Error calculating DCF for {fundamentals.ticker}: {e}")
-            return DCFResult(
-                ticker=fundamentals.ticker,
-                error=str(e)
-            )
+            _logger.exception("Error calculating DCF for %s", fundamentals.ticker)
+            return None
 
     def _assess_dcf_confidence(self, fundamentals: Fundamentals) -> str:
         """Assess confidence level of DCF calculation."""
@@ -456,13 +453,13 @@ class FundamentalScreener:
             return report
 
         except Exception as e:
-            _logger.error(f"Error generating report: {e}")
+            _logger.exception("Error generating report")
             return ScreenerReport(
                 list_type=list_type,
-                total_tickers_processed=total_processed,
+                total_tickers_processed=0,
                 total_tickers_with_data=0,
                 top_results=[],
-                error=str(e)
+                error=f"Error generating report: {e}"
             )
 
     def _calculate_summary_stats(self, results: List[ScreenerResult]) -> Dict[str, Any]:
@@ -576,9 +573,9 @@ class FundamentalScreener:
 
         return message
 
-    def run_screener(self, list_type: str) -> ScreenerReport:
-        """Run complete fundamental screener workflow."""
-        _logger.info(f"Starting fundamental screener for {list_type}")
+    def run_screener(self, list_type: str, max_results: int = 10, min_score: float = 7.0) -> ScreenerReport:
+        """Run the fundamental screener for the specified list type."""
+        _logger.info("Starting fundamental screener for %s", list_type)
 
         try:
             # Load ticker list
@@ -589,19 +586,11 @@ class FundamentalScreener:
                     total_tickers_processed=0,
                     total_tickers_with_data=0,
                     top_results=[],
-                    error="No tickers found for the specified list type"
+                    error="No tickers found for screening"
                 )
 
             # Collect fundamental data
             fundamentals_data = self.collect_fundamentals(tickers)
-            if not fundamentals_data:
-                return ScreenerReport(
-                    list_type=list_type,
-                    total_tickers_processed=len(tickers),
-                    total_tickers_with_data=0,
-                    top_results=[],
-                    error="No fundamental data collected"
-                )
 
             # Apply screening criteria
             results = self.apply_screening_criteria(fundamentals_data)
@@ -609,17 +598,17 @@ class FundamentalScreener:
             # Generate report
             report = self.generate_report(list_type, results, len(tickers))
 
-            _logger.info(f"Screener completed successfully. Found {len(results)} undervalued stocks")
+            _logger.info("Screener completed successfully. Found %d undervalued stocks", len(results))
             return report
 
         except Exception as e:
-            _logger.error(f"Error running screener: {e}")
+            _logger.exception("Error running screener")
             return ScreenerReport(
                 list_type=list_type,
                 total_tickers_processed=0,
                 total_tickers_with_data=0,
                 top_results=[],
-                error=str(e)
+                error=f"Error running screener: {e}"
             )
 
 

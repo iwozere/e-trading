@@ -22,7 +22,12 @@ _logger = setup_logger(__name__)
 def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
     """
     Main business logic handler. Dispatches based on command and parameters.
-    Returns a dict with result/status/data for notification manager.
+
+    Args:
+        parsed: ParsedCommand object containing command and arguments
+
+    Returns:
+        Dict with result/status/data for notification manager
     """
     if parsed.command == "report":
         return handle_report(parsed)
@@ -81,7 +86,7 @@ def handle_help(parsed: ParsedCommand) -> Dict[str, Any]:
             "is_admin": is_admin
         }
     except Exception as e:
-        _logger.exception("Error generating help: ")
+        _logger.exception("Error generating help")
         return {"status": "error", "message": f"Error generating help: {str(e)}"}
 
 
@@ -143,7 +148,7 @@ def handle_request_approval(parsed: ParsedCommand) -> Dict[str, Any]:
             "notify_admins": True
         }
     except Exception as e:
-        _logger.exception("Error processing approval request: ")
+        _logger.exception("Error processing approval request")
         return {"status": "error", "message": f"Error processing approval request: {str(e)}"}
 
 def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
@@ -398,250 +403,288 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
             return {"status": "error", "message": f"Unknown admin command: {action}"}
 
     except Exception as e:
-        _logger.exception("Error in admin command: ")
-        return {"status": "error", "message": f"Error processing admin command: {str(e)}"}
+        _logger.exception("Error in admin command")
+        return {"status": "error", "message": f"Error in admin command: {str(e)}"}
 
-
-def handle_admin_users() -> Dict[str, Any]:
-    """List all registered users."""
+def handle_admin_list_users(parsed: ParsedCommand) -> Dict[str, Any]:
+    """List all users for admin review."""
     try:
-        users = db.list_users()
-        if not users:
-            return {"status": "ok", "title": "Users", "message": "No users registered."}
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
 
+        db.init_db()
+        users = db.get_all_users()
+
+        if not users:
+            return {"status": "ok", "message": "No users found"}
+
+        # Format user list
         user_list = []
         for user in users:
-            status = "✅ Verified" if user.get("verified") else "❌ Unverified"
-            admin = "👑 Admin" if user.get("is_admin") else "👤 User"
-            email = user.get("email", "(no email)")
-            user_list.append(f"{admin} {user['telegram_user_id']}: {email} - {status}")
+            status_text = "✅ Verified & Approved" if user.get("verified") and user.get("approved") else \
+                         "✅ Verified" if user.get("verified") else "❌ Not Verified"
+            user_list.append(f"• {user.get('email', 'N/A')} - {status_text}")
 
-        message = f"Total users: {len(users)}\n\n" + "\n".join(user_list)
-        return {"status": "ok", "title": "All Users", "message": message}
+        return {
+            "status": "ok",
+            "message": f"**User List**\n\n" + "\n".join(user_list),
+            "is_admin": True
+        }
 
     except Exception as e:
-        _logger.exception("Error listing users: ")
+        _logger.exception("Error listing users")
         return {"status": "error", "message": f"Error listing users: {str(e)}"}
 
-
-def handle_admin_listusers() -> Dict[str, Any]:
-    """List users in simple format."""
+def handle_admin_list_pending_approvals(parsed: ParsedCommand) -> Dict[str, Any]:
+    """List users pending approval."""
     try:
-        users = db.list_users()
-        if not users:
-            return {"status": "ok", "title": "Users", "message": "No users registered."}
-
-        user_list = []
-        for user in users:
-            email = user.get("email", "(no email)")
-            user_list.append(f"{user['telegram_user_id']} - {email}")
-
-        message = "\n".join(user_list)
-        return {"status": "ok", "title": "User List", "message": message}
-
-    except Exception as e:
-        _logger.exception("Error listing users: ")
-        return {"status": "error", "message": f"Error listing users: {str(e)}"}
-
-
-def handle_admin_resetemail(user_id: str) -> Dict[str, Any]:
-    """Reset a user's email."""
-    try:
-        db.init_db()
-        user_status = db.get_user_status(user_id)
-        if not user_status:
-            return {"status": "error", "message": f"User {user_id} not found."}
-
-        # Reset email and verification status
-        db.update_user_email(user_id, None)
-        db.update_user_verification(user_id, False)
-
-        return {
-            "status": "ok",
-            "title": "Email Reset",
-            "message": f"Email reset for user {user_id}. User must re-register their email."
-        }
-
-    except Exception as e:
-        _logger.exception("Error resetting email: ")
-        return {"status": "error", "message": f"Error resetting email: {str(e)}"}
-
-
-def handle_admin_verify(user_id: str) -> Dict[str, Any]:
-    """Manually verify a user's email."""
-    try:
-        db.init_db()
-        user_status = db.get_user_status(user_id)
-        if not user_status:
-            return {"status": "error", "message": f"User {user_id} not found."}
-
-        if not user_status.get("email"):
-            return {"status": "error", "message": f"User {user_id} has no email to verify."}
-
-        # Manually verify the user
-        db.update_user_verification(user_id, True)
-
-        return {
-            "status": "ok",
-            "title": "User Verified",
-            "message": f"User {user_id} ({user_status['email']}) has been manually verified."
-        }
-
-    except Exception as e:
-        _logger.exception("Error verifying user: ")
-        return {"status": "error", "message": f"Error verifying user: {str(e)}"}
-
-
-def handle_admin_setlimit(limit_type: str, limit_value: str, user_id: str = None) -> Dict[str, Any]:
-    """Set limits for alerts or schedules."""
-    try:
-        if limit_type not in ["alerts", "schedules"]:
-            return {"status": "error", "message": "Limit type must be 'alerts' or 'schedules'"}
-
-        try:
-            limit = int(limit_value)
-            if limit < 0:
-                raise ValueError("Limit must be non-negative")
-        except ValueError:
-            return {"status": "error", "message": "Limit value must be a non-negative integer"}
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
 
         db.init_db()
+        users = db.get_all_users()
 
-        if user_id:
-            # Set user-specific limit
-            user_status = db.get_user_status(user_id)
-            if not user_status:
-                return {"status": "error", "message": f"User {user_id} not found."}
-
-            if limit_type == "alerts":
-                db.set_user_max_alerts(user_id, limit)
-            else:
-                db.set_user_max_schedules(user_id, limit)
-
-            return {
-                "status": "ok",
-                "title": "Limit Set",
-                "message": f"Set max {limit_type} to {limit} for user {user_id}"
-            }
-        else:
-            # Set global default limit
-            db.set_global_setting(f"default_max_{limit_type}", str(limit))
-
-            return {
-                "status": "ok",
-                "title": "Global Limit Set",
-                "message": f"Set global default max {limit_type} to {limit}"
-            }
-
-    except Exception as e:
-        _logger.exception("Error setting limit: ")
-        return {"status": "error", "message": f"Error setting limit: {str(e)}"}
-
-
-def handle_admin_broadcast(message_text: str) -> Dict[str, Any]:
-    """Send broadcast message to all users."""
-    try:
-        db.init_db()
-        users = db.list_users()
-        if not users:
-            return {"status": "error", "message": "No users to broadcast to."}
-
-        # Store broadcast for processing by notification system
-        # This will be handled by the notification manager
-        return {
-            "status": "ok",
-            "title": "Broadcast Scheduled",
-            "message": f"Broadcast message scheduled for {len(users)} users.",
-            "broadcast": {
-                "message": message_text,
-                "user_count": len(users),
-                "users": [user["telegram_user_id"] for user in users]
-            }
-        }
-
-    except Exception as e:
-        _logger.exception("Error scheduling broadcast: ")
-        return {"status": "error", "message": f"Error scheduling broadcast: {str(e)}"}
-
-def handle_admin_approve(user_id: str) -> Dict[str, Any]:
-    """Approve a user for access to restricted features."""
-    try:
-        db.init_db()
-        user_status = db.get_user_status(user_id)
-
-        if not user_status:
-            return {"status": "error", "message": f"User {user_id} not found."}
-
-        if not user_status.get("verified", False):
-            return {"status": "error", "message": f"User {user_id} has not verified their email yet."}
-
-        if user_status.get("approved", False):
-            return {"status": "error", "message": f"User {user_id} is already approved."}
-
-        db.approve_user(user_id)
-
-        return {
-            "status": "ok",
-            "title": "User Approved",
-            "message": f"User {user_id} ({user_status.get('email', 'no email')}) has been approved for restricted features.",
-            "notify_user": {
-                "user_id": user_id,
-                "message": "Your account has been approved! You can now use all bot features including /report, /alerts, /schedules, and /language commands."
-            }
-        }
-
-    except Exception as e:
-        _logger.exception("Error approving user: ")
-        return {"status": "error", "message": f"Error approving user: {str(e)}"}
-
-def handle_admin_reject(user_id: str) -> Dict[str, Any]:
-    """Reject a user's approval request."""
-    try:
-        db.init_db()
-        user_status = db.get_user_status(user_id)
-
-        if not user_status:
-            return {"status": "error", "message": f"User {user_id} not found."}
-
-        if not user_status.get("verified", False):
-            return {"status": "error", "message": f"User {user_id} has not verified their email yet."}
-
-        if not user_status.get("approved", False):
-            return {"status": "error", "message": f"User {user_id} is not approved (no change needed)."}
-
-        db.reject_user(user_id)
-
-        return {
-            "status": "ok",
-            "title": "User Rejected",
-            "message": f"User {user_id} ({user_status.get('email', 'no email')}) has been rejected for restricted features.",
-            "notify_user": {
-                "user_id": user_id,
-                "message": "Your approval request has been rejected. Please contact an admin for more information."
-            }
-        }
-
-    except Exception as e:
-        _logger.exception("Error rejecting user: ")
-        return {"status": "error", "message": f"Error rejecting user: {str(e)}"}
-
-def handle_admin_pending() -> Dict[str, Any]:
-    """List users waiting for approval."""
-    try:
-        pending_users = db.get_pending_approvals()
+        # Filter for verified but not approved users
+        pending_users = [user for user in users if user.get("verified") and not user.get("approved")]
 
         if not pending_users:
-            return {"status": "ok", "title": "Pending Approvals", "message": "No users waiting for approval."}
+            return {"status": "ok", "message": "No users pending approval"}
 
+        # Format pending user list
         user_list = []
         for user in pending_users:
-            user_list.append(f"{user['telegram_user_id']} - {user['email']}")
+            user_list.append(f"• {user.get('email', 'N/A')} (ID: {user.get('telegram_user_id')})")
 
-        message = f"Users waiting for approval ({len(pending_users)}):\n\n" + "\n".join(user_list)
-        return {"status": "ok", "title": "Pending Approvals", "message": message}
+        return {
+            "status": "ok",
+            "message": f"**Users Pending Approval**\n\n" + "\n".join(user_list),
+            "is_admin": True
+        }
 
     except Exception as e:
-        _logger.exception("Error listing pending approvals: ")
+        _logger.exception("Error listing users")
+        return {"status": "error", "message": f"Error listing users: {str(e)}"}
+
+def handle_admin_reset_email(parsed: ParsedCommand) -> Dict[str, Any]:
+    """Reset user's email verification status."""
+    try:
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
+
+        user_id = parsed.args.get("user_id")
+        if not user_id:
+            return {"status": "error", "message": "No user_id provided"}
+
+        db.init_db()
+        success = db.reset_user_email_verification(user_id)
+
+        if success:
+            return {
+                "status": "ok",
+                "message": f"Email verification reset for user {user_id}",
+                "is_admin": True
+            }
+        else:
+            return {"status": "error", "message": f"Failed to reset email for user {user_id}"}
+
+    except Exception as e:
+        _logger.exception("Error resetting email")
+        return {"status": "error", "message": f"Error resetting email: {str(e)}"}
+
+def handle_admin_verify_user(parsed: ParsedCommand) -> Dict[str, Any]:
+    """Verify a user's email."""
+    try:
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
+
+        user_id = parsed.args.get("user_id")
+        if not user_id:
+            return {"status": "error", "message": "No user_id provided"}
+
+        db.init_db()
+        success = db.verify_user_email(user_id)
+
+        if success:
+            return {
+                "status": "ok",
+                "message": f"User {user_id} verified successfully",
+                "is_admin": True
+            }
+        else:
+            return {"status": "error", "message": f"Failed to verify user {user_id}"}
+
+    except Exception as e:
+        _logger.exception("Error verifying user")
+        return {"status": "error", "message": f"Error verifying user: {str(e)}"}
+
+def handle_admin_set_limit(parsed: ParsedCommand) -> Dict[str, Any]:
+    """Set user's daily request limit."""
+    try:
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
+
+        user_id = parsed.args.get("user_id")
+        limit = parsed.args.get("limit")
+
+        if not user_id or not limit:
+            return {"status": "error", "message": "Both user_id and limit are required"}
+
+        try:
+            limit = int(limit)
+        except ValueError:
+            return {"status": "error", "message": "Limit must be a number"}
+
+        db.init_db()
+        success = db.set_user_daily_limit(user_id, limit)
+
+        if success:
+            return {
+                "status": "ok",
+                "message": f"Daily limit set to {limit} for user {user_id}",
+                "is_admin": True
+            }
+        else:
+            return {"status": "error", "message": f"Failed to set limit for user {user_id}"}
+
+    except Exception as e:
+        _logger.exception("Error setting limit")
+        return {"status": "error", "message": f"Error setting limit: {str(e)}"}
+
+def handle_admin_schedule_broadcast(parsed: ParsedCommand) -> Dict[str, Any]:
+    """Schedule a broadcast message."""
+    try:
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
+
+        message = parsed.args.get("message")
+        scheduled_time = parsed.args.get("scheduled_time")
+
+        if not message or not scheduled_time:
+            return {"status": "error", "message": "Both message and scheduled_time are required"}
+
+        db.init_db()
+        success = db.schedule_broadcast(message, scheduled_time, telegram_user_id)
+
+        if success:
+            return {
+                "status": "ok",
+                "message": f"Broadcast scheduled for {scheduled_time}",
+                "is_admin": True
+            }
+        else:
+            return {"status": "error", "message": "Failed to schedule broadcast"}
+
+    except Exception as e:
+        _logger.exception("Error scheduling broadcast")
+        return {"status": "error", "message": f"Error scheduling broadcast: {str(e)}"}
+
+def handle_admin_approve_user(parsed: ParsedCommand) -> Dict[str, Any]:
+    """Approve a user for restricted features."""
+    try:
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
+
+        user_id = parsed.args.get("user_id")
+        if not user_id:
+            return {"status": "error", "message": "No user_id provided"}
+
+        db.init_db()
+        success = db.approve_user(user_id)
+
+        if success:
+            return {
+                "status": "ok",
+                "message": f"User {user_id} approved successfully",
+                "is_admin": True
+            }
+        else:
+            return {"status": "error", "message": f"Failed to approve user {user_id}"}
+
+    except Exception as e:
+        _logger.exception("Error approving user")
+        return {"status": "error", "message": f"Error approving user: {str(e)}"}
+
+def handle_admin_reject_user(parsed: ParsedCommand) -> Dict[str, Any]:
+    """Reject a user's approval request."""
+    try:
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
+
+        user_id = parsed.args.get("user_id")
+        if not user_id:
+            return {"status": "error", "message": "No user_id provided"}
+
+        db.init_db()
+        success = db.reject_user(user_id)
+
+        if success:
+            return {
+                "status": "ok",
+                "message": f"User {user_id} rejected",
+                "is_admin": True
+            }
+        else:
+            return {"status": "error", "message": f"Failed to reject user {user_id}"}
+
+    except Exception as e:
+        _logger.exception("Error rejecting user")
+        return {"status": "error", "message": f"Error rejecting user: {str(e)}"}
+
+def handle_admin_list_pending_approvals(parsed: ParsedCommand) -> Dict[str, Any]:
+    """List users pending approval."""
+    try:
+        # Check admin access
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        access_check = check_admin_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
+
+        db.init_db()
+        users = db.get_all_users()
+
+        # Filter for verified but not approved users
+        pending_users = [user for user in users if user.get("verified") and not user.get("approved")]
+
+        if not pending_users:
+            return {"status": "ok", "message": "No users pending approval"}
+
+        # Format pending user list
+        user_list = []
+        for user in pending_users:
+            user_list.append(f"• {user.get('email', 'N/A')} (ID: {user.get('telegram_user_id')})")
+
+        return {
+            "status": "ok",
+            "message": f"**Users Pending Approval**\n\n" + "\n".join(user_list),
+            "is_admin": True
+        }
+
+    except Exception as e:
+        _logger.exception("Error listing pending approvals")
         return {"status": "error", "message": f"Error listing pending approvals: {str(e)}"}
 
 
@@ -1109,7 +1152,7 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
                            "  Example: /schedules screener us_small_cap 09:00 -email\n"
                            "  Example: /schedules screener us_large_cap -indicators=PE,PB,ROE\n"
                            "/schedules enhanced_screener CONFIG_JSON - Schedule enhanced screener with JSON config\n"
-                           "  Example: /schedules enhanced_screener '{\"screener_type\":\"hybrid\",\"list_type\":\"us_medium_cap\",\"fundamental_criteria\":[{\"indicator\":\"PE\",\"operator\":\"max\",\"value\":15,\"weight\":1.0,\"required\":true}],\"technical_criteria\":[{\"indicator\":\"RSI\",\"parameters\":{\"period\":14},\"condition\":{\"operator\":\"<\",\"value\":70},\"weight\":0.6,\"required\":false}],\"max_results\":10,\"min_score\":7.0,\"email\":true}'\n"
+                           "  Example: /schedules enhanced_screener '{\"screener_type\":\"hybrid\",\"list_type\":\"us_medium_cap\",\"fmp_criteria\":{\"marketCapMoreThan\":2000000000,\"peRatioLessThan\":20,\"returnOnEquityMoreThan\":0.12,\"limit\":50},\"fundamental_criteria\":[{\"indicator\":\"PE\",\"operator\":\"max\",\"value\":15,\"weight\":1.0,\"required\":true}],\"technical_criteria\":[{\"indicator\":\"RSI\",\"parameters\":{\"period\":14},\"condition\":{\"operator\":\"<\",\"value\":70},\"weight\":0.6,\"required\":false}],\"max_results\":10,\"min_score\":7.0,\"email\":true}'\n"
                            "/schedules edit SCHEDULE_ID [TIME] [flags] - Edit schedule\n"
                            "/schedules delete SCHEDULE_ID - Delete schedule\n"
                            "/schedules pause SCHEDULE_ID - Pause schedule\n"
@@ -1117,7 +1160,9 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
                            "JSON Schedule Examples:\n"
                            "• Simple Report: {\"type\":\"report\",\"ticker\":\"AAPL\",\"scheduled_time\":\"09:00\",\"period\":\"1y\",\"interval\":\"1d\",\"email\":true}\n"
                            "• Advanced Report: {\"type\":\"report\",\"ticker\":\"TSLA\",\"scheduled_time\":\"16:30\",\"period\":\"6mo\",\"interval\":\"1h\",\"indicators\":\"RSI,MACD,BollingerBands\",\"email\":true}\n"
-                           "• Screener: {\"type\":\"screener\",\"list_type\":\"us_small_cap\",\"scheduled_time\":\"08:00\",\"period\":\"1y\",\"interval\":\"1d\",\"indicators\":\"PE,PB,ROE\",\"email\":true}")
+                           "• Screener: {\"type\":\"screener\",\"list_type\":\"us_small_cap\",\"scheduled_time\":\"08:00\",\"period\":\"1y\",\"interval\":\"1d\",\"indicators\":\"PE,PB,ROE\",\"email\":true}\n"
+                           "• FMP Enhanced Screener: {\"screener_type\":\"hybrid\",\"list_type\":\"us_medium_cap\",\"fmp_criteria\":{\"marketCapMoreThan\":2000000000,\"peRatioLessThan\":20,\"returnOnEquityMoreThan\":0.12,\"limit\":50},\"fundamental_criteria\":[{\"indicator\":\"PE\",\"operator\":\"max\",\"value\":15,\"weight\":1.0,\"required\":true}],\"max_results\":10,\"min_score\":7.0,\"email\":true}\n"
+                           "• FMP Strategy Screener: {\"screener_type\":\"hybrid\",\"list_type\":\"us_large_cap\",\"fmp_strategy\":\"conservative_value\",\"fundamental_criteria\":[{\"indicator\":\"ROE\",\"operator\":\"min\",\"value\":15,\"weight\":1.0,\"required\":true}],\"max_results\":15,\"min_score\":7.5,\"email\":true}")
             }
 
     except Exception as e:
@@ -1221,6 +1266,16 @@ def handle_schedules_enhanced_screener(telegram_user_id: str, config_json: str) 
         message = f"✅ Enhanced screener scheduled successfully!\n\n"
         message += f"📊 **Screener Type**: {screener_type.title()}\n"
         message += f"🔍 **List Type**: {list_type.replace('_', ' ').title()}\n"
+
+        # Add FMP information if available
+        fmp_criteria_count = summary.get("fmp_criteria_count", 0)
+        fmp_strategy = summary.get("fmp_strategy")
+
+        if fmp_criteria_count > 0:
+            message += f"🚀 **FMP Pre-filtering**: {fmp_criteria_count} criteria\n"
+        if fmp_strategy:
+            message += f"📋 **FMP Strategy**: {fmp_strategy}\n"
+
         message += f"📈 **Fundamental Criteria**: {fundamental_count} indicators\n"
         message += f"📊 **Technical Criteria**: {technical_count} indicators\n"
         message += f"🎯 **Max Results**: {max_results}\n"

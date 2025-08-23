@@ -10,8 +10,6 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime
-import logging
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -19,7 +17,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 import yfinance as yf
 import pandas as pd
-import numpy as np
 from src.model.telegram_bot import Fundamentals, ScreenerResult, DCFResult, ScreenerReport
 from src.util.tickers_list import (
     get_us_small_cap_tickers,
@@ -71,21 +68,31 @@ class EnhancedScreener:
             return []
 
     def run_enhanced_screener(self, config: ScreenerConfig) -> ScreenerReport:
-        """Run enhanced screener with combined fundamental and technical analysis."""
-        _logger.info(f"Starting enhanced screener for {config.list_type}")
+        """Run enhanced screener with FMP-based initial screening and combined fundamental/technical analysis."""
+        _logger.info("Starting enhanced screener for %s", config.list_type)
 
         try:
-            # Load ticker list
-            tickers = self.load_ticker_list(config.list_type)
+            # Stage 1: FMP Screening (Single API call for initial filtering)
+            fmp_tickers, fmp_results = self._run_fmp_screening(config)
+
+            if not fmp_tickers:
+                _logger.warning("FMP screening returned no tickers, falling back to traditional list loading")
+                # Fallback to traditional ticker list loading
+                tickers = self.load_ticker_list(config.list_type)
+            else:
+                _logger.info("FMP screening completed: %d tickers found", len(fmp_tickers))
+                tickers = fmp_tickers
+
             if not tickers:
                 return ScreenerReport(
                     list_type=config.list_type,
                     total_tickers_processed=0,
                     total_tickers_with_data=0,
                     top_results=[],
-                    error="No tickers found for the specified list type"
+                    error="No tickers found for screening"
                 )
 
+            # Stage 2: Enhanced Analysis (Only for FMP-filtered tickers)
             # Collect data based on screener type
             if config.screener_type in ["fundamental", "hybrid"]:
                 fundamentals_data = self.collect_fundamentals(tickers)
@@ -93,37 +100,91 @@ class EnhancedScreener:
                 fundamentals_data = {}
 
             if config.screener_type in ["technical", "hybrid"]:
-                technical_data = self.collect_technical_data(tickers, config.period, config.interval, config.provider)
+                technical_data = self.collect_technical_data(tickers, config.period, config.interval)
             else:
                 technical_data = {}
 
-            # Apply screening criteria
-            results = self.apply_enhanced_screening_criteria(
-                config, fundamentals_data, technical_data
+            # Stage 3: Apply screening criteria and generate results
+            results = self.apply_screening_criteria(
+                tickers, fundamentals_data, technical_data, config
             )
 
-            # Generate report
-            report = self.generate_enhanced_report(config, results, len(tickers))
+            # Stage 4: Generate comprehensive report
+            report = self.generate_enhanced_report(config, results, fmp_results)
 
-            _logger.info(f"Enhanced screener completed successfully. Found {len(results)} stocks")
+            _logger.info("Enhanced screener completed successfully. Found %d stocks from %d FMP-filtered tickers",
+                        len(results), len(tickers))
+
             return report
 
         except Exception as e:
-            _logger.error(f"Error running enhanced screener: {e}")
+            _logger.exception("Error running enhanced screener")
             return ScreenerReport(
                 list_type=config.list_type,
                 total_tickers_processed=0,
                 total_tickers_with_data=0,
                 top_results=[],
-                error=str(e)
+                error=f"Error running enhanced screener: {e}"
             )
 
+    def _run_fmp_screening(self, config: ScreenerConfig) -> Tuple[List[str], Dict[str, Any]]:
+        """Run FMP screening to get initial list of tickers."""
+        try:
+            from src.frontend.telegram.screener.fmp_integration import run_fmp_screening
+
+            # Get FMP criteria from config or use defaults
+            fmp_criteria = config.fmp_criteria or {}
+            fmp_strategy = config.fmp_strategy
+
+            # Run FMP screening
+            fmp_results = run_fmp_screening(fmp_criteria, fmp_strategy)
+
+            if fmp_results and 'fmp_results' in fmp_results:
+                ticker_list = [stock['symbol'] for stock in fmp_results['fmp_results']]
+                return ticker_list, fmp_results
+            else:
+                return [], {}
+
+        except Exception as e:
+            _logger.exception("Error in FMP screening")
+            return [], {}
+
     def collect_fundamentals(self, tickers: List[str]) -> Dict[str, Fundamentals]:
-        """Collect fundamental data for a list of tickers."""
+        """Collect fundamental data for a list of tickers using optimized batch operations."""
+        if not tickers:
+            return {}
+
+        _logger.info("Starting fundamental data collection for %d tickers", len(tickers))
+
+        try:
+            # Use optimized batch fundamentals download for maximum performance
+            from src.data.yahoo_data_downloader import YahooDataDownloader
+            downloader = YahooDataDownloader()
+
+            # Use the most optimized batch method that minimizes individual API calls
+            fundamentals_data = downloader.get_fundamentals_batch_optimized(tickers, include_financials=False)
+
+            # Filter out invalid data
+            valid_fundamentals = {}
+            for ticker, fundamentals in fundamentals_data.items():
+                if self._validate_fundamental_data(fundamentals):
+                    valid_fundamentals[ticker] = fundamentals
+                else:
+                    _logger.warning("Insufficient fundamental data for %s, skipping", ticker)
+
+            _logger.info("Fundamental data collection completed. %d/%d tickers processed successfully",
+                        len(valid_fundamentals), len(tickers))
+            return valid_fundamentals
+
+        except Exception as e:
+            _logger.error("Error in optimized batch fundamental collection: %s", str(e))
+            _logger.info("Falling back to regular batch fundamental collection")
+            return self._collect_fundamentals_individual(tickers)
+
+    def _collect_fundamentals_individual(self, tickers: List[str]) -> Dict[str, Fundamentals]:
+        """Fallback method for individual fundamental data collection."""
         fundamentals_data = {}
         total_tickers = len(tickers)
-
-        _logger.info("Starting fundamental data collection for %d tickers", total_tickers)
 
         for i, ticker in enumerate(tickers, 1):
             try:
@@ -145,16 +206,55 @@ class EnhancedScreener:
                 _logger.error("Error collecting fundamental data for %s: %s", ticker, e)
                 continue
 
-        _logger.info("Fundamental data collection completed. %d/%d tickers processed successfully",
-                    len(fundamentals_data), total_tickers)
         return fundamentals_data
 
     def collect_technical_data(self, tickers: List[str], period: str, interval: str, provider: str) -> Dict[str, Dict[str, Any]]:
-        """Collect technical data for a list of tickers."""
+        """Collect technical data for a list of tickers using batch operations."""
+        if not tickers:
+            return {}
+
+        _logger.info("Starting technical data collection for %d tickers", len(tickers))
+
+        try:
+            # Use batch OHLCV download for better performance
+            from src.data.yahoo_data_downloader import YahooDataDownloader
+            downloader = YahooDataDownloader()
+
+            # Calculate date range
+            from src.common import analyze_period_interval
+            start_date, end_date = analyze_period_interval(period, interval)
+
+            # Download batch OHLCV data
+            ohlcv_data = downloader.get_ohlcv_batch(tickers, interval, start_date, end_date)
+
+            # Calculate technical indicators for each ticker
+            technical_data = {}
+            for ticker, df in ohlcv_data.items():
+                try:
+                    if not df.empty:
+                        # Calculate technical indicators
+                        df_with_technicals, technicals = calculate_technicals_from_df(df)
+                        technical_data[ticker] = technicals
+                        _logger.debug("Calculated technical indicators for %s", ticker)
+                    else:
+                        _logger.warning("No OHLCV data for %s, skipping technical analysis", ticker)
+                except Exception as e:
+                    _logger.error("Error calculating technical indicators for %s: %s", ticker, e)
+                    continue
+
+            _logger.info("Technical data collection completed. %d/%d tickers processed successfully",
+                        len(technical_data), len(tickers))
+            return technical_data
+
+        except Exception as e:
+            _logger.error("Error in batch technical collection: %s", str(e))
+            _logger.info("Falling back to individual technical collection")
+            return self._collect_technical_data_individual(tickers, period, interval, provider)
+
+    def _collect_technical_data_individual(self, tickers: List[str], period: str, interval: str, provider: str) -> Dict[str, Dict[str, Any]]:
+        """Fallback method for individual technical data collection."""
         technical_data = {}
         total_tickers = len(tickers)
-
-        _logger.info("Starting technical data collection for %d tickers", total_tickers)
 
         for i, ticker in enumerate(tickers, 1):
             try:
@@ -163,21 +263,13 @@ class EnhancedScreener:
                 # Get OHLCV data
                 df = get_ohlcv(ticker, interval, period, provider)
 
-                if df is not None and not df.empty:
+                if not df.empty:
                     # Calculate technical indicators
                     df_with_technicals, technicals = calculate_technicals_from_df(df)
-
-                    if technicals:
-                        technical_data[ticker] = {
-                            'ohlcv': df_with_technicals,
-                            'technicals': technicals,
-                            'current_price': df['close'].iloc[-1] if not df.empty else None
-                        }
-                        _logger.info("Successfully collected technical data for %s", ticker)
-                    else:
-                        _logger.warning("No technical indicators calculated for %s", ticker)
+                    technical_data[ticker] = technicals
+                    _logger.debug("Calculated technical indicators for %s", ticker)
                 else:
-                    _logger.warning("No OHLCV data available for %s", ticker)
+                    _logger.warning("No OHLCV data for %s, skipping technical analysis", ticker)
 
                 # Rate limiting - sleep between requests
                 time.sleep(0.1)  # 100ms delay between requests
@@ -186,8 +278,6 @@ class EnhancedScreener:
                 _logger.error("Error collecting technical data for %s: %s", ticker, e)
                 continue
 
-        _logger.info("Technical data collection completed. %d/%d tickers processed successfully",
-                    len(technical_data), total_tickers)
         return technical_data
 
     def _get_ticker_fundamentals(self, ticker: str) -> Optional[Fundamentals]:
@@ -595,15 +685,23 @@ class EnhancedScreener:
 
     def generate_enhanced_report(self, config: ScreenerConfig,
                                results: List[ScreenerResult],
-                               total_tickers: int) -> ScreenerReport:
-        """Generate enhanced screener report."""
-        return ScreenerReport(
+                               total_tickers: int,
+                               fmp_results: Dict[str, Any] = None) -> ScreenerReport:
+        """Generate enhanced screener report with optional FMP information."""
+        # Add FMP information to the report if available
+        report = ScreenerReport(
             list_type=config.list_type,
             total_tickers_processed=total_tickers,
             total_tickers_with_data=len(results),
             top_results=results,
             error=None
         )
+
+        # Store FMP results in the report for later use
+        if fmp_results:
+            report.fmp_results = fmp_results
+
+        return report
 
     def format_enhanced_telegram_message(self, report: ScreenerReport, config: ScreenerConfig) -> str:
         """Format enhanced screener report for Telegram."""
@@ -616,6 +714,15 @@ class EnhancedScreener:
         message = f"📊 **Enhanced Screener Results**\n\n"
         message += f"🔍 **List Type**: {config.list_type.replace('_', ' ').title()}\n"
         message += f"📈 **Screener Type**: {config.screener_type.title()}\n"
+
+        # Add FMP information if available
+        if hasattr(report, 'fmp_results') and report.fmp_results:
+            fmp_criteria = report.fmp_results.get('fmp_criteria', {})
+            fmp_results = report.fmp_results.get('fmp_results', [])
+            message += f"🚀 **FMP Pre-filtered**: {len(fmp_results)} stocks\n"
+            if fmp_criteria:
+                message += f"🎯 **FMP Criteria**: {', '.join(fmp_criteria.keys())}\n"
+
         message += f"📊 **Processed**: {report.total_tickers_processed} tickers\n"
         message += f"✅ **Found**: {len(report.top_results)} matching stocks\n"
         message += f"🎯 **Min Score**: {config.min_score}/10\n\n"
