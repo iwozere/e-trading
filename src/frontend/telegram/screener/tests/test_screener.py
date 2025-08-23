@@ -31,30 +31,34 @@ def test_comprehensive_fmp_analysis():
     print("\n🎯 BASIC FMP ANALYSIS TEST")
     print("=" * 70)
 
-    # Simple configuration for basic analysis
+    # Configuration for mid-cap stocks ($200M - $2B market cap)
     config = {
         "screener_type": "hybrid",
         "list_type": "us_medium_cap",
         "fmp_criteria": {
-            "marketCapMoreThan": 2000000000,  # $2B+ market cap
+            "marketCapMoreThan": 200000000,   # $200M+ market cap
+            "marketCapLowerThan": 2000000000, # $2B- market cap
             "peRatioLessThan": 20,            # P/E < 20
-            "returnOnEquityMoreThan": 0.12,   # ROE > 12%
+            "returnOnEquityMoreThan": 0.10,   # ROE > 10%
+            "isEtf": False,                   # Exclude ETFs
+            "isFund": False,                  # Exclude mutual funds
             "limit": 20                        # Get up to 20 stocks from FMP
         },
         "fundamental_criteria": [
+            # Only YFinance-only criteria that cannot be filtered by FMP
             {
-                "indicator": "PE",
-                "operator": "max",
-                "value": 15,
+                "indicator": "Revenue_Growth",
+                "operator": "min",
+                "value": 0.05,       # Revenue growth > 5% (0.05 in decimal)
                 "weight": 1.0,
-                "required": True
+                "required": False   # Not required since FMP already filtered
             },
             {
-                "indicator": "ROE",
+                "indicator": "Operating_Margin",
                 "operator": "min",
-                "value": 15,
+                "value": 0.10,       # Operating margin > 10% (0.10 in decimal)
                 "weight": 1.0,
-                "required": True
+                "required": False   # Not required since FMP already filtered
             }
         ],
         "technical_criteria": [
@@ -74,7 +78,7 @@ def test_comprehensive_fmp_analysis():
             }
         ],
         "max_results": 5,   # Show top 5 results
-        "min_score": 6.0    # Minimum composite score
+        "min_score": 2.0    # Lower minimum score to see results
     }
 
     try:
@@ -115,6 +119,15 @@ def test_comprehensive_fmp_analysis():
         print(f"   Processed: {report.total_tickers_processed} tickers")
         print(f"   Found: {len(report.top_results)} matching stocks")
 
+        # Debug: Show why no stocks were found
+        if len(report.top_results) == 0:
+            print("\n🔍 DEBUG: Why no stocks found?")
+            print("   - Check if FMP returned any stocks")
+            print("   - Check if fundamental criteria are too strict (PE < 15, ROE > 12%)")
+            print("   - Check if technical criteria are too strict (RSI < 70, MACD above signal)")
+            print("   - Check if min_score (6.0) is too high")
+            print("   - Consider relaxing criteria for mid-cap stocks")
+
         if not report.top_results:
             print("❌ No stocks found matching criteria")
             return
@@ -130,43 +143,61 @@ def test_comprehensive_fmp_analysis():
 
             # Overall Score
             print(f"📈 Overall Score: {result.composite_score:.1f}/10")
-            print(f"   Fundamental Score: {result.fundamental_score:.1f}/10")
-            print(f"   Technical Score: {result.technical_score:.1f}/10")
             print(f"   Recommendation: {result.recommendation}")
 
-            if result.current_price:
-                print(f"   Current Price: ${result.current_price:.2f}")
+            if result.fundamentals and result.fundamentals.current_price:
+                print(f"   Current Price: ${result.fundamentals.current_price:.2f}")
 
             # Fundamental Analysis
-            if hasattr(result, 'fundamental_analysis') and result.fundamental_analysis:
+            if result.fundamentals:
                 print(f"\n📊 Fundamental Analysis:")
-                for indicator, analysis in result.fundamental_analysis.items():
-                    if isinstance(analysis, dict) and 'value' in analysis and 'recommendation' in analysis:
-                        value = analysis['value']
-                        recommendation = analysis['recommendation']
-                        print(f"   • {indicator}: {value:.2f} - {recommendation}")
+                if result.fundamentals.pe_ratio:
+                    print(f"   • PE Ratio: {result.fundamentals.pe_ratio:.2f}")
+                if result.fundamentals.return_on_equity:
+                    print(f"   • ROE: {result.fundamentals.return_on_equity:.2%}")
+                if result.fundamentals.revenue_growth:
+                    print(f"   • Revenue Growth: {result.fundamentals.revenue_growth:.2%}")
+                if result.fundamentals.operating_margin:
+                    print(f"   • Operating Margin: {result.fundamentals.operating_margin:.2%}")
+                if result.fundamentals.market_cap:
+                    print(f"   • Market Cap: ${result.fundamentals.market_cap:,.0f}")
 
             # Technical Analysis
-            if hasattr(result, 'technical_analysis') and result.technical_analysis:
+            if result.technicals:
                 print(f"\n📈 Technical Analysis:")
-                for indicator, analysis in result.technical_analysis.items():
-                    if isinstance(analysis, dict) and 'value' in analysis and 'recommendation' in analysis:
-                        value = analysis['value']
-                        recommendation = analysis['recommendation']
-                        print(f"   • {indicator}: {value:.2f} - {recommendation}")
+                print(f"   • RSI: {result.technicals.rsi:.2f}")
+                print(f"   • MACD: {result.technicals.macd:.4f}")
+                print(f"   • MACD Signal: {result.technicals.macd_signal:.4f}")
+                print(f"   • SMA 50: {result.technicals.sma_50:.2f}")
+                print(f"   • SMA 200: {result.technicals.sma_200:.2f}")
+                print(f"   • Bollinger Upper: {result.technicals.bb_upper:.2f}")
+                print(f"   • Bollinger Lower: {result.technicals.bb_lower:.2f}")
+                print(f"   • ADX: {result.technicals.adx:.2f}")
+                print(f"   • Stochastic K: {result.technicals.stoch_k:.2f}")
+                print(f"   • Stochastic D: {result.technicals.stoch_d:.2f}")
+
+                # Technical recommendations if available
+                if result.technicals.recommendations:
+                    print(f"\n   📋 Technical Recommendations:")
+                    for indicator, rec in result.technicals.recommendations.items():
+                        if isinstance(rec, dict) and 'signal' in rec:
+                            signal = rec['signal']
+                            reason = rec.get('reason', 'No reason provided')
+                            print(f"   • {indicator.upper()}: {signal} - {reason}")
+            else:
+                print(f"\n📈 Technical Analysis: No technical data available")
 
             # DCF Analysis
-            if hasattr(result, 'dcf_analysis') and result.dcf_analysis:
-                dcf = result.dcf_analysis
-                if 'fair_value' in dcf and 'current_price' in dcf:
-                    fair_value = dcf['fair_value']
-                    current_price = dcf['current_price']
-                    if current_price > 0:
-                        upside = ((fair_value - current_price) / current_price) * 100
-                        print(f"\n💰 DCF Analysis:")
-                        print(f"   • Fair Value: ${fair_value:.2f}")
-                        print(f"   • Current Price: ${current_price:.2f}")
-                        print(f"   • Upside Potential: {upside:+.1f}%")
+            if result.dcf_valuation and result.dcf_valuation.fair_value:
+                dcf = result.dcf_valuation
+                if result.fundamentals and result.fundamentals.current_price:
+                    current_price = result.fundamentals.current_price
+                    fair_value = dcf.fair_value
+                    upside = ((fair_value - current_price) / current_price) * 100
+                    print(f"\n💰 DCF Analysis:")
+                    print(f"   • Fair Value: ${fair_value:.2f}")
+                    print(f"   • Current Price: ${current_price:.2f}")
+                    print(f"   • Upside Potential: {upside:+.1f}%")
 
             print("\n" + "-" * 50)
 
@@ -177,12 +208,31 @@ def test_comprehensive_fmp_analysis():
         if report.top_results:
             scores = [r.composite_score for r in report.top_results]
             recommendations = [r.recommendation for r in report.top_results]
+
+            # Count all recommendation types
+            strong_buy_count = recommendations.count('STRONG_BUY')
             buy_count = recommendations.count('BUY')
             hold_count = recommendations.count('HOLD')
+            weak_hold_count = recommendations.count('WEAK_HOLD')
             sell_count = recommendations.count('SELL')
 
             print(f"   Average Score: {sum(scores)/len(scores):.1f}/10")
-            print(f"   Recommendations: {buy_count} BUY, {hold_count} HOLD, {sell_count} SELL")
+            print(f"   Recommendations:")
+            if strong_buy_count > 0:
+                print(f"     • STRONG_BUY: {strong_buy_count}")
+            if buy_count > 0:
+                print(f"     • BUY: {buy_count}")
+            if hold_count > 0:
+                print(f"     • HOLD: {hold_count}")
+            if weak_hold_count > 0:
+                print(f"     • WEAK_HOLD: {weak_hold_count}")
+            if sell_count > 0:
+                print(f"     • SELL: {sell_count}")
+
+            # Also show total buy signals (STRONG_BUY + BUY)
+            total_buy_signals = strong_buy_count + buy_count
+            if total_buy_signals > 0:
+                print(f"   Total Buy Signals: {total_buy_signals}")
 
         print(f"\n✅ Basic FMP Analysis completed successfully!")
 

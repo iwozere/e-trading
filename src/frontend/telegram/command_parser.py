@@ -156,6 +156,17 @@ COMMAND_SPECS = {
         },
         positional=["action", "params"]
     ),
+    "screener": CommandSpec(
+        parameters={
+            "email": bool,
+            "immediate": bool,
+        },
+        defaults={
+            "email": False,
+            "immediate": True,
+        },
+        positional=["config_json"]
+    ),
 }
 
 # For backward compatibility

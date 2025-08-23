@@ -112,6 +112,7 @@ class ScreenerResult:
     """Result of fundamental screening for a single ticker."""
     ticker: str
     fundamentals: Optional[Fundamentals] = None
+    technicals: Optional[Technicals] = None
     dcf_valuation: Optional[DCFResult] = None
     composite_score: Optional[float] = None
     screening_status: Optional[Dict[str, bool]] = None

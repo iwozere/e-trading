@@ -1083,6 +1083,15 @@ def help_page():
                 <li><code>/schedules add_json '{"type":"screener","list_type":"us_small_cap","scheduled_time":"08:00","period":"1y","interval":"1d","indicators":"PE,PB,ROE","email":true}'</code></li>
             </ul>
 
+            <h4>Report Schedules (Single/Multiple Tickers)</h4>
+            <p><code>/schedules add_json CONFIG_JSON</code></p>
+            <p><strong>Examples:</strong></p>
+            <ul>
+                <li><code>/schedules add_json '{"type":"report","ticker":"AAPL","scheduled_time":"09:00","period":"1y","interval":"1d","email":true}'</code></li>
+                <li><code>/schedules add_json '{"type":"report","tickers":["AAPL","MSFT"],"scheduled_time":"09:00","period":"1y","interval":"1d","indicators":"RSI,MACD","email":true}'</code></li>
+                <li><code>/schedules add_json '{"type":"report","tickers":["TSLA","NVDA","AMD"],"scheduled_time":"16:30","period":"6mo","interval":"1h","indicators":"RSI,MACD,BollingerBands","email":true}'</code></li>
+            </ul>
+
             <h4>Screener Schedules</h4>
             <p><code>/schedules screener LIST_TYPE [TIME] [flags]</code></p>
             <p><strong>Examples:</strong></p>
@@ -1101,6 +1110,34 @@ def help_page():
             </ul>
 
             <p><strong>Supported List Types:</strong> us_small_cap, us_medium_cap, us_large_cap, swiss_shares, custom_list</p>
+        </div>
+
+        <h3>🔍 Screener Commands</h3>
+        <div style="background: #e8f4fd; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+            <h4>Immediate Screener</h4>
+            <p><code>/screener JSON_CONFIG [-email]</code></p>
+            <p>Run enhanced screener immediately with JSON configuration for instant results.</p>
+            <p><strong>Examples:</strong></p>
+            <ul>
+                <li><code>/screener '{"screener_type":"hybrid","list_type":"us_medium_cap","fmp_criteria":{"marketCapMoreThan":200000000,"peRatioLessThan":20},"fundamental_criteria":[{"indicator":"Revenue_Growth","operator":"min","value":0.05}],"max_results":5,"min_score":2.0}'</code></li>
+                <li><code>/screener '{"screener_type":"fundamental","list_type":"us_small_cap","fmp_strategy":"conservative_value","max_results":10}' -email</code></li>
+            </ul>
+
+            <h4>Enhanced Screener Features</h4>
+            <ul>
+                <li><strong>FMP Integration:</strong> Pre-filter stocks using Financial Modeling Prep API</li>
+                <li><strong>Fundamental Analysis:</strong> PE, PB, ROE, ROA, Debt/Equity, Current Ratio, and more</li>
+                <li><strong>Technical Analysis:</strong> RSI, MACD, Bollinger Bands, SMAs, and other indicators</li>
+                <li><strong>DCF Valuation:</strong> Discounted Cash Flow analysis for fair value estimation</li>
+                <li><strong>Composite Scoring:</strong> Weighted scoring system with buy/sell/hold recommendations</li>
+            </ul>
+
+            <p><strong>Flags:</strong></p>
+            <ul>
+                <li><code>-email</code> - Send results to your registered email</li>
+            </ul>
+
+            <p><strong>JSON Configuration:</strong> Uses the same format as scheduled enhanced screeners. See the "Enhanced Screener with FMP Integration" section in the documentation for detailed examples.</p>
         </div>
 
         <h3>🔧 Utility Commands</h3>

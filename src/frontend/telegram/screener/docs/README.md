@@ -421,6 +421,7 @@ The `/alerts add_indicator` command supports advanced JSON configuration for com
 | `/schedules delete SCHEDULE_ID`         | Delete a scheduled report by ID.                          | `/schedules delete 1`         |
 | `/schedules pause SCHEDULE_ID`          | Pause a scheduled report.                                 | `/schedules pause 1`          |
 | `/schedules resume SCHEDULE_ID`         | Resume a paused scheduled report.                         | `/schedules resume 1`         |
+| `/schedules add_json CONFIG_JSON`       | Schedule with advanced JSON configuration (single/multiple tickers).| `/schedules add_json '{"type":"report","tickers":["AAPL","MSFT"],"scheduled_time":"09:00","period":"1y","interval":"1d","indicators":"RSI,MACD","email":true}'` |
 
 **Schedule Flags:**
 - `-email`: Send report to email.
@@ -430,8 +431,9 @@ The `/alerts add_indicator` command supports advanced JSON configuration for com
 - `-provider=...`: Data provider (e.g., yf for Yahoo, bnc for Binance).
 
 **JSON Configuration for Schedules:**
-The `/schedules add_json` command supports advanced JSON configuration for complex scheduling requirements:
+The `/schedules add_json` command supports advanced JSON configuration for complex scheduling requirements, including both single and multiple ticker reports:
 
+**Single Ticker Report:**
 ```json
 {
   "type": "report",
@@ -443,6 +445,31 @@ The `/schedules add_json` command supports advanced JSON configuration for compl
   "email": true
 }
 ```
+
+**Multiple Ticker Report:**
+```json
+{
+  "type": "report",
+  "tickers": ["AAPL", "MSFT", "GOOGL"],
+  "scheduled_time": "09:00",
+  "period": "1y",
+  "interval": "1d",
+  "indicators": "RSI,MACD,BollingerBands",
+  "provider": "yf",
+  "email": true
+}
+```
+
+**Supported JSON Fields for Report Schedules:**
+- `type`: "report" (required)
+- `ticker`: Single ticker symbol (use either `ticker` OR `tickers`, not both)
+- `tickers`: Array of ticker symbols (use either `ticker` OR `tickers`, not both)
+- `scheduled_time`: Time in HH:MM format (24h UTC) (required)
+- `period`: Data period ("1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max")
+- `interval`: Data interval ("1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo")
+- `indicators`: Comma-separated technical indicators or array
+- `provider`: Data provider ("yf", "alpha_vantage", "polygon")
+- `email`: Boolean to send to email
 
 **Supported JSON Fields:**
 - `type`: "report" or "screener"
@@ -456,7 +483,7 @@ The `/schedules add_json` command supports advanced JSON configuration for compl
 
 **Schedule Examples:**
 
-**Simple Report Schedule:**
+**Single Ticker Report Schedule:**
 ```json
 {
   "type": "report",
@@ -464,6 +491,19 @@ The `/schedules add_json` command supports advanced JSON configuration for compl
   "scheduled_time": "09:00",
   "period": "1y",
   "interval": "1d",
+  "email": true
+}
+```
+
+**Multiple Ticker Report Schedule:**
+```json
+{
+  "type": "report",
+  "tickers": ["AAPL", "MSFT", "GOOGL"],
+  "scheduled_time": "09:00",
+  "period": "1y",
+  "interval": "1d",
+  "indicators": "RSI,MACD,BollingerBands",
   "email": true
 }
 ```
@@ -1762,3 +1802,68 @@ When contributing to the screener module:
 - [CoinGecko Bot Guide](https://www.coingecko.com/learn/build-crypto-telegram-bot)
 - [Telegram Bot API](https://core.telegram.org/bots/api)
 - [Python Telegram Bot](https://github.com/python-telegram-bot/python-telegram-bot)
+
+### Enhanced Screener (Immediate)
+
+| Command                                 | Description                                               | Example Usage                  |
+|-----------------------------------------|-----------------------------------------------------------|-------------------------------|
+| `/screener JSON_CONFIG [-email]`        | Run enhanced screener immediately with JSON configuration.| `/screener '{"screener_type":"hybrid","list_type":"us_medium_cap","fmp_criteria":{"marketCapMoreThan":200000000,"peRatioLessThan":20},"fundamental_criteria":[{"indicator":"Revenue_Growth","operator":"min","value":0.05}],"max_results":5,"min_score":2.0}'` |
+|                                         |                                                           | `/screener '{"screener_type":"fundamental","list_type":"us_small_cap","fmp_strategy":"conservative_value","max_results":10}' -email` |
+
+**Supported Flags:**
+- `-email`: Send results to your registered email
+
+**JSON Configuration:**
+The `/screener` command uses the same JSON configuration format as `/schedules enhanced_screener`. See the "Enhanced Screener with FMP Integration" section below for detailed examples.
+
+### Fundamental Screener
+
+**Fundamental Screener Schedule:**
+```json
+{
+  "type": "screener",
+  "list_type": "us_small_cap",
+  "scheduled_time": "08:00",
+  "period": "1y",
+  "interval": "1d",
+  "indicators": "PE,PB,ROE",
+  "email": true
+}
+```
+
+**Report Schedule Examples:**
+
+**Basic Multi-Ticker Report:**
+```json
+{
+  "tickers": ["AAPL", "MSFT"],
+  "scheduled_time": "09:00",
+  "period": "1y",
+  "interval": "1d",
+  "email": true
+}
+```
+
+**Advanced Technical Report:**
+```json
+{
+  "tickers": ["TSLA", "NVDA"],
+  "scheduled_time": "16:30",
+  "period": "6mo",
+  "interval": "1h",
+  "indicators": "RSI,MACD,BollingerBands",
+  "email": true
+}
+```
+
+**Daily Market Update:**
+```json
+{
+  "tickers": ["SPY", "QQQ", "IWM"],
+  "scheduled_time": "08:00",
+  "period": "5d",
+  "interval": "1d",
+  "indicators": "RSI,SMA",
+  "email": false
+}
+```

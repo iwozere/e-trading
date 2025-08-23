@@ -86,7 +86,7 @@ async def process_report_notifications(result, notification_manager, message, us
                     )
                     _logger.info("Successfully sent Telegram notification for %s", report['ticker'])
             except Exception as e:
-                _logger.exception("Error sending notification for %s: ", report['ticker'])
+                _logger.exception("Error sending notification for %s", report['ticker'])
                 # Try fallback without attachment
                 try:
                     await notification_manager.channels["telegram"].send(
@@ -103,21 +103,34 @@ async def process_report_notifications(result, notification_manager, message, us
                     )
                     _logger.info("Successfully sent fallback Telegram notification for %s", report['ticker'])
                 except Exception as e2:
-                    _logger.exception("Error sending fallback notification for %s: ", report['ticker'])
+                    _logger.exception("Error sending fallback notification for %s", report['ticker'])
 
-            # Add a small delay between notifications to avoid rate limiting
-            if i < len(result["reports"]) - 1:  # Don't delay after the last notification
-                import asyncio
-                _logger.info("Waiting 500ms before next notification...")
-                await asyncio.sleep(0.5)  # 500ms delay between notifications
-                _logger.info("Delay completed, continuing with next notification")
 
-    _logger.info("Completed processing all %d reports", len(result["reports"]))
+def send_screener_email(email: str, report, config):
+    """Send screener results via email."""
+    try:
+        from src.frontend.telegram.screener.enhanced_screener import EnhancedScreener
 
-    # Wait a bit to ensure all notifications are processed
-    import asyncio
-    await asyncio.sleep(1.0)
-    _logger.info("Final wait completed, all notifications should be sent")
+        subject = f"Screener Results - {config.list_type.replace('_', ' ').title()}"
+
+        # Format email content using the enhanced screener's formatting
+        enhanced_screener = EnhancedScreener()
+        content = enhanced_screener.format_enhanced_telegram_message(report, config)
+
+        # Convert markdown to HTML for email
+        content_html = content.replace('**', '<strong>').replace('*', '<em>')
+        content_html = content_html.replace('\n', '<br>')
+
+        # Send email using existing email infrastructure
+        from src.notification.emailer import EmailNotifier
+        email_notifier = EmailNotifier()
+        email_notifier.send_email(email, subject, content_html)
+
+        _logger.info("Screener results sent via email to %s", email)
+
+    except Exception as e:
+        _logger.exception("Error sending screener email to %s", email)
+        raise
 
 async def process_report_command(message, telegram_user_id, args, notification_manager):
     try:
@@ -144,16 +157,11 @@ async def process_report_command(message, telegram_user_id, args, notification_m
                 email_receiver=user_email if "email" in channels else None
             )
     except Exception as e:
-        _logger.exception("Error in report command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Report Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+        _logger.exception("Error in report command")
+        return {
+            "status": "error",
+            "message": f"Error processing report command: {str(e)}"
+        }
 
 async def process_help_command(message, telegram_user_id, message_text=None, notification_manager=None):
     try:
@@ -203,16 +211,11 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
             )
 
     except Exception as e:
-        _logger.exception("Error in help command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Help Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+        _logger.exception("Error in help command")
+        return {
+            "status": "error",
+            "message": f"Error processing help command: {str(e)}"
+        }
 
 def get_comprehensive_help_content():
     """Get comprehensive help content for the bot."""
@@ -368,16 +371,11 @@ async def process_info_command(message, telegram_user_id, notification_manager):
             )
 
     except Exception as e:
-        _logger.exception("Error in info command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Info Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+        _logger.exception("Error in info command")
+        return {
+            "status": "error",
+            "message": f"Error processing info command: {str(e)}"
+        }
 
 async def process_register_command(message, telegram_user_id, args, notification_manager):
     try:
@@ -411,16 +409,11 @@ async def process_register_command(message, telegram_user_id, args, notification
             )
 
     except Exception as e:
-        _logger.exception("Error in register command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Register Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+        _logger.exception("Error in register command")
+        return {
+            "status": "error",
+            "message": f"Error processing register command: {str(e)}"
+        }
 
 async def process_verify_command(message, telegram_user_id, args, notification_manager):
     try:
@@ -682,33 +675,51 @@ async def process_feedback_command(message, telegram_user_id, args, notification
         )
 
 async def process_feature_command(message, telegram_user_id, args, notification_manager):
+    """Process /feature command"""
     try:
-        feature_text = args[1] if len(args) > 1 else None
-        parsed = ParsedCommand(command="feature", args={"telegram_user_id": telegram_user_id, "feature": feature_text})
+        # Parse command
+        parsed = parse_command(" ".join(args))
+        parsed.args["telegram_user_id"] = telegram_user_id
+
+        # Execute business logic
         result = handle_command(parsed)
-        channels = ["telegram"]
-        if result.get("email", False):
-            channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
-            title=result.get("title", "Feature Request"),
-            message=result.get("message", "No message"),
-            priority="NORMAL",
-            channels=channels,
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+
+        # Send response
+        if result["status"] == "ok":
+            await message.answer(result["message"])
+        else:
+            await message.answer(f"❌ {result['message']}")
+
     except Exception as e:
-        _logger.exception("Error in feature command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
-            title="Feature Command Error",
-            message="An error occurred while processing your request.",
-            priority="CRITICAL",
-            channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
-        )
+        _logger.exception("Error processing feature command")
+        await message.answer("❌ Error processing feature request. Please try again.")
+
+
+async def process_screener_command(message, telegram_user_id, args, notification_manager):
+    """Process /screener command"""
+    try:
+        # Parse command
+        parsed = parse_command(" ".join(args))
+        parsed.args["telegram_user_id"] = telegram_user_id
+
+        # Execute business logic
+        result = handle_command(parsed)
+
+        # Send response
+        if result["status"] == "success":
+            if "report" in result:
+                # Send formatted message to Telegram
+                await message.answer(result["message"], parse_mode='Markdown')
+            else:
+                # Email sent confirmation
+                await message.answer(result["message"])
+        else:
+            await message.answer(f"❌ {result['message']}")
+
+    except Exception as e:
+        _logger.exception("Error processing screener command")
+        await message.answer("❌ Error processing screener request. Please try again.")
+
 
 async def process_unknown_command(message, telegram_user_id, notification_manager, help_text):
     try:

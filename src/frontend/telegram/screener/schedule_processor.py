@@ -127,6 +127,8 @@ class ScheduleProcessor:
 
             if schedule_config == "enhanced_screener":
                 await self.execute_enhanced_screener_schedule(schedule)
+            elif schedule_config == "report":
+                await self.execute_json_report_schedule(schedule)
             elif schedule_type == "screener":
                 await self.execute_screener_schedule(schedule)
             else:
@@ -169,44 +171,6 @@ class ScheduleProcessor:
 
         except Exception as e:
             _logger.exception("Error executing report schedule %s", schedule.get("id"))
-            return
-
-    async def execute_screener_schedule(self, schedule: Dict[str, Any]):
-        """Execute a scheduled screener."""
-        try:
-            schedule_id = schedule["id"]
-            user_id = schedule["user_id"]
-            list_type = schedule.get("list_type", "us_medium_cap")
-            screener_type = schedule.get("screener_type", "fundamental")
-
-            _logger.info("Executing screener schedule %s for user %s, list %s", schedule_id, user_id, list_type)
-
-            # Import screener based on type
-            if screener_type == "fundamental":
-                from src.frontend.telegram.screener.fundamental_screener import FundamentalScreener
-                screener = FundamentalScreener()
-                report = screener.run_screener(list_type)
-            else:
-                _logger.error("Unsupported screener type %s for schedule %s", screener_type, schedule_id)
-                return
-
-            if report.error:
-                _logger.error("Screener failed for schedule %s: %s", schedule_id, report.error)
-                return
-
-            # Format screener report for Telegram
-            from src.frontend.telegram.screener.enhanced_screener import format_enhanced_telegram_message
-            message = format_enhanced_telegram_message(report)
-
-            # Send via HTTP API
-            if self.api_client:
-                await self.api_client.send_message_to_user(user_id, message)
-                _logger.info("Screener report sent successfully for schedule %s", schedule_id)
-            else:
-                _logger.warning("No API client available for schedule %s", schedule_id)
-
-        except Exception as e:
-            _logger.exception("Error executing screener schedule %s", schedule.get("id"))
             return
 
     async def execute_enhanced_screener_schedule(self, schedule: Dict[str, Any]):
@@ -252,6 +216,180 @@ class ScheduleProcessor:
 
         except Exception as e:
             _logger.exception("Error executing enhanced screener schedule %s", schedule.get("id"))
+            return
+
+
+async def execute_json_report_schedule(self, schedule: Dict[str, Any]):
+    """Execute a scheduled report with JSON configuration."""
+    try:
+        schedule_id = schedule["id"]
+        user_id = schedule["user_id"]
+        config_json = schedule.get("config_json")
+
+        if not config_json:
+            _logger.error("No config_json found for schedule %s", schedule_id)
+            return
+
+        _logger.info("Executing JSON report schedule %s for user %s", schedule_id, user_id)
+
+        # Parse JSON configuration
+        import json
+        try:
+            config = json.loads(config_json)
+        except json.JSONDecodeError as e:
+            _logger.error("Invalid JSON config for schedule %s: %s", schedule_id, e)
+            return
+
+        # Extract configuration - support both single ticker and multiple tickers
+        ticker = config.get("ticker")  # Single ticker
+        tickers = config.get("tickers", [])  # Multiple tickers
+
+        # Determine which tickers to process
+        if ticker and tickers:
+            _logger.error("Both 'ticker' and 'tickers' specified in config for schedule %s", schedule_id)
+            return
+        elif ticker:
+            tickers = [ticker]  # Convert single ticker to list
+        elif not tickers:
+            _logger.error("No tickers specified in config for schedule %s", schedule_id)
+            return
+
+        period = config.get("period", "2y")
+        interval = config.get("interval", "1d")
+        indicators = config.get("indicators", "")
+        provider = config.get("provider", "yf")
+        email = config.get("email", False)
+
+        # Generate reports for all tickers
+        all_reports = []
+        for ticker in tickers:
+            try:
+                # Create a ParsedCommand-like structure for the report
+                from src.frontend.telegram.command_parser import ParsedCommand
+                parsed = ParsedCommand(
+                    command="report",
+                    args={
+                        "telegram_user_id": user_id,
+                        "indicators": indicators,
+                        "period": period,
+                        "interval": interval,
+                        "provider": provider,
+                        "email": email
+                    },
+                    positionals=[ticker]
+                )
+
+                # Generate report
+                from src.frontend.telegram.screener.business_logic import handle_report
+                result = handle_report(parsed)
+
+                if result["status"] == "ok" and "data" in result:
+                    all_reports.append({
+                        "ticker": ticker,
+                        "data": result["data"],
+                        "message": result.get("message", "")
+                    })
+                else:
+                    _logger.warning("Failed to generate report for %s in schedule %s: %s",
+                                  ticker, schedule_id, result.get("message", "Unknown error"))
+
+            except Exception as e:
+                _logger.exception("Error generating report for %s in schedule %s", ticker, schedule_id)
+                continue
+
+        if not all_reports:
+            _logger.error("No reports generated for schedule %s", schedule_id)
+            return
+
+        # Format combined report message
+        message = f"📊 **Scheduled Report** - {len(all_reports)} tickers\n\n"
+
+        for report in all_reports:
+            ticker = report["ticker"]
+            data = report["data"]
+
+            # Format individual ticker report
+            ticker_message = f"**{ticker}**\n"
+
+            # Add price information
+            if "current_price" in data:
+                ticker_message += f"💰 Price: ${data['current_price']:.2f}\n"
+
+            # Add technical indicators if available
+            if "technicals" in data and data["technicals"]:
+                tech = data["technicals"]
+                if "rsi" in tech:
+                    ticker_message += f"📈 RSI: {tech['rsi']:.2f}\n"
+                if "macd" in tech:
+                    ticker_message += f"📊 MACD: {tech['macd']:.2f}\n"
+
+            # Add fundamental data if available
+            if "fundamentals" in data and data["fundamentals"]:
+                fund = data["fundamentals"]
+                if "pe_ratio" in fund:
+                    ticker_message += f"📊 P/E: {fund['pe_ratio']:.2f}\n"
+                if "market_cap" in fund:
+                    ticker_message += f"💼 Market Cap: ${fund['market_cap']/1e9:.2f}B\n"
+
+            message += ticker_message + "\n"
+
+        # Add configuration info
+        message += f"⏰ **Configuration:**\n"
+        message += f"• Period: {period}\n"
+        message += f"• Interval: {interval}\n"
+        if indicators:
+            message += f"• Indicators: {indicators}\n"
+        if email:
+            message += f"• Email: ✅\n"
+
+        # Send via HTTP API
+        if self.api_client:
+            await self.api_client.send_message_to_user(user_id, message)
+            _logger.info("JSON report sent successfully for schedule %s", schedule_id)
+        else:
+            _logger.warning("No API client available for schedule %s", schedule_id)
+
+    except Exception as e:
+        _logger.exception("Error executing JSON report schedule %s", schedule.get("id"))
+        return
+
+
+async def execute_screener_schedule(self, schedule: Dict[str, Any]):
+        """Execute a scheduled screener."""
+        try:
+            schedule_id = schedule["id"]
+            user_id = schedule["user_id"]
+            list_type = schedule.get("list_type", "us_medium_cap")
+            screener_type = schedule.get("screener_type", "fundamental")
+
+            _logger.info("Executing screener schedule %s for user %s, list %s", schedule_id, user_id, list_type)
+
+            # Import screener based on type
+            if screener_type == "fundamental":
+                from src.frontend.telegram.screener.fundamental_screener import FundamentalScreener
+                screener = FundamentalScreener()
+                report = screener.run_screener(list_type)
+            else:
+                _logger.error("Unsupported screener type %s for schedule %s", screener_type, schedule_id)
+                return
+
+            if report.error:
+                _logger.error("Screener failed for schedule %s: %s", schedule_id, report.error)
+                return
+
+            # Format screener report for Telegram
+            from src.frontend.telegram.screener.enhanced_screener import format_enhanced_telegram_message
+            message = format_enhanced_telegram_message(report)
+
+            # Send via HTTP API
+            if self.api_client:
+                await self.api_client.send_message_to_user(user_id, message)
+                _logger.info("Screener report sent successfully for schedule %s", schedule_id)
+            else:
+                _logger.warning("No API client available for schedule %s", schedule_id)
+
+        except Exception as e:
+            _logger.exception("Error executing screener schedule %s", schedule.get("id"))
             return
 
 

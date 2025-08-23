@@ -49,6 +49,8 @@ def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
         return handle_alerts(parsed)
     elif parsed.command == "schedules":
         return handle_schedules(parsed)
+    elif parsed.command == "screener":
+        return handle_screener(parsed)
     elif parsed.command == "feedback":
         return handle_feedback(parsed)
     elif parsed.command == "feature":
@@ -382,23 +384,54 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
             }
 
         if action == "users":
-            return handle_admin_users()
+            return handle_admin_list_users(parsed)
         elif action == "listusers":
-            return handle_admin_listusers()
+            return handle_admin_list_users(parsed)
         elif action == "resetemail" and len(params) >= 1:
-            return handle_admin_resetemail(params[0])
+            # Create a new parsed command with the user_id parameter
+            new_parsed = ParsedCommand(
+                command="admin",
+                args={"telegram_user_id": telegram_user_id, "user_id": params[0]},
+                positionals=[]
+            )
+            return handle_admin_reset_email(new_parsed)
         elif action == "verify" and len(params) >= 1:
-            return handle_admin_verify(params[0])
+            new_parsed = ParsedCommand(
+                command="admin",
+                args={"telegram_user_id": telegram_user_id, "user_id": params[0]},
+                positionals=[]
+            )
+            return handle_admin_verify_user(new_parsed)
         elif action == "approve" and len(params) >= 1:
-            return handle_admin_approve(params[0])
+            new_parsed = ParsedCommand(
+                command="admin",
+                args={"telegram_user_id": telegram_user_id, "user_id": params[0]},
+                positionals=[]
+            )
+            return handle_admin_approve_user(new_parsed)
         elif action == "reject" and len(params) >= 1:
-            return handle_admin_reject(params[0])
+            new_parsed = ParsedCommand(
+                command="admin",
+                args={"telegram_user_id": telegram_user_id, "user_id": params[0]},
+                positionals=[]
+            )
+            return handle_admin_reject_user(new_parsed)
         elif action == "pending":
-            return handle_admin_pending()
+            return handle_admin_list_pending_approvals(parsed)
         elif action == "setlimit" and len(params) >= 2:
-            return handle_admin_setlimit(params[0], params[1], params[2] if len(params) > 2 else None)
+            new_parsed = ParsedCommand(
+                command="admin",
+                args={"telegram_user_id": telegram_user_id, "user_id": params[2] if len(params) > 2 else None, "limit": params[1]},
+                positionals=[]
+            )
+            return handle_admin_set_limit(new_parsed)
         elif action == "broadcast" and len(params) >= 1:
-            return handle_admin_broadcast(" ".join(params))
+            new_parsed = ParsedCommand(
+                command="admin",
+                args={"telegram_user_id": telegram_user_id, "message": " ".join(params), "scheduled_time": "now"},
+                positionals=[]
+            )
+            return handle_admin_schedule_broadcast(new_parsed)
         else:
             return {"status": "error", "message": f"Unknown admin command: {action}"}
 
@@ -1158,7 +1191,8 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
                            "/schedules pause SCHEDULE_ID - Pause schedule\n"
                            "/schedules resume SCHEDULE_ID - Resume schedule\n\n"
                            "JSON Schedule Examples:\n"
-                           "• Simple Report: {\"type\":\"report\",\"ticker\":\"AAPL\",\"scheduled_time\":\"09:00\",\"period\":\"1y\",\"interval\":\"1d\",\"email\":true}\n"
+                           "• Single Report: {\"type\":\"report\",\"ticker\":\"AAPL\",\"scheduled_time\":\"09:00\",\"period\":\"1y\",\"interval\":\"1d\",\"email\":true}\n"
+                           "• Multiple Reports: {\"type\":\"report\",\"tickers\":[\"AAPL\",\"MSFT\",\"GOOGL\"],\"scheduled_time\":\"09:00\",\"period\":\"1y\",\"interval\":\"1d\",\"indicators\":\"RSI,MACD\",\"email\":true}\n"
                            "• Advanced Report: {\"type\":\"report\",\"ticker\":\"TSLA\",\"scheduled_time\":\"16:30\",\"period\":\"6mo\",\"interval\":\"1h\",\"indicators\":\"RSI,MACD,BollingerBands\",\"email\":true}\n"
                            "• Screener: {\"type\":\"screener\",\"list_type\":\"us_small_cap\",\"scheduled_time\":\"08:00\",\"period\":\"1y\",\"interval\":\"1d\",\"indicators\":\"PE,PB,ROE\",\"email\":true}\n"
                            "• FMP Enhanced Screener: {\"screener_type\":\"hybrid\",\"list_type\":\"us_medium_cap\",\"fmp_criteria\":{\"marketCapMoreThan\":2000000000,\"peRatioLessThan\":20,\"returnOnEquityMoreThan\":0.12,\"limit\":50},\"fundamental_criteria\":[{\"indicator\":\"PE\",\"operator\":\"max\",\"value\":15,\"weight\":1.0,\"required\":true}],\"max_results\":10,\"min_score\":7.0,\"email\":true}\n"
@@ -1171,16 +1205,57 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
 
 
 def handle_schedules_add_json(telegram_user_id: str, config_json: str) -> Dict[str, Any]:
-    """Add a new JSON-based schedule."""
+    """Add a new JSON-based schedule with support for multiple tickers and report configurations."""
     try:
-        # Validate JSON configuration
-        try:
-            from src.frontend.telegram.screener.schedule_config_parser import validate_schedule_config
-            is_valid, errors = validate_schedule_config(config_json)
-            if not is_valid:
-                return {"status": "error", "message": f"Invalid schedule configuration: {'; '.join(errors)}"}
-        except Exception as e:
-            return {"status": "error", "message": f"Error validating schedule configuration: {str(e)}"}
+        # Parse JSON to determine schedule type
+        import json
+        config = json.loads(config_json)
+        schedule_type = config.get("type", "report")
+
+        # Validate JSON configuration based on type
+        if schedule_type == "report":
+            # Validate report-specific fields
+            required_fields = ["scheduled_time"]
+            missing_fields = [field for field in required_fields if field not in config]
+            if missing_fields:
+                return {"status": "error", "message": f"Missing required fields: {', '.join(missing_fields)}"}
+
+            # Check for either 'ticker' (single) or 'tickers' (multiple)
+            ticker = config.get("ticker")
+            tickers = config.get("tickers", [])
+
+            if not ticker and not tickers:
+                return {"status": "error", "message": "Either 'ticker' (single) or 'tickers' (multiple) must be specified"}
+
+            if ticker and tickers:
+                return {"status": "error", "message": "Cannot specify both 'ticker' and 'tickers' - use one or the other"}
+
+            # Validate scheduled_time format (HH:MM)
+            scheduled_time = config.get("scheduled_time", "")
+            if not scheduled_time or not isinstance(scheduled_time, str):
+                return {"status": "error", "message": "scheduled_time must be a string in HH:MM format"}
+
+            # Basic time format validation
+            try:
+                hour, minute = scheduled_time.split(":")
+                if not (0 <= int(hour) <= 23 and 0 <= int(minute) <= 59):
+                    raise ValueError("Invalid time")
+            except:
+                return {"status": "error", "message": "scheduled_time must be in HH:MM format (24h)"}
+
+            # Validate tickers list if multiple
+            if tickers and not isinstance(tickers, list):
+                return {"status": "error", "message": "tickers must be a list"}
+
+        else:
+            # Use existing validation for other schedule types
+            try:
+                from src.frontend.telegram.screener.schedule_config_parser import validate_schedule_config
+                is_valid, errors = validate_schedule_config(config_json)
+                if not is_valid:
+                    return {"status": "error", "message": f"Invalid schedule configuration: {'; '.join(errors)}"}
+            except Exception as e:
+                return {"status": "error", "message": f"Error validating schedule configuration: {str(e)}"}
 
         # Check user limits
         user_status = db.get_user_status(telegram_user_id)
@@ -1193,29 +1268,69 @@ def handle_schedules_add_json(telegram_user_id: str, config_json: str) -> Dict[s
                 "message": f"Schedule limit reached ({max_schedules}). Delete some schedules first or contact admin."
             }
 
+        # Determine schedule_config based on type
+        if schedule_type == "report":
+            schedule_config = "report"
+        elif schedule_type == "enhanced_screener":
+            schedule_config = "enhanced_screener"
+        else:
+            schedule_config = "advanced"
+
         # Add the JSON schedule
         schedule_id = db.add_json_schedule(
             user_id=telegram_user_id,
             config_json=config_json,
-            schedule_config="advanced"
+            schedule_config=schedule_config
         )
 
-        # Get schedule summary for display
-        from src.frontend.telegram.screener.schedule_config_parser import get_schedule_summary
-        summary = get_schedule_summary(config_json)
+        # Create success message based on type
+        if schedule_type == "report":
+            # Handle report schedule
+            ticker = config.get("ticker")
+            tickers = config.get("tickers", [])
 
-        if "error" in summary:
-            return {"status": "error", "message": f"Error creating schedule: {summary['error']}"}
+            if ticker:
+                tickers_str = ticker
+                ticker_count = 1
+            else:
+                tickers_str = ", ".join(tickers)
+                ticker_count = len(tickers)
+
+            period = config.get("period", "2y")
+            interval = config.get("interval", "1d")
+            indicators = config.get("indicators", "")
+            email_flag = " (with email)" if config.get("email", False) else ""
+
+            message = f"Report schedule #{schedule_id} created for {tickers_str} at {scheduled_time} UTC{email_flag}"
+            if indicators:
+                message += f"\nIndicators: {indicators}"
+            message += f"\nPeriod: {period}, Interval: {interval}"
+
+            if ticker_count > 1:
+                message += f"\n📊 Multiple tickers: {ticker_count} reports will be generated"
+
+        else:
+            # Use existing summary for other types
+            from src.frontend.telegram.screener.schedule_config_parser import get_schedule_summary
+            summary = get_schedule_summary(config_json)
+
+            if "error" in summary:
+                return {"status": "error", "message": f"Error creating schedule: {summary['error']}"}
+
+            message = f"Schedule #{schedule_id} created: {summary.get('type', 'Unknown')} at {summary.get('scheduled_time', 'Unknown')}"
 
         return {
             "status": "ok",
             "title": "Schedule Added",
-            "message": f"Schedule #{schedule_id} created: {summary.get('type', 'Unknown')} at {summary.get('scheduled_time', 'Unknown')}"
+            "message": message
         }
 
+    except json.JSONDecodeError:
+        return {"status": "error", "message": "Invalid JSON format"}
     except Exception as e:
         _logger.exception("Error adding JSON schedule: ")
         return {"status": "error", "message": f"Error adding JSON schedule: {str(e)}"}
+
 
 
 def handle_schedules_enhanced_screener(telegram_user_id: str, config_json: str) -> Dict[str, Any]:
@@ -1862,3 +1977,69 @@ def handle_language(parsed: ParsedCommand) -> Dict[str, Any]:
     except Exception as e:
         _logger.exception("Error in language command: ")
         return {"status": "error", "message": f"Error updating language: {str(e)}"}
+
+
+def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
+    """
+    Business logic for /screener command for immediate screener execution.
+    """
+    try:
+        # Extract parameters
+        telegram_user_id = parsed.args.get("telegram_user_id")
+        config_json = parsed.args.get("config_json")
+        send_email = parsed.args.get("email", False)
+
+        if not telegram_user_id:
+            return {"status": "error", "message": "No telegram_user_id provided"}
+
+        if not config_json:
+            return {"status": "error", "message": "Please provide screener configuration. Usage: /screener <JSON_CONFIG> [-email]"}
+
+        # Check if user has approved access
+        access_check = check_approved_access(telegram_user_id)
+        if access_check["status"] != "ok":
+            return access_check
+
+        # Import screener modules
+        from src.frontend.telegram.screener.enhanced_screener import EnhancedScreener
+        from src.frontend.telegram.screener.screener_config_parser import (
+            parse_screener_config,
+            validate_screener_config
+        )
+
+        # Parse and validate screener configuration
+        is_valid, errors = validate_screener_config(config_json)
+        if not is_valid:
+            return {"status": "error", "message": f"Invalid screener configuration: {errors}"}
+
+        screener_config = parse_screener_config(config_json)
+
+        # Run enhanced screener immediately
+        enhanced_screener = EnhancedScreener()
+        report = enhanced_screener.run_enhanced_screener(screener_config)
+
+        if report.error:
+            return {"status": "error", "message": report.error}
+
+        # Format results
+        message = enhanced_screener.format_enhanced_telegram_message(report, screener_config)
+
+        # Send results
+        if send_email:
+            # Get user email
+            db.init_db()
+            user_status = db.get_user_status(telegram_user_id)
+            if not user_status or not user_status.get("email"):
+                return {"status": "error", "message": "Email not registered. Please use /register email@example.com first"}
+
+            # Send via email
+            from src.frontend.telegram.screener.notifications import send_screener_email
+            send_screener_email(user_status["email"], report, screener_config)
+            return {"status": "success", "message": "Screener results sent to your email"}
+        else:
+            # Return for Telegram display
+            return {"status": "success", "message": message, "report": report}
+
+    except Exception as e:
+        _logger.exception("Error in screener command")
+        return {"status": "error", "message": f"Screener error: {str(e)}"}

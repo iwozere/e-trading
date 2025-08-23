@@ -10,6 +10,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
+from datetime import datetime
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -68,20 +69,25 @@ class EnhancedScreener:
             return []
 
     def run_enhanced_screener(self, config: ScreenerConfig) -> ScreenerReport:
-        """Run enhanced screener with FMP-based initial screening and combined fundamental/technical analysis."""
-        _logger.info("Starting enhanced screener for %s", config.list_type)
-
+        """Run enhanced screener with FMP integration and comprehensive analysis."""
         try:
-            # Stage 1: FMP Screening (Single API call for initial filtering)
-            fmp_tickers, fmp_results = self._run_fmp_screening(config)
+            _logger.info("Starting enhanced screener for %s", config.list_type)
 
-            if not fmp_tickers:
-                _logger.warning("FMP screening returned no tickers, falling back to traditional list loading")
-                # Fallback to traditional ticker list loading
-                tickers = self.load_ticker_list(config.list_type)
+            # Stage 1: FMP Pre-filtering (if FMP criteria provided)
+            tickers = []
+            fmp_results = {}
+
+            if config.fmp_criteria or config.fmp_strategy:
+                _logger.info("Running FMP pre-filtering")
+                tickers, fmp_results = self._run_fmp_screening(config)
+
+                if not tickers:
+                    _logger.warning("FMP screening returned no results, falling back to traditional screening")
+                    tickers = self._load_ticker_list(config.list_type)
+                    fmp_results = {}
             else:
-                _logger.info("FMP screening completed: %d tickers found", len(fmp_tickers))
-                tickers = fmp_tickers
+                # Traditional screening without FMP
+                tickers = self._load_ticker_list(config.list_type)
 
             if not tickers:
                 return ScreenerReport(
@@ -93,20 +99,22 @@ class EnhancedScreener:
                 )
 
             # Stage 2: Enhanced Analysis (Only for FMP-filtered tickers)
-            # Collect data based on screener type
+            # Always collect detailed fundamentals from YFinance using optimized batch operations
             if config.screener_type in ["fundamental", "hybrid"]:
+                # Use YFinance's optimized batch download for all tickers (FMP-filtered or traditional)
                 fundamentals_data = self.collect_fundamentals(tickers)
+                _logger.info("Collected detailed fundamental data from YFinance for %d tickers", len(fundamentals_data))
             else:
                 fundamentals_data = {}
 
             if config.screener_type in ["technical", "hybrid"]:
-                technical_data = self.collect_technical_data(tickers, config.period, config.interval)
+                technical_data = self.collect_technical_data(tickers, config.period, config.interval, "yf")
             else:
                 technical_data = {}
 
             # Stage 3: Apply screening criteria and generate results
-            results = self.apply_screening_criteria(
-                tickers, fundamentals_data, technical_data, config
+            results = self.apply_enhanced_screening_criteria(
+                config, fundamentals_data, technical_data
             )
 
             # Stage 4: Generate comprehensive report
@@ -132,18 +140,18 @@ class EnhancedScreener:
         try:
             from src.frontend.telegram.screener.fmp_integration import run_fmp_screening
 
-            # Get FMP criteria from config or use defaults
-            fmp_criteria = config.fmp_criteria or {}
-            fmp_strategy = config.fmp_strategy
+            # Convert ScreenerConfig to dictionary for FMP integration
+            screener_config = {
+                "screener_type": config.screener_type,
+                "list_type": config.list_type,
+                "fmp_criteria": getattr(config, 'fmp_criteria', None),
+                "fmp_strategy": getattr(config, 'fmp_strategy', None)
+            }
 
             # Run FMP screening
-            fmp_results = run_fmp_screening(fmp_criteria, fmp_strategy)
+            ticker_list, fmp_results = run_fmp_screening(screener_config)
 
-            if fmp_results and 'fmp_results' in fmp_results:
-                ticker_list = [stock['symbol'] for stock in fmp_results['fmp_results']]
-                return ticker_list, fmp_results
-            else:
-                return [], {}
+            return ticker_list, fmp_results
 
         except Exception as e:
             _logger.exception("Error in FMP screening")
@@ -345,15 +353,23 @@ class EnhancedScreener:
         """Apply enhanced screening criteria combining fundamental and technical analysis."""
         results = []
 
-        # Get all tickers that have data
-        all_tickers = set()
+        # For fundamental/hybrid screening: use fundamental data for filtering
+        # Technical data is only used for additional info when available
         if config.screener_type in ["fundamental", "hybrid"]:
-            all_tickers.update(fundamentals_data.keys())
-        if config.screener_type in ["technical", "hybrid"]:
-            all_tickers.update(technical_data.keys())
+            all_tickers = set(fundamentals_data.keys())
+        elif config.screener_type == "technical":
+            all_tickers = set(technical_data.keys())
+        else:
+            all_tickers = set()
+
+        _logger.info("Starting criteria evaluation for %d tickers", len(all_tickers))
+        _logger.info("Fundamental data available for: %s", list(fundamentals_data.keys()))
+        _logger.info("Technical data available for: %s", list(technical_data.keys()))
 
         for ticker in all_tickers:
             try:
+                _logger.debug("Processing ticker: %s", ticker)
+
                 # Calculate fundamental score
                 fundamental_score = 0.0
                 fundamental_analysis = {}
@@ -362,8 +378,9 @@ class EnhancedScreener:
                     fundamental_score, fundamental_analysis = self._calculate_fundamental_score(
                         config.fundamental_criteria, fundamentals_data[ticker]
                     )
+                    _logger.debug("Ticker %s - Fundamental score: %.2f", ticker, fundamental_score)
 
-                # Calculate technical score
+                # Calculate technical score (only if data available)
                 technical_score = 0.0
                 technical_analysis = {}
 
@@ -371,19 +388,24 @@ class EnhancedScreener:
                     technical_score, technical_analysis = self._calculate_technical_score(
                         config.technical_criteria, technical_data[ticker]
                     )
+                    _logger.debug("Ticker %s - Technical score: %.2f", ticker, technical_score)
 
                 # Calculate composite score
                 composite_score = self._calculate_composite_score(
                     config, fundamental_score, technical_score
                 )
+                _logger.debug("Ticker %s - Composite score: %.2f (min required: %.2f)",
+                            ticker, composite_score, config.min_score)
 
                 # Check if meets minimum score requirement
                 if composite_score >= config.min_score:
+                    _logger.info("Ticker %s PASSED - Score: %.2f", ticker, composite_score)
+
                     # Get current price
                     current_price = None
-                    if ticker in technical_data:
-                        current_price = technical_data[ticker].get('current_price')
-                    elif ticker in fundamentals_data:
+                    if ticker in fundamentals_data:
+                        current_price = fundamentals_data[ticker].current_price
+                    elif ticker in technical_data:
                         # Try to get price from yfinance
                         try:
                             stock = yf.Ticker(ticker)
@@ -394,17 +416,17 @@ class EnhancedScreener:
                     # Create screener result
                     result = ScreenerResult(
                         ticker=ticker,
-                        current_price=current_price,
-                        fundamental_score=fundamental_score,
-                        technical_score=technical_score,
+                        fundamentals=fundamentals_data.get(ticker),
+                        technicals=technical_data.get(ticker) if ticker in technical_data else None,
                         composite_score=composite_score,
-                        fundamental_analysis=fundamental_analysis,
-                        technical_analysis=technical_analysis,
-                        recommendation=self._get_recommendation(composite_score),
-                        dcf_valuation=self._calculate_dcf_valuation(fundamentals_data.get(ticker))
+                        dcf_valuation=self._calculate_dcf_valuation(fundamentals_data.get(ticker)),
+                        recommendation=self._get_recommendation(composite_score)
                     )
 
                     results.append(result)
+                else:
+                    _logger.debug("Ticker %s FAILED - Score: %.2f < %.2f",
+                                ticker, composite_score, config.min_score)
 
             except Exception as e:
                 _logger.error("Error processing ticker %s: %s", ticker, e)
@@ -412,6 +434,7 @@ class EnhancedScreener:
 
         # Sort by composite score (descending) and limit results
         results.sort(key=lambda x: x.composite_score, reverse=True)
+        _logger.info("Final results: %d stocks passed criteria", len(results))
         return results[:config.max_results]
 
     def _calculate_fundamental_score(self, criteria: List[FundamentalCriteria],
@@ -427,6 +450,9 @@ class EnhancedScreener:
         for criterion in criteria:
             indicator_value = self._get_fundamental_value(fundamentals, criterion.indicator)
 
+            _logger.debug("Evaluating %s: value=%.2f, criterion=%s",
+                         criterion.indicator, indicator_value, criterion)
+
             if indicator_value is not None and not pd.isna(indicator_value):
                 score = self._evaluate_fundamental_criterion(criterion, indicator_value)
                 weighted_score = score * criterion.weight
@@ -440,12 +466,20 @@ class EnhancedScreener:
                     'weighted_score': weighted_score,
                     'criterion': criterion
                 }
+
+                _logger.debug("  %s: value=%.2f, score=%.2f, weighted=%.2f",
+                             criterion.indicator, indicator_value, score, weighted_score)
             elif criterion.required:
                 # If required criterion is missing, return 0 score
+                _logger.debug("  %s: MISSING REQUIRED VALUE - returning 0 score", criterion.indicator)
                 return 0.0, {}
+            else:
+                _logger.debug("  %s: MISSING VALUE (not required) - skipping", criterion.indicator)
 
         # Normalize score to 0-10 scale
         final_score = (total_score / total_weight * 10) if total_weight > 0 else 0.0
+        _logger.debug("Final fundamental score: %.2f (total=%.2f, weight=%.2f)",
+                     final_score, total_score, total_weight)
         return final_score, analysis
 
     def _get_fundamental_value(self, fundamentals: Fundamentals, indicator: str) -> Optional[float]:
@@ -539,20 +573,20 @@ class EnhancedScreener:
                                     technical_data: Dict[str, Any]) -> float:
         """Evaluate a technical criterion and return a score (0-1)."""
         try:
-            technicals = technical_data.get('technicals', {})
-            indicator_data = technicals.get(criterion.indicator)
+            # technical_data is a Technicals object, not a dictionary
+            technicals = technical_data
 
-            if indicator_data is None:
+            # Get the indicator value from the Technicals object
+            indicator_name = criterion.indicator.lower()
+
+            if not hasattr(technicals, indicator_name):
+                _logger.warning("Indicator %s not found in technicals data", indicator_name)
                 return 0.0
 
-            # Get the latest value
-            if isinstance(indicator_data, pd.Series):
-                current_value = indicator_data.iloc[-1]
-            elif isinstance(indicator_data, dict):
-                # For indicators that return multiple values (like Bollinger Bands)
-                current_value = indicator_data
-            else:
-                current_value = indicator_data
+            current_value = getattr(technicals, indicator_name)
+
+            if current_value is None or pd.isna(current_value):
+                return 0.0
 
             # Evaluate condition
             condition = criterion.condition
@@ -574,29 +608,36 @@ class EnhancedScreener:
 
             elif operator == "above":
                 # For moving averages, check if price is above MA
-                if isinstance(current_value, dict) and 'close' in technical_data.get('ohlcv', {}):
-                    close_price = technical_data['ohlcv']['close'].iloc[-1]
-                    return 1.0 if close_price > current_value else 0.0
+                # We need to get the current price from OHLCV data
+                # For now, we'll use a simple comparison
+                return 1.0 if current_value > 0 else 0.0
+
+            elif operator == "above_signal":
+                # For MACD, check if MACD is above signal line
+                if indicator_name == "macd" and hasattr(technicals, "macd_signal"):
+                    return 1.0 if current_value > technicals.macd_signal else 0.0
+                return 0.0
 
             elif operator == "below_lower_band":
                 # For Bollinger Bands
-                if isinstance(current_value, dict) and 'lower' in current_value:
-                    close_price = technical_data['ohlcv']['close'].iloc[-1]
-                    return 1.0 if close_price < current_value['lower'].iloc[-1] else 0.0
+                if indicator_name == "bb_lower" and hasattr(technicals, "bb_upper"):
+                    # We need current price to compare with lower band
+                    # For now, return 0.0 as we don't have current price in this context
+                    return 0.0
 
             elif operator == "not_above_upper_band":
                 # For Bollinger Bands
-                if isinstance(current_value, dict) and 'upper' in current_value:
-                    close_price = technical_data['ohlcv']['close'].iloc[-1]
-                    return 1.0 if close_price <= current_value['upper'].iloc[-1] else 0.0
+                if indicator_name == "bb_upper":
+                    # We need current price to compare with upper band
+                    # For now, return 0.0 as we don't have current price in this context
+                    return 0.0
 
             elif operator == "between_bands":
                 # For Bollinger Bands
-                if isinstance(current_value, dict) and 'upper' in current_value and 'lower' in current_value:
-                    close_price = technical_data['ohlcv']['close'].iloc[-1]
-                    upper = current_value['upper'].iloc[-1]
-                    lower = current_value['lower'].iloc[-1]
-                    return 1.0 if lower <= close_price <= upper else 0.0
+                if hasattr(technicals, "bb_upper") and hasattr(technicals, "bb_lower"):
+                    # We need current price to compare with bands
+                    # For now, return 0.0 as we don't have current price in this context
+                    return 0.0
 
         except Exception as e:
             _logger.error("Error evaluating technical criterion %s: %s", criterion.indicator, e)
@@ -644,12 +685,15 @@ class EnhancedScreener:
     def _calculate_dcf_valuation(self, fundamentals: Optional[Fundamentals]) -> Optional[DCFResult]:
         """Calculate DCF valuation if fundamental data is available."""
         if not fundamentals:
+            _logger.debug("DCF: No fundamentals data available")
             return None
 
         try:
             # Simple DCF calculation (can be enhanced)
             free_cash_flow = fundamentals.free_cash_flow
             if free_cash_flow is None or free_cash_flow <= 0:
+                _logger.debug("DCF for %s: Free cash flow missing or <= 0 (value: %s)",
+                            fundamentals.ticker, free_cash_flow)
                 return None
 
             # Assume 5% growth rate and 10% discount rate
@@ -663,23 +707,37 @@ class EnhancedScreener:
             present_value = terminal_value / ((1 + discount_rate) ** 5)
 
             # Fair value per share (assuming market cap is available)
-            if fundamentals.market_cap:
-                shares_outstanding = fundamentals.market_cap / fundamentals.current_price if fundamentals.current_price else None
-                if shares_outstanding:
-                    fair_value_per_share = present_value / shares_outstanding
+            if not fundamentals.market_cap:
+                _logger.debug("DCF for %s: Market cap missing", fundamentals.ticker)
+                return None
 
-                    return DCFResult(
-                        fair_value=fair_value_per_share,
-                        upside_potential=((fair_value_per_share - fundamentals.current_price) / fundamentals.current_price * 100) if fundamentals.current_price else None,
-                        assumptions={
-                            'growth_rate': growth_rate,
-                            'discount_rate': discount_rate,
-                            'free_cash_flow': free_cash_flow
-                        }
-                    )
+            if not fundamentals.current_price:
+                _logger.debug("DCF for %s: Current price missing", fundamentals.ticker)
+                return None
+
+            shares_outstanding = fundamentals.market_cap / fundamentals.current_price
+            if shares_outstanding <= 0:
+                _logger.debug("DCF for %s: Invalid shares outstanding calculation (market_cap: %s, current_price: %s)",
+                            fundamentals.ticker, fundamentals.market_cap, fundamentals.current_price)
+                return None
+
+            fair_value_per_share = present_value / shares_outstanding
+
+            _logger.debug("DCF for %s: Successfully calculated (FCF: %s, Fair Value: %s)",
+                        fundamentals.ticker, free_cash_flow, fair_value_per_share)
+
+            return DCFResult(
+                ticker=fundamentals.ticker,
+                fair_value=fair_value_per_share,
+                assumptions={
+                    'growth_rate': growth_rate,
+                    'discount_rate': discount_rate,
+                    'free_cash_flow': free_cash_flow
+                }
+            )
 
         except Exception as e:
-            _logger.error("Error calculating DCF valuation: %s", e)
+            _logger.error("Error calculating DCF valuation for %s: %s", fundamentals.ticker, e)
 
         return None
 
@@ -779,6 +837,94 @@ class EnhancedScreener:
         message += f"🎯 Max Results: {config.max_results}\n"
 
         return message
+
+    def _convert_fmp_to_fundamentals(self, fmp_results: List[Dict[str, Any]]) -> Dict[str, Fundamentals]:
+        """Convert FMP stock screener results to Fundamentals objects with basic data only."""
+        fundamentals_data = {}
+
+        for stock in fmp_results:
+            try:
+                ticker = stock.get('symbol', '').upper()
+                if not ticker:
+                    continue
+
+                # FMP stock screener only provides basic data, not comprehensive fundamentals
+                # We'll use this for initial filtering but need YFinance for detailed analysis
+                fundamentals = Fundamentals(
+                    ticker=ticker,
+                    company_name=stock.get('companyName', 'Unknown'),
+                    current_price=stock.get('price', 0.0),
+                    market_cap=stock.get('marketCap', 0.0),
+                    beta=stock.get('beta', 0.0),
+                    sector=stock.get('sector', 'Unknown'),
+                    industry=stock.get('industry', 'Unknown'),
+                    country=stock.get('country', 'Unknown'),
+                    exchange=stock.get('exchange', 'Unknown'),
+                    # Calculate dividend yield from lastAnnualDividend and price
+                    dividend_yield=(stock.get('lastAnnualDividend', 0.0) / stock.get('price', 1.0)) if stock.get('price', 0) > 0 else 0.0,
+                    # Set other fields to None as FMP doesn't provide them
+                    pe_ratio=None,
+                    forward_pe=None,
+                    earnings_per_share=None,
+                    price_to_book=None,
+                    return_on_equity=None,
+                    return_on_assets=None,
+                    debt_to_equity=None,
+                    current_ratio=None,
+                    quick_ratio=None,
+                    revenue=None,
+                    revenue_growth=None,
+                    net_income=None,
+                    net_income_growth=None,
+                    free_cash_flow=None,
+                    operating_margin=None,
+                    profit_margin=None,
+                    currency='USD',
+                    shares_outstanding=None,
+                    float_shares=None,
+                    short_ratio=None,
+                    payout_ratio=None,
+                    peg_ratio=None,
+                    price_to_sales=None,
+                    enterprise_value=None,
+                    enterprise_value_to_ebitda=None,
+                    data_source="Financial Modeling Prep (Basic)",
+                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+
+                fundamentals_data[ticker] = fundamentals
+                _logger.debug("Converted basic FMP data for %s", ticker)
+
+            except Exception as e:
+                _logger.error("Error converting FMP data for %s: %s", stock.get('symbol', 'Unknown'), e)
+                continue
+
+        _logger.info("Converted basic FMP data for %d/%d stocks (detailed fundamentals will be fetched from YFinance)",
+                    len(fundamentals_data), len(fmp_results))
+        return fundamentals_data
+
+    def _load_ticker_list(self, list_type: str) -> List[str]:
+        """Load ticker list based on the specified type."""
+        try:
+            if list_type == 'us_small_cap':
+                return get_us_small_cap_tickers()
+            elif list_type == 'us_medium_cap':
+                return get_us_medium_cap_tickers()
+            elif list_type == 'us_large_cap':
+                return get_us_large_cap_tickers()
+            elif list_type == 'swiss_shares':
+                return get_six_tickers()
+            elif list_type == 'custom_list':
+                # For custom lists, we'll need to implement storage/retrieval
+                # For now, return an empty list
+                _logger.warning("Custom list support not yet implemented")
+                return []
+            else:
+                _logger.error("Unknown list type: %s", list_type)
+                return []
+        except Exception as e:
+            _logger.error("Error loading ticker list %s: %s", list_type, e)
+            return []
 
 
 # Global enhanced screener instance

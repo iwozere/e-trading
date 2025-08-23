@@ -16,7 +16,7 @@ import random
 from src.notification.async_notification_manager import initialize_notification_manager
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PASSWORD
 from src.frontend.telegram.screener.notifications import (
-    process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
+    process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_screener_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
 )
 from src.frontend.telegram import db
 
@@ -180,6 +180,14 @@ HELP_TEXT = (
     "  /report -config='{\"report_type\":\"analysis\",\"tickers\":[\"AAPL\",\"MSFT\"],\"period\":\"1y\",\"indicators\":[\"RSI\",\"MACD\"],\"email\":true}'\n"
     "  /report -config='{\"report_type\":\"analysis\",\"tickers\":[\"TSLA\"],\"period\":\"6mo\",\"interval\":\"1h\",\"indicators\":[\"RSI\",\"MACD\",\"BollingerBands\"],\"include_fundamentals\":false}'\n\n"
 
+    "Screener Commands:\n"
+    "/screener JSON_CONFIG [-email] - Run enhanced screener immediately\n"
+    "  JSON_CONFIG: Screener configuration in JSON format\n"
+    "  Example: /screener '{\"screener_type\":\"hybrid\",\"list_type\":\"us_medium_cap\",\"fmp_criteria\":{\"marketCapMoreThan\":200000000,\"peRatioLessThan\":20},\"fundamental_criteria\":[{\"indicator\":\"Revenue_Growth\",\"operator\":\"min\",\"value\":0.05}],\"max_results\":5,\"min_score\":2.0}'\n"
+    "  Example: /screener '{\"screener_type\":\"fundamental\",\"list_type\":\"us_small_cap\",\"fmp_strategy\":\"conservative_value\",\"max_results\":10}' -email\n"
+    "Flags:\n"
+    "  -email: Send results to your registered email\n\n"
+
     "Alert Commands:\n"
     "/alerts - List all your active price alerts\n"
     "/alerts add TICKER PRICE CONDITION [flags] - Add price alert\n"
@@ -204,6 +212,7 @@ HELP_TEXT = (
     "  -period=1y: Data period\n"
     "  -interval=1d: Data interval\n"
     "  -provider=yf: Data provider\n"
+
     "/schedules screener LIST_TYPE TIME [flags] - Schedule fundamental screener report\n"
     "  LIST_TYPE: us_small_cap, us_medium_cap, us_large_cap, swiss_shares, or custom list name\n"
     "  TIME: HH:MM format (24h UTC)\n"
@@ -352,6 +361,11 @@ async def cmd_schedules(message: Message):
     args = message.text.split()
     await audit_command_wrapper(message, process_schedules_command, str(message.from_user.id), args, notification_manager)
 
+@dp.message(Command("screener"))
+async def cmd_screener(message: Message):
+    args = message.text.split()
+    await audit_command_wrapper(message, process_screener_command, str(message.from_user.id), args, notification_manager)
+
 @dp.message(Command("feedback"))
 async def cmd_feedback(message: Message):
     args = message.text.split(maxsplit=1)
@@ -378,6 +392,7 @@ async def unknown_command(message: Message):
         "report": cmd_report,
         "alerts": cmd_alerts,
         "schedules": cmd_schedules,
+        "screener": cmd_screener,
         "admin": cmd_admin,
         "register": cmd_register,
         "verify": cmd_verify,
