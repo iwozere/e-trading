@@ -792,8 +792,8 @@ class EnhancedScreener:
         for i, result in enumerate(report.top_results[:10], 1):
             message += f"{i}. **{result.ticker}** "
 
-            if result.current_price:
-                message += f"(${result.current_price:.2f}) "
+            if result.fundamentals and result.fundamentals.current_price:
+                message += f"(${result.fundamentals.current_price:.2f}) "
 
             message += f"Score: {result.composite_score:.1f}/10 "
 
@@ -812,16 +812,18 @@ class EnhancedScreener:
             message += f"({result.recommendation.replace('_', ' ')})"
 
             # Add fundamental score if available
-            if config.screener_type in ["fundamental", "hybrid"] and result.fundamental_score > 0:
+            if config.screener_type in ["fundamental", "hybrid"] and hasattr(result, 'fundamental_score') and result.fundamental_score > 0:
                 message += f"\n   📊 Fundamental: {result.fundamental_score:.1f}/10"
 
             # Add technical score if available
-            if config.screener_type in ["technical", "hybrid"] and result.technical_score > 0:
+            if config.screener_type in ["technical", "hybrid"] and hasattr(result, 'technical_score') and result.technical_score > 0:
                 message += f"\n   📈 Technical: {result.technical_score:.1f}/10"
 
             # Add DCF valuation if available
-            if result.dcf_valuation and result.dcf_valuation.upside_potential:
-                upside = result.dcf_valuation.upside_potential
+            if result.dcf_valuation and result.dcf_valuation.fair_value and result.fundamentals and result.fundamentals.current_price:
+                current_price = result.fundamentals.current_price
+                fair_value = result.dcf_valuation.fair_value
+                upside = ((fair_value - current_price) / current_price) * 100
                 if upside > 0:
                     message += f"\n   💰 DCF Upside: +{upside:.1f}%"
                 else:

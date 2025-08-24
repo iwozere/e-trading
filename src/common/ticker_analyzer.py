@@ -1,6 +1,6 @@
 from src.common.ticker_chart import generate_chart
 from src.common.fundamentals import get_fundamentals, format_fundamental_analysis
-from src.common import get_ohlcv
+from src.common import get_ohlcv, determine_provider, get_ticker_info
 from src.model.telegram_bot import TickerAnalysis
 from src.common.technicals import calculate_technicals_from_df, format_technical_analysis
 from src.notification.logger import setup_logger
@@ -16,7 +16,7 @@ def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provid
     try:
         # Infer provider if not specified
         if not provider:
-            provider = "yf" if len(ticker) <= 5 else "bnc"
+            provider = determine_provider(ticker)
 
         logger.debug("provider: %s", provider)
 

@@ -84,7 +84,27 @@ class YahooDataDownloader(BaseDataDownloader):
 
             # Convert to standard format
             df = df.reset_index()
-            df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+
+            # Handle different column structures from YFinance
+            expected_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            actual_columns = list(df.columns)
+
+            _logger.debug("YFinance returned columns for %s: %s", symbol, actual_columns)
+
+            # If we have more columns than expected, handle it gracefully
+            if len(actual_columns) > len(expected_columns):
+                # YFinance sometimes returns additional columns like 'Adj Close', 'Dividends'
+                # We'll take the first 6 columns and rename them
+                df = df.iloc[:, :6]  # Take first 6 columns
+                df.columns = expected_columns
+            elif len(actual_columns) == len(expected_columns):
+                # Exact match, just rename
+                df.columns = expected_columns
+            else:
+                # Fewer columns than expected, this is an error
+                _logger.error("Unexpected column count for %s: expected %d, got %d", symbol, len(expected_columns), len(actual_columns))
+                raise ValueError(f"Unexpected column structure for {symbol}: {actual_columns}")
+
             df['timestamp'] = pd.to_datetime(df['timestamp'])
 
             _logger.debug("Downloaded %d rows for %s", len(df), symbol)
@@ -132,7 +152,27 @@ class YahooDataDownloader(BaseDataDownloader):
             if len(symbols) == 1:
                 # Single ticker case
                 df = df_batch.reset_index()
-                df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+
+                # Handle different column structures from YFinance
+                expected_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                actual_columns = list(df.columns)
+
+                _logger.debug("YFinance batch returned columns for %s: %s", symbols[0], actual_columns)
+
+                # If we have more columns than expected, handle it gracefully
+                if len(actual_columns) > len(expected_columns):
+                    # YFinance sometimes returns additional columns like 'Adj Close', 'Dividends'
+                    # We'll take the first 6 columns and rename them
+                    df = df.iloc[:, :6]  # Take first 6 columns
+                    df.columns = expected_columns
+                elif len(actual_columns) == len(expected_columns):
+                    # Exact match, just rename
+                    df.columns = expected_columns
+                else:
+                    # Fewer columns than expected, this is an error
+                    _logger.error("Unexpected column count for %s: expected %d, got %d", symbols[0], len(expected_columns), len(actual_columns))
+                    raise ValueError(f"Unexpected column structure for {symbols[0]}: {actual_columns}")
+
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
                 results[symbols[0]] = df
             else:
@@ -142,7 +182,27 @@ class YahooDataDownloader(BaseDataDownloader):
                         # Extract data for this symbol
                         if symbol in df_batch.columns.get_level_values(0):
                             df_symbol = df_batch[symbol].reset_index()
-                            df_symbol.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+
+                            # Handle different column structures from YFinance
+                            expected_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                            actual_columns = list(df_symbol.columns)
+
+                            _logger.debug("YFinance batch returned columns for %s: %s", symbol, actual_columns)
+
+                            # If we have more columns than expected, handle it gracefully
+                            if len(actual_columns) > len(expected_columns):
+                                # YFinance sometimes returns additional columns like 'Adj Close', 'Dividends'
+                                # We'll take the first 6 columns and rename them
+                                df_symbol = df_symbol.iloc[:, :6]  # Take first 6 columns
+                                df_symbol.columns = expected_columns
+                            elif len(actual_columns) == len(expected_columns):
+                                # Exact match, just rename
+                                df_symbol.columns = expected_columns
+                            else:
+                                # Fewer columns than expected, this is an error
+                                _logger.error("Unexpected column count for %s: expected %d, got %d", symbol, len(expected_columns), len(actual_columns))
+                                raise ValueError(f"Unexpected column structure for {symbol}: {actual_columns}")
+
                             df_symbol['timestamp'] = pd.to_datetime(df_symbol['timestamp'])
                             results[symbol] = df_symbol
                         else:

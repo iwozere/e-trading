@@ -266,7 +266,8 @@ class FMPDataDownloader(BaseDataDownloader):
             'FUND', 'MUTUAL', 'ETF', 'TRUST', 'PORTFOLIO', 'SERIES',
             'ADVISOR', 'ADVANTAGE', 'PREMIUM', 'SELECT', 'FOCUS',
             'GROWTH FUND', 'INCOME FUND', 'BOND FUND', 'MONEY MARKET',
-            'TARGET DATE', 'LIFECYCLE', 'BALANCED FUND', 'INDEX FUND'
+            'TARGET DATE', 'LIFECYCLE', 'BALANCED FUND', 'INDEX FUND',
+            'FD', 'FUNDS', 'FUNDAMENTAL', 'FINANCIAL'
         ]
 
         # Symbol patterns that often indicate funds/ETFs
@@ -279,19 +280,26 @@ class FMPDataDownloader(BaseDataDownloader):
             symbol = item.get('symbol', '').upper()
             company_name = item.get('companyName', '').upper()
 
+            # First, check the FMP API flags (most reliable)
+            is_etf_api = item.get('isEtf', False)
+            is_fund_api = item.get('isFund', False)
+
             # Check if it's a fund based on company name
-            is_fund = any(keyword in company_name for keyword in fund_keywords)
+            is_fund_name = any(keyword in company_name for keyword in fund_keywords)
 
             # Check if it's a fund based on symbol pattern
             is_fund_symbol = any(pattern in symbol for pattern in fund_symbol_patterns)
 
             # Additional checks for common fund indicators
-            if (is_fund or is_fund_symbol or
-                'FUND' in company_name or
-                'ETF' in company_name or
-                'MUTUAL' in company_name):
+            is_fund_indicator = ('FUND' in company_name or
+                               'ETF' in company_name or
+                               'MUTUAL' in company_name or
+                               'FD ' in company_name or  # "Fd" in "Vanguard 500 Index Fd Admiral Shs"
+                               ' FD' in company_name)    # Space before FD
 
-                funds_etfs_removed.append((symbol, company_name))
+            # Filter out if any indicator suggests it's a fund/ETF
+            if (is_etf_api or is_fund_api or is_fund_name or is_fund_symbol or is_fund_indicator):
+                funds_etfs_removed.append((symbol, company_name, f"API:ETF={is_etf_api},FUND={is_fund_api},NAME={is_fund_name},SYMBOL={is_fund_symbol},INDICATOR={is_fund_indicator}"))
                 continue
 
             filtered_results.append(item)
@@ -299,7 +307,7 @@ class FMPDataDownloader(BaseDataDownloader):
         if funds_etfs_removed:
             _logger.info("Filtered out %d funds/ETFs: %s",
                         len(funds_etfs_removed),
-                        [f"{symbol}: {name}" for symbol, name in funds_etfs_removed[:5]])
+                        [f"{symbol}: {name} ({reason})" for symbol, name, reason in funds_etfs_removed[:5]])
 
         return filtered_results
 
