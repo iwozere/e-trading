@@ -75,6 +75,9 @@ class FundamentalScreener:
             elif list_type == 'us_large_cap':
                 return get_us_large_cap_tickers()
             elif list_type == 'swiss_shares':
+                # For Swiss shares, we should use FMP with exchange=SIX
+                # This is a fallback in case FMP is not available
+                _logger.warning("Swiss shares should be handled via FMP with exchange=SIX. Using CSV fallback.")
                 return get_six_tickers()
             elif list_type == 'custom_list':
                 # For custom lists, we'll need to implement storage/retrieval

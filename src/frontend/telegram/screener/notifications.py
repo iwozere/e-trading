@@ -117,7 +117,7 @@ def send_screener_email(email: str, report, config):
         <h2>🎯 {config.list_type.replace('_', ' ').title()} Screener Results</h2>
         <p><strong>Analysis Summary:</strong></p>
         <ul>
-            <li>FMP Pre-filtered: {len(report.fmp_results.get('fmp_results', [])) if hasattr(report, 'fmp_results') and report.fmp_results else 'N/A'} stocks</li>
+            <li>FMP Pre-filtered: {len(report.fmp_results.get('fmp_results', [])) if hasattr(report, 'fmp_results') and report.fmp_results and 'fmp_results' in report.fmp_results else 'N/A'} stocks</li>
             <li>Processed: {report.total_tickers_processed} tickers</li>
             <li>Found: {len(report.top_results)} matching stocks</li>
         </ul>
@@ -147,55 +147,71 @@ def send_screener_email(email: str, report, config):
                     body += f"<p><strong>Current Price:</strong> ${result.fundamentals.current_price:.2f}</p>"
                     has_fundamental_data = True
                 if result.fundamentals.pe_ratio:
-                    body += f"<p><strong>P/E Ratio:</strong> {result.fundamentals.pe_ratio:.2f}</p>"
+                    recommendation = _get_pe_recommendation(result.fundamentals.pe_ratio)
+                    body += f"<p><strong>P/E Ratio:</strong> {result.fundamentals.pe_ratio:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.forward_pe:
-                    body += f"<p><strong>Forward P/E:</strong> {result.fundamentals.forward_pe:.2f}</p>"
+                    recommendation = _get_pe_recommendation(result.fundamentals.forward_pe)
+                    body += f"<p><strong>Forward P/E:</strong> {result.fundamentals.forward_pe:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.price_to_book:
-                    body += f"<p><strong>P/B Ratio:</strong> {result.fundamentals.price_to_book:.2f}</p>"
+                    recommendation = _get_pb_recommendation(result.fundamentals.price_to_book)
+                    body += f"<p><strong>P/B Ratio:</strong> {result.fundamentals.price_to_book:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.price_to_sales:
-                    body += f"<p><strong>P/S Ratio:</strong> {result.fundamentals.price_to_sales:.2f}</p>"
+                    recommendation = _get_ps_recommendation(result.fundamentals.price_to_sales)
+                    body += f"<p><strong>P/S Ratio:</strong> {result.fundamentals.price_to_sales:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.peg_ratio:
-                    body += f"<p><strong>PEG Ratio:</strong> {result.fundamentals.peg_ratio:.2f}</p>"
+                    recommendation = _get_peg_recommendation(result.fundamentals.peg_ratio)
+                    body += f"<p><strong>PEG Ratio:</strong> {result.fundamentals.peg_ratio:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.return_on_equity:
-                    body += f"<p><strong>ROE:</strong> {result.fundamentals.return_on_equity:.2%}</p>"
+                    recommendation = _get_roe_recommendation(result.fundamentals.return_on_equity)
+                    body += f"<p><strong>ROE:</strong> {result.fundamentals.return_on_equity:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.return_on_assets:
-                    body += f"<p><strong>ROA:</strong> {result.fundamentals.return_on_assets:.2%}</p>"
+                    recommendation = _get_roa_recommendation(result.fundamentals.return_on_assets)
+                    body += f"<p><strong>ROA:</strong> {result.fundamentals.return_on_assets:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.debt_to_equity:
-                    body += f"<p><strong>Debt/Equity:</strong> {result.fundamentals.debt_to_equity:.2f}</p>"
+                    recommendation = _get_debt_equity_recommendation(result.fundamentals.debt_to_equity)
+                    body += f"<p><strong>Debt/Equity:</strong> {result.fundamentals.debt_to_equity:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.current_ratio:
-                    body += f"<p><strong>Current Ratio:</strong> {result.fundamentals.current_ratio:.2f}</p>"
+                    recommendation = _get_current_ratio_recommendation(result.fundamentals.current_ratio)
+                    body += f"<p><strong>Current Ratio:</strong> {result.fundamentals.current_ratio:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.quick_ratio:
-                    body += f"<p><strong>Quick Ratio:</strong> {result.fundamentals.quick_ratio:.2f}</p>"
+                    recommendation = _get_quick_ratio_recommendation(result.fundamentals.quick_ratio)
+                    body += f"<p><strong>Quick Ratio:</strong> {result.fundamentals.quick_ratio:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.operating_margin:
-                    body += f"<p><strong>Operating Margin:</strong> {result.fundamentals.operating_margin:.2%}</p>"
+                    recommendation = _get_margin_recommendation(result.fundamentals.operating_margin)
+                    body += f"<p><strong>Operating Margin:</strong> {result.fundamentals.operating_margin:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.profit_margin:
-                    body += f"<p><strong>Profit Margin:</strong> {result.fundamentals.profit_margin:.2%}</p>"
+                    recommendation = _get_margin_recommendation(result.fundamentals.profit_margin)
+                    body += f"<p><strong>Profit Margin:</strong> {result.fundamentals.profit_margin:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.revenue_growth:
-                    body += f"<p><strong>Revenue Growth:</strong> {result.fundamentals.revenue_growth:.2%}</p>"
+                    recommendation = _get_growth_recommendation(result.fundamentals.revenue_growth)
+                    body += f"<p><strong>Revenue Growth:</strong> {result.fundamentals.revenue_growth:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.net_income_growth:
-                    body += f"<p><strong>Net Income Growth:</strong> {result.fundamentals.net_income_growth:.2%}</p>"
+                    recommendation = _get_growth_recommendation(result.fundamentals.net_income_growth)
+                    body += f"<p><strong>Net Income Growth:</strong> {result.fundamentals.net_income_growth:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.free_cash_flow:
                     body += f"<p><strong>Free Cash Flow:</strong> ${result.fundamentals.free_cash_flow:,.0f}</p>"
                     has_fundamental_data = True
                 if result.fundamentals.dividend_yield:
-                    body += f"<p><strong>Dividend Yield:</strong> {result.fundamentals.dividend_yield:.2%}</p>"
+                    recommendation = _get_dividend_recommendation(result.fundamentals.dividend_yield)
+                    body += f"<p><strong>Dividend Yield:</strong> {(result.fundamentals.dividend_yield / 100.0):.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.payout_ratio:
-                    body += f"<p><strong>Payout Ratio:</strong> {result.fundamentals.payout_ratio:.2%}</p>"
+                    recommendation = _get_payout_recommendation(result.fundamentals.payout_ratio)
+                    body += f"<p><strong>Payout Ratio:</strong> {result.fundamentals.payout_ratio:.2%} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                     has_fundamental_data = True
                 if result.fundamentals.market_cap:
                     body += f"<p><strong>Market Cap:</strong> ${result.fundamentals.market_cap:,.0f}</p>"
@@ -225,41 +241,52 @@ def send_screener_email(email: str, report, config):
                 body += "<h5 style='color: #3498db; margin: 10px 0;'>📈 Technical Analysis:</h5>"
 
                 if hasattr(result.technicals, 'rsi') and result.technicals.rsi is not None:
-                    body += f"<p><strong>RSI:</strong> {result.technicals.rsi:.2f}</p>"
+                    recommendation = _get_rsi_recommendation(result.technicals.rsi)
+                    body += f"<p><strong>RSI:</strong> {result.technicals.rsi:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'macd') and result.technicals.macd is not None:
-                    body += f"<p><strong>MACD:</strong> {result.technicals.macd:.4f}</p>"
+                    recommendation = _get_macd_recommendation(result.technicals.macd, result.technicals.macd_signal if hasattr(result.technicals, 'macd_signal') else None)
+                    body += f"<p><strong>MACD:</strong> {result.technicals.macd:.4f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'macd_signal') and result.technicals.macd_signal is not None:
                     body += f"<p><strong>MACD Signal:</strong> {result.technicals.macd_signal:.4f}</p>"
                 if hasattr(result.technicals, 'sma_50') and result.technicals.sma_50 is not None:
-                    body += f"<p><strong>SMA 50:</strong> ${result.technicals.sma_50:.2f}</p>"
+                    recommendation = _get_sma_recommendation(result.fundamentals.current_price if result.fundamentals else None, result.technicals.sma_50)
+                    body += f"<p><strong>SMA 50:</strong> ${result.technicals.sma_50:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'sma_200') and result.technicals.sma_200 is not None:
-                    body += f"<p><strong>SMA 200:</strong> ${result.technicals.sma_200:.2f}</p>"
+                    recommendation = _get_sma_recommendation(result.fundamentals.current_price if result.fundamentals else None, result.technicals.sma_200)
+                    body += f"<p><strong>SMA 200:</strong> ${result.technicals.sma_200:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'ema_12') and result.technicals.ema_12 is not None:
                     body += f"<p><strong>EMA 12:</strong> ${result.technicals.ema_12:.2f}</p>"
                 if hasattr(result.technicals, 'ema_26') and result.technicals.ema_26 is not None:
                     body += f"<p><strong>EMA 26:</strong> ${result.technicals.ema_26:.2f}</p>"
                 if hasattr(result.technicals, 'bb_upper') and result.technicals.bb_upper is not None:
-                    body += f"<p><strong>Bollinger Upper:</strong> ${result.technicals.bb_upper:.2f}</p>"
+                    recommendation = _get_bollinger_recommendation(result.fundamentals.current_price if result.fundamentals else None, result.technicals.bb_upper, result.technicals.bb_lower if hasattr(result.technicals, 'bb_lower') else None)
+                    body += f"<p><strong>Bollinger Upper:</strong> ${result.technicals.bb_upper:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'bb_lower') and result.technicals.bb_lower is not None:
                     body += f"<p><strong>Bollinger Lower:</strong> ${result.technicals.bb_lower:.2f}</p>"
                 if hasattr(result.technicals, 'bb_middle') and result.technicals.bb_middle is not None:
                     body += f"<p><strong>Bollinger Middle:</strong> ${result.technicals.bb_middle:.2f}</p>"
                 if hasattr(result.technicals, 'adx') and result.technicals.adx is not None:
-                    body += f"<p><strong>ADX:</strong> {result.technicals.adx:.2f}</p>"
+                    recommendation = _get_adx_recommendation(result.technicals.adx)
+                    body += f"<p><strong>ADX:</strong> {result.technicals.adx:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'atr') and result.technicals.atr is not None:
                     body += f"<p><strong>ATR:</strong> {result.technicals.atr:.2f}</p>"
                 if hasattr(result.technicals, 'stoch_k') and result.technicals.stoch_k is not None:
-                    body += f"<p><strong>Stochastic K:</strong> {result.technicals.stoch_k:.2f}</p>"
+                    recommendation = _get_stochastic_recommendation(result.technicals.stoch_k)
+                    body += f"<p><strong>Stochastic K:</strong> {result.technicals.stoch_k:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'stoch_d') and result.technicals.stoch_d is not None:
                     body += f"<p><strong>Stochastic D:</strong> {result.technicals.stoch_d:.2f}</p>"
                 if hasattr(result.technicals, 'williams_r') and result.technicals.williams_r is not None:
-                    body += f"<p><strong>Williams %R:</strong> {result.technicals.williams_r:.2f}</p>"
+                    recommendation = _get_williams_r_recommendation(result.technicals.williams_r)
+                    body += f"<p><strong>Williams %R:</strong> {result.technicals.williams_r:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'cci') and result.technicals.cci is not None:
-                    body += f"<p><strong>CCI:</strong> {result.technicals.cci:.2f}</p>"
+                    recommendation = _get_cci_recommendation(result.technicals.cci)
+                    body += f"<p><strong>CCI:</strong> {result.technicals.cci:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'roc') and result.technicals.roc is not None:
-                    body += f"<p><strong>ROC:</strong> {result.technicals.roc:.2f}</p>"
+                    recommendation = _get_roc_recommendation(result.technicals.roc)
+                    body += f"<p><strong>ROC:</strong> {result.technicals.roc:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'mfi') and result.technicals.mfi is not None:
-                    body += f"<p><strong>MFI:</strong> {result.technicals.mfi:.2f}</p>"
+                    recommendation = _get_mfi_recommendation(result.technicals.mfi)
+                    body += f"<p><strong>MFI:</strong> {result.technicals.mfi:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
 
                 body += "</div>"
 
@@ -292,6 +319,251 @@ def send_screener_email(email: str, report, config):
     except Exception as e:
         _logger.exception("Error sending screener email to %s", email)
         raise
+
+
+def _get_recommendation_color(recommendation: str) -> str:
+    """Get color for recommendation."""
+    if recommendation == "BUY":
+        return "#27ae60"  # Green
+    elif recommendation == "SELL":
+        return "#e74c3c"  # Red
+    elif recommendation == "HOLD":
+        return "#f39c12"  # Orange
+    else:
+        return "#95a5a6"  # Gray
+
+
+def _get_pe_recommendation(pe_ratio: float) -> str:
+    """Get recommendation for P/E ratio."""
+    if pe_ratio <= 15:
+        return "BUY"
+    elif pe_ratio <= 25:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_pb_recommendation(pb_ratio: float) -> str:
+    """Get recommendation for P/B ratio."""
+    if pb_ratio <= 1.5:
+        return "BUY"
+    elif pb_ratio <= 3.0:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_ps_recommendation(ps_ratio: float) -> str:
+    """Get recommendation for P/S ratio."""
+    if ps_ratio <= 1.0:
+        return "BUY"
+    elif ps_ratio <= 3.0:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_peg_recommendation(peg_ratio: float) -> str:
+    """Get recommendation for PEG ratio."""
+    if peg_ratio <= 1.0:
+        return "BUY"
+    elif peg_ratio <= 1.5:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_roe_recommendation(roe: float) -> str:
+    """Get recommendation for ROE."""
+    if roe >= 0.15:
+        return "BUY"
+    elif roe >= 0.10:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_roa_recommendation(roa: float) -> str:
+    """Get recommendation for ROA."""
+    if roa >= 0.05:
+        return "BUY"
+    elif roa >= 0.03:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_debt_equity_recommendation(debt_equity: float) -> str:
+    """Get recommendation for Debt/Equity ratio."""
+    if debt_equity <= 0.5:
+        return "BUY"
+    elif debt_equity <= 1.0:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_current_ratio_recommendation(current_ratio: float) -> str:
+    """Get recommendation for Current Ratio."""
+    if current_ratio >= 2.0:
+        return "BUY"
+    elif current_ratio >= 1.5:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_quick_ratio_recommendation(quick_ratio: float) -> str:
+    """Get recommendation for Quick Ratio."""
+    if quick_ratio >= 1.0:
+        return "BUY"
+    elif quick_ratio >= 0.8:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_margin_recommendation(margin: float) -> str:
+    """Get recommendation for Operating/Profit Margin."""
+    if margin >= 0.15:
+        return "BUY"
+    elif margin >= 0.10:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_growth_recommendation(growth: float) -> str:
+    """Get recommendation for Revenue/Net Income Growth."""
+    if growth >= 0.10:
+        return "BUY"
+    elif growth >= 0.05:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_dividend_recommendation(dividend_yield: float) -> str:
+    """Get recommendation for Dividend Yield."""
+    # dividend_yield is now in percentage format (e.g., 4.0 for 4%)
+    if dividend_yield >= 4.0:
+        return "BUY"
+    elif dividend_yield >= 2.0:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_payout_recommendation(payout_ratio: float) -> str:
+    """Get recommendation for Payout Ratio."""
+    if payout_ratio <= 0.50:
+        return "BUY"
+    elif payout_ratio <= 0.75:
+        return "HOLD"
+    else:
+        return "SELL"
+
+
+def _get_rsi_recommendation(rsi: float) -> str:
+    """Get recommendation for RSI."""
+    if rsi <= 30:
+        return "BUY"
+    elif rsi >= 70:
+        return "SELL"
+    else:
+        return "HOLD"
+
+
+def _get_macd_recommendation(macd: float, macd_signal: float = None) -> str:
+    """Get recommendation for MACD."""
+    if macd_signal is not None:
+        if macd > macd_signal:
+            return "BUY"
+        else:
+            return "SELL"
+    else:
+        if macd > 0:
+            return "BUY"
+        else:
+            return "SELL"
+
+
+def _get_sma_recommendation(current_price: float, sma: float) -> str:
+    """Get recommendation for SMA."""
+    if current_price is None:
+        return "HOLD"
+    if current_price > sma:
+        return "BUY"
+    else:
+        return "SELL"
+
+
+def _get_bollinger_recommendation(current_price: float, bb_upper: float, bb_lower: float = None) -> str:
+    """Get recommendation for Bollinger Bands."""
+    if current_price is None:
+        return "HOLD"
+    if current_price <= bb_lower:
+        return "BUY"
+    elif current_price >= bb_upper:
+        return "SELL"
+    else:
+        return "HOLD"
+
+
+def _get_adx_recommendation(adx: float) -> str:
+    """Get recommendation for ADX."""
+    if adx >= 25:
+        return "BUY"
+    else:
+        return "HOLD"
+
+
+def _get_stochastic_recommendation(stoch_k: float) -> str:
+    """Get recommendation for Stochastic."""
+    if stoch_k <= 20:
+        return "BUY"
+    elif stoch_k >= 80:
+        return "SELL"
+    else:
+        return "HOLD"
+
+
+def _get_williams_r_recommendation(williams_r: float) -> str:
+    """Get recommendation for Williams %R."""
+    if williams_r <= -80:
+        return "BUY"
+    elif williams_r >= -20:
+        return "SELL"
+    else:
+        return "HOLD"
+
+
+def _get_cci_recommendation(cci: float) -> str:
+    """Get recommendation for CCI."""
+    if cci <= -100:
+        return "BUY"
+    elif cci >= 100:
+        return "SELL"
+    else:
+        return "HOLD"
+
+
+def _get_roc_recommendation(roc: float) -> str:
+    """Get recommendation for ROC."""
+    if roc > 0:
+        return "BUY"
+    else:
+        return "SELL"
+
+
+def _get_mfi_recommendation(mfi: float) -> str:
+    """Get recommendation for MFI."""
+    if mfi <= 20:
+        return "BUY"
+    elif mfi >= 80:
+        return "SELL"
+    else:
+        return "HOLD"
 
 async def process_report_command(message, telegram_user_id, args, notification_manager):
     try:

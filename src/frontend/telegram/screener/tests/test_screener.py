@@ -35,7 +35,8 @@ def test_mid_cap_screener():
             "marketCapLowerThan": 2000000000, # $2B- market cap
             "peRatioLessThan": 25,            # P/E < 25
             "returnOnEquityMoreThan": 0.08,   # ROE > 8%
-            "isEtf": False,                   # Exclude ETFs
+            "isETF": False,                   # Exclude ETFs
+            "isFund": False,                  # Exclude funds
             "isActivelyTrading": True,        # Only actively trading stocks
             "limit": 50                        # Get up to 50 stocks from FMP
         },
@@ -104,7 +105,8 @@ def test_large_cap_screener():
             "marketCapLowerThan": 200000000000, # $200B- market cap
             "peRatioLessThan": 30,             # P/E < 30
             "returnOnEquityMoreThan": 0.10,    # ROE > 10%
-            "isEtf": False,                    # Exclude ETFs
+            "isETF": False,                    # Exclude ETFs
+            "isFund": False,                   # Exclude funds
             "isActivelyTrading": True,         # Only actively trading stocks
             "limit": 50
         },
@@ -172,7 +174,8 @@ def test_super_large_cap_screener():
             "marketCapMoreThan": 200000000000, # $200B+ market cap
             "peRatioLessThan": 35,             # P/E < 35
             "returnOnEquityMoreThan": 0.12,    # ROE > 12%
-            "isEtf": False,                    # Exclude ETFs
+            "isETF": False,                    # Exclude ETFs
+            "isFund": False,                   # Exclude funds
             "isActivelyTrading": True,         # Only actively trading stocks
             "limit": 50
         },
@@ -237,10 +240,11 @@ def test_swiss_screener():
         "screener_type": "hybrid",
         "list_type": "swiss_shares",
         "fmp_criteria": {
-            "exchange": "SWX",       # Swiss Exchange
+            "exchange": "SIX",       # Swiss SIX exchange
             "peRatioLessThan": 20,   # P/E < 20
             "returnOnEquityMoreThan": 0.08, # ROE > 8%
-            "isEtf": False,          # Exclude ETFs
+            "isETF": False,          # Exclude ETFs
+            "isFund": False,         # Exclude funds
             "isActivelyTrading": True, # Only actively trading stocks
             "limit": 50
         },
@@ -491,7 +495,8 @@ def test_comprehensive_fmp_analysis():
             "marketCapLowerThan": 2000000000, # $2B- market cap
             "peRatioLessThan": 20,            # P/E < 20
             "returnOnEquityMoreThan": 0.10,   # ROE > 10%
-            "isEtf": False,                   # Exclude ETFs
+            "isETF": False,                   # Exclude ETFs
+            "isFund": False,                  # Exclude funds
             "isActivelyTrading": True,        # Only actively trading stocks
             "limit": 20                        # Get up to 20 stocks from FMP
         },

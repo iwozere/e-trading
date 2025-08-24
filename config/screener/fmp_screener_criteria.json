@@ -7,6 +7,9 @@
         "peRatioLessThan": 20,
         "priceToBookRatioLessThan": 2.0,
         "returnOnEquityMoreThan": 0.10,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 100
       }
     },
@@ -17,6 +20,9 @@
         "peRatioLessThan": 25,
         "priceToBookRatioLessThan": 3.0,
         "returnOnEquityMoreThan": 0.12,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 80
       }
     },
@@ -24,6 +30,9 @@
       "description": "Default FMP criteria for technical screening",
       "fmp_criteria": {
         "marketCapMoreThan": 500000000,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 150
       }
     },
@@ -35,6 +44,9 @@
         "priceToBookRatioLessThan": 1.2,
         "debtToEquityLessThan": 0.3,
         "returnOnEquityMoreThan": 0.15,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 50
       }
     },
@@ -46,6 +58,9 @@
         "peRatioMoreThan": 8,
         "returnOnEquityMoreThan": 0.15,
         "revenueGrowthMoreThan": 0.10,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 60
       }
     }
@@ -67,6 +82,9 @@
         "dividendYieldMoreThan": 0.03,
         "betaLessThan": 1.0,
         "payoutRatioLessThan": 0.6,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 50
       }
     },
@@ -84,6 +102,9 @@
         "netIncomeGrowthMoreThan": 0.08,
         "operatingMarginMoreThan": 0.10,
         "betaLessThan": 1.3,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 50
       }
     },
@@ -100,6 +121,9 @@
         "operatingMarginMoreThan": 0.12,
         "profitMarginMoreThan": 0.08,
         "betaLessThan": 1.2,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 30
       }
     },
@@ -116,6 +140,9 @@
         "returnOnEquityMoreThan": 0.08,
         "operatingMarginMoreThan": 0.08,
         "betaLessThan": 1.1,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 40
       }
     },
@@ -135,6 +162,9 @@
         "debtToEquityLessThan": 0.3,
         "currentRatioMoreThan": 1.4,
         "betaLessThan": 1.2,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 30
       }
     },
@@ -153,6 +183,9 @@
         "currentRatioMoreThan": 1.3,
         "revenueGrowthMoreThan": 0.08,
         "betaLessThan": 1.3,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 40
       }
     },
@@ -171,6 +204,9 @@
         "profitMarginMoreThan": 0.08,
         "dividendYieldMoreThan": 0.02,
         "payoutRatioLessThan": 0.7,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 25
       }
     },
@@ -189,6 +225,9 @@
         "debtToEquityLessThan": 0.4,
         "currentRatioMoreThan": 1.3,
         "betaLessThan": 1.2,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 35
       }
     },
@@ -204,6 +243,9 @@
         "profitMarginMoreThan": 0.06,
         "dividendYieldMoreThan": 0.03,
         "betaLessThan": 1.1,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 30
       }
     },
@@ -222,6 +264,9 @@
         "operatingMarginMoreThan": 0.15,
         "debtToEquityLessThan": 0.3,
         "betaLessThan": 1.4,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 25
       }
     },
@@ -239,6 +284,9 @@
         "profitMarginMoreThan": 0.15,
         "dividendYieldMoreThan": 0.02,
         "betaLessThan": 1.2,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
         "limit": 20
       }
     }

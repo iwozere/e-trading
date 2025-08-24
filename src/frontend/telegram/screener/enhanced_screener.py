@@ -118,7 +118,7 @@ class EnhancedScreener:
             )
 
             # Stage 4: Generate comprehensive report
-            report = self.generate_enhanced_report(config, results, fmp_results)
+            report = self.generate_enhanced_report(config, results, len(tickers), fmp_results)
 
             _logger.info("Enhanced screener completed successfully. Found %d stocks from %d FMP-filtered tickers",
                         len(results), len(tickers))
@@ -913,6 +913,9 @@ class EnhancedScreener:
             elif list_type == 'us_large_cap':
                 return get_us_large_cap_tickers()
             elif list_type == 'swiss_shares':
+                # For Swiss shares, we should use FMP with exchange=SIX
+                # This is a fallback in case FMP is not available
+                _logger.warning("Swiss shares should be handled via FMP with exchange=SIX. Using CSV fallback.")
                 return get_six_tickers()
             elif list_type == 'custom_list':
                 # For custom lists, we'll need to implement storage/retrieval
@@ -925,6 +928,41 @@ class EnhancedScreener:
         except Exception as e:
             _logger.error("Error loading ticker list %s: %s", list_type, e)
             return []
+
+    def _normalize_dividend_yield(self, dividend_yield_value) -> Optional[float]:
+        """
+        Normalize dividend yield value to percentage format.
+
+        This method is kept for compatibility with other data sources that might
+        return dividend yield in different formats.
+
+        Args:
+            dividend_yield_value: Raw dividend yield value from data source
+
+        Returns:
+            Normalized dividend yield as percentage (e.g., 4.61 for 4.61%) or None if invalid
+        """
+        if dividend_yield_value is None:
+            return None
+
+        try:
+            dividend_yield = float(dividend_yield_value)
+
+            # Handle extreme values that are clearly wrong
+            if dividend_yield > 1000.0:  # More than 1000% dividend yield is impossible
+                _logger.warning("Extreme dividend yield value detected: %s, setting to 0", dividend_yield_value)
+                return 0.0
+
+            # Ensure the result is reasonable (between 0 and 100)
+            if dividend_yield < 0 or dividend_yield > 100:
+                _logger.warning("Unreasonable dividend yield value: %s, setting to 0", dividend_yield)
+                return 0.0
+
+            return dividend_yield
+
+        except (ValueError, TypeError):
+            _logger.warning("Invalid dividend yield value: %s", dividend_yield_value)
+            return None
 
 
 # Global enhanced screener instance
