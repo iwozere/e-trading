@@ -450,7 +450,7 @@ class EnhancedScreener:
         for criterion in criteria:
             indicator_value = self._get_fundamental_value(fundamentals, criterion.indicator)
 
-            _logger.debug("Evaluating %s: value=%.2f, criterion=%s",
+            _logger.debug("Evaluating %s: value=%s, criterion=%s",
                          criterion.indicator, indicator_value, criterion)
 
             if indicator_value is not None and not pd.isna(indicator_value):
@@ -467,7 +467,7 @@ class EnhancedScreener:
                     'criterion': criterion
                 }
 
-                _logger.debug("  %s: value=%.2f, score=%.2f, weighted=%.2f",
+                _logger.debug("  %s: value=%s, score=%.2f, weighted=%.2f",
                              criterion.indicator, indicator_value, score, weighted_score)
             elif criterion.required:
                 # If required criterion is missing, return 0 score

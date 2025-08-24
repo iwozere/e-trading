@@ -273,8 +273,15 @@ class YahooDataDownloader(BaseDataDownloader):
             tickers_str = " ".join(symbols)
             tickers_obj = yf.Tickers(tickers_str)
 
-            # Get info for all tickers in a single batch call
-            info_batch = tickers_obj.info
+            # Get info for all tickers - access individual ticker info
+            info_batch = {}
+            for symbol in symbols:
+                try:
+                    ticker_obj = tickers_obj.tickers[symbol]
+                    info_batch[symbol] = ticker_obj.info
+                except Exception as e:
+                    _logger.warning("Failed to get info for %s: %s", symbol, str(e))
+                    info_batch[symbol] = None
 
             results = {}
 
@@ -380,8 +387,15 @@ class YahooDataDownloader(BaseDataDownloader):
             tickers_str = " ".join(symbols)
             tickers_obj = yf.Tickers(tickers_str)
 
-            # Get comprehensive info for all tickers in a single batch call
-            info_batch = tickers_obj.info
+            # Get comprehensive info for all tickers - access individual ticker info
+            info_batch = {}
+            for symbol in symbols:
+                try:
+                    ticker_obj = tickers_obj.tickers[symbol]
+                    info_batch[symbol] = ticker_obj.info
+                except Exception as e:
+                    _logger.warning("Failed to get info for %s: %s", symbol, str(e))
+                    info_batch[symbol] = None
 
             results = {}
 
