@@ -304,6 +304,8 @@ class EnhancedScreener:
             # Extract key metrics
             fundamentals = Fundamentals(
                 ticker=ticker,
+                company_name=info.get('longName', ticker),
+                current_price=info.get('regularMarketPrice'),
                 pe_ratio=info.get('trailingPE'),
                 forward_pe=info.get('forwardPE'),
                 price_to_book=info.get('priceToBook'),

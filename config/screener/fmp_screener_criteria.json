@@ -289,6 +289,55 @@
         "isActivelyTrading": true,
         "limit": 20
       }
+    },
+    "mid_cap_stocks": {
+      "description": "Mid-cap stocks ($2B - $200B market cap) with balanced growth and value",
+      "criteria": {
+        "marketCapMoreThan": 2000000000,
+        "marketCapLowerThan": 200000000000,
+        "peRatioLessThan": 30,
+        "returnOnEquityMoreThan": 0.10,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "large_cap_stocks": {
+      "description": "Large-cap stocks ($200B+ market cap) with strong fundamentals",
+      "criteria": {
+        "marketCapMoreThan": 200000000000,
+        "peRatioLessThan": 35,
+        "returnOnEquityMoreThan": 0.12,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "six_stocks": {
+      "description": "Swiss stocks listed on SIX exchange",
+      "criteria": {
+        "exchange": "SIX",
+        "peRatioLessThan": 20,
+        "returnOnEquityMoreThan": 0.08,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "extra_large_cap_stocks": {
+      "description": "Extra large-cap stocks ($500B+ market cap) - mega caps",
+      "criteria": {
+        "marketCapMoreThan": 500000000000,
+        "peRatioLessThan": 40,
+        "returnOnEquityMoreThan": 0.15,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 30
+      }
     }
   }
 }

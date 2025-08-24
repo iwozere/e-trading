@@ -126,9 +126,16 @@ def send_screener_email(email: str, report, config):
         """
 
         for i, result in enumerate(report.top_results[:20], 1):  # Show top 20
+            # Get company name from fundamentals if available
+            company_name = ""
+            if result.fundamentals and hasattr(result.fundamentals, 'company_name') and result.fundamentals.company_name:
+                company_name = f" - {result.fundamentals.company_name}"
+            elif result.fundamentals and hasattr(result.fundamentals, 'sector') and result.fundamentals.sector:
+                company_name = f" - {result.fundamentals.sector}"
+
             body += f"""
             <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 8px; background-color: #f9f9f9;">
-                <h4 style="color: #2c3e50; margin-top: 0;">#{i}: {result.ticker}</h4>
+                <h4 style="color: #2c3e50; margin-top: 0;">#{i}: {result.ticker}{company_name}</h4>
                 <p style="font-size: 16px; font-weight: bold; color: #e74c3c;">
                     <strong>Score:</strong> {result.composite_score:.1f}/10 |
                     <strong>Recommendation:</strong> {result.recommendation}
@@ -713,6 +720,39 @@ Screener Schedules:
 • /schedules screener LIST_TYPE [TIME] [flags]
 • /schedules screener us_small_cap 09:00 -email
 • /schedules screener us_large_cap -indicators=PE,PB,ROE
+
+🔍 SCREENER COMMANDS
+Immediate Screening:
+• /screener SCREENER_NAME [flags] - Run predefined screener immediately
+• /screener financial_stocks - Screen financial sector stocks
+• /screener small_cap_value -email - Screen small-cap value stocks and send to email
+• /screener six_stocks - Screen Swiss stocks on SIX exchange
+• /screener mid_cap_stocks -email - Screen mid-cap stocks and send to email
+• /screener large_cap_stocks - Screen large-cap stocks
+• /screener extra_large_cap_stocks -email - Screen mega-cap stocks and send to email
+
+Available Predefined Screeners:
+• conservative_value - Conservative value stocks with low risk
+• growth_at_reasonable_price - Growth stocks with reasonable valuations
+• dividend_aristocrats - High-quality dividend-paying stocks
+• deep_value - Deep value stocks with very low valuations
+• quality_growth - High-quality growth stocks with strong fundamentals
+• small_cap_value - Small-cap value stocks with growth potential
+• defensive_stocks - Defensive stocks with low volatility
+• momentum_quality - Quality stocks with positive momentum
+• international_value - International value stocks
+• tech_growth - Technology growth stocks with reasonable valuations
+• financial_stocks - Financial sector stocks with strong fundamentals
+• mid_cap_stocks - Mid-cap stocks ($2B - $200B market cap)
+• large_cap_stocks - Large-cap stocks ($200B+ market cap)
+• six_stocks - Swiss stocks listed on SIX exchange
+• extra_large_cap_stocks - Extra large-cap stocks ($500B+ market cap)
+
+Custom JSON Configuration:
+• /screener '{"screener_type":"hybrid","list_type":"us_medium_cap",...}' - Use custom JSON config
+
+Flags:
+• -email - Send screener results to your verified email
 
 Schedule Management:
 • /schedules - List all schedules
