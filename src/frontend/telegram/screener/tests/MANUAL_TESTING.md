@@ -38,6 +38,7 @@ Before testing, ensure you have:
    WEBGUI_LOGIN=admin
    WEBGUI_PASSWORD=your_admin_password
    WEBGUI_PORT=5000
+   FMP_API_KEY=your_fmp_api_key_here
    ```
 3. **Database**: SQLite database will be auto-created on first run
 4. **Dependencies**: All Python dependencies installed
@@ -82,16 +83,25 @@ python src/util/create_admin.py YOUR_TELEGRAM_USER_ID your.email@example.com
 
 ### Optional Testing Scripts
 
-#### 4. Fundamental Screener Test Script
+#### 4. Enhanced Screener Test Script
 ```bash
-# Test screener functionality independently
+# Test enhanced screener functionality independently
 cd /path/to/e-trading
 python src/frontend/telegram/screener/tests/test_screener.py
 ```
-**Purpose**: Test screener functionality without full bot
+**Purpose**: Test enhanced screener functionality without full bot
 **Status**: Optional - for debugging screener issues
 
-#### 5. Notification Commands Test Script
+#### 5. Predefined Screeners Test Script
+```bash
+# Test predefined screeners functionality
+cd /path/to/e-trading
+python test_predefined_screeners.py
+```
+**Purpose**: Test predefined screeners with FMP integration
+**Status**: Optional - for testing screener configurations
+
+#### 6. Notification Commands Test Script
 ```bash
 # Run automated tests for notification commands
 cd /path/to/e-trading
@@ -152,7 +162,7 @@ curl http://localhost:5000/login
    # Check if variables are set
    echo $TELEGRAM_BOT_TOKEN
    echo $SMTP_USER
-   echo $WEBGUI_LOGIN
+   echo $FMP_API_KEY
    ```
 
 #### Service Logs
@@ -169,7 +179,8 @@ curl http://localhost:5000/login
 ### Phase 5: Admin Commands
 ### Phase 6: Web Admin Panel
 ### Phase 7: Advanced Features
-### Phase 8: Error Handling and Edge Cases
+### Phase 8: Enhanced Screener and FMP Integration
+### Phase 9: Error Handling and Edge Cases
 
 ---
 
@@ -195,7 +206,7 @@ curl http://localhost:5000/login
 3. **Test `/help` command**:
    - Send `/help` to your bot
    - **Expected**: Comprehensive help message with all available commands
-   - **Verify**: All command categories are listed (Basic, Report, Alert, Schedule, Admin)
+   - **Verify**: All command categories are listed (Basic, Report, Alert, Schedule, Screener, Admin)
 
 4. **Test case-insensitive commands**:
    - Send `/START`, `/Start`, `/start`
@@ -350,6 +361,7 @@ curl http://localhost:5000/login
    - Try `/report AAPL` (should fail)
    - Try `/alerts` (should fail)
    - Try `/schedules` (should fail)
+   - Try `/screener financial_stocks` (should fail)
    - **Expected**: Error messages about needing approval
 
 **Success Criteria**: Restricted commands are properly blocked before approval.
@@ -461,16 +473,20 @@ curl http://localhost:5000/login
    - Send `/schedules add GOOGL 11:00 daily -indicators=RSI,MACD,PE` to your bot
    - **Expected**: Schedule created with custom indicators
 
-5. **Edit schedule**:
+5. **Add schedule with JSON configuration**:
+   - Send `/schedules add_json '{"tickers":["AAPL","MSFT"],"timeframe":"1d","indicators":["RSI","MACD"]}' 12:00 daily` to your bot
+   - **Expected**: Schedule created with JSON configuration
+
+6. **Edit schedule**:
    - Send `/schedules edit 1 10:00 daily` to your bot
    - **Expected**: Confirmation message about schedule update
 
-6. **Pause/Resume schedule**:
+7. **Pause/Resume schedule**:
    - Send `/schedules pause 1` to your bot
    - Send `/schedules resume 1` to your bot
    - **Expected**: Confirmation messages for pause/resume
 
-7. **Delete schedule**:
+8. **Delete schedule**:
    - Send `/schedules delete 1` to your bot
    - **Expected**: Confirmation message about schedule deletion
 
@@ -756,9 +772,151 @@ curl http://localhost:5000/login
 
 ---
 
-## Phase 8: Error Handling and Edge Cases
+## Phase 8: Enhanced Screener and FMP Integration
 
-### Test 8.1: Network and API Errors
+### Test 8.1: Immediate Screener Commands
+
+**Objective**: Test the new `/screener` command with predefined screeners.
+
+**Steps**:
+1. **Test basic screener command**:
+   - Send `/screener financial_stocks` to your bot
+   - **Expected**: Immediate screener execution with results
+
+2. **Test screener with email flag**:
+   - Send `/screener small_cap_value -email` to your bot
+   - **Expected**: Screener results sent to both Telegram and email
+
+3. **Test Swiss stocks screener**:
+   - Send `/screener six_stocks` to your bot
+   - **Expected**: Swiss stocks from SIX exchange
+
+4. **Test large cap screener**:
+   - Send `/screener large_cap_stocks -email` to your bot
+   - **Expected**: Large cap stocks with email delivery
+
+5. **Test extra large cap screener**:
+   - Send `/screener extra_large_cap_stocks` to your bot
+   - **Expected**: Mega-cap stocks ($500B+ market cap)
+
+6. **Test mid cap screener**:
+   - Send `/screener mid_cap_stocks -email` to your bot
+   - **Expected**: Mid-cap stocks with email delivery
+
+**Success Criteria**: All predefined screeners work correctly.
+
+### Test 8.2: Custom JSON Screener Configuration
+
+**Objective**: Test screener with custom JSON configuration.
+
+**Steps**:
+1. **Test custom fundamental screener**:
+   - Send `/screener '{"screener_type":"fundamental","list_type":"us_medium_cap","fundamental_criteria":{"PE":{"operator":"<","value":20,"weight":1.0},"ROE":{"operator":">","value":15,"weight":1.0}},"min_score":1.0}'` to your bot
+   - **Expected**: Custom fundamental analysis
+
+2. **Test custom hybrid screener**:
+   - Send `/screener '{"screener_type":"hybrid","list_type":"us_large_cap","fundamental_criteria":{"PE":{"operator":"<","value":25,"weight":1.0}},"technical_criteria":{"RSI":{"operator":"<","value":70,"weight":0.5}},"min_score":1.0}'` to your bot
+   - **Expected**: Combined fundamental and technical analysis
+
+3. **Test custom screener with email**:
+   - Send `/screener '{"screener_type":"fundamental","list_type":"us_small_cap","fundamental_criteria":{"PE":{"operator":"<","value":15,"weight":1.0}},"min_score":1.0}' -email` to your bot
+   - **Expected**: Custom screener with email delivery
+
+**Success Criteria**: Custom JSON configurations work correctly.
+
+### Test 8.3: FMP Integration Testing
+
+**Objective**: Test Financial Modeling Prep (FMP) API integration.
+
+**Steps**:
+1. **Test FMP API connectivity**:
+   - Run the test script: `python test_predefined_screeners.py`
+   - **Expected**: FMP API returns stock data
+
+2. **Test FMP filtering**:
+   - Verify that funds and ETFs are filtered out
+   - **Expected**: Only actual stocks are returned
+
+3. **Test FMP criteria validation**:
+   - Check that unsupported criteria are logged as warnings
+   - **Expected**: Proper validation and logging
+
+**Success Criteria**: FMP integration works correctly with proper filtering.
+
+### Test 8.4: Enhanced Screener Features
+
+**Objective**: Test enhanced screener specific features.
+
+**Steps**:
+1. **Test company name display**:
+   - Run any screener command
+   - **Expected**: Company names appear next to tickers in results
+
+2. **Test fundamental indicators with recommendations**:
+   - Check screener results for BUY/SELL/HOLD recommendations
+   - **Expected**: Each indicator shows appropriate recommendation
+
+3. **Test technical indicators with recommendations**:
+   - Check screener results for technical analysis
+   - **Expected**: Technical indicators show recommendations
+
+4. **Test DCF analysis**:
+   - Check screener results for DCF valuations
+   - **Expected**: DCF analysis appears for eligible stocks
+
+5. **Test composite scoring**:
+   - Check screener results for composite scores (0-10 scale)
+   - **Expected**: Scores are calculated and displayed correctly
+
+**Success Criteria**: All enhanced screener features work correctly.
+
+### Test 8.5: Email Formatting
+
+**Objective**: Test email formatting for screener results.
+
+**Steps**:
+1. **Test screener email content**:
+   - Send `/screener financial_stocks -email` to your bot
+   - **Expected**: Email contains formatted results without raw JSON
+
+2. **Test fundamental indicators in email**:
+   - Check email for fundamental indicators with recommendations
+   - **Expected**: All fundamental indicators displayed with BUY/SELL/HOLD
+
+3. **Test technical indicators in email**:
+   - Check email for technical indicators with recommendations
+   - **Expected**: All technical indicators displayed with recommendations
+
+4. **Test company names in email**:
+   - Check email for company names next to tickers
+   - **Expected**: Company names displayed correctly
+
+**Success Criteria**: Email formatting is clean and informative.
+
+### Test 8.6: Scheduled Enhanced Screeners
+
+**Objective**: Test scheduled enhanced screener functionality.
+
+**Steps**:
+1. **Schedule predefined screener**:
+   - Send `/schedules add_json '{"type":"screener","screener_name":"financial_stocks"}' 09:00 daily` to your bot
+   - **Expected**: Scheduled screener created
+
+2. **Schedule custom screener**:
+   - Send `/schedules add_json '{"type":"screener","screener_config":{"screener_type":"fundamental","list_type":"us_medium_cap","fundamental_criteria":{"PE":{"operator":"<","value":20,"weight":1.0}},"min_score":1.0}}' 10:00 daily -email` to your bot
+   - **Expected**: Custom scheduled screener created with email
+
+3. **Test scheduled execution**:
+   - Wait for scheduled time or manually trigger
+   - **Expected**: Screener executes and generates results
+
+**Success Criteria**: Scheduled screeners work correctly.
+
+---
+
+## Phase 9: Error Handling and Edge Cases
+
+### Test 9.1: Network and API Errors
 
 **Objective**: Test error handling for network and API issues.
 
@@ -771,13 +929,17 @@ curl http://localhost:5000/login
    - Try to get report for very obscure ticker
    - **Expected**: Error message about data unavailability
 
-3. **Test rate limiting**:
+3. **Test FMP API errors**:
+   - Temporarily use invalid FMP API key
+   - **Expected**: Graceful error handling
+
+4. **Test rate limiting**:
    - Send multiple rapid commands
    - **Expected**: Bot handles rate limiting gracefully
 
 **Success Criteria**: Bot handles errors gracefully with user-friendly messages.
 
-### Test 8.2: Database and Storage
+### Test 9.2: Database and Storage
 
 **Objective**: Test database operations and storage limits.
 
@@ -794,7 +956,7 @@ curl http://localhost:5000/login
 
 **Success Criteria**: Database operations work correctly and limits are enforced.
 
-### Test 8.3: Bot Restart and Recovery
+### Test 9.3: Bot Restart and Recovery
 
 **Objective**: Test bot restart and state recovery.
 
@@ -815,7 +977,7 @@ curl http://localhost:5000/login
 
 ## Performance Testing
 
-### Test 9.1: Load Testing
+### Test 10.1: Load Testing
 
 **Objective**: Test bot performance under load.
 
@@ -828,9 +990,13 @@ curl http://localhost:5000/login
    - Request reports for multiple tickers simultaneously
    - **Expected**: Bot processes requests efficiently
 
+3. **Screener performance**:
+   - Run multiple screeners simultaneously
+   - **Expected**: Screeners complete within reasonable time
+
 **Success Criteria**: Bot performs well under load.
 
-### Test 9.2: Memory and Resource Usage
+### Test 10.2: Memory and Resource Usage
 
 **Objective**: Monitor resource usage during operation.
 
@@ -850,7 +1016,7 @@ curl http://localhost:5000/login
 
 ## Security Testing
 
-### Test 10.1: Access Control
+### Test 11.1: Access Control
 
 **Objective**: Test security and access control.
 
@@ -866,7 +1032,7 @@ curl http://localhost:5000/login
 
 **Success Criteria**: Security measures work correctly.
 
-### Test 10.2: Input Validation
+### Test 11.2: Input Validation
 
 **Objective**: Test input validation and sanitization.
 
@@ -876,13 +1042,17 @@ curl http://localhost:5000/login
    - Try SQL injection attempts
    - **Expected**: Input properly validated and sanitized
 
+2. **Test JSON validation**:
+   - Try invalid JSON in screener commands
+   - **Expected**: Proper JSON validation and error messages
+
 **Success Criteria**: All inputs are properly validated.
 
 ---
 
 ## Final Verification
 
-### Test 11.1: End-to-End Workflow
+### Test 12.1: End-to-End Workflow
 
 **Objective**: Test complete user workflow from registration to advanced usage.
 
@@ -892,7 +1062,7 @@ curl http://localhost:5000/login
    - Verify email
    - Request approval
    - Get approved
-   - Use all restricted features
+   - Use all restricted features including screeners
    - **Expected**: Complete workflow works seamlessly
 
 2. **Admin workflow**:
@@ -900,6 +1070,12 @@ curl http://localhost:5000/login
    - Send broadcasts
    - Monitor system
    - **Expected**: Admin workflow works correctly
+
+3. **Screener workflow**:
+   - Test all predefined screeners
+   - Test custom JSON configurations
+   - Test scheduled screeners
+   - **Expected**: All screener features work correctly
 
 **Success Criteria**: Complete system works end-to-end.
 
@@ -929,6 +1105,16 @@ curl http://localhost:5000/login
    - Verify database schema
    - Check for corruption
 
+5. **FMP API errors**:
+   - Check FMP_API_KEY environment variable
+   - Verify API key is valid
+   - Check API rate limits
+
+6. **Screener not working**:
+   - Check FMP API connectivity
+   - Verify screener configurations
+   - Check logs for specific errors
+
 ### Log Analysis
 
 Monitor logs for:
@@ -936,6 +1122,8 @@ Monitor logs for:
 - Performance issues
 - Security events
 - User activity patterns
+- FMP API responses
+- Screener execution details
 
 ---
 
@@ -948,6 +1136,12 @@ Monitor logs for:
 - [ ] All admin commands tested
 - [ ] Web admin panel tested
 - [ ] Advanced features tested
+- [ ] Enhanced screener functionality tested
+- [ ] FMP integration tested
+- [ ] Predefined screeners tested
+- [ ] Custom JSON configurations tested
+- [ ] Email formatting tested
+- [ ] Scheduled screeners tested
 - [ ] Error handling tested
 - [ ] Performance tested
 - [ ] Security tested
@@ -959,7 +1153,10 @@ After completing all tests, document:
 1. Test results and any issues found
 2. Performance metrics
 3. Security findings
-4. Recommendations for improvements
-5. Any bugs or unexpected behavior
+4. Screener accuracy and performance
+5. FMP API reliability and response times
+6. Email delivery success rates
+7. Recommendations for improvements
+8. Any bugs or unexpected behavior
 
-This comprehensive testing guide ensures thorough validation of all Telegram bot features and functionality.
+This comprehensive testing guide ensures thorough validation of all Telegram bot features and functionality, including the new enhanced screener system with FMP integration.
