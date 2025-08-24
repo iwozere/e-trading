@@ -35,21 +35,44 @@ def test_mid_cap_screener():
             "marketCapLowerThan": 2000000000, # $2B- market cap
             "peRatioLessThan": 25,            # P/E < 25
             "returnOnEquityMoreThan": 0.08,   # ROE > 8%
+            "isEtf": False,                   # Exclude ETFs
+            "isActivelyTrading": True,        # Only actively trading stocks
             "limit": 50                        # Get up to 50 stocks from FMP
         },
         "fundamental_criteria": [
             {
+                "indicator": "PE",
+                "operator": "max",
+                "value": 25,         # P/E < 25
+                "weight": 1.0,
+                "required": False
+            },
+            {
+                "indicator": "PB",
+                "operator": "max",
+                "value": 3.0,        # P/B < 3.0
+                "weight": 1.0,
+                "required": False
+            },
+            {
+                "indicator": "ROE",
+                "operator": "min",
+                "value": 0.10,       # ROE > 10%
+                "weight": 1.0,
+                "required": False
+            },
+            {
                 "indicator": "Revenue_Growth",
                 "operator": "min",
                 "value": 0.03,       # Revenue growth > 3%
-                "weight": 1.0,
+                "weight": 0.5,
                 "required": False
             },
             {
                 "indicator": "Operating_Margin",
                 "operator": "min",
                 "value": 0.05,       # Operating margin > 5%
-                "weight": 1.0,
+                "weight": 0.5,
                 "required": False
             }
         ],
@@ -81,6 +104,8 @@ def test_large_cap_screener():
             "marketCapLowerThan": 200000000000, # $200B- market cap
             "peRatioLessThan": 30,             # P/E < 30
             "returnOnEquityMoreThan": 0.10,    # ROE > 10%
+            "isEtf": False,                    # Exclude ETFs
+            "isActivelyTrading": True,         # Only actively trading stocks
             "limit": 50
         },
         "fundamental_criteria": [
@@ -147,6 +172,8 @@ def test_super_large_cap_screener():
             "marketCapMoreThan": 200000000000, # $200B+ market cap
             "peRatioLessThan": 35,             # P/E < 35
             "returnOnEquityMoreThan": 0.12,    # ROE > 12%
+            "isEtf": False,                    # Exclude ETFs
+            "isActivelyTrading": True,         # Only actively trading stocks
             "limit": 50
         },
         "fundamental_criteria": [
@@ -213,6 +240,8 @@ def test_swiss_screener():
             "exchange": "SWX",       # Swiss Exchange
             "peRatioLessThan": 20,   # P/E < 20
             "returnOnEquityMoreThan": 0.08, # ROE > 8%
+            "isEtf": False,          # Exclude ETFs
+            "isActivelyTrading": True, # Only actively trading stocks
             "limit": 50
         },
         "fundamental_criteria": [
@@ -372,53 +401,17 @@ def send_screener_email(screener_name, report):
         except Exception:
             pass  # Use default email if database lookup fails
 
-        # Initialize emailer
-        emailer = EmailNotifier()
+        # Create a mock config for the email function
+        class MockConfig:
+            def __init__(self, list_type):
+                self.list_type = list_type
 
-        # Create email content
-        subject = f"📊 {screener_name} Screener Results - {len(report.top_results)} Stocks Found"
+        # Use the same email function as the Telegram bot for consistency
+        from src.frontend.telegram.screener.notifications import send_screener_email as bot_send_email
+        mock_config = MockConfig(screener_name.lower().replace(' ', '_').replace('-', '_'))
+        bot_send_email(user_email, report, mock_config)
 
-        # Build email body
-        body = f"""
-        <h2>🎯 {screener_name} Screener Results</h2>
-        <p><strong>Analysis Summary:</strong></p>
-        <ul>
-            <li>FMP Pre-filtered: {len(report.fmp_results.get('fmp_results', [])) if hasattr(report, 'fmp_results') and report.fmp_results else 'N/A'} stocks</li>
-            <li>Processed: {report.total_tickers_processed} tickers</li>
-            <li>Found: {len(report.top_results)} matching stocks</li>
-        </ul>
-
-        <h3>📋 Top Results:</h3>
-        """
-
-        for i, result in enumerate(report.top_results[:20], 1):  # Show top 20
-            body += f"""
-            <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 5px;">
-                <h4>#{i}: {result.ticker}</h4>
-                <p><strong>Score:</strong> {result.composite_score:.1f}/10 | <strong>Recommendation:</strong> {result.recommendation}</p>
-            """
-
-            if result.fundamentals:
-                if result.fundamentals.current_price:
-                    body += f"<p><strong>Price:</strong> ${result.fundamentals.current_price:.2f}</p>"
-                if result.fundamentals.pe_ratio:
-                    body += f"<p><strong>P/E:</strong> {result.fundamentals.pe_ratio:.2f}</p>"
-                if result.fundamentals.return_on_equity:
-                    body += f"<p><strong>ROE:</strong> {result.fundamentals.return_on_equity:.2%}</p>"
-                if result.fundamentals.market_cap:
-                    body += f"<p><strong>Market Cap:</strong> ${result.fundamentals.market_cap:,.0f}</p>"
-
-            body += "</div>"
-
-        if len(report.top_results) > 20:
-            body += f"<p><em>... and {len(report.top_results) - 20} more results</em></p>"
-
-        # Send email
-        success = emailer.send_email(user_email, subject, body)
-        if success:
-            print(f"✅ {screener_name} results sent via email to {user_email}")
-        else:
-            print(f"❌ Failed to send {screener_name} email to {user_email}")
+        print(f"✅ {screener_name} results sent via email to {user_email}")
 
     except Exception as e:
         print(f"❌ Error sending {screener_name} email: {e}")
@@ -498,6 +491,8 @@ def test_comprehensive_fmp_analysis():
             "marketCapLowerThan": 2000000000, # $2B- market cap
             "peRatioLessThan": 20,            # P/E < 20
             "returnOnEquityMoreThan": 0.10,   # ROE > 10%
+            "isEtf": False,                   # Exclude ETFs
+            "isActivelyTrading": True,        # Only actively trading stocks
             "limit": 20                        # Get up to 20 stocks from FMP
         },
         "fundamental_criteria": [

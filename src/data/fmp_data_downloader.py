@@ -196,6 +196,9 @@ class FMPDataDownloader(BaseDataDownloader):
             # Exchange
             "exchange",
 
+            # ETF and Trading Status
+            "isEtf", "isActivelyTrading",
+
             # Limit
             "limit"
         }

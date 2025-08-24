@@ -233,7 +233,7 @@ class FMPIntegration:
                     "dividendYieldMoreThan", "dividendYieldLessThan",
                     "payoutRatioLessThan", "payoutRatioMoreThan",
                     "betaLessThan", "betaMoreThan",
-                    "exchange", "limit"
+                    "exchange", "isEtf", "isActivelyTrading", "limit"
                 }
 
                 invalid_criteria = set(fmp_criteria.keys()) - supported_criteria

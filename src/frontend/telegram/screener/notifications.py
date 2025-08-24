@@ -109,22 +109,183 @@ async def process_report_notifications(result, notification_manager, message, us
 def send_screener_email(email: str, report, config):
     """Send screener results via email."""
     try:
-        from src.frontend.telegram.screener.enhanced_screener import EnhancedScreener
+        # Create email content
+        subject = f"📊 {config.list_type.replace('_', ' ').title()} Screener Results - {len(report.top_results)} Stocks Found"
 
-        subject = f"Screener Results - {config.list_type.replace('_', ' ').title()}"
+        # Build email body
+        body = f"""
+        <h2>🎯 {config.list_type.replace('_', ' ').title()} Screener Results</h2>
+        <p><strong>Analysis Summary:</strong></p>
+        <ul>
+            <li>FMP Pre-filtered: {len(report.fmp_results.get('fmp_results', [])) if hasattr(report, 'fmp_results') and report.fmp_results else 'N/A'} stocks</li>
+            <li>Processed: {report.total_tickers_processed} tickers</li>
+            <li>Found: {len(report.top_results)} matching stocks</li>
+        </ul>
 
-        # Format email content using the enhanced screener's formatting
-        enhanced_screener = EnhancedScreener()
-        content = enhanced_screener.format_enhanced_telegram_message(report, config)
+        <h3>📋 Top Results:</h3>
+        """
 
-        # Convert markdown to HTML for email
-        content_html = content.replace('**', '<strong>').replace('*', '<em>')
-        content_html = content_html.replace('\n', '<br>')
+        for i, result in enumerate(report.top_results[:20], 1):  # Show top 20
+            body += f"""
+            <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 8px; background-color: #f9f9f9;">
+                <h4 style="color: #2c3e50; margin-top: 0;">#{i}: {result.ticker}</h4>
+                <p style="font-size: 16px; font-weight: bold; color: #e74c3c;">
+                    <strong>Score:</strong> {result.composite_score:.1f}/10 |
+                    <strong>Recommendation:</strong> {result.recommendation}
+                </p>
+            """
+
+            # Fundamental Analysis
+            if result.fundamentals:
+                body += "<div style='margin: 10px 0;'>"
+                body += "<h5 style='color: #27ae60; margin: 10px 0;'>📊 Fundamental Analysis:</h5>"
+
+                # Check if fundamentals has any data
+                has_fundamental_data = False
+
+                if result.fundamentals.current_price:
+                    body += f"<p><strong>Current Price:</strong> ${result.fundamentals.current_price:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.pe_ratio:
+                    body += f"<p><strong>P/E Ratio:</strong> {result.fundamentals.pe_ratio:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.forward_pe:
+                    body += f"<p><strong>Forward P/E:</strong> {result.fundamentals.forward_pe:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.price_to_book:
+                    body += f"<p><strong>P/B Ratio:</strong> {result.fundamentals.price_to_book:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.price_to_sales:
+                    body += f"<p><strong>P/S Ratio:</strong> {result.fundamentals.price_to_sales:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.peg_ratio:
+                    body += f"<p><strong>PEG Ratio:</strong> {result.fundamentals.peg_ratio:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.return_on_equity:
+                    body += f"<p><strong>ROE:</strong> {result.fundamentals.return_on_equity:.2%}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.return_on_assets:
+                    body += f"<p><strong>ROA:</strong> {result.fundamentals.return_on_assets:.2%}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.debt_to_equity:
+                    body += f"<p><strong>Debt/Equity:</strong> {result.fundamentals.debt_to_equity:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.current_ratio:
+                    body += f"<p><strong>Current Ratio:</strong> {result.fundamentals.current_ratio:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.quick_ratio:
+                    body += f"<p><strong>Quick Ratio:</strong> {result.fundamentals.quick_ratio:.2f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.operating_margin:
+                    body += f"<p><strong>Operating Margin:</strong> {result.fundamentals.operating_margin:.2%}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.profit_margin:
+                    body += f"<p><strong>Profit Margin:</strong> {result.fundamentals.profit_margin:.2%}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.revenue_growth:
+                    body += f"<p><strong>Revenue Growth:</strong> {result.fundamentals.revenue_growth:.2%}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.net_income_growth:
+                    body += f"<p><strong>Net Income Growth:</strong> {result.fundamentals.net_income_growth:.2%}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.free_cash_flow:
+                    body += f"<p><strong>Free Cash Flow:</strong> ${result.fundamentals.free_cash_flow:,.0f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.dividend_yield:
+                    body += f"<p><strong>Dividend Yield:</strong> {result.fundamentals.dividend_yield:.2%}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.payout_ratio:
+                    body += f"<p><strong>Payout Ratio:</strong> {result.fundamentals.payout_ratio:.2%}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.market_cap:
+                    body += f"<p><strong>Market Cap:</strong> ${result.fundamentals.market_cap:,.0f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.enterprise_value:
+                    body += f"<p><strong>Enterprise Value:</strong> ${result.fundamentals.enterprise_value:,.0f}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.sector:
+                    body += f"<p><strong>Sector:</strong> {result.fundamentals.sector}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.industry:
+                    body += f"<p><strong>Industry:</strong> {result.fundamentals.industry}</p>"
+                    has_fundamental_data = True
+                if result.fundamentals.country:
+                    body += f"<p><strong>Country:</strong> {result.fundamentals.country}</p>"
+                    has_fundamental_data = True
+
+                # Debug: Show if no fundamental data was found
+                if not has_fundamental_data:
+                    body += "<p><em>No fundamental data available for this ticker</em></p>"
+
+                body += "</div>"
+
+            # Technical Analysis
+            if result.technicals:
+                body += "<div style='margin: 10px 0;'>"
+                body += "<h5 style='color: #3498db; margin: 10px 0;'>📈 Technical Analysis:</h5>"
+
+                if hasattr(result.technicals, 'rsi') and result.technicals.rsi is not None:
+                    body += f"<p><strong>RSI:</strong> {result.technicals.rsi:.2f}</p>"
+                if hasattr(result.technicals, 'macd') and result.technicals.macd is not None:
+                    body += f"<p><strong>MACD:</strong> {result.technicals.macd:.4f}</p>"
+                if hasattr(result.technicals, 'macd_signal') and result.technicals.macd_signal is not None:
+                    body += f"<p><strong>MACD Signal:</strong> {result.technicals.macd_signal:.4f}</p>"
+                if hasattr(result.technicals, 'sma_50') and result.technicals.sma_50 is not None:
+                    body += f"<p><strong>SMA 50:</strong> ${result.technicals.sma_50:.2f}</p>"
+                if hasattr(result.technicals, 'sma_200') and result.technicals.sma_200 is not None:
+                    body += f"<p><strong>SMA 200:</strong> ${result.technicals.sma_200:.2f}</p>"
+                if hasattr(result.technicals, 'ema_12') and result.technicals.ema_12 is not None:
+                    body += f"<p><strong>EMA 12:</strong> ${result.technicals.ema_12:.2f}</p>"
+                if hasattr(result.technicals, 'ema_26') and result.technicals.ema_26 is not None:
+                    body += f"<p><strong>EMA 26:</strong> ${result.technicals.ema_26:.2f}</p>"
+                if hasattr(result.technicals, 'bb_upper') and result.technicals.bb_upper is not None:
+                    body += f"<p><strong>Bollinger Upper:</strong> ${result.technicals.bb_upper:.2f}</p>"
+                if hasattr(result.technicals, 'bb_lower') and result.technicals.bb_lower is not None:
+                    body += f"<p><strong>Bollinger Lower:</strong> ${result.technicals.bb_lower:.2f}</p>"
+                if hasattr(result.technicals, 'bb_middle') and result.technicals.bb_middle is not None:
+                    body += f"<p><strong>Bollinger Middle:</strong> ${result.technicals.bb_middle:.2f}</p>"
+                if hasattr(result.technicals, 'adx') and result.technicals.adx is not None:
+                    body += f"<p><strong>ADX:</strong> {result.technicals.adx:.2f}</p>"
+                if hasattr(result.technicals, 'atr') and result.technicals.atr is not None:
+                    body += f"<p><strong>ATR:</strong> {result.technicals.atr:.2f}</p>"
+                if hasattr(result.technicals, 'stoch_k') and result.technicals.stoch_k is not None:
+                    body += f"<p><strong>Stochastic K:</strong> {result.technicals.stoch_k:.2f}</p>"
+                if hasattr(result.technicals, 'stoch_d') and result.technicals.stoch_d is not None:
+                    body += f"<p><strong>Stochastic D:</strong> {result.technicals.stoch_d:.2f}</p>"
+                if hasattr(result.technicals, 'williams_r') and result.technicals.williams_r is not None:
+                    body += f"<p><strong>Williams %R:</strong> {result.technicals.williams_r:.2f}</p>"
+                if hasattr(result.technicals, 'cci') and result.technicals.cci is not None:
+                    body += f"<p><strong>CCI:</strong> {result.technicals.cci:.2f}</p>"
+                if hasattr(result.technicals, 'roc') and result.technicals.roc is not None:
+                    body += f"<p><strong>ROC:</strong> {result.technicals.roc:.2f}</p>"
+                if hasattr(result.technicals, 'mfi') and result.technicals.mfi is not None:
+                    body += f"<p><strong>MFI:</strong> {result.technicals.mfi:.2f}</p>"
+
+                body += "</div>"
+
+            # DCF Analysis
+            if result.dcf_valuation and result.dcf_valuation.fair_value:
+                dcf = result.dcf_valuation
+                if result.fundamentals and result.fundamentals.current_price:
+                    current_price = result.fundamentals.current_price
+                    fair_value = dcf.fair_value
+                    upside = ((fair_value - current_price) / current_price) * 100
+                    body += "<div style='margin: 10px 0;'>"
+                    body += "<h5 style='color: #f39c12; margin: 10px 0;'>💰 DCF Analysis:</h5>"
+                    body += f"<p><strong>Fair Value:</strong> ${fair_value:.2f}</p>"
+                    body += f"<p><strong>Current Price:</strong> ${current_price:.2f}</p>"
+                    body += f"<p><strong>Upside Potential:</strong> {upside:+.1f}%</p>"
+                    body += "</div>"
+
+            body += "</div>"
+
+        if len(report.top_results) > 20:
+            body += f"<p><em>... and {len(report.top_results) - 20} more results</em></p>"
 
         # Send email using existing email infrastructure
         from src.notification.emailer import EmailNotifier
         email_notifier = EmailNotifier()
-        email_notifier.send_email(email, subject, content_html)
+        email_notifier.send_email(email, subject, body)
 
         _logger.info("Screener results sent via email to %s", email)
 
