@@ -101,7 +101,7 @@ async def send_broadcast_message(message_text: str, sent_by: str = "admin") -> t
         # Use the bot API to send broadcast
         async with aiohttp.ClientSession() as session:
             async with session.post(f"{BOT_API_URL}/api/broadcast", json={
-                "message": message_text,
+                "message": message_text,xxx
                 "title": "Alkotrader Announcement"
             }) as response:
                 if response.status == 200:

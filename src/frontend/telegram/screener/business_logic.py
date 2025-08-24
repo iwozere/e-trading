@@ -2060,6 +2060,7 @@ def _get_predefined_screener_config(screener_name: str):
     try:
         import json
         from pathlib import Path
+        from src.frontend.telegram.screener.screener_config_parser import ScreenerConfigParser
 
         # Load FMP screener criteria
         config_path = Path(__file__).resolve().parents[4] / "config" / "screener" / "fmp_screener_criteria.json"
@@ -2071,8 +2072,8 @@ def _get_predefined_screener_config(screener_name: str):
         if screener_name in fmp_config.get("predefined_strategies", {}):
             strategy = fmp_config["predefined_strategies"][screener_name]
 
-            # Create screener configuration
-            config = {
+            # Create screener configuration dictionary
+            config_dict = {
                 "screener_type": "hybrid",
                 "list_type": _get_list_type_for_screener(screener_name),
                 "fmp_criteria": strategy["criteria"],
@@ -2084,7 +2085,9 @@ def _get_predefined_screener_config(screener_name: str):
                 "interval": "1d"
             }
 
-            return config
+            # Convert dictionary to ScreenerConfig object
+            parser = ScreenerConfigParser()
+            return parser._parse_config_dict(config_dict)
 
         return None
 
