@@ -893,7 +893,30 @@ curl http://localhost:5000/login
 
 **Success Criteria**: Email formatting is clean and informative.
 
-### Test 8.6: Scheduled Enhanced Screeners
+### Test 8.6: Message Length Handling
+
+**Objective**: Test handling of long messages in Telegram.
+
+**Steps**:
+1. **Test long screener results**:
+   - Run a screener with many results (e.g., `/screener large_cap_stocks`)
+   - **Expected**: Long messages are automatically split into multiple parts
+
+2. **Test long help messages**:
+   - Send `/help` command
+   - **Expected**: Help content is condensed for Telegram, full version available via email
+
+3. **Test long report messages**:
+   - Generate a comprehensive report with many indicators
+   - **Expected**: Report is summarized for Telegram, full details sent via email
+
+4. **Test message splitting indicators**:
+   - Check for "📄 Part X/Y" indicators in split messages
+   - **Expected**: Clear indication of message parts
+
+**Success Criteria**: Long messages are handled gracefully without errors.
+
+### Test 8.7: Scheduled Enhanced Screeners
 
 **Objective**: Test scheduled enhanced screener functionality.
 
@@ -1114,6 +1137,12 @@ curl http://localhost:5000/login
    - Check FMP API connectivity
    - Verify screener configurations
    - Check logs for specific errors
+
+7. **Telegram message too long errors**:
+   - Check if message splitting is working
+   - Verify message length limits (4000 chars per message)
+   - Check for automatic message splitting indicators
+   - Use email flag for very long content
 
 ### Log Analysis
 

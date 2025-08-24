@@ -44,6 +44,7 @@ async def process_report_notifications(result, notification_manager, message, us
                     channels=["email"],
                     email_receiver=user_email
                 )
+
     # Telegram notifications - Send directly to avoid queue issues
     _logger.info("Starting Telegram notifications for %d reports", len(result["reports"]))
     for i, report in enumerate(result["reports"]):
@@ -70,12 +71,15 @@ async def process_report_notifications(result, notification_manager, message, us
                     )
                     _logger.info("Successfully sent error notification for %s", report['ticker'])
                 else:
+                    # Create a more concise message for Telegram to avoid length issues
+                    telegram_message = _create_telegram_friendly_message(report["message"], report.get("ticker", "Unknown"))
+
                     # Send success notification directly
                     await notification_manager.channels["telegram"].send(
                         notification_manager._create_notification(
                             notification_type="INFO",
                             title=f"Report for {report['ticker']}",
-                            message=report["message"],
+                            message=telegram_message,
                             data={
                                 "channels": ["telegram"],
                                 "telegram_chat_id": message.chat.id,
@@ -89,11 +93,12 @@ async def process_report_notifications(result, notification_manager, message, us
                 _logger.exception("Error sending notification for %s", report['ticker'])
                 # Try fallback without attachment
                 try:
+                    telegram_message = _create_telegram_friendly_message(report["message"], report.get("ticker", "Unknown"))
                     await notification_manager.channels["telegram"].send(
                         notification_manager._create_notification(
                             notification_type="INFO",
                             title=f"Report for {report['ticker']}",
-                            message=report["message"] + "\n\n[Chart could not be sent due to an error.]",
+                            message=telegram_message + "\n\n[Chart could not be sent due to an error.]",
                             data={
                                 "channels": ["telegram"],
                                 "telegram_chat_id": message.chat.id,
@@ -104,6 +109,91 @@ async def process_report_notifications(result, notification_manager, message, us
                     _logger.info("Successfully sent fallback Telegram notification for %s", report['ticker'])
                 except Exception as e2:
                     _logger.exception("Error sending fallback notification for %s", report['ticker'])
+
+
+def _create_telegram_friendly_message(message: str, ticker: str) -> str:
+    """
+    Create a more concise message for Telegram to avoid length limits.
+
+    Args:
+        message: Original message content
+        ticker: Stock ticker symbol
+
+    Returns:
+        Concise message suitable for Telegram
+    """
+    # If message is already short enough, return as is
+    if len(message) <= 3000:
+        return message
+
+    # For very long messages, create a summary
+    lines = message.split('\n')
+    summary_lines = []
+
+    # Keep the header/title
+    for line in lines[:5]:  # Keep first 5 lines (usually header)
+        if line.strip():
+            summary_lines.append(line)
+
+    # Add a summary indicator
+    summary_lines.append("\n📊 **Summary Report** (Full details sent via email)")
+
+    # Try to extract key metrics
+    key_metrics = []
+    for line in lines:
+        if any(keyword in line.lower() for keyword in ['price:', 'pe ratio:', 'roe:', 'rsi:', 'macd:']):
+            if len(key_metrics) < 8:  # Limit to 8 key metrics
+                key_metrics.append(line.strip())
+
+    if key_metrics:
+        summary_lines.append("\n**Key Metrics:**")
+        summary_lines.extend(key_metrics[:8])
+
+    summary_lines.append(f"\n💡 Use `/report {ticker} -email` for complete analysis")
+
+    return '\n'.join(summary_lines)
+
+
+def _create_telegram_friendly_help(help_content: str) -> str:
+    """
+    Create a more concise help message for Telegram to avoid length limits.
+
+    Args:
+        help_content: Original help content
+
+    Returns:
+        Concise help message suitable for Telegram
+    """
+    # If help content is already short enough, return as is
+    if len(help_content) <= 3000:
+        return help_content
+
+    # For very long help content, create a summary
+    lines = help_content.split('\n')
+    summary_lines = []
+
+    # Keep the header
+    for line in lines[:10]:  # Keep first 10 lines (header and quick start)
+        if line.strip():
+            summary_lines.append(line)
+
+    # Add a summary indicator
+    summary_lines.append("\n📋 **Quick Command Reference**")
+
+    # Extract key command categories
+    command_categories = []
+    for line in lines:
+        if line.startswith('📊') or line.startswith('🚨') or line.startswith('⏰') or line.startswith('🔍') or line.startswith('🔧'):
+            if len(command_categories) < 10:  # Limit categories
+                command_categories.append(line.strip())
+
+    if command_categories:
+        summary_lines.extend(command_categories)
+
+    summary_lines.append("\n💡 **For complete help with examples, use:** `/help -email`")
+    summary_lines.append("📞 **Need support?** Contact admin or check admin panel")
+
+    return '\n'.join(summary_lines)
 
 
 def send_screener_email(email: str, report, config):
@@ -628,11 +718,14 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
         if email_flag and user_email:
             channels.append("email")
 
+        # Create a more concise help message for Telegram
+        telegram_help = _create_telegram_friendly_help(help_content)
+
         # Send Telegram notification
         await notification_manager.send_notification(
             notification_type="INFO",
             title="Alkotrader Bot - Complete Help Guide",
-            message=help_content,
+            message=telegram_help,
             priority="NORMAL",
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
@@ -1181,8 +1274,11 @@ async def process_screener_command(message, telegram_user_id, args, notification
         # Send response
         if result["status"] == "success":
             if "report" in result:
+                # Create a more concise message for Telegram to avoid length issues
+                telegram_message = _create_telegram_friendly_message(result["message"], "Screener Results")
+
                 # Send formatted message to Telegram
-                await message.answer(result["message"], parse_mode='Markdown')
+                await message.answer(telegram_message, parse_mode='Markdown')
             else:
                 # Email sent confirmation
                 await message.answer(result["message"])
