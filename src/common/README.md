@@ -1,16 +1,173 @@
 # Common Module
 
-This module provides unified access to data providers, fundamentals, technical analysis, and ticker analysis functions.
+This module provides unified access to data providers, fundamentals, technical analysis, and ticker analysis functions with a modern, unified indicator system.
 
 ## Overview
 
-The common module is organized into specialized submodules:
+The common module is organized into specialized submodules with a unified indicator system:
 
+- **`indicator_service.py`** - Unified indicator service with TA-Lib direct calculation
+- **`recommendation_engine.py`** - Unified recommendation engine for all indicators
 - **`fundamentals.py`** - Fundamental data retrieval and normalization
-- **`technicals.py`** - Technical indicator calculations
+- **`technicals.py`** - Technical indicator calculations (legacy)
 - **`ticker_analyzer.py`** - Complete ticker analysis with fundamentals and technicals
 - **`ticker_chart.py`** - Chart generation for ticker analysis
 - **`__init__.py`** - Core utilities (OHLCV data, period/interval conversion)
+
+## Unified Indicator System
+
+The new unified indicator system provides a single, consistent interface for calculating both technical and fundamental indicators with direct TA-Lib integration and intelligent caching.
+
+### Quick Start
+
+```python
+from src.common.indicator_service import get_indicator_service
+from src.models.indicators import IndicatorCalculationRequest
+
+# Get the unified indicator service
+service = get_indicator_service()
+
+# Calculate indicators for a single ticker
+request = IndicatorCalculationRequest(
+    ticker="AAPL",
+    indicators=["RSI", "MACD", "PE_RATIO", "ROE"],
+    timeframe="1d",
+    period="1y",
+    include_recommendations=True
+)
+
+result = await service.get_indicators(request)
+
+print(f"Composite Score: {result.composite_score:.2f}")
+print(f"Overall Recommendation: {result.overall_recommendation.recommendation.value}")
+
+# Show individual indicators
+for name, indicator in result.get_all_indicators().items():
+    print(f"{name}: {indicator.value:.4f} ({indicator.recommendation.recommendation.value})")
+```
+
+### Batch Processing
+
+```python
+from src.models.indicators import BatchIndicatorRequest
+
+# Calculate indicators for multiple tickers
+batch_request = BatchIndicatorRequest(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    indicators=["RSI", "MACD", "PE_RATIO"],
+    timeframe="1d",
+    period="1y",
+    max_concurrent=3,
+    include_recommendations=True
+)
+
+results = await service.get_batch_indicators(batch_request)
+
+for ticker, result in results.items():
+    print(f"{ticker}: Score {result.composite_score:.2f}")
+```
+
+### Available Indicators
+
+#### Technical Indicators (22 total)
+- **RSI** - Relative Strength Index
+- **MACD** - Moving Average Convergence Divergence (MACD, Signal, Histogram)
+- **Bollinger Bands** - Upper, Middle, Lower bands
+- **Stochastic** - Stochastic Oscillator (K and D)
+- **ADX** - Average Directional Index (ADX, Plus DI, Minus DI)
+- **SMA** - Simple Moving Averages (50, 200)
+- **EMA** - Exponential Moving Averages (12, 26)
+- **CCI** - Commodity Channel Index
+- **ROC** - Rate of Change
+- **MFI** - Money Flow Index
+- **Williams %R** - Williams Percent Range
+- **ATR** - Average True Range
+
+#### Fundamental Indicators (21 total)
+- **PE_RATIO** - Price-to-Earnings Ratio
+- **FORWARD_PE** - Forward P/E Ratio
+- **PB_RATIO** - Price-to-Book Ratio
+- **PS_RATIO** - Price-to-Sales Ratio
+- **PEG_RATIO** - Price/Earnings-to-Growth Ratio
+- **ROE** - Return on Equity
+- **ROA** - Return on Assets
+- **DEBT_TO_EQUITY** - Debt-to-Equity Ratio
+- **CURRENT_RATIO** - Current Ratio
+- **QUICK_RATIO** - Quick Ratio
+- **OPERATING_MARGIN** - Operating Margin
+- **PROFIT_MARGIN** - Profit Margin
+- **REVENUE_GROWTH** - Revenue Growth
+- **NET_INCOME_GROWTH** - Net Income Growth
+- **FREE_CASH_FLOW** - Free Cash Flow
+- **DIVIDEND_YIELD** - Dividend Yield
+- **PAYOUT_RATIO** - Payout Ratio
+- **BETA** - Beta
+- **MARKET_CAP** - Market Capitalization
+- **ENTERPRISE_VALUE** - Enterprise Value
+
+### Service Information
+
+```python
+# Get service information
+info = service.get_service_info()
+print(f"Service: {info['service']} v{info['version']}")
+
+# Get available indicators
+available = service.get_available_indicators()
+print(f"Technical: {len(available['technical'])} indicators")
+print(f"Fundamental: {len(available['fundamental'])} indicators")
+
+# Get cache statistics
+stats = service.get_cache_stats()
+print(f"Cache size: {stats['cache_size']}/{stats['max_size']}")
+```
+
+## Recommendation Engine
+
+The unified recommendation engine provides consistent buy/sell/hold recommendations for all indicators.
+
+### Technical Recommendations
+
+```python
+from src.common.recommendation_engine import RecommendationEngine
+
+engine = RecommendationEngine()
+
+# Get RSI recommendation
+rsi_rec = engine.get_recommendation("RSI", 25.5)
+print(f"RSI 25.5: {rsi_rec.recommendation.value} (Confidence: {rsi_rec.confidence:.2f})")
+
+# Get MACD recommendation (needs context)
+macd_rec = engine.get_recommendation("MACD", 0.5, {
+    'macd_signal': 0.3,
+    'macd_histogram': 0.2
+})
+print(f"MACD: {macd_rec.recommendation.value}")
+```
+
+### Fundamental Recommendations
+
+```python
+# Get P/E recommendation
+pe_rec = engine.get_recommendation("PE_RATIO", 15.2)
+print(f"P/E 15.2: {pe_rec.recommendation.value}")
+
+# Get ROE recommendation
+roe_rec = engine.get_recommendation("ROE", 0.18)
+print(f"ROE 18%: {roe_rec.recommendation.value}")
+```
+
+### Composite Recommendations
+
+```python
+# Get overall recommendation from indicator set
+composite = engine.get_composite_recommendation(result)
+print(f"Overall: {composite.recommendation.value}")
+print(f"Confidence: {composite.confidence:.2f}")
+print(f"Reasoning: {composite.reasoning}")
+print(f"Technical Score: {composite.technical_score:.2f}")
+print(f"Fundamental Score: {composite.fundamental_score:.2f}")
+```
 
 ## Fundamentals
 
@@ -57,9 +214,9 @@ df = get_ohlcv('AAPL', '1d', '2y', provider='yf')
 print(df.head())
 ```
 
-## Technical Analysis
+## Technical Analysis (Legacy)
 
-Calculate technical indicators:
+Calculate technical indicators using the legacy system:
 
 ```python
 from src.common.technicals import get_technicals, calculate_technicals_from_df
@@ -80,17 +237,6 @@ technicals = get_technicals(
     indicator_params={'rsi': {'timeperiod': 10}}
 )
 ```
-
-### Available Technical Indicators
-
-- **RSI** - Relative Strength Index
-- **MACD** - Moving Average Convergence Divergence
-- **Bollinger Bands** - Upper, Middle, Lower bands
-- **Stochastic** - Stochastic Oscillator (K and D)
-- **ADX** - Average Directional Index
-- **OBV** - On Balance Volume
-- **ADR** - Average Daily Range
-- **SMA** - Simple Moving Averages (50, 200)
 
 ## Ticker Analysis
 
@@ -169,8 +315,10 @@ print(f"From {start_date} to {end_date}")
 ```
 src/common/
 ├── __init__.py              # Core utilities (get_ohlcv, analyze_period_interval)
+├── indicator_service.py     # Unified indicator service with TA-Lib
+├── recommendation_engine.py # Unified recommendation engine
 ├── fundamentals.py          # Fundamentals logic (get_fundamentals, normalize_fundamentals)
-├── technicals.py            # Technicals logic (get_technicals, calculate_technicals_from_df)
+├── technicals.py            # Technicals logic (legacy system)
 ├── ticker_analyzer.py       # Complete ticker analysis
 ├── ticker_chart.py          # Chart generation
 └── README.md               # This file
@@ -181,10 +329,17 @@ src/common/
 ### Import Patterns
 
 ```python
+# Unified Indicator System (Recommended)
+from src.common.indicator_service import get_indicator_service
+from src.models.indicators import IndicatorCalculationRequest, BatchIndicatorRequest
+
+# Recommendation Engine
+from src.common.recommendation_engine import RecommendationEngine
+
 # Fundamentals
 from src.common.fundamentals import get_fundamentals, normalize_fundamentals
 
-# Technicals  
+# Technicals (Legacy)
 from src.common.technicals import get_technicals, calculate_technicals_from_df
 
 # Ticker Analysis
@@ -201,11 +356,19 @@ from src.common import get_ohlcv, analyze_period_interval
 
 ```python
 try:
+    # Unified indicator system
+    result = await service.get_indicators(request)
+except Exception as e:
+    print(f"Error: {e}")
+
+try:
+    # Legacy fundamentals
     fundamentals = get_fundamentals('INVALID', provider='yf')
 except ValueError as e:
     print(f"Error: {e}")
 
 try:
+    # Legacy technicals
     technicals = get_technicals('AAPL', '1d', '2y', provider='yf')
 except Exception as e:
     print(f"Error: {e}")
@@ -227,10 +390,13 @@ fundamentals = get_fundamentals('AAPL', provider='av')  # Force Alpha Vantage
 Run the test suite:
 
 ```bash
-# Run all common module tests
-python -m pytest tests/test_common.py -v
+# Test unified indicator system
+python -c "from src.common.indicator_service import get_indicator_service; print('Indicator Service OK')"
 
-# Test specific functionality
+# Test recommendation engine
+python -c "from src.common.recommendation_engine import RecommendationEngine; print('Recommendation Engine OK')"
+
+# Test legacy systems
 python -c "from src.common.fundamentals import get_fundamentals; print('Fundamentals OK')"
 python -c "from src.common.technicals import get_technicals; print('Technicals OK')"
 python -c "from src.common.ticker_analyzer import analyze_ticker; print('Analyzer OK')"
@@ -238,13 +404,99 @@ python -c "from src.common.ticker_analyzer import analyze_ticker; print('Analyze
 
 ## Examples
 
-### Complete Analysis Workflow
+### Complete Analysis Workflow (Unified System)
 
 ```python
+from src.common.indicator_service import get_indicator_service
+from src.models.indicators import IndicatorCalculationRequest
+
+# Get unified service
+service = get_indicator_service()
+
+# Analyze ticker with comprehensive indicators
+request = IndicatorCalculationRequest(
+    ticker="AAPL",
+    indicators=["RSI", "MACD", "BB_UPPER", "BB_LOWER", "PE_RATIO", "ROE", "DIVIDEND_YIELD"],
+    timeframe="1d",
+    period="1y",
+    include_recommendations=True
+)
+
+result = await service.get_indicators(request)
+
+# Display results
+print(f"Analysis for {result.ticker}")
+print(f"Composite Score: {result.composite_score:.2f}")
+print(f"Overall Recommendation: {result.overall_recommendation.recommendation.value}")
+print(f"Confidence: {result.overall_recommendation.confidence:.2f}")
+print(f"Reasoning: {result.overall_recommendation.reasoning}")
+
+# Show technical indicators
+print("\nTechnical Indicators:")
+for name, indicator in result.get_all_indicators().items():
+    if indicator.category.value == 'technical':
+        print(f"  {name}: {indicator.value:.4f} ({indicator.recommendation.recommendation.value})")
+
+# Show fundamental indicators
+print("\nFundamental Indicators:")
+for name, indicator in result.get_all_indicators().items():
+    if indicator.category.value == 'fundamental':
+        print(f"  {name}: {indicator.value:.4f} ({indicator.recommendation.recommendation.value})")
+```
+
+### Batch Analysis
+
+```python
+# Analyze multiple tickers efficiently
+batch_request = BatchIndicatorRequest(
+    tickers=["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN"],
+    indicators=["RSI", "MACD", "PE_RATIO", "ROE"],
+    timeframe="1d",
+    period="1y",
+    max_concurrent=5,
+    include_recommendations=True
+)
+
+results = await service.get_batch_indicators(batch_request)
+
+# Sort by composite score
+sorted_results = sorted(results.items(), key=lambda x: x[1].composite_score, reverse=True)
+
+print("Top Performers:")
+for ticker, result in sorted_results:
+    print(f"{ticker}: Score {result.composite_score:.2f} - {result.overall_recommendation.recommendation.value}")
+```
+
+### Custom Recommendation Analysis
+
+```python
+from src.common.recommendation_engine import RecommendationEngine
+
+engine = RecommendationEngine()
+
+# Analyze specific indicators
+indicators_to_analyze = [
+    ("RSI", 25.5),
+    ("PE_RATIO", 15.2),
+    ("ROE", 0.18),
+    ("DIVIDEND_YIELD", 3.5)
+]
+
+print("Individual Indicator Analysis:")
+for indicator, value in indicators_to_analyze:
+    rec = engine.get_recommendation(indicator, value)
+    print(f"{indicator} {value}: {rec.recommendation.value} (Confidence: {rec.confidence:.2f})")
+    print(f"  Reason: {rec.reason}")
+```
+
+### Legacy System Integration
+
+```python
+# Use legacy systems alongside unified system
 from src.common.ticker_analyzer import analyze_ticker
 from src.common.ticker_chart import generate_chart
 
-# Analyze ticker
+# Legacy analysis
 analysis = analyze_ticker('AAPL', period='1y', interval='1d')
 
 # Generate chart
@@ -254,41 +506,65 @@ chart_image = generate_chart(analysis)
 with open('aapl_analysis.png', 'wb') as f:
     f.write(chart_image)
 
-print(f"Analysis complete for {analysis.ticker}")
+print(f"Legacy analysis complete for {analysis.ticker}")
 print(f"PE Ratio: {analysis.fundamentals.pe_ratio}")
 print(f"RSI: {analysis.technicals.rsi}")
 ```
 
-### Multi-Provider Fundamentals
+## Migration Guide
 
-```python
-from src.common.fundamentals import get_fundamentals
+### From Legacy to Unified System
 
-# Get comprehensive fundamentals from all providers
-fundamentals = get_fundamentals('AAPL')
-
-print(f"Data sources: {fundamentals.sources}")
-print(f"PE Ratio from: {fundamentals.sources.get('pe_ratio', 'Unknown')}")
-```
-
-### Custom Technical Analysis
-
+**Before (Legacy):**
 ```python
 from src.common.technicals import get_technicals
+from src.common.fundamentals import get_fundamentals
 
-# Get specific indicators with custom parameters
-technicals = get_technicals(
-    'AAPL',
-    '1d',
-    '6mo',
-    provider='yf',
-    indicators=['rsi', 'macd', 'bollinger'],
-    indicator_params={
-        'rsi': {'timeperiod': 10},
-        'macd': {'fastperiod': 8, 'slowperiod': 21}
-    }
+# Separate calls for technicals and fundamentals
+technicals = get_technicals('AAPL', '1d', '1y', provider='yf')
+fundamentals = get_fundamentals('AAPL', provider='yf')
+
+# Manual recommendation logic
+if technicals.rsi < 30:
+    rsi_rec = "BUY"
+elif technicals.rsi > 70:
+    rsi_rec = "SELL"
+else:
+    rsi_rec = "HOLD"
+```
+
+**After (Unified):**
+```python
+from src.common.indicator_service import get_indicator_service
+from src.models.indicators import IndicatorCalculationRequest
+
+service = get_indicator_service()
+
+request = IndicatorCalculationRequest(
+    ticker="AAPL",
+    indicators=["RSI", "MACD", "PE_RATIO", "ROE"],
+    timeframe="1d",
+    period="1y",
+    include_recommendations=True
 )
 
-print(f"RSI (10): {technicals.rsi}")
-print(f"MACD: {technicals.macd}")
-``` 
+result = await service.get_indicators(request)
+
+# Automatic recommendations with confidence scores
+for name, indicator in result.get_all_indicators().items():
+    print(f"{name}: {indicator.recommendation.recommendation.value} (Confidence: {indicator.recommendation.confidence:.2f})")
+
+# Overall composite recommendation
+print(f"Overall: {result.overall_recommendation.recommendation.value}")
+```
+
+### Benefits of Migration
+
+1. **Unified Interface**: Single service for all indicators
+2. **Automatic Recommendations**: Built-in buy/sell/hold logic
+3. **Confidence Scores**: Quantitative confidence for each recommendation
+4. **Composite Analysis**: Overall recommendation combining all indicators
+5. **Better Performance**: Direct TA-Lib integration with intelligent caching
+6. **Parameter-Aware Caching**: Handles different indicator combinations efficiently
+7. **Batch Processing**: Efficient multi-ticker analysis
+8. **Error Handling**: Robust error handling and fallbacks 
