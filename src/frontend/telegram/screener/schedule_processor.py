@@ -203,9 +203,33 @@ class ScheduleProcessor:
                 _logger.error("Enhanced screener failed for schedule %s: %s", schedule_id, report.error)
                 return
 
+            # Check if email is requested
+            email = schedule.get("email", False)
+
+            if email:
+                # Send via email
+                try:
+                    from src.frontend.telegram import db
+                    user_status = db.get_user_status(user_id)
+                    if user_status and user_status.get("email"):
+                        from src.frontend.telegram.screener.notifications import send_screener_email
+
+                        # Create a mock config for the email function
+                        class MockConfig:
+                            def __init__(self, list_type):
+                                self.list_type = list_type
+
+                        mock_config = MockConfig(screener_config.list_type)
+                        send_screener_email(user_status["email"], report, mock_config)
+                        _logger.info("Enhanced screener email sent successfully for schedule %s", schedule_id)
+                    else:
+                        _logger.warning("No email found for user %s in schedule %s", user_id, schedule_id)
+                except Exception as e:
+                    _logger.exception("Error sending enhanced screener email for schedule %s", schedule_id)
+
             # Format report for Telegram
             from src.frontend.telegram.screener.enhanced_screener import format_enhanced_telegram_message
-            message = format_enhanced_telegram_message(report)
+            message = format_enhanced_telegram_message(report, screener_config)
 
             # Send via HTTP API
             if self.api_client:
@@ -376,6 +400,30 @@ async def execute_screener_schedule(self, schedule: Dict[str, Any]):
             if report.error:
                 _logger.error("Screener failed for schedule %s: %s", schedule_id, report.error)
                 return
+
+            # Check if email is requested
+            email = schedule.get("email", False)
+
+            if email:
+                # Send via email
+                try:
+                    from src.frontend.telegram import db
+                    user_status = db.get_user_status(user_id)
+                    if user_status and user_status.get("email"):
+                        from src.frontend.telegram.screener.notifications import send_screener_email
+
+                        # Create a mock config for the email function
+                        class MockConfig:
+                            def __init__(self, list_type):
+                                self.list_type = list_type
+
+                        mock_config = MockConfig(list_type)
+                        send_screener_email(user_status["email"], report, mock_config)
+                        _logger.info("Screener email sent successfully for schedule %s", schedule_id)
+                    else:
+                        _logger.warning("No email found for user %s in schedule %s", user_id, schedule_id)
+                except Exception as e:
+                    _logger.exception("Error sending screener email for schedule %s", schedule_id)
 
             # Format screener report for Telegram
             from src.frontend.telegram.screener.enhanced_screener import format_enhanced_telegram_message

@@ -1114,9 +1114,41 @@ def help_page():
 
         <h3>🔍 Screener Commands</h3>
         <div style="background: #e8f4fd; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
-            <h4>Immediate Screener</h4>
+            <h4>Predefined Screeners (Recommended)</h4>
+            <p><code>/screener SCREENER_NAME [flags]</code></p>
+            <p>Run predefined screeners immediately for instant results.</p>
+            <p><strong>Examples:</strong></p>
+            <ul>
+                <li><code>/screener financial_stocks</code> - Screen financial sector stocks</li>
+                <li><code>/screener small_cap_value -email</code> - Screen small-cap value stocks and send to email</li>
+                <li><code>/screener six_stocks</code> - Screen Swiss stocks on SIX exchange</li>
+                <li><code>/screener mid_cap_stocks -email</code> - Screen mid-cap stocks and send to email</li>
+                <li><code>/screener large_cap_stocks</code> - Screen large-cap stocks</li>
+                <li><code>/screener extra_large_cap_stocks -email</code> - Screen mega-cap stocks and send to email</li>
+            </ul>
+
+            <h4>Available Predefined Screeners</h4>
+            <ul>
+                <li><strong>conservative_value</strong> - Conservative value stocks with low risk</li>
+                <li><strong>growth_at_reasonable_price</strong> - Growth stocks with reasonable valuations</li>
+                <li><strong>dividend_aristocrats</strong> - High-quality dividend-paying stocks</li>
+                <li><strong>deep_value</strong> - Deep value stocks with very low valuations</li>
+                <li><strong>quality_growth</strong> - High-quality growth stocks with strong fundamentals</li>
+                <li><strong>small_cap_value</strong> - Small-cap value stocks with growth potential</li>
+                <li><strong>defensive_stocks</strong> - Defensive stocks with low volatility</li>
+                <li><strong>momentum_quality</strong> - Quality stocks with positive momentum</li>
+                <li><strong>international_value</strong> - International value stocks</li>
+                <li><strong>tech_growth</strong> - Technology growth stocks with reasonable valuations</li>
+                <li><strong>financial_stocks</strong> - Financial sector stocks with strong fundamentals</li>
+                <li><strong>mid_cap_stocks</strong> - Mid-cap stocks ($2B - $200B market cap)</li>
+                <li><strong>large_cap_stocks</strong> - Large-cap stocks ($200B+ market cap)</li>
+                <li><strong>six_stocks</strong> - Swiss stocks listed on SIX exchange</li>
+                <li><strong>extra_large_cap_stocks</strong> - Extra large-cap stocks ($500B+ market cap)</li>
+            </ul>
+
+            <h4>Custom JSON Screener (Advanced)</h4>
             <p><code>/screener JSON_CONFIG [-email]</code></p>
-            <p>Run enhanced screener immediately with JSON configuration for instant results.</p>
+            <p>Run enhanced screener immediately with custom JSON configuration for advanced users.</p>
             <p><strong>Examples:</strong></p>
             <ul>
                 <li><code>/screener '{"screener_type":"hybrid","list_type":"us_medium_cap","fmp_criteria":{"marketCapMoreThan":200000000,"peRatioLessThan":20},"fundamental_criteria":[{"indicator":"Revenue_Growth","operator":"min","value":0.05}],"max_results":5,"min_score":2.0}'</code></li>

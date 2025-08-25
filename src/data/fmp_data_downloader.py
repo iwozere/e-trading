@@ -1,6 +1,33 @@
 """
 Financial Modeling Prep (FMP) Data Downloader
 
+List of all countries
+https://financialmodelingprep.com/api/v3/get-all-countries
+
+List of all exchanges
+https://financialmodelingprep.com/api/v3/available-exchanges
+
+Screener
+https://financialmodelingprep.com/api/v3/stock-screener?Country=CH&exchange=SIX&isEtf=Flase&isFund=False&isActivelyTrading=True&apikey=2P
+Example:
+  {
+    "symbol": "FESM",
+    "companyName": "Fidelity Covington Trust - Enhanced Small Cap ETF",
+    "marketCap": 1999722623,
+    "sector": "Financial Services",
+    "industry": "Asset Management",
+    "beta": 1.2,
+    "price": 35.47,
+    "lastAnnualDividend": 0.402,
+    "volume": 712898,
+    "exchange": "New York Stock Exchange Arca",
+    "exchangeShortName": "AMEX",
+    "country": "US",
+    "isEtf": true,
+    "isFund": false,
+    "isActivelyTrading": true
+  }
+
 This module provides integration with the Financial Modeling Prep API for:
 - Stock screening with professional criteria
 - Fundamental data retrieval
@@ -89,6 +116,7 @@ class FMPDataDownloader(BaseDataDownloader):
             if response.status_code == 200:
                 data = response.json()
                 _logger.debug("FMP API request successful, received %d items", len(data) if isinstance(data, list) else 1)
+                _logger.debug("FMP API response: %s", data)
                 return data
             elif response.status_code == 429:
                 _logger.error("FMP API rate limit exceeded")
@@ -154,8 +182,15 @@ class FMPDataDownloader(BaseDataDownloader):
                 _logger.error("Unexpected response format from FMP screener")
                 return []
 
-            _logger.info("FMP screener returned %d stocks", len(results))
-            return results
+            # Post-filter to remove funds and ETFs (FMP API filtering might not be reliable)
+            filtered_results = self._filter_out_funds_and_etfs(results)
+
+            if len(filtered_results) < len(results):
+                _logger.warning("FMP API returned %d results, but %d were filtered out as funds/ETFs",
+                              len(results), len(results) - len(filtered_results))
+
+            _logger.info("FMP screener returned %d stocks (after filtering)", len(filtered_results))
+            return filtered_results
 
         except Exception as e:
             _logger.error("Error in FMP stock screener: %s", str(e))
@@ -196,6 +231,12 @@ class FMPDataDownloader(BaseDataDownloader):
             # Exchange
             "exchange",
 
+            # Country
+            "Country",
+
+            # ETF and Trading Status - Note: FMP API might have issues with these parameters
+            "isETF", "isFund", "isActivelyTrading",
+
             # Limit
             "limit"
         }
@@ -203,6 +244,72 @@ class FMPDataDownloader(BaseDataDownloader):
         invalid_criteria = set(criteria.keys()) - supported_criteria
         if invalid_criteria:
             _logger.warning("Unsupported criteria provided: %s", invalid_criteria)
+
+    def _filter_out_funds_and_etfs(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out funds and ETFs from FMP results.
+
+        Since FMP API filtering might not be reliable, we do additional filtering
+        based on company names and symbols to ensure we only get actual stocks.
+
+        Args:
+            results: List of stock data from FMP API
+
+        Returns:
+            Filtered list with funds and ETFs removed
+        """
+        filtered_results = []
+        funds_etfs_removed = []
+
+        # Keywords that indicate funds, ETFs, or other non-stock instruments
+        fund_keywords = [
+            'FUND', 'MUTUAL', 'ETF', 'TRUST', 'PORTFOLIO', 'SERIES',
+            'ADVISOR', 'ADVANTAGE', 'PREMIUM', 'SELECT', 'FOCUS',
+            'GROWTH FUND', 'INCOME FUND', 'BOND FUND', 'MONEY MARKET',
+            'TARGET DATE', 'LIFECYCLE', 'BALANCED FUND', 'INDEX FUND',
+            'FD', 'FUNDS', 'FUNDAMENTAL', 'FINANCIAL'
+        ]
+
+        # Symbol patterns that often indicate funds/ETFs
+        fund_symbol_patterns = [
+            'X$',  # Many ETFs end with X
+            '^[A-Z]{3,4}X$',  # 3-4 letter symbols ending with X
+        ]
+
+        for item in results:
+            symbol = item.get('symbol', '').upper()
+            company_name = item.get('companyName', '').upper()
+
+            # First, check the FMP API flags (most reliable)
+            is_etf_api = item.get('isEtf', False)
+            is_fund_api = item.get('isFund', False)
+
+            # Check if it's a fund based on company name
+            is_fund_name = any(keyword in company_name for keyword in fund_keywords)
+
+            # Check if it's a fund based on symbol pattern
+            is_fund_symbol = any(pattern in symbol for pattern in fund_symbol_patterns)
+
+            # Additional checks for common fund indicators
+            is_fund_indicator = ('FUND' in company_name or
+                               'ETF' in company_name or
+                               'MUTUAL' in company_name or
+                               'FD ' in company_name or  # "Fd" in "Vanguard 500 Index Fd Admiral Shs"
+                               ' FD' in company_name)    # Space before FD
+
+            # Filter out if any indicator suggests it's a fund/ETF
+            if (is_etf_api or is_fund_api or is_fund_name or is_fund_symbol or is_fund_indicator):
+                funds_etfs_removed.append((symbol, company_name, f"API:ETF={is_etf_api},FUND={is_fund_api},NAME={is_fund_name},SYMBOL={is_fund_symbol},INDICATOR={is_fund_indicator}"))
+                continue
+
+            filtered_results.append(item)
+
+        if funds_etfs_removed:
+            _logger.info("Filtered out %d funds/ETFs: %s",
+                        len(funds_etfs_removed),
+                        [f"{symbol}: {name} ({reason})" for symbol, name, reason in funds_etfs_removed[:5]])
+
+        return filtered_results
 
     def get_fundamentals(self, symbol: str) -> Fundamentals:
         """
@@ -241,7 +348,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 market_cap=profile.get('mktCap', 0.0),
                 pe_ratio=ratios.get('peRatio', 0.0),
                 forward_pe=ratios.get('forwardPeRatio', 0.0),
-                dividend_yield=profile.get('lastDiv', 0.0) / profile.get('price', 1.0) if profile.get('price', 0) > 0 else 0.0,
+                dividend_yield=profile.get('dividendYield'),
                 earnings_per_share=ratios.get('eps', 0.0),
                 price_to_book=ratios.get('priceToBookRatio', 0.0),
                 return_on_equity=ratios.get('returnOnEquity', 0.0),
@@ -446,3 +553,37 @@ class FMPDataDownloader(BaseDataDownloader):
     def is_valid_period_interval(self, period: str, interval: str) -> bool:
         """Check if the period and interval combination is valid."""
         return period in self.get_periods() and interval in self.get_intervals()
+
+    def _normalize_dividend_yield(self, dividend_yield_value) -> Optional[float]:
+        """
+        Normalize dividend yield value to percentage format.
+
+        This method ensures consistent percentage format for dividend yield values.
+
+        Args:
+            dividend_yield_value: Raw dividend yield value from data source
+
+        Returns:
+            Normalized dividend yield as percentage (e.g., 4.61 for 4.61%) or None if invalid
+        """
+        if dividend_yield_value is None:
+            return None
+
+        try:
+            dividend_yield = float(dividend_yield_value)
+
+            # Handle extreme values that are clearly wrong
+            if dividend_yield > 1000.0:  # More than 1000% dividend yield is impossible
+                _logger.warning("Extreme dividend yield value detected: %s, setting to 0", dividend_yield_value)
+                return 0.0
+
+            # Ensure the result is reasonable (between 0 and 100)
+            if dividend_yield < 0 or dividend_yield > 100:
+                _logger.warning("Unreasonable dividend yield value: %s, setting to 0", dividend_yield)
+                return 0.0
+
+            return dividend_yield
+
+        except (ValueError, TypeError):
+            _logger.warning("Invalid dividend yield value: %s", dividend_yield_value)
+            return None

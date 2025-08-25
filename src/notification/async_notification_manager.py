@@ -197,24 +197,126 @@ class TelegramChannel(NotificationChannel):
 
             # Try to send with reply first, fall back to regular message if reply fails
             try:
-                await self.bot.send_message(
+                await self._send_telegram_message_with_splitting(
                     chat_id=target_chat_id,
                     text=notification.message,
-                    parse_mode=None,
                     reply_to_message_id=reply_to_message_id
                 )
             except Exception as reply_error:
                 # If reply fails, send without reply
                 _logger.warning("Failed to send message with reply, sending without reply: %s", reply_error)
-                await self.bot.send_message(
+                await self._send_telegram_message_with_splitting(
                     chat_id=target_chat_id,
-                    text=notification.message,
-                    parse_mode=None
+                    text=notification.message
                 )
             return True
         except Exception as e:
             _logger.exception("Failed to send Telegram notification: %s", e)
             return False
+
+    async def _send_telegram_message_with_splitting(self, chat_id: int, text: str, reply_to_message_id: Optional[int] = None):
+        """
+        Send Telegram message with automatic splitting for long messages.
+
+        Telegram has a 4096 character limit per message. This method splits longer messages
+        into multiple parts while preserving formatting and readability.
+        """
+        MAX_MESSAGE_LENGTH = 4000  # Leave some buffer for safety
+
+        if len(text) <= MAX_MESSAGE_LENGTH:
+            # Message is short enough, send normally
+            await self.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=None,
+                reply_to_message_id=reply_to_message_id
+            )
+            return
+
+        # Split long message into parts
+        parts = self._split_message(text, MAX_MESSAGE_LENGTH)
+
+        for i, part in enumerate(parts):
+            # Add part indicator for multi-part messages
+            if len(parts) > 1:
+                part_text = f"📄 Part {i+1}/{len(parts)}\n\n{part}"
+            else:
+                part_text = part
+
+            # Only use reply_to_message_id for the first part
+            current_reply_id = reply_to_message_id if i == 0 else None
+
+            try:
+                await self.bot.send_message(
+                    chat_id=chat_id,
+                    text=part_text,
+                    parse_mode=None,
+                    reply_to_message_id=current_reply_id
+                )
+                # Small delay between messages to avoid rate limiting
+                if i < len(parts) - 1:
+                    await asyncio.sleep(0.5)
+            except Exception as e:
+                _logger.error("Failed to send message part %d/%d: %s", i+1, len(parts), e)
+                # Try to send a truncated version if splitting failed
+                if i == 0:  # Only for first part
+                    truncated_text = text[:MAX_MESSAGE_LENGTH-100] + "\n\n... [Message truncated due to length]"
+                    await self.bot.send_message(
+                        chat_id=chat_id,
+                        text=truncated_text,
+                        parse_mode=None,
+                        reply_to_message_id=reply_to_message_id
+                    )
+
+    def _split_message(self, text: str, max_length: int) -> List[str]:
+        """
+        Split a long message into parts while preserving formatting and readability.
+
+        Args:
+            text: The message text to split
+            max_length: Maximum length per part
+
+        Returns:
+            List of message parts
+        """
+        if len(text) <= max_length:
+            return [text]
+
+        parts = []
+        current_part = ""
+        lines = text.split('\n')
+
+        for line in lines:
+            # If adding this line would exceed the limit
+            if len(current_part) + len(line) + 1 > max_length:
+                if current_part:
+                    parts.append(current_part.strip())
+                    current_part = ""
+
+                # If a single line is too long, split it
+                if len(line) > max_length:
+                    # Split long line by words
+                    words = line.split()
+                    temp_line = ""
+                    for word in words:
+                        if len(temp_line) + len(word) + 1 <= max_length:
+                            temp_line += (word + " ")
+                        else:
+                            if temp_line:
+                                parts.append(temp_line.strip())
+                                temp_line = word + " "
+                    if temp_line:
+                        current_part = temp_line
+                else:
+                    current_part = line
+            else:
+                current_part += line + '\n'
+
+        # Add the last part
+        if current_part.strip():
+            parts.append(current_part.strip())
+
+        return parts
 
 
 class EmailChannel(NotificationChannel):

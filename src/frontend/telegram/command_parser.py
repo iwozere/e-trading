@@ -165,7 +165,7 @@ COMMAND_SPECS = {
             "email": False,
             "immediate": True,
         },
-        positional=["config_json"]
+        positional=["screener_name_or_config"]
     ),
 }
 

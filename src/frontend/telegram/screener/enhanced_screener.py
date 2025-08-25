@@ -118,7 +118,7 @@ class EnhancedScreener:
             )
 
             # Stage 4: Generate comprehensive report
-            report = self.generate_enhanced_report(config, results, fmp_results)
+            report = self.generate_enhanced_report(config, results, len(tickers), fmp_results)
 
             _logger.info("Enhanced screener completed successfully. Found %d stocks from %d FMP-filtered tickers",
                         len(results), len(tickers))
@@ -304,6 +304,8 @@ class EnhancedScreener:
             # Extract key metrics
             fundamentals = Fundamentals(
                 ticker=ticker,
+                company_name=info.get('longName', ticker),
+                current_price=info.get('regularMarketPrice'),
                 pe_ratio=info.get('trailingPE'),
                 forward_pe=info.get('forwardPE'),
                 price_to_book=info.get('priceToBook'),
@@ -450,7 +452,7 @@ class EnhancedScreener:
         for criterion in criteria:
             indicator_value = self._get_fundamental_value(fundamentals, criterion.indicator)
 
-            _logger.debug("Evaluating %s: value=%.2f, criterion=%s",
+            _logger.debug("Evaluating %s: value=%s, criterion=%s",
                          criterion.indicator, indicator_value, criterion)
 
             if indicator_value is not None and not pd.isna(indicator_value):
@@ -467,7 +469,7 @@ class EnhancedScreener:
                     'criterion': criterion
                 }
 
-                _logger.debug("  %s: value=%.2f, score=%.2f, weighted=%.2f",
+                _logger.debug("  %s: value=%s, score=%.2f, weighted=%.2f",
                              criterion.indicator, indicator_value, score, weighted_score)
             elif criterion.required:
                 # If required criterion is missing, return 0 score
@@ -790,8 +792,8 @@ class EnhancedScreener:
         for i, result in enumerate(report.top_results[:10], 1):
             message += f"{i}. **{result.ticker}** "
 
-            if result.current_price:
-                message += f"(${result.current_price:.2f}) "
+            if result.fundamentals and result.fundamentals.current_price:
+                message += f"(${result.fundamentals.current_price:.2f}) "
 
             message += f"Score: {result.composite_score:.1f}/10 "
 
@@ -810,16 +812,18 @@ class EnhancedScreener:
             message += f"({result.recommendation.replace('_', ' ')})"
 
             # Add fundamental score if available
-            if config.screener_type in ["fundamental", "hybrid"] and result.fundamental_score > 0:
+            if config.screener_type in ["fundamental", "hybrid"] and hasattr(result, 'fundamental_score') and result.fundamental_score > 0:
                 message += f"\n   📊 Fundamental: {result.fundamental_score:.1f}/10"
 
             # Add technical score if available
-            if config.screener_type in ["technical", "hybrid"] and result.technical_score > 0:
+            if config.screener_type in ["technical", "hybrid"] and hasattr(result, 'technical_score') and result.technical_score > 0:
                 message += f"\n   📈 Technical: {result.technical_score:.1f}/10"
 
             # Add DCF valuation if available
-            if result.dcf_valuation and result.dcf_valuation.upside_potential:
-                upside = result.dcf_valuation.upside_potential
+            if result.dcf_valuation and result.dcf_valuation.fair_value and result.fundamentals and result.fundamentals.current_price:
+                current_price = result.fundamentals.current_price
+                fair_value = result.dcf_valuation.fair_value
+                upside = ((fair_value - current_price) / current_price) * 100
                 if upside > 0:
                     message += f"\n   💰 DCF Upside: +{upside:.1f}%"
                 else:
@@ -913,6 +917,9 @@ class EnhancedScreener:
             elif list_type == 'us_large_cap':
                 return get_us_large_cap_tickers()
             elif list_type == 'swiss_shares':
+                # For Swiss shares, we should use FMP with exchange=SIX
+                # This is a fallback in case FMP is not available
+                _logger.warning("Swiss shares should be handled via FMP with exchange=SIX. Using CSV fallback.")
                 return get_six_tickers()
             elif list_type == 'custom_list':
                 # For custom lists, we'll need to implement storage/retrieval
@@ -925,6 +932,41 @@ class EnhancedScreener:
         except Exception as e:
             _logger.error("Error loading ticker list %s: %s", list_type, e)
             return []
+
+    def _normalize_dividend_yield(self, dividend_yield_value) -> Optional[float]:
+        """
+        Normalize dividend yield value to percentage format.
+
+        This method is kept for compatibility with other data sources that might
+        return dividend yield in different formats.
+
+        Args:
+            dividend_yield_value: Raw dividend yield value from data source
+
+        Returns:
+            Normalized dividend yield as percentage (e.g., 4.61 for 4.61%) or None if invalid
+        """
+        if dividend_yield_value is None:
+            return None
+
+        try:
+            dividend_yield = float(dividend_yield_value)
+
+            # Handle extreme values that are clearly wrong
+            if dividend_yield > 1000.0:  # More than 1000% dividend yield is impossible
+                _logger.warning("Extreme dividend yield value detected: %s, setting to 0", dividend_yield_value)
+                return 0.0
+
+            # Ensure the result is reasonable (between 0 and 100)
+            if dividend_yield < 0 or dividend_yield > 100:
+                _logger.warning("Unreasonable dividend yield value: %s, setting to 0", dividend_yield)
+                return 0.0
+
+            return dividend_yield
+
+        except (ValueError, TypeError):
+            _logger.warning("Invalid dividend yield value: %s", dividend_yield_value)
+            return None
 
 
 # Global enhanced screener instance

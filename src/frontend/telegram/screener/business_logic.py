@@ -9,7 +9,7 @@ import sqlite3
 import time
 from typing import Any, Dict, List
 from src.frontend.telegram.command_parser import ParsedCommand
-from src.common import get_ohlcv
+from src.common import get_ohlcv, determine_provider, get_ticker_info
 from src.common.fundamentals import get_fundamentals
 from src.common.technicals import calculate_technicals_from_df
 from src.model.telegram_bot import TickerAnalysis
@@ -293,7 +293,7 @@ def analyze_ticker_business(
 
         return TickerAnalysis(
             ticker=ticker.upper(),
-            provider=provider or ("yf" if len(ticker) <= 5 else "bnc"),
+            provider=provider or determine_provider(ticker),
             period=period,
             interval=interval,
             ohlcv=df_with_technicals,
@@ -307,7 +307,7 @@ def analyze_ticker_business(
     except Exception as e:
         return TickerAnalysis(
             ticker=ticker.upper(),
-            provider=provider or ("yf" if len(ticker) <= 5 else "bnc"),
+            provider=provider or determine_provider(ticker),
             period=period,
             interval=interval,
             ohlcv=None,
@@ -1982,18 +1982,19 @@ def handle_language(parsed: ParsedCommand) -> Dict[str, Any]:
 def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
     """
     Business logic for /screener command for immediate screener execution.
+    Supports both predefined screeners and custom JSON configuration.
     """
     try:
         # Extract parameters
         telegram_user_id = parsed.args.get("telegram_user_id")
-        config_json = parsed.args.get("config_json")
+        config_json = parsed.args.get("screener_name_or_config")
         send_email = parsed.args.get("email", False)
 
         if not telegram_user_id:
             return {"status": "error", "message": "No telegram_user_id provided"}
 
         if not config_json:
-            return {"status": "error", "message": "Please provide screener configuration. Usage: /screener <JSON_CONFIG> [-email]"}
+            return {"status": "error", "message": "Please provide screener name or configuration. Usage: /screener <SCREENER_NAME> [-email] or /screener <JSON_CONFIG> [-email]"}
 
         # Check if user has approved access
         access_check = check_approved_access(telegram_user_id)
@@ -2007,12 +2008,19 @@ def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
             validate_screener_config
         )
 
-        # Parse and validate screener configuration
-        is_valid, errors = validate_screener_config(config_json)
-        if not is_valid:
-            return {"status": "error", "message": f"Invalid screener configuration: {errors}"}
-
-        screener_config = parse_screener_config(config_json)
+        # Check if config_json is a predefined screener name
+        screener_config = None
+        if config_json.startswith('{'):
+            # It's a JSON configuration
+            is_valid, errors = validate_screener_config(config_json)
+            if not is_valid:
+                return {"status": "error", "message": f"Invalid screener configuration: {errors}"}
+            screener_config = parse_screener_config(config_json)
+        else:
+            # It's a predefined screener name
+            screener_config = _get_predefined_screener_config(config_json)
+            if not screener_config:
+                return {"status": "error", "message": f"Unknown screener: {config_json}. Available screeners: {', '.join(_get_available_screeners())}"}
 
         # Run enhanced screener immediately
         enhanced_screener = EnhancedScreener()
@@ -2043,3 +2051,152 @@ def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
     except Exception as e:
         _logger.exception("Error in screener command")
         return {"status": "error", "message": f"Screener error: {str(e)}"}
+
+
+def _get_predefined_screener_config(screener_name: str):
+    """
+    Get predefined screener configuration by name.
+    """
+    try:
+        import json
+        from pathlib import Path
+        from src.frontend.telegram.screener.screener_config_parser import ScreenerConfigParser
+
+        # Load FMP screener criteria
+        config_path = Path(__file__).resolve().parents[4] / "config" / "screener" / "fmp_screener_criteria.json"
+
+        with open(config_path, 'r') as f:
+            fmp_config = json.load(f)
+
+        # Check if screener exists in predefined strategies
+        if screener_name in fmp_config.get("predefined_strategies", {}):
+            strategy = fmp_config["predefined_strategies"][screener_name]
+
+            # Create screener configuration dictionary
+            config_dict = {
+                "screener_type": "hybrid",
+                "list_type": _get_list_type_for_screener(screener_name),
+                "fmp_criteria": strategy["criteria"],
+                "fundamental_criteria": _get_fundamental_criteria_for_screener(screener_name),
+                "technical_criteria": _get_technical_criteria_for_screener(screener_name),
+                "max_results": strategy["criteria"].get("limit", 50),
+                "min_score": 0.5,
+                "period": "1y",
+                "interval": "1d"
+            }
+
+            # Convert dictionary to ScreenerConfig object
+            parser = ScreenerConfigParser()
+            return parser._parse_config_dict(config_dict)
+
+        return None
+
+    except Exception as e:
+        _logger.error("Error loading predefined screener config for %s: %s", screener_name, e)
+        return None
+
+
+def _get_list_type_for_screener(screener_name: str) -> str:
+    """
+    Determine the appropriate list type for a given screener.
+    """
+    if screener_name == "six_stocks":
+        return "swiss_shares"
+    elif screener_name in ["mid_cap_stocks", "large_cap_stocks", "extra_large_cap_stocks"]:
+        return "us_large_cap"  # Will be filtered by FMP criteria
+    else:
+        return "us_medium_cap"  # Default fallback
+
+
+def _get_fundamental_criteria_for_screener(screener_name: str):
+    """
+    Get fundamental criteria for a predefined screener.
+    """
+    # Base fundamental criteria for all screeners
+    base_criteria = [
+        {
+            "indicator": "PE",
+            "operator": "max",
+            "value": 30,
+            "weight": 1.0,
+            "required": False
+        },
+        {
+            "indicator": "PB",
+            "operator": "max",
+            "value": 3.0,
+            "weight": 1.0,
+            "required": False
+        },
+        {
+            "indicator": "ROE",
+            "operator": "min",
+            "value": 0.10,
+            "weight": 1.0,
+            "required": False
+        }
+    ]
+
+    # Adjust criteria based on screener type
+    if screener_name == "conservative_value":
+        base_criteria[0]["value"] = 12  # PE < 12
+        base_criteria[1]["value"] = 1.2  # PB < 1.2
+        base_criteria[2]["value"] = 0.15  # ROE > 15%
+    elif screener_name == "deep_value":
+        base_criteria[0]["value"] = 8   # PE < 8
+        base_criteria[1]["value"] = 0.8  # PB < 0.8
+        base_criteria[2]["value"] = 0.08  # ROE > 8%
+    elif screener_name == "quality_growth":
+        base_criteria[0]["value"] = 25  # PE < 25
+        base_criteria[1]["value"] = 5.0  # PB < 5.0
+        base_criteria[2]["value"] = 0.18  # ROE > 18%
+    elif screener_name == "large_cap_stocks":
+        base_criteria[0]["value"] = 35  # PE < 35
+        base_criteria[1]["value"] = 5.0  # PB < 5.0
+        base_criteria[2]["value"] = 0.15  # ROE > 15%
+    elif screener_name == "extra_large_cap_stocks":
+        base_criteria[0]["value"] = 40  # PE < 40
+        base_criteria[1]["value"] = 6.0  # PB < 6.0
+        base_criteria[2]["value"] = 0.15  # ROE > 15%
+    elif screener_name == "six_stocks":
+        base_criteria[0]["value"] = 20  # PE < 20
+        base_criteria[1]["value"] = 2.5  # PB < 2.5
+        base_criteria[2]["value"] = 0.08  # ROE > 8%
+
+    return base_criteria
+
+
+def _get_technical_criteria_for_screener(screener_name: str):
+    """
+    Get technical criteria for a predefined screener.
+    """
+    # Base technical criteria for all screeners
+    return [
+        {
+            "indicator": "RSI",
+            "parameters": {"period": 14},
+            "condition": {"operator": "<", "value": 75},
+            "weight": 0.5,
+            "required": False
+        }
+    ]
+
+
+def _get_available_screeners():
+    """
+    Get list of available predefined screeners.
+    """
+    try:
+        import json
+        from pathlib import Path
+
+        config_path = Path(__file__).resolve().parents[4] / "config" / "screener" / "fmp_screener_criteria.json"
+
+        with open(config_path, 'r') as f:
+            fmp_config = json.load(f)
+
+        return list(fmp_config.get("predefined_strategies", {}).keys())
+
+    except Exception as e:
+        _logger.error("Error loading available screeners: %s", e)
+        return []

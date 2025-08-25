@@ -378,7 +378,7 @@ class ScreenerConfigParser:
                 "dividendYieldMoreThan", "dividendYieldLessThan",
                 "payoutRatioLessThan", "payoutRatioMoreThan",
                 "betaLessThan", "betaMoreThan",
-                "exchange", "limit"
+                "exchange", "Country", "isETF", "isFund", "isActivelyTrading", "limit"
             }
 
             invalid_criteria = set(fmp_criteria.keys()) - supported_criteria

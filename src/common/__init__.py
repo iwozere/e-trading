@@ -11,8 +11,61 @@ Supported providers:
 """
 import datetime
 from src.data.data_downloader_factory import DataDownloaderFactory
+from src.common.ticker_classifier import TickerClassifier, DataProvider
 
 PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
+
+# Initialize the ticker classifier
+_ticker_classifier = TickerClassifier()
+
+
+def determine_provider(ticker: str) -> str:
+    """
+    Intelligently determine the appropriate data provider based on ticker characteristics.
+    Uses the TickerClassifier for comprehensive pattern matching.
+
+    Args:
+        ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT', 'VUSD.L')
+
+    Returns:
+        str: Provider code ('yf' for stocks, 'bnc' for crypto)
+    """
+    ticker_info = _ticker_classifier.classify_ticker(ticker)
+
+    # Map DataProvider enum to provider codes
+    if ticker_info.provider == DataProvider.BINANCE:
+        return "bnc"
+    elif ticker_info.provider == DataProvider.YFINANCE:
+        return "yf"
+    else:
+        # For unknown providers, default to Yahoo Finance (safer for stocks)
+        return "yf"
+
+
+def get_ticker_info(ticker: str):
+    """
+    Get comprehensive ticker information using the TickerClassifier.
+
+    Args:
+        ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT', 'VUSD.L')
+
+    Returns:
+        TickerInfo object with provider, exchange, and asset information
+    """
+    return _ticker_classifier.classify_ticker(ticker)
+
+
+def get_data_provider_config(ticker: str):
+    """
+    Get configuration for data retrieval based on ticker classification.
+
+    Args:
+        ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT', 'VUSD.L')
+
+    Returns:
+        Dictionary with provider-specific configuration
+    """
+    return _ticker_classifier.get_data_provider_config(ticker)
 
 
 def analyze_period_interval(period: str = "2y", interval: str = "1d"):
@@ -45,10 +98,10 @@ def analyze_period_interval(period: str = "2y", interval: str = "1d"):
 def get_ohlcv(ticker: str, interval: str, period: str, provider: str = None, **kwargs):
     """
     Retrieve OHLCV data for a ticker using the specified data provider.
-    If provider is None, try to infer from ticker length (yf for stocks, bnc for crypto).
+    If provider is None, try to infer from ticker characteristics using intelligent logic.
 
     Args:
-        ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT')
+        ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT', 'VUSD.L')
         interval: Data interval (e.g., '1m', '5m', '15m', '1h', '1d')
         period: Period string (e.g., '1d', '7d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y')
         provider: Data provider code (e.g., 'yf', 'bnc', 'av', etc.)
@@ -63,7 +116,7 @@ def get_ohlcv(ticker: str, interval: str, period: str, provider: str = None, **k
     """
     # Infer provider if not specified
     if provider is None:
-        provider = "yf" if len(ticker) <= 5 else "bnc"
+        provider = determine_provider(ticker)
 
     # Get downloader
     downloader = DataDownloaderFactory.create_downloader(provider, **kwargs)

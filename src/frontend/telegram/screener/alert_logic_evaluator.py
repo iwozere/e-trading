@@ -17,7 +17,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from src.notification.logger import setup_logger
 from src.frontend.telegram.screener.alert_config_parser import AlertConfig, IndicatorConfig, parse_alert_config
 from src.frontend.telegram.screener.indicator_calculator import IndicatorCalculator
-from src.common import get_ohlcv
+from src.common import get_ohlcv, determine_provider, get_ticker_info
 
 _logger = setup_logger(__name__)
 
@@ -133,8 +133,8 @@ class AlertLogicEvaluator:
     def _get_current_price(self, ticker: str, timeframe: str) -> Optional[float]:
         """Get current price for a ticker."""
         try:
-            # Determine provider based on ticker length
-            provider = "yf" if len(ticker) < 5 else "bnc"
+            # Determine provider based on ticker characteristics
+            provider = determine_provider(ticker)
 
             # Get recent data
             data = get_ohlcv(ticker, timeframe, "1d", provider)
@@ -150,8 +150,8 @@ class AlertLogicEvaluator:
     def _get_market_data(self, ticker: str, timeframe: str, config: AlertConfig) -> Optional[pd.DataFrame]:
         """Get market data for indicator calculation."""
         try:
-            # Determine provider based on ticker length
-            provider = "yf" if len(ticker) < 5 else "bnc"
+            # Determine provider based on ticker characteristics
+            provider = determine_provider(ticker)
 
             # Calculate required data points
             required_points = self._calculate_required_data_points(config)
