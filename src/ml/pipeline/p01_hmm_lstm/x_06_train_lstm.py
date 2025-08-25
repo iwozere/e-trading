@@ -128,6 +128,39 @@ class LSTMTrainer:
         _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
+    def _get_checkpoint_path(self, symbol: str, timeframe: str) -> Path:
+        """
+        Build checkpoint filename based on labeled CSV file.
+        """
+        fname = f"checkpoint_{symbol}_{timeframe}.pth"
+        return self.models_dir / fname
+
+    def save_checkpoint(self, model, optimizer, epoch, train_losses, val_losses,
+                        symbol: str, timeframe: str):
+        """Save model/optimizer state so training can resume later."""
+        ckpt_path = self._get_checkpoint_path(symbol, timeframe)
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_losses': train_losses,
+            'val_losses': val_losses
+        }, ckpt_path)
+        _logger.info("Checkpoint saved at %s (epoch %d)", ckpt_path, epoch+1)
+
+    def load_checkpoint(self, model, optimizer, symbol: str, timeframe: str):
+        """Load model/optimizer state to resume training if checkpoint exists."""
+        ckpt_path = self._get_checkpoint_path(symbol, timeframe)
+        if ckpt_path.exists():
+            checkpoint = torch.load(ckpt_path, map_location=DEVICE)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            _logger.info("Resuming from checkpoint %s (epoch %d)", ckpt_path, start_epoch)
+            return start_epoch, checkpoint['train_losses'], checkpoint['val_losses']
+        else:
+            return 0, [], []
+
     def load_optimization_results(self, symbol: str, timeframe: str) -> Tuple[Optional[Dict], Optional[Dict]]:
         """
         Load optimization results for indicators and LSTM parameters.
@@ -519,20 +552,10 @@ class LSTMTrainer:
         }
 
     def train_model(self, model: nn.Module, train_loader: DataLoader, val_loader: DataLoader,
-                   learning_rate: float, epochs: int, early_stopping_patience: int = 15) -> Dict:
+                   learning_rate: float, epochs: int, symbol: str = "LTCUSDT", timeframe: str = "15m",
+                   early_stopping_patience: int = 15) -> Dict:
         """
-        Train LSTM model with early stopping and learning rate scheduling.
-
-        Args:
-            model: LSTM model
-            train_loader: Training data loader
-            val_loader: Validation data loader
-            learning_rate: Learning rate
-            epochs: Number of epochs
-            early_stopping_patience: Patience for early stopping
-
-        Returns:
-            Dict with training history and metrics
+        Train LSTM model with checkpointing, early stopping, and LR scheduling.
         """
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         criterion = nn.MSELoss()
@@ -540,58 +563,48 @@ class LSTMTrainer:
             optimizer, mode='min', factor=0.5, patience=5
         )
 
-        train_losses = []
-        val_losses = []
-        best_val_loss = float('inf')
+        # Try to load checkpoint
+        start_epoch, train_losses, val_losses = self.load_checkpoint(model, optimizer, symbol, timeframe)
+
+        best_val_loss = float('inf') if not val_losses else min(val_losses)
         patience_counter = 0
         best_model_state = None
 
-        for epoch in range(epochs):
-            # Training
+        for epoch in range(start_epoch, epochs):
+            # Training loop
             model.train()
             train_loss = 0.0
-
             for batch_X, batch_regime, batch_y in train_loader:
-                batch_X = batch_X.to(DEVICE)
-                batch_regime = batch_regime.to(DEVICE)
-                batch_y = batch_y.to(DEVICE)
+                batch_X, batch_regime, batch_y = batch_X.to(DEVICE), batch_regime.to(DEVICE), batch_y.to(DEVICE)
 
                 optimizer.zero_grad()
                 outputs = model(batch_X, batch_regime).squeeze()
                 loss = criterion(outputs, batch_y)
                 loss.backward()
-
-                # Gradient clipping
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
                 optimizer.step()
                 train_loss += loss.item()
-
             train_loss /= len(train_loader)
 
             # Validation
             model.eval()
             val_loss = 0.0
-
             with torch.no_grad():
                 for batch_X, batch_regime, batch_y in val_loader:
-                    batch_X = batch_X.to(DEVICE)
-                    batch_regime = batch_regime.to(DEVICE)
-                    batch_y = batch_y.to(DEVICE)
-
+                    batch_X, batch_regime, batch_y = batch_X.to(DEVICE), batch_regime.to(DEVICE), batch_y.to(DEVICE)
                     outputs = model(batch_X, batch_regime).squeeze()
                     loss = criterion(outputs, batch_y)
                     val_loss += loss.item()
-
             val_loss /= len(val_loader)
 
             train_losses.append(train_loss)
             val_losses.append(val_loss)
-
-            # Learning rate scheduling
             scheduler.step(val_loss)
 
-            # Early stopping
+            # Save checkpoint after each epoch
+            self.save_checkpoint(model, optimizer, epoch, train_losses, val_losses, symbol, timeframe)
+
+            # Early stopping logic
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 patience_counter = 0
@@ -602,10 +615,9 @@ class LSTMTrainer:
                     _logger.info("Early stopping at epoch %d", epoch+1)
                     break
 
-            if (epoch + 1) % 10 == 0:
+            if (epoch + 1) % 5 == 0:
                 _logger.info("Epoch %d/%d - Train Loss: %.6f, Val Loss: %.6f", epoch+1, epochs, train_loss, val_loss)
 
-        # Load best model state
         if best_model_state is not None:
             model.load_state_dict(best_model_state)
 
