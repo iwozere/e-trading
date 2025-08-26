@@ -1,0 +1,121 @@
+{
+    "multi_timeframe_strategies": {
+        "trend_following_mtf": {
+            "name": "Multi-Timeframe Trend Following",
+            "description": "Uses higher timeframe for trend direction and lower timeframe for entries",
+            "timeframes": {
+                "trend_timeframe": "4h",
+                "entry_timeframe": "1h",
+                "exit_timeframe": "15m"
+            },
+            "strategy_config": {
+                "trend_analysis": {
+                    "method": "supertrend",
+                    "params": {
+                        "period": 10,
+                        "multiplier": 3.0,
+                        "atr_period": 14
+                    }
+                },
+                "entry_signals": {
+                    "method": "rsi_volume",
+                    "params": {
+                        "rsi_period": 14,
+                        "rsi_oversold": 30,
+                        "rsi_overbought": 70,
+                        "volume_threshold": 1.5
+                    }
+                },
+                "exit_signals": {
+                    "method": "atr_trailing_stop",
+                    "params": {
+                        "atr_period": 14,
+                        "trailing_multiplier": 2.0
+                    }
+                }
+            },
+            "rules": {
+                "trend_confirmation_required": true,
+                "entry_only_in_trend_direction": true,
+                "use_higher_tf_stops": true
+            }
+        },
+        "breakout_mtf": {
+            "name": "Multi-Timeframe Breakout",
+            "description": "Uses multiple timeframes to confirm breakouts",
+            "timeframes": {
+                "primary_timeframe": "1h",
+                "confirmation_timeframe": "4h",
+                "execution_timeframe": "15m"
+            },
+            "strategy_config": {
+                "breakout_detection": {
+                    "method": "bollinger_bands",
+                    "params": {
+                        "period": 20,
+                        "stddev": 2.0,
+                        "volume_confirmation": true
+                    }
+                },
+                "trend_confirmation": {
+                    "method": "ema_crossover",
+                    "params": {
+                        "fast_ema": 12,
+                        "slow_ema": 26
+                    }
+                },
+                "entry_execution": {
+                    "method": "atr_breakout",
+                    "params": {
+                        "atr_period": 14,
+                        "breakout_multiplier": 1.5
+                    }
+                }
+            },
+            "rules": {
+                "require_trend_alignment": true,
+                "volume_confirmation_required": true,
+                "use_breakout_levels_as_support_resistance": true
+            }
+        },
+        "mean_reversion_mtf": {
+            "name": "Multi-Timeframe Mean Reversion",
+            "description": "Uses higher timeframe for mean calculation and lower timeframe for entries",
+            "timeframes": {
+                "mean_timeframe": "4h",
+                "entry_timeframe": "1h",
+                "exit_timeframe": "30m"
+            },
+            "strategy_config": {
+                "mean_calculation": {
+                    "method": "bollinger_bands",
+                    "params": {
+                        "period": 20,
+                        "stddev": 2.0
+                    }
+                },
+                "entry_signals": {
+                    "method": "rsi_extremes",
+                    "params": {
+                        "rsi_period": 14,
+                        "oversold_threshold": 25,
+                        "overbought_threshold": 75,
+                        "volume_confirmation": true
+                    }
+                },
+                "exit_signals": {
+                    "method": "mean_reversion",
+                    "params": {
+                        "target_return": 0.02,
+                        "max_holding_period": 48
+                    }
+                }
+            },
+            "rules": {
+                "only_trade_extremes": true,
+                "require_volume_confirmation": true,
+                "use_dynamic_targets": true
+            }
+        }
+    }
+} 

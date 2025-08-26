@@ -1,0 +1,8 @@
+[MAIN]
+max-line-length=200
+
+[FORMAT]
+max-line-length=200
+
+[MESSAGES CONTROL]
+disable=broad-except

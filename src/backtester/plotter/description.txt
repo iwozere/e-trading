@@ -1,0 +1,30 @@
+1. Indicator Selection: How should the plotter determine which indicators to show? Should it:
+Read the strategy parameters from the JSON file and show only the indicators used in that strategy? Yes. JSON file contains entry and exit mixins configuration. Try to conclude content using the parameters name. You can create a json configuration for example to define which mixin what indicators is using. I can help you to create such dictionary if needed.
+Show all available indicators (ichimoku, supertrend, bollinger bands, RSI, volume) for every plot? Yes, if possible, show them all.
+Have a configuration file to specify which indicators to show? This would be really great.
+
+2. Subplot Layout: You mentioned "second/third/fourth subplots" - should this be:
+Fixed layout (e.g., 4 subplots total)? No, mixins have different set of indicators. You can create a json configuration for example to define which mixin what indicators is using.
+Dynamic based on how many indicators are being shown? Yes
+Configurable layout? Yes, use parameters (or add if needed) in /config/optimizer/optimizer.json
+
+3. Data Loading: For the data file, should it:
+Only load the exact date range that matches the trades in the JSON? Full file.
+Load the entire CSV file and let the plotting library handle the range? Yes.
+
+4. Have some padding before/after the first/last trade? Full file data should be plotted, independently on the trade range.
+Trade Visualization: How should trades be displayed on the price chart? BUY - green triangle, SELL - red triangle.
+Buy/sell markers at entry/exit points? Yes
+Lines connecting entry to exit? No for now. But would be great to make it configurable.
+Different colors for winning/losing trades? No.
+
+5. Equity Line: Should the equity line be:
+Cumulative P&L over time? Yes
+Portfolio value over time? No
+Based on the trade data in the JSON or calculated from the strategy results? Trades from JSON.
+
+6. Output: Should the plotter:
+Create one PNG file per JSON file? Yes
+Have options for different formats (PNG, PDF, etc.)? Yes, ideally configurable in json
+Include any text annotations with key metrics? Not for now. Mention this in the code as a future improvement.
+

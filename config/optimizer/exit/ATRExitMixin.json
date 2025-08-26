@@ -1,0 +1,23 @@
+{
+    "name": "ATRExitMixin",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 5,
+            "high": 90,
+            "default": 14
+        },
+        "x_tp_multiplier": {
+            "type": "float",
+            "low": 3.0,
+            "high": 5.0,
+            "default": 4.0
+        },
+        "x_sl_multiplier": {
+            "type": "float",
+            "low": 2.2,
+            "high": 3.0,
+            "default": 2.5
+        }
+    }
+} 

@@ -1,0 +1,46 @@
+{
+    "description": "Example configurations for live data feeds",
+    "data_feeds": {
+        "binance_example": {
+            "data_source": "binance",
+            "symbol": "BTCUSDT",
+            "interval": "1m",
+            "lookback_bars": 1000,
+            "retry_interval": 60,
+            "testnet": false,
+            "description": "Binance crypto data with WebSocket real-time updates (public data only)"
+        },
+        "yahoo_example": {
+            "data_source": "yahoo",
+            "symbol": "AAPL",
+            "interval": "5m",
+            "lookback_bars": 500,
+            "retry_interval": 60,
+            "polling_interval": 60,
+            "description": "Yahoo Finance stock data with polling updates"
+        },
+        "ibkr_example": {
+            "data_source": "ibkr",
+            "symbol": "SPY",
+            "interval": "1m",
+            "lookback_bars": 1000,
+            "retry_interval": 60,
+            "host": "127.0.0.1",
+            "port": 7497,
+            "client_id": 1,
+            "description": "IBKR data with native API real-time updates"
+        }
+    },
+    "usage_example": {
+        "python_code": "from src.data.data_feed_factory import DataFeedFactory\nimport json\n\n# Load configuration\nwith open('config/trading/live_data_example.json', 'r') as f:\n    config = json.load(f)\n\n# Create data feed\nfeed_config = config['data_feeds']['binance_example']\ndata_feed = DataFeedFactory.create_data_feed(feed_config)\n\n# Use with Backtrader\ncerebro = bt.Cerebro()\ncerebro.adddata(data_feed)\ncerebro.run()"
+    },
+    "notes": {
+        "api_keys": "This configuration uses public data only. No API keys required for basic functionality.",
+        "rate_limits": "Be aware of rate limits for each data source",
+        "connection": "Ensure proper network connectivity for real-time data",
+        "testing": "Use testnet/paper trading first before live trading",
+        "binance_public": "Binance public data includes OHLCV data for all trading pairs",
+        "yahoo_public": "Yahoo Finance provides free stock and ETF data",
+        "ibkr_connection": "IBKR requires TWS or Gateway to be running for data access"
+    }
+} 

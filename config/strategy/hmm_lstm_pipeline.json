@@ -1,0 +1,409 @@
+{
+    "strategy_name": "HMM-LSTM Pipeline Strategy",
+    "description": "Advanced trading strategy using HMM regime detection combined with regime-aware LSTM predictions",
+    "version": "1.0.0",
+    "strategy_class": "HMMLSTMPipelineStrategy",
+    "strategy_module": "src.strategy.hmm_lstm_pipeline_strategy",
+    
+    "strategy_configs": {
+        "conservative": {
+            "name": "Conservative HMM-LSTM",
+            "description": "Low-risk configuration with high confidence thresholds",
+            "symbol": "BTCUSDT",
+            "timeframe": "1h",
+            "strategy_config": {
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                "results_dir": "results",
+                
+                "position_sizing": {
+                    "base_position_size": 0.05,
+                    "min_position_size": 0.02,
+                    "max_position_size": 0.10,
+                    "use_kelly_criterion": false
+                },
+                
+                "entry_criteria": {
+                    "prediction_threshold": 0.002,
+                    "regime_confidence_threshold": 0.75,
+                    "require_trend_alignment": true,
+                    "min_volume_ratio": 1.2
+                },
+                
+                "risk_management": {
+                    "profit_target": 0.015,
+                    "stop_loss": 0.008,
+                    "trailing_stop": 0.003,
+                    "max_holding_periods": {
+                        "regime_0": 24,
+                        "regime_1": 48,
+                        "regime_2": 36
+                    }
+                },
+                
+                "exit_criteria": {
+                    "exit_on_regime_change": true,
+                    "exit_on_low_confidence": true,
+                    "low_confidence_threshold": 0.3,
+                    "exit_on_prediction_reversal": true,
+                    "prediction_reversal_threshold": 0.001
+                },
+                
+                "regime_specific_rules": {
+                    "regime_0": {
+                        "name": "bearish",
+                        "allow_long": false,
+                        "allow_short": true,
+                        "position_multiplier": 0.8,
+                        "exit_speed": "fast"
+                    },
+                    "regime_1": {
+                        "name": "sideways", 
+                        "allow_long": true,
+                        "allow_short": true,
+                        "position_multiplier": 0.6,
+                        "exit_speed": "medium"
+                    },
+                    "regime_2": {
+                        "name": "bullish",
+                        "allow_long": true,
+                        "allow_short": false,
+                        "position_multiplier": 1.2,
+                        "exit_speed": "slow"
+                    }
+                },
+                
+                "advanced_features": {
+                    "use_regime_transition_signals": true,
+                    "dynamic_thresholds": true,
+                    "volume_confirmation": true,
+                    "multi_timeframe_confirmation": false
+                }
+            }
+        },
+        
+        "aggressive": {
+            "name": "Aggressive HMM-LSTM",
+            "description": "Higher-risk configuration with lower thresholds for more frequent trading",
+            "symbol": "BTCUSDT",
+            "timeframe": "1h",
+            "strategy_config": {
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                "results_dir": "results",
+                
+                "position_sizing": {
+                    "base_position_size": 0.15,
+                    "min_position_size": 0.05,
+                    "max_position_size": 0.25,
+                    "use_kelly_criterion": true
+                },
+                
+                "entry_criteria": {
+                    "prediction_threshold": 0.001,
+                    "regime_confidence_threshold": 0.6,
+                    "require_trend_alignment": false,
+                    "min_volume_ratio": 1.0
+                },
+                
+                "risk_management": {
+                    "profit_target": 0.025,
+                    "stop_loss": 0.012,
+                    "trailing_stop": 0.005,
+                    "max_holding_periods": {
+                        "regime_0": 18,
+                        "regime_1": 36,
+                        "regime_2": 48
+                    }
+                },
+                
+                "exit_criteria": {
+                    "exit_on_regime_change": false,
+                    "exit_on_low_confidence": true,
+                    "low_confidence_threshold": 0.2,
+                    "exit_on_prediction_reversal": true,
+                    "prediction_reversal_threshold": 0.0005
+                },
+                
+                "regime_specific_rules": {
+                    "regime_0": {
+                        "name": "bearish",
+                        "allow_long": true,
+                        "allow_short": true,
+                        "position_multiplier": 1.0,
+                        "exit_speed": "medium"
+                    },
+                    "regime_1": {
+                        "name": "sideways",
+                        "allow_long": true,
+                        "allow_short": true,
+                        "position_multiplier": 0.8,
+                        "exit_speed": "fast"
+                    },
+                    "regime_2": {
+                        "name": "bullish",
+                        "allow_long": true,
+                        "allow_short": true,
+                        "position_multiplier": 1.5,
+                        "exit_speed": "slow"
+                    }
+                },
+                
+                "advanced_features": {
+                    "use_regime_transition_signals": true,
+                    "dynamic_thresholds": true,
+                    "volume_confirmation": false,
+                    "multi_timeframe_confirmation": false
+                }
+            }
+        },
+        
+        "multi_symbol": {
+            "name": "Multi-Symbol HMM-LSTM",
+            "description": "Portfolio approach trading multiple cryptocurrencies",
+            "symbols": ["BTCUSDT", "ETHUSDT", "LTCUSDT"],
+            "timeframe": "1h",
+            "strategy_config": {
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                "results_dir": "results",
+                
+                "portfolio_management": {
+                    "total_capital_allocation": 0.8,
+                    "max_positions_per_symbol": 1,
+                    "max_total_positions": 3,
+                    "correlation_threshold": 0.7,
+                    "rebalance_frequency": 24
+                },
+                
+                "position_sizing": {
+                    "base_position_size": 0.1,
+                    "min_position_size": 0.03,
+                    "max_position_size": 0.15,
+                    "use_volatility_adjustment": true
+                },
+                
+                "entry_criteria": {
+                    "prediction_threshold": 0.0015,
+                    "regime_confidence_threshold": 0.7,
+                    "require_portfolio_diversification": true,
+                    "min_prediction_consensus": 0.6
+                },
+                
+                "risk_management": {
+                    "profit_target": 0.02,
+                    "stop_loss": 0.01,
+                    "trailing_stop": 0.004,
+                    "portfolio_max_drawdown": 0.05,
+                    "position_correlation_limit": 0.8
+                },
+                
+                "symbol_specific_rules": {
+                    "BTCUSDT": {
+                        "weight": 0.5,
+                        "volatility_multiplier": 1.0,
+                        "liquidity_requirement": "high"
+                    },
+                    "ETHUSDT": {
+                        "weight": 0.3,
+                        "volatility_multiplier": 1.1,
+                        "liquidity_requirement": "high"
+                    },
+                    "LTCUSDT": {
+                        "weight": 0.2,
+                        "volatility_multiplier": 1.2,
+                        "liquidity_requirement": "medium"
+                    }
+                },
+                
+                "advanced_features": {
+                    "cross_asset_regime_analysis": true,
+                    "regime_correlation_trading": true,
+                    "dynamic_correlation_adjustment": true,
+                    "sector_rotation_signals": false
+                }
+            }
+        },
+        
+        "multi_timeframe": {
+            "name": "Multi-Timeframe HMM-LSTM",
+            "description": "Uses multiple timeframes for enhanced signal confirmation",
+            "symbol": "BTCUSDT",
+            "timeframes": {
+                "primary": "1h",
+                "secondary": "4h",
+                "execution": "15m"
+            },
+            "strategy_config": {
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                "results_dir": "results",
+                
+                "timeframe_analysis": {
+                    "primary_weight": 0.6,
+                    "secondary_weight": 0.3,
+                    "execution_weight": 0.1,
+                    "require_alignment": true,
+                    "alignment_threshold": 0.7
+                },
+                
+                "position_sizing": {
+                    "base_position_size": 0.12,
+                    "min_position_size": 0.04,
+                    "max_position_size": 0.20,
+                    "timeframe_multipliers": {
+                        "aligned": 1.5,
+                        "partial": 1.0,
+                        "conflicted": 0.5
+                    }
+                },
+                
+                "entry_criteria": {
+                    "prediction_thresholds": {
+                        "primary": 0.0015,
+                        "secondary": 0.002,
+                        "execution": 0.001
+                    },
+                    "regime_confidence_thresholds": {
+                        "primary": 0.7,
+                        "secondary": 0.6,
+                        "execution": 0.5
+                    },
+                    "require_timeframe_confirmation": true,
+                    "min_confirmation_ratio": 0.6
+                },
+                
+                "risk_management": {
+                    "profit_targets": {
+                        "short_term": 0.01,
+                        "medium_term": 0.02,
+                        "long_term": 0.035
+                    },
+                    "stop_losses": {
+                        "tight": 0.005,
+                        "normal": 0.01,
+                        "wide": 0.015
+                    },
+                    "trailing_stops": {
+                        "aggressive": 0.002,
+                        "normal": 0.004,
+                        "conservative": 0.006
+                    }
+                },
+                
+                "regime_timeframe_rules": {
+                    "all_bullish": {
+                        "position_multiplier": 1.8,
+                        "profit_target": "long_term",
+                        "stop_loss": "wide",
+                        "trailing_stop": "conservative"
+                    },
+                    "mixed_bullish": {
+                        "position_multiplier": 1.2,
+                        "profit_target": "medium_term", 
+                        "stop_loss": "normal",
+                        "trailing_stop": "normal"
+                    },
+                    "mixed_neutral": {
+                        "position_multiplier": 0.8,
+                        "profit_target": "short_term",
+                        "stop_loss": "tight",
+                        "trailing_stop": "aggressive"
+                    },
+                    "all_bearish": {
+                        "position_multiplier": 0.6,
+                        "profit_target": "short_term",
+                        "stop_loss": "tight",
+                        "trailing_stop": "aggressive"
+                    }
+                },
+                
+                "advanced_features": {
+                    "timeframe_regime_transitions": true,
+                    "cascade_exit_signals": true,
+                    "dynamic_timeframe_weights": true,
+                    "regime_persistence_analysis": true
+                }
+            }
+        }
+    },
+    
+    "backtesting_parameters": {
+        "initial_cash": 100000,
+        "commission": 0.001,
+        "slippage": 0.0005,
+        "data_frequency": "1H",
+        "warmup_period": 100,
+        
+        "performance_metrics": [
+            "total_return",
+            "sharpe_ratio",
+            "max_drawdown",
+            "win_rate",
+            "profit_factor",
+            "calmar_ratio",
+            "sortino_ratio",
+            "regime_specific_performance"
+        ],
+        
+        "benchmark": {
+            "type": "buy_and_hold",
+            "symbol": "BTCUSDT"
+        }
+    },
+    
+    "optimization_settings": {
+        "parameter_ranges": {
+            "prediction_threshold": [0.0005, 0.0050, 0.0005],
+            "regime_confidence_threshold": [0.5, 0.9, 0.1],
+            "base_position_size": [0.05, 0.20, 0.025],
+            "profit_target": [0.01, 0.04, 0.005],
+            "stop_loss": [0.005, 0.02, 0.0025]
+        },
+        
+        "optimization_method": "optuna",
+        "n_trials": 100,
+        "optimization_metric": "sharpe_ratio",
+        "cross_validation": {
+            "method": "walk_forward",
+            "train_periods": 6,
+            "test_periods": 1
+        }
+    },
+    
+    "model_requirements": {
+        "hmm_model": {
+            "required_files": ["hmm_{symbol}_{timeframe}_*.pkl"],
+            "min_training_samples": 1000,
+            "max_model_age_days": 30
+        },
+        
+        "lstm_model": {
+            "required_files": ["lstm_{symbol}_{timeframe}_*.pkl"],
+            "min_training_samples": 2000,
+            "max_model_age_days": 7
+        },
+        
+        "optimized_indicators": {
+            "required_files": ["indicators_{symbol}_{timeframe}_*.json"],
+            "max_optimization_age_days": 14
+        }
+    },
+    
+    "monitoring_and_alerts": {
+        "performance_alerts": {
+            "max_drawdown_threshold": 0.15,
+            "consecutive_losses_threshold": 5,
+            "low_confidence_threshold": 0.3
+        },
+        
+        "model_health_checks": {
+            "prediction_volatility_threshold": 0.1,
+            "regime_stability_threshold": 0.8,
+            "feature_drift_threshold": 2.0
+        },
+        
+        "retraining_triggers": {
+            "performance_degradation": true,
+            "regime_distribution_change": true,
+            "prediction_accuracy_drop": true,
+            "scheduled_retraining_days": 7
+        }
+    }
+}

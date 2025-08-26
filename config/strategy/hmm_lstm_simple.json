@@ -1,0 +1,65 @@
+{
+    "strategy_name": "Simple HMM-LSTM Strategy",
+    "description": "Simplified HMM-LSTM strategy for backtesting integration",
+    "strategy_class": "HMMLSTMPipelineStrategy",
+    "strategy_module": "src.strategy.hmm_lstm_pipeline_strategy",
+    
+    "default_config": {
+        "symbol": "BTCUSDT",
+        "timeframe": "1h",
+        
+        "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+        "results_dir": "results",
+        
+        "position_size": 0.1,
+        "max_position_size": 0.2,
+        "min_position_size": 0.05,
+        
+        "prediction_threshold": 0.001,
+        "regime_confidence_threshold": 0.6,
+        
+        "profit_target": 0.02,
+        "stop_loss": 0.01,
+        "trailing_stop": 0.005,
+        
+        "allow_short": false,
+        
+        "exit_on_regime_change": true,
+        "exit_on_low_confidence": true,
+        "low_confidence_threshold": 0.3
+    },
+    
+    "backtesting_config": {
+        "initial_cash": 100000,
+        "commission": 0.001,
+        "data_source": "csv",
+        "timeframe": "1H"
+    },
+    
+    "variants": {
+        "conservative": {
+            "position_size": 0.05,
+            "prediction_threshold": 0.002,
+            "regime_confidence_threshold": 0.75,
+            "profit_target": 0.015,
+            "stop_loss": 0.008
+        },
+        
+        "aggressive": {
+            "position_size": 0.15,
+            "prediction_threshold": 0.0005,
+            "regime_confidence_threshold": 0.5,
+            "profit_target": 0.03,
+            "stop_loss": 0.015,
+            "allow_short": true
+        },
+        
+        "balanced": {
+            "position_size": 0.1,
+            "prediction_threshold": 0.001,
+            "regime_confidence_threshold": 0.65,
+            "profit_target": 0.02,
+            "stop_loss": 0.01
+        }
+    }
+}

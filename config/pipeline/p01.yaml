@@ -1,0 +1,60 @@
+# Multi-provider data configuration
+data_sources:
+  binance:
+    symbols: [LTCUSDT, BTCUSDT]
+    timeframes: [5m, 15m, 1h, 4h]
+  yfinance:
+    symbols: [VT,PSNY]
+    timeframes: [1d]
+
+# Legacy support - will be deprecated
+# symbols: [LTCUSDT]
+# timeframes: [5m, 15m, 1h, 4h]
+
+hmm:
+  n_components: 3
+  train_window_days: 730 # 2 years
+  covariance_type: "diag"
+  algorithm: "viterbi"
+  n_iter: 100
+
+lstm:
+  sequence_length: 60
+  hidden_size: 64
+  batch_size: 32
+  epochs: 50
+  learning_rate: 0.001
+  validation_split: 0.2
+  dropout: 0.2
+  num_layers: 2
+
+optuna:
+  n_trials: 50
+  sampler: tpe
+  pruning: true
+  timeout: 3600  # 1 hour timeout per symbol
+
+evaluation:
+  test_split: 0.1
+  baseline_model: naive
+  metrics: [mse, directional_accuracy, sharpe_ratio]
+
+data:
+  period: "2y"  # 2 years of historical data
+  provider: "bnc"  # Binance for crypto pairs
+  save_raw: true
+  save_processed: true
+
+features:
+  log_returns: true
+  rolling_stats: true
+  technical_indicators: true
+  normalization: "minmax"
+
+paths:
+  data_raw: "data/raw"
+  data_labeled: "data/labeled"
+  models_hmm: "src/ml/pipeline/p01_hmm_lstm/models/hmm"
+  models_lstm: "src/ml/pipeline/p01_hmm_lstm/models/lstm"
+  results: "src/ml/pipeline/p01_hmm_lstm/models/results"
+  reports: "src/ml/pipeline/p01_hmm_lstm/models/results"

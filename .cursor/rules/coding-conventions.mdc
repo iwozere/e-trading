@@ -1,0 +1,5 @@
+---
+description: Project structure and coding conventions rules
+globs: Always follow the coding conventions described in CODING_CONVENTIONS.md
+alwaysApply: true
+---

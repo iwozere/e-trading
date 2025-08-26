@@ -1,0 +1,343 @@
+{
+  "default_configs": {
+    "fundamental": {
+      "description": "Default FMP criteria for fundamental screening",
+      "fmp_criteria": {
+        "marketCapMoreThan": 1000000000,
+        "peRatioLessThan": 20,
+        "priceToBookRatioLessThan": 2.0,
+        "returnOnEquityMoreThan": 0.10,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 100
+      }
+    },
+    "hybrid": {
+      "description": "Default FMP criteria for hybrid screening",
+      "fmp_criteria": {
+        "marketCapMoreThan": 2000000000,
+        "peRatioLessThan": 25,
+        "priceToBookRatioLessThan": 3.0,
+        "returnOnEquityMoreThan": 0.12,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 80
+      }
+    },
+    "technical": {
+      "description": "Default FMP criteria for technical screening",
+      "fmp_criteria": {
+        "marketCapMoreThan": 500000000,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 150
+      }
+    },
+    "conservative_value": {
+      "description": "Conservative value screening",
+      "fmp_criteria": {
+        "marketCapMoreThan": 5000000000,
+        "peRatioLessThan": 12,
+        "priceToBookRatioLessThan": 1.2,
+        "debtToEquityLessThan": 0.3,
+        "returnOnEquityMoreThan": 0.15,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "growth": {
+      "description": "Growth stock screening",
+      "fmp_criteria": {
+        "marketCapMoreThan": 1000000000,
+        "peRatioLessThan": 30,
+        "peRatioMoreThan": 8,
+        "returnOnEquityMoreThan": 0.15,
+        "revenueGrowthMoreThan": 0.10,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 60
+      }
+    }
+  },
+  "predefined_strategies": {
+    "conservative_value": {
+      "description": "Conservative value stocks with strong fundamentals and low risk",
+      "criteria": {
+        "marketCapMoreThan": 5000000000,
+        "peRatioLessThan": 12,
+        "priceToBookRatioLessThan": 1.2,
+        "debtToEquityLessThan": 0.3,
+        "currentRatioMoreThan": 1.5,
+        "quickRatioMoreThan": 1.2,
+        "returnOnEquityMoreThan": 0.15,
+        "returnOnAssetsMoreThan": 0.08,
+        "operatingMarginMoreThan": 0.15,
+        "profitMarginMoreThan": 0.10,
+        "dividendYieldMoreThan": 0.03,
+        "betaLessThan": 1.0,
+        "payoutRatioLessThan": 0.6,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "growth_at_reasonable_price": {
+      "description": "Growth stocks with reasonable valuations",
+      "criteria": {
+        "marketCapMoreThan": 1000000000,
+        "peRatioLessThan": 20,
+        "peRatioMoreThan": 8,
+        "priceToBookRatioLessThan": 3.0,
+        "priceToSalesRatioLessThan": 5.0,
+        "returnOnEquityMoreThan": 0.12,
+        "returnOnAssetsMoreThan": 0.06,
+        "revenueGrowthMoreThan": 0.10,
+        "netIncomeGrowthMoreThan": 0.08,
+        "operatingMarginMoreThan": 0.10,
+        "betaLessThan": 1.3,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "dividend_aristocrats": {
+      "description": "High-quality dividend-paying stocks",
+      "criteria": {
+        "marketCapMoreThan": 2000000000,
+        "dividendYieldMoreThan": 0.04,
+        "payoutRatioLessThan": 0.6,
+        "returnOnEquityMoreThan": 0.10,
+        "returnOnAssetsMoreThan": 0.05,
+        "debtToEquityLessThan": 0.5,
+        "currentRatioMoreThan": 1.2,
+        "operatingMarginMoreThan": 0.12,
+        "profitMarginMoreThan": 0.08,
+        "betaLessThan": 1.2,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 30
+      }
+    },
+    "deep_value": {
+      "description": "Deep value stocks with very low valuations",
+      "criteria": {
+        "marketCapMoreThan": 1000000000,
+        "peRatioLessThan": 8,
+        "priceToBookRatioLessThan": 0.8,
+        "priceToSalesRatioLessThan": 1.0,
+        "priceToCashFlowRatioLessThan": 5.0,
+        "debtToEquityLessThan": 0.4,
+        "currentRatioMoreThan": 1.3,
+        "returnOnEquityMoreThan": 0.08,
+        "operatingMarginMoreThan": 0.08,
+        "betaLessThan": 1.1,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 40
+      }
+    },
+    "quality_growth": {
+      "description": "High-quality growth stocks with strong fundamentals",
+      "criteria": {
+        "marketCapMoreThan": 3000000000,
+        "peRatioLessThan": 25,
+        "peRatioMoreThan": 10,
+        "returnOnEquityMoreThan": 0.18,
+        "returnOnAssetsMoreThan": 0.10,
+        "returnOnCapitalEmployedMoreThan": 0.15,
+        "operatingMarginMoreThan": 0.20,
+        "profitMarginMoreThan": 0.15,
+        "revenueGrowthMoreThan": 0.15,
+        "netIncomeGrowthMoreThan": 0.12,
+        "debtToEquityLessThan": 0.3,
+        "currentRatioMoreThan": 1.4,
+        "betaLessThan": 1.2,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 30
+      }
+    },
+    "small_cap_value": {
+      "description": "Small-cap value stocks with growth potential",
+      "criteria": {
+        "marketCapMoreThan": 500000000,
+        "marketCapLowerThan": 2000000000,
+        "peRatioLessThan": 15,
+        "priceToBookRatioLessThan": 1.5,
+        "priceToSalesRatioLessThan": 2.0,
+        "returnOnEquityMoreThan": 0.12,
+        "returnOnAssetsMoreThan": 0.06,
+        "operatingMarginMoreThan": 0.10,
+        "debtToEquityLessThan": 0.5,
+        "currentRatioMoreThan": 1.3,
+        "revenueGrowthMoreThan": 0.08,
+        "betaLessThan": 1.3,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 40
+      }
+    },
+    "defensive_stocks": {
+      "description": "Defensive stocks with low volatility and stable earnings",
+      "criteria": {
+        "marketCapMoreThan": 3000000000,
+        "peRatioLessThan": 18,
+        "peRatioMoreThan": 8,
+        "betaLessThan": 0.8,
+        "debtToEquityLessThan": 0.4,
+        "currentRatioMoreThan": 1.5,
+        "quickRatioMoreThan": 1.2,
+        "returnOnEquityMoreThan": 0.10,
+        "operatingMarginMoreThan": 0.12,
+        "profitMarginMoreThan": 0.08,
+        "dividendYieldMoreThan": 0.02,
+        "payoutRatioLessThan": 0.7,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 25
+      }
+    },
+    "momentum_quality": {
+      "description": "Quality stocks with positive momentum",
+      "criteria": {
+        "marketCapMoreThan": 2000000000,
+        "peRatioLessThan": 22,
+        "peRatioMoreThan": 10,
+        "returnOnEquityMoreThan": 0.15,
+        "returnOnAssetsMoreThan": 0.08,
+        "operatingMarginMoreThan": 0.15,
+        "profitMarginMoreThan": 0.10,
+        "revenueGrowthMoreThan": 0.12,
+        "netIncomeGrowthMoreThan": 0.10,
+        "debtToEquityLessThan": 0.4,
+        "currentRatioMoreThan": 1.3,
+        "betaLessThan": 1.2,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 35
+      }
+    },
+    "international_value": {
+      "description": "International value stocks (non-US exchanges)",
+      "criteria": {
+        "marketCapMoreThan": 1000000000,
+        "peRatioLessThan": 12,
+        "priceToBookRatioLessThan": 1.2,
+        "debtToEquityLessThan": 0.5,
+        "returnOnEquityMoreThan": 0.12,
+        "operatingMarginMoreThan": 0.10,
+        "profitMarginMoreThan": 0.06,
+        "dividendYieldMoreThan": 0.03,
+        "betaLessThan": 1.1,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 30
+      }
+    },
+    "tech_growth": {
+      "description": "Technology growth stocks with reasonable valuations",
+      "criteria": {
+        "marketCapMoreThan": 2000000000,
+        "peRatioLessThan": 30,
+        "peRatioMoreThan": 12,
+        "priceToBookRatioLessThan": 5.0,
+        "priceToSalesRatioLessThan": 8.0,
+        "returnOnEquityMoreThan": 0.15,
+        "returnOnAssetsMoreThan": 0.08,
+        "revenueGrowthMoreThan": 0.15,
+        "netIncomeGrowthMoreThan": 0.12,
+        "operatingMarginMoreThan": 0.15,
+        "debtToEquityLessThan": 0.3,
+        "betaLessThan": 1.4,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 25
+      }
+    },
+    "financial_stocks": {
+      "description": "Financial sector stocks with strong fundamentals",
+      "criteria": {
+        "marketCapMoreThan": 3000000000,
+        "peRatioLessThan": 15,
+        "priceToBookRatioLessThan": 1.5,
+        "returnOnEquityMoreThan": 0.12,
+        "returnOnAssetsMoreThan": 0.08,
+        "debtToEquityLessThan": 0.8,
+        "currentRatioMoreThan": 1.2,
+        "operatingMarginMoreThan": 0.20,
+        "profitMarginMoreThan": 0.15,
+        "dividendYieldMoreThan": 0.02,
+        "betaLessThan": 1.2,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 20
+      }
+    },
+    "mid_cap_stocks": {
+      "description": "Mid-cap stocks ($2B - $200B market cap) with balanced growth and value",
+      "criteria": {
+        "marketCapMoreThan": 2000000000,
+        "marketCapLowerThan": 200000000000,
+        "peRatioLessThan": 30,
+        "returnOnEquityMoreThan": 0.10,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "large_cap_stocks": {
+      "description": "Large-cap stocks ($200B+ market cap) with strong fundamentals",
+      "criteria": {
+        "marketCapMoreThan": 200000000000,
+        "peRatioLessThan": 35,
+        "returnOnEquityMoreThan": 0.12,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "six_stocks": {
+      "description": "Swiss stocks listed on SIX exchange",
+      "criteria": {
+        "exchange": "SIX",
+        "peRatioLessThan": 20,
+        "returnOnEquityMoreThan": 0.08,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 50
+      }
+    },
+    "extra_large_cap_stocks": {
+      "description": "Extra large-cap stocks ($500B+ market cap) - mega caps",
+      "criteria": {
+        "marketCapMoreThan": 500000000000,
+        "peRatioLessThan": 40,
+        "returnOnEquityMoreThan": 0.15,
+        "isETF": false,
+        "isFund": false,
+        "isActivelyTrading": true,
+        "limit": 30
+      }
+    }
+  }
+}

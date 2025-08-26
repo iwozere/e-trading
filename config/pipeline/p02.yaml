@@ -1,0 +1,127 @@
+# CNN-LSTM-XGBoost Pipeline Configuration
+# Multi-provider data configuration
+
+data_sources:
+  binance:
+    symbols: [BTCUSDT, LTCUSDT]
+    timeframes: [5m, 15m, 1h, 4h]
+  yfinance:
+    symbols: [AAPL, MSFT]
+    timeframes: [1d]
+
+# CNN-LSTM model configuration
+cnn_lstm:
+  time_steps: 20
+  conv_filters_range: [32, 128]
+  lstm_units_range: [50, 200]
+  dense_units_range: [20, 100]
+  dropout: 0.3
+  epochs: 50
+  batch_size_options: [16, 32, 64]
+  learning_rate_range: [1e-5, 1e-2]
+  attention_heads: 1
+  kernel_size: 3
+  validation_split: 0.2
+  early_stopping_patience: 10
+  model_save_path: "src/ml/pipeline/p_02_cnn_lstm_xgboost/models/cnn_lstm/checkpoints"
+
+# XGBoost model configuration
+xgboost:
+  n_estimators_range: [100, 2000]
+  learning_rate_range: [0.001, 0.3]
+  max_depth_range: [3, 12]
+  subsample_range: [0.5, 1.0]
+  colsample_bytree_range: [0.5, 1.0]
+  gamma_range: [0, 5]
+  reg_alpha_range: [0, 1000]
+  reg_lambda_range: [0, 1000]
+  early_stopping_rounds: 50
+  validation_split: 0.2
+  model_save_path: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/xgboost/models"
+
+# Technical indicators configuration
+technical_indicators:
+  rsi_period: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  bb_period: 20
+  bb_std: 2
+  atr_period: 14
+  adx_period: 14
+  sma_periods: [10, 20, 50]
+  ema_periods: [10, 20, 50]
+
+# Feature engineering configuration
+feature_engineering:
+  normalization: "minmax"  # minmax, standard, robust
+  sequence_preparation: true
+  feature_selection: true
+  missing_data_strategy: "forward_fill"  # forward_fill, backward_fill, interpolate, drop
+  outlier_handling: "iqr"  # iqr, zscore, none
+
+# Optuna optimization configuration
+optuna:
+  n_trials: 20
+  timeout: 3600  # 1 hour timeout per symbol
+  storage: "sqlite:///db/cnn_lstm_xgboost.db"
+  sampler: "tpe"  # tpe, random, cmaes
+  pruner: "median"  # median, percentile, hyperband
+  n_jobs: 1  # Number of parallel jobs
+  study_names:
+    cnn_lstm: "cnn_lstm_optimization"
+    xgboost: "xgboost_optimization"
+
+# Data processing configuration
+data:
+  period: "2y"  # 2 years of historical data
+  save_raw: true
+  save_processed: true
+  parallel_downloads: 4
+  rate_limit_delay: 1.0  # seconds between requests
+  retry_attempts: 3
+  retry_delay: 5  # seconds
+
+# Evaluation configuration
+evaluation:
+  test_split: 0.2
+  validation_split: 0.2
+  metrics: [mse, mae, directional_accuracy, sharpe_ratio, max_drawdown, win_rate]
+  baseline_models: [naive, linear, random_forest]
+  trading_signal_threshold: 0.02  # 2% threshold for buy/sell signals
+  backtest_initial_capital: 10000
+  backtest_commission: 0.001  # 0.1% commission
+
+# Paths configuration
+paths:
+  data_raw: "data/raw"
+  data_labeled: "data/labeled"
+  models_cnn_lstm: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/cnn_lstm"
+  models_xgboost: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/xgboost"
+  results: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/results"
+  reports: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/results/reports"
+  visualizations: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/results/visualizations"
+  predictions: "src/ml/pipeline/p02_cnn_lstm_xgboost/models/results/predictions"
+
+# Logging configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/cnn_lstm_xgboost_pipeline.log"
+  max_file_size: "10MB"
+  backup_count: 5
+
+# Hardware configuration
+hardware:
+  device: "auto"  # auto, cpu, cuda
+  num_workers: 4
+  pin_memory: true
+  mixed_precision: false  # Enable for faster training on compatible GPUs
+
+# Pipeline execution configuration
+pipeline:
+  parallel_stages: false  # Run stages in parallel where possible
+  resume_from_checkpoint: true
+  save_intermediate_results: true
+  cleanup_temp_files: true
+  max_memory_usage: "8GB"  # Maximum memory usage limit
