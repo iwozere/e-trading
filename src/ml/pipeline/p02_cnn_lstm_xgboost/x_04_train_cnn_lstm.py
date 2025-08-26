@@ -7,7 +7,7 @@ It loads the best hyperparameters and trains the final model for feature extract
 Features:
 - Loads optimized hyperparameters from Optuna study
 - Trains CNN-LSTM model with best parameters
-- Model checkpointing and saving
+- Model checkpointing and saving with training restart capability
 - Training visualization and monitoring
 - GPU support and mixed precision training
 - Comprehensive logging and error handling
@@ -99,57 +99,100 @@ class CNNLSTMTrainer:
         """Load processed data from labeled data directory."""
         _logger.info("Loading processed data...")
 
-        # Find processed data files
-        npz_files = list(self.labeled_data_dir.glob("processed_*.npz"))
+        # Load train data
+        train_data = np.load(self.labeled_data_dir / "combined_features_train.npz")
+        X_train = train_data['features']
+        y_train = train_data['targets']
 
-        if not npz_files:
-            raise FileNotFoundError("No processed data files found")
+        # Load validation data
+        val_data = np.load(self.labeled_data_dir / "combined_features_val.npz")
+        X_val = val_data['features']
+        y_val = val_data['targets']
 
-        # Load the first file (you might want to modify this to handle multiple files)
-        data_file = npz_files[0]
-        _logger.info(f"Loading data from: {data_file.name}")
+        # Load test data
+        test_data = np.load(self.labeled_data_dir / "combined_features_test.npz")
+        X_test = test_data['features']
+        y_test = test_data['targets']
 
-        data = np.load(data_file)
+        # Load feature names
+        feature_names_path = self.labeled_data_dir / "feature_names.json"
+        if feature_names_path.exists():
+            with open(feature_names_path, 'r') as f:
+                feature_names = json.load(f)
+        else:
+            feature_names = [f"feature_{i}" for i in range(X_train.shape[2])]
+
+        _logger.info(f"Loaded data:")
+        _logger.info(f"  Train: {X_train.shape}, {y_train.shape}")
+        _logger.info(f"  Validation: {X_val.shape}, {y_val.shape}")
+        _logger.info(f"  Test: {X_test.shape}, {y_test.shape}")
+        _logger.info(f"  Features: {len(feature_names)}")
 
         return {
-            'X_train': data['X_train'],
-            'X_val': data['X_val'],
-            'X_test': data['X_test'],
-            'y_train': data['y_train'],
-            'y_val': data['y_val'],
-            'y_test': data['y_test'],
-            'feature_names': data['feature_names'].tolist() if 'feature_names' in data else []
+            'X_train': X_train,
+            'y_train': y_train,
+            'X_val': X_val,
+            'y_val': y_val,
+            'X_test': X_test,
+            'y_test': y_test,
+            'feature_names': feature_names
         }
 
-    def _load_best_params(self) -> Dict[str, Any]:
-        """Load the best hyperparameters from the optimization study."""
-        _logger.info("Loading best hyperparameters...")
+    def _load_best_params(self) -> dict:
+        """Load the best hyperparameters from optimization stage."""
+        best_params_path = self.studies_dir / "best_cnn_lstm_params.json"
 
-        # Find the most recent best parameters file
-        best_params_files = list(self.studies_dir.glob("cnn_lstm_best_params_*.json"))
-
-        if not best_params_files:
-            # If no optimization has been run, use default parameters
-            _logger.warning("No optimization results found, using default parameters")
+        if not best_params_path.exists():
+            _logger.warning("Best parameters not found, using default parameters")
             return {
                 'conv_filters': 64,
-                'lstm_units': 100,
-                'dense_units': 50,
+                'lstm_units': 128,
+                'dense_units': 64,
+                'dropout': 0.3,
                 'learning_rate': 0.001,
                 'batch_size': 32,
-                'dropout': 0.3,
-                'attention_heads': 1
+                'epochs': 100
             }
 
-        # Load the most recent file
-        latest_file = max(best_params_files, key=lambda x: x.stat().st_mtime)
-        _logger.info(f"Loading best parameters from: {latest_file.name}")
+        try:
+            with open(best_params_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            _logger.error(f"Failed to load best parameters: {e}")
+            raise
 
-        with open(latest_file, 'r') as f:
-            best_params = json.load(f)
+    def _get_checkpoint_path(self) -> Path:
+        """Get checkpoint file path."""
+        return self.checkpoints_dir / "cnn_lstm_checkpoint.pth"
 
-        _logger.info(f"Best parameters: {best_params}")
-        return best_params
+    def save_checkpoint(self, model: nn.Module, optimizer: optim.Optimizer,
+                       epoch: int, history: Dict[str, List[float]], best_val_loss: float):
+        """Save model/optimizer state so training can resume later."""
+        ckpt_path = self._get_checkpoint_path()
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'history': history,
+            'best_val_loss': best_val_loss,
+            'best_params': self.best_params
+        }, ckpt_path)
+        _logger.info("Checkpoint saved at %s (epoch %d)", ckpt_path, epoch+1)
+
+    def load_checkpoint(self, model: nn.Module, optimizer: optim.Optimizer) -> Tuple[int, Dict[str, List[float]], float]:
+        """Load model/optimizer state to resume training if checkpoint exists."""
+        ckpt_path = self._get_checkpoint_path()
+        if ckpt_path.exists():
+            checkpoint = torch.load(ckpt_path, map_location=self.device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            history = checkpoint['history']
+            best_val_loss = checkpoint['best_val_loss']
+            _logger.info("Resuming from checkpoint %s (epoch %d)", ckpt_path, start_epoch)
+            return start_epoch, history, best_val_loss
+        else:
+            return 0, {'train_loss': [], 'val_loss': [], 'learning_rate': []}, float('inf')
 
     def create_model(self) -> HybridCNNLSTM:
         """Create the CNN-LSTM model with best hyperparameters."""
@@ -217,7 +260,10 @@ class CNNLSTMTrainer:
         patience_counter = 0
         best_model_state = None
 
-        for epoch in range(epochs):
+        # Load checkpoint if it exists
+        start_epoch, history, best_val_loss = self.load_checkpoint(model, optimizer)
+
+        for epoch in range(start_epoch, epochs):
             # Training
             model.train()
             train_loss = 0.0
@@ -263,6 +309,9 @@ class CNNLSTMTrainer:
                 best_model_state = model.state_dict().copy()
             else:
                 patience_counter += 1
+
+            # Save checkpoint after each epoch
+            self.save_checkpoint(model, optimizer, epoch, history, best_val_loss)
 
             if patience_counter >= early_stopping_patience:
                 _logger.info(f"Early stopping at epoch {epoch + 1}")

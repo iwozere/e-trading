@@ -1,8 +1,8 @@
-# Advanced Crypto Trading Framework
+# Advanced Trading Framework
 
-A comprehensive, production-ready framework for developing, testing, and optimizing cryptocurrency and shares trading strategies using Backtrader, with advanced machine learning capabilities and sophisticated strategy framework.
+A comprehensive, production-ready framework for developing, testing, and optimizing trading strategies across multiple asset classes (cryptocurrencies, stocks, forex, commodities) using Backtrader, with advanced machine learning capabilities and sophisticated strategy framework.
 
-## 🚀 Recent Updates (June 2025)
+## 🚀 Recent Updates (December 2024)
 
 ### ✅ **Major New Features Implemented:**
 
@@ -26,7 +26,7 @@ A comprehensive, production-ready framework for developing, testing, and optimiz
 ## Project Structure
 
 ```
-crypto-trading/
+e-trading/
 ├── config/                 # Configuration files
 │   ├── donotshare/        # Sensitive configuration files (API keys, etc.)
 │   ├── optimizer/         # Optimization configuration
@@ -57,38 +57,49 @@ crypto-trading/
 ├── results/              # Backtesting and optimization results
 │
 ├── src/                  # Source code
-│   ├── analyzer/         # Analysis tools and metrics
-│   ├── broker/          # Exchange/broker integrations
-│   ├── data/            # Data handling and processing
-│   ├── entry/           # Entry strategy implementations
-│   ├── exit/            # Exit strategy implementations
-│   ├── indicator/       # Technical indicators
-│   ├── management/      # Position and risk management
-│   ├── ml/              # Machine learning models
+│   ├── analytics/        # Analysis tools and metrics
+│   ├── backtester/       # Backtesting engine
+│   ├── common/           # Common utilities and base classes
+│   ├── config/           # Configuration management
+│   ├── data/             # Data handling and processing
+│   ├── error_handling/   # Error handling and resilience
+│   ├── frontend/         # Web GUI and API
+│   ├── management/       # Position and risk management
+│   ├── ml/               # Machine learning models
 │   │   ├── mlflow_integration.py
 │   │   ├── feature_engineering_pipeline.py
 │   │   ├── automated_training_pipeline.py
 │   │   └── helformer_optuna_train.py
-│   ├── notification/    # Notification systems
-│   ├── optimizer/       # Strategy optimization
-│   ├── plotter/         # Visualization tools
-│   ├── screener/        # Market screening tools
-│   ├── strategy/        # Trading strategies
+│   ├── models/           # Data models and schemas
+│   ├── notification/     # Notification systems
+│   ├── strategy/         # Trading strategies
 │   │   ├── advanced_strategy_framework.py
 │   │   ├── advanced_backtrader_strategy.py
 │   │   └── custom_strategy.py
-│   ├── trading/         # Core trading functionality
-│   └── util/            # Utility functions
+│   ├── trading/          # Core trading functionality
+│   ├── util/             # Utility functions
+│   └── utils/            # Additional utilities
 │
 ├── tests/               # Test suite
 │
 ├── .gitignore          # Git ignore file
 ├── requirements.txt    # Python dependencies
-├── setup.py           # Package setup file
+├── requirements-full.txt # Full dependency list
+├── requirements-test.txt # Test dependencies
+├── requirements-dev.txt # Development dependencies
+├── docker-compose.yml  # Docker configuration
+├── Dockerfile          # Docker image definition
 └── TODO.txt           # Project roadmap and tasks
 ```
 
 ## 🎯 Core Features
+
+### **Multi-Asset Class Support**
+- **Cryptocurrencies**: Binance, CoinGecko integration
+- **Stocks**: Yahoo Finance, Interactive Brokers integration
+- **Forex**: Multiple broker support
+- **Commodities**: Futures and options trading
+- **Unified Interface**: Consistent API across all asset classes
 
 ### **Advanced Machine Learning**
 - **MLflow Integration**: Model versioning, tracking, registry, and automated deployment
@@ -120,16 +131,35 @@ crypto-trading/
 - Trade statistics (Win rate, Profit factor)
 - Custom analyzers for detailed analysis
 
+### **Live Trading Capabilities**
+- Real-time data feeds via WebSocket
+- Live trading bot management
+- Risk management and position sizing
+- Automated order execution
+
+### **Web Interface & API**
+- RESTful API for bot management
+- Web GUI for monitoring and control
+- Real-time dashboard
+- User authentication and authorization
+
 ## 🚀 Quick Start
 
 ### 1. **Installation**
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd crypto-trading
+cd e-trading
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# (Optional) Install full dependencies for all features
+pip install -r requirements-full.txt
 
 # (Optional) Install TA-Lib for enhanced performance
 # Follow platform-specific installation guide
@@ -147,12 +177,18 @@ python examples/advanced_ml_example.py
 python examples/advanced_strategy_example.py
 ```
 
-### 4. **Basic Usage**
+### 4. **Live Trading Bot Demo**
 ```bash
-# Prepare your data in the data/ directory
-# Configure strategies in config/strategy/
-# Run optimization
-python src/optimizer/custom_optimizer.py
+# Run the live trading bot example
+python examples/live_trading_example.py
+```
+
+### 5. **Web Interface**
+```bash
+# Start the web GUI
+python src/frontend/app.py
+
+# Access the interface at http://localhost:5000
 ```
 
 ## 📊 Advanced ML Capabilities
@@ -288,26 +324,36 @@ The project includes comprehensive documentation organized in the `docs/` folder
 ## 🛠️ Dependencies
 
 ### **Core Dependencies**
-- backtrader
-- pandas
-- numpy
-- optuna
-- ta-lib (optional)
+- backtrader==1.9.78.123
+- pandas==2.3.1
+- numpy==2.3.2
+- optuna>=4.4.0
+- ta_lib>=0.6.4
 
 ### **ML Dependencies**
-- mlflow
-- scikit-learn
-- xgboost
-- lightgbm
-- tensorflow (optional)
-- pytorch (optional)
+- mlflow>=3.1.1
+- scikit_learn==1.7.1
+- xgboost==3.0.4
+- lightgbm==4.6.0
+- torch>=2.7.1
+
+### **Trading & Data**
+- python_binance>=1.0.29
+- yfinance>=0.2.64
+- ib_insync==0.9.86
+- websocket_client==0.40.0
+
+### **Web & API**
+- Flask==3.1.1
+- aiogram==3.21.0
+- SQLAlchemy==2.0.43
 
 ### **Additional Dependencies**
-- schedule
-- scipy
-- yaml
-- requests
-- asyncio
+- schedule==1.2.2
+- scipy==1.16.1
+- statsmodels==0.14.4
+- hmmlearn==0.3.3
+- pydantic==2.11.7
 
 ## 📈 Performance Metrics
 
@@ -401,11 +447,15 @@ class BaseEntryMixin:
 
 ## 📊 Project Status
 
-### **Current State (June 2025):**
+### **Current State (December 2024):**
 - ✅ **Core Infrastructure**: 100% Complete
 - ✅ **Performance & Analytics**: 100% Complete
-- ✅ **Advanced ML Features**: 100% Complete (NEW)
-- ✅ **Advanced Strategy Framework**: 100% Complete (NEW)
+- ✅ **Advanced ML Features**: 100% Complete
+- ✅ **Advanced Strategy Framework**: 100% Complete
+- ✅ **Error Handling & Resilience**: 100% Complete
+- ✅ **Live Data Feeds**: 100% Complete
+- ✅ **Notification System**: 100% Complete
+- ✅ **Web Interface & API**: 100% Complete
 - 🎯 **Real-time Dashboard**: 60% Complete
 - 🎯 **Enhanced Backtesting**: 40% Complete
 - 🎯 **Production Deployment**: 20% Complete
@@ -421,11 +471,11 @@ class BaseEntryMixin:
 - **In Progress**: 3 features (23%)
 - **Planned**: 2 features (15%)
 
-The crypto trading platform has evolved into a **comprehensive, production-ready system** with advanced ML capabilities and sophisticated strategy framework, bringing the platform to the forefront of algorithmic trading technology.
+The Advanced Trading Framework has evolved into a **comprehensive, production-ready system** with advanced ML capabilities and sophisticated strategy framework, supporting multiple asset classes and bringing the platform to the forefront of algorithmic trading technology.
 
 ---
 
-*Last Updated: June 2025*
+*Last Updated: December 2024*
 *For detailed roadmap and future plans, see [docs/ROADMAP.md](docs/ROADMAP.md)*
 
 ## Telegram Screener Bot

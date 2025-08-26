@@ -4,6 +4,13 @@ Stage 7: XGBoost Training
 
 This stage trains the final XGBoost model using the best hyperparameters
 found in the optimization stage and the combined features.
+
+Features:
+- Loads optimized hyperparameters from Optuna study
+- Trains XGBoost model with best parameters
+- Model checkpointing and saving with training restart capability
+- Comprehensive metrics and visualization
+- Time series cross-validation support
 """
 
 import os
@@ -17,6 +24,8 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
+from datetime import datetime
+from typing import Tuple
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
@@ -40,8 +49,9 @@ class XGBoostTrainer:
         self.results_dir = self.models_dir / "results"
         self.predictions_dir = self.results_dir / "predictions"
         self.visualizations_dir = self.results_dir / "visualizations"
+        self.checkpoints_dir = self.xgboost_dir / "checkpoints"
 
-        for dir_path in [self.models_path, self.predictions_dir, self.visualizations_dir]:
+        for dir_path in [self.models_path, self.predictions_dir, self.visualizations_dir, self.checkpoints_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
     def _load_config(self) -> dict:
@@ -75,6 +85,45 @@ class XGBoostTrainer:
         except Exception as e:
             self.logger.error(f"Failed to load best parameters: {e}")
             raise
+
+    def _get_checkpoint_path(self) -> Path:
+        """Get checkpoint file path."""
+        return self.checkpoints_dir / "xgboost_checkpoint.pkl"
+
+    def save_checkpoint(self, model: xgb.XGBRegressor, iteration: int,
+                       train_metrics: dict, val_metrics: dict):
+        """Save model state so training can resume later."""
+        ckpt_path = self._get_checkpoint_path()
+        checkpoint = {
+            'model_state': model.get_booster().save_raw()[4],  # Save raw booster state
+            'iteration': iteration,
+            'train_metrics': train_metrics,
+            'val_metrics': val_metrics,
+            'best_params': self._load_best_params()
+        }
+
+        with open(ckpt_path, 'wb') as f:
+            pickle.dump(checkpoint, f)
+
+        self.logger.info("Checkpoint saved at %s (iteration %d)", ckpt_path, iteration)
+
+    def load_checkpoint(self, model: xgb.XGBRegressor) -> Tuple[int, dict, dict]:
+        """Load model state to resume training if checkpoint exists."""
+        ckpt_path = self._get_checkpoint_path()
+        if ckpt_path.exists():
+            with open(ckpt_path, 'rb') as f:
+                checkpoint = pickle.load(f)
+
+            # Load model state
+            model.get_booster().load_model(ckpt_path)
+            start_iteration = checkpoint['iteration'] + 1
+            train_metrics = checkpoint['train_metrics']
+            val_metrics = checkpoint['val_metrics']
+
+            self.logger.info("Resuming from checkpoint %s (iteration %d)", ckpt_path, start_iteration)
+            return start_iteration, train_metrics, val_metrics
+        else:
+            return 0, {}, {}
 
     def _load_combined_features(self) -> tuple:
         """Load the combined features from the feature extraction stage."""
@@ -187,7 +236,7 @@ class XGBoostTrainer:
 
         self.logger.info(f"Final training data shape: {X_train_full.shape}")
 
-        # Create and train model
+        # Create model
         model = xgb.XGBRegressor(
             **best_params,
             random_state=42,
@@ -195,13 +244,26 @@ class XGBoostTrainer:
             verbosity=0
         )
 
+        # Try to load checkpoint
+        start_iteration, train_metrics, val_metrics = self.load_checkpoint(model)
+
+        if start_iteration > 0:
+            self.logger.info(f"Resuming training from iteration {start_iteration}")
+        else:
+            self.logger.info("Starting fresh training")
+
         # Train with early stopping on validation set
         model.fit(
             X_train, y_train,
             eval_set=[(X_val, y_val)],
             early_stopping_rounds=50,
-            verbose=False
+            verbose=False,
+            xgb_model=None if start_iteration == 0 else model
         )
+
+        # Save checkpoint after training
+        final_iteration = model.n_estimators if hasattr(model, 'n_estimators') else 100
+        self.save_checkpoint(model, final_iteration, train_metrics, val_metrics)
 
         # Make predictions
         y_train_pred = model.predict(X_train)
