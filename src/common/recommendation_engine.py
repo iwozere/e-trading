@@ -38,14 +38,27 @@ class TechnicalRecommendationRules:
     @staticmethod
     def get_bollinger_recommendation(close: float, bb_upper: float, bb_middle: float, bb_lower: float) -> Tuple[RecommendationType, float, str]:
         """Get Bollinger Bands recommendation."""
+        # Calculate position within the bands (0 = at lower band, 1 = at upper band)
+        band_width = bb_upper - bb_lower
+        if band_width <= 0:
+            return RecommendationType.HOLD, 0.5, "Bollinger Bands too narrow or invalid"
+
+        position = (close - bb_lower) / band_width
+
         if close <= bb_lower:
             return RecommendationType.STRONG_BUY, 0.9, "Price at or below lower band - Oversold"
         elif close >= bb_upper:
             return RecommendationType.STRONG_SELL, 0.9, "Price at or above upper band - Overbought"
-        elif close < bb_middle:
-            return RecommendationType.BUY, 0.6, "Price below middle band - Potential buy"
+        elif position < 0.2:  # Price in lower 20% of bands
+            return RecommendationType.BUY, 0.7, f"Price near lower band ({position:.1%} position) - Potential buy"
+        elif position > 0.8:  # Price in upper 20% of bands
+            return RecommendationType.SELL, 0.7, f"Price near upper band ({position:.1%} position) - Potential sell"
+        elif position < 0.4:  # Price in lower-middle range
+            return RecommendationType.BUY, 0.6, f"Price in lower range ({position:.1%} position) - Slight buy bias"
+        elif position > 0.6:  # Price in upper-middle range
+            return RecommendationType.SELL, 0.6, f"Price in upper range ({position:.1%} position) - Slight sell bias"
         else:
-            return RecommendationType.HOLD, 0.5, "Price above middle band - Neutral"
+            return RecommendationType.HOLD, 0.5, f"Price in middle range ({position:.1%} position) - Neutral"
 
     @staticmethod
     def get_macd_recommendation(macd: float, signal: float, macd_hist: float) -> Tuple[RecommendationType, float, str]:
@@ -97,15 +110,53 @@ class TechnicalRecommendationRules:
             return RecommendationType.HOLD, 0.5, "Weak trend - Sideways market"
 
     @staticmethod
-    def get_sma_recommendation(current_price: float, sma: float) -> Tuple[RecommendationType, float, str]:
-        """Get SMA recommendation."""
+    def get_sma_recommendation(current_price: float, sma: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+        """Get improved SMA recommendation with trend and distance analysis."""
         if current_price is None or sma is None:
             return RecommendationType.HOLD, 0.5, "Insufficient data"
 
-        if current_price > sma:
-            return RecommendationType.BUY, 0.6, "Price above moving average"
+        # Calculate distance from MA as percentage
+        distance_pct = ((current_price - sma) / sma) * 100
+
+        # Get trend context if available
+        ma_trend = context.get('ma_trend', 'unknown') if context else 'unknown'  # 'up', 'down', 'sideways'
+        fast_ma = context.get('fast_ma', None) if context else None
+        slow_ma = context.get('slow_ma', None) if context else None
+
+        # Check for MA crossover signals if both fast and slow MAs are available
+        if fast_ma is not None and slow_ma is not None:
+            if fast_ma > slow_ma:
+                ma_crossover = "bullish"
+            elif fast_ma < slow_ma:
+                ma_crossover = "bearish"
+            else:
+                ma_crossover = "neutral"
         else:
-            return RecommendationType.SELL, 0.6, "Price below moving average"
+            ma_crossover = "unknown"
+
+        # Strong signals based on distance and trend
+        if distance_pct >= 5 and ma_trend == 'up':
+            return RecommendationType.STRONG_BUY, 0.8, f"Price {distance_pct:.1f}% above rising MA - Strong uptrend"
+        elif distance_pct <= -5 and ma_trend == 'down':
+            return RecommendationType.STRONG_SELL, 0.8, f"Price {distance_pct:.1f}% below falling MA - Strong downtrend"
+
+        # Moderate signals with trend confirmation
+        elif distance_pct > 2 and ma_trend == 'up':
+            return RecommendationType.BUY, 0.7, f"Price {distance_pct:.1f}% above rising MA - Uptrend"
+        elif distance_pct < -2 and ma_trend == 'down':
+            return RecommendationType.SELL, 0.7, f"Price {distance_pct:.1f}% below falling MA - Downtrend"
+
+        # Crossover signals (only if not already caught by distance signals)
+        elif ma_crossover == "bullish" and current_price > sma and distance_pct <= 2:
+            return RecommendationType.BUY, 0.7, f"Bullish MA crossover - Price {distance_pct:.1f}% above MA"
+        elif ma_crossover == "bearish" and current_price < sma and distance_pct >= -2:
+            return RecommendationType.SELL, 0.7, f"Bearish MA crossover - Price {distance_pct:.1f}% below MA"
+
+        # Weak signals based on position only
+        elif current_price > sma:
+            return RecommendationType.BUY, 0.6, f"Price above MA ({distance_pct:.1f}%) - Weak bullish"
+        else:
+            return RecommendationType.SELL, 0.6, f"Price below MA ({distance_pct:.1f}%) - Weak bearish"
 
     @staticmethod
     def get_cci_recommendation(cci: float) -> Tuple[RecommendationType, float, str]:
@@ -606,7 +657,7 @@ class RecommendationEngine:
     def _get_sma_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for SMA recommendation."""
         if context and 'current_price' in context:
-            return self.technical_rules.get_sma_recommendation(context['current_price'], value)
+            return self.technical_rules.get_sma_recommendation(context['current_price'], value, context)
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for SMA"
 

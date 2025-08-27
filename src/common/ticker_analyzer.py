@@ -357,6 +357,103 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                         'reason': rec.reason
                     }
 
+                # Generate SMA/EMA recommendations with trend context
+                if current_indicators.get('sma_fast') is not None:
+                    # Determine MA trend based on fast vs slow MA relationship
+                    ma_trend = 'unknown'
+                    if current_indicators.get('sma_slow') is not None:
+                        if current_indicators['sma_fast'] > current_indicators['sma_slow']:
+                            ma_trend = 'up'
+                        elif current_indicators['sma_fast'] < current_indicators['sma_slow']:
+                            ma_trend = 'down'
+                        else:
+                            ma_trend = 'sideways'
+
+                    context = {
+                        'current_price': current_price,
+                        'ma_trend': ma_trend,
+                        'fast_ma': current_indicators.get('sma_fast'),
+                        'slow_ma': current_indicators.get('sma_slow')
+                    }
+                    rec = recommendation_engine.get_recommendation('SMA_FAST', current_indicators['sma_fast'], context)
+                    recommendations['sma_fast'] = {
+                        'signal': rec.recommendation.value,
+                        'confidence': rec.confidence,
+                        'reason': rec.reason
+                    }
+
+                if current_indicators.get('sma_slow') is not None:
+                    # Determine MA trend based on fast vs slow MA relationship
+                    ma_trend = 'unknown'
+                    if current_indicators.get('sma_fast') is not None:
+                        if current_indicators['sma_fast'] > current_indicators['sma_slow']:
+                            ma_trend = 'up'
+                        elif current_indicators['sma_fast'] < current_indicators['sma_slow']:
+                            ma_trend = 'down'
+                        else:
+                            ma_trend = 'sideways'
+
+                    context = {
+                        'current_price': current_price,
+                        'ma_trend': ma_trend,
+                        'fast_ma': current_indicators.get('sma_fast'),
+                        'slow_ma': current_indicators.get('sma_slow')
+                    }
+                    rec = recommendation_engine.get_recommendation('SMA_SLOW', current_indicators['sma_slow'], context)
+                    recommendations['sma_slow'] = {
+                        'signal': rec.recommendation.value,
+                        'confidence': rec.confidence,
+                        'reason': rec.reason
+                    }
+
+                if current_indicators.get('ema_fast') is not None:
+                    # Determine MA trend based on fast vs slow EMA relationship
+                    ma_trend = 'unknown'
+                    if current_indicators.get('ema_slow') is not None:
+                        if current_indicators['ema_fast'] > current_indicators['ema_slow']:
+                            ma_trend = 'up'
+                        elif current_indicators['ema_fast'] < current_indicators['ema_slow']:
+                            ma_trend = 'down'
+                        else:
+                            ma_trend = 'sideways'
+
+                    context = {
+                        'current_price': current_price,
+                        'ma_trend': ma_trend,
+                        'fast_ma': current_indicators.get('ema_fast'),
+                        'slow_ma': current_indicators.get('ema_slow')
+                    }
+                    rec = recommendation_engine.get_recommendation('EMA_FAST', current_indicators['ema_fast'], context)
+                    recommendations['ema_fast'] = {
+                        'signal': rec.recommendation.value,
+                        'confidence': rec.confidence,
+                        'reason': rec.reason
+                    }
+
+                if current_indicators.get('ema_slow') is not None:
+                    # Determine MA trend based on fast vs slow EMA relationship
+                    ma_trend = 'unknown'
+                    if current_indicators.get('ema_fast') is not None:
+                        if current_indicators['ema_fast'] > current_indicators['ema_slow']:
+                            ma_trend = 'up'
+                        elif current_indicators['ema_fast'] < current_indicators['ema_slow']:
+                            ma_trend = 'down'
+                        else:
+                            ma_trend = 'sideways'
+
+                    context = {
+                        'current_price': current_price,
+                        'ma_trend': ma_trend,
+                        'fast_ma': current_indicators.get('ema_fast'),
+                        'slow_ma': current_indicators.get('ema_slow')
+                    }
+                    rec = recommendation_engine.get_recommendation('EMA_SLOW', current_indicators['ema_slow'], context)
+                    recommendations['ema_slow'] = {
+                        'signal': rec.recommendation.value,
+                        'confidence': rec.confidence,
+                        'reason': rec.reason
+                    }
+
             except Exception as e:
                 _logger.warning("Error generating recommendations: %s", e)
                 recommendations = {}
