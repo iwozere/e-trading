@@ -230,7 +230,7 @@ def _extract_available_indicators(df: pd.DataFrame) -> Dict[str, np.ndarray]:
             else:
                 _logger.warning(f"✗ {indicator}: No data available")
         else:
-            _logger.debug(f"✗ {indicator}: Column not found in DataFrame")
+            pass
 
     return indicators
 

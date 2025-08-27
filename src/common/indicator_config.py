@@ -34,7 +34,7 @@ class IndicatorConfig:
             if config_file.exists():
                 with open(config_file, 'r') as f:
                     config = json.load(f)
-                _logger.info("Loaded indicator configuration from %s", self.config_path)
+
                 return config
             else:
                 _logger.warning("Configuration file %s not found, using defaults", self.config_path)
@@ -123,13 +123,13 @@ class IndicatorConfig:
         """
         if preset_name == "default":
             self._current_preset = "default"
-            _logger.info("Set indicator preset to default")
+
             return True
 
         available_presets = list(self.config.get("custom_presets", {}).keys())
         if preset_name in available_presets:
             self._current_preset = preset_name
-            _logger.info("Set indicator preset to %s", preset_name)
+
             return True
         else:
             _logger.warning("Preset '%s' not found. Available presets: %s", preset_name, available_presets)
@@ -154,7 +154,7 @@ class IndicatorConfig:
             self._custom_parameters[mapped_indicator] = {}
 
         self._custom_parameters[mapped_indicator][parameter] = value
-        _logger.info("Set custom parameter %s=%s for %s", parameter, value, indicator)
+
 
     def clear_custom_parameters(self, indicator: Optional[str] = None) -> None:
         """
@@ -165,12 +165,12 @@ class IndicatorConfig:
         """
         if indicator is None:
             self._custom_parameters.clear()
-            _logger.info("Cleared all custom parameters")
+
         else:
             mapped_indicator = self.config.get("indicator_mapping", {}).get(indicator, indicator)
             if mapped_indicator in self._custom_parameters:
                 del self._custom_parameters[mapped_indicator]
-                _logger.info("Cleared custom parameters for %s", indicator)
+
 
     def get_available_presets(self) -> list:
         """Get list of available presets."""
@@ -194,7 +194,7 @@ class IndicatorConfig:
     def reload_config(self) -> None:
         """Reload configuration from file."""
         self.config = self._load_config()
-        _logger.info("Reloaded indicator configuration")
+
 
     # Indicator name mappings (old names to new names)
     INDICATOR_MAPPINGS = {

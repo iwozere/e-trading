@@ -136,7 +136,7 @@ class IndicatorService:
         self.cache = SimpleMemoryCache(max_size=cache_size, ttl=cache_ttl)
         self.recommendation_engine = RecommendationEngine()
 
-        _logger.info("Indicator service initialized with TA-Lib direct calculation")
+
 
     async def get_indicators(self, request: IndicatorCalculationRequest) -> IndicatorSet:
         """
@@ -157,7 +157,6 @@ class IndicatorService:
                     request.ticker, request.indicators, request.timeframe, request.period
                 )
                 if cached_result:
-                    _logger.debug("Cache hit for %s", request.ticker)
                     return cached_result
 
             # Calculate indicators directly using TA-Lib
@@ -169,7 +168,6 @@ class IndicatorService:
             )
 
             duration = (datetime.now() - start_time).total_seconds()
-            _logger.debug("Calculated indicators for %s in %.2fs", request.ticker, duration)
 
             return indicator_set
 
@@ -195,7 +193,7 @@ class IndicatorService:
             results = await self._calculate_batch_indicators(request)
 
             duration = (datetime.now() - start_time).total_seconds()
-            _logger.info("Calculated indicators for %d tickers in %.2fs", len(request.tickers), duration)
+
 
             return results
 

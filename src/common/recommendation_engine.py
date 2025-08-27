@@ -470,27 +470,19 @@ class RecommendationEngine:
             Recommendation object
         """
         try:
-            _logger.debug("Getting recommendation for %s, value: %s, context: %s", indicator, value, context)
-
             # Determine if it's a technical or fundamental indicator
             if indicator in self._recommendation_methods:
-                _logger.debug("Using technical recommendation method for %s", indicator)
                 rec_type, confidence, reason = self._recommendation_methods[indicator](value, context)
                 category = IndicatorCategory.TECHNICAL
             elif indicator in self.fundamental_functions:
-                _logger.debug("Using fundamental recommendation method for %s", indicator)
                 rec_type, confidence, reason = self.fundamental_functions[indicator](value)
                 category = IndicatorCategory.FUNDAMENTAL
             else:
                 # Default recommendation for unknown indicators
-                _logger.debug("No specific recommendation method for %s, using default", indicator)
                 rec_type = RecommendationType.HOLD
                 confidence = 0.5
                 reason = f"No specific rules for {indicator}"
                 category = IndicatorCategory.TECHNICAL  # Default to technical
-
-            _logger.debug("Recommendation for %s: %s, confidence: %.2f, reason: %s",
-                         indicator, rec_type, confidence, reason)
 
             return Recommendation(
                 recommendation=rec_type,

@@ -91,11 +91,7 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
     # Extract indicator values and build recommendations
     recommendations = {}
 
-    _logger.debug("Processing %d technical indicators", len(indicator_set.technical_indicators))
-
     for name, indicator in indicator_set.technical_indicators.items():
-        _logger.debug("Processing indicator: %s, value: %s, recommendation: %s",
-                     name, indicator.value, indicator.recommendation)
 
         if name in indicator_mapping:
             field_name = indicator_mapping[name]
@@ -121,7 +117,7 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
                     "confidence": indicator.recommendation.confidence
                 }
 
-                _logger.debug("Initial recommendation for %s: %s - %s", name, signal, indicator.recommendation.reason)
+
 
                 # Override reasons for specific indicators with better context
                 if name == 'RSI' and indicator.value is not None:
@@ -134,36 +130,34 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
                     else:
                         recommendations[name.lower()]["signal"] = "HOLD"
                         recommendations[name.lower()]["reason"] = "Neutral zone - No clear signal"
-                    _logger.debug("RSI override: value=%.2f, signal=%s, reason=%s",
-                                 indicator.value, recommendations[name.lower()]["signal"],
-                                 recommendations[name.lower()]["reason"])
+
                 elif name == 'MACD':
                     if len(indicator_set.technical_indicators) > 10:
                         # Keep original recommendation if we have enough data
-                        _logger.debug("MACD: Keeping original recommendation with %d indicators", len(indicator_set.technical_indicators))
+
                         pass
                     else:
                         recommendations[name.lower()]["signal"] = "HOLD"
                         recommendations[name.lower()]["reason"] = "Insufficient MACD data"
-                        _logger.debug("MACD: Overriding to HOLD due to insufficient data (%d indicators)", len(indicator_set.technical_indicators))
+
                 elif name == 'BB_UPPER':
                     if indicator.value is not None:
                         recommendations[name.lower()]["reason"] = "Price below upper band - Normal range"
                     else:
                         recommendations[name.lower()]["reason"] = "Bollinger Bands data unavailable"
-                    _logger.debug("BB_UPPER: value=%s, reason=%s", indicator.value, recommendations[name.lower()]["reason"])
+
                 elif name == 'BB_MIDDLE':
                     if indicator.value is not None:
                         recommendations[name.lower()]["reason"] = "Price above middle band - Neutral"
                     else:
                         recommendations[name.lower()]["reason"] = "Bollinger Bands data unavailable"
-                    _logger.debug("BB_MIDDLE: value=%s, reason=%s", indicator.value, recommendations[name.lower()]["reason"])
+
                 elif name == 'BB_LOWER':
                     if indicator.value is not None:
                         recommendations[name.lower()]["reason"] = "Price above lower band - Normal range"
                     else:
                         recommendations[name.lower()]["reason"] = "Bollinger Bands data unavailable"
-                    _logger.debug("BB_LOWER: value=%s, reason=%s", indicator.value, recommendations[name.lower()]["reason"])
+
                 elif name == 'STOCH_K' and indicator.value is not None:
                     stoch_d = next((ind.value for ind_name, ind in indicator_set.technical_indicators.items()
                                    if ind_name == 'STOCH_D'), None)
@@ -178,9 +172,7 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
                         recommendations[name.lower()]["reason"] = "Stochastic K above D - Bullish crossover"
                     else:
                         recommendations[name.lower()]["reason"] = "Stochastic in neutral zone"
-                    _logger.debug("STOCH_K: value=%.2f, stoch_d=%s, signal=%s, reason=%s",
-                                 indicator.value, stoch_d, recommendations[name.lower()]["signal"],
-                                 recommendations[name.lower()]["reason"])
+
                 elif name == 'ADX' and indicator.value is not None:
                     plus_di = next((ind.value for ind_name, ind in indicator_set.technical_indicators.items()
                                    if ind_name == 'PLUS_DI'), None)
@@ -197,9 +189,7 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
                             recommendations[name.lower()]["reason"] = f"Strong trend (ADX: {indicator.value:.1f})"
                     else:
                         recommendations[name.lower()]["reason"] = f"Weak trend (ADX: {indicator.value:.1f})"
-                    _logger.debug("ADX: value=%.2f, plus_di=%s, minus_di=%s, signal=%s, reason=%s",
-                                 indicator.value, plus_di, minus_di, recommendations[name.lower()]["signal"],
-                                 recommendations[name.lower()]["reason"])
+
                 elif name == 'OBV' and indicator.value is not None:
                     if indicator.value > 0:
                         recommendations[name.lower()]["signal"] = "BUY"
@@ -207,9 +197,7 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
                     else:
                         recommendations[name.lower()]["signal"] = "SELL"
                         recommendations[name.lower()]["reason"] = "Negative OBV - Distribution"
-                    _logger.debug("OBV: value=%.0f, signal=%s, reason=%s",
-                                 indicator.value, recommendations[name.lower()]["signal"],
-                                 recommendations[name.lower()]["reason"])
+
                 elif name == 'ADR' and indicator.value is not None:
                     if indicator.value > 3.0:  # High volatility
                         recommendations[name.lower()]["reason"] = f"High volatility ({indicator.value:.1f}%) - Caution"
@@ -217,9 +205,9 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
                         recommendations[name.lower()]["reason"] = f"Low volatility ({indicator.value:.1f}%) - Stable price action"
                     else:
                         recommendations[name.lower()]["reason"] = f"Normal volatility ({indicator.value:.1f}%)"
-                    _logger.debug("ADR: value=%.2f, reason=%s", indicator.value, recommendations[name.lower()]["reason"])
+
         else:
-            _logger.debug("Indicator %s not in mapping, skipping", name)
+            pass
 
     # Add overall recommendation if composite recommendation is available
     if indicator_set.overall_recommendation:

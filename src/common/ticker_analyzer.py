@@ -15,13 +15,13 @@ _logger = setup_logger(__name__)
 
 async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provider: str = None) -> TickerAnalysis:
     """Analyze ticker with enhanced technical analysis and recommendations, supporting multiple providers."""
-    _logger.info("Analyzing ticker: %s, period: %s, interval: %s, provider: %s", ticker, period, interval, provider)
+
     try:
         # Infer provider if not specified
         if not provider:
             provider = determine_provider(ticker)
 
-        _logger.debug("provider: %s", provider)
+
 
         # Get OHLCV data using common function
         df = get_ohlcv(ticker, interval, period, provider)
@@ -31,7 +31,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
         if provider.lower() in ["yf", "av", "fh", "td", "pg"]:
             fundamentals = get_fundamentals(ticker, provider)
 
-        _logger.debug("Downloaded data for %s", ticker)
+
 
         # Get unified indicator service
         indicator_service = get_indicator_service()
@@ -228,7 +228,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                 adr = talib.SMA(daily_range, timeperiod=14)
                 df_with_indicators['adr'] = adr
 
-                _logger.info("Successfully calculated and added %d technical indicators to DataFrame", len(df_with_indicators.columns) - 6)
+
 
             except Exception as e:
                 _logger.warning("Error calculating some indicators: %s", e)
