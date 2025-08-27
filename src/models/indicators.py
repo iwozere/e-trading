@@ -153,7 +153,7 @@ class PerformanceMetrics:
 
 
 # Constants for indicator names
-TECHNICAL_INDICATORS = {
+INDICATOR_DESCRIPTIONS = {
     "RSI": "Relative Strength Index",
     "MACD": "Moving Average Convergence Divergence",
     "MACD_SIGNAL": "MACD Signal Line",
@@ -161,21 +161,22 @@ TECHNICAL_INDICATORS = {
     "BB_UPPER": "Bollinger Bands Upper",
     "BB_MIDDLE": "Bollinger Bands Middle",
     "BB_LOWER": "Bollinger Bands Lower",
-    "STOCH_K": "Stochastic %K",
-    "STOCH_D": "Stochastic %D",
+    "SMA_FAST": "Simple Moving Average Fast",
+    "SMA_SLOW": "Simple Moving Average Slow",
+    "EMA_FAST": "Exponential Moving Average Fast",
+    "EMA_SLOW": "Exponential Moving Average Slow",
     "ADX": "Average Directional Index",
     "PLUS_DI": "Plus Directional Indicator",
     "MINUS_DI": "Minus Directional Indicator",
-    "OBV": "On-Balance Volume",
-    "ADR": "Average Daily Range",
-    "SMA_50": "Simple Moving Average 50",
-    "SMA_200": "Simple Moving Average 200",
-    "EMA_12": "Exponential Moving Average 12",
-    "EMA_26": "Exponential Moving Average 26",
+    "ATR": "Average True Range",
+    "STOCH_K": "Stochastic %K",
+    "STOCH_D": "Stochastic %D",
+    "WILLIAMS_R": "Williams %R",
     "CCI": "Commodity Channel Index",
     "ROC": "Rate of Change",
     "MFI": "Money Flow Index",
-    "WILLIAMS_R": "Williams %R",
+    "OBV": "On-Balance Volume",
+    "ADR": "Average Daily Range"
 }
 
 FUNDAMENTAL_INDICATORS = {
@@ -202,4 +203,4 @@ FUNDAMENTAL_INDICATORS = {
     "EV_TO_EBITDA": "Enterprise Value to EBITDA",
 }
 
-ALL_INDICATORS = {**TECHNICAL_INDICATORS, **FUNDAMENTAL_INDICATORS}
+ALL_INDICATORS = {**INDICATOR_DESCRIPTIONS, **FUNDAMENTAL_INDICATORS}

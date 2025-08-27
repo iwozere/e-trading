@@ -300,8 +300,8 @@ def generate_chart(analysis: TickerAnalysis) -> bytes:
     ax1.plot(dates, bb_upper, label='BB Upper', color='gray', alpha=0.7)
     ax1.plot(dates, bb_middle, label='BB Middle', color='blue', alpha=0.7)
     ax1.plot(dates, bb_lower, label='BB Lower', color='gray', alpha=0.7)
-    ax1.plot(dates, sma_50, label='SMA 50', color='orange', alpha=0.8)
-    ax1.plot(dates, sma_200, label='SMA 200', color='darkblue', alpha=0.8)
+    ax1.plot(dates, sma_fast, label='SMA Fast', color='orange', alpha=0.8)
+    ax1.plot(dates, sma_slow, label='SMA Slow', color='darkblue', alpha=0.8)
     
     # 2. RSI with 30/70 lines
     ax2 = fig.add_subplot(gs[1])

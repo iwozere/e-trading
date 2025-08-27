@@ -418,11 +418,15 @@ class DataLoader:
 
         # Calculate moving averages
         df_features['sma_20'] = df_features['close'].rolling(window=20).mean()
-        df_features['ema_12'] = df_features['close'].ewm(span=12).mean()
+        # EMA features
+        df_features['ema_fast'] = df_features['close'].ewm(span=12).mean()
+        df_features['ema_slow'] = df_features['close'].ewm(span=26).mean()
+        df_features['price_vs_ema_fast'] = (df_features['close'] - df_features['ema_fast']) / df_features['ema_fast']
+        df_features['price_vs_ema_slow'] = (df_features['close'] - df_features['ema_slow']) / df_features['ema_slow']
 
         # Price position relative to moving averages
         df_features['price_vs_sma20'] = (df_features['close'] - df_features['sma_20']) / df_features['sma_20']
-        df_features['price_vs_ema12'] = (df_features['close'] - df_features['ema_12']) / df_features['ema_12']
+        # df_features['price_vs_ema12'] = (df_features['close'] - df_features['ema_12']) / df_features['ema_12'] # This line is removed as per the new_code
 
         # Remove NaN values from derived features
         df_features = df_features.dropna()

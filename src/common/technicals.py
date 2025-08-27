@@ -17,7 +17,7 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
 
     request = IndicatorCalculationRequest(
         ticker=ticker,
-        indicators=["RSI", "MACD", "MACD_SIGNAL", "MACD_HISTOGRAM", "BB_UPPER", "BB_MIDDLE", "BB_LOWER", "SMA_50", "SMA_200", "EMA_12", "EMA_26", "ADX", "PLUS_DI", "MINUS_DI", "ATR", "STOCH_K", "STOCH_D", "WILLIAMS_R", "CCI", "ROC", "MFI", "OBV", "ADR"],
+        indicators=["RSI", "MACD", "MACD_SIGNAL", "MACD_HISTOGRAM", "BB_UPPER", "BB_MIDDLE", "BB_LOWER", "SMA_FAST", "SMA_SLOW", "EMA_FAST", "EMA_SLOW", "ADX", "PLUS_DI", "MINUS_DI", "ATR", "STOCH_K", "STOCH_D", "WILLIAMS_R", "CCI", "ROC", "MFI", "OBV", "ADR"],
         timeframe=interval,
         period=period,
         provider=provider,
@@ -33,8 +33,8 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
     # Map indicator names to Technicals class fields
     technical_data = {
         'rsi': None,
-        'sma_50': None,
-        'sma_200': None,
+        'sma_fast': None,
+        'sma_slow': None,
         'macd': None,
         'macd_signal': None,
         'macd_histogram': None,
@@ -51,14 +51,23 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
         'bb_middle': None,
         'bb_lower': None,
         'bb_width': None,
+        'ema_fast': None,
+        'ema_slow': None,
+        'cci': None,
+        'roc': None,
+        'mfi': None,
+        'williams_r': None,
+        'atr': None,
         'recommendations': {}
     }
 
     # Map indicator names to Technicals fields
     indicator_mapping = {
         'RSI': 'rsi',
-        'SMA_50': 'sma_50',
-        'SMA_200': 'sma_200',
+        'SMA_FAST': 'sma_fast',
+        'SMA_SLOW': 'sma_slow',
+        'EMA_FAST': 'ema_fast',
+        'EMA_SLOW': 'ema_slow',
         'MACD': 'macd',
         'MACD_SIGNAL': 'macd_signal',
         'MACD_HISTOGRAM': 'macd_histogram',
@@ -72,12 +81,22 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
         'BB_LOWER': 'bb_lower',
         'OBV': 'obv',
         'ADR': 'adr',
+        'CCI': 'cci',
+        'ROC': 'roc',
+        'MFI': 'mfi',
+        'WILLIAMS_R': 'williams_r',
+        'ATR': 'atr',
     }
 
     # Extract indicator values and build recommendations
     recommendations = {}
 
+    _logger.debug("Processing %d technical indicators", len(indicator_set.technical_indicators))
+
     for name, indicator in indicator_set.technical_indicators.items():
+        _logger.debug("Processing indicator: %s, value: %s, recommendation: %s",
+                     name, indicator.value, indicator.recommendation)
+
         if name in indicator_mapping:
             field_name = indicator_mapping[name]
             technical_data[field_name] = indicator.value
@@ -101,6 +120,106 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
                     "reason": indicator.recommendation.reason,
                     "confidence": indicator.recommendation.confidence
                 }
+
+                _logger.debug("Initial recommendation for %s: %s - %s", name, signal, indicator.recommendation.reason)
+
+                # Override reasons for specific indicators with better context
+                if name == 'RSI' and indicator.value is not None:
+                    if indicator.value > 70:
+                        recommendations[name.lower()]["signal"] = "SELL"
+                        recommendations[name.lower()]["reason"] = "Overbought - Sell opportunity"
+                    elif indicator.value < 30:
+                        recommendations[name.lower()]["signal"] = "BUY"
+                        recommendations[name.lower()]["reason"] = "Oversold - Buy opportunity"
+                    else:
+                        recommendations[name.lower()]["signal"] = "HOLD"
+                        recommendations[name.lower()]["reason"] = "Neutral zone - No clear signal"
+                    _logger.debug("RSI override: value=%.2f, signal=%s, reason=%s",
+                                 indicator.value, recommendations[name.lower()]["signal"],
+                                 recommendations[name.lower()]["reason"])
+                elif name == 'MACD':
+                    if len(indicator_set.technical_indicators) > 10:
+                        # Keep original recommendation if we have enough data
+                        _logger.debug("MACD: Keeping original recommendation with %d indicators", len(indicator_set.technical_indicators))
+                        pass
+                    else:
+                        recommendations[name.lower()]["signal"] = "HOLD"
+                        recommendations[name.lower()]["reason"] = "Insufficient MACD data"
+                        _logger.debug("MACD: Overriding to HOLD due to insufficient data (%d indicators)", len(indicator_set.technical_indicators))
+                elif name == 'BB_UPPER':
+                    if indicator.value is not None:
+                        recommendations[name.lower()]["reason"] = "Price below upper band - Normal range"
+                    else:
+                        recommendations[name.lower()]["reason"] = "Bollinger Bands data unavailable"
+                    _logger.debug("BB_UPPER: value=%s, reason=%s", indicator.value, recommendations[name.lower()]["reason"])
+                elif name == 'BB_MIDDLE':
+                    if indicator.value is not None:
+                        recommendations[name.lower()]["reason"] = "Price above middle band - Neutral"
+                    else:
+                        recommendations[name.lower()]["reason"] = "Bollinger Bands data unavailable"
+                    _logger.debug("BB_MIDDLE: value=%s, reason=%s", indicator.value, recommendations[name.lower()]["reason"])
+                elif name == 'BB_LOWER':
+                    if indicator.value is not None:
+                        recommendations[name.lower()]["reason"] = "Price above lower band - Normal range"
+                    else:
+                        recommendations[name.lower()]["reason"] = "Bollinger Bands data unavailable"
+                    _logger.debug("BB_LOWER: value=%s, reason=%s", indicator.value, recommendations[name.lower()]["reason"])
+                elif name == 'STOCH_K' and indicator.value is not None:
+                    stoch_d = next((ind.value for ind_name, ind in indicator_set.technical_indicators.items()
+                                   if ind_name == 'STOCH_D'), None)
+                    if indicator.value > 80:
+                        recommendations[name.lower()]["signal"] = "SELL"
+                        recommendations[name.lower()]["reason"] = "Stochastic overbought (K > 80)"
+                    elif indicator.value < 20:
+                        recommendations[name.lower()]["signal"] = "BUY"
+                        recommendations[name.lower()]["reason"] = "Stochastic oversold (K < 20)"
+                    elif stoch_d is not None and indicator.value > stoch_d:
+                        recommendations[name.lower()]["signal"] = "BUY"
+                        recommendations[name.lower()]["reason"] = "Stochastic K above D - Bullish crossover"
+                    else:
+                        recommendations[name.lower()]["reason"] = "Stochastic in neutral zone"
+                    _logger.debug("STOCH_K: value=%.2f, stoch_d=%s, signal=%s, reason=%s",
+                                 indicator.value, stoch_d, recommendations[name.lower()]["signal"],
+                                 recommendations[name.lower()]["reason"])
+                elif name == 'ADX' and indicator.value is not None:
+                    plus_di = next((ind.value for ind_name, ind in indicator_set.technical_indicators.items()
+                                   if ind_name == 'PLUS_DI'), None)
+                    minus_di = next((ind.value for ind_name, ind in indicator_set.technical_indicators.items()
+                                    if ind_name == 'MINUS_DI'), None)
+                    if indicator.value > 25:  # Strong trend
+                        if plus_di is not None and minus_di is not None and plus_di > minus_di:
+                            recommendations[name.lower()]["signal"] = "BUY"
+                            recommendations[name.lower()]["reason"] = f"Strong uptrend (ADX: {indicator.value:.1f})"
+                        elif plus_di is not None and minus_di is not None and plus_di < minus_di:
+                            recommendations[name.lower()]["signal"] = "SELL"
+                            recommendations[name.lower()]["reason"] = f"Strong downtrend (ADX: {indicator.value:.1f})"
+                        else:
+                            recommendations[name.lower()]["reason"] = f"Strong trend (ADX: {indicator.value:.1f})"
+                    else:
+                        recommendations[name.lower()]["reason"] = f"Weak trend (ADX: {indicator.value:.1f})"
+                    _logger.debug("ADX: value=%.2f, plus_di=%s, minus_di=%s, signal=%s, reason=%s",
+                                 indicator.value, plus_di, minus_di, recommendations[name.lower()]["signal"],
+                                 recommendations[name.lower()]["reason"])
+                elif name == 'OBV' and indicator.value is not None:
+                    if indicator.value > 0:
+                        recommendations[name.lower()]["signal"] = "BUY"
+                        recommendations[name.lower()]["reason"] = "Positive OBV - Accumulation"
+                    else:
+                        recommendations[name.lower()]["signal"] = "SELL"
+                        recommendations[name.lower()]["reason"] = "Negative OBV - Distribution"
+                    _logger.debug("OBV: value=%.0f, signal=%s, reason=%s",
+                                 indicator.value, recommendations[name.lower()]["signal"],
+                                 recommendations[name.lower()]["reason"])
+                elif name == 'ADR' and indicator.value is not None:
+                    if indicator.value > 3.0:  # High volatility
+                        recommendations[name.lower()]["reason"] = f"High volatility ({indicator.value:.1f}%) - Caution"
+                    elif indicator.value < 1.0:  # Low volatility
+                        recommendations[name.lower()]["reason"] = f"Low volatility ({indicator.value:.1f}%) - Stable price action"
+                    else:
+                        recommendations[name.lower()]["reason"] = f"Normal volatility ({indicator.value:.1f}%)"
+                    _logger.debug("ADR: value=%.2f, reason=%s", indicator.value, recommendations[name.lower()]["reason"])
+        else:
+            _logger.debug("Indicator %s not in mapping, skipping", name)
 
     # Add overall recommendation if composite recommendation is available
     if indicator_set.overall_recommendation:
@@ -156,8 +275,8 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
         }
 
     # Calculate trend based on SMA comparison
-    if technical_data['sma_50'] is not None and technical_data['sma_200'] is not None:
-        if technical_data['sma_50'] > technical_data['sma_200']:
+    if technical_data['sma_fast'] is not None and technical_data['sma_slow'] is not None:
+        if technical_data['sma_fast'] > technical_data['sma_slow']:
             technical_data['trend'] = 'BULLISH'
         else:
             technical_data['trend'] = 'BEARISH'
@@ -200,46 +319,60 @@ def format_technical_analysis(ticker: str, technicals: Technicals, current_price
     message = f"📊 *Technical Analysis: {ticker}*\n\n"
     message += f"💰 Price: {price_str}\n"
     message += f"📈 Trend: {trend}\n"
-    message += f"🎯 Overall: *{overall_rec.get('signal', 'HOLD')}*\n"
+    message += f"�� Overall: *{overall_rec.get('signal', 'HOLD')}*\n"
     message += f"💡 {overall_rec.get('reason', 'No reason available')}\n\n"
     message += "*Key Indicators:*\n"
+
+    # RSI
     rsi_rec = technicals.recommendations.get("rsi", {}) if technicals.recommendations else {}
     if rsi is not None:
         message += f"• RSI ({rsi:.1f}): {rsi_rec.get('signal', 'HOLD')} - {rsi_rec.get('reason', 'No reason provided')}\n"
     else:
         message += f"• RSI (N/A): {rsi_rec.get('signal', 'HOLD')} - {rsi_rec.get('reason', 'No reason provided')}\n"
+
+    # MACD
     macd_rec = technicals.recommendations.get("macd", {}) if technicals.recommendations else {}
     macd_val = technicals.macd
     if macd_val is not None:
         message += f"• MACD ({macd_val:.4f}): {macd_rec.get('signal', 'HOLD')} - {macd_rec.get('reason', 'No reason provided')}\n"
     else:
         message += f"• MACD (N/A): {macd_rec.get('signal', 'HOLD')} - {macd_rec.get('reason', 'No reason provided')}\n"
-    bb_rec = technicals.recommendations.get("bollinger", {}) if technicals.recommendations else {}
+
+    # Bollinger Bands
+    bb_rec = technicals.recommendations.get("bb_middle", {}) if technicals.recommendations else {}
     bb_lower = technicals.bb_lower
     bb_upper = technicals.bb_upper
     if bb_lower is not None and bb_upper is not None:
         message += f"• BB ({bb_lower:.2f} - {bb_upper:.2f}): {bb_rec.get('signal', 'HOLD')} - {bb_rec.get('reason', 'No reason provided')}\n"
     else:
         message += f"• BB (N/A): {bb_rec.get('signal', 'HOLD')} - {bb_rec.get('reason', 'No reason provided')}\n"
-    stoch_rec = technicals.recommendations.get("stochastic", {}) if technicals.recommendations else {}
+
+    # Stochastic
+    stoch_rec = technicals.recommendations.get("stoch_k", {}) if technicals.recommendations else {}
     stoch_k = technicals.stoch_k
     stoch_d = technicals.stoch_d
     if stoch_k is not None and stoch_d is not None:
         message += f"• Stoch K/D ({stoch_k:.1f}/{stoch_d:.1f}): {stoch_rec.get('signal', 'HOLD')} - {stoch_rec.get('reason', 'No reason provided')}\n"
     else:
         message += f"• Stoch K/D (N/A): {stoch_rec.get('signal', 'HOLD')} - {stoch_rec.get('reason', 'No reason provided')}\n"
+
+    # ADX
     adx_rec = technicals.recommendations.get("adx", {}) if technicals.recommendations else {}
     adx_val = technicals.adx
     if adx_val is not None:
         message += f"• ADX ({adx_val:.1f}): {adx_rec.get('signal', 'HOLD')} - {adx_rec.get('reason', 'No reason provided')}\n"
     else:
         message += f"• ADX (N/A): {adx_rec.get('signal', 'HOLD')} - {adx_rec.get('reason', 'No reason provided')}\n"
+
+    # OBV
     obv_rec = technicals.recommendations.get("obv", {}) if technicals.recommendations else {}
     obv_val = technicals.obv
     if obv_val is not None:
         message += f"• OBV ({obv_val:.0f}): {obv_rec.get('signal', 'HOLD')} - {obv_rec.get('reason', 'No reason provided')}\n"
     else:
         message += f"• OBV (N/A): {obv_rec.get('signal', 'HOLD')} - {obv_rec.get('reason', 'No reason provided')}\n"
+
+    # ADR
     adr_rec = technicals.recommendations.get("adr", {}) if technicals.recommendations else {}
     adr_val = technicals.adr
     if adr_val is not None:

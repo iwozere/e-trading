@@ -68,7 +68,7 @@ def test_my_status(user_id=TEST_USER_ID, provider_filter=None, email=None):
                 text = format_comprehensive_analysis(ticker, result.technicals, result.fundamentals)
             else:
                 t = result.technicals
-                text = f"{ticker} (Binance)\nClose: {getattr(t, 'sma_50', 0):.2f}, RSI: {getattr(t, 'rsi', 0):.2f}, MACD: {getattr(t, 'macd', 0):.2f}, BB High: {getattr(t, 'bb_upper', 0):.2f}, BB Low: {getattr(t, 'bb_lower', 0):.2f}"
+                text = f"{ticker} (Binance)\nClose: {getattr(t, 'sma_fast', 0):.2f}, RSI: {getattr(t, 'rsi', 0):.2f}, MACD: {getattr(t, 'macd', 0):.2f}, BB High: {getattr(t, 'bb_upper', 0):.2f}, BB Low: {getattr(t, 'bb_lower', 0):.2f}"
             print(text)
             if email:
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
@@ -116,7 +116,7 @@ def test_my_analyze(user_id=TEST_USER_ID, provider="yf", ticker=None, email=None
             text = format_comprehensive_analysis(ticker, result.technicals, result.fundamentals)
         else:
             t = result.technicals
-            text = f"{ticker} (Binance)\nClose: {getattr(t, 'sma_50', 0):.2f}, RSI: {getattr(t, 'rsi', 0):.2f}, MACD: {getattr(t, 'macd', 0):.2f}, BB High: {getattr(t, 'bb_upper', 0):.2f}, BB Low: {getattr(t, 'bb_lower', 0):.2f}"
+            text = f"{ticker} (Binance)\nClose: {getattr(t, 'sma_fast', 0):.2f}, RSI: {getattr(t, 'rsi', 0):.2f}, MACD: {getattr(t, 'macd', 0):.2f}, BB High: {getattr(t, 'bb_upper', 0):.2f}, BB Low: {getattr(t, 'bb_lower', 0):.2f}"
         print(text)
         if email:
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
@@ -271,7 +271,7 @@ def test_my_status_and_analyze():
                 text = format_comprehensive_analysis(ticker, result.technicals, result.fundamentals)
             else:
                 t = result.technicals
-                text = f"{ticker} (Binance)\nClose: {getattr(t, 'sma_50', 0):.2f}, RSI: {getattr(t, 'rsi', 0):.2f}, MACD: {getattr(t, 'macd', 0):.2f}, BB High: {getattr(t, 'bb_upper', 0):.2f}, BB Low: {getattr(t, 'bb_lower', 0):.2f}"
+                text = f"{ticker} (Binance)\nClose: {getattr(t, 'sma_fast', 0):.2f}, RSI: {getattr(t, 'rsi', 0):.2f}, MACD: {getattr(t, 'macd', 0):.2f}, BB High: {getattr(t, 'bb_upper', 0):.2f}, BB Low: {getattr(t, 'bb_lower', 0):.2f}"
             print(text)
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False, prefix=f"{ticker}_") as temp_file:
                 temp_file.write(result.chart_image)

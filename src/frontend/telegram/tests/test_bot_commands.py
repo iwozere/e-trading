@@ -72,34 +72,42 @@ def test_analyze_ticker_business_valid(monkeypatch):
         data_source='Yahoo Finance',
         last_updated='2023-12-01 12:00:00'
     )
-    mock_technicals = Technicals(
-        rsi=50.0,
-        sma_50=100.0,
-        sma_200=95.0,
+    technicals = Technicals(
+        rsi=65.0,
+        sma_fast=100.0,
+        sma_slow=95.0,
+        ema_fast=98.0,
+        ema_slow=96.0,
         macd=0.5,
         macd_signal=0.3,
         macd_histogram=0.2,
-        stoch_k=60.0,
-        stoch_d=55.0,
+        stoch_k=75.0,
+        stoch_d=70.0,
         adx=25.0,
         plus_di=30.0,
         minus_di=20.0,
         obv=1000000.0,
-        adr=2.0,
-        avg_adr=2.5,
-        trend='NEUTRAL',
-        bb_upper=110.0,
+        adr=2.5,
+        avg_adr=2.0,
+        trend='BULLISH',
+        bb_upper=105.0,
         bb_middle=100.0,
-        bb_lower=90.0,
-        bb_width=0.2
+        bb_lower=95.0,
+        bb_width=0.1,
+        cci=50.0,
+        roc=5.0,
+        mfi=60.0,
+        williams_r=-30.0,
+        atr=2.0,
+        recommendations={}
     )
     monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_ohlcv', lambda *args, **kwargs: mock_df)
     monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_fundamentals', lambda *args, **kwargs: mock_fundamentals)
-    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.calculate_technicals_unified', lambda *args, **kwargs: mock_technicals)
+    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.calculate_technicals_unified', lambda *args, **kwargs: technicals)
     # Patch TickerAnalysis to always include chart_image=None
     result = TickerAnalysis(
         ticker='AAPL', provider='yf', period='2y', interval='1d',
-        ohlcv=mock_df, fundamentals=mock_fundamentals, technicals=mock_technicals, error=None, chart_image=None
+        ohlcv=mock_df, fundamentals=mock_fundamentals, technicals=technicals, error=None, chart_image=None
     )
     assert isinstance(result, TickerAnalysis)
     assert result.ohlcv is not None

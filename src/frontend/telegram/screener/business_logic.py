@@ -287,7 +287,7 @@ async def analyze_ticker_business(
         return analysis
 
     except Exception as e:
-        _logger.exception(f"Error in analyze_ticker_business for {ticker}: {e}")
+        _logger.exception("Error in analyze_ticker_business for %s: %s", ticker, e)
         return TickerAnalysis(
             ticker=ticker.upper(),
             provider=provider or determine_provider(ticker),
@@ -2057,6 +2057,7 @@ def _get_predefined_screener_config(screener_name: str):
 
             # Create screener configuration dictionary
             config_dict = {
+                "screener_name": screener_name,  # Add screener name for email titles
                 "screener_type": "hybrid",
                 "list_type": _get_list_type_for_screener(screener_name),
                 "fmp_criteria": strategy["criteria"],
@@ -2085,7 +2086,9 @@ def _get_list_type_for_screener(screener_name: str) -> str:
     """
     if screener_name == "six_stocks":
         return "swiss_shares"
-    elif screener_name in ["mid_cap_stocks", "large_cap_stocks", "extra_large_cap_stocks"]:
+    elif screener_name == "mid_cap_stocks":
+        return "us_medium_cap"  # Use medium cap list, filtered by FMP criteria
+    elif screener_name in ["large_cap_stocks", "extra_large_cap_stocks"]:
         return "us_large_cap"  # Will be filtered by FMP criteria
     else:
         return "us_medium_cap"  # Default fallback

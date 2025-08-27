@@ -77,43 +77,128 @@ def generate_chart(ticker: str, df: pd.DataFrame) -> bytes:
         # Extract available indicators
         indicators = _extract_available_indicators(df)
 
-        # Create chart layout
-        if len(indicators) > 0:
-            fig, axes = _create_dynamic_layout(indicators)
+        # Create comprehensive chart layout with 6 vertical subplots
+        fig, axes = plt.subplots(6, 1, figsize=(15, 18), height_ratios=[3, 1, 1, 1, 1, 1])
+
+        # Use simple x-axis (data points instead of dates)
+        x = range(len(df))
+
+        # 1. Price chart with Bollinger Bands, SMA 50 and SMA 200 (top, largest)
+        ax1 = axes[0]
+        close = df['close'].values
+        ax1.plot(x, close, label='Close Price', color='blue', linewidth=1)
+
+        # Add moving averages if available
+        if 'sma_fast' in indicators:
+            ax1.plot(x, indicators['sma_fast'], label='SMA Fast', color='orange', linewidth=1, alpha=0.8)
+
+        if 'sma_slow' in indicators:
+            ax1.plot(x, indicators['sma_slow'], label='SMA Slow', color='red', linewidth=1, alpha=0.8)
+
+        # Add Bollinger Bands if available
+        if all(ind in indicators for ind in ['bb_upper', 'bb_middle', 'bb_lower']):
+            ax1.plot(x, indicators['bb_upper'], label='BB Upper', color='gray', linewidth=0.5, alpha=0.6)
+            ax1.plot(x, indicators['bb_middle'], label='BB Middle', color='gray', linewidth=0.5, alpha=0.6)
+            ax1.plot(x, indicators['bb_lower'], label='BB Lower', color='gray', linewidth=0.5, alpha=0.6)
+
+        ax1.set_title(f'{ticker} Technical Analysis', fontsize=14, fontweight='bold')
+        ax1.set_ylabel('Price ($)', fontsize=10)
+        ax1.legend(loc='upper left', fontsize=8)
+        ax1.grid(True, alpha=0.3)
+
+        # 2. RSI chart with oversold (green) and overbought (red) lines
+        ax2 = axes[1]
+        if 'rsi' in indicators:
+            ax2.plot(x, indicators['rsi'], color='purple', linewidth=1, label='RSI')
+            ax2.axhline(y=70, color='red', linestyle='--', alpha=0.7, label='Overbought (70)')
+            ax2.axhline(y=30, color='green', linestyle='--', alpha=0.7, label='Oversold (30)')
+            ax2.set_title('RSI', fontsize=12, fontweight='bold')
+            ax2.set_ylabel('RSI', fontsize=10)
+            ax2.set_ylim(0, 100)
+            ax2.legend(loc='upper left', fontsize=8)
+            ax2.grid(True, alpha=0.3)
         else:
-            fig, axes = _create_comprehensive_layout()
+            ax2.text(0.5, 0.5, 'RSI not available', ha='center', va='center', transform=ax2.transAxes)
+            ax2.set_title('RSI', fontsize=12, fontweight='bold')
 
-        # Plot price chart with indicators
-        _plot_comprehensive_price_chart(axes[0], df, indicators, ticker)
+        # 3. MACD chart
+        ax3 = axes[2]
+        if all(ind in indicators for ind in ['macd', 'macd_signal', 'macd_hist']):
+            ax3.plot(x, indicators['macd'], color='blue', linewidth=1, label='MACD')
+            ax3.plot(x, indicators['macd_signal'], color='red', linewidth=1, label='Signal')
+            ax3.bar(x, indicators['macd_hist'], alpha=0.3, color='gray', label='Histogram')
+            ax3.axhline(y=0, color='black', linestyle='-', alpha=0.3)
+            ax3.set_title('MACD', fontsize=12, fontweight='bold')
+            ax3.set_ylabel('MACD', fontsize=10)
+            ax3.legend(loc='upper left', fontsize=8)
+            ax3.grid(True, alpha=0.3)
+        else:
+            ax3.text(0.5, 0.5, 'MACD not available', ha='center', va='center', transform=ax3.transAxes)
+            ax3.set_title('MACD', fontsize=12, fontweight='bold')
 
-        # Plot volume chart
-        if len(axes) > 1:
-            _plot_volume_obv(axes[1], df, indicators, ticker)
+        # 4. Stochastic chart (D, K, overbought, oversold lines)
+        ax4 = axes[3]
+        if all(ind in indicators for ind in ['stoch_k', 'stoch_d']):
+            ax4.plot(x, indicators['stoch_k'], color='blue', linewidth=1, label='%K')
+            ax4.plot(x, indicators['stoch_d'], color='red', linewidth=1, label='%D')
+            ax4.axhline(y=80, color='red', linestyle='--', alpha=0.7, label='Overbought (80)')
+            ax4.axhline(y=20, color='green', linestyle='--', alpha=0.7, label='Oversold (20)')
+            ax4.set_title('Stochastic', fontsize=12, fontweight='bold')
+            ax4.set_ylabel('Stochastic', fontsize=10)
+            ax4.set_ylim(0, 100)
+            ax4.legend(loc='upper left', fontsize=8)
+            ax4.grid(True, alpha=0.3)
+        else:
+            ax4.text(0.5, 0.5, 'Stochastic not available', ha='center', va='center', transform=ax4.transAxes)
+            ax4.set_title('Stochastic', fontsize=12, fontweight='bold')
 
-        # Plot additional indicators in remaining subplots
-        current_axis = 2
-        for indicator_name in ['rsi', 'macd', 'stoch_k', 'adx', 'cci', 'mfi', 'williams_r', 'roc']:
-            if current_axis < len(axes) and indicator_name in indicators:
-                _plot_indicator_subplot(axes[current_axis], df, indicator_name, indicators[indicator_name], ticker)
-                current_axis += 1
+        # 5. ADX chart (ADX, +DI, -DI, Trend threshold)
+        ax5 = axes[4]
+        if all(ind in indicators for ind in ['adx', 'plus_di', 'minus_di']):
+            ax5.plot(x, indicators['adx'], color='black', linewidth=1, label='ADX')
+            ax5.plot(x, indicators['plus_di'], color='green', linewidth=1, label='+DI')
+            ax5.plot(x, indicators['minus_di'], color='red', linewidth=1, label='-DI')
+            ax5.axhline(y=25, color='gray', linestyle='--', alpha=0.7, label='Trend Threshold (25)')
+            ax5.set_title('ADX', fontsize=12, fontweight='bold')
+            ax5.set_ylabel('ADX', fontsize=10)
+            ax5.legend(loc='upper left', fontsize=8)
+            ax5.grid(True, alpha=0.3)
+        else:
+            ax5.text(0.5, 0.5, 'ADX not available', ha='center', va='center', transform=ax5.transAxes)
+            ax5.set_title('ADX', fontsize=12, fontweight='bold')
 
-        # Set title
-        fig.suptitle(f'{ticker} Technical Analysis', fontsize=16, fontweight='bold')
+        # 6. Volume + OBV chart (bottom)
+        ax6 = axes[5]
+        volume = df['volume'].values
+        ax6.bar(x, volume, alpha=0.7, color='green', label='Volume')
+        ax6.set_title('Volume & OBV', fontsize=12, fontweight='bold')
+        ax6.set_ylabel('Volume', fontsize=10)
+        ax6.set_xlabel('Time Period', fontsize=10)
+        ax6.grid(True, alpha=0.3)
+
+        # Add OBV if available
+        if 'obv' in indicators:
+            ax6_obv = ax6.twinx()
+            ax6_obv.plot(x, indicators['obv'], color='purple', linewidth=1, label='OBV')
+            ax6_obv.set_ylabel('OBV', color='purple', fontsize=10)
+            ax6_obv.tick_params(axis='y', labelcolor='purple')
+
+        plt.tight_layout()
 
         # Save to bytes
         img_buffer = io.BytesIO()
-        plt.savefig(img_buffer, format='png', dpi=CHART_CONFIG['dpi'],
-                   bbox_inches='tight', facecolor='white', edgecolor='none')
+        plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
         img_buffer.seek(0)
 
         plt.close()
 
         chart_bytes = img_buffer.getvalue()
-        _logger.info(f"Chart generated successfully - Size: {len(chart_bytes)} bytes")
+        _logger.info("Chart generated successfully - Size: %d bytes", len(chart_bytes))
         return chart_bytes
 
     except Exception as e:
-        _logger.exception("Failed to generate chart for %s: %s", ticker, str(e))
+        _logger.exception("Failed to generate chart for %s: %s", ticker, e)
         return _generate_error_chart(ticker, f"{type(e).__name__}: {str(e)}")
 
 
@@ -124,8 +209,8 @@ def _extract_available_indicators(df: pd.DataFrame) -> Dict[str, np.ndarray]:
     # List of all possible indicators
     possible_indicators = [
         'rsi', 'macd', 'macd_signal', 'macd_hist', 'stoch_k', 'stoch_d',
-        'adx', 'plus_di', 'minus_di', 'obv', 'adr', 'sma_50', 'sma_200',
-        'ema_12', 'ema_26', 'cci', 'roc', 'mfi', 'williams_r', 'atr',
+        'adx', 'plus_di', 'minus_di', 'obv', 'adr', 'sma_fast', 'sma_slow',
+        'ema_fast', 'ema_slow', 'cci', 'roc', 'mfi', 'williams_r', 'atr',
         'bb_upper', 'bb_middle', 'bb_lower'
     ]
 
@@ -214,17 +299,17 @@ def _plot_comprehensive_price_chart(ax: plt.Axes, df: pd.DataFrame, indicators: 
         _logger.warning(f"✗ Missing Bollinger Bands indicators: {missing_bb}")
 
     # Add moving averages
-    if 'sma_50' in indicators:
-        ax.plot(dates, indicators['sma_50'], label='SMA 50',
+    if 'sma_fast' in indicators:
+        ax.plot(dates, indicators['sma_fast'], label='SMA Fast',
                color=CHART_COLORS['sma'], linewidth=CHART_CONFIG['line_width'], alpha=0.8)
     else:
-        _logger.warning("✗ SMA 50 not found in indicators")
+        _logger.warning("✗ SMA Fast not found in indicators")
 
-    if 'sma_200' in indicators:
-        ax.plot(dates, indicators['sma_200'], label='SMA 200',
+    if 'sma_slow' in indicators:
+        ax.plot(dates, indicators['sma_slow'], label='SMA Slow',
                color=CHART_COLORS['dark'], linewidth=CHART_CONFIG['line_width'], alpha=0.8)
     else:
-        _logger.warning("✗ SMA 200 not found in indicators")
+        _logger.warning("✗ SMA Slow not found in indicators")
 
     ax.set_title(f'{ticker} - Price with Bollinger Bands & Moving Averages',
                 fontsize=CHART_CONFIG['title_font_size'], fontweight='bold')
@@ -238,8 +323,8 @@ def _plot_comprehensive_rsi(ax: plt.Axes, dates: pd.Series, indicators: Dict[str
     if 'rsi' in indicators:
         rsi = indicators['rsi']
         ax.plot(dates, rsi, label='RSI', color=CHART_COLORS['rsi'], linewidth=CHART_CONFIG['line_width'])
-        ax.axhline(y=70, color=CHART_COLORS['danger'], linestyle='--', alpha=0.7, label='Overbought (70)')
-        ax.axhline(y=30, color=CHART_COLORS['success'], linestyle='--', alpha=0.7, label='Oversold (30)')
+        ax.axhline(y=70, color=CHART_COLORS['danger'], linestyle='--', alpha=0.7, label='Overbought')
+        ax.axhline(y=30, color=CHART_COLORS['success'], linestyle='--', alpha=0.7, label='Oversold')
         ax.axhline(y=50, color=CHART_COLORS['dark'], linestyle='-', alpha=0.5)
         ax.set_ylabel('RSI', fontsize=CHART_CONFIG['font_size'])
         ax.legend(loc='upper left', fontsize=CHART_CONFIG['legend_font_size'])
@@ -352,17 +437,17 @@ def _plot_enhanced_price_chart(ax: plt.Axes, dates: pd.Series, high: np.ndarray,
         _plot_bollinger_bands(ax, dates, indicators)
 
     # Add moving averages
-    if 'sma_50' in indicators:
-        ax.plot(dates, indicators['sma_50'], label='SMA 50',
+    if 'sma_fast' in indicators:
+        ax.plot(dates, indicators['sma_fast'], label='SMA Fast',
                color=CHART_COLORS['sma'], linewidth=CHART_CONFIG['line_width'], alpha=0.8)
-    if 'sma_200' in indicators:
-        ax.plot(dates, indicators['sma_200'], label='SMA 200',
+    if 'sma_slow' in indicators:
+        ax.plot(dates, indicators['sma_slow'], label='SMA Slow',
                color=CHART_COLORS['dark'], linewidth=CHART_CONFIG['line_width'], alpha=0.8)
-    if 'ema_12' in indicators:
-        ax.plot(dates, indicators['ema_12'], label='EMA 12',
+    if 'ema_fast' in indicators:
+        ax.plot(dates, indicators['ema_fast'], label='EMA Fast',
                color=CHART_COLORS['ema'], linewidth=CHART_CONFIG['line_width'], alpha=0.7)
-    if 'ema_26' in indicators:
-        ax.plot(dates, indicators['ema_26'], label='EMA 26',
+    if 'ema_slow' in indicators:
+        ax.plot(dates, indicators['ema_slow'], label='EMA Slow',
                color=CHART_COLORS['secondary'], linewidth=CHART_CONFIG['line_width'], alpha=0.7)
 
     # Add ATR bands if available

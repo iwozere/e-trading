@@ -34,13 +34,13 @@ class IndicatorConfig:
             if config_file.exists():
                 with open(config_file, 'r') as f:
                     config = json.load(f)
-                _logger.info(f"Loaded indicator configuration from {self.config_path}")
+                _logger.info("Loaded indicator configuration from %s", self.config_path)
                 return config
             else:
-                _logger.warning(f"Configuration file {self.config_path} not found, using defaults")
+                _logger.warning("Configuration file %s not found, using defaults", self.config_path)
                 return self._get_default_config()
         except Exception as e:
-            _logger.error(f"Error loading indicator configuration: {e}")
+            _logger.error("Error loading indicator configuration: %s", e)
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict[str, Any]:
@@ -129,10 +129,10 @@ class IndicatorConfig:
         available_presets = list(self.config.get("custom_presets", {}).keys())
         if preset_name in available_presets:
             self._current_preset = preset_name
-            _logger.info(f"Set indicator preset to {preset_name}")
+            _logger.info("Set indicator preset to %s", preset_name)
             return True
         else:
-            _logger.warning(f"Preset '{preset_name}' not found. Available presets: {available_presets}")
+            _logger.warning("Preset '%s' not found. Available presets: %s", preset_name, available_presets)
             return False
 
     def get_current_preset(self) -> str:
@@ -154,7 +154,7 @@ class IndicatorConfig:
             self._custom_parameters[mapped_indicator] = {}
 
         self._custom_parameters[mapped_indicator][parameter] = value
-        _logger.info(f"Set custom parameter {parameter}={value} for {indicator}")
+        _logger.info("Set custom parameter %s=%s for %s", parameter, value, indicator)
 
     def clear_custom_parameters(self, indicator: Optional[str] = None) -> None:
         """
@@ -170,7 +170,7 @@ class IndicatorConfig:
             mapped_indicator = self.config.get("indicator_mapping", {}).get(indicator, indicator)
             if mapped_indicator in self._custom_parameters:
                 del self._custom_parameters[mapped_indicator]
-                _logger.info(f"Cleared custom parameters for {indicator}")
+                _logger.info("Cleared custom parameters for %s", indicator)
 
     def get_available_presets(self) -> list:
         """Get list of available presets."""
@@ -195,6 +195,33 @@ class IndicatorConfig:
         """Reload configuration from file."""
         self.config = self._load_config()
         _logger.info("Reloaded indicator configuration")
+
+    # Indicator name mappings (old names to new names)
+    INDICATOR_MAPPINGS = {
+        "RSI": "RSI",
+        "MACD": "MACD",
+        "MACD_SIGNAL": "MACD_SIGNAL",
+        "MACD_HISTOGRAM": "MACD_HISTOGRAM",
+        "BB_UPPER": "BB_UPPER",
+        "BB_MIDDLE": "BB_MIDDLE",
+        "BB_LOWER": "BB_LOWER",
+        "SMA_FAST": "SMA_FAST",
+        "SMA_SLOW": "SMA_SLOW",
+        "EMA_FAST": "EMA_FAST",
+        "EMA_SLOW": "EMA_SLOW",
+        "ADX": "ADX",
+        "PLUS_DI": "PLUS_DI",
+        "MINUS_DI": "MINUS_DI",
+        "ATR": "ATR",
+        "STOCH_K": "STOCH_K",
+        "STOCH_D": "STOCH_D",
+        "WILLIAMS_R": "WILLIAMS_R",
+        "CCI": "CCI",
+        "ROC": "ROC",
+        "MFI": "MFI",
+        "OBV": "OBV",
+        "ADR": "ADR"
+    }
 
 
 # Global instance

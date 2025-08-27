@@ -362,25 +362,28 @@ class RecommendationEngine:
         self.fundamental_rules = FundamentalRecommendationRules()
 
         # Mapping of indicator names to their recommendation functions
-        self.technical_functions = {
-            "RSI": self._get_rsi_recommendation_wrapper,
-            "BB_UPPER": self._get_bollinger_recommendation_wrapper,
-            "BB_MIDDLE": self._get_bollinger_recommendation_wrapper,
-            "BB_LOWER": self._get_bollinger_recommendation_wrapper,
-            "MACD": self._get_macd_recommendation_wrapper,
-            "MACD_SIGNAL": self._get_macd_recommendation_wrapper,
-            "MACD_HISTOGRAM": self._get_macd_recommendation_wrapper,
-            "STOCH_K": self._get_stochastic_recommendation_wrapper,
-            "STOCH_D": self._get_stochastic_recommendation_wrapper,
-            "ADX": self._get_adx_recommendation_wrapper,
-            "PLUS_DI": self._get_adx_recommendation_wrapper,
-            "MINUS_DI": self._get_adx_recommendation_wrapper,
-            "SMA_50": self._get_sma_recommendation_wrapper,
-            "SMA_200": self._get_sma_recommendation_wrapper,
+        self._recommendation_methods = {
+            "RSI": self._get_rsi_recommendation,
+            "MACD": self._get_macd_recommendation,
+            "BB_UPPER": self._get_bollinger_bands_recommendation,
+            "BB_MIDDLE": self._get_bollinger_bands_recommendation,
+            "BB_LOWER": self._get_bollinger_bands_recommendation,
+            "SMA_FAST": self._get_sma_recommendation_wrapper,
+            "SMA_SLOW": self._get_sma_recommendation_wrapper,
+            "EMA_FAST": self._get_sma_recommendation_wrapper,  # Use same logic as SMA
+            "EMA_SLOW": self._get_sma_recommendation_wrapper,  # Use same logic as SMA
+            "ADX": self._get_adx_recommendation,
+            "PLUS_DI": self._get_di_recommendation,
+            "MINUS_DI": self._get_di_recommendation,
+            "STOCH_K": self._get_stochastic_recommendation,
+            "STOCH_D": self._get_stochastic_recommendation,
+            "OBV": self._get_obv_recommendation,
+            "ADR": self._get_adr_recommendation,
             "CCI": self._get_cci_recommendation_wrapper,
             "MFI": self._get_mfi_recommendation_wrapper,
-            "OBV": self._get_obv_recommendation_wrapper,
-            "ADR": self._get_adr_recommendation_wrapper,
+            "WILLIAMS_R": self._get_williams_r_recommendation,
+            "ROC": self._get_roc_recommendation,
+            "ATR": self._get_atr_recommendation,
         }
 
         self.fundamental_functions = {
@@ -416,19 +419,27 @@ class RecommendationEngine:
             Recommendation object
         """
         try:
+            _logger.debug("Getting recommendation for %s, value: %s, context: %s", indicator, value, context)
+
             # Determine if it's a technical or fundamental indicator
-            if indicator in self.technical_functions:
-                rec_type, confidence, reason = self.technical_functions[indicator](value, context)
+            if indicator in self._recommendation_methods:
+                _logger.debug("Using technical recommendation method for %s", indicator)
+                rec_type, confidence, reason = self._recommendation_methods[indicator](value, context)
                 category = IndicatorCategory.TECHNICAL
             elif indicator in self.fundamental_functions:
+                _logger.debug("Using fundamental recommendation method for %s", indicator)
                 rec_type, confidence, reason = self.fundamental_functions[indicator](value)
                 category = IndicatorCategory.FUNDAMENTAL
             else:
                 # Default recommendation for unknown indicators
+                _logger.debug("No specific recommendation method for %s, using default", indicator)
                 rec_type = RecommendationType.HOLD
                 confidence = 0.5
                 reason = f"No specific rules for {indicator}"
                 category = IndicatorCategory.TECHNICAL  # Default to technical
+
+            _logger.debug("Recommendation for %s: %s, confidence: %.2f, reason: %s",
+                         indicator, rec_type, confidence, reason)
 
             return Recommendation(
                 recommendation=rec_type,
@@ -553,7 +564,7 @@ class RecommendationEngine:
             )
 
     # Wrapper methods for indicators that need additional context
-    def _get_bollinger_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_bollinger_bands_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for Bollinger Bands recommendation."""
         if context and 'current_price' in context and 'bb_upper' in context and 'bb_lower' in context:
             return self.technical_rules.get_bollinger_recommendation(
@@ -562,7 +573,7 @@ class RecommendationEngine:
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for Bollinger Bands"
 
-    def _get_macd_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_macd_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for MACD recommendation."""
         if context and 'macd_signal' in context and 'macd_histogram' in context:
             return self.technical_rules.get_macd_recommendation(
@@ -576,14 +587,14 @@ class RecommendationEngine:
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for MACD"
 
-    def _get_stochastic_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_stochastic_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for Stochastic recommendation."""
         if context and 'stoch_d' in context:
             return self.technical_rules.get_stochastic_recommendation(value, context['stoch_d'])
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for Stochastic"
 
-    def _get_adx_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_adx_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for ADX recommendation."""
         if context and 'plus_di' in context and 'minus_di' in context:
             return self.technical_rules.get_adx_recommendation(
@@ -599,7 +610,7 @@ class RecommendationEngine:
         else:
             return RecommendationType.HOLD, 0.5, "Insufficient context for SMA"
 
-    def _get_rsi_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_rsi_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for RSI recommendation."""
         return TechnicalRecommendationRules.get_rsi_recommendation(value)
 
@@ -611,10 +622,62 @@ class RecommendationEngine:
         """Wrapper for MFI recommendation."""
         return TechnicalRecommendationRules.get_mfi_recommendation(value)
 
-    def _get_obv_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_obv_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for OBV recommendation."""
         return TechnicalRecommendationRules.get_obv_recommendation(value, context)
 
-    def _get_adr_recommendation_wrapper(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+    def _get_adr_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
         """Wrapper for ADR recommendation."""
         return TechnicalRecommendationRules.get_adr_recommendation(value, context)
+
+    def _get_di_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+        """Get recommendation for Directional Indicators (PLUS_DI, MINUS_DI)."""
+        if value is None:
+            return RecommendationType.HOLD, 0.0, "No DI data available"
+
+        # DI values are typically between 0 and 100
+        if value > 25:
+            return RecommendationType.BUY, 0.7, f"Strong directional movement ({value:.1f})"
+        elif value < 15:
+            return RecommendationType.SELL, 0.7, f"Weak directional movement ({value:.1f})"
+        else:
+            return RecommendationType.HOLD, 0.5, f"Moderate directional movement ({value:.1f})"
+
+    def _get_williams_r_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+        """Get recommendation for Williams %R."""
+        if value is None:
+            return RecommendationType.HOLD, 0.0, "No Williams %R data available"
+
+        # Williams %R ranges from 0 to -100
+        if value > -20:
+            return RecommendationType.SELL, 0.8, "Overbought - Sell signal"
+        elif value < -80:
+            return RecommendationType.BUY, 0.8, "Oversold - Buy signal"
+        else:
+            return RecommendationType.HOLD, 0.5, "Neutral zone"
+
+    def _get_roc_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+        """Get recommendation for Rate of Change (ROC)."""
+        if value is None:
+            return RecommendationType.HOLD, 0.0, "No ROC data available"
+
+        # ROC shows momentum
+        if value > 2.0:
+            return RecommendationType.BUY, 0.7, f"Strong positive momentum ({value:.2f}%)"
+        elif value < -2.0:
+            return RecommendationType.SELL, 0.7, f"Strong negative momentum ({value:.2f}%)"
+        else:
+            return RecommendationType.HOLD, 0.5, f"Neutral momentum ({value:.2f}%)"
+
+    def _get_atr_recommendation(self, value: float, context: Dict = None) -> Tuple[RecommendationType, float, str]:
+        """Get recommendation for Average True Range (ATR)."""
+        if value is None:
+            return RecommendationType.HOLD, 0.0, "No ATR data available"
+
+        # ATR indicates volatility
+        if value > 5.0:
+            return RecommendationType.HOLD, 0.6, f"High volatility ({value:.2f}) - Caution"
+        elif value < 1.0:
+            return RecommendationType.HOLD, 0.6, f"Low volatility ({value:.2f}) - Stable"
+        else:
+            return RecommendationType.HOLD, 0.5, f"Normal volatility ({value:.2f})"

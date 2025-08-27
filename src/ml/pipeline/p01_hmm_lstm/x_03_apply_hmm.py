@@ -198,11 +198,11 @@ class HMMApplicator:
 
         for feature in missing_features:
             try:
-                if feature == 'ema_spread' and 'ema_12' in df.columns and 'ema_26' in df.columns:
-                    df['ema_spread'] = (df['ema_12'] - df['ema_26']) / df['close']
+                if feature == 'ema_spread' and 'ema_fast' in df.columns and 'ema_slow' in df.columns:
+                    df['ema_spread'] = (df['ema_fast'] - df['ema_slow']) / df['close']
                     _logger.info("Created missing feature: %s", feature)
                 elif feature == 'ema_spread':
-                    _logger.warning("Cannot create %s: missing required columns 'ema_12' or 'ema_26'", feature)
+                    _logger.warning("Cannot create %s: missing required columns 'ema_fast' or 'ema_slow'", feature)
                     _logger.info("Available columns: %s", list(df.columns))
                 elif any(indicator in feature for indicator in ['rsi_', 'bb_', 'macd', 'ema_', 'atr_', 'stoch', 'williams', 'mfi', 'sma']):
                     # These are fixed-period indicators that are no longer generated

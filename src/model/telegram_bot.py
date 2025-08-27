@@ -57,10 +57,10 @@ class Fundamentals:
 @dataclass
 class Technicals:
     rsi: float
-    sma_50: float
-    sma_200: float
-    ema_12: float
-    ema_26: float
+    sma_fast: float
+    sma_slow: float
+    ema_fast: float
+    ema_slow: float
     macd: float
     macd_signal: float
     macd_histogram: float
@@ -82,7 +82,7 @@ class Technicals:
     mfi: float
     williams_r: float
     atr: float
-    recommendations: Optional[Dict] = None
+    recommendations: Dict[str, Any]
 
 
 @dataclass

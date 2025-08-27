@@ -68,6 +68,7 @@ class ScreenerConfig:
     """Configuration for an enhanced screener."""
     screener_type: str  # "fundamental", "technical", "hybrid"
     list_type: str
+    screener_name: Optional[str] = None  # Name of the screener (for email titles)
     fundamental_criteria: Optional[List[FundamentalCriteria]] = None
     technical_criteria: Optional[List[TechnicalCriteria]] = None
     fmp_criteria: Optional[Dict[str, Any]] = None  # FMP screening criteria
@@ -136,6 +137,7 @@ class ScreenerConfigParser:
         fmp_strategy = config_dict.get("fmp_strategy")
 
         return ScreenerConfig(
+            screener_name=config_dict.get("screener_name"),
             screener_type=screener_type,
             list_type=list_type,
             fundamental_criteria=fundamental_criteria,

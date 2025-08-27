@@ -15,7 +15,7 @@ import talib
 from src.models.indicators import (
     IndicatorResult, IndicatorSet, IndicatorCategory,
     IndicatorCalculationRequest, BatchIndicatorRequest,
-    TECHNICAL_INDICATORS, FUNDAMENTAL_INDICATORS, ALL_INDICATORS
+    INDICATOR_DESCRIPTIONS, FUNDAMENTAL_INDICATORS, ALL_INDICATORS
 )
 from src.common.recommendation_engine import RecommendationEngine
 from src.common import get_ohlcv, determine_provider
@@ -212,7 +212,7 @@ class IndicatorService:
         provider = request.provider or determine_provider(ticker)
 
         # Get OHLCV data for technical indicators
-        technical_indicators = [ind for ind in request.indicators if ind in TECHNICAL_INDICATORS]
+        technical_indicators = [ind for ind in request.indicators if ind in INDICATOR_DESCRIPTIONS]
         if technical_indicators:
             try:
                 df = get_ohlcv(ticker, request.timeframe, request.period, provider)
@@ -321,7 +321,7 @@ class IndicatorService:
 
             for indicator_name, value in calculated_indicators.items():
                 try:
-                    # Create context for recommendation
+                    # Create context for recommendation with all available indicators
                     context = self._create_technical_context(calculated_indicators, current_price, indicator_name)
 
                     # Get recommendation
@@ -433,24 +433,21 @@ class IndicatorService:
                 result = talib.MINUS_DI(high, low, close, timeperiod=timeperiod)
                 return result[-1] if len(result) > 0 and not np.isnan(result[-1]) else None
 
-            elif indicator in ["SMA_50", "SMA_FAST"]:
-                timeperiod = params.get("timeperiod", 50)
-                result = talib.SMA(close, timeperiod=timeperiod)
+            elif indicator in ["SMA_FAST", "SMA_50"]:
+                # Simple Moving Average Fast (50 periods)
+                result = talib.SMA(close, timeperiod=50)
                 return result[-1] if len(result) > 0 and not np.isnan(result[-1]) else None
-
-            elif indicator in ["SMA_200", "SMA_SLOW"]:
-                timeperiod = params.get("timeperiod", 200)
-                result = talib.SMA(close, timeperiod=timeperiod)
+            elif indicator in ["SMA_SLOW", "SMA_200"]:
+                # Simple Moving Average Slow (200 periods)
+                result = talib.SMA(close, timeperiod=200)
                 return result[-1] if len(result) > 0 and not np.isnan(result[-1]) else None
-
-            elif indicator in ["EMA_12", "EMA_FAST"]:
-                timeperiod = params.get("timeperiod", 12)
-                result = talib.EMA(close, timeperiod=timeperiod)
+            elif indicator in ["EMA_FAST", "EMA_12"]:
+                # Exponential Moving Average Fast (12 periods)
+                result = talib.EMA(close, timeperiod=12)
                 return result[-1] if len(result) > 0 and not np.isnan(result[-1]) else None
-
-            elif indicator in ["EMA_26", "EMA_SLOW"]:
-                timeperiod = params.get("timeperiod", 26)
-                result = talib.EMA(close, timeperiod=timeperiod)
+            elif indicator in ["EMA_SLOW", "EMA_26"]:
+                # Exponential Moving Average Slow (26 periods)
+                result = talib.EMA(close, timeperiod=26)
                 return result[-1] if len(result) > 0 and not np.isnan(result[-1]) else None
 
             elif indicator == "CCI":
@@ -593,43 +590,69 @@ class IndicatorService:
 
     def _create_technical_context(self, calculated_indicators: Dict[str, float], current_price: float, indicator_name: str) -> Dict[str, Any]:
         """Create context for technical indicator recommendations."""
-        context = {'current_price': current_price}
+        context = {}
 
-        # Add specific context for indicators that need it
-        if indicator_name in ["BB_UPPER", "BB_MIDDLE", "BB_LOWER"]:
-            context.update({
-                'bb_upper': calculated_indicators.get('BB_UPPER'),
-                'bb_lower': calculated_indicators.get('BB_LOWER')
-            })
-        elif indicator_name in ["MACD", "MACD_SIGNAL", "MACD_HISTOGRAM"]:
-            context.update({
-                'macd_signal': calculated_indicators.get('MACD_SIGNAL'),
-                'macd_histogram': calculated_indicators.get('MACD_HISTOGRAM')
-            })
-        elif indicator_name in ["STOCH_K", "STOCH_D"]:
-            context['stoch_d'] = calculated_indicators.get('STOCH_D')
-        elif indicator_name in ["ADX", "PLUS_DI", "MINUS_DI"]:
-            context.update({
-                'plus_di': calculated_indicators.get('PLUS_DI'),
-                'minus_di': calculated_indicators.get('MINUS_DI')
-            })
-        elif indicator_name in ["OBV", "ADR"]:
-            # OBV and ADR need current price for context
+        # Add current price
+        if current_price is not None:
             context['current_price'] = current_price
+
+        # Add specific context for different indicators
+        if indicator_name in ['MACD', 'MACD_SIGNAL', 'MACD_HISTOGRAM']:
+            # MACD needs signal and histogram for proper recommendations
+            if 'MACD' in calculated_indicators:
+                context['macd'] = calculated_indicators['MACD']
+            if 'MACD_SIGNAL' in calculated_indicators:
+                context['macd_signal'] = calculated_indicators['MACD_SIGNAL']
+            if 'MACD_HISTOGRAM' in calculated_indicators:
+                context['macd_histogram'] = calculated_indicators['MACD_HISTOGRAM']
+                context['macd_hist'] = calculated_indicators['MACD_HISTOGRAM']  # Legacy support
+
+        elif indicator_name in ['BB_UPPER', 'BB_MIDDLE', 'BB_LOWER']:
+            # Bollinger Bands need all three values and current price
+            if 'BB_UPPER' in calculated_indicators:
+                context['bb_upper'] = calculated_indicators['BB_UPPER']
+            if 'BB_MIDDLE' in calculated_indicators:
+                context['bb_middle'] = calculated_indicators['BB_MIDDLE']
+            if 'BB_LOWER' in calculated_indicators:
+                context['bb_lower'] = calculated_indicators['BB_LOWER']
+
+        elif indicator_name in ['STOCH_K', 'STOCH_D']:
+            # Stochastic needs both K and D values
+            if 'STOCH_K' in calculated_indicators:
+                context['stoch_k'] = calculated_indicators['STOCH_K']
+            if 'STOCH_D' in calculated_indicators:
+                context['stoch_d'] = calculated_indicators['STOCH_D']
+
+        elif indicator_name in ['ADX', 'PLUS_DI', 'MINUS_DI']:
+            # ADX needs plus and minus DI values
+            if 'PLUS_DI' in calculated_indicators:
+                context['plus_di'] = calculated_indicators['PLUS_DI']
+            if 'MINUS_DI' in calculated_indicators:
+                context['minus_di'] = calculated_indicators['MINUS_DI']
+
+        elif indicator_name in ['SMA_50', 'SMA_200']:
+            # SMA needs current price for comparison
+            if current_price is not None:
+                context['current_price'] = current_price
+
+        elif indicator_name == 'ADR':
+            # ADR needs current price for percentage calculation
+            if current_price is not None:
+                context['current_price'] = current_price
 
         return context
 
     def get_available_indicators(self) -> Dict[str, List[str]]:
         """Get list of available indicators by category."""
         return {
-            "technical": list(TECHNICAL_INDICATORS.keys()),
+            "technical": list(INDICATOR_DESCRIPTIONS.keys()),
             "fundamental": list(FUNDAMENTAL_INDICATORS.keys()),
             "all": list(ALL_INDICATORS.keys())
         }
 
     def get_indicator_description(self, indicator_name: str) -> Optional[str]:
         """Get description for an indicator."""
-        return ALL_INDICATORS.get(indicator_name)
+        return INDICATOR_DESCRIPTIONS.get(indicator_name)
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
@@ -646,7 +669,7 @@ class IndicatorService:
             "version": "1.0.0",
             "cache_stats": self.get_cache_stats(),
             "available_indicators": {
-                "technical_count": len(TECHNICAL_INDICATORS),
+                "technical_count": len(INDICATOR_DESCRIPTIONS),
                 "fundamental_count": len(FUNDAMENTAL_INDICATORS),
                 "total_count": len(ALL_INDICATORS)
             }

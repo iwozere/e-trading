@@ -52,7 +52,7 @@ async def process_report_notifications(result, notification_manager, message, us
     # Telegram notifications - Send directly to avoid queue issues
     _logger.info("Starting Telegram notifications for %d reports", len(result["reports"]))
     for i, report in enumerate(result["reports"]):
-        _logger.info("Sending Telegram notification %d/%d for ticker: %s", i+1, len(result["reports"]), report.get("ticker"))
+        _logger.info("Sending Telegram notification %d/%d for ticker: %s", i + 1, len(result["reports"]), report.get("ticker"))
         if "telegram" in channels:
             attachments = None
             if report.get("chart_bytes"):
@@ -204,11 +204,18 @@ def send_screener_email(email: str, report, config):
     """Send screener results via email."""
     try:
         # Create email content
-        subject = f"📊 {config.list_type.replace('_', ' ').title()} Screener Results - {len(report.top_results)} Stocks Found"
+        # Use screener name if available, otherwise fall back to list_type
+        screener_name = getattr(config, 'screener_name', None)
+        if screener_name:
+            title = screener_name.replace('_', ' ').title()
+        else:
+            title = config.list_type.replace('_', ' ').title()
+
+        subject = f"📊 {title} Screener Results - {len(report.top_results)} Stocks Found"
 
         # Build email body
         body = f"""
-        <h2>🎯 {config.list_type.replace('_', ' ').title()} Screener Results</h2>
+        <h2>🎯 {title} Screener Results</h2>
         <p><strong>Analysis Summary:</strong></p>
         <ul>
             <li>FMP Pre-filtered: {len(report.fmp_results.get('fmp_results', [])) if hasattr(report, 'fmp_results') and report.fmp_results and 'fmp_results' in report.fmp_results else 'N/A'} stocks</li>
@@ -354,18 +361,22 @@ def send_screener_email(email: str, report, config):
                     body += f"<p><strong>MACD:</strong> {result.technicals.macd:.4f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
                 if hasattr(result.technicals, 'macd_signal') and result.technicals.macd_signal is not None:
                     body += f"<p><strong>MACD Signal:</strong> {result.technicals.macd_signal:.4f}</p>"
-                if hasattr(result.technicals, 'sma_50') and result.technicals.sma_50 is not None:
+                if hasattr(result.technicals, 'sma_fast') and result.technicals.sma_fast is not None:
                     context = {'current_price': result.fundamentals.current_price if result.fundamentals else None}
-                    recommendation = _get_unified_recommendation("SMA_50", result.technicals.sma_50, context)
-                    body += f"<p><strong>SMA 50:</strong> ${result.technicals.sma_50:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'sma_200') and result.technicals.sma_200 is not None:
+                    recommendation = _get_unified_recommendation("SMA_FAST", result.technicals.sma_fast, context)
+                    body += f"<p><strong>SMA Fast:</strong> ${result.technicals.sma_fast:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
+
+                if hasattr(result.technicals, 'sma_slow') and result.technicals.sma_slow is not None:
                     context = {'current_price': result.fundamentals.current_price if result.fundamentals else None}
-                    recommendation = _get_unified_recommendation("SMA_200", result.technicals.sma_200, context)
-                    body += f"<p><strong>SMA 200:</strong> ${result.technicals.sma_200:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
-                if hasattr(result.technicals, 'ema_12') and result.technicals.ema_12 is not None:
-                    body += f"<p><strong>EMA 12:</strong> ${result.technicals.ema_12:.2f}</p>"
-                if hasattr(result.technicals, 'ema_26') and result.technicals.ema_26 is not None:
-                    body += f"<p><strong>EMA 26:</strong> ${result.technicals.ema_26:.2f}</p>"
+                    recommendation = _get_unified_recommendation("SMA_SLOW", result.technicals.sma_slow, context)
+                    body += f"<p><strong>SMA Slow:</strong> ${result.technicals.sma_slow:.2f} <span style='color: {_get_recommendation_color(recommendation)};'>({recommendation})</span></p>"
+
+                if hasattr(result.technicals, 'ema_fast') and result.technicals.ema_fast is not None:
+                    body += f"<p><strong>EMA Fast:</strong> ${result.technicals.ema_fast:.2f}</p>"
+
+                if hasattr(result.technicals, 'ema_slow') and result.technicals.ema_slow is not None:
+                    body += f"<p><strong>EMA Slow:</strong> ${result.technicals.ema_slow:.2f}</p>"
+
                 if hasattr(result.technicals, 'bb_upper') and result.technicals.bb_upper is not None:
                     context = {
                         'current_price': result.fundamentals.current_price if result.fundamentals else None,
