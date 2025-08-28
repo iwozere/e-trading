@@ -336,7 +336,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Download OHLCV data for CNN-LSTM-XGBoost pipeline')
-    parser.add_argument('--config', default='config/pipeline/x02.yaml', help='Configuration file path')
+    parser.add_argument('--config', default='config/pipeline/p02.yaml', help='Configuration file path')
     parser.add_argument('--validate-only', action='store_true', help='Only validate existing data')
 
     args = parser.parse_args()

@@ -84,26 +84,19 @@ class CNNXGBoostPipeline:
     def _get_config_schema(self) -> Dict[str, Any]:
         """Define configuration schema for validation."""
         return {
-            "data": {
-                "symbols": list,
-                "timeframes": list,
-                "start_date": str,
-                "end_date": str,
-                "min_records": int,
-                "max_missing_pct": float
-            },
-            "cnn": {
-                "sequence_length": int,
-                "embedding_dim": list,
-                "filters": list,
-                "kernel_sizes": list,
-                "dropout": list
-            },
-            "xgboost": {
-                "n_trials": int,
-                "cv_folds": int,
-                "eval_metric": str
-            }
+            "data_sources": dict,  # Multi-provider data sources
+            "data": dict,  # Data configuration
+            "cnn": dict,  # CNN configuration
+            "xgboost": dict,  # XGBoost configuration
+            "technical_indicators": dict,  # Technical indicators configuration
+            "feature_engineering": dict,  # Feature engineering configuration
+            "targets": dict,  # Target configuration
+            "training": dict,  # Training configuration
+            "validation": dict,  # Validation configuration
+            "performance": dict,  # Performance configuration
+            "logging": dict,  # Logging configuration
+            "output": dict,  # Output configuration
+            "advanced": dict  # Advanced configuration
         }
 
     def _setup_logging(self) -> logging.Logger:
@@ -198,11 +191,10 @@ class CNNXGBoostPipeline:
     def _create_directories(self):
         """Create necessary directories for the pipeline."""
         directories = [
-            self.config["data"]["processed_dir"],
-            self.config["data"]["labeled_dir"],
-            self.config["cnn"]["model_dir"],
-            self.config["xgboost"]["model_dir"],
-            self.config["output"]["results_dir"],
+            self.config["paths"]["data_labeled"],
+            self.config["paths"]["models_cnn"],
+            self.config["paths"]["models_xgboost"],
+            self.config["paths"]["results"],
             Path(self.config["logging"]["file"]).parent,
             self.config["performance"]["cache_dir"]
         ]
@@ -212,13 +204,13 @@ class CNNXGBoostPipeline:
             self.logger.debug(f"Created directory: {directory}")
 
     def _run_data_loader(self) -> Dict[str, Any]:
-        """Run stage 1: Data loading and preprocessing."""
+        """Run stage 1: Data loading (download only)."""
         from x_01_data_loader import DataLoader
 
-        data_loader = DataLoader(self.config)
+        data_loader = DataLoader()
         result = data_loader.run()
 
-        self.logger.info(f"Data loader completed. Processed {result.get('processed_files', 0)} files")
+        self.logger.info(f"Data loader completed. Downloaded {result.get('total_downloads', 0)} files")
         return result
 
     def _run_cnn_training(self) -> Dict[str, Any]:
@@ -283,7 +275,7 @@ class CNNXGBoostPipeline:
 
     def _save_pipeline_state(self):
         """Save pipeline state to file."""
-        state_file = Path(self.config["output"]["results_dir"]) / "pipeline_state.json"
+        state_file = Path(self.config["paths"]["results"]) / "pipeline_state.json"
 
         # Convert timestamps to strings for JSON serialization
         state_copy = self.pipeline_state.copy()
@@ -331,7 +323,7 @@ class CNNXGBoostPipeline:
                 "duration": f"{stage_result['duration']:.2f}s"
             }
 
-        report_file = Path(self.config["output"]["results_dir"]) / "pipeline_summary.json"
+        report_file = Path(self.config["paths"]["results"]) / "pipeline_summary.json"
         with open(report_file, 'w') as f:
             json.dump(report, f, indent=2)
 

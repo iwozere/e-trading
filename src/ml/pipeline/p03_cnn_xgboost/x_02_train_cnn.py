@@ -8,7 +8,7 @@ The CNN is designed as a 1D convolutional network optimized for financial time s
 import json
 import pickle
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Tuple, Any
 
 import numpy as np
 import pandas as pd
@@ -20,10 +20,15 @@ import optuna
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 
-from src.utils.logging import setup_logger
-from src.utils.config import load_config
+import logging
+import yaml
 
-_logger = setup_logger(__name__)
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+_logger = logging.getLogger(__name__)
 
 
 class CNN1D(nn.Module):
@@ -37,7 +42,6 @@ class CNN1D(nn.Module):
     def __init__(self,
                  input_channels: int = 5,
                  sequence_length: int = 120,
-                 embedding_dim: int = 64,
                  num_filters: List[int] = [32, 64, 128],
                  kernel_sizes: List[int] = [3, 5, 7],
                  dropout_rate: float = 0.3) -> None:
@@ -47,7 +51,6 @@ class CNN1D(nn.Module):
         Args:
             input_channels: Number of input features (OHLCV = 5)
             sequence_length: Length of time series sequence
-            embedding_dim: Dimension of output embeddings
             num_filters: List of filter counts for each convolutional layer
             kernel_sizes: List of kernel sizes for each convolutional layer
             dropout_rate: Dropout rate for regularization
@@ -56,7 +59,6 @@ class CNN1D(nn.Module):
 
         self.input_channels = input_channels
         self.sequence_length = sequence_length
-        self.embedding_dim = embedding_dim
 
         # Build convolutional layers
         layers = []
@@ -76,8 +78,8 @@ class CNN1D(nn.Module):
         # Global average pooling
         self.global_pool = nn.AdaptiveAvgPool1d(1)
 
-        # Final embedding layer
-        self.embedding_layer = nn.Linear(num_filters[-1], embedding_dim)
+        # Final classification layer (single output for binary classification)
+        self.classification_layer = nn.Linear(num_filters[-1], 1)
 
         # Initialize weights
         self._initialize_weights()
@@ -101,7 +103,7 @@ class CNN1D(nn.Module):
             x: Input tensor of shape (batch_size, input_channels, sequence_length)
 
         Returns:
-            Embeddings tensor of shape (batch_size, embedding_dim)
+            Logits tensor of shape (batch_size, 1) for binary classification
         """
         # Apply convolutional layers
         x = self.conv_layers(x)
@@ -109,9 +111,9 @@ class CNN1D(nn.Module):
         # Global average pooling
         x = self.global_pool(x)
 
-        # Flatten and apply embedding layer
+        # Flatten and apply classification layer
         x = x.view(x.size(0), -1)
-        x = self.embedding_layer(x)
+        x = self.classification_layer(x)
 
         return x
 
@@ -137,8 +139,8 @@ class CNNTrainer:
 
         _logger.info("Initializing CNN trainer on device: %s", self.device)
 
-        # Create output directories
-        self.models_dir = Path("src/ml/pipeline/p03_cnn_xgboost/models/cnn")
+        # Create output directories using configurable paths
+        self.models_dir = Path(self.config["paths"]["models_cnn"])
         self.checkpoints_dir = self.models_dir / "checkpoints"
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
@@ -158,12 +160,12 @@ class CNNTrainer:
         _logger.info("Starting CNN training stage")
 
         try:
-            # Load processed data
-            data_files = self._discover_processed_data()
+            # Load raw data
+            data_files = self._discover_raw_data()
             if not data_files:
-                raise ValueError("No processed data files found")
+                raise ValueError("No raw data files found")
 
-            _logger.info("Found %d processed data files", len(data_files))
+            _logger.info("Found %d raw data files", len(data_files))
 
             # Prepare training data
             X_train, y_train = self._prepare_training_data(data_files)
@@ -190,23 +192,22 @@ class CNNTrainer:
             _logger.exception("Error in CNN training stage: %s", e)
             raise
 
-    def _discover_processed_data(self) -> List[Path]:
+    def _discover_raw_data(self) -> List[Path]:
         """
-        Discover processed data files from the data loader stage.
+        Discover raw data files from the data loader stage.
 
         Returns:
-            List of paths to processed data files
+            List of paths to raw data files
         """
-        data_dir = Path("data/processed")
+        data_dir = Path(self.config["paths"]["data_raw"])
         if not data_dir.exists():
-            raise FileNotFoundError(f"Processed data directory not found: {data_dir}")
+            raise FileNotFoundError(f"Raw data directory not found: {data_dir}")
 
-        # Look for Parquet files
-        data_files = list(data_dir.glob("*.parquet"))
+        # Look for CSV files (raw data is saved as CSV)
+        data_files = list(data_dir.glob("*.csv"))
 
         if not data_files:
-            # Fallback to CSV files
-            data_files = list(data_dir.glob("*.csv"))
+            raise FileNotFoundError(f"No CSV files found in {data_dir}")
 
         return data_files
 
@@ -246,10 +247,10 @@ class CNNTrainer:
 
     def _prepare_training_data(self, data_files: List[Path]) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Prepare training data from processed files.
+        Prepare training data from raw files.
 
         Args:
-            data_files: List of paths to processed data files
+            data_files: List of paths to raw data files
 
         Returns:
             Tuple of (X_train, y_train) arrays
@@ -263,11 +264,8 @@ class CNNTrainer:
 
         for file_path in data_files:
             try:
-                # Load data
-                if file_path.suffix == ".parquet":
-                    df = pd.read_parquet(file_path)
-                else:
-                    df = pd.read_csv(file_path)
+                # Load data (raw data is saved as CSV)
+                df = pd.read_csv(file_path)
 
                 # Extract OHLCV features
                 ohlcv_cols = ["open", "high", "low", "close", "volume"]
@@ -290,11 +288,20 @@ class CNNTrainer:
                 continue
 
         if not all_sequences:
-            raise ValueError("No valid sequences found in processed data")
+            raise ValueError("No valid sequences found in raw data")
 
         # Convert to numpy arrays
         X = np.array(all_sequences)
         y = np.array(all_targets)
+
+        # Sample data if we have too much to avoid memory issues
+        max_samples = self.cnn_config.get("max_samples", 10000)
+        if len(X) > max_samples:
+            # Randomly sample to reduce memory usage
+            indices = np.random.choice(len(X), max_samples, replace=False)
+            X = X[indices]
+            y = y[indices]
+            _logger.info("Sampled data to %d samples to avoid memory issues", max_samples)
 
         # Normalize features
         X_reshaped = X.reshape(-1, X.shape[-1])
@@ -353,26 +360,24 @@ class CNNTrainer:
         _logger.info("Starting hyperparameter optimization")
 
         def objective(trial):
-            # Define hyperparameter search space
-            embedding_dim = trial.suggest_int("embedding_dim", 32, 128)
+            # Define hyperparameter search space (more conservative to avoid memory issues)
             num_filters = [
-                trial.suggest_int("filters_1", 16, 64),
-                trial.suggest_int("filters_2", 32, 128),
-                trial.suggest_int("filters_3", 64, 256)
+                trial.suggest_int("filters_1", 16, 32),
+                trial.suggest_int("filters_2", 32, 64),
+                trial.suggest_int("filters_3", 64, 128)
             ]
             kernel_sizes = [
-                trial.suggest_int("kernel_1", 3, 7),
-                trial.suggest_int("kernel_2", 3, 9),
-                trial.suggest_int("kernel_3", 3, 11)
+                trial.suggest_int("kernel_1", 3, 5),
+                trial.suggest_int("kernel_2", 3, 7),
+                trial.suggest_int("kernel_3", 3, 9)
             ]
-            dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.5)
+            dropout_rate = trial.suggest_float("dropout_rate", 0.1, 0.3)
             learning_rate = trial.suggest_float("learning_rate", 1e-4, 1e-2, log=True)
 
             # Create model with trial parameters
             model = CNN1D(
                 input_channels=5,
                 sequence_length=X_train.shape[1],
-                embedding_dim=embedding_dim,
                 num_filters=num_filters,
                 kernel_sizes=kernel_sizes,
                 dropout_rate=dropout_rate
@@ -416,7 +421,7 @@ class CNNTrainer:
 
         # Run optimization
         study = optuna.create_study(direction="minimize")
-        n_trials = self.cnn_config.get("optimization_trials", 50)
+        n_trials = self.cnn_config.get("optimization_trials", 10)  # Reduced for faster testing
         study.optimize(objective, n_trials=n_trials)
 
         _logger.info("Best trial: %s", study.best_trial.value)
@@ -437,14 +442,22 @@ class CNNTrainer:
         """
         _logger.info("Training final CNN model")
 
-        # Create model
+        # Create model with proper parameter handling
+        num_filters = self.cnn_config.get("num_filters", [32, 64, 128])
+        kernel_sizes = self.cnn_config.get("kernel_sizes", [3, 5, 7])
+        dropout_rate = self.cnn_config.get("dropout_rate", 0.3)
+
+        # Handle parameters if they're lists (take first values)
+        if isinstance(dropout_rate, list):
+            dropout_rate = dropout_rate[0]
+            _logger.info("Using dropout_rate: %f (from list)", dropout_rate)
+
         self.model = CNN1D(
             input_channels=5,
             sequence_length=X_train.shape[1],
-            embedding_dim=self.cnn_config.get("embedding_dim", 64),
-            num_filters=self.cnn_config.get("num_filters", [32, 64, 128]),
-            kernel_sizes=self.cnn_config.get("kernel_sizes", [3, 5, 7]),
-            dropout_rate=self.cnn_config.get("dropout_rate", 0.3)
+            num_filters=num_filters,
+            kernel_sizes=kernel_sizes,
+            dropout_rate=dropout_rate
         ).to(self.device)
 
         # Prepare data
@@ -454,15 +467,29 @@ class CNNTrainer:
         # Create data loader
         dataset = TensorDataset(X_tensor, y_tensor)
         batch_size = self.cnn_config.get("batch_size", 32)
+
+        # Handle batch_size if it's a list (take first value)
+        if isinstance(batch_size, list):
+            batch_size = batch_size[0]
+            _logger.info("Using batch_size: %d (from list)", batch_size)
+
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
         # Training setup
+        learning_rate = self.cnn_config.get("learning_rate", 0.001)
+        if isinstance(learning_rate, list):
+            learning_rate = learning_rate[0]
+            _logger.info("Using learning_rate: %f (from list)", learning_rate)
+
         optimizer = optim.Adam(
             self.model.parameters(),
-            lr=self.cnn_config.get("learning_rate", 0.001)
+            lr=learning_rate
         )
         criterion = nn.BCEWithLogitsLoss()
         num_epochs = self.cnn_config.get("num_epochs", 50)
+        if isinstance(num_epochs, list):
+            num_epochs = num_epochs[0]
+            _logger.info("Using num_epochs: %d (from list)", num_epochs)
 
         # Training loop
         self.model.train()
@@ -539,7 +566,6 @@ class CNNTrainer:
         model_config = {
             "input_channels": 5,
             "sequence_length": self.cnn_config.get("sequence_length", 120),
-            "embedding_dim": self.cnn_config.get("embedding_dim", 64),
             "num_filters": self.cnn_config.get("num_filters", [32, 64, 128]),
             "kernel_sizes": self.cnn_config.get("kernel_sizes", [3, 5, 7]),
             "dropout_rate": self.cnn_config.get("dropout_rate", 0.3)
@@ -567,8 +593,7 @@ class CNNTrainer:
             "final_loss": training_results["final_loss"],
             "model_parameters": training_results["model_parameters"],
             "device_used": str(self.device),
-            "training_epochs": len(training_results["training_history"]),
-            "embedding_dim": self.cnn_config.get("embedding_dim", 64)
+            "training_epochs": len(training_results["training_history"])
         }
 
 
@@ -585,6 +610,11 @@ def train_cnn(config: Dict[str, Any]) -> Dict[str, Any]:
     trainer = CNNTrainer(config)
     return trainer.run()
 
+
+def load_config(config_path: str) -> Dict[str, Any]:
+    """Load configuration from YAML file."""
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
 
 if __name__ == "__main__":
     # Load configuration
