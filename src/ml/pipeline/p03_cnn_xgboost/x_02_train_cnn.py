@@ -4,7 +4,7 @@ CNN Training Stage for CNN + XGBoost Pipeline.
 This module implements the CNN training stage that extracts features from OHLCV time series data.
 The CNN is designed as a 1D convolutional network optimized for financial time series analysis.
 """
-
+import sys
 import json
 import pickle
 from pathlib import Path
@@ -20,15 +20,14 @@ import optuna
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 
-import logging
 import yaml
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-_logger = logging.getLogger(__name__)
+project_root = Path(__file__).resolve().parents[4]
+sys.path.append(str(project_root))
+
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
 
 
 class CNN1D(nn.Module):
@@ -626,4 +625,4 @@ if __name__ == "__main__":
 
     # Run CNN training
     results = train_cnn(config)
-    print("CNN Training Results:", results)
+    _logger.info("CNN Training Results: %s", results)

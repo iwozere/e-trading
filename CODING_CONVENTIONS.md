@@ -70,7 +70,6 @@ sys.path.append(str(PROJECT_ROOT))
 
   ```python
   from src.notification.logger import setup_logger
-
   _logger = setup_logger(__name__)
   ```
 

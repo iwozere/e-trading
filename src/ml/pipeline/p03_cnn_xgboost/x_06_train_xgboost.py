@@ -17,7 +17,7 @@ import xgboost as xgb
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import log_loss, accuracy_score, precision_score, recall_score, f1_score, classification_report
 
-from src.utils.logging import setup_logger
+from src.notification.logger import setup_logger
 from src.utils.config import load_config
 
 _logger = setup_logger(__name__)
@@ -541,4 +541,4 @@ if __name__ == "__main__":
 
     # Run XGBoost training
     results = train_xgboost(config)
-    print("XGBoost Training Results:", results)
+    _logger.info("XGBoost Training Results: %s", results)

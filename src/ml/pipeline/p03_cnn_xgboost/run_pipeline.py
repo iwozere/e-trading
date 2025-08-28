@@ -26,7 +26,7 @@ import json
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.utils.logging import setup_logger
+from src.notification.logger import setup_logger
 from src.utils.config import load_config, validate_config
 
 
@@ -130,10 +130,10 @@ class CNNXGBoostPipeline:
             # Run pipeline stages
             for stage_num, (stage_name, stage_func) in enumerate(self.stages, 1):
                 if stage_num in self.skip_stages:
-                    self.logger.info(f"Skipping stage {stage_num}: {stage_name}")
+                    self.logger.info("Skipping stage %d: %s", stage_num, stage_name)
                     continue
 
-                self.logger.info(f"Starting stage {stage_num}: {stage_name}")
+                self.logger.info("Starting stage %d: %s", stage_num, stage_name)
                 stage_start_time = time.time()
 
                 try:
@@ -150,11 +150,11 @@ class CNNXGBoostPipeline:
                     }
 
                     self.pipeline_state["completed_stages"].append(stage_num)
-                    self.logger.info(f"Completed stage {stage_num}: {stage_name} in {stage_end_time - stage_start_time:.2f}s")
+                    self.logger.info("Completed stage %d: %s in %.2fs", stage_num, stage_name, stage_end_time - stage_start_time)
 
                 except Exception as e:
                     stage_end_time = time.time()
-                    self.logger.error(f"Failed stage {stage_num}: {stage_name} - {e}")
+                    self.logger.error("Failed stage %d: %s - %s", stage_num, stage_name, e)
 
                     self.pipeline_state["stage_results"][stage_num] = {
                         "name": stage_name,
@@ -183,7 +183,7 @@ class CNNXGBoostPipeline:
             return True
 
         except Exception as e:
-            self.logger.error(f"Pipeline failed with error: {e}")
+            self.logger.error("Pipeline failed with error: %s", e)
             self.pipeline_state["overall_status"] = "failed"
             self._save_pipeline_state()
             return False
@@ -201,7 +201,7 @@ class CNNXGBoostPipeline:
 
         for directory in directories:
             Path(directory).mkdir(parents=True, exist_ok=True)
-            self.logger.debug(f"Created directory: {directory}")
+            self.logger.debug("Created directory: %s", directory)
 
     def _run_data_loader(self) -> Dict[str, Any]:
         """Run stage 1: Data loading (download only)."""
@@ -210,7 +210,7 @@ class CNNXGBoostPipeline:
         data_loader = DataLoader()
         result = data_loader.run()
 
-        self.logger.info(f"Data loader completed. Downloaded {result.get('total_downloads', 0)} files")
+        self.logger.info("Data loader completed. Downloaded %d files", result.get('total_downloads', 0))
         return result
 
     def _run_cnn_training(self) -> Dict[str, Any]:
@@ -220,7 +220,7 @@ class CNNXGBoostPipeline:
         cnn_trainer = CNNTrainer(self.config)
         result = cnn_trainer.run()
 
-        self.logger.info(f"CNN training completed. Trained {result.get('trained_models', 0)} models")
+        self.logger.info("CNN training completed. Trained %d models", result.get('trained_models', 0))
         return result
 
     def _run_embedding_generation(self) -> Dict[str, Any]:
@@ -230,7 +230,7 @@ class CNNXGBoostPipeline:
         embedding_generator = EmbeddingGenerator(self.config)
         result = embedding_generator.run()
 
-        self.logger.info(f"Embedding generation completed. Generated {result.get('embeddings_count', 0)} embeddings")
+        self.logger.info("Embedding generation completed. Generated %d embeddings", result.get('embeddings_count', 0))
         return result
 
     def _run_ta_features(self) -> Dict[str, Any]:
@@ -240,7 +240,7 @@ class CNNXGBoostPipeline:
         ta_engineer = TAFeatureEngineer(self.config)
         result = ta_engineer.run()
 
-        self.logger.info(f"TA feature engineering completed. Generated {result.get('features_count', 0)} features")
+        self.logger.info("TA feature engineering completed. Generated %d features", result.get('features_count', 0))
         return result
 
     def _run_xgboost_optimization(self) -> Dict[str, Any]:
@@ -250,7 +250,7 @@ class CNNXGBoostPipeline:
         xgb_optimizer = XGBoostOptimizer(self.config)
         result = xgb_optimizer.run()
 
-        self.logger.info(f"XGBoost optimization completed. Best score: {result.get('best_score', 0):.4f}")
+        self.logger.info("XGBoost optimization completed. Best score: %.4f", result.get('best_score', 0))
         return result
 
     def _run_xgboost_training(self) -> Dict[str, Any]:
@@ -260,7 +260,7 @@ class CNNXGBoostPipeline:
         xgb_trainer = XGBoostTrainer(self.config)
         result = xgb_trainer.run()
 
-        self.logger.info(f"XGBoost training completed. Trained {result.get('trained_models', 0)} models")
+        self.logger.info("XGBoost training completed. Trained %d models", result.get('trained_models', 0))
         return result
 
     def _run_validation(self) -> Dict[str, Any]:
@@ -270,7 +270,7 @@ class CNNXGBoostPipeline:
         validator = ModelValidator(self.config)
         result = validator.run()
 
-        self.logger.info(f"Validation completed. Overall accuracy: {result.get('overall_accuracy', 0):.4f}")
+        self.logger.info("Validation completed. Overall accuracy: %.4f", result.get('overall_accuracy', 0))
         return result
 
     def _save_pipeline_state(self):
@@ -294,7 +294,7 @@ class CNNXGBoostPipeline:
         with open(state_file, 'w') as f:
             json.dump(state_copy, f, indent=2)
 
-        self.logger.info(f"Pipeline state saved to {state_file}")
+        self.logger.info("Pipeline state saved to %s", state_file)
 
     def _generate_summary_report(self):
         """Generate a summary report of the pipeline execution."""
@@ -327,7 +327,7 @@ class CNNXGBoostPipeline:
         with open(report_file, 'w') as f:
             json.dump(report, f, indent=2)
 
-        self.logger.info(f"Pipeline summary saved to {report_file}")
+        self.logger.info("Pipeline summary saved to %s", report_file)
 
         # Print summary to console
         print("\n" + "="*60)

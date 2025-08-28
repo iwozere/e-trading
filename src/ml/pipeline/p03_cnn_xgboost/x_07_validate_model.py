@@ -17,7 +17,7 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
 from sklearn.model_selection import TimeSeriesSplit
 
-from src.utils.logging import setup_logger
+from src.notification.logger import setup_logger
 from src.utils.config import load_config
 
 _logger = setup_logger(__name__)
@@ -778,4 +778,4 @@ if __name__ == "__main__":
 
     # Run model validation
     results = validate_models(config)
-    print("Model Validation Results:", results)
+    _logger.info("Model Validation Results: %s", results)

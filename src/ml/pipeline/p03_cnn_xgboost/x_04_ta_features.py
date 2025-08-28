@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import talib
 
-from src.utils.logging import setup_logger
+from src.notification.logger import setup_logger
 from src.utils.config import load_config
 
 _logger = setup_logger(__name__)
@@ -402,4 +402,4 @@ if __name__ == "__main__":
 
     # Run TA feature engineering
     results = engineer_ta_features(config)
-    print("TA Feature Engineering Results:", results)
+    _logger.info("TA Feature Engineering Results: %s", results)

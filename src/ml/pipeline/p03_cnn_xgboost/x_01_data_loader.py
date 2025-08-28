@@ -14,33 +14,27 @@ Features:
 - Adds log_return column to downloaded data
 """
 
-import logging
-import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import warnings
 import yaml
 import sys
-import os
+
 
 # Add project root to path to import common utilities
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
+from src.notification.logger import setup_logger
 from src.common import get_ohlcv, analyze_period_interval
 from src.data.data_downloader_factory import DataDownloaderFactory
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-_logger = logging.getLogger(__name__)
+_logger = setup_logger(__name__)
 
 
 class DataLoader:
@@ -301,14 +295,13 @@ def main():
         loader = DataLoader()
         results = loader.run()
 
-        print("Data loading completed successfully!")
-        print(f"Total downloads: {results['total_downloads']}")
-        print(f"Total failures: {results['total_failures']}")
+        _logger.info("Data loading completed successfully!")
+        _logger.info("Total downloads: %d", results['total_downloads'])
+        _logger.info("Total failures: %d", results['total_failures'])
 
         for provider, provider_results in results['providers'].items():
-            print(f"\nProvider {provider}:")
-            print(f"  Successful: {len(provider_results['successful'])}")
-            print(f"  Failed: {len(provider_results['failed'])}")
+            _logger.info("Provider %s: Successful: %d, Failed: %d",
+                        provider, len(provider_results['successful']), len(provider_results['failed']))
 
     except Exception as e:
         _logger.exception("Data loading failed")
