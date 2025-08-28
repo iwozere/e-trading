@@ -3,10 +3,10 @@
 
 # Multi-provider data configuration
 data_sources:
-  binance:
-    symbols: [BTCUSDT, ETHUSDT, LTCUSDT]
-    timeframes: [15m, 1h, 4h]
-    period: "2y"  # 2 years for crypto data (should give enough data)
+#  binance:
+#    symbols: [BTCUSDT, ETHUSDT, LTCUSDT]
+#    timeframes: [15m, 1h, 4h]
+#    period: "2y"  # 2 years for crypto data (should give enough data)
   yfinance:
     symbols: [VT, PSNY, GOOG]
     timeframes: [1d]

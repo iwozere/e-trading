@@ -19,7 +19,7 @@ Classes:
 """
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 import pandas as pd
 import yfinance as yf
@@ -58,7 +58,7 @@ class YahooDataDownloader(BaseDataDownloader):
 
     def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
-        Download OHLCV data for a single symbol.
+        Download OHLCV data for a single symbol with automatic batching for large date ranges.
 
         Args:
             symbol: Stock symbol (e.g., 'AAPL')
@@ -70,49 +70,119 @@ class YahooDataDownloader(BaseDataDownloader):
             pd.DataFrame: OHLCV data with columns ['timestamp', 'open', 'high', 'low', 'close', 'volume']
         """
         try:
-            # Apply rate limiting
-            self._rate_limit()
+            # Determine if we need to use batching based on interval
+            max_period = self._get_max_period_for_interval(interval)
+            date_range = end_date - start_date
 
-            _logger.debug("Downloading OHLCV data for %s (%s to %s)", symbol, start_date, end_date)
+            # Convert max_period to timedelta for comparison
+            period_to_days = {
+                '1d': 1, '7d': 7, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730
+            }
+            max_days = period_to_days.get(max_period, 730)
+            max_timedelta = timedelta(days=max_days)
 
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(start=start_date, end=end_date, interval=interval)
-
-            if df.empty:
-                _logger.warning("No data returned for %s", symbol)
-                return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-
-            # Convert to standard format
-            df = df.reset_index()
-
-            # Handle different column structures from YFinance
-            expected_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
-            actual_columns = list(df.columns)
-
-            _logger.debug("YFinance returned columns for %s: %s", symbol, actual_columns)
-
-            # If we have more columns than expected, handle it gracefully
-            if len(actual_columns) > len(expected_columns):
-                # YFinance sometimes returns additional columns like 'Adj Close', 'Dividends'
-                # We'll take the first 6 columns and rename them
-                df = df.iloc[:, :6]  # Take first 6 columns
-                df.columns = expected_columns
-            elif len(actual_columns) == len(expected_columns):
-                # Exact match, just rename
-                df.columns = expected_columns
+            # If date range is within limits, download normally
+            if date_range <= max_timedelta:
+                return self._download_ohlcv_single(symbol, interval, start_date, end_date)
             else:
-                # Fewer columns than expected, this is an error
-                _logger.error("Unexpected column count for %s: expected %d, got %d", symbol, len(expected_columns), len(actual_columns))
-                raise ValueError(f"Unexpected column structure for {symbol}: {actual_columns}")
-
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-
-            _logger.debug("Downloaded %d rows for %s", len(df), symbol)
-            return df
+                # Use batching for large date ranges
+                _logger.info("Date range %s exceeds yfinance limit for %s interval. Using batching.", date_range, interval)
+                return self._download_ohlcv_batched(symbol, interval, start_date, end_date, max_period)
 
         except Exception as e:
             _logger.exception("Error downloading OHLCV data for %s: %s", symbol, str(e))
             raise
+
+    def _get_max_period_for_interval(self, interval: str) -> str:
+        """
+        Get the maximum supported period for a given interval.
+
+        yfinance has different limits for different intervals:
+        - 1m: 7 days
+        - 2m, 5m, 15m, 30m, 60m, 90m: 60 days
+        - 1h: 730 days (2 years)
+        - 1d, 5d, 1wk, 1mo, 3mo: unlimited (use 2y as reasonable limit)
+        """
+        interval_limits = {
+            '1m': '7d',
+            '2m': '60d', '5m': '60d', '15m': '60d', '30m': '60d', '60m': '60d', '90m': '60d',
+            '1h': '2y',
+            '1d': '2y', '5d': '2y', '1wk': '2y', '1mo': '2y', '3mo': '2y'
+        }
+        return interval_limits.get(interval, '2y')
+
+    def _download_ohlcv_single(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        """Download OHLCV data for a single request (no batching)."""
+        # Apply rate limiting
+        self._rate_limit()
+
+        _logger.debug("Downloading OHLCV data for %s (%s to %s)", symbol, start_date, end_date)
+
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(start=start_date, end=end_date, interval=interval)
+
+        if df.empty:
+            _logger.warning("No data returned for %s", symbol)
+            return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+
+        # Convert to standard format
+        df = df.reset_index()
+
+        # Handle different column structures from YFinance
+        expected_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        actual_columns = list(df.columns)
+
+        _logger.debug("YFinance returned columns for %s: %s", symbol, actual_columns)
+
+        # If we have more columns than expected, handle it gracefully
+        if len(actual_columns) > len(expected_columns):
+            # YFinance sometimes returns additional columns like 'Adj Close', 'Dividends'
+            # We'll take the first 6 columns and rename them
+            df = df.iloc[:, :6]  # Take first 6 columns
+            df.columns = expected_columns
+        elif len(actual_columns) == len(expected_columns):
+            # Exact match, just rename
+            df.columns = expected_columns
+        else:
+            # Fewer columns than expected, this is an error
+            _logger.error("Unexpected column count for %s: expected %d, got %d", symbol, len(expected_columns), len(actual_columns))
+            raise ValueError(f"Unexpected column structure for {symbol}: {actual_columns}")
+
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+        _logger.debug("Downloaded %d rows for %s", len(df), symbol)
+        return df
+
+    def _download_ohlcv_batched(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, max_period: str) -> pd.DataFrame:
+        """Download OHLCV data using batching for large date ranges."""
+        batches = self._calculate_batch_dates(start_date, end_date, max_period)
+
+        all_data = []
+
+        for i, (batch_start, batch_end) in enumerate(batches):
+            _logger.debug("Downloading batch %d/%d for %s: %s to %s",
+                         i + 1, len(batches), symbol, batch_start, batch_end)
+
+            try:
+                batch_df = self._download_ohlcv_single(symbol, interval, batch_start, batch_end)
+                if not batch_df.empty:
+                    all_data.append(batch_df)
+            except Exception as e:
+                _logger.error("Error downloading batch %d for %s: %s", i + 1, symbol, str(e))
+                continue
+
+        if not all_data:
+            _logger.warning("No data downloaded for %s in any batch", symbol)
+            return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+
+        # Combine all batches
+        combined_df = pd.concat(all_data, ignore_index=True)
+
+        # Remove duplicates and sort by timestamp
+        combined_df = combined_df.drop_duplicates(subset=['timestamp']).sort_values('timestamp')
+
+        _logger.info("Downloaded %d total rows for %s across %d batches", len(combined_df), symbol, len(batches))
+        return combined_df
 
     def get_ohlcv_batch(self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Dict[str, pd.DataFrame]:
         """
@@ -646,5 +716,80 @@ class YahooDataDownloader(BaseDataDownloader):
     def get_intervals(self) -> list:
         return ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo']
 
+    def _calculate_batch_dates(self, start_date: datetime, end_date: datetime, max_period: str = "2y") -> List[tuple]:
+        """
+        Calculate batch dates to respect yfinance period limits.
+
+        yfinance has different limits for different intervals:
+        - 1m: 7 days
+        - 2m, 5m, 15m, 30m, 60m, 90m: 60 days
+        - 1h: 730 days (2 years)
+        - 1d, 5d, 1wk, 1mo, 3mo: unlimited
+
+        Args:
+            start_date: Start date
+            end_date: End date
+            max_period: Maximum period to use for batching (default: "2y")
+
+        Returns:
+            List of (batch_start, batch_end) tuples
+        """
+        # Convert max_period to timedelta
+        period_to_days = {
+            '1d': 1, '7d': 7, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730
+        }
+
+        max_days = period_to_days.get(max_period, 730)  # default to 2y
+        max_timedelta = timedelta(days=max_days)
+
+        batches = []
+        current_start = start_date
+
+        while current_start < end_date:
+            current_end = min(current_start + max_timedelta, end_date)
+            batches.append((current_start, current_end))
+            current_start = current_end
+
+        return batches
+
     def is_valid_period_interval(self, period, interval) -> bool:
-        return interval in self.get_intervals() and period in self.get_periods()
+        """
+        Validate period/interval combination for yfinance.
+
+        Since we now support batching for large periods, we accept any period
+        that can be converted to a date range, and let the batching logic handle
+        the actual limits during download.
+        """
+        # First check if interval is supported
+        if interval not in self.get_intervals():
+            return False
+
+        # For periods, we now accept any period that can be parsed
+        # The batching logic will handle the actual limits during download
+        try:
+            # Try to parse the period to see if it's valid
+            from datetime import datetime, timedelta
+
+            if period.endswith("y"):
+                years = int(period[:-1])
+                if years > 0:
+                    return True
+            elif period.endswith("mo"):
+                months = int(period[:-2])
+                if months > 0:
+                    return True
+            elif period.endswith("w"):
+                weeks = int(period[:-1])
+                if weeks > 0:
+                    return True
+            elif period.endswith("d"):
+                days = int(period[:-1])
+                if days > 0:
+                    return True
+            else:
+                # Check if it's in our supported periods list
+                return period in self.get_periods()
+
+            return True
+        except (ValueError, TypeError):
+            return False

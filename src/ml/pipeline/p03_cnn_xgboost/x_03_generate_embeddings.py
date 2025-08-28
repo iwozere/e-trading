@@ -6,10 +6,16 @@ The embeddings serve as learned features that will be combined with technical in
 for the XGBoost classification stage.
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to path to import common utilities
+project_root = Path(__file__).resolve().parents[4]
+sys.path.append(str(project_root))
+
 import json
 import pickle
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Any
 
 import numpy as np
 import pandas as pd
@@ -19,7 +25,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from src.notification.logger import setup_logger
 from src.utils.config import load_config
-
 _logger = setup_logger(__name__)
 
 
@@ -33,7 +38,6 @@ class CNN1D(nn.Module):
     def __init__(self,
                  input_channels: int = 5,
                  sequence_length: int = 120,
-                 embedding_dim: int = 64,
                  num_filters: List[int] = [32, 64, 128],
                  kernel_sizes: List[int] = [3, 5, 7],
                  dropout_rate: float = 0.3) -> None:
@@ -43,7 +47,6 @@ class CNN1D(nn.Module):
         Args:
             input_channels: Number of input features (OHLCV = 5)
             sequence_length: Length of time series sequence
-            embedding_dim: Dimension of output embeddings
             num_filters: List of filter counts for each convolutional layer
             kernel_sizes: List of kernel sizes for each convolutional layer
             dropout_rate: Dropout rate for regularization
@@ -52,7 +55,6 @@ class CNN1D(nn.Module):
 
         self.input_channels = input_channels
         self.sequence_length = sequence_length
-        self.embedding_dim = embedding_dim
 
         # Build convolutional layers
         layers = []
@@ -72,8 +74,8 @@ class CNN1D(nn.Module):
         # Global average pooling
         self.global_pool = nn.AdaptiveAvgPool1d(1)
 
-        # Final embedding layer
-        self.embedding_layer = nn.Linear(num_filters[-1], embedding_dim)
+        # Final classification layer (same as training)
+        self.classification_layer = nn.Linear(num_filters[-1], 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -83,7 +85,7 @@ class CNN1D(nn.Module):
             x: Input tensor of shape (batch_size, input_channels, sequence_length)
 
         Returns:
-            Embeddings tensor of shape (batch_size, embedding_dim)
+            Features tensor of shape (batch_size, num_filters[-1]) before classification
         """
         # Apply convolutional layers
         x = self.conv_layers(x)
@@ -91,9 +93,8 @@ class CNN1D(nn.Module):
         # Global average pooling
         x = self.global_pool(x)
 
-        # Flatten and apply embedding layer
+        # Flatten and return features before classification
         x = x.view(x.size(0), -1)
-        x = self.embedding_layer(x)
 
         return x
 
@@ -185,7 +186,6 @@ class EmbeddingGenerator:
         self.model = CNN1D(
             input_channels=self.model_config["input_channels"],
             sequence_length=self.model_config["sequence_length"],
-            embedding_dim=self.model_config["embedding_dim"],
             num_filters=self.model_config["num_filters"],
             kernel_sizes=self.model_config["kernel_sizes"],
             dropout_rate=self.model_config["dropout_rate"]

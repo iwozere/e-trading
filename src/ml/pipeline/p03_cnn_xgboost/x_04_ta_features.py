@@ -5,9 +5,15 @@ This module calculates technical indicators from OHLCV data and combines them wi
 CNN embeddings to create feature-rich datasets for XGBoost classification.
 """
 
-import json
+import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+
+# Add project root to path to import common utilities
+project_root = Path(__file__).resolve().parents[4]
+sys.path.append(str(project_root))
+
+import json
+from typing import Dict, List, Any
 
 import numpy as np
 import pandas as pd
@@ -15,7 +21,6 @@ import talib
 
 from src.notification.logger import setup_logger
 from src.utils.config import load_config
-
 _logger = setup_logger(__name__)
 
 

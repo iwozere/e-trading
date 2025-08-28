@@ -5,10 +5,17 @@ This module performs comprehensive validation of the trained models including
 backtesting, performance analysis, and generation of detailed reports.
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to path to import common utilities
+project_root = Path(__file__).resolve().parents[4]
+sys.path.append(str(project_root))
+
 import json
 import pickle
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Any, Tuple
 
 import numpy as np
 import pandas as pd

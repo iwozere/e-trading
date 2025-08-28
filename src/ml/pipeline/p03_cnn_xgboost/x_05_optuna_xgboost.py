@@ -5,10 +5,15 @@ This module uses Optuna to optimize XGBoost hyperparameters for the classificati
 It performs time series cross-validation to ensure robust parameter selection.
 """
 
-import json
-import pickle
+import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+
+# Add project root to path to import common utilities
+project_root = Path(__file__).resolve().parents[4]
+sys.path.append(str(project_root))
+
+import json
+from typing import Dict, List, Any, Tuple
 
 import numpy as np
 import pandas as pd
