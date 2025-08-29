@@ -76,7 +76,7 @@ class YahooDataDownloader(BaseDataDownloader):
 
             # Convert max_period to timedelta for comparison
             period_to_days = {
-                '1d': 1, '7d': 7, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730
+                '1d': 1, '7d': 7, '60d': 60, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730
             }
             max_days = period_to_days.get(max_period, 730)
             max_timedelta = timedelta(days=max_days)
@@ -736,7 +736,7 @@ class YahooDataDownloader(BaseDataDownloader):
         """
         # Convert max_period to timedelta
         period_to_days = {
-            '1d': 1, '7d': 7, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730
+            '1d': 1, '7d': 7, '60d': 60, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730
         }
 
         max_days = period_to_days.get(max_period, 730)  # default to 2y

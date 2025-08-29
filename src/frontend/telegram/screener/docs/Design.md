@@ -304,6 +304,77 @@ NavigationFeatures:
     └── Command-specific filtering
 ```
 
+**JSON Generator Tool Architecture:**
+```python
+JSONGenerator:
+├── Web Interface
+│   ├── Tabbed interface (Alerts, Schedules, Reports, Screeners)
+│   ├── Responsive design with modern UI/UX
+│   ├── Real-time JSON generation and preview
+│   └── Copy-to-clipboard and validation features
+├── Multiple Indicators Support
+│   ├── Single indicator mode (traditional)
+│   ├── Multiple indicators with AND logic
+│   ├── Multiple indicators with OR logic
+│   └── Dynamic parameter configuration
+├── Indicator Management
+│   ├── Dynamic form generation for indicator parameters
+│   ├── Parameter persistence across indicator additions
+│   ├── Visual feedback for configured indicators
+│   └── Add/remove functionality for indicator lists
+├── Template System
+│   ├── Pre-configured templates for common scenarios
+│   ├── Quick template loading and application
+│   ├── Template customization and extension
+│   └── Template validation and error checking
+├── Integration
+│   ├── Admin panel integration as new tab
+│   ├── Standalone shareable version
+│   ├── Command generation from JSON configurations
+│   └── Backend compatibility with existing bot commands
+└── Supported Indicators
+    ├── Technical Indicators: RSI, MACD, Bollinger Bands, SMA, EMA, ADX, ATR, Stochastic, Williams %R, CCI, ROC, MFI
+    ├── Parameter Configuration: Periods, deviations, thresholds, signal lines
+    ├── Operator Support: Comparison operators, crossovers, band conditions
+    └── Logic Combinations: AND/OR logic for multiple conditions
+```
+
+**JSON Generator Routes:**
+```python
+Routes:
+├── /json-generator - Main JSON generator interface
+└── /templates/standalone_json_generator.html - Standalone shareable version
+```
+
+**JSON Generator Features:**
+```python
+Features:
+├── Alerts Tab
+│   ├── Price alerts with above/below conditions
+│   ├── Single indicator alerts with custom parameters
+│   ├── Multiple indicator alerts with AND/OR logic
+│   ├── Template system for common alert scenarios
+│   └── Real-time command generation
+├── Schedules Tab
+│   ├── Report schedules with multiple indicators
+│   ├── Screener schedules with fundamental criteria
+│   ├── Enhanced screener with technical criteria
+│   ├── Time configuration and period selection
+│   └── Email integration and delivery options
+├── Reports Tab
+│   ├── Multi-ticker report generation
+│   ├── Technical analysis with multiple indicators
+│   ├── Fundamental analysis integration
+│   ├── Data provider selection
+│   └── Comprehensive analysis options
+└── Screeners Tab
+    ├── Fundamental, technical, and hybrid screening
+    ├── Multiple list types and market cap categories
+    ├── Custom fundamental and technical criteria
+    ├── Result limits and scoring thresholds
+    └── Advanced screening configurations
+```
+
 #### 5. Command Processing Layer
 
 **Command Parser (`command_parser.py`):**

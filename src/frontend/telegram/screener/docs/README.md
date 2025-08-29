@@ -1695,6 +1695,137 @@ Secure multi-tier access control system:
 - **Visual Indicators:** Clear indication of current filter status and navigation state
 - **Non-Registered Users:** Dedicated view for monitoring unregistered user activity
 
+### JSON Generator Tool
+- **Purpose:** Interactive web-based tool for creating complex JSON configurations for alerts, schedules, reports, and screeners
+- **Access:** Available as a tab in the admin panel and as a standalone shareable file
+- **Features:**
+  - **Multiple Indicators Support:** Combine multiple technical indicators with AND/OR logic
+  - **Dynamic Parameter Configuration:** Real-time parameter adjustment for all indicators
+  - **Template System:** Quick templates for common configurations
+  - **Real-time JSON Generation:** Live preview of generated JSON as you configure
+  - **Command Generation:** Automatic generation of bot commands from JSON
+  - **Validation:** Built-in JSON validation and error checking
+  - **Copy-to-Clipboard:** Easy copying of generated configurations
+
+#### JSON Generator Tabs
+
+**🚨 Alerts Tab:**
+- **Price Alerts:** Simple price-based alerts with above/below conditions
+- **Indicator Alerts:** Single or multiple technical indicators with custom parameters
+- **Logic Options:** Single indicator, Multiple indicators (AND), Multiple indicators (OR)
+- **Supported Indicators:** RSI, MACD, Bollinger Bands, SMA, EMA, ADX, ATR, Stochastic, Williams %R, CCI, ROC, MFI
+- **Parameter Configuration:** Customizable periods, deviations, and thresholds for each indicator
+- **Quick Templates:** Pre-configured templates for common alert scenarios
+
+**📅 Schedules Tab:**
+- **Report Schedules:** Daily reports with multiple indicators and custom parameters
+- **Screener Schedules:** Automated screening with fundamental and technical criteria
+- **Enhanced Screener:** Advanced screening with multiple indicators and scoring
+- **Multiple Indicators:** Support for combining multiple indicators in scheduled reports
+- **Time Configuration:** Flexible scheduling with 24-hour format
+- **Period Selection:** Various time periods from 1 day to 2 years
+
+**📊 Reports Tab:**
+- **Multi-Ticker Reports:** Generate reports for multiple tickers simultaneously
+- **Technical Analysis:** Include various technical indicators with custom parameters
+- **Fundamental Analysis:** Include fundamental indicators and ratios
+- **Data Provider Selection:** Choose between Yahoo Finance, Binance, or auto-detect
+- **Multiple Indicators:** Combine multiple indicators for comprehensive analysis
+- **Email Integration:** Direct email delivery configuration
+
+**🔍 Screeners Tab:**
+- **Screener Types:** Fundamental, Technical, or Hybrid screening
+- **List Types:** Various market cap categories and custom lists
+- **Fundamental Criteria:** Market cap, P/E ratio, ROE, and other fundamental metrics
+- **Technical Criteria:** RSI ranges, volume requirements, and primary indicators
+- **Multiple Indicators:** Support for multiple technical indicators in screening
+- **Result Limits:** Configurable maximum results and scoring thresholds
+
+#### Multiple Indicators Feature
+
+The JSON Generator supports combining multiple indicators across all tabs:
+
+**Logic Options:**
+- **Single Indicator:** Traditional single indicator configuration
+- **Multiple Indicators (AND):** All conditions must be true simultaneously
+- **Multiple Indicators (OR):** Any condition can be true
+
+**Dynamic Management:**
+- **Add/Remove Indicators:** Dynamically add or remove indicators from configurations
+- **Parameter Persistence:** All indicator parameters are preserved when adding to lists
+- **Visual Feedback:** Clear display of configured indicators with their parameters
+- **Real-time Updates:** JSON and commands update automatically as you modify configurations
+
+**Supported Indicators with Parameters:**
+- **RSI:** Period (1-100, default: 14)
+- **MACD:** Fast period (1-100, default: 12), Slow period (1-100, default: 26), Signal period (1-100, default: 9)
+- **Bollinger Bands:** Period (1-100, default: 20), Standard deviation (0.1-5.0, default: 2.0)
+- **SMA/EMA:** Period (1-200, default: 20)
+- **ADX:** Period (1-100, default: 14)
+- **ATR:** Period (1-100, default: 14)
+- **Stochastic:** K period (1-100, default: 14), D period (1-20, default: 3)
+- **Williams %R:** Period (1-100, default: 14)
+
+#### Usage Examples
+
+**Multiple Indicator Alert:**
+```json
+{
+  "type": "indicator",
+  "ticker": "AAPL",
+  "conditions": [
+    {
+      "indicator": "RSI",
+      "parameters": {"period": 14},
+      "condition": {"operator": "<", "value": 30}
+    },
+    {
+      "indicator": "MACD",
+      "parameters": {"fast_period": 12, "slow_period": 26, "signal_period": 9},
+      "condition": {"operator": "crossover", "value": null}
+    }
+  ],
+  "logic": "AND",
+  "timeframe": "15m",
+  "alert_action": "notify",
+  "email": true
+}
+```
+
+**Scheduled Report with Multiple Indicators:**
+```json
+{
+  "type": "report",
+  "tickers": ["AAPL", "MSFT", "GOOGL"],
+  "scheduled_time": "09:00",
+  "period": "1y",
+  "interval": "1d",
+  "indicators": ["RSI", "MACD", "BollingerBands"],
+  "email": true
+}
+```
+
+**Enhanced Screener with Technical Criteria:**
+```json
+{
+  "screener_type": "hybrid",
+  "list_type": "us_medium_cap",
+  "fmp_criteria": {
+    "marketCapMoreThan": 2000000000,
+    "peRatioLessThan": 20,
+    "returnOnEquityMoreThan": 0.12
+  },
+  "technical_criteria": {
+    "primary_indicator": "RSI",
+    "rsi_min": 30,
+    "rsi_max": 70,
+    "volume_min": 1.5
+  },
+  "max_results": 10,
+  "email": true
+}
+```
+
 ### Security & Audit
 - **Access Control:** All admin routes protected with login authentication
 - **Audit Trail:** All admin actions logged with timestamps and user information

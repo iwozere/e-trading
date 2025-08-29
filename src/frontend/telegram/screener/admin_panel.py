@@ -56,7 +56,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, session
+from flask import Flask, render_template_string, render_template, request, jsonify, redirect, url_for, flash, session
 import sqlite3
 from datetime import datetime, timedelta
 import asyncio
@@ -252,6 +252,7 @@ ADMIN_TEMPLATE = """
                 <a href="{{ url_for('audit') }}">Audit</a>
                 <a href="{{ url_for('broadcast') }}">Broadcast</a>
                 <a href="{{ url_for('help_page') }}" style="color: #28a745;">📖 Help</a>
+            <a href="{{ url_for('json_generator') }}" style="color: #007bff;">🔧 JSON Generator</a>
                 <span style="color: #ccc; margin: 0 15px;">Welcome, {{ session.get('username', 'Admin') }}</span>
                 <a href="{{ url_for('logout') }}" class="logout">Logout</a>
             </div>
@@ -958,6 +959,11 @@ def schedules():
     except Exception as e:
         _logger.exception("Error in schedules page: ")
         return f"Error: {str(e)}", 500
+
+@app.route('/json-generator')
+def json_generator():
+    """JSON Generator page for creating command configurations."""
+    return render_template('json_generator.html')
 
 @app.route('/help')
 def help_page():

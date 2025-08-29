@@ -95,6 +95,21 @@ from src.frontend.telegram.screener.report_config_parser import ReportConfigPars
   - Purpose: Secure access to admin panel for user management and approvals
   - Default: Set strong credentials in production environment
 
+### JSON Generator Tool Configuration
+- **Web Framework** - Flask-based web application for JSON generator
+  - Dependencies: `Flask >= 2.3.0`, `render_template` for HTML rendering
+  - Purpose: Interactive web interface for creating complex JSON configurations
+  - Features: Multiple indicators support, real-time generation, template system
+- **Frontend Technologies** - Modern web interface for JSON generator
+  - HTML5, CSS3, JavaScript (ES6+) for responsive design
+  - Real-time JSON generation and validation
+  - Copy-to-clipboard functionality
+  - Template system for common configurations
+- **File Organization** - Template files for JSON generator
+  - `templates/json_generator.html` - Main admin panel integration
+  - `templates/standalone_json_generator.html` - Standalone shareable version
+  - Purpose: Consistent file organization and easy maintenance
+
 ### Financial Data APIs
 - **Yahoo Finance (yfinance)** - For fundamental and market data
   - No API key required (free tier)
@@ -626,6 +641,19 @@ DEFAULT_LOG_RETENTION_DAYS = 30
   - Real-time dashboard with system statistics
   - Bulk user management capabilities
   - Enhanced monitoring and reporting features
+
+### JSON Generator Tool
+- **Problem Solved**: Complex JSON configurations difficult to create manually
+- **Solution**: Implemented interactive web-based JSON generator with multiple indicators support
+- **Benefits**:
+  - User-friendly interface for creating complex configurations
+  - Support for multiple indicators with AND/OR logic across all tabs
+  - Real-time JSON generation and command preview
+  - Template system for common configurations
+  - Standalone shareable version for external users
+  - Dynamic parameter configuration for all technical indicators
+  - Copy-to-clipboard and validation features
+  - Integration with admin panel as new tab
 
 ### Dynamic Chat Routing
 - **Problem Solved**: Bot responses were sent to fixed admin chat instead of user's chat

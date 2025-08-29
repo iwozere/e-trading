@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Generator - Trading Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 500;
+            color: #6c757d;
+            transition: all 0.3s ease;
+        }
+
+        .nav-tab:hover {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .nav-tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 30px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            background: #f8f9fa;
+        }
+
+        .form-section h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 500;
+            margin-bottom: 5px;
+            color: #495057;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .output-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+
+        .output-section h3 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+
+        .json-output {
+            width: 100%;
+            min-height: 200px;
+            padding: 15px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            background: #f8f9fa;
+            resize: vertical;
+        }
+
+        .command-output {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .template-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .template-section h4 {
+            color: #1976d2;
+            margin-bottom: 10px;
+        }
+
+        .template-btn {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 0.9em;
+        }
+
+        .template-btn:hover {
+            background: #1976d2;
+        }
+
+        .form-text {
+            color: #6c757d;
+            font-size: 0.875em;
+            margin-top: 0.25rem;
+        }
+
+        .indicator-info {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+
+        .indicator-info h5 {
+            color: #1976d2;
+            margin: 0 0 5px 0;
+            font-size: 0.9em;
+        }
+
+        .indicator-info p {
+            margin: 0;
+            font-size: 0.85em;
+            color: #495057;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+            }
+            
+            .container {
+                margin: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 JSON Generator</h1>
+            <p>Create comprehensive JSON configurations for trading bot commands</p>
+        </div>
+
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('alerts')">🚨 Alerts</button>
+            <button class="nav-tab" onclick="showTab('schedules')">📅 Schedules</button>
+            <button class="nav-tab" onclick="showTab('reports')">📊 Reports</button>
+            <button class="nav-tab" onclick="showTab('screeners')">🔍 Screeners</button>
+        </div>
+
+        <!-- Alerts Tab -->
+        <div id="alerts" class="tab-content active">
+            <div class="form-section">
+                <h3>Alert Configuration</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="alert-type">Alert Type</label>
+                        <select id="alert-type" onchange="updateAlertForm()">
+                            <option value="price">Price Alert</option>
+                            <option value="indicator">Indicator Alert</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="alert-ticker">Ticker Symbol</label>
+                        <input type="text" id="alert-ticker" placeholder="e.g., AAPL, BTCUSDT" value="AAPL">
+                    </div>
+                    <div class="form-group">
+                        <label for="alert-timeframe">Timeframe</label>
+                        <select id="alert-timeframe">
+                            <option value="5m">5 minutes</option>
+                            <option value="15m" selected>15 minutes</option>
+                            <option value="1h">1 hour</option>
+                            <option value="4h">4 hours</option>
+                            <option value="1d">1 day</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Price Alert Fields -->
+                <div id="price-alert-fields">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="alert-price">Target Price</label>
+                            <input type="number" id="alert-price" placeholder="150.00" step="0.01" value="150.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="alert-condition">Condition</label>
+                            <select id="alert-condition">
+                                <option value="above">Above</option>
+                                <option value="below">Below</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicator Alert Fields -->
+                <div id="indicator-alert-fields" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="indicator-logic">Logic (Multiple Indicators)</label>
+                            <select id="indicator-logic" onchange="updateIndicatorLogic()">
+                                <option value="single">Single Indicator</option>
+                                <option value="AND">Multiple Indicators (AND)</option>
+                                <option value="OR">Multiple Indicators (OR)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Single Indicator Section -->
+                    <div id="single-indicator-section">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="indicator-type">Indicator</label>
+                                <select id="indicator-type" onchange="updateIndicatorParams()">
+                                    <option value="RSI">RSI (Relative Strength Index)</option>
+                                    <option value="MACD">MACD</option>
+                                    <option value="BollingerBands">Bollinger Bands</option>
+                                    <option value="SMA">Simple Moving Average</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="indicator-operator">Operator</label>
+                                <select id="indicator-operator" onchange="updateOperatorOptions()">
+                                    <option value="<">Less than</option>
+                                    <option value=">">Greater than</option>
+                                    <option value="<=">Less than or equal</option>
+                                    <option value=">=">Greater than or equal</option>
+                                    <option value="==">Equals</option>
+                                    <option value="!=">Not equal</option>
+                                    <option value="crossover">Crossover</option>
+                                    <option value="crossunder">Cross under</option>
+                                    <option value="above_signal">Above signal line</option>
+                                    <option value="below_signal">Below signal line</option>
+                                    <option value="above_upper_band">Above upper band</option>
+                                    <option value="below_lower_band">Below lower band</option>
+                                    <option value="between_bands">Between bands</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="indicator-value">Value</label>
+                                <input type="number" id="indicator-value" placeholder="30" step="0.1" value="30">
+                            </div>
+                        </div>
+
+                        <!-- Indicator Parameters -->
+                        <div id="indicator-params">
+                            <h4>Indicator Parameters</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="rsi-period">RSI Period</label>
+                                    <input type="number" id="rsi-period" value="14" min="1" max="100">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Multiple Indicators Section -->
+                    <div id="multiple-indicators-section" style="display: none;">
+                        <div class="form-row">
+                            <button type="button" class="btn btn-primary" onclick="addIndicator()">+ Add Indicator</button>
+                        </div>
+                        <div id="indicators-list" class="dynamic-list">
+                            <!-- Indicators will be added here dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="alert-email">
+                        <label for="alert-email">Send to Email</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="indicator-info">
+                <h5>📊 Indicator Alert Guide</h5>
+                <p><strong>RSI:</strong> Momentum oscillator (0-100). Use for oversold/overbought conditions.</p>
+                <p><strong>MACD:</strong> Trend-following indicator. Use crossover/crossunder for signal changes.</p>
+                <p><strong>Bollinger Bands:</strong> Volatility indicator. Use for price breakouts and squeezes.</p>
+                <p><strong>SMA:</strong> Trend indicator. Use for trend direction and crossovers.</p>
+            </div>
+
+            <div class="template-section">
+                <h4>Quick Templates</h4>
+                <button class="template-btn" onclick="loadTemplate('rsi-oversold')">RSI Oversold (< 30)</button>
+                <button class="template-btn" onclick="loadTemplate('rsi-overbought')">RSI Overbought (> 70)</button>
+                <button class="template-btn" onclick="loadTemplate('macd-crossover')">MACD Crossover</button>
+                <button class="template-btn" onclick="loadTemplate('macd-crossunder')">MACD Cross Under</button>
+                <button class="template-btn" onclick="loadTemplate('bollinger-below')">Bollinger Below Lower</button>
+                <button class="template-btn" onclick="loadTemplate('bollinger-above')">Bollinger Above Upper</button>
+                <button class="template-btn" onclick="loadTemplate('sma-crossover')">SMA Crossover</button>
+            </div>
+        </div>
+
+        <!-- Schedules Tab -->
+        <div id="schedules" class="tab-content">
+            <div class="form-section">
+                <h3>Schedule Configuration</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="schedule-type">Schedule Type</label>
+                        <select id="schedule-type" onchange="updateScheduleForm()">
+                            <option value="report">Daily Report</option>
+                            <option value="screener">Screener Report</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="schedule-time">Time (24h format)</label>
+                        <input type="time" id="schedule-time" value="09:00">
+                    </div>
+                    <div class="form-group">
+                        <label for="schedule-period">Period</label>
+                        <select id="schedule-period">
+                            <option value="1d">1 day</option>
+                            <option value="1w">1 week</option>
+                            <option value="1mo">1 month</option>
+                            <option value="3mo">3 months</option>
+                            <option value="6mo">6 months</option>
+                            <option value="1y" selected>1 year</option>
+                            <option value="2y">2 years</option>
+                        </select>
+                    </div>
+                </div>
+
+                                 <!-- Report Schedule Fields -->
+                 <div id="report-schedule-fields">
+                     <div class="form-row">
+                         <div class="form-group">
+                             <label for="schedule-tickers">Tickers (comma-separated)</label>
+                             <input type="text" id="schedule-tickers" placeholder="AAPL,MSFT,GOOGL" value="AAPL">
+                         </div>
+                         <div class="form-group">
+                             <label for="schedule-interval">Data Interval</label>
+                             <select id="schedule-interval">
+                                 <option value="1d" selected>Daily</option>
+                                 <option value="1h">Hourly</option>
+                                 <option value="4h">4 Hours</option>
+                                 <option value="15m">15 Minutes</option>
+                             </select>
+                         </div>
+                         <div class="form-group">
+                             <label for="schedule-indicator-type">Indicator Type</label>
+                             <select id="schedule-indicator-type" onchange="updateScheduleIndicatorParams()">
+                                 <option value="">No indicators</option>
+                                 <option value="RSI">RSI (Relative Strength Index)</option>
+                                 <option value="MACD">MACD</option>
+                                 <option value="BollingerBands">Bollinger Bands</option>
+                                 <option value="SMA">Simple Moving Average</option>
+                                 <option value="EMA">Exponential Moving Average</option>
+                                 <option value="ADX">ADX (Average Directional Index)</option>
+                                 <option value="ATR">ATR (Average True Range)</option>
+                                 <option value="Stochastic">Stochastic Oscillator</option>
+                                 <option value="WilliamsR">Williams %R</option>
+                             </select>
+                         </div>
+                     </div>
+                     
+                     <!-- Schedule Indicator Parameters -->
+                     <div id="schedule-indicator-params" style="display: none;">
+                         <h4>Indicator Parameters</h4>
+                         <div class="form-row">
+                             <div class="form-group">
+                                 <label for="schedule-rsi-period">RSI Period</label>
+                                 <input type="number" id="schedule-rsi-period" value="14" min="1" max="100">
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+
+                <!-- Screener Schedule Fields -->
+                <div id="screener-schedule-fields" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="screener-list-type">List Type</label>
+                            <select id="screener-list-type">
+                                <option value="us_small_cap">US Small Cap</option>
+                                <option value="us_medium_cap">US Medium Cap</option>
+                                <option value="us_large_cap">US Large Cap</option>
+                                <option value="us_extra_large_cap">US Extra Large Cap</option>
+                                <option value="financial_stocks">Financial Stocks</option>
+                                <option value="six_stocks">Swiss Stocks (SIX)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="screener-max-results">Max Results</label>
+                            <input type="number" id="screener-max-results" value="10" min="1" max="100">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="schedule-email">
+                        <label for="schedule-email">Send to Email</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports Tab -->
+        <div id="reports" class="tab-content">
+            <div class="form-section">
+                <h3>Report Configuration</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="report-tickers">Tickers (comma-separated)</label>
+                        <input type="text" id="report-tickers" placeholder="AAPL,MSFT,GOOGL" value="AAPL">
+                    </div>
+                    <div class="form-group">
+                        <label for="report-period">Period</label>
+                        <select id="report-period">
+                            <option value="1mo">1 month</option>
+                            <option value="3mo">3 months</option>
+                            <option value="6mo">6 months</option>
+                            <option value="1y" selected>1 year</option>
+                            <option value="2y">2 years</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="report-interval">Data Interval</label>
+                        <select id="report-interval">
+                            <option value="1d" selected>Daily</option>
+                            <option value="1h">Hourly</option>
+                            <option value="4h">4 Hours</option>
+                            <option value="15m">15 Minutes</option>
+                        </select>
+                    </div>
+                </div>
+
+                                 <div class="form-row">
+                     <div class="form-group">
+                         <label for="report-indicator-type">Indicator Type</label>
+                         <select id="report-indicator-type" onchange="updateReportIndicatorParams()">
+                             <option value="">No indicators</option>
+                             <option value="RSI">RSI (Relative Strength Index)</option>
+                             <option value="MACD">MACD</option>
+                             <option value="BollingerBands">Bollinger Bands</option>
+                             <option value="SMA">Simple Moving Average</option>
+                             <option value="EMA">Exponential Moving Average</option>
+                             <option value="ADX">ADX (Average Directional Index)</option>
+                             <option value="ATR">ATR (Average True Range)</option>
+                             <option value="Stochastic">Stochastic Oscillator</option>
+                             <option value="WilliamsR">Williams %R</option>
+                         </select>
+                     </div>
+                     <div class="form-group">
+                         <label for="report-provider">Data Provider</label>
+                         <select id="report-provider">
+                             <option value="">Auto-detect</option>
+                             <option value="yf">Yahoo Finance</option>
+                             <option value="bnc">Binance</option>
+                         </select>
+                     </div>
+                 </div>
+                 
+                 <!-- Report Indicator Parameters -->
+                 <div id="report-indicator-params" style="display: none;">
+                     <h4>Indicator Parameters</h4>
+                     <div class="form-row">
+                         <div class="form-group">
+                             <label for="report-rsi-period">RSI Period</label>
+                             <input type="number" id="report-rsi-period" value="14" min="1" max="100">
+                         </div>
+                     </div>
+                 </div>
+
+                <div class="form-row">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="report-email">
+                        <label for="report-email">Send to Email</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="report-include-fundamentals" checked>
+                        <label for="report-include-fundamentals">Include Fundamentals</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screeners Tab -->
+        <div id="screeners" class="tab-content">
+            <div class="form-section">
+                <h3>Screener Configuration</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="screener-type">Screener Type</label>
+                        <select id="screener-type" onchange="updateScreenerForm()">
+                            <option value="fundamental">Fundamental</option>
+                            <option value="hybrid" selected>Hybrid (Fundamental + Technical)</option>
+                            <option value="technical">Technical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="screener-list-type-main">List Type</label>
+                        <select id="screener-list-type-main">
+                            <option value="us_small_cap">US Small Cap</option>
+                            <option value="us_medium_cap" selected>US Medium Cap</option>
+                            <option value="us_large_cap">US Large Cap</option>
+                            <option value="us_extra_large_cap">US Extra Large Cap</option>
+                            <option value="financial_stocks">Financial Stocks</option>
+                            <option value="six_stocks">Swiss Stocks (SIX)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="screener-max-results-main">Max Results</label>
+                        <input type="number" id="screener-max-results-main" value="10" min="1" max="100">
+                    </div>
+                </div>
+
+                <!-- Fundamental Criteria -->
+                <div id="fundamental-criteria">
+                    <h4>Fundamental Criteria</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="market-cap-min">Market Cap Min ($)</label>
+                            <input type="number" id="market-cap-min" placeholder="1000000000" value="2000000000">
+                        </div>
+                        <div class="form-group">
+                            <label for="pe-ratio-max">P/E Ratio Max</label>
+                            <input type="number" id="pe-ratio-max" placeholder="20" value="20" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label for="roe-min">ROE Min (%)</label>
+                            <input type="number" id="roe-min" placeholder="12" value="12" step="0.1">
+                        </div>
+                    </div>
+                </div>
+
+                                 <!-- Technical Criteria -->
+                 <div id="technical-criteria" style="display: none;">
+                     <h4>Technical Criteria</h4>
+                     <div class="form-row">
+                         <div class="form-group">
+                             <label for="screener-indicator-type">Primary Indicator</label>
+                             <select id="screener-indicator-type" onchange="updateScreenerIndicatorParams()">
+                                 <option value="RSI">RSI (Relative Strength Index)</option>
+                                 <option value="MACD">MACD</option>
+                                 <option value="BollingerBands">Bollinger Bands</option>
+                                 <option value="SMA">Simple Moving Average</option>
+                                 <option value="EMA">Exponential Moving Average</option>
+                                 <option value="ADX">ADX (Average Directional Index)</option>
+                                 <option value="ATR">ATR (Average True Range)</option>
+                                 <option value="Stochastic">Stochastic Oscillator</option>
+                                 <option value="WilliamsR">Williams %R</option>
+                             </select>
+                         </div>
+                         <div class="form-group">
+                             <label for="rsi-min">RSI Min</label>
+                             <input type="number" id="rsi-min" placeholder="30" value="30" min="0" max="100">
+                         </div>
+                         <div class="form-group">
+                             <label for="rsi-max">RSI Max</label>
+                             <input type="number" id="rsi-max" placeholder="70" value="70" min="0" max="100">
+                         </div>
+                     </div>
+                     
+                     <!-- Screener Indicator Parameters -->
+                     <div id="screener-indicator-params" style="display: none;">
+                         <h5>Indicator Parameters</h5>
+                         <div class="form-row">
+                             <div class="form-group">
+                                 <label for="screener-rsi-period">RSI Period</label>
+                                 <input type="number" id="screener-rsi-period" value="14" min="1" max="100">
+                             </div>
+                         </div>
+                     </div>
+                     
+                     <div class="form-row">
+                         <div class="form-group">
+                             <label for="volume-min">Volume Min (relative)</label>
+                             <input type="number" id="volume-min" placeholder="1.5" value="1.5" step="0.1">
+                         </div>
+                     </div>
+                 </div>
+
+                <div class="form-row">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="screener-email">
+                        <label for="screener-email">Send to Email</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="template-section">
+                <h4>Quick Templates</h4>
+                <button class="template-btn" onclick="loadScreenerTemplate('value-stocks')">Value Stocks</button>
+                <button class="template-btn" onclick="loadScreenerTemplate('growth-stocks')">Growth Stocks</button>
+                <button class="template-btn" onclick="loadScreenerTemplate('dividend-stocks')">Dividend Stocks</button>
+                <button class="template-btn" onclick="loadScreenerTemplate('momentum-stocks')">Momentum Stocks</button>
+            </div>
+        </div>
+
+        <!-- Output Section -->
+        <div class="output-section">
+            <h3>Generated JSON Configuration</h3>
+            <textarea id="json-output" class="json-output" readonly placeholder="JSON will be generated here..."></textarea>
+            
+            <div style="margin-top: 15px;">
+                <button class="btn btn-success" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
+                <button class="btn btn-primary" onclick="validateJSON()">✅ Validate JSON</button>
+                <button class="btn btn-secondary" onclick="clearForm()">🗑️ Clear Form</button>
+            </div>
+
+            <div id="command-output" class="command-output" style="display: none;">
+                <strong>Command:</strong><br>
+                <span id="command-text"></span>
+            </div>
+
+            <div id="validation-result"></div>
+        </div>
+
+        <div class="footer">
+            <p>Generated JSON configurations are compatible with the trading bot commands.</p>
+            <p>Use the generated JSON with commands like: <code>/alerts add_indicator</code>, <code>/schedules add_json</code>, <code>/report -config</code>, <code>/screener</code></p>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'alerts';
+
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to selected nav tab
+            event.target.classList.add('active');
+            
+            currentTab = tabName;
+            generateJSON();
+        }
+
+        function updateAlertForm() {
+            const alertType = document.getElementById('alert-type').value;
+            const priceFields = document.getElementById('price-alert-fields');
+            const indicatorFields = document.getElementById('indicator-alert-fields');
+            
+            if (alertType === 'price') {
+                priceFields.style.display = 'block';
+                indicatorFields.style.display = 'none';
+            } else {
+                priceFields.style.display = 'none';
+                indicatorFields.style.display = 'block';
+            }
+            generateJSON();
+        }
+
+        function updateIndicatorParams() {
+            const indicatorType = document.getElementById('indicator-type').value;
+            const paramsDiv = document.getElementById('indicator-params');
+            
+            let html = '<h4>Indicator Parameters</h4><div class="form-row">';
+            
+            switch (indicatorType) {
+                case 'RSI':
+                    html += `
+                        <div class="form-group">
+                            <label for="rsi-period">RSI Period</label>
+                            <input type="number" id="rsi-period" value="14" min="1" max="100" onchange="generateJSON()">
+                            <small class="form-text">Default: 14. Range: 1-100</small>
+                        </div>
+                    `;
+                    break;
+                case 'MACD':
+                    html += `
+                        <div class="form-group">
+                            <label for="macd-fast">Fast Period</label>
+                            <input type="number" id="macd-fast" value="12" min="1" max="100" onchange="generateJSON()">
+                            <small class="form-text">Default: 12. Range: 1-100</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="macd-slow">Slow Period</label>
+                            <input type="number" id="macd-slow" value="26" min="1" max="100" onchange="generateJSON()">
+                            <small class="form-text">Default: 26. Range: 1-100</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="macd-signal">Signal Period</label>
+                            <input type="number" id="macd-signal" value="9" min="1" max="100" onchange="generateJSON()">
+                            <small class="form-text">Default: 9. Range: 1-100</small>
+                        </div>
+                    `;
+                    break;
+                case 'BollingerBands':
+                    html += `
+                        <div class="form-group">
+                            <label for="bb-period">Period</label>
+                            <input type="number" id="bb-period" value="20" min="1" max="100" onchange="generateJSON()">
+                            <small class="form-text">Default: 20. Range: 1-100</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="bb-deviation">Standard Deviation (bb_dev)</label>
+                            <input type="number" id="bb-deviation" value="2" min="0.1" max="5" step="0.1" onchange="generateJSON()">
+                            <small class="form-text">Default: 2. Range: 0.1-5.0</small>
+                        </div>
+                    `;
+                    break;
+                case 'SMA':
+                    html += `
+                        <div class="form-group">
+                            <label for="sma-period">Period</label>
+                            <input type="number" id="sma-period" value="20" min="1" max="200" onchange="generateJSON()">
+                            <small class="form-text">Default: 20. Range: 1-200</small>
+                        </div>
+                    `;
+                    break;
+            }
+            
+            html += '</div>';
+            paramsDiv.innerHTML = html;
+            updateOperatorOptions();
+            generateJSON();
+        }
+
+        function updateOperatorOptions() {
+            const indicatorType = document.getElementById('indicator-type').value;
+            const operatorSelect = document.getElementById('indicator-operator');
+            const valueInput = document.getElementById('indicator-value');
+            
+            // Define valid operators for each indicator
+            const validOperators = {
+                'RSI': ['<', '>', '<=', '>=', '==', '!='],
+                'MACD': ['crossover', 'crossunder', 'above_signal', 'below_signal'],
+                'BollingerBands': ['above_upper_band', 'below_lower_band', 'between_bands'],
+                'SMA': ['<', '>', '<=', '>=', '==', '!=', 'crossover', 'crossunder']
+            };
+            
+            const operators = validOperators[indicatorType] || ['<', '>', '<=', '>=', '==', '!='];
+            
+            // Store current selection
+            const currentValue = operatorSelect.value;
+            
+            // Clear and repopulate options
+            operatorSelect.innerHTML = '';
+            
+            operators.forEach(operator => {
+                const option = document.createElement('option');
+                option.value = operator;
+                option.textContent = getOperatorDisplayName(operator);
+                if (operator === currentValue) {
+                    option.selected = true;
+                }
+                operatorSelect.appendChild(option);
+            });
+            
+            // Show/hide value input based on operator type
+            const showValueInput = !['crossover', 'crossunder', 'above_upper_band', 'below_lower_band', 'between_bands', 'above_signal', 'below_signal'].includes(operatorSelect.value);
+            valueInput.style.display = showValueInput ? 'block' : 'none';
+            valueInput.parentElement.style.display = showValueInput ? 'block' : 'none';
+            
+            generateJSON();
+        }
+
+        function getOperatorDisplayName(operator) {
+            const displayNames = {
+                '<': 'Less than',
+                '>': 'Greater than',
+                '<=': 'Less than or equal',
+                '>=': 'Greater than or equal',
+                '==': 'Equals',
+                '!=': 'Not equal',
+                'crossover': 'Crossover',
+                'crossunder': 'Cross under',
+                'above_signal': 'Above signal line',
+                'below_signal': 'Below signal line',
+                'above_upper_band': 'Above upper band',
+                'below_lower_band': 'Below lower band',
+                'between_bands': 'Between bands'
+            };
+            return displayNames[operator] || operator;
+        }
+
+        function updateIndicatorLogic() {
+            const singleIndicatorSection = document.getElementById('single-indicator-section');
+            const multipleIndicatorsSection = document.getElementById('multiple-indicators-section');
+            const logicSelect = document.getElementById('indicator-logic');
+
+            if (logicSelect.value === 'single') {
+                singleIndicatorSection.style.display = 'block';
+                multipleIndicatorsSection.style.display = 'none';
+                generateJSON(); // Re-generate JSON for single indicator
+            } else {
+                singleIndicatorSection.style.display = 'none';
+                multipleIndicatorsSection.style.display = 'block';
+                generateJSON(); // Re-generate JSON for multiple indicators
+            }
+        }
+
+        function addIndicator() {
+            const indicatorsList = document.getElementById('indicators-list');
+            const singleIndicatorSection = document.getElementById('single-indicator-section');
+            const indicatorType = singleIndicatorSection.querySelector('#indicator-type').value;
+            const operator = singleIndicatorSection.querySelector('#indicator-operator').value;
+            const value = singleIndicatorSection.querySelector('#indicator-value').value;
+
+            // Get parameters based on indicator type
+            let parametersHtml = '';
+            let parametersInputs = '';
+            
+            switch (indicatorType) {
+                case 'RSI':
+                    const rsiPeriod = singleIndicatorSection.querySelector('#rsi-period').value;
+                    parametersHtml = ` (Period: ${rsiPeriod})`;
+                    parametersInputs = `<input type="hidden" name="rsi-period" value="${rsiPeriod}">`;
+                    break;
+                case 'MACD':
+                    const macdFast = singleIndicatorSection.querySelector('#macd-fast')?.value || '12';
+                    const macdSlow = singleIndicatorSection.querySelector('#macd-slow')?.value || '26';
+                    const macdSignal = singleIndicatorSection.querySelector('#macd-signal')?.value || '9';
+                    parametersHtml = ` (Fast: ${macdFast}, Slow: ${macdSlow}, Signal: ${macdSignal})`;
+                    parametersInputs = `
+                        <input type="hidden" name="macd-fast" value="${macdFast}">
+                        <input type="hidden" name="macd-slow" value="${macdSlow}">
+                        <input type="hidden" name="macd-signal" value="${macdSignal}">
+                    `;
+                    break;
+                case 'BollingerBands':
+                    const bbPeriod = singleIndicatorSection.querySelector('#bb-period')?.value || '20';
+                    const bbDeviation = singleIndicatorSection.querySelector('#bb-deviation')?.value || '2';
+                    parametersHtml = ` (Period: ${bbPeriod}, Dev: ${bbDeviation})`;
+                    parametersInputs = `
+                        <input type="hidden" name="bb-period" value="${bbPeriod}">
+                        <input type="hidden" name="bb-deviation" value="${bbDeviation}">
+                    `;
+                    break;
+                case 'SMA':
+                    const smaPeriod = singleIndicatorSection.querySelector('#sma-period')?.value || '20';
+                    parametersHtml = ` (Period: ${smaPeriod})`;
+                    parametersInputs = `<input type="hidden" name="sma-period" value="${smaPeriod}">`;
+                    break;
+            }
+
+            const indicatorItem = document.createElement('div');
+            indicatorItem.className = 'list-item';
+            indicatorItem.innerHTML = `
+                <input type="hidden" name="indicators[]" value="${indicatorType}">
+                <input type="hidden" name="operators[]" value="${operator}">
+                <input type="hidden" name="values[]" value="${value}">
+                ${parametersInputs}
+                <span>${indicatorType} ${getOperatorDisplayName(operator)} ${value}${parametersHtml}</span>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeIndicator(this)">- Remove</button>
+            `;
+            indicatorsList.appendChild(indicatorItem);
+
+            // Clear single indicator form
+            singleIndicatorSection.querySelector('#indicator-type').value = 'RSI'; // Reset to default
+            singleIndicatorSection.querySelector('#indicator-operator').value = '<'; // Reset to default
+            singleIndicatorSection.querySelector('#indicator-value').value = '30'; // Reset to default
+            updateIndicatorParams(); // Update parameters for the new single indicator
+            generateJSON();
+        }
+
+        function removeIndicator(button) {
+            const indicatorItem = button.closest('.list-item');
+            indicatorItem.remove();
+            generateJSON();
+        }
+
+        function updateScheduleForm() {
+            const scheduleType = document.getElementById('schedule-type').value;
+            const reportFields = document.getElementById('report-schedule-fields');
+            const screenerFields = document.getElementById('screener-schedule-fields');
+            
+            if (scheduleType === 'report') {
+                reportFields.style.display = 'block';
+                screenerFields.style.display = 'none';
+            } else {
+                reportFields.style.display = 'none';
+                screenerFields.style.display = 'block';
+            }
+            generateJSON();
+        }
+
+                 function updateScreenerForm() {
+             const screenerType = document.getElementById('screener-type').value;
+             const technicalCriteria = document.getElementById('technical-criteria');
+             
+             if (screenerType === 'hybrid' || screenerType === 'technical') {
+                 technicalCriteria.style.display = 'block';
+             } else {
+                 technicalCriteria.style.display = 'none';
+             }
+             generateJSON();
+         }
+
+         function updateScheduleIndicatorParams() {
+             const indicatorType = document.getElementById('schedule-indicator-type').value;
+             const paramsDiv = document.getElementById('schedule-indicator-params');
+             
+             if (!indicatorType) {
+                 paramsDiv.style.display = 'none';
+                 generateJSON();
+                 return;
+             }
+             
+             let html = '<h4>Indicator Parameters</h4><div class="form-row">';
+             
+             switch (indicatorType) {
+                 case 'RSI':
+                     html += `
+                         <div class="form-group">
+                             <label for="schedule-rsi-period">RSI Period</label>
+                             <input type="number" id="schedule-rsi-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'MACD':
+                     html += `
+                         <div class="form-group">
+                             <label for="schedule-macd-fast">Fast Period</label>
+                             <input type="number" id="schedule-macd-fast" value="12" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 12. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="schedule-macd-slow">Slow Period</label>
+                             <input type="number" id="schedule-macd-slow" value="26" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 26. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="schedule-macd-signal">Signal Period</label>
+                             <input type="number" id="schedule-macd-signal" value="9" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 9. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'BollingerBands':
+                     html += `
+                         <div class="form-group">
+                             <label for="schedule-bb-period">Period</label>
+                             <input type="number" id="schedule-bb-period" value="20" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 20. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="schedule-bb-deviation">Standard Deviation</label>
+                             <input type="number" id="schedule-bb-deviation" value="2" min="0.1" max="5" step="0.1" onchange="generateJSON()">
+                             <small class="form-text">Default: 2. Range: 0.1-5.0</small>
+                         </div>
+                     `;
+                     break;
+                 case 'SMA':
+                 case 'EMA':
+                     html += `
+                         <div class="form-group">
+                             <label for="schedule-ma-period">Period</label>
+                             <input type="number" id="schedule-ma-period" value="20" min="1" max="200" onchange="generateJSON()">
+                             <small class="form-text">Default: 20. Range: 1-200</small>
+                         </div>
+                     `;
+                     break;
+                 case 'ADX':
+                     html += `
+                         <div class="form-group">
+                             <label for="schedule-adx-period">Period</label>
+                             <input type="number" id="schedule-adx-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'ATR':
+                     html += `
+                         <div class="form-group">
+                             <label for="schedule-atr-period">Period</label>
+                             <input type="number" id="schedule-atr-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'Stochastic':
+                     html += `
+                         <div class="form-group">
+                             <label for="schedule-stoch-k">K Period</label>
+                             <input type="number" id="schedule-stoch-k" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="schedule-stoch-d">D Period</label>
+                             <input type="number" id="schedule-stoch-d" value="3" min="1" max="20" onchange="generateJSON()">
+                             <small class="form-text">Default: 3. Range: 1-20</small>
+                         </div>
+                     `;
+                     break;
+                 case 'WilliamsR':
+                     html += `
+                         <div class="form-group">
+                             <label for="schedule-williams-period">Period</label>
+                             <input type="number" id="schedule-williams-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+             }
+             
+             html += '</div>';
+             paramsDiv.innerHTML = html;
+             paramsDiv.style.display = 'block';
+             generateJSON();
+         }
+
+         function updateReportIndicatorParams() {
+             const indicatorType = document.getElementById('report-indicator-type').value;
+             const paramsDiv = document.getElementById('report-indicator-params');
+             
+             if (!indicatorType) {
+                 paramsDiv.style.display = 'none';
+                 generateJSON();
+                 return;
+             }
+             
+             let html = '<h4>Indicator Parameters</h4><div class="form-row">';
+             
+             switch (indicatorType) {
+                 case 'RSI':
+                     html += `
+                         <div class="form-group">
+                             <label for="report-rsi-period">RSI Period</label>
+                             <input type="number" id="report-rsi-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'MACD':
+                     html += `
+                         <div class="form-group">
+                             <label for="report-macd-fast">Fast Period</label>
+                             <input type="number" id="report-macd-fast" value="12" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 12. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="report-macd-slow">Slow Period</label>
+                             <input type="number" id="report-macd-slow" value="26" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 26. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="report-macd-signal">Signal Period</label>
+                             <input type="number" id="report-macd-signal" value="9" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 9. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'BollingerBands':
+                     html += `
+                         <div class="form-group">
+                             <label for="report-bb-period">Period</label>
+                             <input type="number" id="report-bb-period" value="20" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 20. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="report-bb-deviation">Standard Deviation</label>
+                             <input type="number" id="report-bb-deviation" value="2" min="0.1" max="5" step="0.1" onchange="generateJSON()">
+                             <small class="form-text">Default: 2. Range: 0.1-5.0</small>
+                         </div>
+                     `;
+                     break;
+                 case 'SMA':
+                 case 'EMA':
+                     html += `
+                         <div class="form-group">
+                             <label for="report-ma-period">Period</label>
+                             <input type="number" id="report-ma-period" value="20" min="1" max="200" onchange="generateJSON()">
+                             <small class="form-text">Default: 20. Range: 1-200</small>
+                         </div>
+                     `;
+                     break;
+                 case 'ADX':
+                     html += `
+                         <div class="form-group">
+                             <label for="report-adx-period">Period</label>
+                             <input type="number" id="report-adx-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'ATR':
+                     html += `
+                         <div class="form-group">
+                             <label for="report-atr-period">Period</label>
+                             <input type="number" id="report-atr-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'Stochastic':
+                     html += `
+                         <div class="form-group">
+                             <label for="report-stoch-k">K Period</label>
+                             <input type="number" id="report-stoch-k" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="report-stoch-d">D Period</label>
+                             <input type="number" id="report-stoch-d" value="3" min="1" max="20" onchange="generateJSON()">
+                             <small class="form-text">Default: 3. Range: 1-20</small>
+                         </div>
+                     `;
+                     break;
+                 case 'WilliamsR':
+                     html += `
+                         <div class="form-group">
+                             <label for="report-williams-period">Period</label>
+                             <input type="number" id="report-williams-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+             }
+             
+             html += '</div>';
+             paramsDiv.innerHTML = html;
+             paramsDiv.style.display = 'block';
+             generateJSON();
+         }
+
+         function updateScreenerIndicatorParams() {
+             const indicatorType = document.getElementById('screener-indicator-type').value;
+             const paramsDiv = document.getElementById('screener-indicator-params');
+             
+             if (!indicatorType) {
+                 paramsDiv.style.display = 'none';
+                 generateJSON();
+                 return;
+             }
+             
+             let html = '<h5>Indicator Parameters</h5><div class="form-row">';
+             
+             switch (indicatorType) {
+                 case 'RSI':
+                     html += `
+                         <div class="form-group">
+                             <label for="screener-rsi-period">RSI Period</label>
+                             <input type="number" id="screener-rsi-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'MACD':
+                     html += `
+                         <div class="form-group">
+                             <label for="screener-macd-fast">Fast Period</label>
+                             <input type="number" id="screener-macd-fast" value="12" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 12. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="screener-macd-slow">Slow Period</label>
+                             <input type="number" id="screener-macd-slow" value="26" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 26. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="screener-macd-signal">Signal Period</label>
+                             <input type="number" id="screener-macd-signal" value="9" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 9. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'BollingerBands':
+                     html += `
+                         <div class="form-group">
+                             <label for="screener-bb-period">Period</label>
+                             <input type="number" id="screener-bb-period" value="20" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 20. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="screener-bb-deviation">Standard Deviation</label>
+                             <input type="number" id="screener-bb-deviation" value="2" min="0.1" max="5" step="0.1" onchange="generateJSON()">
+                             <small class="form-text">Default: 2. Range: 0.1-5.0</small>
+                         </div>
+                     `;
+                     break;
+                 case 'SMA':
+                 case 'EMA':
+                     html += `
+                         <div class="form-group">
+                             <label for="screener-ma-period">Period</label>
+                             <input type="number" id="screener-ma-period" value="20" min="1" max="200" onchange="generateJSON()">
+                             <small class="form-text">Default: 20. Range: 1-200</small>
+                         </div>
+                     `;
+                     break;
+                 case 'ADX':
+                     html += `
+                         <div class="form-group">
+                             <label for="screener-adx-period">Period</label>
+                             <input type="number" id="screener-adx-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'ATR':
+                     html += `
+                         <div class="form-group">
+                             <label for="screener-atr-period">Period</label>
+                             <input type="number" id="screener-atr-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+                 case 'Stochastic':
+                     html += `
+                         <div class="form-group">
+                             <label for="screener-stoch-k">K Period</label>
+                             <input type="number" id="screener-stoch-k" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                         <div class="form-group">
+                             <label for="screener-stoch-d">D Period</label>
+                             <input type="number" id="screener-stoch-d" value="3" min="1" max="20" onchange="generateJSON()">
+                             <small class="form-text">Default: 3. Range: 1-20</small>
+                         </div>
+                     `;
+                     break;
+                 case 'WilliamsR':
+                     html += `
+                         <div class="form-group">
+                             <label for="screener-williams-period">Period</label>
+                             <input type="number" id="screener-williams-period" value="14" min="1" max="100" onchange="generateJSON()">
+                             <small class="form-text">Default: 14. Range: 1-100</small>
+                         </div>
+                     `;
+                     break;
+             }
+             
+             html += '</div>';
+             paramsDiv.innerHTML = html;
+             paramsDiv.style.display = 'block';
+             generateJSON();
+         }
+
+        function generateJSON() {
+            let json = {};
+            let command = '';
+            
+            switch (currentTab) {
+                case 'alerts':
+                    json = generateAlertJSON();
+                    command = generateAlertCommand(json);
+                    break;
+                case 'schedules':
+                    json = generateScheduleJSON();
+                    command = generateScheduleCommand(json);
+                    break;
+                case 'reports':
+                    json = generateReportJSON();
+                    command = generateReportCommand(json);
+                    break;
+                case 'screeners':
+                    json = generateScreenerJSON();
+                    command = generateScreenerCommand(json);
+                    break;
+            }
+            
+            document.getElementById('json-output').value = JSON.stringify(json, null, 2);
+            document.getElementById('command-text').textContent = command;
+            document.getElementById('command-output').style.display = 'block';
+        }
+
+        function generateAlertJSON() {
+            const alertType = document.getElementById('alert-type').value;
+            const ticker = document.getElementById('alert-ticker').value;
+            const timeframe = document.getElementById('alert-timeframe').value;
+            const email = document.getElementById('alert-email').checked;
+            
+            if (alertType === 'price') {
+                return {
+                    type: "price",
+                    ticker: ticker,
+                    price: parseFloat(document.getElementById('alert-price').value),
+                    condition: document.getElementById('alert-condition').value,
+                    timeframe: timeframe,
+                    email: email
+                };
+            } else {
+                const logic = document.getElementById('indicator-logic').value;
+                
+                if (logic === 'single') {
+                    // Single indicator format
+                    const indicatorType = document.getElementById('indicator-type').value;
+                    const operator = document.getElementById('indicator-operator').value;
+                    const value = parseFloat(document.getElementById('indicator-value').value);
+                    
+                    let parameters = {};
+                    switch (indicatorType) {
+                        case 'RSI':
+                            parameters = { period: parseInt(document.getElementById('rsi-period').value) };
+                            break;
+                        case 'MACD':
+                            parameters = {
+                                fast_period: parseInt(document.getElementById('macd-fast').value),
+                                slow_period: parseInt(document.getElementById('macd-slow').value),
+                                signal_period: parseInt(document.getElementById('macd-signal').value)
+                            };
+                            break;
+                        case 'BollingerBands':
+                            parameters = {
+                                period: parseInt(document.getElementById('bb-period').value),
+                                deviation: parseFloat(document.getElementById('bb-deviation').value)
+                            };
+                            break;
+                        case 'SMA':
+                            parameters = { period: parseInt(document.getElementById('sma-period').value) };
+                            break;
+                    }
+                    
+                    return {
+                        type: "indicator",
+                        ticker: ticker,
+                        indicator: indicatorType,
+                        parameters: parameters,
+                        condition: {
+                            operator: operator,
+                            value: value
+                        },
+                        timeframe: timeframe,
+                        alert_action: "notify",
+                        email: email
+                    };
+                } else {
+                    // Multiple indicators format
+                    const conditions = [];
+                    document.querySelectorAll('#indicators-list .list-item').forEach(item => {
+                        const indicatorType = item.querySelector('input[name="indicators[]"]').value;
+                        const operator = item.querySelector('input[name="operators[]"]').value;
+                        const value = parseFloat(item.querySelector('input[name="values[]"]').value);
+                        
+                        let parameters = {};
+                        switch (indicatorType) {
+                            case 'RSI':
+                                parameters = { period: parseInt(item.querySelector('input[name="rsi-period"]').value) };
+                                break;
+                            case 'MACD':
+                                parameters = {
+                                    fast_period: parseInt(item.querySelector('input[name="macd-fast"]').value),
+                                    slow_period: parseInt(item.querySelector('input[name="macd-slow"]').value),
+                                    signal_period: parseInt(item.querySelector('input[name="macd-signal"]').value)
+                                };
+                                break;
+                            case 'BollingerBands':
+                                parameters = {
+                                    period: parseInt(item.querySelector('input[name="bb-period"]').value),
+                                    deviation: parseFloat(item.querySelector('input[name="bb-deviation"]').value)
+                                };
+                                break;
+                            case 'SMA':
+                                parameters = { period: parseInt(item.querySelector('input[name="sma-period"]').value) };
+                                break;
+                        }
+                        
+                        conditions.push({
+                            indicator: indicatorType,
+                            parameters: parameters,
+                            condition: {
+                                operator: operator,
+                                value: value
+                            }
+                        });
+                    });
+                    
+                    return {
+                        type: "indicator",
+                        ticker: ticker,
+                        conditions: conditions,
+                        logic: logic,
+                        timeframe: timeframe,
+                        alert_action: "notify",
+                        email: email
+                    };
+                }
+            }
+        }
+
+        function generateScheduleJSON() {
+            const scheduleType = document.getElementById('schedule-type').value;
+            const scheduledTime = document.getElementById('schedule-time').value;
+            const period = document.getElementById('schedule-period').value;
+            const email = document.getElementById('schedule-email').checked;
+            
+            if (scheduleType === 'report') {
+                const tickers = document.getElementById('schedule-tickers').value.split(',').map(t => t.trim());
+                const interval = document.getElementById('schedule-interval').value;
+                const indicators = document.getElementById('schedule-indicators').value;
+                
+                return {
+                    type: "report",
+                    tickers: tickers,
+                    scheduled_time: scheduledTime,
+                    period: period,
+                    interval: interval,
+                    indicators: indicators ? indicators.split(',').map(i => i.trim()) : [],
+                    email: email
+                };
+            } else {
+                const listType = document.getElementById('screener-list-type').value;
+                const maxResults = parseInt(document.getElementById('screener-max-results').value);
+                
+                return {
+                    type: "screener",
+                    list_type: listType,
+                    scheduled_time: scheduledTime,
+                    period: period,
+                    interval: "1d",
+                    max_results: maxResults,
+                    email: email
+                };
+            }
+        }
+
+        function generateReportJSON() {
+            const tickers = document.getElementById('report-tickers').value.split(',').map(t => t.trim());
+            const period = document.getElementById('report-period').value;
+            const interval = document.getElementById('report-interval').value;
+            const indicators = document.getElementById('report-indicators').value;
+            const provider = document.getElementById('report-provider').value;
+            const email = document.getElementById('report-email').checked;
+            const includeFundamentals = document.getElementById('report-include-fundamentals').checked;
+            
+            return {
+                report_type: "analysis",
+                tickers: tickers,
+                period: period,
+                interval: interval,
+                indicators: indicators ? indicators.split(',').map(i => i.trim()) : [],
+                provider: provider || null,
+                email: email,
+                include_fundamentals: includeFundamentals
+            };
+        }
+
+        function generateScreenerJSON() {
+            const screenerType = document.getElementById('screener-type').value;
+            const listType = document.getElementById('screener-list-type-main').value;
+            const maxResults = parseInt(document.getElementById('screener-max-results-main').value);
+            const email = document.getElementById('screener-email').checked;
+            
+            let json = {
+                screener_type: screenerType,
+                list_type: listType,
+                max_results: maxResults,
+                email: email
+            };
+            
+            if (screenerType === 'fundamental' || screenerType === 'hybrid') {
+                json.fmp_criteria = {
+                    marketCapMoreThan: parseInt(document.getElementById('market-cap-min').value),
+                    peRatioLessThan: parseFloat(document.getElementById('pe-ratio-max').value),
+                    returnOnEquityMoreThan: parseFloat(document.getElementById('roe-min').value) / 100
+                };
+            }
+            
+            if (screenerType === 'hybrid' || screenerType === 'technical') {
+                json.technical_criteria = {
+                    rsi_min: parseInt(document.getElementById('rsi-min').value),
+                    rsi_max: parseInt(document.getElementById('rsi-max').value),
+                    volume_min: parseFloat(document.getElementById('volume-min').value)
+                };
+            }
+            
+            return json;
+        }
+
+        function generateAlertCommand(json) {
+            const ticker = json.ticker;
+            const config = JSON.stringify(json);
+            
+            if (json.type === 'price') {
+                return `/alerts add ${ticker} ${json.price} ${json.condition}${json.email ? ' -email' : ''}`;
+            } else {
+                let command = `/alerts add_indicator ${ticker} '${config}'`;
+                if (json.email) {
+                    command += ' -email';
+                }
+                return command;
+            }
+        }
+
+        function generateScheduleCommand(json) {
+            const config = JSON.stringify(json);
+            return `/schedules add_json '${config}'`;
+        }
+
+        function generateReportCommand(json) {
+            const config = JSON.stringify(json);
+            return `/report -config='${config}'`;
+        }
+
+        function generateScreenerCommand(json) {
+            const config = JSON.stringify(json);
+            return `/screener '${config}'${json.email ? ' -email' : ''}`;
+        }
+
+        function copyToClipboard() {
+            const jsonOutput = document.getElementById('json-output');
+            jsonOutput.select();
+            document.execCommand('copy');
+            
+            // Show success message
+            showAlert('JSON copied to clipboard!', 'success');
+        }
+
+        function validateJSON() {
+            const jsonOutput = document.getElementById('json-output').value;
+            const resultDiv = document.getElementById('validation-result');
+            
+            try {
+                JSON.parse(jsonOutput);
+                resultDiv.innerHTML = '<div class="alert alert-success">✅ Valid JSON</div>';
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="alert alert-error">❌ Invalid JSON: ${e.message}</div>`;
+            }
+        }
+
+        function clearForm() {
+            // Reset all form fields
+            document.querySelectorAll('input[type="text"], input[type="number"], input[type="time"]').forEach(input => {
+                input.value = '';
+            });
+            
+            document.querySelectorAll('select').forEach(select => {
+                select.selectedIndex = 0;
+            });
+            
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            // Reset to defaults
+            document.getElementById('alert-ticker').value = 'AAPL';
+            document.getElementById('alert-price').value = '150.00';
+            document.getElementById('schedule-time').value = '09:00';
+            document.getElementById('report-tickers').value = 'AAPL';
+            document.getElementById('screener-max-results-main').value = '10';
+            
+            generateJSON();
+        }
+
+        function loadTemplate(templateName) {
+            switch (templateName) {
+                case 'rsi-oversold':
+                    document.getElementById('alert-type').value = 'indicator';
+                    document.getElementById('indicator-logic').value = 'single'; // Ensure single indicator
+                    document.getElementById('indicator-type').value = 'RSI';
+                    document.getElementById('indicator-operator').value = '<';
+                    document.getElementById('indicator-value').value = '30';
+                    updateAlertForm();
+                    break;
+                case 'rsi-overbought':
+                    document.getElementById('alert-type').value = 'indicator';
+                    document.getElementById('indicator-logic').value = 'single'; // Ensure single indicator
+                    document.getElementById('indicator-type').value = 'RSI';
+                    document.getElementById('indicator-operator').value = '>';
+                    document.getElementById('indicator-value').value = '70';
+                    updateAlertForm();
+                    break;
+                case 'macd-crossover':
+                    document.getElementById('alert-type').value = 'indicator';
+                    document.getElementById('indicator-logic').value = 'single'; // Ensure single indicator
+                    document.getElementById('indicator-type').value = 'MACD';
+                    document.getElementById('indicator-operator').value = 'crossover';
+                    updateAlertForm();
+                    break;
+                case 'macd-crossunder':
+                    document.getElementById('alert-type').value = 'indicator';
+                    document.getElementById('indicator-logic').value = 'single'; // Ensure single indicator
+                    document.getElementById('indicator-type').value = 'MACD';
+                    document.getElementById('indicator-operator').value = 'crossunder';
+                    updateAlertForm();
+                    break;
+                case 'bollinger-below':
+                    document.getElementById('alert-type').value = 'indicator';
+                    document.getElementById('indicator-logic').value = 'single'; // Ensure single indicator
+                    document.getElementById('indicator-type').value = 'BollingerBands';
+                    document.getElementById('indicator-operator').value = 'below_lower_band';
+                    updateAlertForm();
+                    break;
+                case 'bollinger-above':
+                    document.getElementById('alert-type').value = 'indicator';
+                    document.getElementById('indicator-logic').value = 'single'; // Ensure single indicator
+                    document.getElementById('indicator-type').value = 'BollingerBands';
+                    document.getElementById('indicator-operator').value = 'above_upper_band';
+                    updateAlertForm();
+                    break;
+                case 'sma-crossover':
+                    document.getElementById('alert-type').value = 'indicator';
+                    document.getElementById('indicator-logic').value = 'single'; // Ensure single indicator
+                    document.getElementById('indicator-type').value = 'SMA';
+                    document.getElementById('indicator-operator').value = 'crossover';
+                    updateAlertForm();
+                    break;
+            }
+        }
+
+        function loadScreenerTemplate(templateName) {
+            switch (templateName) {
+                case 'value-stocks':
+                    document.getElementById('screener-type').value = 'fundamental';
+                    document.getElementById('pe-ratio-max').value = '15';
+                    document.getElementById('roe-min').value = '15';
+                    updateScreenerForm();
+                    break;
+                case 'growth-stocks':
+                    document.getElementById('screener-type').value = 'hybrid';
+                    document.getElementById('pe-ratio-max').value = '25';
+                    document.getElementById('roe-min').value = '20';
+                    document.getElementById('rsi-min').value = '40';
+                    document.getElementById('rsi-max').value = '80';
+                    updateScreenerForm();
+                    break;
+                case 'dividend-stocks':
+                    document.getElementById('screener-type').value = 'fundamental';
+                    document.getElementById('pe-ratio-max').value = '20';
+                    document.getElementById('roe-min').value = '10';
+                    updateScreenerForm();
+                    break;
+                case 'momentum-stocks':
+                    document.getElementById('screener-type').value = 'technical';
+                    document.getElementById('rsi-min').value = '50';
+                    document.getElementById('rsi-max').value = '80';
+                    document.getElementById('volume-min').value = '2.0';
+                    updateScreenerForm();
+                    break;
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            document.querySelector('.output-section').insertBefore(alertDiv, document.querySelector('.output-section').firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 3000);
+        }
+
+        // Add event listeners for real-time updates
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add change listeners to all form elements
+            document.querySelectorAll('input, select, textarea').forEach(element => {
+                element.addEventListener('change', generateJSON);
+                element.addEventListener('input', generateJSON);
+            });
+            
+            // Initial generation
+            generateJSON();
+        });
+    </script>
+</body>
+</html>
