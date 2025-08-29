@@ -148,6 +148,10 @@ class XGBoostOptimizer:
         all_features = []
         all_targets = {target: [] for target in self.targets}
 
+        # Track processing statistics
+        processed_count = 0
+        error_count = 0
+
         for file_path in feature_files:
             try:
                 # Load feature data
@@ -167,18 +171,35 @@ class XGBoostOptimizer:
 
                 for target in self.targets:
                     if target in df.columns:
-                        targets = df[target].values
-                        all_targets[target].append(targets)
+                        # Convert target to numeric type to handle string/int mismatches
+                        target_values = pd.to_numeric(df[target], errors='coerce')
+
+                        # Check for any NaN values after conversion
+                        nan_count = target_values.isna().sum()
+                        if nan_count > 0:
+                            _logger.warning("Found %d NaN values in target %s for file %s",
+                                          nan_count, target, file_path.name)
+                            # Fill NaN values with mode or most common value
+                            target_values = target_values.fillna(target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0)
+
+                        all_targets[target].append(target_values.values)
 
                 _logger.debug("Processed %s: %d samples, %d features",
                              file_path.name, len(features), len(feature_cols))
 
+                processed_count += 1
+
             except Exception as e:
-                _logger.warning("Error processing %s: %s", file_path, e)
+                _logger.error("Error processing %s: %s", file_path, e)
+                _logger.exception("Full traceback for %s:", file_path.name)
+                error_count += 1
                 continue
 
         if not all_features:
             raise ValueError("No valid feature data found")
+
+        _logger.info("Data preparation summary: %d files processed successfully, %d files failed",
+                    processed_count, error_count)
 
         # Combine all data
         X_train = np.vstack(all_features)
@@ -221,8 +242,8 @@ class XGBoostOptimizer:
                 "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.6, 1.0),
 
                 # Regularization parameters
-                "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 0.0, 10.0, log=True),
+                "reg_alpha": trial.suggest_float("reg_alpha", 0.001, 10.0, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 0.001, 10.0, log=True),
 
                 # Tree parameters
                 "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
@@ -247,7 +268,6 @@ class XGBoostOptimizer:
                 model.fit(
                     X_fold_train, y_fold_train,
                     eval_set=[(X_fold_val, y_fold_val)],
-                    early_stopping_rounds=50,
                     verbose=False
                 )
 

@@ -21,6 +21,7 @@ import talib
 
 from src.notification.logger import setup_logger
 from src.utils.config import load_config
+from src.ml.pipeline.p03_cnn_xgboost.utils.data_validation import convert_targets_to_numeric, log_data_quality_report
 _logger = setup_logger(__name__)
 
 
@@ -330,10 +331,11 @@ class TAFeatureEngineer:
         change_median = price_changes.median()
         df["target_magnitude"] = (price_changes > change_median).astype(int)
 
-        # Handle NaN values in targets
+        # Handle NaN values in targets and ensure proper data types
         target_cols = ["target_direction", "target_volatility", "target_trend", "target_magnitude"]
-        for col in target_cols:
-            df[col] = df[col].fillna(0)
+
+                # Convert targets to proper numeric types
+        df = convert_targets_to_numeric(df, target_cols)
 
         return df
 

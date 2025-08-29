@@ -237,8 +237,18 @@ class XGBoostTrainer:
 
                 for target in self.targets:
                     if target in df.columns:
-                        targets = df[target].values
-                        all_targets[target].append(targets)
+                        # Convert target to numeric type to handle string/int mismatches
+                        target_values = pd.to_numeric(df[target], errors='coerce')
+                        
+                        # Check for any NaN values after conversion
+                        nan_count = target_values.isna().sum()
+                        if nan_count > 0:
+                            _logger.warning("Found %d NaN values in target %s for file %s", 
+                                          nan_count, target, file_path.name)
+                            # Fill NaN values with mode or most common value
+                            target_values = target_values.fillna(target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0)
+                        
+                        all_targets[target].append(target_values.values)
 
                 _logger.debug("Processed %s: %d samples, %d features",
                              file_path.name, len(features), len(feature_cols))
