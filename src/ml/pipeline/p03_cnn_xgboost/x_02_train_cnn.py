@@ -3,12 +3,14 @@ CNN Training Stage for CNN + XGBoost Pipeline.
 
 This module implements the CNN training stage that extracts features from OHLCV time series data.
 The CNN is designed as a 1D convolutional network optimized for financial time series analysis.
+Each data file gets its own trained model with individual artifacts.
 """
 import sys
 import json
 import pickle
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -19,7 +21,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import optuna
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
-
+import matplotlib.pyplot as plt
 import yaml
 
 project_root = Path(__file__).resolve().parents[4]
@@ -123,6 +125,7 @@ class CNNTrainer:
 
     Handles data preparation, model training, hyperparameter optimization,
     and model saving for the CNN feature extraction stage.
+    Each data file gets its own trained model.
     """
 
     def __init__(self, config: Dict[str, Any]) -> None:
@@ -141,13 +144,17 @@ class CNNTrainer:
         # Create output directories using configurable paths
         self.models_dir = Path(self.config["paths"]["models_cnn"])
         self.checkpoints_dir = self.models_dir / "checkpoints"
-        self.models_dir.mkdir(parents=True, exist_ok=True)
-        self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
+        self.reports_dir = self.models_dir / "reports"
+        self.visualizations_dir = self.models_dir / "visualizations"
+
+        for dir_path in [self.models_dir, self.checkpoints_dir, self.reports_dir, self.visualizations_dir]:
+            dir_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize components
         self.model = None
         self.scaler = StandardScaler()
         self.training_history = []
+        self.optimization_results = []
 
     def run(self) -> Dict[str, Any]:
         """
@@ -166,23 +173,20 @@ class CNNTrainer:
 
             _logger.info("Found %d raw data files", len(data_files))
 
-            # Prepare training data
-            X_train, y_train = self._prepare_training_data(data_files)
+            # Train individual models for each data file
+            all_results = []
 
-            # Optimize hyperparameters if enabled
-            if self.cnn_config.get("optimize_hyperparameters", True):
-                best_params = self._optimize_hyperparameters(X_train, y_train)
-                self.cnn_config.update(best_params)
-                _logger.info("Hyperparameter optimization completed")
+            for data_file in data_files:
+                try:
+                    _logger.info("Training CNN model for %s", data_file.name)
+                    result = self._train_model_for_file(data_file)
+                    all_results.append(result)
+                except Exception as e:
+                    _logger.error("Failed to train model for %s: %s", data_file.name, e)
+                    continue
 
-            # Train final model
-            training_results = self._train_model(X_train, y_train)
-
-            # Save model and artifacts
-            self._save_model_and_artifacts(training_results)
-
-            # Generate training summary
-            summary = self._generate_training_summary(training_results)
+            # Generate overall summary
+            summary = self._generate_overall_summary(all_results)
 
             _logger.info("CNN training stage completed successfully")
             return summary
@@ -190,6 +194,92 @@ class CNNTrainer:
         except Exception as e:
             _logger.exception("Error in CNN training stage: %s", e)
             raise
+
+    def _train_model_for_file(self, data_file: Path) -> Dict[str, Any]:
+        """
+        Train a CNN model for a specific data file.
+
+        Args:
+            data_file: Path to the data file
+
+        Returns:
+            Dictionary containing training results for this file
+        """
+        # Parse filename to extract metadata
+        file_metadata = self._parse_filename(data_file.name)
+
+        # Generate timestamp for this training run
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Create model identifier
+        model_id = f"cnn_{file_metadata['provider']}_{file_metadata['symbol']}_{file_metadata['timeframe']}_{file_metadata['start_date']}_{file_metadata['end_date']}_{timestamp}"
+
+        _logger.info("Training model: %s", model_id)
+
+        # Prepare training data for this file
+        X_train, y_train = self._prepare_training_data_for_file(data_file)
+
+        if len(X_train) == 0:
+            raise ValueError(f"No valid training data found in {data_file.name}")
+
+        # Optimize hyperparameters if enabled
+        best_params = None
+        if self.cnn_config.get("optimize_hyperparameters", True):
+            best_params = self._optimize_hyperparameters(X_train, y_train, model_id)
+            self.cnn_config.update(best_params)
+            _logger.info("Hyperparameter optimization completed for %s", model_id)
+
+        # Train final model
+        training_results = self._train_model(X_train, y_train, model_id)
+
+        # Save model and artifacts
+        self._save_model_and_artifacts(training_results, model_id, file_metadata, best_params)
+
+        # Generate visualization
+        self._create_visualization(training_results, model_id, file_metadata)
+
+        return {
+            "model_id": model_id,
+            "data_file": data_file.name,
+            "file_metadata": file_metadata,
+            "training_results": training_results,
+            "best_params": best_params,
+            "model_path": str(self.models_dir / f"{model_id}.pth"),
+            "config_path": str(self.models_dir / f"{model_id}_config.json"),
+            "report_path": str(self.reports_dir / f"{model_id}_report.json"),
+            "visualization_path": str(self.visualizations_dir / f"{model_id}.png")
+        }
+
+    def _parse_filename(self, filename: str) -> Dict[str, str]:
+        """
+        Parse filename to extract metadata.
+
+        Expected format: provider_symbol_timeframe_startdate_enddate.csv
+        Example: yfinance_VT_1d_20210829_20250828.csv
+        """
+        # Remove .csv extension
+        name = filename.replace('.csv', '')
+
+        # Split by underscore
+        parts = name.split('_')
+
+        if len(parts) >= 5:
+            return {
+                "provider": parts[0],
+                "symbol": parts[1],
+                "timeframe": parts[2],
+                "start_date": parts[3],
+                "end_date": parts[4]
+            }
+        else:
+            # Fallback for non-standard filenames
+            return {
+                "provider": "unknown",
+                "symbol": "unknown",
+                "timeframe": "unknown",
+                "start_date": "unknown",
+                "end_date": "unknown"
+            }
 
     def _discover_raw_data(self) -> List[Path]:
         """
@@ -210,112 +300,66 @@ class CNNTrainer:
 
         return data_files
 
-    def _get_checkpoint_path(self) -> Path:
-        """Get checkpoint file path."""
-        return self.checkpoints_dir / "cnn_checkpoint.pth"
-
-    def save_checkpoint(self, model: nn.Module, optimizer: optim.Optimizer,
-                       epoch: int, history: Dict[str, List[float]], best_val_loss: float):
-        """Save model/optimizer state so training can resume later."""
-        ckpt_path = self._get_checkpoint_path()
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'history': history,
-            'best_val_loss': best_val_loss,
-            'scaler_state': self.scaler
-        }, ckpt_path)
-        _logger.info("Checkpoint saved at %s (epoch %d)", ckpt_path, epoch+1)
-
-    def load_checkpoint(self, model: nn.Module, optimizer: optim.Optimizer) -> Tuple[int, Dict[str, List[float]], float]:
-        """Load model/optimizer state to resume training if checkpoint exists."""
-        ckpt_path = self._get_checkpoint_path()
-        if ckpt_path.exists():
-            checkpoint = torch.load(ckpt_path, map_location=self.device)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            start_epoch = checkpoint['epoch'] + 1
-            history = checkpoint['history']
-            best_val_loss = checkpoint['best_val_loss']
-            self.scaler = checkpoint['scaler_state']
-            _logger.info("Resuming from checkpoint %s (epoch %d)", ckpt_path, start_epoch)
-            return start_epoch, history, best_val_loss
-        else:
-            return 0, {'train_loss': [], 'val_loss': [], 'learning_rate': []}, float('inf')
-
-    def _prepare_training_data(self, data_files: List[Path]) -> Tuple[np.ndarray, np.ndarray]:
+    def _prepare_training_data_for_file(self, data_file: Path) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Prepare training data from raw files.
+        Prepare training data from a single file.
 
         Args:
-            data_files: List of paths to raw data files
+            data_file: Path to the data file
 
         Returns:
             Tuple of (X_train, y_train) arrays
         """
-        _logger.info("Preparing training data from %d files", len(data_files))
+        _logger.info("Preparing training data from %s", data_file.name)
 
-        all_sequences = []
-        all_targets = []
+        try:
+            # Load data (raw data is saved as CSV)
+            df = pd.read_csv(data_file)
 
-        sequence_length = self.cnn_config.get("sequence_length", 120)
+            # Extract OHLCV features
+            ohlcv_cols = ["open", "high", "low", "close", "volume"]
+            if not all(col in df.columns for col in ohlcv_cols):
+                _logger.warning("Missing OHLCV columns in %s, skipping", data_file.name)
+                return np.array([]), np.array([])
 
-        for file_path in data_files:
-            try:
-                # Load data (raw data is saved as CSV)
-                df = pd.read_csv(file_path)
+            ohlcv_data = df[ohlcv_cols].values
 
-                # Extract OHLCV features
-                ohlcv_cols = ["open", "high", "low", "close", "volume"]
-                if not all(col in df.columns for col in ohlcv_cols):
-                    _logger.warning("Missing OHLCV columns in %s, skipping", file_path)
-                    continue
+            # Create sequences
+            sequence_length = self.cnn_config.get("sequence_length", 120)
+            sequences, targets = self._create_sequences(ohlcv_data, sequence_length)
 
-                ohlcv_data = df[ohlcv_cols].values
+            if len(sequences) == 0:
+                _logger.warning("No valid sequences found in %s", data_file.name)
+                return np.array([]), np.array([])
 
-                # Create sequences
-                sequences, targets = self._create_sequences(ohlcv_data, sequence_length)
+            # Convert to numpy arrays
+            X = np.array(sequences)
+            y = np.array(targets)
 
-                all_sequences.extend(sequences)
-                all_targets.extend(targets)
+            # Sample data if we have too much to avoid memory issues
+            max_samples = self.cnn_config.get("max_samples", 10000)
+            if len(X) > max_samples:
+                # Randomly sample to reduce memory usage
+                indices = np.random.choice(len(X), max_samples, replace=False)
+                X = X[indices]
+                y = y[indices]
+                _logger.info("Sampled %d sequences from %s", max_samples, data_file.name)
 
-                _logger.debug("Processed %s: %d sequences", file_path.name, len(sequences))
+            # Normalize features
+            X_reshaped = X.reshape(-1, X.shape[-1])
+            X_normalized = self.scaler.fit_transform(X_reshaped)
+            X = X_normalized.reshape(X.shape)
 
-            except Exception as e:
-                _logger.warning("Error processing %s: %s", file_path, e)
-                continue
+            _logger.info("Prepared %d sequences from %s", len(X), data_file.name)
+            return X, y
 
-        if not all_sequences:
-            raise ValueError("No valid sequences found in raw data")
+        except Exception as e:
+            _logger.error("Error processing %s: %s", data_file.name, e)
+            return np.array([]), np.array([])
 
-        # Convert to numpy arrays
-        X = np.array(all_sequences)
-        y = np.array(all_targets)
-
-        # Sample data if we have too much to avoid memory issues
-        max_samples = self.cnn_config.get("max_samples", 10000)
-        if len(X) > max_samples:
-            # Randomly sample to reduce memory usage
-            indices = np.random.choice(len(X), max_samples, replace=False)
-            X = X[indices]
-            y = y[indices]
-            _logger.info("Sampled data to %d samples to avoid memory issues", max_samples)
-
-        # Normalize features
-        X_reshaped = X.reshape(-1, X.shape[-1])
-        X_normalized = self.scaler.fit_transform(X_reshaped)
-        X = X_normalized.reshape(X.shape)
-
-        _logger.info("Prepared training data: X shape %s, y shape %s", X.shape, y.shape)
-
-        return X, y
-
-    def _create_sequences(self,
-                         data: np.ndarray,
-                         sequence_length: int) -> Tuple[List[np.ndarray], List[int]]:
+    def _create_sequences(self, data: np.ndarray, sequence_length: int) -> Tuple[List[np.ndarray], List[int]]:
         """
-        Create sequences and targets from time series data.
+        Create sequences and targets from OHLCV data.
 
         Args:
             data: OHLCV data array
@@ -328,38 +372,37 @@ class CNNTrainer:
         targets = []
 
         for i in range(len(data) - sequence_length):
-            # Extract sequence
+            # Create sequence
             sequence = data[i:i + sequence_length]
-
-            # Create target (next period return direction)
-            current_close = data[i + sequence_length - 1, 3]  # Close price
-            next_close = data[i + sequence_length, 3] if i + sequence_length < len(data) else current_close
-
-            # Simple binary target: 1 if price goes up, 0 if down
-            target = 1 if next_close > current_close else 0
-
             sequences.append(sequence)
+
+            # Create target (simple binary classification: price goes up or down)
+            current_price = data[i + sequence_length - 1, 3]  # Close price
+            next_price = data[i + sequence_length, 3]  # Next close price
+            target = 1 if next_price > current_price else 0
             targets.append(target)
 
         return sequences, targets
 
     def _optimize_hyperparameters(self,
                                  X_train: np.ndarray,
-                                 y_train: np.ndarray) -> Dict[str, Any]:
+                                 y_train: np.ndarray,
+                                 model_id: str) -> Dict[str, Any]:
         """
         Optimize CNN hyperparameters using Optuna.
 
         Args:
             X_train: Training features
             y_train: Training targets
+            model_id: Model identifier for logging
 
         Returns:
             Dictionary of best hyperparameters
         """
-        _logger.info("Starting hyperparameter optimization")
+        _logger.info("Starting hyperparameter optimization for %s", model_id)
 
         def objective(trial):
-            # Define hyperparameter search space (more conservative to avoid memory issues)
+            # Define hyperparameter search space
             num_filters = [
                 trial.suggest_int("filters_1", 16, 32),
                 trial.suggest_int("filters_2", 32, 64),
@@ -420,26 +463,35 @@ class CNNTrainer:
 
         # Run optimization
         study = optuna.create_study(direction="minimize")
-        n_trials = self.cnn_config.get("optimization_trials", 10)  # Reduced for faster testing
+        n_trials = self.cnn_config.get("optimization_trials", 10)
         study.optimize(objective, n_trials=n_trials)
 
-        _logger.info("Best trial: %s", study.best_trial.value)
-        _logger.info("Best parameters: %s", study.best_trial.params)
+        _logger.info("Best trial for %s: %s", model_id, study.best_trial.value)
+        _logger.info("Best parameters for %s: %s", model_id, study.best_trial.params)
+
+        # Save optimization results
+        self.optimization_results.append({
+            "model_id": model_id,
+            "best_value": study.best_trial.value,
+            "best_params": study.best_trial.params,
+            "n_trials": n_trials
+        })
 
         return study.best_trial.params
 
-    def _train_model(self, X_train: np.ndarray, y_train: np.ndarray) -> Dict[str, Any]:
+    def _train_model(self, X_train: np.ndarray, y_train: np.ndarray, model_id: str) -> Dict[str, Any]:
         """
         Train the final CNN model.
 
         Args:
             X_train: Training features
             y_train: Training targets
+            model_id: Model identifier
 
         Returns:
             Dictionary containing training results
         """
-        _logger.info("Training final CNN model")
+        _logger.info("Training final CNN model for %s", model_id)
 
         # Create model with proper parameter handling
         num_filters = self.cnn_config.get("num_filters", [32, 64, 128])
@@ -449,7 +501,6 @@ class CNNTrainer:
         # Handle parameters if they're lists (take first values)
         if isinstance(dropout_rate, list):
             dropout_rate = dropout_rate[0]
-            _logger.info("Using dropout_rate: %f (from list)", dropout_rate)
 
         self.model = CNN1D(
             input_channels=5,
@@ -459,49 +510,35 @@ class CNNTrainer:
             dropout_rate=dropout_rate
         ).to(self.device)
 
-        # Prepare data
-        X_tensor = torch.FloatTensor(X_train).to(self.device)
-        y_tensor = torch.FloatTensor(y_train).to(self.device)
-
-        # Create data loader
-        dataset = TensorDataset(X_tensor, y_tensor)
-        batch_size = self.cnn_config.get("batch_size", 32)
-
-        # Handle batch_size if it's a list (take first value)
-        if isinstance(batch_size, list):
-            batch_size = batch_size[0]
-            _logger.info("Using batch_size: %d (from list)", batch_size)
-
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-        # Training setup
+        # Training parameters
         learning_rate = self.cnn_config.get("learning_rate", 0.001)
         if isinstance(learning_rate, list):
             learning_rate = learning_rate[0]
-            _logger.info("Using learning_rate: %f (from list)", learning_rate)
 
-        optimizer = optim.Adam(
-            self.model.parameters(),
-            lr=learning_rate
-        )
-        criterion = nn.BCEWithLogitsLoss()
-        num_epochs = self.cnn_config.get("num_epochs", 50)
+        batch_size = self.cnn_config.get("batch_size", 32)
+        if isinstance(batch_size, list):
+            batch_size = batch_size[0]
+
+        num_epochs = self.cnn_config.get("epochs", 50)
         if isinstance(num_epochs, list):
             num_epochs = num_epochs[0]
-            _logger.info("Using num_epochs: %d (from list)", num_epochs)
+
+        # Create data loader
+        dataset = TensorDataset(
+            torch.FloatTensor(X_train),
+            torch.FloatTensor(y_train)
+        )
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+        # Setup training
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+        criterion = nn.BCEWithLogitsLoss()
 
         # Training loop
-        self.model.train()
         training_history = []
         best_loss = float('inf')
 
-        # Try to load checkpoint
-        start_epoch, history, best_loss = self.load_checkpoint(self.model, optimizer)
-        if start_epoch > 0:
-            training_history = history['train_loss']
-            _logger.info("Resuming training from epoch %d", start_epoch)
-
-        for epoch in range(start_epoch, num_epochs):
+        for epoch in range(num_epochs):
             epoch_loss = 0.0
             num_batches = 0
 
@@ -522,9 +559,8 @@ class CNNTrainer:
             avg_loss = epoch_loss / num_batches
             training_history.append(avg_loss)
 
-            # Save checkpoint after each epoch
-            self.save_checkpoint(self.model, optimizer, epoch,
-                               {'train_loss': training_history}, best_loss)
+            if avg_loss < best_loss:
+                best_loss = avg_loss
 
             if (epoch + 1) % 10 == 0:
                 _logger.info("Epoch %d/%d, Loss: %.4f", epoch + 1, num_epochs, avg_loss)
@@ -533,66 +569,159 @@ class CNNTrainer:
 
         return {
             "final_loss": training_history[-1],
+            "best_loss": best_loss,
             "training_history": training_history,
-            "model_parameters": sum(p.numel() for p in self.model.parameters())
+            "model_parameters": sum(p.numel() for p in self.model.parameters()),
+            "num_epochs": num_epochs,
+            "batch_size": batch_size,
+            "learning_rate": learning_rate
         }
 
-    def _save_model_and_artifacts(self, training_results: Dict[str, Any]) -> None:
+    def _save_model_and_artifacts(self, training_results: Dict[str, Any], model_id: str,
+                                 file_metadata: Dict[str, str], best_params: Dict[str, Any]) -> None:
         """
         Save the trained model and training artifacts.
 
         Args:
             training_results: Results from model training
+            model_id: Model identifier
+            file_metadata: Metadata from filename
+            best_params: Best hyperparameters from optimization
         """
-        _logger.info("Saving model and artifacts")
+        _logger.info("Saving model and artifacts for %s", model_id)
 
         # Save model
-        model_path = self.models_dir / "cnn_model.pth"
+        model_path = self.models_dir / f"{model_id}.pth"
         torch.save(self.model.state_dict(), model_path)
 
         # Save scaler
-        scaler_path = self.models_dir / "scaler.pkl"
+        scaler_path = self.models_dir / f"{model_id}_scaler.pkl"
         with open(scaler_path, "wb") as f:
             pickle.dump(self.scaler, f)
 
-        # Save training results
-        results_path = self.models_dir / "training_results.json"
-        with open(results_path, "w") as f:
-            json.dump(training_results, f, indent=2)
-
         # Save model configuration
-        config_path = self.models_dir / "model_config.json"
+        config_path = self.models_dir / f"{model_id}_config.json"
         model_config = {
             "input_channels": 5,
             "sequence_length": self.cnn_config.get("sequence_length", 120),
             "num_filters": self.cnn_config.get("num_filters", [32, 64, 128]),
             "kernel_sizes": self.cnn_config.get("kernel_sizes", [3, 5, 7]),
-            "dropout_rate": self.cnn_config.get("dropout_rate", 0.3)
+            "dropout_rate": self.cnn_config.get("dropout_rate", 0.3),
+            "file_metadata": file_metadata,
+            "best_params": best_params,
+            "training_config": {
+                "learning_rate": training_results.get("learning_rate"),
+                "batch_size": training_results.get("batch_size"),
+                "num_epochs": training_results.get("num_epochs")
+            }
         }
         with open(config_path, "w") as f:
             json.dump(model_config, f, indent=2)
 
-        _logger.info("Model and artifacts saved to %s", self.models_dir)
+        # Save training report
+        report_path = self.reports_dir / f"{model_id}_report.json"
+        report = {
+            "model_id": model_id,
+            "file_metadata": file_metadata,
+            "training_results": training_results,
+            "best_params": best_params,
+            "device_used": str(self.device),
+            "training_timestamp": datetime.now().isoformat()
+        }
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2)
 
-    def _generate_training_summary(self, training_results: Dict[str, Any]) -> Dict[str, Any]:
+        _logger.info("Model and artifacts saved for %s", model_id)
+
+    def _create_visualization(self, training_results: Dict[str, Any], model_id: str,
+                            file_metadata: Dict[str, str]) -> None:
         """
-        Generate a summary of the training process.
+        Create training visualization.
 
         Args:
             training_results: Results from model training
+            model_id: Model identifier
+            file_metadata: Metadata from filename
+        """
+        try:
+            # Create figure
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+
+            # Plot training loss
+            training_history = training_results["training_history"]
+            epochs = range(1, len(training_history) + 1)
+
+            ax1.plot(epochs, training_history, 'b-', label='Training Loss')
+            ax1.set_title(f'Training Loss - {file_metadata["symbol"]} ({file_metadata["timeframe"]})')
+            ax1.set_xlabel('Epoch')
+            ax1.set_ylabel('Loss')
+            ax1.legend()
+            ax1.grid(True)
+
+            # Plot loss distribution
+            ax2.hist(training_history, bins=20, alpha=0.7, color='skyblue', edgecolor='black')
+            ax2.set_title(f'Loss Distribution - {file_metadata["symbol"]}')
+            ax2.set_xlabel('Loss')
+            ax2.set_ylabel('Frequency')
+            ax2.grid(True)
+
+            # Add model info text
+            info_text = f"""
+            Model: {model_id}
+            Symbol: {file_metadata['symbol']}
+            Timeframe: {file_metadata['timeframe']}
+            Provider: {file_metadata['provider']}
+            Final Loss: {training_results['final_loss']:.4f}
+            Best Loss: {training_results['best_loss']:.4f}
+            Parameters: {training_results['model_parameters']:,}
+            """
+
+            plt.figtext(0.02, 0.02, info_text, fontsize=8,
+                       bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+
+            plt.tight_layout()
+
+            # Save visualization
+            viz_path = self.visualizations_dir / f"{model_id}.png"
+            plt.savefig(viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+
+            _logger.info("Visualization saved: %s", viz_path)
+
+        except Exception as e:
+            _logger.warning("Failed to create visualization for %s: %s", model_id, e)
+
+    def _generate_overall_summary(self, all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Generate overall summary of all training runs.
+
+        Args:
+            all_results: List of results from all training runs
 
         Returns:
-            Dictionary containing training summary
+            Dictionary containing overall summary
         """
+        # Save optimization summary report
+        if self.optimization_results:
+            optimization_report_path = self.reports_dir / f"full_cnn_optimization_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            opt_df = pd.DataFrame(self.optimization_results)
+            opt_df.to_csv(optimization_report_path, index=False)
+            _logger.info("Optimization report saved: %s", optimization_report_path)
+
+        # Calculate summary statistics
+        successful_models = len(all_results)
+        total_parameters = sum(r["training_results"]["model_parameters"] for r in all_results)
+        avg_final_loss = np.mean([r["training_results"]["final_loss"] for r in all_results])
+
         return {
             "stage": "cnn_training",
             "status": "completed",
-            "model_path": str(self.models_dir / "cnn_model.pth"),
-            "scaler_path": str(self.models_dir / "scaler.pkl"),
-            "final_loss": training_results["final_loss"],
-            "model_parameters": training_results["model_parameters"],
+            "total_models_trained": successful_models,
+            "total_parameters": total_parameters,
+            "average_final_loss": avg_final_loss,
             "device_used": str(self.device),
-            "training_epochs": len(training_results["training_history"])
+            "models": [r["model_id"] for r in all_results],
+            "optimization_report_path": str(optimization_report_path) if self.optimization_results else None
         }
 
 
