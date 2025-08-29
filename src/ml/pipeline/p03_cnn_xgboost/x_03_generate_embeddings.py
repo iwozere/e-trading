@@ -103,7 +103,7 @@ class EmbeddingGenerator:
     """
     Embedding Generator for the CNN + XGBoost pipeline.
 
-    Loads the trained CNN model and generates embeddings from all processed data files.
+    Loads the trained CNN model and generates embeddings from all raw data files.
     The embeddings are saved alongside the original data for use in the XGBoost stage.
     """
 
@@ -142,12 +142,12 @@ class EmbeddingGenerator:
             # Load trained model and artifacts
             self._load_model_and_artifacts()
 
-            # Discover processed data files
-            data_files = self._discover_processed_data()
+            # Discover raw data files
+            data_files = self._discover_raw_data()
             if not data_files:
-                raise ValueError("No processed data files found")
+                raise ValueError("No raw data files found")
 
-            _logger.info("Found %d processed data files", len(data_files))
+            _logger.info("Found %d raw data files", len(data_files))
 
             # Generate embeddings for each file
             generation_results = self._generate_embeddings_for_all_files(data_files)
@@ -166,16 +166,25 @@ class EmbeddingGenerator:
         """Load the trained CNN model and associated artifacts."""
         models_dir = Path("src/ml/pipeline/p03_cnn_xgboost/models/cnn")
 
-        # Load model configuration
-        config_path = models_dir / "model_config.json"
-        if not config_path.exists():
-            raise FileNotFoundError(f"Model configuration not found: {config_path}")
+        # Find the most recent model configuration file
+        config_files = list(models_dir.glob("*_config.json"))
+        if not config_files:
+            raise FileNotFoundError(f"No model configuration files found in {models_dir}")
+
+        # Sort by modification time and get the most recent
+        config_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        config_path = config_files[0]
+
+        _logger.info("Loading model configuration from: %s", config_path)
 
         with open(config_path, "r") as f:
             self.model_config = json.load(f)
 
-        # Load scaler
-        scaler_path = models_dir / "scaler.pkl"
+        # Extract model ID from config filename to find corresponding scaler and model files
+        model_id = config_path.stem.replace("_config", "")
+        scaler_path = models_dir / f"{model_id}_scaler.pkl"
+        model_path = models_dir / f"{model_id}.pth"
+
         if not scaler_path.exists():
             raise FileNotFoundError(f"Scaler not found: {scaler_path}")
 
@@ -192,41 +201,39 @@ class EmbeddingGenerator:
         ).to(self.device)
 
         # Load trained weights
-        model_path = models_dir / "cnn_model.pth"
         if not model_path.exists():
             raise FileNotFoundError(f"Trained model not found: {model_path}")
 
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.model.eval()
 
-        _logger.info("Loaded trained CNN model and artifacts")
+        _logger.info("Loaded trained CNN model and artifacts from: %s", model_id)
 
-    def _discover_processed_data(self) -> List[Path]:
+    def _discover_raw_data(self) -> List[Path]:
         """
-        Discover processed data files from the data loader stage.
+        Discover raw data files from the data loader stage.
 
         Returns:
-            List of paths to processed data files
+            List of paths to raw data files
         """
-        data_dir = Path("data/processed")
+        data_dir = Path("data/raw")
         if not data_dir.exists():
-            raise FileNotFoundError(f"Processed data directory not found: {data_dir}")
+            raise FileNotFoundError(f"Raw data directory not found: {data_dir}")
 
-        # Look for Parquet files
-        data_files = list(data_dir.glob("*.parquet"))
+        # Look for CSV files (raw data is saved as CSV)
+        data_files = list(data_dir.glob("*.csv"))
 
         if not data_files:
-            # Fallback to CSV files
-            data_files = list(data_dir.glob("*.csv"))
+            raise FileNotFoundError(f"No CSV files found in {data_dir}")
 
         return data_files
 
     def _generate_embeddings_for_all_files(self, data_files: List[Path]) -> Dict[str, Any]:
         """
-        Generate embeddings for all processed data files.
+        Generate embeddings for all raw data files.
 
         Args:
-            data_files: List of paths to processed data files
+            data_files: List of paths to raw data files
 
         Returns:
             Dictionary containing generation results
@@ -420,11 +427,11 @@ class EmbeddingGenerator:
             Path to saved labeled data file
         """
         # Create output filename
-        output_filename = f"{original_file_path.stem}_labeled.parquet"
+        output_filename = f"{original_file_path.stem}_labeled.csv"
         output_path = self.labeled_dir / output_filename
 
-        # Save as Parquet
-        labeled_df.to_parquet(output_path, index=False)
+        # Save as CSV
+        labeled_df.to_csv(output_path, index=False)
 
         _logger.debug("Saved labeled data to %s", output_path)
 
