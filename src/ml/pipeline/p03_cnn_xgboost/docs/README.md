@@ -10,6 +10,7 @@ The CNN + XGBoost pipeline is a hybrid machine learning approach that combines C
 - **Multi-provider Support**: Support for yfinance, Binance, and other data providers
 - **Hyperparameter Optimization**: Automated optimization using Optuna
 - **Advanced Visualization**: Training progress and performance visualizations
+- **CSV Format Consistency**: All data files use CSV format for compatibility and ease of processing
 
 ## Recent Updates
 
@@ -23,6 +24,12 @@ The CNN + XGBoost pipeline is a hybrid machine learning approach that combines C
 - **Proper Naming**: Models follow the convention: `cnn_{provider}_{symbol}_{timeframe}_{start_date}_{end_date}_{timestamp}.pth`
 - **Individual Artifacts**: Each model has its own configuration, report, and visualization files
 
+### Data Format Consistency
+- **CSV Throughout**: All pipeline stages use CSV format for data storage and exchange
+- **Compatibility**: CSV format ensures compatibility with various tools and systems
+- **Ease of Processing**: Human-readable format for debugging and analysis
+- **Consistent Naming**: Standardized file naming across all pipeline stages
+
 ### Comprehensive Output Structure
 ```
 src/ml/pipeline/p03_cnn_xgboost/models/cnn/
@@ -34,6 +41,11 @@ src/ml/pipeline/p03_cnn_xgboost/models/cnn/
 │   └── full_cnn_optimization_report_20250812_221148.csv
 └── visualizations/
     └── cnn_yfinance_VT_1d_20210829_20250828_20250812_221148.png
+
+data/
+├── raw/                    # Original downloaded data (CSV)
+├── labeled/                # Data with CNN embeddings (CSV)
+└── features/               # Data with technical indicators (CSV)
 ```
 
 ## Features
@@ -45,6 +57,7 @@ src/ml/pipeline/p03_cnn_xgboost/models/cnn/
 - Provider-specific configuration management
 - Comprehensive visualization and reporting
 - Automatic error handling and recovery
+- **CSV format consistency** throughout the pipeline
 
 ## Quick Start
 Example code showing how to use this pipeline:
@@ -97,6 +110,33 @@ cnn:
   epochs: [50, 100]
 ```
 
+## Data Flow
+
+### Pipeline Stages and Data Formats
+1. **Data Loading** (`x_01_data_loader.py`)
+   - Input: None (downloads from providers)
+   - Output: `data/raw/*.csv` (original OHLCV data)
+
+2. **CNN Training** (`x_02_train_cnn.py`)
+   - Input: `data/raw/*.csv`
+   - Output: `models/cnn/*.pth`, `*.json`, `*.pkl` (trained models and artifacts)
+
+3. **Embedding Generation** (`x_03_generate_embeddings.py`)
+   - Input: `data/raw/*.csv`
+   - Output: `data/labeled/*_labeled.csv` (data with CNN embeddings)
+
+4. **Technical Analysis** (`x_04_ta_features.py`)
+   - Input: `data/labeled/*_labeled.csv`
+   - Output: `data/features/*_features.csv` (data with technical indicators)
+
+5. **XGBoost Training** (`x_05_optuna_xgboost.py`, `x_06_train_xgboost.py`)
+   - Input: `data/features/*_features.csv`
+   - Output: `models/xgboost/*.pkl` (trained XGBoost models)
+
+6. **Validation** (`x_07_validate_model.py`)
+   - Input: `data/features/*_features.csv`
+   - Output: `results/*.json` (validation reports)
+
 ## Integration
 This module integrates with:
 - `src.data` - For data retrieval and preprocessing (with enhanced batching)
@@ -111,6 +151,11 @@ This module integrates with:
 - **`_config.json`**: Model architecture and training parameters
 - **`_scaler.pkl`**: Data normalization scaler
 
+### Data Files (CSV Format)
+- **`data/raw/*.csv`**: Original OHLCV data from providers
+- **`data/labeled/*_labeled.csv`**: Data with CNN embeddings
+- **`data/features/*_features.csv`**: Data with technical indicators and targets
+
 ### Reports
 - **`_report.json`**: Individual model training report
 - **`full_cnn_optimization_report_*.csv`**: Overall optimization summary
@@ -122,3 +167,4 @@ This module integrates with:
 - [Requirements](Requirements.md) - Technical requirements
 - [Design](Design.md) - Architecture and design
 - [Tasks](Tasks.md) - Implementation roadmap
+- [Data Format Guide](Data_Format_Guide.md) - CSV format consistency and data flow

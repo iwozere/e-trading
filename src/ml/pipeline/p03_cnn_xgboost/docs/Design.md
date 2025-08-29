@@ -97,6 +97,7 @@ The pipeline consists of several interconnected stages:
 4. **Quality Validation**: Check data quality requirements (minimum records, missing data)
 5. **Data Cleaning**: Remove outliers and handle missing values
 6. **Feature Engineering**: Add derived features (log returns, ratios, moving averages)
+7. **CSV Storage**: Save processed data in CSV format for compatibility
 
 ### CNN Processing Pipeline - **MAJOR UPDATE**
 1. **Individual File Processing**: Process each data file separately
@@ -105,6 +106,7 @@ The pipeline consists of several interconnected stages:
 4. **Artifact Generation**: Create individual model files, configs, reports, and visualizations
 5. **Embedding Generation**: Extract embeddings for all data points using trained models
 6. **Target Creation**: Generate target variables for supervised learning
+7. **CSV Output**: Save labeled data with embeddings in CSV format
 
 ### XGBoost Processing Pipeline
 1. **Feature Combination**: Combine CNN embeddings with technical indicators
@@ -112,6 +114,7 @@ The pipeline consists of several interconnected stages:
 3. **Hyperparameter Optimization**: Optimize XGBoost parameters with Optuna
 4. **Model Training**: Train final model with optimized parameters
 5. **Validation**: Perform cross-validation and backtesting
+6. **CSV Processing**: Read and write feature data in CSV format throughout
 
 ### Output Generation - **ENHANCED**
 1. **Individual Model Artifacts**: 
@@ -124,6 +127,7 @@ The pipeline consists of several interconnected stages:
 3. **Optimization Reports**: `full_cnn_optimization_report_*.csv` (overall optimization summary)
 4. **Performance Metrics**: Calculate comprehensive evaluation metrics
 5. **Visualizations**: Create performance charts and analysis plots
+6. **CSV Data Files**: All intermediate and final data files in CSV format for compatibility
 
 ## Enhanced Output Structure
 
@@ -158,7 +162,7 @@ src/ml/pipeline/p03_cnn_xgboost/models/cnn/
 - **PyTorch**: Chosen for CNN implementation due to flexibility and GPU support
 - **XGBoost**: Selected for gradient boosting due to superior performance on structured data
 - **Optuna**: Used for hyperparameter optimization due to efficient search algorithms
-- **CSV Format**: Adopted for data storage due to compatibility and ease of processing
+- **CSV Format**: Adopted for data storage due to compatibility, ease of processing, and human readability
 - **PyYAML**: Used for configuration management due to readability and flexibility
 - **Matplotlib/Seaborn**: Used for visualization due to comprehensive plotting capabilities
 
@@ -168,6 +172,7 @@ src/ml/pipeline/p03_cnn_xgboost/models/cnn/
 - **Factory Pattern**: Dynamic model creation based on configuration
 - **Observer Pattern**: Progress tracking and logging throughout pipeline
 - **Individual Model Pattern**: Each data file gets its own specialized model
+- **CSV Consistency Pattern**: All data exchange between stages uses CSV format for compatibility
 
 ### Performance Considerations - **ENHANCED**
 - **Memory Management**: Efficient data loading with chunking for large datasets
@@ -176,6 +181,7 @@ src/ml/pipeline/p03_cnn_xgboost/models/cnn/
 - **Caching**: Intermediate results caching to avoid recomputation
 - **Optimization**: Hyperparameter optimization to maximize model performance
 - **Individual Models**: Specialized models for each data source for better performance
+- **CSV Processing**: Fast CSV I/O operations with pandas for data handling
 
 ### Security Decisions
 - **Input Validation**: Comprehensive validation of all input data
@@ -216,3 +222,5 @@ src/ml/pipeline/p03_cnn_xgboost/models/cnn/
 - **Performance Metrics**: Comprehensive evaluation results storage
 - **Visualization Storage**: Training progress and performance charts
 - **Optimization Reports**: Overall optimization summaries across all models
+- **CSV Data Storage**: All intermediate and final data files stored in CSV format for compatibility and ease of access
+- **Data Flow Persistence**: Consistent CSV format throughout pipeline stages for seamless data exchange

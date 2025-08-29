@@ -255,7 +255,7 @@ class TAFeatureEngineer:
         ta_features["roc"] = talib.ROC(close_prices, timeperiod=10)
 
         # Handle NaN values
-        ta_features = ta_features.fillna(method="ffill").fillna(0)
+        ta_features = ta_features.ffill().fillna(0)
 
         return ta_features
 
