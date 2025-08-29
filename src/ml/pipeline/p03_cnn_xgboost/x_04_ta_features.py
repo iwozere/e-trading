@@ -96,12 +96,12 @@ class TAFeatureEngineer:
         if not labeled_dir.exists():
             raise FileNotFoundError(f"Labeled data directory not found: {labeled_dir}")
 
-        # Look for Parquet files with embeddings
-        labeled_files = list(labeled_dir.glob("*_labeled.parquet"))
+        # Look for CSV files with embeddings
+        labeled_files = list(labeled_dir.glob("*_labeled.csv"))
 
         if not labeled_files:
-            # Fallback to any Parquet files
-            labeled_files = list(labeled_dir.glob("*.parquet"))
+            # Fallback to any CSV files
+            labeled_files = list(labeled_dir.glob("*.csv"))
 
         return labeled_files
 
@@ -156,7 +156,7 @@ class TAFeatureEngineer:
             Dictionary containing file processing results
         """
         # Load labeled data
-        df = pd.read_parquet(file_path)
+        df = pd.read_csv(file_path)
 
         # Extract OHLCV data
         ohlcv_cols = ["open", "high", "low", "close", "volume"]
@@ -350,11 +350,11 @@ class TAFeatureEngineer:
         """
         # Create output filename
         base_name = original_file_path.stem.replace("_labeled", "")
-        output_filename = f"{base_name}_features.parquet"
+        output_filename = f"{base_name}_features.csv"
         output_path = self.features_dir / output_filename
 
-        # Save as Parquet
-        feature_df.to_parquet(output_path, index=False)
+        # Save as CSV
+        feature_df.to_csv(output_path, index=False)
 
         _logger.debug("Saved feature data to %s", output_path)
 

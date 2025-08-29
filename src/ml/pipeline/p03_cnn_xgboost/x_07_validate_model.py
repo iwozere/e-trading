@@ -144,12 +144,12 @@ class ModelValidator:
         if not features_dir.exists():
             raise FileNotFoundError(f"Features directory not found: {features_dir}")
 
-        # Look for Parquet files with features
-        feature_files = list(features_dir.glob("*_features.parquet"))
+        # Look for CSV files with features
+        feature_files = list(features_dir.glob("*_features.csv"))
 
         if not feature_files:
-            # Fallback to any Parquet files
-            feature_files = list(features_dir.glob("*.parquet"))
+            # Fallback to any CSV files
+            feature_files = list(features_dir.glob("*.csv"))
 
         return feature_files
 
@@ -171,7 +171,7 @@ class ModelValidator:
         for file_path in feature_files:
             try:
                 # Load feature data
-                df = pd.read_parquet(file_path)
+                df = pd.read_csv(file_path)
 
                 # Extract feature columns (exclude targets and metadata)
                 exclude_cols = self.targets + ["date", "timestamp", "sequence_start_idx", "sequence_end_idx"]
@@ -404,7 +404,7 @@ class ModelValidator:
         for file_path in feature_files:
             try:
                 # Load feature data
-                df = pd.read_parquet(file_path)
+                df = pd.read_csv(file_path)
 
                 # Extract features and targets
                 exclude_cols = self.targets + ["date", "timestamp", "sequence_start_idx", "sequence_end_idx"]
