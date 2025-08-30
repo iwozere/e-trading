@@ -1699,8 +1699,11 @@ Secure multi-tier access control system:
 - **Purpose:** Interactive web-based tool for creating complex JSON configurations for alerts, schedules, reports, and screeners
 - **Access:** Available as a tab in the admin panel and as a standalone shareable file
 - **Features:**
+  - **Dedicated Indicator Configuration Snippet:** Reusable component for all tabs with consistent UI/UX
   - **Multiple Indicators Support:** Combine multiple technical indicators with AND/OR logic
+  - **Duplicate Prevention:** Cannot add the same indicator twice to prevent conflicts
   - **Dynamic Parameter Configuration:** Real-time parameter adjustment for all indicators
+  - **Visual Indicator Management:** Clear list view of added indicators with remove functionality
   - **Template System:** Quick templates for common configurations
   - **Real-time JSON Generation:** Live preview of generated JSON as you configure
   - **Command Generation:** Automatic generation of bot commands from JSON
