@@ -39,6 +39,7 @@ import seaborn as sns
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.backtester.optimizer.base_optimizer import BaseOptimizer
 from src.strategy.hmm_lstm_strategy import HMMLSTMStrategy
 from src.backtester.analyzer.bt_analyzers import (CAGR, CalmarRatio,
                                        ConsecutiveWinsLosses,
@@ -49,7 +50,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-class HMMLSTMOptimizer:
+class HMMLSTMOptimizer(BaseOptimizer):
     """
     HMM-LSTM Backtesting Optimizer
 
@@ -64,30 +65,17 @@ class HMMLSTMOptimizer:
         Args:
             config_path: Path to configuration file
         """
-        self.config_path = Path(config_path)
-        self.config = self._load_config()
+        super().__init__(config_path)
+
         self.pipeline_dir = Path(self.config['ml_models']['pipeline_dir'])
         self.models_dir = Path(self.config['ml_models']['models_dir'])
         self.pipeline_config = self._load_pipeline_config()
-
-        # Create output directory
-        self.output_dir = Path(self.config['output_dir'])
-        self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize device for PyTorch
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         _logger.info("Using device: %s", self.device)
 
-    def _load_config(self) -> dict:
-        """Load configuration from JSON file."""
-        if not self.config_path.exists():
-            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
 
-        with open(self.config_path, 'r') as f:
-            config = json.load(f)
-
-        _logger.info("Loaded configuration from %s", self.config_path)
-        return config
 
     def _load_pipeline_config(self) -> dict:
         """Load pipeline configuration."""
@@ -111,14 +99,18 @@ class HMMLSTMOptimizer:
         Returns:
             Tuple of (hmm_model_path, lstm_model_path) or (None, None) if not found
         """
-        # Find HMM model
-        hmm_pattern = f"hmm_{symbol}_{timeframe}_*.pkl"
-        hmm_files = list(self.models_dir.glob(hmm_pattern))
+        # Find HMM model - pattern: hmm_{source}_{symbol}_{timeframe}_{start_date}_{end_date}_{timestamp}.pkl
+        hmm_dir = self.models_dir / "hmm"
+        hmm_pattern = f"hmm_*_{symbol}_{timeframe}_*.pkl"
+        hmm_files = list(hmm_dir.glob(hmm_pattern))
+        _logger.debug("HMM pattern '%s' found %d files: %s", hmm_pattern, len(hmm_files), [f.name for f in hmm_files])
         hmm_model_path = sorted(hmm_files)[-1] if hmm_files else None
 
-        # Find LSTM model
+        # Find LSTM model - pattern: lstm_{symbol}_{timeframe}_{timestamp}.pkl
+        lstm_dir = self.models_dir / "lstm"
         lstm_pattern = f"lstm_{symbol}_{timeframe}_*.pkl"
-        lstm_files = list(self.models_dir.glob(lstm_pattern))
+        lstm_files = list(lstm_dir.glob(lstm_pattern))
+        _logger.debug("LSTM pattern '%s' found %d files: %s", lstm_pattern, len(lstm_files), [f.name for f in lstm_files])
         lstm_model_path = sorted(lstm_files)[-1] if lstm_files else None
 
         if hmm_model_path:
@@ -152,11 +144,72 @@ class HMMLSTMOptimizer:
         with open(lstm_path, 'rb') as f:
             lstm_data = pickle.load(f)
 
-        _logger.info("Loaded HMM model with %d components", hmm_data['config']['n_components'])
-        _logger.info("Loaded LSTM model with input_size=%d, hidden_size=%d",
-                    lstm_data['config']['input_size'], lstm_data['config']['hidden_size'])
+        # Log HMM model info (handle different possible structures)
+        if 'config' in hmm_data and 'n_components' in hmm_data['config']:
+            _logger.info("Loaded HMM model with %d components", hmm_data['config']['n_components'])
+        elif 'params' in hmm_data and 'n_components' in hmm_data['params']:
+            _logger.info("Loaded HMM model with %d components", hmm_data['params']['n_components'])
+        else:
+            _logger.info("Loaded HMM model (structure: %s)", list(hmm_data.keys()))
+
+        # Log LSTM model info (handle different possible structures)
+        if 'config' in lstm_data and 'input_size' in lstm_data['config']:
+            _logger.info("Loaded LSTM model with input_size=%d, hidden_size=%d",
+                        lstm_data['config']['input_size'], lstm_data['config']['hidden_size'])
+        elif 'model_architecture' in lstm_data:
+            arch = lstm_data['model_architecture']
+            _logger.info("Loaded LSTM model with input_size=%d, hidden_size=%d",
+                        arch.get('input_size', 'unknown'), arch.get('hidden_size', 'unknown'))
+        else:
+            _logger.info("Loaded LSTM model (structure: %s)", list(lstm_data.keys()))
 
         return hmm_data, lstm_data
+
+    def _reconstruct_lstm_model(self, lstm_data: Dict) -> torch.nn.Module:
+        """
+        Reconstruct LSTM model from saved components.
+
+        Args:
+            lstm_data: Loaded LSTM model data containing architecture and state dict
+
+        Returns:
+            Reconstructed PyTorch LSTM model
+        """
+        try:
+            # Import LSTMModel from strategy module
+            from src.strategy.hmm_lstm_strategy import LSTMModel
+
+            # Get model architecture
+            if 'model_architecture' not in lstm_data:
+                raise ValueError("No model_architecture found in LSTM data")
+
+            arch = lstm_data['model_architecture']
+
+            # Create model with saved architecture
+            model = LSTMModel(
+                input_size=arch.get('input_size', 50),
+                hidden_size=arch.get('hidden_size', 100),
+                num_layers=arch.get('num_layers', 2),
+                dropout=arch.get('dropout', 0.2),
+                output_size=arch.get('output_size', 1),
+                n_regimes=arch.get('n_regimes', 3)
+            )
+
+            # Load state dict
+            if 'model_state_dict' not in lstm_data:
+                raise ValueError("No model_state_dict found in LSTM data")
+
+            model.load_state_dict(lstm_data['model_state_dict'])
+            model.eval()  # Set to evaluation mode
+
+            _logger.info("Reconstructed LSTM model: input_size=%d, hidden_size=%d, num_layers=%d",
+                        arch.get('input_size', 50), arch.get('hidden_size', 100), arch.get('num_layers', 2))
+
+            return model
+
+        except Exception as e:
+            _logger.error("Error reconstructing LSTM model: %s", e)
+            raise
 
     def prepare_data(self, symbol: str, timeframe: str) -> pd.DataFrame:
         """
@@ -171,14 +224,36 @@ class HMMLSTMOptimizer:
         """
         # Load raw OHLCV data
         data_dir = Path(self.config['data']['data_dir'])
-        data_file = data_dir / f"{symbol}_{timeframe}.csv"
 
-        if not data_file.exists():
-            raise FileNotFoundError(f"Data file not found: {data_file}")
+        # Find the data file with the correct naming pattern
+        # Pattern: {source}_{symbol}_{timeframe}_{start_date}_{end_date}.csv
+        pattern = f"*_{symbol}_{timeframe}_*.csv"
+        matching_files = list(data_dir.glob(pattern))
+
+        if not matching_files:
+            raise FileNotFoundError(f"No data file found for {symbol}_{timeframe} in {data_dir}")
+
+        # Use the first matching file (or the most recent one)
+        data_file = sorted(matching_files)[-1]  # Get the most recent file
+        _logger.info("Using data file: %s", data_file.name)
 
         df = pd.read_csv(data_file)
-        df['datetime'] = pd.to_datetime(df['datetime'])
+
+        # Handle different datetime column names
+        datetime_col = None
+        for col in ['datetime', 'timestamp', 'date']:
+            if col in df.columns:
+                datetime_col = col
+                break
+
+        if datetime_col is None:
+            raise ValueError(f"No datetime column found in {data_file}. Available columns: {df.columns.tolist()}")
+
+        df['datetime'] = pd.to_datetime(df[datetime_col], utc=True)
         df.set_index('datetime', inplace=True)
+
+        # Convert to timezone-naive for compatibility
+        df.index = df.index.tz_localize(None)
 
         # Ensure we have required OHLCV columns
         required_cols = ['open', 'high', 'low', 'close', 'volume']
@@ -198,153 +273,110 @@ class HMMLSTMOptimizer:
         _logger.info("Loaded data: %s rows, %s columns", len(df), len(df.columns))
         return df
 
-    def run_backtest(self, symbol: str, timeframe: str,
-                    hmm_data: Dict, lstm_data: Dict, trial=None, include_analyzers=True) -> Dict:
+    def run_backtest(self, combination: Dict[str, str], strategy_params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Run backtesting for a single symbol-timeframe combination.
+        Run backtesting for a specific combination.
 
         Args:
-            symbol: Trading symbol
-            timeframe: Timeframe
-            hmm_data: Loaded HMM model data
-            lstm_data: Loaded LSTM model data
-            trial: Optuna trial object for optimization (optional)
-            include_analyzers: Whether to include detailed analyzers (default: True)
+            combination: Dictionary with symbol, timeframe, and model information
+            strategy_params: Strategy parameters for this backtest
 
         Returns:
-            Dictionary containing backtest results
+            Dictionary with backtest results
         """
-        # Prepare data
-        df = self.prepare_data(symbol, timeframe)
+        try:
+            _logger.info("Running backtest for %s %s %s",
+                        combination['provider'], combination['symbol'], combination['timeframe'])
 
-        # Create Backtrader engine
-        cerebro = bt.Cerebro()
+            # Prepare data using base class method
+            data_file = self.data_dir / combination['data_file']
+            df = self._prepare_data(data_file)
 
-        # Add data feed
-        data = bt.feeds.PandasData(
-            dataname=df,
-            datetime=None,  # Use index
-            open='open',
-            high='high',
-            low='low',
-            close='close',
-            volume='volume',
-            openinterest=None
-        )
-        cerebro.adddata(data)
+            # Load models
+            hmm_data, lstm_data = self.load_models(Path(combination['hmm_model']), Path(combination['lstm_model']))
 
-        # Prepare strategy parameters (with optimization if trial provided)
-        strategy_params = self.config['strategy'].copy()
+            # Prepare strategy config
+            strategy_config = {
+                'prediction_threshold': strategy_params.get('entry_threshold', 0.001),
+                'regime_confidence_threshold': strategy_params.get('regime_confidence_threshold', 0.4),
+                'profit_target': strategy_params.get('profit_target', 0.02),
+                'stop_loss': strategy_params.get('stop_loss', 0.01),
+                'trailing_stop': strategy_params.get('trailing_stop', 0.005),
+                'position_size': strategy_params.get('position_size', 0.1),
+                'max_position_size': strategy_params.get('max_position_size', 0.5),
+                'models_dir': str(self.models_dir),
+                'results_dir': str(self.output_dir)
+            }
 
-        if trial:
-            # Update parameters based on trial suggestions
-            strategy_params['entry_threshold'] = trial.suggest_float(
-                'entry_threshold', 0.3, 0.8
+            # Reconstruct LSTM model from saved components
+            lstm_model = self._reconstruct_lstm_model(lstm_data)
+
+            # Create Backtrader engine using base class method
+            cerebro = bt.Cerebro()
+
+            # Add data feed
+            data = bt.feeds.PandasData(
+                dataname=df,
+                datetime=None,
+                open='open',
+                high='high',
+                low='low',
+                close='close',
+                volume='volume',
+                openinterest=None,
+                fromdate=df.index[0],
+                todate=df.index[-1]
             )
-            strategy_params['regime_confidence_threshold'] = trial.suggest_float(
-                'regime_confidence_threshold', 0.5, 0.9
+            cerebro.adddata(data)
+
+            # Add strategy with correct model data structure
+            cerebro.addstrategy(
+                HMMLSTMStrategy,
+                hmm_model=hmm_data['model'],
+                hmm_scaler=hmm_data.get('scaler', None),
+                hmm_features=hmm_data.get('features', None),
+                lstm_model=lstm_model,
+                lstm_scalers=lstm_data['scalers'],
+                lstm_features=lstm_data['features'],
+                sequence_length=lstm_data.get('hyperparameters', {}).get('sequence_length', 60),
+                strategy_config=strategy_config
             )
-            strategy_params['profit_target'] = trial.suggest_float(
-                'profit_target', 0.01, 0.05
-            )
-            strategy_params['stop_loss'] = trial.suggest_float(
-                'stop_loss', 0.005, 0.03
-            )
 
-        # Add strategy
-        cerebro.addstrategy(
-            HMMLSTMStrategy,
-            hmm_model=hmm_data['model'],
-            hmm_scaler=hmm_data['scaler'],
-            hmm_features=hmm_data['features'],
-            lstm_model=lstm_data['model'],
-            lstm_scalers=lstm_data['scalers'],
-            lstm_features=lstm_data['features'],
-            sequence_length=lstm_data['config']['sequence_length'],
-            prediction_threshold=strategy_params['entry_threshold'],
-            regime_confidence_threshold=strategy_params['regime_confidence_threshold'],
-            profit_target=strategy_params.get('profit_target', self.config['risk_management']['take_profit_pct']),
-            stop_loss=strategy_params.get('stop_loss', self.config['risk_management']['stop_loss_pct']),
-            trailing_stop=self.config['risk_management'].get('trailing_stop', 0.005)
-        )
+            # Add analyzers
+            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+            cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+            cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+            cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
 
-        # Set broker parameters
-        cerebro.broker.setcash(self.config['initial_capital'])
-        cerebro.broker.setcommission(commission=self.config['commission'])
+            # Set initial cash and commission
+            cerebro.broker.setcash(self.initial_cash)
+            cerebro.broker.setcommission(commission=self.commission)
 
-        # Add trade analyzer (always available)
-        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
+            # Run backtest
+            results = cerebro.run()
+            strategy = results[0]
 
-        # Add detailed analyzers only if requested
-        if include_analyzers:
-            # Add basic analyzers
-            cerebro.addanalyzer(bt.analyzers.Returns, _name="returns")
-            cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
-            cerebro.addanalyzer(bt.analyzers.SQN, _name="sqn")
-            cerebro.addanalyzer(bt.analyzers.TimeDrawDown, _name="time_drawdown")
-            cerebro.addanalyzer(bt.analyzers.VWR, _name="vwr")
-            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe", riskfreerate=0.01)
+            # Extract results using base class method
+            backtest_results = self._extract_backtest_results(cerebro, strategy)
 
-            # Add custom analyzers (same as custom_optimizer.py)
-            cerebro.addanalyzer(ProfitFactor, _name="profit_factor")
-            cerebro.addanalyzer(WinRate, _name="winrate")
-            cerebro.addanalyzer(CalmarRatio, _name="calmar", riskfreerate=0.01)
-            cerebro.addanalyzer(CAGR, _name="cagr", timeframe=bt.TimeFrame.Years)
-            cerebro.addanalyzer(SortinoRatio, _name="sortino", riskfreerate=0.01)
-            cerebro.addanalyzer(ConsecutiveWinsLosses, _name="consecutivewinslosses")
-            cerebro.addanalyzer(PortfolioVolatility, _name="portfoliovolatility")
-
-        # Run backtest
-        _logger.info("Running backtest for %s %s", symbol, timeframe)
-        results = cerebro.run(runonce=True, preload=True)
-        strategy = results[0]
-
-        # Process analyzers
-        analyzers = {}
-        if include_analyzers:
-            for name in strategy.analyzers._names:
-                analyzer = getattr(strategy.analyzers, name)
-                analysis = analyzer.get_analysis()
-                analyzers[name] = self.to_dict(analysis)
-
-        # Get trade analysis (always available)
-        trades_analysis = analyzers.get("trades", {}) if include_analyzers else {}
-
-        # Calculate metrics (consistent with custom_optimizer.py)
-        gross_profit = trades_analysis.get("pnl", {}).get("gross", {}).get("total", 0.0)
-        net_profit = trades_analysis.get("pnl", {}).get("net", {}).get("total", 0.0)
-        total_commission = gross_profit - net_profit
-
-        # If gross profit is not available, calculate it from net profit + commission
-        if gross_profit == 0.0 and net_profit != 0.0:
-            gross_profit = net_profit + total_commission
-
-        # Compile results (consistent format with custom_optimizer.py)
-        backtest_results = {
-            'symbol': symbol,
-            'timeframe': timeframe,
-            'best_params': strategy_params,
-            'total_profit': float(gross_profit),  # Gross profit (before commission)
-            'total_profit_with_commission': float(net_profit),  # Net profit (after commission)
-            'total_commission': float(total_commission),  # Total commission paid
-            'initial_capital': self.config['initial_capital'],
-            'final_capital': cerebro.broker.getvalue(),
-            'total_return': (cerebro.broker.getvalue() - self.config['initial_capital']) / self.config['initial_capital'],
-            'analyzers': analyzers,
-            'trades': strategy.trades,
-            'strategy_params': strategy_params,
-            'timestamp': datetime.now().isoformat()
-        }
-
-        # Add legacy fields for backward compatibility
-        if include_analyzers:
+            # Add combination-specific information
             backtest_results.update({
-                'annual_return': analyzers.get('returns', {}).get('rnorm100', 0.0),
-                'sharpe_ratio': analyzers.get('sharpe', {}).get('sharperatio', 0.0),
-                'max_drawdown': analyzers.get('drawdown', {}).get('max', {}).get('drawdown', 0.0),
+                'symbol': combination['symbol'],
+                'timeframe': combination['timeframe'],
+                'provider': combination['provider'],
+                'strategy_params': strategy_params
             })
 
-        return strategy, cerebro, backtest_results
+            _logger.info("Backtest completed - Return: %.2f%%, Sharpe: %.3f, Max DD: %.2f%%, Trades: %d",
+                        backtest_results['total_return'] * 100, backtest_results['sharpe_ratio'],
+                        backtest_results['max_drawdown'] * 100, backtest_results['total_trades'])
+
+            return backtest_results
+
+        except Exception as e:
+            _logger.error("Error in backtest for %s %s %s: %s",
+                         combination['provider'], combination['symbol'], combination['timeframe'], e)
+
 
     def to_dict(self, obj):
         """Convert object to dictionary (same as custom_optimizer.py)."""
@@ -357,186 +389,82 @@ class HMMLSTMOptimizer:
         else:
             return obj
 
-    def optimize_parameters(self, symbol: str, timeframe: str,
-                          hmm_data: Dict, lstm_data: Dict) -> Dict:
+    def optimize_parameters(self, combination: Dict[str, str], n_trials: int = 100) -> Dict[str, Any]:
         """
         Optimize strategy parameters using Optuna.
 
         Args:
-            symbol: Trading symbol
-            timeframe: Timeframe
-            hmm_data: Loaded HMM model data
-            lstm_data: Loaded LSTM model data
+            combination: Dictionary with symbol, timeframe, and model information
+            n_trials: Number of optimization trials
 
         Returns:
-            Dictionary containing optimization results
+            Dictionary with optimization results
         """
-        if not self.config['optimization']['enabled']:
-            return {}
+        try:
+            _logger.info("Starting parameter optimization for %s %s %s",
+                        combination['provider'], combination['symbol'], combination['timeframe'])
 
-        def objective(trial):
-            # Get parameter ranges from config
-            param_ranges = self.config['optimization']['parameter_ranges']
+            def objective(trial):
+                # Suggest parameters based on config
+                strategy_params = {}
 
-            # Suggest parameter values based on config
-            suggested_params = {}
-            for param_name in self.config['optimization']['optimize_params']:
-                if param_name in param_ranges:
-                    param_config = param_ranges[param_name]
+                # Get parameter ranges from config
+                param_ranges = self.config.get('optimization', {}).get('parameter_ranges', {})
+
+                for param_name, param_config in param_ranges.items():
                     if param_config['type'] == 'float':
-                        suggested_params[param_name] = trial.suggest_float(
+                        strategy_params[param_name] = trial.suggest_float(
                             param_name,
                             param_config['min'],
                             param_config['max']
                         )
                     elif param_config['type'] == 'int':
-                        suggested_params[param_name] = trial.suggest_int(
+                        strategy_params[param_name] = trial.suggest_int(
                             param_name,
                             param_config['min'],
                             param_config['max']
                         )
                     elif param_config['type'] == 'categorical':
-                        suggested_params[param_name] = trial.suggest_categorical(
+                        strategy_params[param_name] = trial.suggest_categorical(
                             param_name,
                             param_config['choices']
                         )
 
-            # Update config temporarily
-            original_params = self.config['strategy'].copy()
-            self.config['strategy'].update(suggested_params)
+                # Run backtest
+                results = self.run_backtest(combination, strategy_params)
 
-            try:
-                # Run backtest with suggested parameters (without detailed analyzers for speed)
-                strategy, cerebro, results = self.run_backtest(
-                    symbol, timeframe, hmm_data, lstm_data,
-                    include_analyzers=False
-                )
+                # Return negative Sharpe ratio (Optuna minimizes)
+                return -results['sharpe_ratio']
 
-                # Return negative total return (Optuna minimizes)
-                return -results['total_return']
+            # Create study using base class method
+            study = self._create_optuna_study(direction='minimize')
 
-            except Exception as e:
-                _logger.error("Optimization trial failed: %s", e)
-                return float('inf')
-            finally:
-                # Restore original parameters
-                self.config['strategy'] = original_params
+            # Optimize
+            study.optimize(objective, n_trials=n_trials)
 
-        # Create study
-        study = optuna.create_study(direction='minimize')
-        study.optimize(objective, n_trials=self.config['optimization']['n_trials'])
+            # Get best parameters
+            best_params = study.best_params
+            best_value = -study.best_value  # Convert back to positive Sharpe ratio
 
-        # Get best parameters
-        best_params = study.best_params
-        best_value = study.best_value
+            # Run final backtest with best parameters
+            final_results = self.run_backtest(combination, best_params)
 
-        _logger.info("Optimization completed. Best Sharpe ratio: %.4f", -best_value)
-        _logger.info("Best parameters: %s", best_params)
+            optimization_results = {
+                'best_params': best_params,
+                'best_sharpe': best_value,
+                'final_results': final_results,
+                'optimization_history': study.trials_dataframe().to_dict('records')
+            }
 
-        return {
-            'best_params': best_params,
-            'best_sharpe': -best_value,
-            'optimization_history': study.trials_dataframe()
-        }
+            _logger.info("Optimization completed - Best Sharpe: %.3f", best_value)
 
-    def save_results(self, results: Dict, symbol: str, timeframe: str):
-        """
-        Save backtest results to file.
+            return optimization_results
 
-        Args:
-            results: Backtest results dictionary
-            symbol: Trading symbol
-            timeframe: Timeframe
-        """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"hmm_lstm_{symbol}_{timeframe}_{timestamp}.json"
-        filepath = self.output_dir / filename
+        except Exception as e:
+            _logger.error("Error in parameter optimization: %s", e)
+            raise
 
-        # Convert numpy types to native Python types for JSON serialization
-        def convert_numpy(obj):
-            if isinstance(obj, np.integer):
-                return int(obj)
-            elif isinstance(obj, np.floating):
-                return float(obj)
-            elif isinstance(obj, np.ndarray):
-                return obj.tolist()
-            elif isinstance(obj, dict):
-                return {key: convert_numpy(value) for key, value in obj.items()}
-            elif isinstance(obj, list):
-                return [convert_numpy(item) for item in obj]
-            return obj
 
-        results_serializable = convert_numpy(results)
-
-        with open(filepath, 'w') as f:
-            json.dump(results_serializable, f, indent=2, default=str)
-
-        _logger.info("Results saved to %s", filepath)
-
-    def generate_report(self, all_results: List[Dict]):
-        """
-        Generate comprehensive performance report.
-
-        Args:
-            all_results: List of backtest results for all symbol-timeframe combinations
-        """
-        if not all_results:
-            return
-
-        # Create summary DataFrame
-        summary_data = []
-        for result in all_results:
-            summary_data.append({
-                'Symbol': result['symbol'],
-                'Timeframe': result['timeframe'],
-                'Total Return (%)': result['total_return'] * 100,
-                'Total Profit ($)': result['total_profit_with_commission'],
-                'Total Commission ($)': result['total_commission'],
-                'Final Capital ($)': result['final_capital'],
-                'Sharpe Ratio': result.get('sharpe_ratio', 0.0),
-                'Max Drawdown (%)': result.get('max_drawdown', 0.0),
-                'Annual Return (%)': result.get('annual_return', 0.0)
-            })
-
-        summary_df = pd.DataFrame(summary_data)
-
-        # Save summary
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        summary_file = self.output_dir / f"hmm_lstm_summary_{timestamp}.csv"
-        summary_df.to_csv(summary_file, index=False)
-
-        # Generate plots
-        self._generate_plots(all_results, summary_df)
-
-        _logger.info("Report generated. Summary saved to %s", summary_file)
-
-    def _generate_plots(self, all_results: List[Dict], summary_df: pd.DataFrame):
-        """Generate performance plots."""
-        # Create figure with subplots
-        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        fig.suptitle('HMM-LSTM Strategy Performance Summary', fontsize=16)
-
-        # 1. Returns comparison
-        symbols = summary_df['Symbol'].unique()
-        x = np.arange(len(symbols))
-        width = 0.35
-
-        axes[0, 0].bar(x - width/2, summary_df['Total Return (%)'], width, label='Total Return')
-        axes[0, 0].bar(x + width/2, summary_df['Total Profit ($)'], width, label='Total Profit ($)')
-        axes[0, 0].set_xlabel('Symbol')
-        axes[0, 0].set_ylabel('Return (%) / Profit ($)')
-        axes[0, 0].set_title('Returns Comparison')
-        axes[0, 0].set_xticks(x)
-        axes[0, 0].set_xticklabels(symbols)
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-
-        # 2. Sharpe ratio
-        axes[0, 1].bar(symbols, summary_df['Sharpe Ratio'])
-        axes[0, 1].set_xlabel('Symbol')
-        axes[0, 1].set_ylabel('Sharpe Ratio')
-        axes[0, 1].set_title('Sharpe Ratio by Symbol')
-        axes[0, 1].grid(True, alpha=0.3)
 
         # 3. Max drawdown
         axes[1, 0].bar(symbols, summary_df['Max Drawdown (%)'])
@@ -568,12 +496,12 @@ class HMMLSTMOptimizer:
 
         _logger.info("Performance plots saved to %s", plot_file)
 
-    def discover_available_combinations(self) -> List[Tuple[str, str]]:
+    def discover_available_combinations(self) -> List[Dict[str, str]]:
         """
         Discover available symbol-timeframe combinations that have both models and data.
 
         Returns:
-            List of (symbol, timeframe) tuples that have both models and data
+            List of dictionaries with symbol, timeframe, and model information
         """
         available_combinations = []
         data_dir = Path(self.config['data']['data_dir'])
@@ -588,26 +516,37 @@ class HMMLSTMOptimizer:
 
         for csv_file in csv_files:
             # Parse filename to extract symbol and timeframe
-            # Expected format: {symbol}_{timeframe}.csv
+            # Expected format: {source}_{symbol}_{timeframe}_{start_date}_{end_date}.csv
+            # Example: binance_BTCUSDT_1h_20230829_20250828.csv
             filename = csv_file.stem  # Remove .csv extension
 
             if '_' not in filename:
-                _logger.warning("Skipping file with invalid format: %s (expected: symbol_timeframe.csv)", csv_file.name)
+                _logger.warning("Skipping file with invalid format: %s (expected: source_symbol_timeframe_*.csv)", csv_file.name)
                 continue
 
-            # Split by last underscore to handle symbols with underscores
-            parts = filename.rsplit('_', 1)
-            if len(parts) != 2:
-                _logger.warning("Skipping file with invalid format: %s (expected: symbol_timeframe.csv)", csv_file.name)
+            # Split by underscores to extract components
+            parts = filename.split('_')
+            if len(parts) < 3:
+                _logger.warning("Skipping file with invalid format: %s (expected: source_symbol_timeframe_*.csv)", csv_file.name)
                 continue
 
-            symbol, timeframe = parts
+            # Extract source, symbol, and timeframe
+            source = parts[0]  # binance, yfinance, etc.
+            symbol = parts[1]  # BTCUSDT, GOOG, etc.
+            timeframe = parts[2]  # 1h, 4h, 15m, 1d, etc.
 
             # Check if models exist for this combination
             hmm_path, lstm_path = self.find_latest_models(symbol, timeframe)
 
             if hmm_path and lstm_path:
-                available_combinations.append((symbol, timeframe))
+                available_combinations.append({
+                    'provider': source,
+                    'symbol': symbol,
+                    'timeframe': timeframe,
+                    'data_file': csv_file.name,
+                    'hmm_model': str(hmm_path),
+                    'lstm_model': str(lstm_path)
+                })
                 _logger.info("Found complete setup for %s %s (data + models)", symbol, timeframe)
             else:
                 _logger.warning("Skipping %s %s - models not found (data exists: %s)",
@@ -615,9 +554,16 @@ class HMMLSTMOptimizer:
 
         return available_combinations
 
-    def run(self):
+    def run(self, optimize: bool = False, n_trials: int = 100) -> Dict[str, Any]:
         """
         Run the complete HMM-LSTM backtesting process.
+
+        Args:
+            optimize: Whether to run parameter optimization
+            n_trials: Number of optimization trials per combination
+
+        Returns:
+            Dictionary with overall results
         """
         _logger.info("Starting HMM-LSTM backtesting process")
 
@@ -629,57 +575,51 @@ class HMMLSTMOptimizer:
         if not available_combinations:
             _logger.error("No valid symbol-timeframe combinations found with both models and data")
             _logger.info("Please ensure you have:")
-            _logger.info("1. OHLCV files in %s with format: symbol_timeframe.csv", self.config['data']['data_dir'])
+            _logger.info("1. OHLCV files in %s with format: source_symbol_timeframe_*.csv", self.config['data']['data_dir'])
             _logger.info("2. Trained models in %s with format: hmm/lstm_symbol_timeframe_*.pkl", self.models_dir)
-            return
+            return {}
 
         _logger.info("Discovered %d symbol-timeframe combinations from data directory", len(available_combinations))
-        combinations_to_process = available_combinations
 
-        for symbol, timeframe in combinations_to_process:
+        for i, combination in enumerate(available_combinations):
             try:
-                _logger.info("Processing %s %s", symbol, timeframe)
+                _logger.info("Processing combination %d/%d: %s %s %s",
+                            i + 1, len(available_combinations),
+                            combination['provider'], combination['symbol'], combination['timeframe'])
 
-                # Find and load models
-                hmm_path, lstm_path = self.find_latest_models(symbol, timeframe)
-                if not hmm_path or not lstm_path:
-                    _logger.warning("Skipping %s %s - models not found", symbol, timeframe)
-                    continue
+                # Load models
+                hmm_data, lstm_data = self.load_models(Path(combination['hmm_model']), Path(combination['lstm_model']))
 
-                hmm_data, lstm_data = self.load_models(hmm_path, lstm_path)
+                if optimize:
+                    # Run optimization
+                    results = self.optimize_parameters(combination, n_trials)
+                else:
+                    # Run backtest with default parameters
+                    default_params = self.config.get('strategy', {})
+                    results = {
+                        'final_results': self.run_backtest(combination, default_params),
+                        'best_params': default_params
+                    }
 
-                # Run optimization if enabled
-                if self.config['optimization']['enabled']:
-                    opt_results = self.optimize_parameters(symbol, timeframe, hmm_data, lstm_data)
-                    if opt_results:
-                        # Update strategy parameters with best values
-                        best_params = opt_results['best_params']
-                        self.config['strategy'].update(best_params)
-
-                # Run backtest with detailed analyzers
-                strategy, cerebro, results = self.run_backtest(
-                    symbol, timeframe, hmm_data, lstm_data,
-                    include_analyzers=True
-                )
-
-                # Save individual results
-                self.save_results(results, symbol, timeframe)
-                all_results.append(results)
-
-                _logger.info("Completed %s %s - Return: %.2f%%, Profit: $%.2f",
-                           symbol, timeframe, results['total_return'] * 100,
-                           results['total_profit_with_commission'])
+                all_results.append({
+                    'combination': combination,
+                    'results': results
+                })
 
             except Exception as e:
-                _logger.error("Error processing %s %s: %s", symbol, timeframe, e)
+                _logger.error("Error processing combination %s %s %s: %s",
+                             combination['provider'], combination['symbol'], combination['timeframe'], e)
                 continue
 
-        # Generate comprehensive report
-        if all_results:
-            self.generate_report(all_results)
-            _logger.info("HMM-LSTM backtesting completed successfully. Processed %d combinations", len(all_results))
-        else:
-            _logger.warning("HMM-LSTM backtesting completed with no successful results")
+        # Generate overall summary using base class method
+        summary = self._generate_summary(all_results)
+
+        # Save results using base class method
+        self._save_results(all_results, summary, "hmm_lstm")
+
+        _logger.info("HMM-LSTM backtesting completed successfully. Processed %d combinations", len(all_results))
+
+        return summary
 
 
 def main():
@@ -689,14 +629,23 @@ def main():
     parser = argparse.ArgumentParser(description='HMM-LSTM Backtesting Optimizer')
     parser.add_argument('--config', default='config/optimizer/p01_hmm_lstm.json',
                        help='Path to configuration file')
+    parser.add_argument('--optimize', action='store_true',
+                       help='Run parameter optimization')
+    parser.add_argument('--n-trials', type=int, default=100,
+                       help='Number of optimization trials')
 
     args = parser.parse_args()
 
     # Initialize optimizer
     optimizer = HMMLSTMOptimizer(args.config)
 
-    # Run backtesting (automatically discovers all available combinations)
-    optimizer.run()
+    # Run backtesting and optimization
+    results = optimizer.run(optimize=args.optimize, n_trials=args.n_trials)
+
+    print("HMM-LSTM backtesting completed successfully!")
+    print(f"Processed combinations: {results.get('total_combinations', 0)}")
+    print(f"Average return: {results.get('average_return', 0):.2%}")
+    print(f"Average Sharpe ratio: {results.get('average_sharpe', 0):.3f}")
 
 
 if __name__ == "__main__":

@@ -373,7 +373,8 @@ Validates trained LSTM models against naive baselines and generates comprehensiv
      - **Good**: LSTM line (blue) closely follows actual line (red) with minimal lag
      - **Concerning**: Large gaps between predicted and actual values, or systematic bias
      - **Baseline Comparison**: Naive baseline (orange) should generally be worse than LSTM
-   - **Interpretation**: If LSTM predictions are consistently far from actual values, the model may be overfitting or using inappropriate features
+     - **Critical Issue**: If blue line (LSTM) is horizontal/flat, the model is not learning
+   - **Interpretation**: If LSTM predictions are consistently far from actual values, the model may be overfitting or using inappropriate features. A horizontal blue line indicates the LSTM is predicting constant values and needs retraining.
 
 2. **`predictions_scatter.png`** - Scatter Plot Analysis
    - **Purpose**: Shows the correlation between predicted and actual log returns

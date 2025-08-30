@@ -101,7 +101,17 @@ class BaseStrategy(bt.Strategy):
         try:
             current_equity = self.broker.getvalue()
             self.equity_curve.append(current_equity)
-            self.equity_dates.append(self.data.num2date(0))
+
+            # Safely get current date, handling edge cases
+            try:
+                current_date = self.data.num2date(0)
+                self.equity_dates.append(current_date)
+            except (ValueError, IndexError) as e:
+                # Fallback to current datetime if num2date fails
+                from datetime import datetime
+                current_date = datetime.now()
+                self.equity_dates.append(current_date)
+                self._logger.debug("Using fallback date for equity curve: %s", current_date)
 
             # Update peak equity and drawdown
             if current_equity > self.peak_equity:

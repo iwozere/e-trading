@@ -31,7 +31,7 @@ from src.strategy.base_strategy import BaseStrategy
 
 
 class LSTMModel(nn.Module):
-    """LSTM model architecture matching the pipeline implementation."""
+    """Enhanced LSTM model architecture matching the pipeline implementation."""
 
     def __init__(self, input_size: int, hidden_size: int, num_layers: int,
                  dropout: float = 0.2, output_size: int = 1, n_regimes: int = 3):
@@ -47,14 +47,24 @@ class LSTMModel(nn.Module):
             hidden_size=hidden_size,
             num_layers=num_layers,
             dropout=dropout if num_layers > 1 else 0,
-            batch_first=True
+            batch_first=True,
+            bidirectional=False
         )
 
-        # Dropout layer
-        self.dropout = nn.Dropout(dropout)
+        # Additional dense layers for better feature extraction
+        self.dense1 = nn.Linear(hidden_size + n_regimes, hidden_size // 2)
+        self.dense2 = nn.Linear(hidden_size // 2, hidden_size // 4)
 
-        # Output layer with regime conditioning
-        self.linear = nn.Linear(hidden_size + n_regimes, output_size)
+        # Dropout layers
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout * 0.5)
+
+        # Output layer
+        self.linear = nn.Linear(hidden_size // 4, output_size)
+
+        # Activation functions
+        self.relu = nn.ReLU()
+        self.tanh = nn.Tanh()
 
     def forward(self, x, regime_onehot):
         # Initialize hidden state
@@ -68,14 +78,15 @@ class LSTMModel(nn.Module):
         # Take the output from the last time step
         last_output = lstm_out[:, -1, :]
 
-        # Apply dropout
-        dropped = self.dropout(last_output)
+        # Concatenate with regime information early
+        combined = torch.cat([last_output, regime_onehot], dim=1)
 
-        # Concatenate with regime information
-        combined = torch.cat([dropped, regime_onehot], dim=1)
+        # Apply dense layers with activation and dropout
+        dense1_out = self.dropout1(self.relu(self.dense1(combined)))
+        dense2_out = self.dropout2(self.relu(self.dense2(dense1_out)))
 
         # Final prediction
-        output = self.linear(combined)
+        output = self.linear(dense2_out)
 
         return output
 
@@ -93,9 +104,16 @@ class HMMLSTMStrategy(BaseStrategy):
 
     The strategy focuses on:
     - HMM model loading and regime detection
-    - LSTM model loading and price prediction
+    - LSTM model loading and log return prediction
     - Technical indicator calculation
     - Strategy-specific entry/exit logic
+
+    **Important: LSTM Predictions**
+    The LSTM model predicts log returns: log(price[t+1] / price[t])
+    - Positive log return = predicted price increase
+    - Negative log return = predicted price decrease
+    - Typical log returns range from -0.003 to +0.003 (-0.3% to +0.3%)
+    - Thresholds are set for log return scale (e.g., 0.001 = 0.1% predicted change)
 
     Can be used for both backtesting (with pre-loaded models) and live trading (loading from files).
     """
@@ -153,14 +171,14 @@ class HMMLSTMStrategy(BaseStrategy):
             self.prediction_buffer = deque(maxlen=10)
             self.feature_buffer = deque(maxlen=100)
 
-            # Trading parameters
-            self.prediction_threshold = self.config.get('prediction_threshold', 0.001)
-            self.regime_confidence_threshold = self.config.get('regime_confidence_threshold', 0.6)
+            # Trading parameters (configured for log return predictions)
+            self.prediction_threshold = self.config.get('prediction_threshold', 0.001)  # 0.1% log return
+            self.regime_confidence_threshold = self.config.get('regime_confidence_threshold', 0.4)  # 40% confidence
 
-            # Exit parameters
-            self.profit_target = self.config.get('profit_target', 0.02)
-            self.stop_loss = self.config.get('stop_loss', 0.01)
-            self.trailing_stop = self.config.get('trailing_stop', 0.005)
+            # Exit parameters (configured for log return scale)
+            self.profit_target = self.config.get('profit_target', 0.01)  # 1% profit target
+            self.stop_loss = self.config.get('stop_loss', 0.005)  # 0.5% stop loss
+            self.trailing_stop = self.config.get('trailing_stop', 0.005)  # 0.5% trailing stop
 
             # Check if models are passed as parameters (for backtesting)
             if hasattr(self, 'hmm_model_param') and self.hmm_model_param is not None:
@@ -260,7 +278,24 @@ class HMMLSTMStrategy(BaseStrategy):
         """Initialize technical indicators using optimized parameters."""
         try:
             # Use optimized parameters if available, otherwise use defaults
-            params = self.optimized_indicators
+            params = self.optimized_indicators or {}
+
+            # Set default parameters if optimized_indicators is None
+            if not params:
+                params = {
+                    'rsi_period': 14,
+                    'bb_period': 20,
+                    'bb_std': 2.0,
+                    'macd_fast': 12,
+                    'macd_slow': 26,
+                    'macd_signal': 9,
+                    'ema_fast': 12,
+                    'ema_slow': 26,
+                    'atr_period': 14,
+                    'stoch_k': 14,
+                    'stoch_d': 3
+                }
+                self.optimized_indicators = params
 
             # RSI
             rsi_period = params.get('rsi_period', 14)
@@ -412,7 +447,14 @@ class HMMLSTMStrategy(BaseStrategy):
             try:
                 posteriors = self.hmm_model.predict_proba(scaled_features[-1:])
                 confidence = np.max(posteriors[0])
-            except:
+
+                # Debug: Log regime prediction details occasionally
+                if len(self.data) % 100 == 0:  # Log every 100 bars
+                    self._logger.debug("HMM Regime Debug - Regime: %d, Posteriors: %s, Max Confidence: %.3f",
+                                     int(regime[0]), posteriors[0].tolist(), confidence)
+
+            except Exception as e:
+                self._logger.warning("Error getting HMM posteriors: %s", e)
                 confidence = 0.7  # Default confidence
 
             return int(regime[0]), float(confidence)
@@ -516,8 +558,10 @@ class HMMLSTMStrategy(BaseStrategy):
             self.current_regime = regime
             self.regime_confidence = regime_confidence
 
-            self._logger.debug("Regime: %d (conf: %.3f), Prediction: %.6f, Price: %.4f",
-                             regime, regime_confidence, prediction, self.data.close[0])
+            # Convert log return to percentage for logging
+            percentage_change = self._log_return_to_percentage(prediction)
+            self._logger.debug("Regime: %d (conf: %.3f), Log Return: %.6f (%.4f%%), Price: %.4f",
+                             regime, regime_confidence, prediction, percentage_change * 100, self.data.close[0])
 
             # Trading logic
             current_position = self.position.size
@@ -533,38 +577,60 @@ class HMMLSTMStrategy(BaseStrategy):
         except Exception as e:
             self._logger.exception("Error in _execute_strategy_logic")
 
+    def _log_return_to_percentage(self, log_return: float) -> float:
+        """Convert log return to percentage change."""
+        return np.exp(log_return) - 1
+
+    def _percentage_to_log_return(self, percentage: float) -> float:
+        """Convert percentage change to log return."""
+        return np.log(1 + percentage)
+
     def _check_entry_signals(self, prediction: float, regime: int, regime_confidence: float):
         """Check for entry signals and execute trades."""
         try:
+            # Debug: Log signal check details occasionally
+            if len(self.data) % 50 == 0:  # Log every 50 bars
+                self._logger.debug("Signal Check - Prediction: %.6f, Threshold: %.6f, Regime Conf: %.3f, Threshold: %.3f",
+                                 prediction, self.prediction_threshold, regime_confidence, self.regime_confidence_threshold)
+
             # Only trade if we have sufficient confidence in regime prediction
             if regime_confidence < self.regime_confidence_threshold:
+                if len(self.data) % 50 == 0:  # Log occasionally
+                    self._logger.debug("No trade: Regime confidence %.3f < threshold %.3f",
+                                     regime_confidence, self.regime_confidence_threshold)
                 return
 
-            # Only trade if prediction is strong enough
+            # Only trade if prediction is strong enough (prediction is log return)
             if abs(prediction) < self.prediction_threshold:
+                if len(self.data) % 50 == 0:  # Log occasionally
+                    self._logger.debug("No trade: Prediction %.6f < threshold %.6f",
+                                     abs(prediction), self.prediction_threshold)
                 return
 
-            # Calculate confidence and risk multiplier based on prediction strength
-            prediction_strength = abs(prediction)
-            confidence = min(1.0, prediction_strength * 100)  # Cap at 1.0
-            risk_multiplier = min(2.0, 1.0 + prediction_strength * 100)  # Cap at 2x
+            # Convert log return prediction to percentage change for signal strength calculation
+            percentage_change = self._log_return_to_percentage(prediction)
 
-            # Long signal
+            # Calculate confidence and risk multiplier based on percentage change strength
+            prediction_strength = abs(percentage_change)
+            confidence = min(1.0, prediction_strength * 1000)  # Scale for percentage (0.001 = 0.1%)
+            risk_multiplier = min(2.0, 1.0 + prediction_strength * 1000)  # Scale for percentage
+
+            # Long signal (positive log return = price increase)
             if prediction > self.prediction_threshold:
-                self._logger.info("LONG signal - Prediction: %.6f, Regime: %d, Confidence: %.3f",
-                               prediction, regime, regime_confidence)
+                self._logger.info("LONG signal - Log Return: %.6f (%.4f%%), Regime: %d, Confidence: %.3f",
+                               prediction, percentage_change * 100, regime, regime_confidence)
 
                 self._enter_position(
                     direction='long',
                     confidence=confidence,
                     risk_multiplier=risk_multiplier,
-                    reason=f"HMM-LSTM prediction: {prediction:.6f}"
+                    reason=f"HMM-LSTM log return prediction: {prediction:.6f} ({percentage_change*100:.4f}%)"
                 )
 
-            # Short signal (if enabled)
+            # Short signal (negative log return = price decrease)
             elif prediction < -self.prediction_threshold and self.config.get('allow_short', False):
-                self._logger.info("SHORT signal - Prediction: %.6f, Regime: %d, Confidence: %.3f",
-                               prediction, regime, regime_confidence)
+                self._logger.info("SHORT signal - Log Return: %.6f (%.4f%%), Regime: %d, Confidence: %.3f",
+                               prediction, percentage_change * 100, regime, regime_confidence)
 
                 self._enter_position(
                     direction='short',
@@ -619,7 +685,7 @@ class HMMLSTMStrategy(BaseStrategy):
                 exit_signal = True
                 exit_reason = "regime_change"
 
-            # 5. Prediction reversal
+            # 5. Prediction reversal (log return predictions)
             elif position_size > 0 and prediction < -self.prediction_threshold:
                 exit_signal = True
                 exit_reason = "prediction_reversal"
