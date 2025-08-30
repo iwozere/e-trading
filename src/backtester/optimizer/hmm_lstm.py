@@ -13,8 +13,9 @@ Features:
 - Integration with existing HMM-LSTM pipeline
 - Support for multiple symbols and timeframes
 - Regime-aware trading decisions
-- Comprehensive performance analysis
+- Comprehensive performance analysis with custom analyzers
 - Risk management controls
+- Consistent results format with custom_optimizer.py
 """
 
 import os
@@ -39,6 +40,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.strategy.hmm_lstm_strategy import HMMLSTMStrategy
+from src.backtester.analyzer.bt_analyzers import (CAGR, CalmarRatio,
+                                       ConsecutiveWinsLosses,
+                                       PortfolioVolatility, ProfitFactor,
+                                       SortinoRatio, WinRate)
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -194,7 +199,7 @@ class HMMLSTMOptimizer:
         return df
 
     def run_backtest(self, symbol: str, timeframe: str,
-                    hmm_data: Dict, lstm_data: Dict) -> Dict:
+                    hmm_data: Dict, lstm_data: Dict, trial=None, include_analyzers=True) -> Dict:
         """
         Run backtesting for a single symbol-timeframe combination.
 
@@ -203,6 +208,8 @@ class HMMLSTMOptimizer:
             timeframe: Timeframe
             hmm_data: Loaded HMM model data
             lstm_data: Loaded LSTM model data
+            trial: Optuna trial object for optimization (optional)
+            include_analyzers: Whether to include detailed analyzers (default: True)
 
         Returns:
             Dictionary containing backtest results
@@ -226,8 +233,25 @@ class HMMLSTMOptimizer:
         )
         cerebro.adddata(data)
 
+        # Prepare strategy parameters (with optimization if trial provided)
+        strategy_params = self.config['strategy'].copy()
+
+        if trial:
+            # Update parameters based on trial suggestions
+            strategy_params['entry_threshold'] = trial.suggest_float(
+                'entry_threshold', 0.3, 0.8
+            )
+            strategy_params['regime_confidence_threshold'] = trial.suggest_float(
+                'regime_confidence_threshold', 0.5, 0.9
+            )
+            strategy_params['profit_target'] = trial.suggest_float(
+                'profit_target', 0.01, 0.05
+            )
+            strategy_params['stop_loss'] = trial.suggest_float(
+                'stop_loss', 0.005, 0.03
+            )
+
         # Add strategy
-        strategy_params = self.config['strategy']
         cerebro.addstrategy(
             HMMLSTMStrategy,
             hmm_model=hmm_data['model'],
@@ -239,45 +263,99 @@ class HMMLSTMOptimizer:
             sequence_length=lstm_data['config']['sequence_length'],
             prediction_threshold=strategy_params['entry_threshold'],
             regime_confidence_threshold=strategy_params['regime_confidence_threshold'],
-            profit_target=self.config['risk_management']['take_profit_pct'],
-            stop_loss=self.config['risk_management']['stop_loss_pct'],
+            profit_target=strategy_params.get('profit_target', self.config['risk_management']['take_profit_pct']),
+            stop_loss=strategy_params.get('stop_loss', self.config['risk_management']['stop_loss_pct']),
             trailing_stop=self.config['risk_management'].get('trailing_stop', 0.005)
         )
 
-        # Set initial capital
+        # Set broker parameters
         cerebro.broker.setcash(self.config['initial_capital'])
         cerebro.broker.setcommission(commission=self.config['commission'])
 
-        # Add analyzers
-        cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-        cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-        cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+        # Add trade analyzer (always available)
+        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
+
+        # Add detailed analyzers only if requested
+        if include_analyzers:
+            # Add basic analyzers
+            cerebro.addanalyzer(bt.analyzers.Returns, _name="returns")
+            cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
+            cerebro.addanalyzer(bt.analyzers.SQN, _name="sqn")
+            cerebro.addanalyzer(bt.analyzers.TimeDrawDown, _name="time_drawdown")
+            cerebro.addanalyzer(bt.analyzers.VWR, _name="vwr")
+            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe", riskfreerate=0.01)
+
+            # Add custom analyzers (same as custom_optimizer.py)
+            cerebro.addanalyzer(ProfitFactor, _name="profit_factor")
+            cerebro.addanalyzer(WinRate, _name="winrate")
+            cerebro.addanalyzer(CalmarRatio, _name="calmar", riskfreerate=0.01)
+            cerebro.addanalyzer(CAGR, _name="cagr", timeframe=bt.TimeFrame.Years)
+            cerebro.addanalyzer(SortinoRatio, _name="sortino", riskfreerate=0.01)
+            cerebro.addanalyzer(ConsecutiveWinsLosses, _name="consecutivewinslosses")
+            cerebro.addanalyzer(PortfolioVolatility, _name="portfoliovolatility")
 
         # Run backtest
         _logger.info("Running backtest for %s %s", symbol, timeframe)
-        results = cerebro.run()
+        results = cerebro.run(runonce=True, preload=True)
+        strategy = results[0]
 
-        # Extract results
-        strat = results[0]
-        analyzers = strat.analyzers
+        # Process analyzers
+        analyzers = {}
+        if include_analyzers:
+            for name in strategy.analyzers._names:
+                analyzer = getattr(strategy.analyzers, name)
+                analysis = analyzer.get_analysis()
+                analyzers[name] = self.to_dict(analysis)
 
-        # Compile results
+        # Get trade analysis (always available)
+        trades_analysis = analyzers.get("trades", {}) if include_analyzers else {}
+
+        # Calculate metrics (consistent with custom_optimizer.py)
+        gross_profit = trades_analysis.get("pnl", {}).get("gross", {}).get("total", 0.0)
+        net_profit = trades_analysis.get("pnl", {}).get("net", {}).get("total", 0.0)
+        total_commission = gross_profit - net_profit
+
+        # If gross profit is not available, calculate it from net profit + commission
+        if gross_profit == 0.0 and net_profit != 0.0:
+            gross_profit = net_profit + total_commission
+
+        # Compile results (consistent format with custom_optimizer.py)
         backtest_results = {
             'symbol': symbol,
             'timeframe': timeframe,
+            'best_params': strategy_params,
+            'total_profit': float(gross_profit),  # Gross profit (before commission)
+            'total_profit_with_commission': float(net_profit),  # Net profit (after commission)
+            'total_commission': float(total_commission),  # Total commission paid
             'initial_capital': self.config['initial_capital'],
             'final_capital': cerebro.broker.getvalue(),
-            'total_return': analyzers.returns.get_analysis()['rtot'],
-            'annual_return': analyzers.returns.get_analysis()['rnorm100'],
-            'sharpe_ratio': analyzers.sharpe.get_analysis()['sharperatio'],
-            'max_drawdown': analyzers.drawdown.get_analysis()['max']['drawdown'],
-            'trades': analyzers.trades.get_analysis(),
+            'total_return': (cerebro.broker.getvalue() - self.config['initial_capital']) / self.config['initial_capital'],
+            'analyzers': analyzers,
+            'trades': strategy.trades,
             'strategy_params': strategy_params,
             'timestamp': datetime.now().isoformat()
         }
 
-        return backtest_results
+        # Add legacy fields for backward compatibility
+        if include_analyzers:
+            backtest_results.update({
+                'annual_return': analyzers.get('returns', {}).get('rnorm100', 0.0),
+                'sharpe_ratio': analyzers.get('sharpe', {}).get('sharperatio', 0.0),
+                'max_drawdown': analyzers.get('drawdown', {}).get('max', {}).get('drawdown', 0.0),
+            })
+
+        return strategy, cerebro, backtest_results
+
+    def to_dict(self, obj):
+        """Convert object to dictionary (same as custom_optimizer.py)."""
+        if isinstance(obj, dict):
+            return {k: self.to_dict(v) for k, v in obj.items()}
+        elif hasattr(obj, "items"):
+            return {k: self.to_dict(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [self.to_dict(v) for v in obj]
+        else:
+            return obj
 
     def optimize_parameters(self, symbol: str, timeframe: str,
                           hmm_data: Dict, lstm_data: Dict) -> Dict:
@@ -328,11 +406,14 @@ class HMMLSTMOptimizer:
             self.config['strategy'].update(suggested_params)
 
             try:
-                # Run backtest with suggested parameters
-                results = self.run_backtest(symbol, timeframe, hmm_data, lstm_data)
+                # Run backtest with suggested parameters (without detailed analyzers for speed)
+                strategy, cerebro, results = self.run_backtest(
+                    symbol, timeframe, hmm_data, lstm_data,
+                    include_analyzers=False
+                )
 
-                # Return negative Sharpe ratio (Optuna minimizes)
-                return -results['sharpe_ratio']
+                # Return negative total return (Optuna minimizes)
+                return -results['total_return']
 
             except Exception as e:
                 _logger.error("Optimization trial failed: %s", e)
@@ -409,10 +490,12 @@ class HMMLSTMOptimizer:
                 'Symbol': result['symbol'],
                 'Timeframe': result['timeframe'],
                 'Total Return (%)': result['total_return'] * 100,
-                'Annual Return (%)': result['annual_return'],
-                'Sharpe Ratio': result['sharpe_ratio'],
-                'Max Drawdown (%)': result['max_drawdown'],
-                'Final Capital': result['final_capital']
+                'Total Profit ($)': result['total_profit_with_commission'],
+                'Total Commission ($)': result['total_commission'],
+                'Final Capital ($)': result['final_capital'],
+                'Sharpe Ratio': result.get('sharpe_ratio', 0.0),
+                'Max Drawdown (%)': result.get('max_drawdown', 0.0),
+                'Annual Return (%)': result.get('annual_return', 0.0)
             })
 
         summary_df = pd.DataFrame(summary_data)
@@ -439,9 +522,9 @@ class HMMLSTMOptimizer:
         width = 0.35
 
         axes[0, 0].bar(x - width/2, summary_df['Total Return (%)'], width, label='Total Return')
-        axes[0, 0].bar(x + width/2, summary_df['Annual Return (%)'], width, label='Annual Return')
+        axes[0, 0].bar(x + width/2, summary_df['Total Profit ($)'], width, label='Total Profit ($)')
         axes[0, 0].set_xlabel('Symbol')
-        axes[0, 0].set_ylabel('Return (%)')
+        axes[0, 0].set_ylabel('Return (%) / Profit ($)')
         axes[0, 0].set_title('Returns Comparison')
         axes[0, 0].set_xticks(x)
         axes[0, 0].set_xticklabels(symbols)
@@ -573,16 +656,19 @@ class HMMLSTMOptimizer:
                         best_params = opt_results['best_params']
                         self.config['strategy'].update(best_params)
 
-                # Run backtest
-                results = self.run_backtest(symbol, timeframe, hmm_data, lstm_data)
+                # Run backtest with detailed analyzers
+                strategy, cerebro, results = self.run_backtest(
+                    symbol, timeframe, hmm_data, lstm_data,
+                    include_analyzers=True
+                )
 
                 # Save individual results
                 self.save_results(results, symbol, timeframe)
                 all_results.append(results)
 
-                _logger.info("Completed %s %s - Sharpe: %.4f, Return: %.2f%%",
-                           symbol, timeframe, results['sharpe_ratio'],
-                           results['total_return'] * 100)
+                _logger.info("Completed %s %s - Return: %.2f%%, Profit: $%.2f",
+                           symbol, timeframe, results['total_return'] * 100,
+                           results['total_profit_with_commission'])
 
             except Exception as e:
                 _logger.error("Error processing %s %s: %s", symbol, timeframe, e)

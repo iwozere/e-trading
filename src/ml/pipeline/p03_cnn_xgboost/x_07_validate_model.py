@@ -30,6 +30,20 @@ from src.utils.config import load_config
 _logger = setup_logger(__name__)
 
 
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle NumPy data types."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        return super(NumpyEncoder, self).default(obj)
+
+
 class ModelValidator:
     """
     Model Validator for the CNN + XGBoost pipeline.
@@ -189,15 +203,15 @@ class ModelValidator:
                     if target in df.columns:
                         # Convert target to numeric type to handle string/int mismatches
                         target_values = pd.to_numeric(df[target], errors='coerce')
-                        
+
                         # Check for any NaN values after conversion
                         nan_count = target_values.isna().sum()
                         if nan_count > 0:
-                            _logger.warning("Found %d NaN values in target %s for file %s", 
+                            _logger.warning("Found %d NaN values in target %s for file %s",
                                           nan_count, target, file_path.name)
                             # Fill NaN values with mode or most common value
                             target_values = target_values.fillna(target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0)
-                        
+
                         all_targets[target].append(target_values.values)
 
             except Exception as e:
@@ -766,7 +780,7 @@ class ModelValidator:
         }
 
         with open(summary_path, "w") as f:
-            json.dump(summary, f, indent=2)
+            json.dump(summary, f, indent=2, cls=NumpyEncoder)
 
         _logger.info("Validation summary saved to %s", summary_path)
 

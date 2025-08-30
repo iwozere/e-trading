@@ -1,16 +1,13 @@
 """
 HMM-LSTM Backtesting Example
 
-This example demonstrates how to use the HMM-LSTM backtesting system
-programmatically to evaluate trained models on historical data.
+This example demonstrates how to use the updated HMM-LSTM optimizer
+with the same structure and quality as custom_optimizer.py.
 
 Prerequisites:
-1. Complete HMM-LSTM pipeline training
-2. Trained models available in src/ml/pipeline/p01_hmm_lstm/models/
-3. OHLCV data available in data/{symbol}_{timeframe}.csv
-
-Usage:
-    python examples/hmm_lstm_backtest_example.py
+1. Complete the HMM-LSTM pipeline training
+2. Ensure you have OHLCV data files in data/ directory
+3. Ensure trained models are available in src/ml/pipeline/p01_hmm_lstm/models/
 """
 
 import sys
@@ -24,213 +21,183 @@ sys.path.append(str(project_root))
 from src.backtester.optimizer.hmm_lstm import HMMLSTMOptimizer
 
 
-def create_custom_config():
-    """Create a custom configuration for the example."""
-    config = {
-        "optimizer_type": "hmm_lstm",
-        "initial_capital": 10000.0,
-        "commission": 0.001,
-        "position_size": 0.1,
-        "plot": True,
-        "save_trades": True,
-        "output_dir": "results",
+def example_basic_backtesting():
+    """Example 1: Basic backtesting with default configuration."""
+    print("=" * 60)
+    print("Example 1: Basic HMM-LSTM Backtesting")
+    print("=" * 60)
 
-        "ml_models": {
+    try:
+        # Initialize optimizer with default config
+        optimizer = HMMLSTMOptimizer("config/optimizer/p01_hmm_lstm.json")
+
+        # Run backtesting (automatically discovers available combinations)
+        optimizer.run()
+
+        print("Backtesting completed successfully!")
+        print("Check the results/ directory for detailed reports and visualizations.")
+
+    except Exception as e:
+        print(f"Error in basic backtesting: {e}")
+        return None
+
+
+def example_with_optimization():
+    """Example 2: Backtesting with parameter optimization."""
+    print("\n" + "=" * 60)
+    print("Example 2: HMM-LSTM Backtesting with Optimization")
+    print("=" * 60)
+
+    try:
+        # Load configuration
+        with open("config/optimizer/p01_hmm_lstm.json", 'r') as f:
+            config = json.load(f)
+
+        # Enable optimization
+        config['optimization']['enabled'] = True
+        config['optimization']['n_trials'] = 20  # Reduced for faster execution
+
+        # Save modified config
+        temp_config_path = "config/optimizer/p01_hmm_lstm_optimization.json"
+        with open(temp_config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+
+        # Initialize optimizer with optimization enabled
+        optimizer = HMMLSTMOptimizer(temp_config_path)
+
+        # Run backtesting with optimization
+        optimizer.run()
+
+        print("Backtesting with optimization completed successfully!")
+        print("Check the results/ directory for optimization results.")
+
+        # Clean up temporary config
+        Path(temp_config_path).unlink(missing_ok=True)
+
+    except Exception as e:
+        print(f"Error in optimization backtesting: {e}")
+        return None
+
+
+def example_custom_configuration():
+    """Example 3: Backtesting with custom configuration."""
+    print("\n" + "=" * 60)
+    print("Example 3: HMM-LSTM Backtesting with Custom Configuration")
+    print("=" * 60)
+
+    try:
+        # Create custom configuration
+        custom_config = {
+            "optimizer_type": "hmm_lstm",
+            "initial_capital": 50000.0,  # Higher initial capital
+            "commission": 0.0005,  # Lower commission
+            "position_size": 0.15,  # Larger position size
+            "plot": True,
+            "save_trades": True,
+            "output_dir": "results/custom_hmm_lstm",
+
+            "ml_models": {
                 "pipeline_dir": "src/ml/pipeline/p01_hmm_lstm",
-    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
-            "config_file": "config/pipeline/p01.yaml"
-        },
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                "config_file": "config/pipeline/p01.yaml"
+            },
 
-        "strategy": {
-            "name": "HMMLSTMStrategy",
-            "entry_threshold": 0.6,
-            "regime_confidence_threshold": 0.7
-        },
+            "strategy": {
+                "name": "HMMLSTMStrategy",
+                "entry_threshold": 0.5,  # More conservative entry
+                "regime_confidence_threshold": 0.8  # Higher confidence requirement
+            },
 
-        "data": {
-            "data_dir": "data",
-            "start_date": "2023-01-01",
-            "end_date": "2024-01-01"
-        },
+            "data": {
+                "data_dir": "data",
+                "start_date": "2023-06-01",  # Shorter period
+                "end_date": "2023-12-31"
+            },
 
-        "risk_management": {
-            "max_position_size": 0.2,
-            "stop_loss_pct": 0.05,
-            "take_profit_pct": 0.1,
-            "max_drawdown": 0.15
-        },
+            "risk_management": {
+                "max_position_size": 0.25,
+                "stop_loss_pct": 0.03,  # Tighter stop loss
+                "take_profit_pct": 0.08,  # Lower profit target
+                "max_drawdown": 0.10
+            },
 
-        "optimization": {
-            "enabled": False,  # Disable optimization for this example
-            "n_trials": 50,
-            "optimize_params": [
-                "entry_threshold",
-                "exit_threshold",
-                "regime_confidence_threshold"
-            ],
-            "parameter_ranges": {
-                "entry_threshold": {
-                    "min": 0.3,
-                    "max": 0.8,
-                    "type": "float"
-                },
-                "exit_threshold": {
-                    "min": 0.2,
-                    "max": 0.7,
-                    "type": "float"
-                },
-                "regime_confidence_threshold": {
-                    "min": 0.5,
-                    "max": 0.9,
-                    "type": "float"
-                }
+            "optimization": {
+                "enabled": False  # No optimization for this example
             }
         }
-    }
 
-    return config
+        # Save custom config
+        custom_config_path = "config/optimizer/p01_hmm_lstm_custom.json"
+        with open(custom_config_path, 'w') as f:
+            json.dump(custom_config, f, indent=2)
 
+        # Initialize optimizer with custom config
+        optimizer = HMMLSTMOptimizer(custom_config_path)
 
-def save_config(config, filename="hmm_lstm_example.json"):
-    """Save configuration to file."""
-    config_path = Path("config/optimizer") / filename
-    config_path.parent.mkdir(parents=True, exist_ok=True)
+        # Run backtesting
+        optimizer.run()
 
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
+        print("Custom configuration backtesting completed successfully!")
+        print("Check the results/custom_hmm_lstm/ directory for results.")
 
-    print(f"Configuration saved to: {config_path}")
-    return config_path
+        # Clean up custom config
+        Path(custom_config_path).unlink(missing_ok=True)
 
-
-def run_basic_backtest():
-    """Run a basic backtest with default settings."""
-    print("=== Running Basic HMM-LSTM Backtest ===")
-
-    # Create custom configuration
-    config = create_custom_config()
-    config_path = save_config(config)
-
-    # Initialize optimizer
-    optimizer = HMMLSTMOptimizer(str(config_path))
-
-    # Run backtesting
-    optimizer.run()
-
-    print("Basic backtest completed!")
-
-
-def run_optimization_backtest():
-    """Run backtest with parameter optimization."""
-    print("=== Running HMM-LSTM Backtest with Optimization ===")
-
-    # Create configuration with optimization enabled
-    config = create_custom_config()
-    config["optimization"]["enabled"] = True
-    config["optimization"]["n_trials"] = 20  # Reduced for faster execution
-
-    config_path = save_config(config, "hmm_lstm_optimize.json")
-
-    # Initialize optimizer
-    optimizer = HMMLSTMOptimizer(str(config_path))
-
-    # Run backtesting with optimization
-    optimizer.run()
-
-    print("Optimization backtest completed!")
-
-
-def run_multi_symbol_backtest():
-    """Run backtest with all available symbols and timeframes."""
-    print("=== Running Multi-Symbol HMM-LSTM Backtest ===")
-
-    # Create configuration (will auto-discover all available combinations)
-    config = create_custom_config()
-    config_path = save_config(config, "hmm_lstm_multi.json")
-
-    # Initialize optimizer
-    optimizer = HMMLSTMOptimizer(str(config_path))
-
-    # Run backtesting (will process all discovered combinations)
-    optimizer.run()
-
-    print("Multi-symbol backtest completed!")
-
-
-def check_prerequisites():
-    """Check if prerequisites are met."""
-    print("=== Checking Prerequisites ===")
-
-    # Check if models directory exists
-    models_dir = Path("src/ml/pipeline/p01_hmm_lstm/models")
-    if not models_dir.exists():
-        print("❌ Models directory not found. Please run the HMM-LSTM pipeline first.")
-        return False
-
-        # Check if data directory exists
-    data_dir = Path("data")
-    if not data_dir.exists():
-        print("❌ Data directory not found. Please create a 'data' directory with OHLCV files.")
-        return False
-
-    # Check for model files
-    model_files = list(models_dir.glob("*.pkl"))
-    if not model_files:
-        print("❌ No model files found. Please run the HMM-LSTM pipeline first.")
-        return False
-
-    # Check for OHLCV data files
-    data_files = list(data_dir.glob("*.csv"))
-    if not data_files:
-        print("❌ No OHLCV data files found. Please add CSV files to the 'data' directory.")
-        return False
-
-    print("✅ Prerequisites met!")
-    print(f"   Found {len(model_files)} model files")
-    print(f"   Found {len(data_files)} OHLCV data files")
-    return True
+    except Exception as e:
+        print(f"Error in custom configuration backtesting: {e}")
+        return None
 
 
 def main():
-    """Main function to run the example."""
-    print("HMM-LSTM Backtesting Example")
-    print("=" * 50)
+    """Run all examples."""
+    print("HMM-LSTM Backtesting Examples")
+    print("=" * 60)
+    print("This script demonstrates the updated HMM-LSTM optimizer.")
+    print("Make sure you have completed the p01_hmm_lstm pipeline before running.")
+    print()
 
     # Check prerequisites
-    if not check_prerequisites():
-        print("\nPlease complete the HMM-LSTM pipeline training first:")
-        print("cd src/ml/pipeline/p01_hmm_lstm")
-        print("python run_pipeline.py")
+    models_dir = Path("src/ml/pipeline/p01_hmm_lstm/models")
+    data_dir = Path("data")
+
+    if not models_dir.exists():
+        print("❌ Models directory not found. Please complete the HMM-LSTM pipeline training first.")
         return
 
-    print("\n" + "=" * 50)
+    if not data_dir.exists():
+        print("❌ Data directory not found. Please ensure you have OHLCV data files.")
+        return
 
-    # Run different examples
-    try:
-        # Example 1: Basic backtest
-        run_basic_backtest()
+    print("✅ Prerequisites check passed!")
+    print()
 
-        print("\n" + "=" * 50)
+    # Run examples
+    example_basic_backtesting()
+    example_with_optimization()
+    example_custom_configuration()
 
-        # Example 2: Optimization backtest (optional)
-        response = input("\nRun optimization backtest? (y/n): ").lower().strip()
-        if response == 'y':
-            run_optimization_backtest()
-
-        print("\n" + "=" * 50)
-
-        # Example 3: Multi-symbol backtest (optional)
-        response = input("\nRun multi-symbol backtest? (y/n): ").lower().strip()
-        if response == 'y':
-            run_multi_symbol_backtest()
-
-        print("\n" + "=" * 50)
-        print("All examples completed successfully!")
-        print("\nCheck the 'results/' directory for output files.")
-
-    except Exception as e:
-        print(f"❌ Error running examples: {e}")
-        print("\nPlease check the error messages and ensure all prerequisites are met.")
+    # Summary
+    print("\n" + "=" * 60)
+    print("Summary")
+    print("=" * 60)
+    print("Examples completed! Check the following for results:")
+    print("- Basic backtesting: results/")
+    print("- Optimization results: results/ (with optimization enabled)")
+    print("- Custom configuration: results/custom_hmm_lstm/")
+    print()
+    print("Key improvements in the updated HMM-LSTM optimizer:")
+    print("1. ✅ Consistent results format with custom_optimizer.py")
+    print("2. ✅ Same analyzer structure and quality")
+    print("3. ✅ Enhanced optimization framework")
+    print("4. ✅ Better error handling and logging")
+    print("5. ✅ Automatic discovery of available symbol-timeframe combinations")
+    print("6. ✅ Comprehensive performance analysis")
+    print()
+    print("Next steps:")
+    print("1. Review the generated reports and visualizations")
+    print("2. Analyze the performance metrics")
+    print("3. Use the best parameters for live trading")
+    print("4. Consider running more extensive optimization")
 
 
 if __name__ == "__main__":
