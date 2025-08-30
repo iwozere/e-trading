@@ -241,7 +241,8 @@ class XGBoostTrainer:
             **best_params,
             random_state=42,
             n_jobs=-1,
-            verbosity=0
+            verbosity=0,
+            early_stopping_rounds=50
         )
 
         # Try to load checkpoint
@@ -256,7 +257,6 @@ class XGBoostTrainer:
         model.fit(
             X_train, y_train,
             eval_set=[(X_val, y_val)],
-            early_stopping_rounds=50,
             verbose=False,
             xgb_model=None if start_iteration == 0 else model
         )

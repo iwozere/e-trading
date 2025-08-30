@@ -111,10 +111,9 @@ class XGBoostOptimizer:
         }
 
         # Train XGBoost model
-        model = xgb.XGBRegressor(**params)
+        model = xgb.XGBRegressor(**params, early_stopping_rounds=50)
         model.fit(X_train, y_train,
                  eval_set=[(X_val, y_val)],
-                 early_stopping_rounds=50,
                  verbose=False)
 
         # Make predictions on validation set
@@ -192,10 +191,9 @@ class XGBoostOptimizer:
             self.logger.warning(f"Failed to create optimization plots: {e}")
 
         # Evaluate best model on test set
-        best_model = xgb.XGBRegressor(**best_params, random_state=42, n_jobs=-1, verbosity=0)
+        best_model = xgb.XGBRegressor(**best_params, random_state=42, n_jobs=-1, verbosity=0, early_stopping_rounds=50)
         best_model.fit(X_train, y_train,
                       eval_set=[(X_val, y_val)],
-                      early_stopping_rounds=50,
                       verbose=False)
 
         y_test_pred = best_model.predict(X_test)

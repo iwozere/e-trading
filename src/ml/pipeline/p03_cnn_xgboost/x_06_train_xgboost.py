@@ -75,7 +75,6 @@ class XGBoostTrainer:
         """Save model state so training can resume later."""
         ckpt_path = self._get_checkpoint_path(target)
         checkpoint = {
-            'model_state': model.get_booster().save_raw()[4],  # Save raw booster state
             'iteration': iteration,
             'train_metrics': train_metrics,
             'val_metrics': val_metrics,
@@ -94,13 +93,13 @@ class XGBoostTrainer:
             with open(ckpt_path, 'rb') as f:
                 checkpoint = pickle.load(f)
 
-            # Load model state
-            model.get_booster().load_model(ckpt_path)
+            # For now, just return the checkpoint info without loading the model state
+            # since we can't access booster on unfitted model in XGBoost 3.x
             start_iteration = checkpoint['iteration'] + 1
             train_metrics = checkpoint['train_metrics']
             val_metrics = checkpoint['val_metrics']
 
-            _logger.info("Resuming training for %s from checkpoint %s (iteration %d)",
+            _logger.info("Found checkpoint for %s at %s (iteration %d) - will start fresh training",
                         target, ckpt_path, start_iteration)
             return start_iteration, train_metrics, val_metrics
         else:
@@ -239,15 +238,15 @@ class XGBoostTrainer:
                     if target in df.columns:
                         # Convert target to numeric type to handle string/int mismatches
                         target_values = pd.to_numeric(df[target], errors='coerce')
-                        
+
                         # Check for any NaN values after conversion
                         nan_count = target_values.isna().sum()
                         if nan_count > 0:
-                            _logger.warning("Found %d NaN values in target %s for file %s", 
+                            _logger.warning("Found %d NaN values in target %s for file %s",
                                           nan_count, target, file_path.name)
                             # Fill NaN values with mode or most common value
                             target_values = target_values.fillna(target_values.mode().iloc[0] if len(target_values.mode()) > 0 else 0)
-                        
+
                         all_targets[target].append(target_values.values)
 
                 _logger.debug("Processed %s: %d samples, %d features",
@@ -317,11 +316,10 @@ class XGBoostTrainer:
             y_fold_train, y_fold_val = y_train[train_idx], y_train[val_idx]
 
             # Train XGBoost model
-            model = xgb.XGBClassifier(**best_params)
+            model = xgb.XGBClassifier(**best_params, early_stopping_rounds=50)
             model.fit(
                 X_fold_train, y_fold_train,
                 eval_set=[(X_fold_val, y_fold_val)],
-                early_stopping_rounds=50,
                 verbose=False
             )
 
@@ -345,13 +343,10 @@ class XGBoostTrainer:
         # Train final model on full dataset
         final_model = xgb.XGBClassifier(**best_params)
 
-        # Try to load checkpoint
+        # Check if checkpoint exists (for logging purposes only)
         start_iteration, train_metrics, val_metrics = self.load_checkpoint(final_model, target)
 
-        if start_iteration > 0:
-            _logger.info("Resuming training for %s from iteration %d", target, start_iteration)
-
-        final_model.fit(X_train, y_train, xgb_model=None if start_iteration == 0 else final_model)
+        final_model.fit(X_train, y_train)
 
         # Save checkpoint after training
         final_iteration = final_model.n_estimators if hasattr(final_model, 'n_estimators') else 100
