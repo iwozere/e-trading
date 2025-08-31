@@ -21,7 +21,8 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from common.fundamentals import setup_logging
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class XGBoostOptimizer:
     """XGBoost hyperparameter optimizer using Optuna."""
@@ -30,7 +31,6 @@ class XGBoostOptimizer:
         """Initialize the XGBoost optimizer."""
         self.config_path = config_path
         self.config = self._load_config()
-        self.logger = setup_logging(__name__)
 
         # Create directories
         self.models_dir = Path("src/ml/pipeline/p02_cnn_lstm_xgboost/models")
@@ -68,10 +68,10 @@ class XGBoostOptimizer:
         X_test = test_data['features']
         y_test = test_data['targets']
 
-        self.logger.info(f"Loaded combined features:")
-        self.logger.info(f"  Train: {X_train.shape}, {y_train.shape}")
-        self.logger.info(f"  Validation: {X_val.shape}, {y_val.shape}")
-        self.logger.info(f"  Test: {X_test.shape}, {y_test.shape}")
+        _logger.info(f"Loaded combined features:")
+        _logger.info(f"  Train: {X_train.shape}, {y_train.shape}")
+        _logger.info(f"  Validation: {X_val.shape}, {y_val.shape}")
+        _logger.info(f"  Test: {X_test.shape}, {y_test.shape}")
 
         return (X_train, y_train), (X_val, y_val), (X_test, y_test)
 
@@ -126,7 +126,7 @@ class XGBoostOptimizer:
 
     def optimize(self) -> dict:
         """Run XGBoost hyperparameter optimization."""
-        self.logger.info("Starting XGBoost hyperparameter optimization...")
+        _logger.info("Starting XGBoost hyperparameter optimization...")
 
         # Load data
         (X_train, y_train), (X_val, y_val), (X_test, y_test) = self._load_combined_features()
@@ -145,7 +145,7 @@ class XGBoostOptimizer:
         )
 
         # Run optimization
-        self.logger.info(f"Running {n_trials} trials with {timeout}s timeout...")
+        _logger.info(f"Running {n_trials} trials with {timeout}s timeout...")
         study.optimize(
             lambda trial: self._objective(trial, X_train, y_train, X_val, y_val),
             n_trials=n_trials,
@@ -156,8 +156,8 @@ class XGBoostOptimizer:
         best_params = study.best_params
         best_value = study.best_value
 
-        self.logger.info(f"Best validation MSE: {best_value:.6f}")
-        self.logger.info(f"Best parameters: {best_params}")
+        _logger.info(f"Best validation MSE: {best_value:.6f}")
+        _logger.info(f"Best parameters: {best_params}")
 
         # Save study results
         study_path = self.studies_dir / f"{study_name}.pkl"
@@ -185,10 +185,10 @@ class XGBoostOptimizer:
             fig = optuna.visualization.plot_parallel_coordinate(study)
             fig.write_html(str(self.studies_dir / "xgboost_parallel_coordinate.html"))
 
-            self.logger.info("Optimization plots saved")
+            _logger.info("Optimization plots saved")
 
         except Exception as e:
-            self.logger.warning(f"Failed to create optimization plots: {e}")
+            _logger.warning(f"Failed to create optimization plots: {e}")
 
         # Evaluate best model on test set
         best_model = xgb.XGBRegressor(**best_params, random_state=42, n_jobs=-1, verbosity=0, early_stopping_rounds=50)
@@ -217,11 +217,11 @@ class XGBoostOptimizer:
             'best_params_path': str(best_params_path)
         }
 
-        self.logger.info("XGBoost optimization completed")
-        self.logger.info(f"Test MSE: {test_mse:.6f}")
-        self.logger.info(f"Test MAE: {test_mae:.6f}")
-        self.logger.info(f"Test RMSE: {test_rmse:.6f}")
-        self.logger.info(f"Directional Accuracy: {directional_accuracy:.4f}")
+        _logger.info("XGBoost optimization completed")
+        _logger.info(f"Test MSE: {test_mse:.6f}")
+        _logger.info(f"Test MAE: {test_mae:.6f}")
+        _logger.info(f"Test RMSE: {test_rmse:.6f}")
+        _logger.info(f"Directional Accuracy: {directional_accuracy:.4f}")
 
         return results
 

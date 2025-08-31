@@ -27,7 +27,10 @@ import sys
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
+from src.notification.logger import setup_logger
 from src.strategy.base_strategy import BaseStrategy
+
+_logger = setup_logger(__name__)
 
 
 class LSTMModel(nn.Module):
@@ -155,7 +158,7 @@ class HMMLSTMStrategy(BaseStrategy):
     def _initialize_strategy(self):
         """Initialize HMM and LSTM models and indicators."""
         try:
-            self._logger.info("Initializing HMM-LSTM Pipeline Strategy")
+            _logger.info("Initializing HMM-LSTM Pipeline Strategy")
 
             # Model components
             self.hmm_model = None
@@ -190,7 +193,7 @@ class HMMLSTMStrategy(BaseStrategy):
                 self.lstm_scalers = self.lstm_scalers_param
                 self.lstm_features = self.lstm_features_param
                 self.sequence_length = self.sequence_length_param
-                self._logger.info("Using pre-loaded models for backtesting")
+                _logger.info("Using pre-loaded models for backtesting")
             else:
                 # Load models from files (for live trading)
                 self._load_models()
@@ -202,7 +205,7 @@ class HMMLSTMStrategy(BaseStrategy):
             self.current_trade_regime = None
 
         except Exception as e:
-            self._logger.exception("Error in _initialize_strategy")
+            _logger.exception("Error in _initialize_strategy")
             raise
 
     def _load_models(self):

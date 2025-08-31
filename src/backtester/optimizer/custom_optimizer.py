@@ -94,7 +94,7 @@ class CustomOptimizer:
         else:
             cerebro = bt.Cerebro(optdatas=True, optreturn=True)
 
-        # Add data
+                # Add data
         cerebro.adddata(self.data)
 
         # Add entry logic parameters

@@ -8,9 +8,12 @@ tracking, position management, and performance monitoring.
 
 from typing import Any, Dict
 
+from src.notification.logger import setup_logger
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.strategy.base_strategy import BaseStrategy
+
+_logger = setup_logger(__name__)
 
 
 class CustomStrategy(BaseStrategy):
@@ -32,14 +35,14 @@ class CustomStrategy(BaseStrategy):
     def _initialize_strategy(self):
         """Initialize entry and exit mixins."""
         try:
-            self._logger.debug("Initializing CustomStrategy mixins...")
+            _logger.debug("Initializing CustomStrategy mixins...")
 
             # Set configuration from params
             if self.p.strategy_config:
                 self.use_talib = self.p.strategy_config.get("use_talib", False)
                 self.entry_logic = self.p.strategy_config.get("entry_logic")
                 self.exit_logic = self.p.strategy_config.get("exit_logic")
-                self._logger.debug(
+                _logger.debug(
                     f"Strategy config loaded - Entry: {self.entry_logic['name']}, Exit: {self.exit_logic['name']}"
                 )
 
@@ -47,12 +50,12 @@ class CustomStrategy(BaseStrategy):
             if self.entry_logic:
                 entry_mixin_class = ENTRY_MIXIN_REGISTRY[self.entry_logic["name"]]
                 if entry_mixin_class:
-                    self._logger.debug("Creating entry mixin: %s", self.entry_logic['name'])
+                    _logger.debug("Creating entry mixin: %s", self.entry_logic['name'])
                     self.entry_mixin = entry_mixin_class(
                         params=self.entry_logic["params"]
                     )
                     self.entry_mixin.init_entry(self)
-                    self._logger.debug(
+                    _logger.debug(
                         f"Entry mixin created with params: {self.entry_logic['params']}"
                     )
 
@@ -60,15 +63,15 @@ class CustomStrategy(BaseStrategy):
             if self.exit_logic:
                 exit_mixin_class = EXIT_MIXIN_REGISTRY[self.exit_logic["name"]]
                 if exit_mixin_class:
-                    self._logger.debug("Creating exit mixin: %s", self.exit_logic['name'])
+                    _logger.debug("Creating exit mixin: %s", self.exit_logic['name'])
                     self.exit_mixin = exit_mixin_class(params=self.exit_logic["params"])
                     self.exit_mixin.init_exit(self)
-                    self._logger.debug(
+                    _logger.debug(
                         f"Exit mixin created with params: {self.exit_logic['params']}"
                     )
 
         except Exception as e:
-            self._logger.exception("Error in _initialize_strategy")
+            _logger.exception("Error in _initialize_strategy")
             raise
 
     def _execute_strategy_logic(self):
@@ -108,7 +111,7 @@ class CustomStrategy(BaseStrategy):
                 self._exit_position(reason="Exit mixin signal")
 
         except Exception as e:
-            self._logger.exception("Error in _execute_strategy_logic")
+            _logger.exception("Error in _execute_strategy_logic")
 
     def notify_trade(self, trade):
         """Override to add mixin-specific trade handling."""
@@ -122,7 +125,7 @@ class CustomStrategy(BaseStrategy):
             if self.exit_mixin:
                 self.exit_mixin.notify_trade(trade)
         except Exception as e:
-            self._logger.exception("Error in mixin trade notification")
+            _logger.exception("Error in mixin trade notification")
 
 
 # Example of creating a strategy with the refactored approach

@@ -27,7 +27,7 @@ class BaseStrategy(bt.Strategy):
     """
 
     params = (
-        ("strategy_config", None),  # Strategy configuration
+        ("strategy_config", None), # Strategy configuration
         ("position_size", 0.1),    # Default position size as fraction of capital
         ("symbol", ""),            # Trading symbol
         ("timeframe", ""),         # Trading timeframe
@@ -37,8 +37,7 @@ class BaseStrategy(bt.Strategy):
         """Initialize base strategy components."""
         super().__init__()
 
-        # Initialize logger
-        self._logger = setup_logger(self.__class__.__name__)
+
 
         # Configuration
         self.config = self.p.strategy_config or {}
@@ -69,11 +68,11 @@ class BaseStrategy(bt.Strategy):
         self.max_position_size = self.config.get('max_position_size', 0.2)
         self.min_position_size = self.config.get('min_position_size', 0.05)
 
-        self._logger.debug("BaseBacktraderStrategy initialized")
+        _logger.debug("BaseBacktraderStrategy initialized")
 
     def start(self):
         """Called once at the start of the strategy."""
-        self._logger.debug("BaseBacktraderStrategy.start called")
+        _logger.debug("BaseBacktraderStrategy.start called")
         self._initialize_strategy()
 
     def _initialize_strategy(self):
@@ -111,7 +110,7 @@ class BaseStrategy(bt.Strategy):
                 from datetime import datetime
                 current_date = datetime.now()
                 self.equity_dates.append(current_date)
-                self._logger.debug("Using fallback date for equity curve: %s", current_date)
+                _logger.debug("Using fallback date for equity curve: %s", current_date)
 
             # Update peak equity and drawdown
             if current_equity > self.peak_equity:
@@ -122,7 +121,7 @@ class BaseStrategy(bt.Strategy):
                 self.max_drawdown = current_drawdown
 
         except Exception as e:
-            self._logger.exception("Error updating equity curve")
+            _logger.exception("Error updating equity curve")
 
     def _calculate_position_size(self, confidence: float = 1.0, risk_multiplier: float = 1.0) -> float:
         """
@@ -145,7 +144,7 @@ class BaseStrategy(bt.Strategy):
             return position_size
 
         except Exception as e:
-            self._logger.exception("Error calculating position size")
+            _logger.exception("Error calculating position size")
             return self.min_position_size
 
     def _calculate_shares(self, position_size: float) -> float:
@@ -169,7 +168,7 @@ class BaseStrategy(bt.Strategy):
             return shares
 
         except Exception as e:
-            self._logger.exception("Error calculating shares")
+            _logger.exception("Error calculating shares")
             return 0.0
 
     def _enter_position(self, direction: str, confidence: float = 1.0,
@@ -185,26 +184,26 @@ class BaseStrategy(bt.Strategy):
         """
         try:
             if self.position.size != 0:
-                self._logger.debug("Already in position, skipping entry")
+                _logger.debug("Already in position, skipping entry")
                 return
 
             position_size = self._calculate_position_size(confidence, risk_multiplier)
             shares = self._calculate_shares(position_size)
 
             if shares < 1:
-                self._logger.debug("Insufficient capital for position")
+                _logger.debug("Insufficient capital for position")
                 return
 
             if direction.lower() == 'long':
                 order = self.buy(size=shares)
-                self._logger.info("LONG entry - Size: %.3f, Price: %.4f, Reason: %s",
+                _logger.info("LONG entry - Size: %.3f, Price: %.4f, Reason: %s",
                                 position_size, self.data.close[0], reason)
             elif direction.lower() == 'short':
                 order = self.sell(size=shares)
-                self._logger.info("SHORT entry - Size: %.3f, Price: %.4f, Reason: %s",
+                _logger.info("SHORT entry - Size: %.3f, Price: %.4f, Reason: %s",
                                 position_size, self.data.close[0], reason)
             else:
-                self._logger.error("Invalid direction: %s", direction)
+                _logger.error("Invalid direction: %s", direction)
                 return
 
             if order:
@@ -212,7 +211,7 @@ class BaseStrategy(bt.Strategy):
                 self.highest_profit = 0.0
 
         except Exception as e:
-            self._logger.exception("Error entering position")
+            _logger.exception("Error entering position")
 
     def _exit_position(self, reason: str = ""):
         """
@@ -226,14 +225,14 @@ class BaseStrategy(bt.Strategy):
                 return
 
             self.close()
-            self._logger.info("Position exit - Reason: %s", reason)
+            _logger.info("Position exit - Reason: %s", reason)
 
             # Reset trade tracking
             self.entry_price = None
             self.highest_profit = 0.0
 
         except Exception as e:
-            self._logger.exception("Error exiting position")
+            _logger.exception("Error exiting position")
 
     def _update_trade_tracking(self):
         """Update trade tracking metrics."""
@@ -252,12 +251,12 @@ class BaseStrategy(bt.Strategy):
                     self.highest_profit = pnl_pct
 
         except Exception as e:
-            self._logger.exception("Error updating trade tracking")
+            _logger.exception("Error updating trade tracking")
 
     def notify_trade(self, trade):
         """Handle trade notifications and update metrics."""
         try:
-            self._logger.info(
+            _logger.info(
                 "Trade notification - Status: %s, Size: %s, PnL: %s, Price: %s",
                 'CLOSED' if trade.isclosed else 'OPEN',
                 trade.size, trade.pnl, trade.price
@@ -303,7 +302,7 @@ class BaseStrategy(bt.Strategy):
                 else:
                     self.losing_trades += 1
 
-                self._logger.info(
+                _logger.info(
                     "Trade closed - Entry: %.4f, Exit: %.4f, PnL: %.2f (%.2f%%), Duration: %.1f min",
                     self.entry_price, self.data.close[0], net_pnl,
                     trade_record["pnl_percentage"], duration_minutes
@@ -326,10 +325,10 @@ class BaseStrategy(bt.Strategy):
                     "trade_type": "long" if trade.size > 0 else "short"
                 }
 
-                self._logger.info("Trade opened - Price: %.4f, Size: %s", trade.price, trade.size)
+                _logger.info("Trade opened - Price: %.4f, Size: %s", trade.price, trade.size)
 
         except Exception as e:
-            self._logger.exception("Error in notify_trade")
+            _logger.exception("Error in notify_trade")
 
     def get_performance_summary(self) -> Dict[str, Any]:
         """
@@ -364,14 +363,14 @@ class BaseStrategy(bt.Strategy):
             }
 
         except Exception as e:
-            self._logger.exception("Error getting performance summary")
+            _logger.exception("Error getting performance summary")
             return {}
 
     def stop(self):
         """Called when strategy stops."""
         try:
             performance = self.get_performance_summary()
-            self._logger.info("Strategy stopped - Performance: %s", performance)
+            _logger.info("Strategy stopped - Performance: %s", performance)
 
         except Exception as e:
-            self._logger.exception("Error in stop")
+            _logger.exception("Error in stop")

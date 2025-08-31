@@ -6,20 +6,19 @@ This stage performs comprehensive validation of both CNN-LSTM and XGBoost models
 comparing their performance and generating final evaluation reports.
 """
 
-import os
 import sys
 import yaml
 import numpy as np
 import json
 import pandas as pd
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-import matplotlib.pyplot as plt
 from pathlib import Path
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from common.fundamentals import setup_logging
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class ModelValidator:
     """Comprehensive model validator for CNN-LSTM-XGBoost pipeline."""
@@ -28,7 +27,6 @@ class ModelValidator:
         """Initialize the model validator."""
         self.config_path = config_path
         self.config = self._load_config()
-        self.logger = setup_logging(__name__)
 
         # Create directories
         self.models_dir = Path("src/ml/pipeline/p02_cnn_lstm_xgboost/models")
@@ -137,7 +135,7 @@ class ModelValidator:
 
     def validate(self) -> dict:
         """Perform model validation."""
-        self.logger.info("Starting model validation...")
+        _logger.info("Starting model validation...")
 
         # Load predictions
         predictions = self._load_predictions()
@@ -172,7 +170,7 @@ class ModelValidator:
         summary_df.to_csv(summary_path, index=False)
 
         # Log results
-        self.logger.info("Model validation completed")
+        _logger.info("Model validation completed")
 
         # Print summary
         print("\n" + "="*60)

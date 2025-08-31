@@ -5,7 +5,7 @@
         "commission": 0.001,
         "risk_free_rate": 0.01,
         "omega_threshold": 0.0,
-        "use_talib": false,
+        "use_talib": true,
         "n_trials": 100,
         "n_jobs": -1,
         "n_random_trials": 10,

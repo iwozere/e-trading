@@ -13,7 +13,6 @@ Features:
 - Time series cross-validation support
 """
 
-import os
 import sys
 import yaml
 import numpy as np
@@ -22,15 +21,15 @@ import json
 import pickle
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import matplotlib.pyplot as plt
-import seaborn as sns
 from pathlib import Path
-from datetime import datetime
 from typing import Tuple
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-from common.fundamentals import setup_logging
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
+
 
 class XGBoostTrainer:
     """XGBoost model trainer."""
@@ -39,7 +38,6 @@ class XGBoostTrainer:
         """Initialize the XGBoost trainer."""
         self.config_path = config_path
         self.config = self._load_config()
-        self.logger = setup_logging(__name__)
 
         # Create directories
         self.models_dir = Path("src/ml/pipeline/p02_cnn_lstm_xgboost/models")
@@ -67,7 +65,7 @@ class XGBoostTrainer:
         best_params_path = self.configs_dir / "best_xgboost_params.json"
 
         if not best_params_path.exists():
-            self.logger.warning("Best parameters not found, using default parameters")
+            _logger.warning("Best parameters not found, using default parameters")
             return {
                 'n_estimators': 100,
                 'learning_rate': 0.1,
@@ -83,7 +81,7 @@ class XGBoostTrainer:
             with open(best_params_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            self.logger.error(f"Failed to load best parameters: {e}")
+            _logger.error(f"Failed to load best parameters: {e}")
             raise
 
     def _get_checkpoint_path(self) -> Path:
@@ -105,7 +103,7 @@ class XGBoostTrainer:
         with open(ckpt_path, 'wb') as f:
             pickle.dump(checkpoint, f)
 
-        self.logger.info("Checkpoint saved at %s (iteration %d)", ckpt_path, iteration)
+        _logger.info("Checkpoint saved at %s (iteration %d)", ckpt_path, iteration)
 
     def load_checkpoint(self, model: xgb.XGBRegressor) -> Tuple[int, dict, dict]:
         """Load model state to resume training if checkpoint exists."""
@@ -120,7 +118,7 @@ class XGBoostTrainer:
             train_metrics = checkpoint['train_metrics']
             val_metrics = checkpoint['val_metrics']
 
-            self.logger.info("Resuming from checkpoint %s (iteration %d)", ckpt_path, start_iteration)
+            _logger.info("Resuming from checkpoint %s (iteration %d)", ckpt_path, start_iteration)
             return start_iteration, train_metrics, val_metrics
         else:
             return 0, {}, {}
@@ -144,10 +142,10 @@ class XGBoostTrainer:
         X_test = test_data['features']
         y_test = test_data['targets']
 
-        self.logger.info(f"Loaded combined features:")
-        self.logger.info(f"  Train: {X_train.shape}, {y_train.shape}")
-        self.logger.info(f"  Validation: {X_val.shape}, {y_val.shape}")
-        self.logger.info(f"  Test: {X_test.shape}, {y_test.shape}")
+        _logger.info(f"Loaded combined features:")
+        _logger.info(f"  Train: {X_train.shape}, {y_train.shape}")
+        _logger.info(f"  Validation: {X_val.shape}, {y_val.shape}")
+        _logger.info(f"  Test: {X_test.shape}, {y_test.shape}")
 
         return (X_train, y_train), (X_val, y_val), (X_test, y_test)
 
@@ -221,11 +219,11 @@ class XGBoostTrainer:
 
     def train(self) -> dict:
         """Train the XGBoost model."""
-        self.logger.info("Starting XGBoost training...")
+        _logger.info("Starting XGBoost training...")
 
         # Load best parameters
         best_params = self._load_best_params()
-        self.logger.info(f"Using parameters: {best_params}")
+        _logger.info(f"Using parameters: {best_params}")
 
         # Load data
         (X_train, y_train), (X_val, y_val), (X_test, y_test) = self._load_combined_features()
@@ -234,7 +232,7 @@ class XGBoostTrainer:
         X_train_full = np.vstack([X_train, X_val])
         y_train_full = np.concatenate([y_train, y_val])
 
-        self.logger.info(f"Final training data shape: {X_train_full.shape}")
+        _logger.info(f"Final training data shape: {X_train_full.shape}")
 
         # Create model
         model = xgb.XGBRegressor(
@@ -249,9 +247,9 @@ class XGBoostTrainer:
         start_iteration, train_metrics, val_metrics = self.load_checkpoint(model)
 
         if start_iteration > 0:
-            self.logger.info(f"Resuming training from iteration {start_iteration}")
+            _logger.info(f"Resuming training from iteration {start_iteration}")
         else:
-            self.logger.info("Starting fresh training")
+            _logger.info("Starting fresh training")
 
         # Train with early stopping on validation set
         model.fit(
@@ -320,12 +318,12 @@ class XGBoostTrainer:
             json.dump(metrics, f, indent=2)
 
         # Log results
-        self.logger.info("XGBoost training completed")
-        self.logger.info(f"Train MSE: {train_metrics['mse']:.6f}")
-        self.logger.info(f"Validation MSE: {val_metrics['mse']:.6f}")
-        self.logger.info(f"Test MSE: {test_metrics['mse']:.6f}")
-        self.logger.info(f"Test Directional Accuracy: {test_metrics['directional_accuracy']:.4f}")
-        self.logger.info(f"Test R-squared: {test_metrics['r_squared']:.4f}")
+        _logger.info("XGBoost training completed")
+        _logger.info(f"Train MSE: {train_metrics['mse']:.6f}")
+        _logger.info(f"Validation MSE: {val_metrics['mse']:.6f}")
+        _logger.info(f"Test MSE: {test_metrics['mse']:.6f}")
+        _logger.info(f"Test Directional Accuracy: {test_metrics['directional_accuracy']:.4f}")
+        _logger.info(f"Test R-squared: {test_metrics['r_squared']:.4f}")
 
         return metrics
 
@@ -356,7 +354,7 @@ def main():
         print("="*50)
 
     except Exception as e:
-        print(f"Error during XGBoost training: {e}")
+        _logger.exception("Error during XGBoost training:")
         sys.exit(1)
 
 if __name__ == "__main__":

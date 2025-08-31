@@ -92,10 +92,16 @@ def prepare_data_frame(data_file) -> pd.DataFrame:
     df = pd.read_csv(os.path.join("data", data_file))
     print("Available columns:", df.columns.tolist())
 
-    # Find datetime column
+    # Find datetime column and convert properly
     df["datetime"] = pd.to_datetime(df["timestamp"], utc=True)
     df = df.sort_values("datetime", ascending=True)
     df.set_index("datetime", inplace=True)
+
+    # Ensure the index is timezone-naive for Backtrader compatibility
+    df.index = df.index.tz_localize(None)
+
+    # Ensure the index is pandas datetime, not numpy float64
+    df.index = pd.to_datetime(df.index)
 
     df = df[["open", "high", "low", "close", "volume"]]
 
@@ -104,6 +110,16 @@ def prepare_data_frame(data_file) -> pd.DataFrame:
 
     df.ffill(inplace=True)
     df.bfill(inplace=True)
+
+    # Remove any rows with NaN values
+    df = df.dropna()
+
+    # Ensure we have data
+    if len(df) == 0:
+        raise ValueError(f"No valid data found in {data_file}")
+
+    print(f"Final data shape: {df.shape}")
+    print(f"Data range: {df.index[0]} to {df.index[-1]}")
 
     # Extract symbol from data file name
     symbol = "UNKNOWN"
@@ -115,18 +131,50 @@ def prepare_data_frame(data_file) -> pd.DataFrame:
     return df
 
 def prepare_data_feed(df : pd.DataFrame, symbol : str):
-    """Prepare data feed from pandas dataframe"""
-    return bt.feeds.PandasData(
-        dataname=df,
-        datetime=None,
-        open=df.columns.get_loc("open"),
-        high=df.columns.get_loc("high"),
-        low=df.columns.get_loc("low"),
-        close=df.columns.get_loc("close"),
-        volume=df.columns.get_loc("volume"),
+    """Prepare data feed from pandas dataframe with robust datetime handling"""
+    # Validate DataFrame before creating feed
+    if df.empty:
+        raise ValueError("DataFrame is empty")
+
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise ValueError(f"DataFrame index is not DatetimeIndex: {type(df.index)}")
+
+    print(f"Creating data feed for {symbol} with {len(df)} rows")
+    print(f"DataFrame columns: {df.columns.tolist()}")
+    print(f"DataFrame index type: {type(df.index)}")
+
+    # Create a deep copy to prevent any modifications
+    df_copy = df.copy(deep=True)
+
+    # Ensure the index is properly formatted
+    df_copy.index = pd.to_datetime(df_copy.index)
+
+    # Reset index to make datetime a column instead of index to avoid Backtrader issues
+    df_copy = df_copy.reset_index()
+    df_copy = df_copy.rename(columns={'datetime': 'timestamp'})
+
+    # Ensure timestamp column is datetime
+    df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'])
+
+    # Create the data feed with datetime as column 0
+    data_feed = bt.feeds.PandasData(
+        dataname=df_copy,
+        datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
+        open=1,      # open is now column 1
+        high=2,      # high is now column 2
+        low=3,       # low is now column 3
+        close=4,     # close is now column 4
+        volume=5,    # volume is now column 5
         openinterest=None,
-        name=symbol,  # Set the symbol as the data feed name
+        name=symbol,
     )
+
+        # Debug: Check the created data feed
+    print(f"Created data feed type: {type(data_feed)}")
+    print(f"DataFrame columns: {df_copy.columns.tolist()}")
+    print(f"DataFrame timestamp column type: {type(df_copy.iloc[0, 0])}")
+
+    return data_feed
 
 
 def parse_data_file_name(data_file : str) -> dict:
@@ -356,6 +404,7 @@ if __name__ == "__main__":
                         """Objective function for optimization"""
                         # Create a new data feed for each trial (important for parallel jobs)
                         data = prepare_data_feed(df, symbol)
+
                         _optimizer_config = {
                             "data": data,
                             "entry_logic": entry_logic_config,
@@ -379,7 +428,7 @@ if __name__ == "__main__":
                             n_jobs=optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1),
                         )
                     except Exception as e:
-                        _logger.exception("Error during optimization for %s + %s: %s")
+                        _logger.exception("Error during optimization for %s + %s: %s", entry_logic_name, exit_logic_name, e)
                         raise
 
                     # Get best result
@@ -406,13 +455,13 @@ if __name__ == "__main__":
                         # Save results
                         save_results(best_result, data_file)
                     except Exception as e:
-                        _logger.exception("Error in final backtest for%s + %s: %s")
+                        _logger.exception("Error in final backtest for%s + %s: %s", entry_logic_name, exit_logic_name, e)
                         raise
 
                     _logger.info("Completed optimization %d/%d", processed_combinations, total_combinations)
 
                 except Exception as e:
-                    _logger.exception("Error for %s + %s: %s")
+                    _logger.exception("Error for %s + %s: %s", entry_logic_name, exit_logic_name, e)
 
     end_time = dt.now()
     duration = end_time - start_time

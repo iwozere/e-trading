@@ -541,8 +541,8 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             # Long signal
             if signal_strength > self.prediction_threshold:
-                self._logger.info("LONG signal - Signal Strength: %.3f, Confidence: %.3f, Price: %.4f",
-                                 signal_strength, confidence, self.data.close[0])
+                _logger.info("LONG signal - Signal Strength: %.3f, Confidence: %.3f, Price: %.4f",
+                            signal_strength, confidence, self.data.close[0])
 
                 # Calculate position size
                 position_size = self._calculate_position_size(confidence, risk_multiplier)
@@ -555,8 +555,8 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             # Short signal
             elif signal_strength < -self.prediction_threshold:
-                self._logger.info("SHORT signal - Signal Strength: %.3f, Confidence: %.3f, Price: %.4f",
-                                 signal_strength, confidence, self.data.close[0])
+                _logger.info("SHORT signal - Signal Strength: %.3f, Confidence: %.3f, Price: %.4f",
+                            signal_strength, confidence, self.data.close[0])
 
                 # Calculate position size
                 position_size = self._calculate_position_size(confidence, risk_multiplier)
@@ -568,7 +568,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                 self._set_exit_orders(position_size, 'short')
 
         except Exception as e:
-            self._logger.error("Error in entry signal check: %s", e)
+            _logger.error("Error in entry signal check: %s", e)
 
     def _check_exit_signals(self, predictions: Dict[str, float], signal_strength: float):
         """Check for exit signals."""
@@ -616,12 +616,12 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             # Execute exit if signal detected
             if exit_signal:
-                self._logger.info("EXIT signal - Reason: %s, Signal Strength: %.3f, Price: %.4f",
-                                 exit_reason, signal_strength, self.data.close[0])
+                _logger.info("EXIT signal - Reason: %s, Signal Strength: %.3f, Price: %.4f",
+                            exit_reason, signal_strength, self.data.close[0])
                 self.close()
 
         except Exception as e:
-            self._logger.error("Error in exit signal check: %s", e)
+            _logger.error("Error in exit signal check: %s", e)
 
     def next(self):
         """Main strategy logic executed on each bar."""
@@ -638,9 +638,9 @@ class CNNXGBoostStrategy(BaseStrategy):
 
                 # Log predictions occasionally
                 if len(self.data) % 50 == 0:
-                    self._logger.debug("Predictions - Direction: %.3f, Volatility: %.3f, Trend: %.3f, Magnitude: %.3f, Signal: %.3f",
-                                     predictions.get('target_direction', 0), predictions.get('target_volatility', 0),
-                                     predictions.get('target_trend', 0), predictions.get('target_magnitude', 0), signal_strength)
+                                    _logger.debug("Predictions - Direction: %.3f, Volatility: %.3f, Trend: %.3f, Magnitude: %.3f, Signal: %.3f",
+                             predictions.get('target_direction', 0), predictions.get('target_volatility', 0),
+                             predictions.get('target_trend', 0), predictions.get('target_magnitude', 0), signal_strength)
 
                 # Check for exit signals first
                 self._check_exit_signals(predictions, signal_strength)
@@ -649,7 +649,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                 self._check_entry_signals(predictions, signal_strength)
 
         except Exception as e:
-            self._logger.error("Error in strategy next(): %s", e)
+            _logger.error("Error in strategy next(): %s", e)
 
     def _set_exit_orders(self, position_size: float, position_type: str):
         """Set stop loss and take profit orders."""
@@ -675,7 +675,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                 self.buy(exectype=bt.Order.Limit, price=profit_price, size=position_size)
 
         except Exception as e:
-            self._logger.error("Error setting exit orders: %s", e)
+            _logger.error("Error setting exit orders: %s", e)
 
     def _calculate_position_size(self, confidence: float, risk_multiplier: float) -> float:
         """Calculate position size based on confidence and risk."""
@@ -693,5 +693,5 @@ class CNNXGBoostStrategy(BaseStrategy):
             return max(min_size, min(max_size, adjusted_size))
 
         except Exception as e:
-            self._logger.error("Error calculating position size: %s", e)
+            _logger.error("Error calculating position size: %s", e)
             return self.config.get('base_position_size', 0.1)

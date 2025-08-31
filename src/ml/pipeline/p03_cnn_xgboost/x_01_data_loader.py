@@ -36,7 +36,6 @@ warnings.filterwarnings('ignore')
 
 _logger = setup_logger(__name__)
 
-
 class DataLoader:
     def __init__(self, config_path: str = "config/pipeline/p03.yaml"):
         """

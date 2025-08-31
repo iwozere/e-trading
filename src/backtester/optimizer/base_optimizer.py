@@ -118,6 +118,12 @@ class BaseOptimizer:
             df['datetime'] = pd.to_datetime(df[datetime_col], utc=True)
             df.set_index('datetime', inplace=True)
 
+            # Ensure the index is timezone-naive for Backtrader compatibility
+            df.index = df.index.tz_localize(None)
+
+            # Ensure the index is pandas datetime, not numpy float64
+            df.index = pd.to_datetime(df.index)
+
             # Filter by date range if specified
             if 'start_date' in self.config.get('data', {}):
                 start_date = pd.to_datetime(self.config['data']['start_date'], utc=True)
@@ -142,6 +148,9 @@ class BaseOptimizer:
             _logger.info("Prepared data: %s rows from %s to %s",
                         len(df), df.index[0], df.index[-1])
 
+            # Debug: Check index type
+            _logger.debug("Index type: %s, dtype: %s", type(df.index), df.index.dtype)
+
             return df
 
         except Exception as e:
@@ -164,15 +173,22 @@ class BaseOptimizer:
             # Create Backtrader engine
             cerebro = bt.Cerebro()
 
+            # Prepare data feed with robust datetime handling
+            # Reset index to make datetime a column instead of index to avoid Backtrader issues
+            df_copy = df.copy(deep=True)
+            df_copy = df_copy.reset_index()
+            df_copy = df_copy.rename(columns={'datetime': 'timestamp'})
+            df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'])
+
             # Add data feed
             data = bt.feeds.PandasData(
-                dataname=df,
-                datetime=None,
-                open='open',
-                high='high',
-                low='low',
-                close='close',
-                volume='volume',
+                dataname=df_copy,
+                datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
+                open=1,      # open is now column 1
+                high=2,      # high is now column 2
+                low=3,       # low is now column 3
+                close=4,     # close is now column 4
+                volume=5,    # volume is now column 5
                 openinterest=None,
                 fromdate=df.index[0],
                 todate=df.index[-1]

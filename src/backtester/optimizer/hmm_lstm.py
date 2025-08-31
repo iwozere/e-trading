@@ -314,15 +314,22 @@ class HMMLSTMOptimizer(BaseOptimizer):
             # Create Backtrader engine using base class method
             cerebro = bt.Cerebro()
 
+            # Prepare data feed with robust datetime handling
+            # Reset index to make datetime a column instead of index to avoid Backtrader issues
+            df_copy = df.copy(deep=True)
+            df_copy = df_copy.reset_index()
+            df_copy = df_copy.rename(columns={'datetime': 'timestamp'})
+            df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'])
+
             # Add data feed
             data = bt.feeds.PandasData(
-                dataname=df,
-                datetime=None,
-                open='open',
-                high='high',
-                low='low',
-                close='close',
-                volume='volume',
+                dataname=df_copy,
+                datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
+                open=1,      # open is now column 1
+                high=2,      # high is now column 2
+                low=3,       # low is now column 3
+                close=4,     # close is now column 4
+                volume=5,    # volume is now column 5
                 openinterest=None,
                 fromdate=df.index[0],
                 todate=df.index[-1]
