@@ -13,7 +13,7 @@ from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.strategy.base_strategy import BaseStrategy
 
 
-class CustomStrategyRefactored(BaseStrategy):
+class CustomStrategy(BaseStrategy):
     """
     Refactored custom strategy with support for modular entry/exit mixins.
 
