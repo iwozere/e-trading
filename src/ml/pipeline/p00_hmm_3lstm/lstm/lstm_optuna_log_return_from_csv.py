@@ -106,7 +106,7 @@ class Config:
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 from src.common.indicator_service import get_indicator_service
-from src.models.indicators import IndicatorCalculationRequest
+from src.model.indicators import IndicatorCalculationRequest
 from src.notification.logger import setup_logger
 
 # Helper function to replace calculate_technicals_from_df for ML pipeline

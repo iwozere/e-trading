@@ -3,7 +3,7 @@ from typing import Optional
 from src.notification.logger import setup_logger
 from src.model.telegram_bot import Technicals
 from src.common.indicator_service import get_indicator_service
-from src.models.indicators import IndicatorCalculationRequest, IndicatorCategory
+from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
 
 _logger = setup_logger(__name__)
 

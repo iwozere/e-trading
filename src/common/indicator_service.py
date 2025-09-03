@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 import talib
 
-from src.models.indicators import (
+from src.model.indicators import (
     IndicatorResult, IndicatorSet, IndicatorCategory,
     IndicatorCalculationRequest, BatchIndicatorRequest,
     INDICATOR_DESCRIPTIONS, FUNDAMENTAL_INDICATORS, ALL_INDICATORS

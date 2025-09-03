@@ -8,7 +8,7 @@ Usage:
 from src.data.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
 from src.common.indicator_service import get_indicator_service
-from src.models.indicators import IndicatorCalculationRequest, IndicatorCategory
+from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
 
 PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
 

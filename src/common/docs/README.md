@@ -22,7 +22,7 @@ The new unified indicator system provides a single, consistent interface for cal
 
 ```python
 from src.common.indicator_service import get_indicator_service
-from src.models.indicators import IndicatorCalculationRequest
+from src.model.indicators import IndicatorCalculationRequest
 
 # Get the unified indicator service
 service = get_indicator_service()
@@ -49,7 +49,7 @@ for name, indicator in result.get_all_indicators().items():
 ### Batch Processing
 
 ```python
-from src.models.indicators import BatchIndicatorRequest
+from src.model.indicators import BatchIndicatorRequest
 
 # Calculate indicators for multiple tickers
 batch_request = BatchIndicatorRequest(
@@ -335,7 +335,7 @@ src/common/
 ```python
 # Unified Indicator System (Recommended)
 from src.common.indicator_service import get_indicator_service
-from src.models.indicators import IndicatorCalculationRequest, BatchIndicatorRequest
+from src.model.indicators import IndicatorCalculationRequest, BatchIndicatorRequest
 
 # Recommendation Engine
 from src.common.recommendation_engine import RecommendationEngine
@@ -412,7 +412,7 @@ python -c "from src.common.ticker_analyzer import analyze_ticker; print('Analyze
 
 ```python
 from src.common.indicator_service import get_indicator_service
-from src.models.indicators import IndicatorCalculationRequest
+from src.model.indicators import IndicatorCalculationRequest
 
 # Get unified service
 service = get_indicator_service()
@@ -674,7 +674,7 @@ else:
 **After (Unified):**
 ```python
 from src.common.indicator_service import get_indicator_service
-from src.models.indicators import IndicatorCalculationRequest
+from src.model.indicators import IndicatorCalculationRequest
 
 service = get_indicator_service()
 

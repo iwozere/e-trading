@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import pandas as pd
 
-from src.models.indicators import (
+from src.model.indicators import (
     Recommendation, RecommendationType, IndicatorCategory,
     IndicatorResult, IndicatorSet, CompositeRecommendation
 )
