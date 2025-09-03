@@ -73,9 +73,8 @@ class TrailingStopExitMixin(BaseExitMixin):
                     timeperiod=atr_period,
                 )
             else:
-                self.atr = bt.indicators.AverageTrueRange(
-                    self.strategy.data, period=atr_period
-                )
+                self.atr = bt.indicators.AverageTrueRange(self.strategy.data, period=atr_period)
+
             self.register_indicator(self.atr_name, self.atr)
         except Exception as e:
             logger.exception("Error initializing indicators: ")
@@ -100,9 +99,7 @@ class TrailingStopExitMixin(BaseExitMixin):
                     return False
                 atr = self.indicators[self.atr_name]
                 atr_val = atr[0] if hasattr(atr, "__getitem__") else atr.lines.atr[0]
-                stop_level = self.highest_price - (
-                    atr_val * self.get_param("x_atr_multiplier")
-                )
+                stop_level = self.highest_price - (atr_val * self.get_param("x_atr_multiplier"))
             else:
                 stop_level = self.highest_price * (1 - self.get_param("x_trail_pct"))
 

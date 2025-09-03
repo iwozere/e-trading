@@ -20,7 +20,7 @@ import time
 import json
 import websocket
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 from binance.client import Client
@@ -28,6 +28,8 @@ from binance.exceptions import BinanceAPIException
 
 from src.data.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
+from src.data.utils.retry import retry_on_exception
+from src.data.utils.rate_limiting import get_provider_limiter
 
 _logger = setup_logger(__name__)
 
@@ -98,9 +100,10 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         }
         return interval_map.get(interval, Client.KLINE_INTERVAL_1MINUTE)
 
+    @retry_on_exception(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def _load_historical_data(self) -> Optional[pd.DataFrame]:
         """
-        Load historical data from Binance REST API.
+        Load historical data from Binance REST API with proper pagination.
 
         Returns:
             DataFrame with historical OHLCV data
@@ -108,50 +111,77 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         try:
             _logger.info("Loading %d historical bars for %s", self.lookback_bars, self.symbol)
 
-            # Calculate start time based on lookback_bars
-            # Approximate: each bar represents the interval duration
+            per_call_limit = 1000
+            remaining = int(self.lookback_bars)
             interval_minutes = self._get_interval_minutes()
-            total_minutes = self.lookback_bars * interval_minutes
-            start_time = datetime.now() - timedelta(minutes=total_minutes)
 
-            # Get historical klines
-            klines = self.client.get_historical_klines(
-                symbol=self.symbol,
-                interval=self.binance_interval,
-                start_str=start_time.strftime('%Y-%m-%d %H:%M:%S'),
-                limit=self.lookback_bars
-            )
+            # Use UTC time
+            end_dt = datetime.utcnow().replace(tzinfo=timezone.utc)
+            start_dt = end_dt - timedelta(minutes=remaining * interval_minutes)
 
-            if not klines:
-                _logger.warning("No historical data found for %s", self.symbol)
+            all_rows = []
+            start_str = int(start_dt.timestamp() * 1000)  # ms
+
+            while remaining > 0:
+                batch_limit = min(per_call_limit, remaining)
+                klines = self.client.get_historical_klines(
+                    symbol=self.symbol,
+                    interval=self.binance_interval,
+                    start_str=start_str,
+                    limit=batch_limit,
+                )
+
+                if not klines:
+                    _logger.warning("No historical data returned for %s", self.symbol)
+                    break
+
+                all_rows.extend(klines)
+                remaining -= len(klines)
+
+                # advance start_str using last kline close time + 1ms to avoid duplicates
+                last_close_ms = klines[-1][6]  # close_time
+                start_str = last_close_ms + 1
+
+                if len(klines) < batch_limit:  # nothing more to fetch
+                    break
+
+            if not all_rows:
                 return None
 
             # Convert to DataFrame
-            df = pd.DataFrame(klines, columns=[
-                'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                'close_time', 'quote_asset_volume', 'number_of_trades',
-                'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+            df = pd.DataFrame(all_rows, columns=[
+                'open_time','open','high','low','close','volume',
+                'close_time','quote_asset_volume','number_of_trades',
+                'taker_buy_base_asset_volume','taker_buy_quote_asset_volume','ignore'
             ])
 
-            # Convert timestamp to datetime
-            df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+            # Use open_time for index (consistent with WS) OR switch to close_time consciously
+            df['datetime'] = pd.to_datetime(df['open_time'], unit='ms', utc=True)
             df.set_index('datetime', inplace=True)
 
             # Convert price columns to float
-            for col in ['open', 'high', 'low', 'close', 'volume']:
+            for col in ['open','high','low','close','volume']:
                 df[col] = df[col].astype(float)
 
             # Select only required columns
-            df = df[['open', 'high', 'low', 'close', 'volume']]
+            df = df[['open','high','low','close','volume']]
+
+            # Validate data quality
+            from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
+            is_valid, errors = validate_ohlcv_data(df)
+            if not is_valid:
+                _logger.warning("Historical data validation failed for %s: %s", self.symbol, errors)
+                quality_score = get_data_quality_score(df)
+                _logger.info("Historical data quality score: %.2f", quality_score['quality_score'])
 
             _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
             return df
 
         except BinanceAPIException as e:
-            _logger.exception("Binance API error loading historical data: %s")
+            _logger.exception("Binance API error loading historical data: %s", e)
             return None
         except Exception as e:
-            _logger.exception("Error loading historical data for %s: %s")
+            _logger.exception("Unexpected error loading historical data for %s: %s", self.symbol, e)
             return None
 
     def _get_interval_minutes(self) -> int:
@@ -193,18 +223,23 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
                 on_open=self._on_ws_open
             )
 
-            # Start WebSocket in a separate thread
+            # Start WebSocket in a separate thread with ping/pong
             import threading
-            self.ws_thread = threading.Thread(target=self.ws.run_forever, daemon=True)
+            self.ws_thread = threading.Thread(
+                target=lambda: self.ws.run_forever(ping_interval=20, ping_timeout=10),
+                daemon=True
+            )
             self.ws_thread.start()
 
-            # Wait for connection to establish
-            time.sleep(2)
-
-            return self.ws.sock is not None and self.ws.sock.connected
+            # Wait briefly but also check repeatedly for connection
+            for _ in range(20):
+                if self.ws and self.ws.sock and self.ws.sock.connected:
+                    return True
+                time.sleep(0.1)
+            return False
 
         except Exception as e:
-            _logger.exception("Error connecting to Binance WebSocket: %s")
+            _logger.exception("Error connecting to Binance WebSocket: %s", e)
             return False
 
     def _disconnect_realtime(self):
@@ -224,7 +259,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
     def _on_ws_error(self, ws, error):
         """WebSocket error occurred."""
-        _logger.exception("Binance WebSocket error for %s: %s")
+        _logger.exception("Binance WebSocket error for %s: %s", self.symbol, error)
         self.is_connected = False
 
     def _on_ws_message(self, ws, message):
@@ -238,20 +273,28 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
                 # Check if this is a completed kline
                 if kline['x']:  # kline is closed
+                    # Use UTC time for consistency
+                    ts = pd.to_datetime(kline['t'], unit='ms', utc=True)
                     new_data = pd.DataFrame([{
                         'open': float(kline['o']),
                         'high': float(kline['h']),
                         'low': float(kline['l']),
                         'close': float(kline['c']),
                         'volume': float(kline['v'])
-                    }], index=[pd.to_datetime(kline['t'], unit='ms')])
+                    }], index=[ts])
 
-                    self._process_new_data(new_data)
+                    # Validate new data before processing
+                    from src.data.utils.validation import validate_ohlcv_data
+                    is_valid, errors = validate_ohlcv_data(new_data)
+                    if not is_valid:
+                        _logger.warning("WebSocket data validation failed: %s", errors)
+                    else:
+                        self._process_new_data(new_data)
 
         except json.JSONDecodeError as e:
-            _logger.exception("Error decoding WebSocket message: %s")
+            _logger.exception("Error decoding WebSocket message: %s", e)
         except Exception as e:
-            _logger.exception("Error processing WebSocket message: %s")
+            _logger.exception("Error processing WebSocket message: %s", e)
 
     def _get_latest_data(self) -> Optional[pd.DataFrame]:
         """

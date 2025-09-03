@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 import requests
 from src.notification.logger import setup_logger
-from src.model.telegram_bot import Fundamentals
+from src.model.schemas import OptionalFundamentals, Fundamentals
 from src.data.base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
@@ -151,7 +151,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
 
-    def get_fundamentals(self, symbol: str) -> Fundamentals:
+    def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
         """
         Get comprehensive fundamental data for a given stock using Finnhub.
 

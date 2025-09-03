@@ -43,7 +43,7 @@ from typing import List, Dict, Optional, Any
 import pandas as pd
 
 from src.data.base_data_downloader import BaseDataDownloader
-from src.common.fundamentals import Fundamentals
+from src.model.schemas import OptionalFundamentals, Fundamentals
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -311,7 +311,7 @@ class FMPDataDownloader(BaseDataDownloader):
 
         return filtered_results
 
-    def get_fundamentals(self, symbol: str) -> Fundamentals:
+    def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
         """
         Get comprehensive fundamental data for a single stock.
 

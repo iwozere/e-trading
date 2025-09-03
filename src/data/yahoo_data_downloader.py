@@ -25,7 +25,7 @@ import pandas as pd
 import yfinance as yf
 
 from src.notification.logger import setup_logger
-from src.model.telegram_bot import Fundamentals
+from src.model.schemas import OptionalFundamentals, Fundamentals
 from src.data.base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
@@ -303,7 +303,7 @@ class YahooDataDownloader(BaseDataDownloader):
                 results[symbol] = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         return results
 
-    def get_fundamentals(self, symbol: str) -> Fundamentals:
+    def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
         """
         Get comprehensive fundamental data for a given stock using Yahoo Finance.
 

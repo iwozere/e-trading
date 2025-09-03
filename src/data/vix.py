@@ -4,7 +4,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 import yfinance as yf
@@ -89,10 +89,13 @@ def update_vix() -> None:
 
     # Download new data from Yahoo (starting from last date)
     today = datetime.today().date()
-    _logger.info("Downloading VIX data from %s to %s", last_date, today)
+    # Extend end date by a few days to ensure we get the most recent trading data
+    # This handles cases where the requested end date falls on a weekend/holiday
+    end_date = today + timedelta(days=7)
+    _logger.info("Downloading VIX data from %s to %s (extended to %s to ensure we get recent trading data)", last_date, today, end_date)
 
     try:
-        vix_new = yf.download("^VIX", start=last_date, end=today)
+        vix_new = yf.download("^VIX", start=last_date, end=end_date)
         vix_new.reset_index(inplace=True)
 
         # Handle multi-index columns from yfinance

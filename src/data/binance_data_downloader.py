@@ -28,7 +28,7 @@ from src.notification.logger import setup_logger
 import time
 
 from src.data   .base_data_downloader import BaseDataDownloader
-from src.model.telegram_bot import Fundamentals
+from src.model.schemas import Fundamentals
 
 _logger = setup_logger(__name__)
 

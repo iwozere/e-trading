@@ -3,7 +3,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 from abc import ABC, abstractmethod
 from src.notification.logger import setup_logger
-from src.model.telegram_bot import Fundamentals
+from src.model.schemas import OptionalFundamentals, Fundamentals
+from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
 from datetime import datetime
 from pathlib import Path
 
@@ -59,37 +60,80 @@ class BaseDataDownloader(ABC):
         start_date: datetime = None,
         end_date: datetime = None,
         directory: str = None,
+        ts_col: str = "timestamp",
+        to_parquet: bool = False,
     ) -> str:
         """
         Save downloaded data to a CSV file.
         start_date and end_date should be datetime.datetime objects (or None).
         directory: Optional directory to save the file. If not provided, uses self.data_dir.
         """
-        if start_date is None:
-            start_date = df["timestamp"].min()
-        if end_date is None:
-            end_date = df["timestamp"].max()
+        # Handle timestamp column flexibly
+        if ts_col in df.columns:
+            df[ts_col] = pd.to_datetime(df[ts_col], utc=True)
+            if start_date is None:
+                start_date = df[ts_col].min()
+            if end_date is None:
+                end_date = df[ts_col].max()
+        else:
+            # Fall back to index
+            df.index = pd.to_datetime(df.index, utc=True)
+            if start_date is None:
+                start_date = df.index.min()
+            if end_date is None:
+                end_date = df.index.max()
+            df = df.reset_index().rename(columns={'index': ts_col})
+
+        # Validate data quality before saving
+        is_valid, errors = validate_ohlcv_data(df)
+        if not is_valid:
+            _logger.warning("Data validation failed for %s: %s", symbol, errors)
+            quality_score = get_data_quality_score(df)
+            _logger.info("Data quality score: %.2f", quality_score['quality_score'])
+
         # Convert to string for filename
         start_date_str = start_date.strftime("%Y-%m-%d") if isinstance(start_date, datetime) else str(start_date)
         end_date_str = end_date.strftime("%Y-%m-%d") if isinstance(end_date, datetime) else str(end_date)
         filename = f"{symbol}_{interval}_{start_date_str.replace('-', '')}"
         if end_date_str:
             filename += f"_{end_date_str.replace('-', '')}"
-        filename += ".csv"
+
         # Use provided directory or default
         target_dir = Path(directory) if directory else self.data_dir
         target_dir.mkdir(parents=True, exist_ok=True)
-        filepath = target_dir / filename
-        df.to_csv(filepath, index=False)
+
+        # Save in appropriate format
+        if to_parquet:
+            filename += ".parquet"
+            filepath = target_dir / filename
+            df.to_parquet(filepath, index=False, compression='snappy')
+        else:
+            filename += ".csv"
+            filepath = target_dir / filename
+            df.to_csv(filepath, index=False)
+
         return str(filepath)
 
     def load_data(self, filepath: str) -> pd.DataFrame:
         """
-        Load data from a CSV file.
+        Load data from a CSV or Parquet file.
         """
-        df = pd.read_csv(filepath)
+        filepath = Path(filepath)
+        if filepath.suffix.lower() == '.parquet':
+            df = pd.read_parquet(filepath)
+        else:
+            df = pd.read_csv(filepath)
+
         if "timestamp" in df.columns:
             df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+        # Validate loaded data
+        is_valid, errors = validate_ohlcv_data(df)
+        if not is_valid:
+            _logger.warning("Loaded data validation failed: %s", errors)
+            quality_score = get_data_quality_score(df)
+            _logger.info("Loaded data quality score: %.2f", quality_score['quality_score'])
+
         return df
 
     def download_multiple_symbols(
@@ -112,7 +156,10 @@ class BaseDataDownloader(ABC):
                 start_date = kwargs.get("start_date") or (args[0] if args else None)
                 end_date = kwargs.get("end_date") or (args[1] if len(args) > 1 else None)
                 filepath = self.save_data(
-                    df, symbol, self.interval, start_date, end_date
+                    df, symbol, self.interval, start_date, end_date,
+                    directory=kwargs.get("directory"),
+                    ts_col=kwargs.get("ts_col", "timestamp"),
+                    to_parquet=kwargs.get("to_parquet", False)
                 )
                 results[symbol] = filepath
 
@@ -146,6 +193,6 @@ class BaseDataDownloader(ABC):
         pass
 
     @abstractmethod
-    def get_fundamentals(self, symbol: str) -> Fundamentals:
-        """Return the fundamentals for a given symbol. Must be implemented by subclasses."""
+    def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
+        """Return fundamentals if available for this provider; otherwise None."""
         pass

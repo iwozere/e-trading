@@ -23,7 +23,7 @@ import pandas as pd
 import requests
 from src.data.base_data_downloader import BaseDataDownloader
 from src.notification.logger import setup_logger
-from src.model.telegram_bot import Fundamentals
+from src.model.schemas import OptionalFundamentals
 
 _logger = setup_logger(__name__)
 
@@ -165,7 +165,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         save_to_csv = kwargs.get('save_to_csv', False)
         return self.download_historical_data(symbol, interval, start_date, end_date, save_to_csv=save_to_csv)
 
-    def get_fundamentals(self, symbol: str) -> Fundamentals:
+    def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
         """
         Get fundamental data for a given symbol.
 

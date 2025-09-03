@@ -2,10 +2,14 @@ import json
 import threading
 import queue
 import requests
+import time
+import pandas as pd
 from datetime import datetime
 import websocket
 import backtrader as bt
 from src.notification.logger import setup_logger
+from src.data.utils.retry import retry_on_exception
+from src.data.utils.rate_limiting import get_provider_limiter
 
 """
 Data feed implementation for Binance, providing real-time and historical market data for trading strategies.
@@ -26,22 +30,61 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
     """
     Backtrader data feed for Binance supporting historical and real-time data via REST API and WebSocket.
     """
+    lines = ('open', 'high', 'low', 'close', 'volume', 'openinterest')
     params = (
         ('symbol', 'BTCUSDT'),
         ('interval', '1m'),
         ('lookback', 1000),
     )
 
+    # Interval to milliseconds mapping
+    _INTERVAL_MS = {
+        '1m': 60_000,
+        '3m': 180_000,
+        '5m': 300_000,
+        '15m': 900_000,
+        '30m': 1_800_000,
+        '1h': 3_600_000,
+        '2h': 7_200_000,
+        '4h': 14_400_000,
+        '6h': 21_600_000,
+        '8h': 28_800_000,
+        '12h': 43_200_000,
+        '1d': 86_400_000,
+        '3d': 259_200_000,
+        '1w': 604_800_000,
+        '1M': 2_592_000_000
+    }
+
     def __init__(self):
         super().__init__()
-        self.data_queue = queue.Queue()
+        self.data_queue = queue.Queue(maxsize=10_000)  # avoid unbounded growth
         self._backfill_historical_data()
         self._start_websocket()
         self._state = self._ST_LIVE
 
+    def _load(self):
+        """Load data from queue into Backtrader lines."""
+        if self._state == self._ST_LIVE and not self.data_queue.empty():
+            try:
+                nd = self.data_queue.get_nowait()
+                self.lines.datetime[0] = bt.date2num(nd['datetime'])
+                self.lines.open[0] = nd['open']
+                self.lines.high[0] = nd['high']
+                self.lines.low[0] = nd['low']
+                self.lines.close[0] = nd['close']
+                self.lines.volume[0] = nd['volume']
+                self.lines.openinterest[0] = nd.get('openinterest', 0.0)
+                return True
+            except Exception as e:
+                _logger.exception("Error loading data: %s", e)
+        return False
+
+    @retry_on_exception(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def _backfill_historical_data(self):
-        end_time = int(datetime.now().timestamp() * 1000)
-        start_time = end_time - (self.p.lookback * 60 * 1000)
+        end_time = int(datetime.utcnow().timestamp() * 1000)
+        step = self._INTERVAL_MS.get(self.p.interval, 60_000)
+        start_time = end_time - (self.p.lookback * step)
 
         url = "https://api.binance.com/api/v3/klines"
         params = {
@@ -49,21 +92,40 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
             'interval': self.p.interval,
             'startTime': start_time,
             'endTime': end_time,
-            'limit': self.p.lookback
+            'limit': min(self.p.lookback, 1000)
         }
 
-        response = requests.get(url, params=params)
-        klines = response.json()
+        try:
+            response = requests.get(url, params=params, timeout=15)
+            if response.status_code != 200:
+                _logger.error("HTTP %s from Binance: %s", response.status_code, response.text)
+                return
 
-        for k in klines:
-            self.data_queue.put({
-                'datetime': datetime.utcfromtimestamp(k[0]/1000),
-                'open': float(k[1]),
-                'high': float(k[2]),
-                'low': float(k[3]),
-                'close': float(k[4]),
-                'volume': float(k[5])
-            })
+            klines = response.json()
+            if not klines:
+                return
+
+            for k in klines:
+                data_point = {
+                    'datetime': datetime.utcfromtimestamp(k[0]/1000),
+                    'open': float(k[1]),
+                    'high': float(k[2]),
+                    'low': float(k[3]),
+                    'close': float(k[4]),
+                    'volume': float(k[5]),
+                    'openinterest': 0.0
+                }
+
+                # Validate data point before adding to queue
+                from src.data.utils.validation import validate_ohlcv_data
+                df_point = pd.DataFrame([data_point])
+                is_valid, errors = validate_ohlcv_data(df_point)
+                if is_valid:
+                    self.data_queue.put(data_point)
+                else:
+                    _logger.warning("Invalid data point: %s", errors)
+        except Exception as e:
+            _logger.exception("Error fetching historical data: %s", e)
 
     def _start_websocket(self):
         self.ws_thread = threading.Thread(target=self._run_websocket, daemon=True)
@@ -71,11 +133,25 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
 
     def _run_websocket(self):
         ws_url = f"wss://stream.binance.com:9443/ws/{self.p.symbol.lower()}@kline_{self.p.interval}"
-        self.ws = websocket.WebSocketApp(ws_url,
-                                         on_open=self._on_open,
-                                         on_message=self._on_message,
-                                         on_error=self._on_error)
-        self.ws.run_forever()
+        backoff = 1
+
+        while True:
+            self.ws = websocket.WebSocketApp(
+                ws_url,
+                on_open=self._on_open,
+                on_message=self._on_message,
+                on_error=self._on_error,
+                on_close=None
+            )
+
+            try:
+                self.ws.run_forever(ping_interval=20, ping_timeout=10)
+            except Exception as e:
+                _logger.exception("WS run_forever exception: %s", e)
+
+            _logger.info("WS disconnected; retrying in %ss", backoff)
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 60)
 
     def _on_open(self, ws):
         _logger.info("WebSocket connected for %s", self.p.symbol)
@@ -84,20 +160,27 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
         msg = json.loads(message)
         if msg['e'] == 'kline' and msg['k']['x']:
             k = msg['k']
-            self.data_queue.put({
+            data_point = {
                 'datetime': datetime.utcfromtimestamp(k['t']/1000),
                 'open': float(k['o']),
                 'high': float(k['h']),
                 'low': float(k['l']),
                 'close': float(k['c']),
-                'volume': float(k['v'])
-            })
+                'volume': float(k['v']),
+                'openinterest': 0.0
+            }
+
+            # Validate data point before adding to queue
+            from src.data.utils.validation import validate_ohlcv_data
+            df_point = pd.DataFrame([data_point])
+            is_valid, errors = validate_ohlcv_data(df_point)
+            if is_valid:
+                self.data_queue.put(data_point)
+            else:
+                _logger.warning("Invalid WebSocket data point: %s", errors)
 
     def _on_error(self, ws, error):
         _logger.error("WebSocket error: %s", error)
-        # Auto-reconnect logic
-        _logger.info("Reconnecting in 5 seconds...")
-        threading.Timer(5.0, self._run_websocket).start()
 
     def _load(self):
         if self._state == self._ST_LIVE and not self.data_queue.empty():

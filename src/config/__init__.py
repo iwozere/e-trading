@@ -23,8 +23,8 @@ New Simplified Models:
 """
 
 # Legacy imports (for backward compatibility)
-from .config_manager import ConfigManager
-from .schemas import (
+from src.config.config_manager import ConfigManager
+from src.model.schemas import (
     ConfigSchema,
     TradingConfig,
     OptimizerConfig as LegacyOptimizerConfig,
@@ -35,11 +35,11 @@ from .schemas import (
     SchedulingConfig,
     PerformanceConfig
 )
-from .registry import ConfigRegistry
-from .templates import ConfigTemplates
+from src.config.registry import ConfigRegistry
+from src.config.templates import ConfigTemplates
 
 # New simplified imports
-from .config_models import (
+from src.model.config_models import (
     TradingBotConfig,
     OptimizerConfig,
     DataConfig,
@@ -48,7 +48,7 @@ from .config_models import (
     DataSourceType,
     StrategyType
 )
-from .config_loader import (
+from src.config.config_loader import (
     load_config,
     load_optimizer_config,
     load_data_config,
@@ -88,4 +88,4 @@ __all__ = [
     'validate_config_file',
     'create_sample_config',
     'convert_old_config'
-] 
+]
