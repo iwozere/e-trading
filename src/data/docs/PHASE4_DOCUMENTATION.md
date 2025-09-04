@@ -319,9 +319,11 @@ processor = ParallelProcessor(max_workers=4)
 
 def process_chunk(chunk):
     """Process a chunk of data."""
-    chunk['sma_20'] = chunk['close'].rolling(20).mean()
-    chunk['rsi'] = 100 - (100 / (1 + chunk['close'].pct_change().rolling(14).mean()))
-    return chunk
+    # Create a copy to avoid SettingWithCopyWarning
+    chunk_copy = chunk.copy()
+    chunk_copy['sma_20'] = chunk_copy['close'].rolling(20).mean()
+    chunk_copy['rsi'] = 100 - (100 / (1 + chunk_copy['close'].pct_change().rolling(14).mean()))
+    return chunk_copy
 
 with monitor.start_operation("parallel_processing"):
     processed_df = processor.process_dataframe(large_df, process_chunk)

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 class DataProvider(Enum):
     BINANCE = "binance"
     YFINANCE = "yfinance"
+    ALPHA_VANTAGE = "alpha_vantage"
     UNKNOWN = "unknown"
 
 @dataclass
@@ -422,36 +423,98 @@ class TickerClassifier:
                 return True
         return False
 
-    def get_data_provider_config(self, ticker: str) -> Dict:
+    def get_data_provider_config(self, ticker: str, interval: str = None) -> Dict:
         """
-        Get configuration for data retrieval based on ticker
+        Get configuration for data retrieval based on ticker and interval.
+
+        Provider selection logic:
+        - Crypto: Always use Binance
+        - Stocks: 1d -> yfinance, others -> Alpha Vantage
+
+        Args:
+            ticker: The ticker symbol
+            interval: Time interval (1d, 1h, 5m, 15m, etc.)
 
         Returns:
             Dictionary with provider-specific configuration
         """
         ticker_info = self.classify_ticker(ticker)
 
+        # Determine the best provider based on symbol type and interval
+        best_provider = self._select_best_provider(ticker_info, interval)
+
         config = {
             'ticker': ticker_info.original_ticker,
-            'provider': ticker_info.provider.value,
+            'provider': best_provider.value,
             'formatted_ticker': ticker_info.formatted_ticker,
+            'best_provider': best_provider.value,
+            'original_provider': ticker_info.provider.value,
         }
 
-        if ticker_info.provider == DataProvider.BINANCE:
+        if best_provider == DataProvider.BINANCE:
             config.update({
                 'base_asset': ticker_info.base_asset,
                 'quote_asset': ticker_info.quote_asset,
-                'interval': '1d',  # default interval
-                'limit': 100       # default limit
+                'interval': interval or '1d',
+                'limit': 1000,  # Higher limit for crypto
+                'reason': 'Crypto symbol - Binance provides best coverage'
             })
-        elif ticker_info.provider == DataProvider.YFINANCE:
+        elif best_provider == DataProvider.YFINANCE:
             config.update({
                 'exchange': ticker_info.exchange,
-                'period': '1y',    # default period
-                'interval': '1d'   # default interval
+                'period': '1y',
+                'interval': interval or '1d',
+                'reason': f'Stock symbol with {interval} interval - yfinance for daily data'
+            })
+        elif best_provider == DataProvider.ALPHA_VANTAGE:
+            config.update({
+                'exchange': ticker_info.exchange,
+                'interval': interval or '1d',
+                'reason': f'Stock symbol with {interval} interval - Alpha Vantage for intraday data'
             })
 
         return config
+
+    def _select_best_provider(self, ticker_info: TickerInfo, interval: str = None) -> DataProvider:
+        """
+        Select the best provider based on symbol type and interval.
+
+        Args:
+            ticker_info: Ticker classification information
+            interval: Time interval
+
+        Returns:
+            Best provider for the given symbol and interval
+        """
+        # Crypto symbols: Always use Binance
+        if ticker_info.provider == DataProvider.BINANCE:
+            return DataProvider.BINANCE
+
+        # Stock symbols: Choose based on interval
+        if ticker_info.provider == DataProvider.YFINANCE:
+            if interval == '1d':
+                # Daily data: Use yfinance (free, reliable)
+                return DataProvider.YFINANCE
+            else:
+                # Intraday data: Use Alpha Vantage (no 60-day limit)
+                return DataProvider.ALPHA_VANTAGE
+
+        # Unknown symbols: Default to original provider
+        return ticker_info.provider
+
+    def get_provider_for_interval(self, ticker: str, interval: str) -> str:
+        """
+        Get the recommended provider for a specific ticker and interval.
+
+        Args:
+            ticker: The ticker symbol
+            interval: Time interval
+
+        Returns:
+            Provider name as string
+        """
+        config = self.get_data_provider_config(ticker, interval)
+        return config['best_provider']
 
     def get_supported_exchanges(self) -> Dict[str, str]:
         """

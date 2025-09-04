@@ -20,7 +20,7 @@ from src.data import (
     create_data_source,
     DataAggregator
 )
-from src.data.binance_live_feed import BinanceLiveFeed
+from src.data.binance_live_feed import BinanceLiveDataFeed
 from src.data.utils import get_data_handler, validate_ohlcv_data
 
 
@@ -68,7 +68,7 @@ def test_data_source_factory():
         print("✓ Factory instance created")
 
         # Register a test data source
-        register_data_source("test_binance", BinanceLiveFeed)
+        register_data_source("test_binance", BinanceLiveDataFeed)
         print("✓ Test data source registered")
 
         # Check available providers

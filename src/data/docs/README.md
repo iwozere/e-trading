@@ -1,14 +1,91 @@
 # Data Module
 
-This module provides comprehensive data downloading and live feed capabilities for the e-trading platform. It supports multiple data sources for both historical data and real-time market feeds.
+This module provides comprehensive data downloading, caching, and live feed capabilities for the e-trading platform. It supports multiple data sources with intelligent provider selection and a unified cache system for both historical data and real-time market feeds.
 
 ## Overview
 
 The data module consists of:
+- **Unified Cache System**: Intelligent file-based caching with gzip compression
 - **Data Downloaders**: For fetching historical OHLCV data and fundamental information
 - **Live Data Feeds**: For real-time market data streaming
-- **Data Factory**: For creating and managing data sources
-- **Database Integration**: For storing and retrieving market data
+- **Provider Selection**: Automatic selection of the best data provider based on symbol and timeframe
+- **Data Validation**: Comprehensive data quality checks and validation
+
+## Unified Cache System
+
+### New Cache Structure
+
+The unified cache system provides a simplified, efficient structure for storing historical data with proper year splitting:
+
+```
+data-cache/
+├── BTCUSDT/
+│   ├── 5m/
+│   │   ├── 2025.csv.gz          # Data for 2025 only
+│   │   ├── 2025.metadata.json   # Metadata for 2025
+│   │   ├── 2024.csv.gz          # Data for 2024 only
+│   │   └── 2024.metadata.json   # Metadata for 2024
+│   └── 1h/
+├── AAPL/
+│   ├── 5m/
+│   └── 1d/
+└── _metadata/
+    ├── symbols.json
+    ├── providers.json
+    └── quality_scores.json
+```
+
+### Key Features
+
+- **Simplified Structure**: `symbol/timeframe/` instead of `provider/symbol/timeframe/year/`
+- **Year Splitting**: Data is automatically split by year into separate files
+- **Gzip Compression**: All CSV files are compressed for efficient storage
+- **Provider Metadata**: Data source information embedded in metadata files
+- **Intelligent Provider Selection**: Automatic selection of best provider based on symbol type and timeframe
+- **Data Validation**: Built-in OHLCV data validation and quality scoring
+
+### Usage
+
+```python
+from src.data.cache.unified_cache import configure_unified_cache
+
+# Configure cache
+cache = configure_unified_cache(cache_dir="./data-cache")
+
+# Store data
+cache.put(df, "BTCUSDT", "5m", start_date, end_date, provider="binance")
+
+# Retrieve data
+df = cache.get("BTCUSDT", "5m", start_date, end_date)
+```
+
+## Intelligent Provider Selection
+
+The system automatically selects the best data provider based on symbol type and timeframe:
+
+### Provider Selection Logic
+
+- **Cryptocurrency Symbols**: Always use Binance
+- **Stock Symbols (Daily)**: Use Yahoo Finance
+- **Stock Symbols (Intraday)**: Use Alpha Vantage (full historical data, no 60-day limit)
+
+### Usage
+
+```python
+from src.common.ticker_classifier import TickerClassifier
+
+classifier = TickerClassifier()
+
+# Get best provider for a symbol and timeframe
+provider = classifier.get_provider_for_interval("BTCUSDT", "5m")  # Returns "binance"
+provider = classifier.get_provider_for_interval("AAPL", "1d")     # Returns "yfinance"
+provider = classifier.get_provider_for_interval("AAPL", "5m")     # Returns "alpha_vantage"
+
+# Get detailed provider configuration
+config = classifier.get_data_provider_config("AAPL", "5m")
+print(f"Provider: {config['best_provider']}")
+print(f"Reason: {config['reason']}")
+```
 
 ## Data Downloaders
 
@@ -20,43 +97,32 @@ All data downloaders inherit from `BaseDataDownloader` which provides:
 - Error handling and logging
 - Abstract `get_fundamentals()` method
 
-### VIX Data Management
-
-The VIX (Volatility Index) data module provides functionality for downloading and managing CBOE VIX data:
-
-**Features:**
-- ✅ **Automatic Directory Creation**: Creates `data/vix/` directory if it doesn't exist
-- ✅ **Incremental Updates**: Only downloads new data since last update
-- ✅ **Data Deduplication**: Removes duplicate entries automatically
-- ✅ **Local Storage**: Stores data in CSV format for offline access
-
-**Usage:**
-```python
-from src.data.vix import update_vix
-
-# Update VIX data (creates directory if needed)
-update_vix()
-```
-
-**Data Format:**
-- **File Location**: `data/vix/vix.csv`
-- **Columns**: Date, Open, High, Low, Close, Adj Close, Volume
-- **Index**: Date (datetime)
-- **Frequency**: Daily data from 1990 to present
-
-**Directory Structure:**
-```
-data/
-├── vix/
-│   └── vix.csv          # VIX historical data
-└── ...
-```
-
 ### Available Data Sources
 
-#### 1. Yahoo Finance Data Downloader (`YahooDataDownloader`)
+#### 1. Binance Data Downloader (`BinanceDataDownloader`)
 
-**Best for:** Comprehensive fundamental analysis and global stock coverage
+**Best for:** Cryptocurrency data with comprehensive historical coverage
+
+**Capabilities:**
+- ✅ **Cryptocurrency OHLCV**: All major crypto pairs
+- ✅ **Multiple Timeframes**: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w, 1M
+- ✅ **High Rate Limits**: 1200 requests per minute
+- ✅ **Real-time Data**: WebSocket support for live feeds
+
+**Data Quality:** Excellent - Direct from exchange
+**Rate Limits:** 1200 requests/minute (free tier)
+**Coverage:** Cryptocurrencies only
+
+```python
+from src.data.binance_data_downloader import BinanceDataDownloader
+
+downloader = BinanceDataDownloader()
+df = downloader.get_ohlcv("BTCUSDT", "5m", "2023-01-01", "2023-12-31")
+```
+
+#### 2. Yahoo Finance Data Downloader (`YahooDataDownloader`)
+
+**Best for:** Stock fundamental data and daily historical data
 
 **Capabilities:**
 - ✅ **PE Ratio**: Trailing and forward PE ratios
@@ -64,8 +130,8 @@ data/
 - ✅ **Growth Metrics**: Revenue growth, net income growth
 - ✅ **Company Information**: Name, sector, industry, country, exchange
 - ✅ **Market Data**: Market cap, current price, shares outstanding
-- ✅ **Profitability Metrics**: Operating margin, profit margin, free cash flow
-- ✅ **Valuation Metrics**: Beta, PEG ratio, price-to-sales, enterprise value
+- ✅ **Daily Data**: Comprehensive historical daily data
+- ⚠️ **Intraday Limitation**: Only 60 days of intraday data
 
 **Data Quality:** High - Comprehensive fundamental data
 **Rate Limits:** None for basic usage
@@ -76,145 +142,86 @@ from src.data.yahoo_data_downloader import YahooDataDownloader
 
 downloader = YahooDataDownloader()
 fundamentals = downloader.get_fundamentals("AAPL")
-print(f"PE Ratio: {fundamentals.pe_ratio}")
-print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
+df = downloader.get_ohlcv("AAPL", "1d", "2020-01-01", "2023-12-31")
 ```
 
-#### 2. Alpha Vantage Data Downloader (`AlphaVantageDataDownloader`)
+#### 3. Alpha Vantage Data Downloader (`AlphaVantageDataDownloader`)
 
-**Best for:** High-quality fundamental data with API key
+**Best for:** Full historical intraday stock data (no 60-day limit)
 
 **Capabilities:**
-- ✅ **PE Ratio**: Trailing and forward PE ratios
-- ✅ **Financial Ratios**: P/B, ROE, ROA, debt/equity, current ratio, quick ratio
-- ✅ **Growth Metrics**: Revenue growth, net income growth
-- ✅ **Company Information**: Name, sector, industry, country, exchange
-- ✅ **Market Data**: Market cap, current price, shares outstanding
-- ✅ **Profitability Metrics**: Operating margin, profit margin, free cash flow
-- ✅ **Valuation Metrics**: Beta, PEG ratio, price-to-sales, enterprise value
+- ✅ **Full Historical Data**: Complete intraday data history
+- ✅ **Multiple Intervals**: 1m, 5m, 15m, 30m, 60m, 1h, 1d, 1w, 1M
+- ✅ **Stock Data**: Comprehensive US and international stocks
+- ✅ **Crypto Data**: Limited cryptocurrency support
+- ✅ **Fundamental Data**: Company information and financial metrics
 
-**Data Quality:** High - Comprehensive fundamental data
-**Rate Limits:** 5 API calls per minute (free tier), 500 per day (free tier)
-**Coverage:** Global stocks and ETFs
+**Data Quality:** High - Professional-grade data
+**Rate Limits:** 5 calls/minute, 500/day (free tier)
+**Coverage:** Global stocks and limited crypto
 
 ```python
 from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
-downloader = AlphaVantageDataDownloader("YOUR_API_KEY")
-fundamentals = downloader.get_fundamentals("AAPL")
+downloader = AlphaVantageDataDownloader(api_key="YOUR_API_KEY")
+df = downloader.get_ohlcv("AAPL", "5m", "2020-01-01", "2023-12-31")  # Full history!
 ```
 
-#### 3. Finnhub Data Downloader (`FinnhubDataDownloader`)
+## Cache Population Script
 
-**Best for:** Real-time data and comprehensive fundamentals
+The `populate_cache.py` script provides an easy way to populate the cache with historical data:
 
-**Capabilities:**
-- ✅ **PE Ratio**: Trailing and forward PE ratios
-- ✅ **Financial Ratios**: P/B, ROE, ROA, debt/equity, current ratio, quick ratio
-- ✅ **Growth Metrics**: Revenue growth, net income growth
-- ✅ **Company Information**: Name, sector, industry, country, exchange
-- ✅ **Market Data**: Market cap, current price, shares outstanding
-- ✅ **Profitability Metrics**: Operating margin, profit margin, free cash flow
-- ✅ **Valuation Metrics**: Beta, PEG ratio, price-to-sales, enterprise value
+### Basic Usage
 
-**Data Quality:** High - Comprehensive fundamental data
-**Rate Limits:** 60 API calls per minute (free tier)
-**Coverage:** Global stocks and ETFs
+```bash
+# Populate cache with default symbols and timeframes
+python src/data/cache/populate_cache.py
 
-```python
-from src.data.finnhub_data_downloader import FinnhubDataDownloader
+# Custom symbols and timeframes
+python src/data/cache/populate_cache.py --symbols BTCUSDT,AAPL,GOOGL --intervals 5m,15m,1h,1d
 
-downloader = FinnhubDataDownloader("YOUR_API_KEY")
-fundamentals = downloader.get_fundamentals("AAPL")
+# Specific date range
+python src/data/cache/populate_cache.py --start-date 2020-01-01 --end-date 2023-12-31
+
+# Custom cache directory
+python src/data/cache/populate_cache.py --cache-dir ./my-cache
 ```
 
-#### 4. Polygon.io Data Downloader (`PolygonDataDownloader`)
+### Features
 
-**Best for:** US market data with basic fundamentals (free tier)
+- **Intelligent Provider Selection**: Automatically chooses the best provider for each symbol/timeframe combination
+- **Incremental Updates**: Only downloads missing data, skips existing recent data
+- **Rate Limiting**: Built-in delays to respect API limits
+- **Data Validation**: Validates all data before caching
+- **Progress Tracking**: Shows detailed progress and statistics
 
-**Capabilities:**
-- ❌ **PE Ratio**: Requires paid tier
-- ❌ **Financial Ratios**: Requires paid tier
-- ❌ **Growth Metrics**: Requires paid tier
-- ✅ **Company Information**: Name, sector, industry, country, exchange
-- ✅ **Market Data**: Market cap, current price, shares outstanding
-- ❌ **Profitability Metrics**: Requires paid tier
-- ❌ **Valuation Metrics**: Requires paid tier
+### Example Output
 
-**Data Quality:** Basic (free tier) - Limited fundamental data
-**Rate Limits:** 5 API calls per minute (free tier)
-**Coverage:** US stocks and ETFs (free tier)
-
-```python
-from src.data.polygon_data_downloader import PolygonDataDownloader
-
-downloader = PolygonDataDownloader("YOUR_API_KEY")
-fundamentals = downloader.get_fundamentals("AAPL")
 ```
+🚀 Populating cache at: ./data-cache
+📊 Symbols: BTCUSDT, AAPL, GOOGL
+⏱️  Intervals: 5m, 15m, 1h, 1d
+📅 Date range: 2020-01-01 to 2023-12-31
+🔢 Total operations: 12
 
-#### 5. Twelve Data Downloader (`TwelveDataDataDownloader`)
+  ✅ Binance downloader initialized
+  ✅ Yahoo downloader initialized
+  ✅ Alpha Vantage downloader initialized
+  ✅ Ticker classifier initialized
+  📡 Available downloaders: binance, yahoo, alpha_vantage
 
-**Best for:** Global coverage with basic fundamental data
-
-**Capabilities:**
-- ✅ **PE Ratio**: Basic PE ratio
-- ✅ **Price-to-Book Ratio**: Available
-- ❌ **Financial Ratios**: ROE, ROA, debt/equity, etc. not available
-- ❌ **Growth Metrics**: Revenue growth, net income growth not available
-- ✅ **Company Information**: Name, sector, industry, country, exchange
-- ✅ **Market Data**: Market cap, current price
-- ✅ **Earnings Data**: EPS, revenue from earnings reports
-- ✅ **Beta**: Volatility measure
-
-**Data Quality:** Basic - Limited fundamental data
-**Rate Limits:** 8 API calls per minute (free tier), 800 per day (free tier)
-**Coverage:** Global stocks and ETFs
-
-```python
-from src.data.twelvedata_data_downloader import TwelveDataDataDownloader
-
-downloader = TwelveDataDataDownloader("YOUR_API_KEY")
-fundamentals = downloader.get_fundamentals("AAPL")
-```
-
-#### 6. Binance Data Downloader (`BinanceDataDownloader`)
-
-**Best for:** Cryptocurrency data only
-
-**Capabilities:**
-- ❌ **Fundamental Data**: Not applicable for cryptocurrencies
-- ✅ **Cryptocurrency OHLCV**: Comprehensive crypto market data
-
-**Data Quality:** N/A - Cryptocurrency exchange
-**Rate Limits:** 1200 requests per minute (free tier)
-**Coverage:** Cryptocurrencies only
-
-```python
-from src.data.binance_data_downloader import BinanceDataDownloader
-
-downloader = BinanceDataDownloader("YOUR_API_KEY", "YOUR_SECRET_KEY")
-# Get cryptocurrency data
-df = downloader.get_ohlcv("BTCUSDT", "1d", "2023-01-01", "2023-12-31")
-```
-
-#### 7. CoinGecko Data Downloader (`CoinGeckoDataDownloader`)
-
-**Best for:** Cryptocurrency data with no API key required
-
-**Capabilities:**
-- ❌ **Fundamental Data**: Not applicable for cryptocurrencies
-- ✅ **Cryptocurrency OHLCV**: Comprehensive crypto market data
-
-**Data Quality:** N/A - Cryptocurrency exchange
-**Rate Limits:** 50 calls per minute (free tier)
-**Coverage:** Cryptocurrencies only
-
-```python
-from src.data.coingecko_data_downloader import CoinGeckoDataDownloader
-
-downloader = CoinGeckoDataDownloader()
-# Get cryptocurrency data
-df = downloader.get_ohlcv("bitcoin", "1d", "2023-01-01", "2023-12-31")
+🔄 Progress: 1/12 (8.3%)
+📥 Downloading BTCUSDT 5m data...
+  🔍 Ticker classification: BTCUSDT -> binance
+  🎯 Best provider for 5m: binance
+  💡 Reason: Crypto symbol detected
+  📡 Using Binance data source for crypto symbol BTCUSDT
+  ✅ Successfully downloaded from binance: 125,000 rows
+  💾 Caching data to unified cache: BTCUSDT/5m/2020/...
+  ✅ Downloaded and cached 125,000 rows
+  📈 Quality score: 0.95
+  📁 Cached to: BTCUSDT/5m/2020/
+  🔗 Provider: binance
 ```
 
 ## Live Data Feeds
@@ -255,238 +262,88 @@ feed = YahooLiveFeed(["AAPL", "GOOGL"])
 feed.start()
 ```
 
-#### 3. IBKR Live Feed (`IBKRLiveFeed`)
+## Data Validation
 
-Interactive Brokers real-time data feed.
+The system includes comprehensive data validation:
 
-**Features:**
-- Professional-grade data
-- Multiple asset classes
-- Real-time streaming
-- Advanced order management
+### OHLCV Data Validation
 
 ```python
-from src.data.ibkr_live_feed import IBKRLiveFeed
+from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
 
-feed = IBKRLiveFeed()
-feed.connect()
+# Validate data
+is_valid, errors = validate_ohlcv_data(df)
+quality_score = get_data_quality_score(df)
+
+print(f"Data valid: {is_valid}")
+print(f"Quality score: {quality_score['quality_score']:.2f}")
 ```
 
-#### 4. CoinGecko Live Feed (`CoinGeckoLiveDataFeed`)
+### Validation Checks
 
-Real-time cryptocurrency data streaming from CoinGecko.
+- **Required Columns**: open, high, low, close, volume
+- **Data Types**: Numeric validation for OHLCV columns
+- **Logical Consistency**: high >= max(open, close), low <= min(open, close)
+- **Timestamp Validation**: Proper datetime index, no duplicates
+- **Data Gaps**: Detection of missing time periods
+- **Quality Scoring**: Overall data quality assessment
 
-**Features:**
-- Polling-based real-time data (no WebSocket available)
-- Multiple cryptocurrency support
-- Automatic rate limiting (50 calls/minute)
-- Error handling and reconnection
-- No API key required
+## Cache Management
 
-**Note:** CoinGecko doesn't provide WebSocket API, so this implementation uses polling to simulate real-time updates.
+### Cache Statistics
 
 ```python
-from src.data.coingecko_live_feed import CoinGeckoLiveDataFeed
-
-feed = CoinGeckoLiveDataFeed("bitcoin", "1h", polling_interval=60)
-feed.start()
+# Get cache statistics
+stats = cache.get_stats()
+print(f"Cache size: {stats['total_size_gb']:.2f} GB")
+print(f"Files: {stats['files_count']}")
 ```
 
-## Data Factories
-
-### Data Downloader Factory
-
-The `DataDownloaderFactory` provides a unified interface for creating data downloaders using short provider codes:
+### Cache Operations
 
 ```python
-from src.data.data_downloader_factory import DataDownloaderFactory
+# List available data
+symbols = cache.list_symbols()
+timeframes = cache.list_timeframes("BTCUSDT")
+years = cache.list_years("BTCUSDT", "5m")
 
-# Create downloaders using short provider codes
-yahoo_downloader = DataDownloaderFactory.create_downloader("yf")  # Yahoo Finance
-alpha_vantage_downloader = DataDownloaderFactory.create_downloader("av", api_key="your_key")
-binance_downloader = DataDownloaderFactory.create_downloader("bnc", api_key="your_key", secret_key="your_secret")
-
-# Get fundamental data
-fundamentals = yahoo_downloader.get_fundamentals("AAPL")
+# Get data information
+info = cache.get_data_info("BTCUSDT", "5m", 2023)
+print(f"Provider: {info['data_source']}")
+print(f"Quality: {info['data_quality']['score']}")
 ```
 
-**Supported Provider Codes:**
-- `"yf"` or `"yahoo"` → Yahoo Finance
-- `"av"` or `"alphavantage"` → Alpha Vantage
-- `"fh"` or `"finnhub"` → Finnhub
-- `"pg"` or `"polygon"` → Polygon.io
-- `"td"` or `"twelvedata"` → Twelve Data
-- `"bnc"` or `"binance"` → Binance
-- `"cg"` or `"coingecko"` → CoinGecko
-
-**Environment Variable Support:**
-The factory automatically reads API keys from environment variables:
-- `ALPHA_VANTAGE_API_KEY`
-- `FINNHUB_API_KEY`
-- `POLYGON_API_KEY`
-- `TWELVEDATA_API_KEY`
-- `BINANCE_API_KEY`
-- `BINANCE_SECRET_KEY`
-
-### Data Feed Factory
-
-The `DataFeedFactory` provides a unified interface for creating live data feeds:
+### Cache Cleanup
 
 ```python
-from src.data.data_feed_factory import DataFeedFactory
-
-# Create a live feed
-feed = DataFeedFactory.create_live_feed("binance", symbols=["BTCUSDT"])
-
-# Create a CoinGecko live feed
-coingecko_config = {
-    "data_source": "coingecko",
-    "symbol": "bitcoin",
-    "interval": "1h",
-    "polling_interval": 60
-}
-feed = DataFeedFactory.create_data_feed(coingecko_config)
+# Remove old data (older than 365 days)
+removed = cache.cleanup_old_data(max_age_days=365)
+print(f"Removed {removed} old files")
 ```
 
-### Data Downloader Factory Usage Examples
+## Migration Tools
 
-The `DataDownloaderFactory` makes it easy to create downloaders using short provider codes:
+### Migrate from Old Cache Structure
 
-```python
-from src.data.data_downloader_factory import DataDownloaderFactory
+```bash
+# Migrate from provider-based to unified cache
+python src/data/cache/migrate_to_unified_cache.py --migrate
 
-# Yahoo Finance (no API key required)
-yahoo_downloader = DataDownloaderFactory.create_downloader("yf")
-fundamentals = yahoo_downloader.get_fundamentals("AAPL")
-
-# Alpha Vantage (API key from environment variable)
-alpha_vantage_downloader = DataDownloaderFactory.create_downloader("av")
-fundamentals = alpha_vantage_downloader.get_fundamentals("AAPL")
-
-# Binance (API credentials from environment variables)
-binance_downloader = DataDownloaderFactory.create_downloader("bnc")
-df = binance_downloader.get_ohlcv("BTCUSDT", "1d", "2023-01-01", "2023-12-31")
-
-# List all available providers
-DataDownloaderFactory.list_providers()
-
-# Get provider information
-provider_info = DataDownloaderFactory.get_provider_info()
+# Dry run to see what would be migrated
+python src/data/cache/migrate_to_unified_cache.py --dry-run
 ```
 
-**Quick Provider Reference:**
-- `"yf"` - Yahoo Finance (no API key)
-- `"av"` - Alpha Vantage (API key required)
-- `"fh"` - Finnhub (API key required)
-- `"pg"` - Polygon.io (API key required)
-- `"td"` - Twelve Data (API key required)
-- `"bnc"` - Binance (API key + secret required)
-- `"cg"` - CoinGecko (no API key)
+### Cache Validation and Cleanup
 
-## Fundamentals Data Model
+```bash
+# Validate cache files
+python src/data/cache/cleanup_failed_cache.py --validate-only
 
-All data downloaders return fundamental data using the `Fundamentals` dataclass:
+# Clean up invalid files
+python src/data/cache/cleanup_failed_cache.py --cleanup
 
-```python
-@dataclass
-class Fundamentals:
-    ticker: str
-    company_name: str
-    current_price: float
-    market_cap: float
-    pe_ratio: float
-    forward_pe: float
-    dividend_yield: float
-    earnings_per_share: float
-    # Additional fields for comprehensive analysis
-    price_to_book: Optional[float] = None
-    return_on_equity: Optional[float] = None
-    return_on_assets: Optional[float] = None
-    debt_to_equity: Optional[float] = None
-    current_ratio: Optional[float] = None
-    quick_ratio: Optional[float] = None
-    revenue: Optional[float] = None
-    revenue_growth: Optional[float] = None
-    net_income: Optional[float] = None
-    net_income_growth: Optional[float] = None
-    free_cash_flow: Optional[float] = None
-    operating_margin: Optional[float] = None
-    profit_margin: Optional[float] = None
-    beta: Optional[float] = None
-    sector: Optional[str] = None
-    industry: Optional[str] = None
-    country: Optional[str] = None
-    exchange: Optional[str] = None
-    currency: Optional[str] = None
-    shares_outstanding: Optional[float] = None
-    float_shares: Optional[float] = None
-    short_ratio: Optional[float] = None
-    payout_ratio: Optional[float] = None
-    peg_ratio: Optional[float] = None
-    price_to_sales: Optional[float] = None
-    enterprise_value: Optional[float] = None
-    enterprise_value_to_ebitda: Optional[float] = None
-    data_source: str = "Unknown"
-    last_updated: str = ""
-```
-
-## Usage Examples
-
-### Basic Data Download
-
-```python
-from src.data.yahoo_data_downloader import YahooDataDownloader
-
-# Initialize downloader
-downloader = YahooDataDownloader()
-
-# Download historical data
-df = downloader.get_ohlcv("AAPL", "1d", "2023-01-01", "2023-12-31")
-
-# Get fundamental data
-fundamentals = downloader.get_fundamentals("AAPL")
-print(f"Company: {fundamentals.company_name}")
-print(f"PE Ratio: {fundamentals.pe_ratio}")
-print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
-```
-
-### Batch Data Download
-
-```python
-from src.data.yahoo_data_downloader import YahooDataDownloader
-
-downloader = YahooDataDownloader()
-symbols = ["AAPL", "GOOGL", "MSFT", "AMZN"]
-
-# Download data for multiple symbols
-for symbol in symbols:
-    df = downloader.get_ohlcv(symbol, "1d", "2023-01-01", "2023-12-31")
-    fundamentals = downloader.get_fundamentals(symbol)
-    print(f"{symbol}: PE={fundamentals.pe_ratio}, Market Cap=${fundamentals.market_cap:,.0f}")
-```
-
-### Live Data Streaming
-
-```python
-from src.data.binance_live_feed import BinanceLiveFeed
-
-def on_data(data):
-    print(f"Received: {data}")
-
-feed = BinanceLiveFeed(["BTCUSDT", "ETHUSDT"])
-feed.set_callback(on_data)
-feed.start()
-```
-
-```python
-from src.data.coingecko_live_feed import CoinGeckoLiveDataFeed
-
-def on_new_bar(symbol, timestamp, data):
-    print(f"New {symbol} data at {timestamp}: {data}")
-
-feed = CoinGeckoLiveDataFeed("bitcoin", "1h", polling_interval=60)
-feed.on_new_bar = on_new_bar
-feed.start()
+# Validate and clean up
+python src/data/cache/cleanup_failed_cache.py --validate-and-cleanup
 ```
 
 ## Error Handling
@@ -495,52 +352,70 @@ All data downloaders include comprehensive error handling:
 
 ```python
 try:
-    fundamentals = downloader.get_fundamentals("INVALID_SYMBOL")
+    df = downloader.get_ohlcv("INVALID_SYMBOL", "1d", start_date, end_date)
 except Exception as e:
     print(f"Error: {e}")
-    # Returns default Fundamentals object with error information
+    # Returns None or empty DataFrame with error information
 ```
 
 ## Rate Limiting
 
-Be aware of API rate limits when using multiple data sources:
+The system respects API rate limits with built-in throttling:
 
-- **Yahoo Finance**: No limits for basic usage
-- **Alpha Vantage**: 5 calls/minute, 500/day (free tier)
-- **Finnhub**: 60 calls/minute (free tier)
-- **Polygon.io**: 5 calls/minute (free tier)
-- **Twelve Data**: 8 calls/minute, 800/day (free tier)
-- **Binance**: 1200 requests/minute (free tier)
-- **CoinGecko**: 50 calls/minute (free tier)
+- **Binance**: 1200 requests/minute (built-in throttling)
+- **Yahoo Finance**: No limits for basic usage (built-in throttling)
+- **Alpha Vantage**: 5 calls/minute, 500/day (built-in throttling)
+- **Cache Population**: 0.2 second delay between operations
 
 ## Configuration
 
-Data downloaders can be configured through environment variables or direct initialization:
+### Environment Variables
+
+```bash
+# Alpha Vantage API Key (for intraday stock data)
+ALPHA_VANTAGE_API_KEY=your_api_key
+
+# Binance API Credentials (optional, for higher rate limits)
+BINANCE_API_KEY=your_api_key
+BINANCE_SECRET_KEY=your_secret_key
+```
+
+### Cache Configuration
 
 ```python
-# Using environment variables
-import os
-os.environ["ALPHA_VANTAGE_API_KEY"] = "your_api_key"
-os.environ["FINNHUB_API_KEY"] = "your_api_key"
-
-# Direct initialization
-downloader = AlphaVantageDataDownloader(api_key="your_api_key")
+# Configure cache with custom settings
+cache = configure_unified_cache(
+    cache_dir="./my-cache",
+    max_size_gb=20.0
+)
 ```
 
 ## Best Practices
 
-1. **Choose the right data source** based on your needs:
-   - For comprehensive fundamental analysis: Yahoo Finance, Alpha Vantage, or Finnhub
-   - For basic data: Polygon.io or Twelve Data
-   - For cryptocurrencies: Binance or CoinGecko
+1. **Use the cache population script** for initial data setup
+2. **Let the system choose providers** automatically based on symbol type
+3. **Validate data quality** before using in trading strategies
+4. **Monitor cache size** and clean up old data regularly
+5. **Use appropriate timeframes** for your trading strategy needs
+6. **Handle rate limits** gracefully with built-in throttling
 
-2. **Handle rate limits** by implementing appropriate delays between requests
+## Troubleshooting
 
-3. **Cache data** when possible to avoid repeated API calls
+### Common Issues
 
-4. **Use error handling** to gracefully handle API failures
+1. **Cache Directory Permissions**: Ensure write access to cache directory
+2. **API Key Issues**: Verify environment variables are set correctly
+3. **Data Validation Failures**: Check data quality and format
+4. **Rate Limiting**: Built-in throttling should handle this automatically
 
-5. **Monitor data quality** and validate results
+### Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
 
 ## Documentation
 
@@ -558,6 +433,7 @@ When adding new data sources:
 3. Add comprehensive error handling
 4. Include proper documentation
 5. Add tests for the new implementation
-6. Update Requirements.md if new dependencies are needed
-7. Document design decisions in Design.md
-8. Add tasks to Tasks.md for future enhancements 
+6. Update the ticker classifier for provider selection
+7. Update Requirements.md if new dependencies are needed
+8. Document design decisions in Design.md
+9. Add tasks to Tasks.md for future enhancements

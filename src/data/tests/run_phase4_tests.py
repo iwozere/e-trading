@@ -6,11 +6,11 @@ integration tests, and performance benchmarks.
 """
 
 import sys
-import os
 import time
 import argparse
 from pathlib import Path
 import unittest
+import pandas as pd
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
@@ -182,6 +182,41 @@ def generate_test_report(unit_result, integration_result, performance_result):
     except ImportError:
         print(f"  ✓ Redis dependency: Successfully removed")
 
+    # Test enhanced CSV cache functionality
+    print(f"\nEnhanced CSV Cache Functionality:")
+    try:
+        from src.data.utils.file_based_cache import (
+            CSVFormatConventions, SafeCSVAppender, SmartDataAppender, CacheMetadata
+        )
+        print(f"  ✓ CSV Format Conventions: Available")
+        print(f"  ✓ Safe CSV Appender: Available")
+        print(f"  ✓ Smart Data Appender: Available")
+        print(f"  ✓ Enhanced Cache Metadata: Available")
+
+        # Test basic functionality
+        test_df = pd.DataFrame({
+            'timestamp': pd.date_range('2023-01-01', periods=5, freq='h'),
+            'open': [100.0, 101.0, 102.0, 103.0, 104.0],
+            'high': [101.0, 102.0, 103.0, 104.0, 105.0],
+            'low': [99.0, 100.0, 101.0, 102.0, 103.0],
+            'close': [101.0, 102.0, 103.0, 104.0, 105.0],
+            'volume': [1000.0, 1100.0, 1200.0, 1300.0, 1400.0]
+        })
+
+        # Test CSV validation
+        is_valid = CSVFormatConventions.validate_dataframe(test_df)
+        print(f"  ✓ CSV Validation: {'Working' if is_valid else 'Failed'}")
+
+        # Test standardization
+        standardized_df = CSVFormatConventions.standardize_dataframe(test_df, 'test_provider')
+        has_provider_ts = 'provider_download_ts' in standardized_df.columns
+        print(f"  ✓ CSV Standardization: {'Working' if has_provider_ts else 'Failed'}")
+
+    except ImportError as e:
+        print(f"  ✗ Enhanced CSV Cache: Import failed - {e}")
+    except Exception as e:
+        print(f"  ✗ Enhanced CSV Cache: Test failed - {e}")
+
     # Check test organization
     test_dirs = ["unit", "integration", "performance"]
     for test_dir in test_dirs:
@@ -189,6 +224,14 @@ def generate_test_report(unit_result, integration_result, performance_result):
         if test_path.exists():
             test_files = list(test_path.glob("test_*.py"))
             print(f"  ✓ {test_dir.capitalize()} tests: {len(test_files)} files found")
+
+            # Check for enhanced CSV cache tests
+            if test_dir == "unit":
+                enhanced_csv_tests = [f for f in test_files if "enhanced_csv" in f.name]
+                if enhanced_csv_tests:
+                    print(f"    - Enhanced CSV Cache tests: {len(enhanced_csv_tests)} files found")
+                else:
+                    print(f"    - Enhanced CSV Cache tests: Not found")
         else:
             print(f"  ✗ {test_dir.capitalize()} tests: Directory not found")
 

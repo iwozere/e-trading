@@ -24,6 +24,7 @@ from .data_source_factory import (
 from .data_aggregator import DataAggregator
 from .binance_live_feed import BinanceLiveDataFeed
 from .binance_data_feed import BinanceEnhancedFeed
+from .utils.advanced_caching import get_advanced_cache, configure_advanced_cache
 
 # Utilities
 from .utils import (
@@ -36,6 +37,10 @@ from .utils import (
                 FileBasedCache,
                 get_file_cache,
                 configure_file_cache,
+                TimeBasedInvalidation,
+                VersionBasedInvalidation,
+                FileCacheInvalidationStrategy,
+                FileCacheCompressor,
     StreamMultiplexer,
     get_stream_multiplexer,
     create_stream_config,
@@ -68,6 +73,8 @@ __all__ = [
     # Specific implementations
     'BinanceLiveDataFeed',
     'BinanceEnhancedFeed',
+    'get_advanced_cache',
+    'configure_advanced_cache',
 
     # Core utilities
     'get_data_handler',
@@ -80,6 +87,10 @@ __all__ = [
                 'FileBasedCache',
                 'get_file_cache',
                 'configure_file_cache',
+                'TimeBasedInvalidation',
+                'VersionBasedInvalidation',
+                'FileCacheInvalidationStrategy',
+                'FileCacheCompressor',
 
     # Phase 3: Data Streaming
     'StreamMultiplexer',

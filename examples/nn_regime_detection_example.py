@@ -16,7 +16,7 @@ Features:
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from src.ml.nn_regime_detector import NNRegimeDetector
+from src.ml.future.nn_regime_detector import NNRegimeDetector
 
 # 1. Generate synthetic data with features and regime labels
 def generate_synthetic_data(n_samples=1000, n_features=4, n_regimes=3, seed=42):
@@ -38,7 +38,7 @@ def generate_synthetic_data(n_samples=1000, n_features=4, n_regimes=3, seed=42):
     # Create DataFrame
     df = pd.DataFrame(features, columns=['return', 'volatility', 'rsi', 'macd'])
     df['regime'] = regimes
-    df['datetime'] = pd.date_range('2023-01-01', periods=n_samples, freq='H')
+    df['datetime'] = pd.date_range('2023-01-01', periods=n_samples, freq='h')
     return df
 
 def main():
@@ -85,4 +85,4 @@ def main():
     plt.show()
 
 if __name__ == '__main__':
-    main() 
+    main()

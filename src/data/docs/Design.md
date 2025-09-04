@@ -2,20 +2,21 @@
 
 ## Purpose
 
-The data module provides a comprehensive, extensible framework for acquiring, processing, and streaming financial market data from multiple sources. It serves as the foundation for the e-trading platform's data infrastructure, supporting both historical analysis and real-time trading operations.
+The data module provides a comprehensive, extensible framework for acquiring, processing, and streaming financial market data from multiple sources. It serves as the foundation for the e-trading platform's data infrastructure, supporting both historical analysis and real-time trading operations with an intelligent unified cache system.
 
 **Core Objectives:**
-- Unified interface for multiple data providers
+- Unified interface for multiple data providers with intelligent selection
 - Support for both historical and real-time data
 - Consistent data formats across all sources
 - Robust error handling and failover capabilities
 - Scalable architecture for high-frequency operations
+- Efficient file-based caching with gzip compression
 
 ## Architecture
 
 ### High-Level Overview
 
-The data module follows a layered architecture with clear separation of concerns:
+The data module follows a layered architecture with clear separation of concerns and intelligent provider selection:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -26,47 +27,95 @@ The data module follows a layered architecture with clear separation of concerns
 ┌─────────────────────────▼───────────────────────────────────┐
 │                    Data Access Layer                       │
 │  ┌─────────────────┐    ┌─────────────────┐                │
-│  │ Data Downloader │    │  Live Data Feed │                │
-│  │    Factory      │    │     Factory     │                │
+│  │ Unified Cache   │    │  Live Data Feed │                │
+│  │    System       │    │     Factory     │                │
 │  └─────────────────┘    └─────────────────┘                │
 └─────────────┬─────────────────────┬───────────────────────────┘
               │                     │
 ┌─────────────▼───────────┐ ┌───────▼─────────────────────────┐
-│   Historical Data       │ │      Real-time Data             │
-│     Downloaders         │ │       Feeds                     │
+│   Intelligent Provider  │ │      Real-time Data             │
+│     Selection           │ │       Feeds                     │
 │ ┌─────────────────────┐ │ │ ┌─────────────────────────────┐ │
-│ │ Yahoo Finance       │ │ │ │ Binance WebSocket          │ │
-│ │ Alpha Vantage       │ │ │ │ Yahoo Finance Polling      │ │
-│ │ Finnhub             │ │ │ │ IBKR Native API           │ │
-│ │ Polygon.io          │ │ │ │ CoinGecko Polling         │ │
-│ │ Twelve Data         │ │ │ └─────────────────────────────┘ │
-│ │ Binance             │ │ └─────────────────────────────────┘
-│ │ CoinGecko           │ │
-│ └─────────────────────┘ │
-└─────────────────────────┘
+│ │ Ticker Classifier   │ │ │ │ Binance WebSocket          │ │
+│ │ Provider Selection  │ │ │ │ Yahoo Finance Polling      │ │
+│ │ Cache Management    │ │ │ │ IBKR Native API           │ │
+│ └─────────────────────┘ │ │ │ CoinGecko Polling         │ │
+└─────────────────────────┘ │ └─────────────────────────────┘ │
+              │             └─────────────────────────────────┘
+┌─────────────▼───────────────────────────────────────────────┐
+│                    Data Providers                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
+│  │ Binance         │  │ Yahoo Finance   │  │Alpha Vantage│ │
+│  │ (Crypto)        │  │ (Stocks Daily)  │  │(Stocks Intra)│ │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘ │
+└─────────────────────────────────────────────────────────────┘
               │
 ┌─────────────▼───────────────────────────────────────────────┐
-│                    Storage Layer                           │
+│                    Unified Cache Layer                     │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
-│  │   CSV Files     │  │   SQLite DB     │  │  PostgreSQL │ │
-│  │  (Historical)   │  │    (Trades)     │  │ (Production)│ │
-│  │  ┌─────────────┐ │  └─────────────────┘  └─────────────┘ │
-│  │  │ VIX Data    │ │                                         │
-│  │  │ (Volatility)│ │                                         │
-│  │  └─────────────┘ │                                         │
+│  │ Symbol/Timeframe│  │ Gzip Compressed │  │ Metadata    │ │
+│  │ Directory       │  │ CSV Files       │  │ JSON Files  │ │
+│  │ Structure       │  │ (.csv.gz)       │  │ (.json)     │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Architecture
 
-#### 1. Data Downloaders (Historical Data)
+#### 1. Unified Cache System
+
+**New Architecture Pattern:**
+- Simplified directory structure: `symbol/timeframe/` instead of `provider/symbol/timeframe/year/`
+- Gzip-compressed CSV files for efficient storage
+- Embedded provider metadata in JSON files
+- Intelligent provider selection based on symbol type and timeframe
+
+**Key Components:**
+```python
+UnifiedCache
+├── put() -> Store data with provider metadata
+├── get() -> Retrieve data across multiple years
+├── _get_available_years() -> List available data years
+├── _save_compressed_csv() -> Save with gzip compression
+├── _load_year_data() -> Load specific year data
+├── get_stats() -> Cache statistics and health
+├── list_symbols() -> List available symbols
+├── list_timeframes() -> List timeframes for symbol
+├── list_years() -> List years for symbol/timeframe
+├── get_data_info() -> Get detailed data information
+└── cleanup_old_data() -> Remove old data
+```
+
+#### 2. Intelligent Provider Selection
+
+**Ticker Classification System:**
+- Automatic symbol type detection (crypto vs stock)
+- Provider selection based on symbol type and timeframe
+- Fallback mechanisms for provider failures
+- Provider capability mapping
+
+**Key Components:**
+```python
+TickerClassifier
+├── get_provider_for_interval() -> Select best provider
+├── get_data_provider_config() -> Get provider configuration
+├── _select_best_provider() -> Apply selection logic
+├── _classify_symbol() -> Determine symbol type
+└── _get_provider_capabilities() -> Check provider features
+
+Provider Selection Logic:
+├── Crypto Symbols → Binance (all timeframes)
+├── Stock Symbols (Daily) → Yahoo Finance
+└── Stock Symbols (Intraday) → Alpha Vantage
+```
+
+#### 3. Data Downloaders (Historical Data)
 
 **Base Architecture Pattern:**
 - Abstract base class (`BaseDataDownloader`) defines common interface
 - Concrete implementations for each data provider
-- Factory pattern for provider selection and instantiation
-- Consistent data format using pandas DataFrames and Fundamentals dataclass
+- Intelligent provider selection via ticker classifier
+- Consistent data format using pandas DataFrames
 
 **Key Components:**
 ```python
@@ -77,64 +126,49 @@ BaseDataDownloader (ABC)
 └── download_multiple_symbols()
 
 Concrete Implementations:
-├── YahooDataDownloader
-├── AlphaVantageDataDownloader  
-├── FinnhubDataDownloader
-├── PolygonDataDownloader
-├── TwelveDataDataDownloader
-├── BinanceDataDownloader
-├── CoinGeckoDataDownloader
-└── VIXDataManager (Specialized)
+├── BinanceDataDownloader (Crypto - All timeframes)
+├── YahooDataDownloader (Stocks - Daily data)
+├── AlphaVantageDataDownloader (Stocks - Intraday data)
+└── MockDataSource (Testing fallback)
 ```
 
-#### 2. Live Data Feeds (Real-time Data)
+#### 4. Cache Population System
 
-**Base Architecture Pattern:**
-- Abstract base class (`BaseLiveDataFeed`) extends Backtrader's PandasData
-- WebSocket/polling implementations for real-time updates
-- Automatic reconnection and error recovery
-- Historical data preloading for strategy initialization
+**Automated Cache Management:**
+- Intelligent provider selection for each symbol/timeframe
+- Incremental updates (only missing data)
+- Data validation before caching
+- Rate limiting and error handling
 
 **Key Components:**
 ```python
-BaseLiveDataFeed (extends bt.feeds.PandasData)
-├── _load_historical_data() (abstract)
-├── _connect_realtime() (abstract)
-├── _get_latest_data() (abstract)
-└── _update_loop() (background thread)
-
-Concrete Implementations:
-├── BinanceLiveDataFeed (WebSocket)
-├── YahooLiveDataFeed (Polling)
-├── IBKRLiveDataFeed (Native API)
-└── CoinGeckoLiveDataFeed (Polling)
+populate_cache()
+├── Configure unified cache
+├── Initialize data downloaders
+├── Initialize ticker classifier
+├── For each symbol/timeframe:
+│   ├── Check existing cache data
+│   ├── Select best provider
+│   ├── Download data if needed
+│   ├── Validate data quality
+│   └── Cache with metadata
+└── Return statistics and results
 ```
-
-#### 3. Factory Pattern Implementation
-
-**DataDownloaderFactory:**
-- Provider code mapping (e.g., "yf" → Yahoo Finance)
-- Environment variable integration for API keys
-- Parameter validation and error handling
-- Provider information and capabilities discovery
-
-**DataFeedFactory:**
-- Configuration-based feed creation
-- Support for different data source types
-- Real-time parameter optimization
-- Source capability validation
 
 ### Data Flow
 
-#### Historical Data Flow
+#### Historical Data Flow with Intelligent Selection
 
 ```
-1. Request → DataDownloaderFactory.create_downloader(provider_code)
-2. Factory → Instantiate specific downloader with API credentials
-3. Downloader → Fetch data from external API
-4. Processing → Convert to standardized DataFrame/Fundamentals format
-5. Storage → Save to CSV files with standardized naming
-6. Return → Processed data to application layer
+1. Request → populate_cache.py with symbols and timeframes
+2. Classification → TickerClassifier determines symbol type
+3. Provider Selection → Select best provider based on symbol/timeframe
+4. Cache Check → Check existing data in unified cache
+5. Download → Fetch data from selected provider (if needed)
+6. Validation → Validate OHLCV data quality
+7. Storage → Save to unified cache with gzip compression
+8. Metadata → Store provider and quality information
+9. Return → Processed data to application layer
 ```
 
 #### Real-time Data Flow
@@ -142,7 +176,7 @@ Concrete Implementations:
 ```
 1. Configuration → DataFeedFactory.create_data_feed(config)
 2. Factory → Instantiate specific live feed implementation
-3. Historical Load → Fetch initial data for strategy context
+3. Historical Load → Fetch initial data from unified cache
 4. Real-time Start → Establish WebSocket/polling connection
 5. Data Updates → Continuous data processing in background thread
 6. Backtrader Integration → Update strategy with new bars
@@ -151,72 +185,114 @@ Concrete Implementations:
 
 ### Data Models
 
-#### Fundamentals Data Model
+#### Unified Cache Data Model
 
-Standardized fundamental data structure supporting comprehensive financial analysis:
+**File Structure:**
+```
+data-cache/
+├── BTCUSDT/
+│   ├── 5m/
+│   │   ├── 2025.csv.gz          # Data for 2025 only
+│   │   ├── 2025.metadata.json   # Metadata for 2025
+│   │   ├── 2024.csv.gz          # Data for 2024 only
+│   │   └── 2024.metadata.json   # Metadata for 2024
+│   └── 1h/
+├── AAPL/
+│   ├── 5m/
+│   └── 1d/
+└── _metadata/
+    ├── symbols.json             # Global symbol metadata
+    ├── providers.json           # Provider information
+    └── quality_scores.json      # Data quality tracking
+```
 
+**CSV File Format (Gzip Compressed):**
+```python
+DataFrame columns:
+- timestamp: pd.Timestamp (timezone-naive for compatibility)
+- open: float
+- high: float  
+- low: float
+- close: float
+- volume: float
+```
+
+**Metadata File Format:**
+```python
+{
+    "symbol": "BTCUSDT",
+    "timeframe": "5m",
+    "year": 2025,
+    "data_source": "binance",
+    "created_at": "2025-01-15T10:30:00",
+    "last_updated": "2025-01-15T10:30:00",
+    "start_date": "2025-01-01T00:00:00",
+    "end_date": "2025-01-15T10:30:00",
+    "data_quality": {
+        "score": 0.95,
+        "validation_errors": [],
+        "gaps": 0,
+        "duplicates": 0
+    },
+    "file_info": {
+        "format": "csv.gz",
+        "size_bytes": 1024000,
+        "rows": 50000,
+        "columns": ["open", "high", "low", "close", "volume"]
+    },
+    "provider_info": {
+        "name": "binance",
+        "reliability": 0.95,
+        "rate_limit": "1200/minute"
+    }
+}
+```
+
+#### Provider Selection Model
+
+**Ticker Classification:**
 ```python
 @dataclass
-class Fundamentals:
-    # Core identification
-    ticker: str
-    company_name: str
-    data_source: str
-    last_updated: str
-    
-    # Market data
-    current_price: float
-    market_cap: float
-    shares_outstanding: Optional[float]
-    
-    # Valuation metrics
-    pe_ratio: Optional[float]
-    forward_pe: Optional[float]
-    price_to_book: Optional[float]
-    price_to_sales: Optional[float]
-    peg_ratio: Optional[float]
-    enterprise_value: Optional[float]
-    enterprise_value_to_ebitda: Optional[float]
-    
-    # Financial health
-    return_on_equity: Optional[float]
-    return_on_assets: Optional[float]
-    debt_to_equity: Optional[float]
-    current_ratio: Optional[float]
-    quick_ratio: Optional[float]
-    
-    # Profitability
-    earnings_per_share: Optional[float]
-    revenue: Optional[float]
-    net_income: Optional[float]
-    free_cash_flow: Optional[float]
-    operating_margin: Optional[float]
-    profit_margin: Optional[float]
-    
-    # Growth metrics
-    revenue_growth: Optional[float]
-    net_income_growth: Optional[float]
-    
-    # Dividend and risk
-    dividend_yield: Optional[float]
-    payout_ratio: Optional[float]
-    beta: Optional[float]
-    
-    # Company details
-    sector: Optional[str]
-    industry: Optional[str]
-    country: Optional[str]
+class TickerInfo:
+    symbol: str
+    symbol_type: str  # "crypto" or "stock"
     exchange: Optional[str]
-    currency: Optional[str]
+    base_asset: Optional[str]  # For crypto pairs
+    quote_asset: Optional[str]  # For crypto pairs
+    original_provider: str
+
+@dataclass
+class ProviderConfig:
+    symbol: str
+    interval: str
+    original_provider: str
+    best_provider: str
+    reason: str
+    exchange: Optional[str]
+    base_asset: Optional[str]
+    quote_asset: Optional[str]
+```
+
+**Provider Selection Logic:**
+```python
+def _select_best_provider(ticker_info: TickerInfo, interval: str) -> str:
+    if ticker_info.symbol_type == "crypto":
+        return "binance"  # Always use Binance for crypto
+    elif ticker_info.symbol_type == "stock":
+        if interval in ["1d", "1w", "1M"]:
+            return "yfinance"  # Yahoo Finance for daily data
+        else:
+            return "alpha_vantage"  # Alpha Vantage for intraday
+    else:
+        return "yfinance"  # Default fallback
 ```
 
 #### OHLCV Data Model
 
-Standardized time series data format:
-
+**Standardized time series data format:**
 ```python
 DataFrame columns:
-- timestamp: pd.Timestamp (timezone-aware)
+- timestamp: pd.Timestamp (timezone-naive for cache compatibility)
 - open: float
 - high: float  
 - low: float
@@ -225,231 +301,167 @@ DataFrame columns:
 - (optional) adj_close: float
 ```
 
-#### VIX Data Model
+#### Data Validation Model
 
-Specialized data structure for CBOE VIX (Volatility Index) data:
-
+**Validation Results:**
 ```python
-# File-based storage in data/vix/vix.csv
-DataFrame columns:
-- Date: pd.Timestamp (index)
-- Open: float
-- High: float
-- Low: float
-- Close: float
-- Adj Close: float
-- Volume: float
-
-# Key Features:
-- Automatic directory creation (data/vix/)
-- Incremental updates (only new data)
-- Deduplication of overlapping data
-- Local CSV storage for offline access
-- Historical data from 1990 to present
-```
-
-### Database Schema
-
-#### Trade Tracking
-
-```sql
--- Trade lifecycle management
-CREATE TABLE trades (
-    id VARCHAR(36) PRIMARY KEY,
-    bot_id VARCHAR(255) NOT NULL,
-    trade_type VARCHAR(10) NOT NULL, -- 'paper', 'live', 'optimization'
-    symbol VARCHAR(50) NOT NULL,
-    strategy_name VARCHAR(255),
-    
-    -- Entry details
-    entry_timestamp TIMESTAMP,
-    entry_price NUMERIC(20, 8),
-    entry_size NUMERIC(20, 8),
-    entry_order_id VARCHAR(255),
-    
-    -- Exit details
-    exit_timestamp TIMESTAMP,
-    exit_price NUMERIC(20, 8),
-    exit_size NUMERIC(20, 8),
-    exit_order_id VARCHAR(255),
-    
-    -- Performance
-    pnl NUMERIC(20, 8),
-    pnl_percent NUMERIC(10, 4),
-    commission NUMERIC(20, 8),
-    
-    -- Status and metadata
-    trade_status VARCHAR(20) DEFAULT 'OPEN',
-    metadata JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Indexes for performance
-CREATE INDEX idx_trades_bot_id ON trades(bot_id);
-CREATE INDEX idx_trades_symbol_timestamp ON trades(symbol, entry_timestamp);
-CREATE INDEX idx_trades_status ON trades(trade_status);
-```
-
-#### Performance Metrics
-
-```sql
--- Strategy performance tracking
-CREATE TABLE performance_metrics (
-    id VARCHAR(36) PRIMARY KEY,
-    bot_id VARCHAR(255) NOT NULL,
-    measurement_timestamp TIMESTAMP NOT NULL,
-    
-    -- Core metrics
-    total_return NUMERIC(10, 4),
-    sharpe_ratio NUMERIC(10, 4),
-    max_drawdown NUMERIC(10, 4),
-    win_rate NUMERIC(10, 4),
-    profit_factor NUMERIC(10, 4),
-    
-    -- Trade statistics
-    total_trades INTEGER,
-    winning_trades INTEGER,
-    losing_trades INTEGER,
-    
-    -- Additional metrics (JSON for flexibility)
-    metrics JSON,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+@dataclass
+class ValidationResult:
+    is_valid: bool
+    errors: List[str]
+    quality_score: float
+    gaps: int
+    duplicates: int
+    missing_columns: List[str]
+    data_types_valid: bool
+    logical_consistency: bool
 ```
 
 ## Design Decisions
 
-### 1. Multiple Data Provider Support
+### 1. Unified Cache Architecture
 
-**Decision:** Support multiple financial data providers with unified interface
+**Decision:** Implement simplified cache structure without provider-based directories
 
 **Rationale:**
-- **Redundancy**: Failover capabilities when providers have outages
-- **Data Quality**: Cross-validation between multiple sources
-- **Cost Optimization**: Use free tiers strategically before paid upgrades
-- **Coverage**: Different providers excel in different asset classes
+- **Simplicity**: Easier to manage and navigate cache structure
+- **Efficiency**: Reduced directory depth and file system overhead
+- **Provider Agnostic**: Data source information embedded in metadata
+- **Scalability**: Better performance with large numbers of symbols
 
 **Implementation:**
-- Factory pattern for provider selection
-- Abstract base classes for consistent interface
-- Provider-specific optimizations while maintaining compatibility
+- Directory structure: `symbol/timeframe/` instead of `provider/symbol/timeframe/year/`
+- Provider information stored in metadata files
+- Gzip compression for efficient storage
+- Direct file access without provider lookup
 
-### 2. Factory Pattern for Object Creation
+### 2. Intelligent Provider Selection
 
-**Decision:** Use factory pattern for both data downloaders and live feeds
-
-**Rationale:**
-- **Simplicity**: Single entry point for creating data sources
-- **Configuration**: Support for environment variables and explicit parameters
-- **Validation**: Centralized parameter validation and error handling
-- **Extensibility**: Easy addition of new providers without changing client code
-
-**Trade-offs:**
-- Additional abstraction layer
-- Centralized configuration management complexity
-
-### 3. Pandas DataFrame as Standard Data Format
-
-**Decision:** Use pandas DataFrames for all time series data
+**Decision:** Automatic provider selection based on symbol type and timeframe
 
 **Rationale:**
-- **Ecosystem Integration**: Compatible with most Python financial libraries
-- **Performance**: Optimized for numerical operations
-- **Functionality**: Rich time series and data manipulation capabilities
-- **Backtrader Compatibility**: Native support in backtesting framework
-
-**Considerations:**
-- Memory usage for large datasets
-- Potential need for alternative formats (e.g., Arrow) in future
-
-### 4. Backtrader Integration for Live Feeds
-
-**Decision:** Extend Backtrader's PandasData for live feed base class
-
-**Rationale:**
-- **Unified Interface**: Same data feed interface for backtesting and live trading
-- **Strategy Compatibility**: Existing strategies work with both historical and live data
-- **Framework Benefits**: Leverage Backtrader's data handling and event system
-
-**Implementation Details:**
-- Historical data preloading for strategy initialization
-- Background thread for real-time updates
-- Thread-safe data sharing between update loop and Backtrader
-
-### 5. Database Schema Design
-
-**Decision:** Use both SQLite (development) and PostgreSQL (production) support
-
-**Rationale:**
-- **Development Ease**: SQLite for local development and testing
-- **Production Scale**: PostgreSQL for production deployments
-- **Data Integrity**: Proper constraints and foreign keys
-- **Performance**: Optimized indexes for common query patterns
-
-**Schema Decisions:**
-- UUID primary keys for distributed system compatibility
-- JSONB fields for flexible metadata storage
-- Audit trails with created_at/updated_at timestamps
-- Proper numeric types for financial calculations
-
-### 6. Error Handling Strategy
-
-**Decision:** Multi-layered error handling with graceful degradation
-
-**Rationale:**
-- **Reliability**: Trading systems must handle failures gracefully
-- **Debugging**: Comprehensive logging for troubleshooting
-- **User Experience**: Meaningful error messages and fallback options
+- **Optimization**: Use best provider for each use case
+- **Reliability**: Fallback mechanisms for provider failures
+- **User Experience**: No need to manually select providers
+- **Data Quality**: Ensure best data source for each symbol/timeframe combination
 
 **Implementation:**
-- Provider-specific error handling
-- Rate limiting and retry logic
-- Fallback to alternative data sources
-- Comprehensive logging at all levels
+- Ticker classification system for symbol type detection
+- Provider capability mapping
+- Automatic selection logic based on symbol type and timeframe
+- Fallback to mock data for testing
 
-### 7. Configuration Management
+### 3. Gzip Compression for Cache Files
 
-**Decision:** Environment variables + programmatic configuration
+**Decision:** Use gzip compression for all cached CSV files
 
 **Rationale:**
-- **Security**: API keys not stored in code
-- **Flexibility**: Support for both deployment and development scenarios
-- **Twelve-Factor App**: Follow modern application deployment practices
+- **Storage Efficiency**: 60-80% reduction in storage space
+- **Performance**: Faster I/O operations with compressed files
+- **Standardization**: Built-in Python support, no external dependencies
+- **Compatibility**: Works across all platforms
 
 **Implementation:**
-- Environment variable detection in factories
-- Override capability through explicit parameters
-- Validation and meaningful error messages for missing credentials
+- All CSV files saved as `.csv.gz`
+- Transparent compression/decompression in cache operations
+- Metadata files remain uncompressed for quick access
+
+### 4. Provider-Specific Optimization
+
+**Decision:** Optimize provider selection for specific use cases
+
+**Rationale:**
+- **Data Quality**: Each provider excels in different areas
+- **Rate Limits**: Distribute load across multiple providers
+- **Coverage**: Ensure comprehensive data coverage
+- **Cost Efficiency**: Use free tiers strategically
+
+**Provider Selection Strategy:**
+- **Binance**: All cryptocurrency data (best rate limits and coverage)
+- **Yahoo Finance**: Stock daily data (no API key required, comprehensive)
+- **Alpha Vantage**: Stock intraday data (full historical data, no 60-day limit)
+
+### 5. Incremental Cache Updates
+
+**Decision:** Only download missing data, skip existing recent data
+
+**Rationale:**
+- **Efficiency**: Avoid redundant downloads
+- **Rate Limiting**: Respect API limits by minimizing requests
+- **Speed**: Faster cache population for existing data
+- **Cost**: Reduce API usage costs
+
+**Implementation:**
+- Check existing cache data before downloading
+- Skip recent data (configurable age threshold)
+- Update only when data is old or missing
+- Maintain data freshness for current year
+
+### 6. Comprehensive Data Validation
+
+**Decision:** Validate all data before caching
+
+**Rationale:**
+- **Data Quality**: Ensure only valid data is cached
+- **Error Prevention**: Catch data issues early
+- **Reliability**: Prevent downstream errors from bad data
+- **Monitoring**: Track data quality over time
+
+**Validation Checks:**
+- Required columns (open, high, low, close, volume)
+- Data type validation
+- Logical consistency (high >= max(open, close), low <= min(open, close))
+- Timestamp validation and ordering
+- Gap detection
+- Duplicate detection
+- Quality scoring
+
+### 7. Rate Limiting and Error Handling
+
+**Decision:** Built-in rate limiting and comprehensive error handling
+
+**Rationale:**
+- **API Compliance**: Respect provider rate limits
+- **Reliability**: Handle API failures gracefully
+- **User Experience**: Provide meaningful error messages
+- **Monitoring**: Track provider performance
+
+**Implementation:**
+- Provider-specific rate limiting
+- Exponential backoff for failed requests
+- Fallback to alternative providers
+- Comprehensive logging and error reporting
 
 ## Performance Considerations
 
-### Data Caching Strategy
+### Cache Performance Optimization
 
-1. **File-based Caching**: Historical data saved as CSV files with standardized naming
-2. **Memory Caching**: In-memory DataFrame storage for frequently accessed data
-3. **Database Caching**: SQLite/PostgreSQL for structured trade and performance data
+1. **Gzip Compression**: 60-80% storage reduction
+2. **Local File System**: Fast local access
+3. **Incremental Updates**: Only download missing data
+4. **Parallel Processing**: Support for concurrent operations
+5. **Memory Efficiency**: Load data on-demand
 
-### Rate Limiting
+### Provider Selection Performance
 
-1. **Provider-Specific Limits**: Respect individual API rate limits
-2. **Exponential Backoff**: Implement retry logic with increasing delays
-3. **Request Queuing**: Queue requests to avoid overwhelming APIs
-4. **Load Balancing**: Distribute requests across multiple providers when possible
+1. **Caching**: Cache provider selection results
+2. **Fast Classification**: Efficient symbol type detection
+3. **Minimal Overhead**: Lightweight selection logic
+4. **Fallback Speed**: Quick fallback to alternative providers
 
-### Memory Management
+### Data Processing Performance
 
-1. **Data Chunking**: Process large datasets in chunks to manage memory
-2. **Lazy Loading**: Load data on-demand rather than preloading everything
-3. **Garbage Collection**: Explicit cleanup of large DataFrames when no longer needed
-4. **Streaming**: Use generators for large data processing operations
+1. **Vectorized Operations**: Use pandas/numpy for efficiency
+2. **Chunked Processing**: Process large datasets in chunks
+3. **Memory Management**: Efficient DataFrame operations
+4. **Lazy Loading**: Load data only when needed
 
 ### Network Optimization
 
-1. **Connection Pooling**: Reuse HTTP connections for multiple requests
-2. **Compression**: Use gzip compression for large data transfers
-3. **Parallel Requests**: Concurrent API calls where rate limits allow
-4. **Local Proxy**: Optional caching proxy for repeated requests
+1. **Connection Pooling**: Reuse HTTP connections
+2. **Compression**: Gzip compression for data transfer
+3. **Rate Limiting**: Respect API limits with built-in throttling
+4. **Parallel Downloads**: Concurrent downloads where possible
 
 ## Security Considerations
 
@@ -460,39 +472,62 @@ CREATE TABLE performance_metrics (
 3. **Scope Limitation**: Use read-only keys where possible
 4. **Audit Logging**: Log API key usage for security monitoring
 
-### Data Privacy
+### Cache Security
 
-1. **PII Handling**: Minimize personally identifiable information storage
-2. **Data Retention**: Implement configurable data retention policies
-3. **Encryption**: Encrypt sensitive data at rest and in transit
-4. **Access Control**: Role-based access to different data sources
+1. **Local Storage**: Cache data stored locally on user's system
+2. **No Sensitive Data**: Cache contains only market data
+3. **Access Control**: Proper file system permissions
+4. **Data Integrity**: Validation and checksum verification
 
 ### Network Security
 
 1. **HTTPS Only**: All API communications use encrypted connections
 2. **Certificate Validation**: Verify SSL certificates for all connections
-3. **IP Whitelisting**: Support for IP-based access restrictions where available
-4. **VPN Support**: Compatible with VPN deployments for additional security
+3. **Rate Limiting**: Prevent abuse of external APIs
+4. **Error Handling**: Don't expose sensitive information in errors
 
 ## Scalability Design
 
 ### Horizontal Scaling
 
-1. **Stateless Design**: Data downloaders are stateless and can be distributed
-2. **Database Scaling**: Support for database read replicas and sharding
-3. **Load Distribution**: Factory pattern supports multiple instance creation
-4. **Microservice Ready**: Components can be deployed as separate services
+1. **Stateless Design**: Cache operations are stateless
+2. **Distributed Cache**: Support for distributed cache systems
+3. **Load Distribution**: Provider selection distributes load
+4. **Microservice Ready**: Components can be deployed separately
 
 ### Vertical Scaling
 
-1. **Multi-threading**: Background threads for real-time data processing
-2. **Async Support**: Async/await patterns for high-concurrency operations
-3. **Memory Optimization**: Efficient data structures and memory management
-4. **CPU Optimization**: Vectorized operations using pandas and numpy
+1. **Multi-threading**: Background threads for data processing
+2. **Memory Optimization**: Efficient data structures
+3. **CPU Optimization**: Vectorized operations using pandas/numpy
+4. **Storage Optimization**: Gzip compression and efficient file formats
 
 ### Future Extensibility
 
-1. **Plugin Architecture**: Easy addition of new data providers
+1. **Plugin Architecture**: Easy addition of new providers
 2. **Protocol Abstraction**: Support for different communication protocols
-3. **Data Format Evolution**: Ability to migrate to new data formats
+3. **Data Format Evolution**: Ability to migrate to new formats
 4. **Configuration Evolution**: Backward-compatible configuration updates
+
+## Monitoring and Observability
+
+### Cache Monitoring
+
+1. **Size Tracking**: Monitor cache growth over time
+2. **Quality Metrics**: Track data quality scores
+3. **Provider Performance**: Monitor provider success rates
+4. **Storage Efficiency**: Track compression ratios
+
+### Performance Monitoring
+
+1. **Download Times**: Track data download performance
+2. **Cache Hit Rates**: Monitor cache effectiveness
+3. **Provider Response Times**: Track API performance
+4. **Error Rates**: Monitor system reliability
+
+### Health Checks
+
+1. **Cache Validation**: Regular cache integrity checks
+2. **Provider Health**: Monitor provider availability
+3. **Data Freshness**: Track data age and updates
+4. **System Resources**: Monitor disk space and memory usage

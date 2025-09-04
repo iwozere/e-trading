@@ -9,25 +9,11 @@
 ### Financial Data APIs
 - `yfinance >= 0.2.18` - Yahoo Finance API for stock and ETF data (includes VIX data)
 - `alpha_vantage >= 2.3.1` - Alpha Vantage API wrapper for financial data
-- `finnhub-python >= 2.4.15` - Finnhub API client for real-time market data
-- `polygon-api-client >= 1.12.5` - Polygon.io API for US market data
-- `twelvedata >= 1.2.14` - Twelve Data API for global market coverage
 - `python-binance >= 1.0.19` - Binance API for cryptocurrency data
-- `pycoingecko >= 3.1.0` - CoinGecko API for cryptocurrency market data
 
-### Trading and Backtesting Framework
-- `backtrader >= 1.9.78.123` - Backtesting and live trading framework
-- `ib_insync >= 0.9.86` - Interactive Brokers API integration
-
-### Real-time Data and WebSockets
-- `websockets >= 11.0.3` - WebSocket client for real-time data feeds
-- `websocket-client >= 1.6.1` - Alternative WebSocket implementation
-- `aiohttp >= 3.8.5` - Async HTTP client for REST API calls
-
-### Database and Storage
-- `sqlalchemy >= 2.0.0` - SQL toolkit and ORM for database operations
-- `sqlite3` - Built-in SQLite database support (Python standard library)
-- `psycopg2-binary >= 2.9.7` - PostgreSQL adapter (optional for production)
+### Data Compression and Storage
+- `gzip` - Built-in Python compression for cache files (no additional dependency)
+- `pathlib` - Built-in Python path handling (no additional dependency)
 
 ### Date and Time Handling
 - `python-dateutil >= 2.8.2` - Date parsing and manipulation utilities
@@ -35,7 +21,6 @@
 
 ### Configuration and Environment
 - `python-dotenv >= 1.0.0` - Environment variable management
-- `pyyaml >= 6.0.1` - YAML configuration file support
 
 ### Logging and Monitoring
 - `colorlog >= 6.7.0` - Colored logging output for better debugging
@@ -43,41 +28,32 @@
 ## External Services
 
 ### Required API Keys (Production)
-- **Alpha Vantage API Key** - For comprehensive fundamental data
-  - Free tier: 5 calls/minute, 500 calls/day
-  - Environment variable: `ALPHA_VANTAGE_API_KEY`
-  - Registration: [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
 
-- **Finnhub API Key** - For real-time market data and fundamentals
-  - Free tier: 60 calls/minute
-  - Environment variable: `FINNHUB_API_KEY`
-  - Registration: [Finnhub](https://finnhub.io/)
+#### Alpha Vantage API Key
+- **Purpose**: Full historical intraday stock data (no 60-day limit)
+- **Free tier**: 5 calls/minute, 500 calls/day
+- **Environment variable**: `ALPHA_VANTAGE_API_KEY`
+- **Registration**: [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
+- **Usage**: Stock symbols with intraday timeframes (5m, 15m, 30m, 1h)
 
-- **Polygon.io API Key** - For US market data
-  - Free tier: 5 calls/minute
-  - Environment variable: `POLYGON_API_KEY`
-  - Registration: [Polygon.io](https://polygon.io/)
-
-- **Twelve Data API Key** - For global market coverage
-  - Free tier: 8 calls/minute, 800 calls/day
-  - Environment variable: `TWELVEDATA_API_KEY`
-  - Registration: [Twelve Data](https://twelvedata.com/)
-
-- **Binance API Credentials** - For cryptocurrency data
-  - Rate limit: 1200 requests/minute
-  - Environment variables: `BINANCE_API_KEY`, `BINANCE_SECRET_KEY`
-  - Registration: [Binance](https://www.binance.com/en/my/settings/api-management)
-
-### Optional API Keys
-- **Interactive Brokers Account** - For professional trading data
-  - Requires TWS or IB Gateway installation
-  - Market data subscriptions may be required
-  - Configuration: Host, Port, Client ID
+#### Binance API Credentials (Optional)
+- **Purpose**: Higher rate limits for cryptocurrency data
+- **Rate limit**: 1200 requests/minute (free tier)
+- **Environment variables**: `BINANCE_API_KEY`, `BINANCE_SECRET_KEY`
+- **Registration**: [Binance](https://www.binance.com/en/my/settings/api-management)
+- **Usage**: Cryptocurrency symbols (BTCUSDT, ETHUSDT, etc.)
 
 ### No API Key Required
-- **Yahoo Finance** - Basic stock and ETF data (rate limited)
-- **CoinGecko** - Cryptocurrency data (50 calls/minute free tier)
-- **VIX Data** - CBOE VIX volatility index data via Yahoo Finance
+
+#### Yahoo Finance
+- **Purpose**: Stock fundamental data and daily historical data
+- **Rate limits**: None for basic usage
+- **Usage**: Stock symbols with daily timeframes (1d)
+
+#### Binance Public API
+- **Purpose**: Cryptocurrency data (public endpoints)
+- **Rate limits**: 1200 requests/minute
+- **Usage**: Cryptocurrency symbols (no API key needed for basic data)
 
 ## System Requirements
 
@@ -88,14 +64,35 @@
 
 ### Hardware Requirements
 - **Memory**: Minimum 4GB RAM (8GB+ recommended for live trading)
-- **Storage**: 10GB+ available space for historical data storage
-  - VIX data: ~50MB for complete historical dataset (1990-present)
+- **Storage**: 10GB+ available space for historical data cache
+  - Cache files are gzip compressed for efficient storage
+  - Typical cache size: 1-5GB for comprehensive historical data
 - **CPU**: Multi-core processor recommended for parallel data processing
 
 ### Operating System Compatibility
 - **Windows**: Windows 10+ (PowerShell support)
 - **macOS**: macOS 10.15+ (Catalina or later)
 - **Linux**: Ubuntu 20.04+ or equivalent distributions
+
+## Cache System Requirements
+
+### Unified Cache Structure
+- **Directory Structure**: `symbol/timeframe/` (e.g., `BTCUSDT/5m/`)
+- **File Format**: Gzip-compressed CSV files (`.csv.gz`)
+- **Metadata**: JSON files for data source and quality information
+- **Storage**: Local file system (no database required)
+
+### Cache Directory Permissions
+- **Write Access**: Full write permissions to cache directory
+- **Read Access**: Read access for data retrieval
+- **Default Location**: `./data-cache` (project root)
+- **Custom Location**: Configurable via `--cache-dir` parameter
+
+### Cache Size Management
+- **Default Limit**: 10GB maximum cache size
+- **Configurable**: Adjustable via `max_size_gb` parameter
+- **Cleanup**: Automatic cleanup of old data (configurable age limit)
+- **Compression**: All data files are gzip compressed for efficiency
 
 ## Development Dependencies (Optional)
 
@@ -131,7 +128,7 @@ conda create -n e-trading python=3.11
 conda activate e-trading
 
 # Install dependencies
-conda install pandas numpy sqlalchemy pyyaml
+conda install pandas numpy python-dateutil pytz
 pip install -r requirements.txt
 ```
 
@@ -141,13 +138,42 @@ pip install -r requirements.txt
 ```bash
 # Financial Data APIs
 ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
-FINNHUB_API_KEY=your_finnhub_key
-POLYGON_API_KEY=your_polygon_key
-TWELVEDATA_API_KEY=your_twelvedata_key
 
-# Cryptocurrency APIs
+# Cryptocurrency APIs (optional)
 BINANCE_API_KEY=your_binance_api_key
 BINANCE_SECRET_KEY=your_binance_secret_key
+```
+
+## Cache System Setup
+
+### Initial Cache Population
+```bash
+# Populate cache with default symbols and timeframes
+python src/data/cache/populate_cache.py
+
+# Custom cache directory
+python src/data/cache/populate_cache.py --cache-dir /path/to/cache
+
+# Specific symbols and timeframes
+python src/data/cache/populate_cache.py --symbols BTCUSDT,AAPL,GOOGL --intervals 5m,15m,1h,1d
+```
+
+### Cache Migration (if upgrading from old system)
+```bash
+# Migrate from old provider-based cache structure
+python src/data/cache/migrate_to_unified_cache.py --migrate
+
+# Dry run to see what would be migrated
+python src/data/cache/migrate_to_unified_cache.py --dry-run
+```
+
+### Cache Validation and Cleanup
+```bash
+# Validate cache files
+python src/data/cache/cleanup_failed_cache.py --validate-only
+
+# Clean up invalid files
+python src/data/cache/cleanup_failed_cache.py --cleanup
 ```
 
 ## Security Considerations
@@ -168,6 +194,11 @@ BINANCE_SECRET_KEY=your_binance_secret_key
 - Implement proper data retention policies
 - Secure storage of historical trading data
 
+### Cache Security
+- **Local Storage**: Cache data is stored locally on your system
+- **No Sensitive Data**: Cache contains only market data, no personal information
+- **Access Control**: Ensure proper file system permissions for cache directory
+
 ## Rate Limiting and Fair Usage
 
 ### API Rate Limits (Free Tiers)
@@ -175,11 +206,12 @@ BINANCE_SECRET_KEY=your_binance_secret_key
 |----------|--------------|-----------|-------|
 | Yahoo Finance | Unlimited* | Unlimited* | *Rate limited but not specified |
 | Alpha Vantage | 5 | 500 | Upgrade available |
-| Finnhub | 60 | - | Real-time data |
-| Polygon.io | 5 | - | US markets only (free) |
-| Twelve Data | 8 | 800 | Global coverage |
 | Binance | 1200 | - | Crypto only |
-| CoinGecko | 50 | - | Crypto only |
+
+### Built-in Rate Limiting
+- **Cache Population**: 0.2 second delay between operations
+- **Downloader Throttling**: Built-in rate limiting in each downloader
+- **Automatic Retry**: Exponential backoff for failed requests
 
 ### Best Practices
 - Implement exponential backoff for rate limiting
@@ -190,11 +222,23 @@ BINANCE_SECRET_KEY=your_binance_secret_key
 ## Troubleshooting
 
 ### Common Issues
+
+#### Cache Issues
+1. **Cache Directory Permissions**: Ensure write access to cache directory
+2. **Disk Space**: Monitor available disk space for cache growth
+3. **File Corruption**: Use cache validation tools to check data integrity
+
+#### API Issues
 1. **Import Errors**: Ensure all dependencies are installed
 2. **API Key Errors**: Verify environment variables are set correctly
-3. **Rate Limiting**: Implement proper delays between API calls
+3. **Rate Limiting**: Built-in throttling should handle this automatically
 4. **Data Quality**: Validate data from multiple sources when possible
 5. **Network Issues**: Implement retry logic with exponential backoff
+
+#### Provider Selection Issues
+1. **Symbol Classification**: Check if symbol is properly classified as crypto or stock
+2. **Provider Availability**: Verify that the selected provider is available
+3. **Fallback Behavior**: System falls back to mock data if no provider is available
 
 ### Debug Mode
 Enable debug logging to troubleshoot issues:
@@ -203,7 +247,60 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 ```
 
+### Cache Debugging
+```bash
+# Check cache structure
+ls -la ./data-cache/
+
+# Validate specific cache files
+python src/data/cache/cleanup_failed_cache.py --validate-only
+
+# Check cache statistics
+python -c "from src.data.cache.unified_cache import configure_unified_cache; cache = configure_unified_cache(); print(cache.get_stats())"
+```
+
 ### Support Resources
 - Check provider documentation for API changes
 - Monitor provider status pages for outages
 - Join community forums for troubleshooting tips
+- Review cache validation logs for data quality issues
+
+## Performance Considerations
+
+### Cache Performance
+- **Gzip Compression**: Reduces storage space by 60-80%
+- **Local Access**: Fast local file system access
+- **Incremental Updates**: Only download missing data
+- **Parallel Processing**: Support for concurrent operations
+
+### Memory Usage
+- **DataFrames**: Efficient pandas DataFrame operations
+- **Lazy Loading**: Load data on-demand
+- **Memory Management**: Automatic cleanup of large datasets
+
+### Network Optimization
+- **Connection Pooling**: Reuse HTTP connections
+- **Compression**: Gzip compression for data transfer
+- **Rate Limiting**: Respect API limits with built-in throttling
+
+## Monitoring and Maintenance
+
+### Cache Monitoring
+- **Size Monitoring**: Track cache growth over time
+- **Quality Monitoring**: Monitor data quality scores
+- **Provider Performance**: Track provider success rates
+
+### Regular Maintenance
+- **Cache Cleanup**: Remove old data periodically
+- **Validation**: Regular cache validation checks
+- **Backup**: Backup important cache data
+- **Updates**: Keep dependencies updated
+
+### Health Checks
+```bash
+# Check cache health
+python src/data/cache/populate_cache.py --test-all
+
+# Validate cache integrity
+python src/data/cache/cleanup_failed_cache.py --validate-and-cleanup
+```

@@ -229,13 +229,15 @@ def test_parallel_processing():
         })
 
         # Create parallel processor
-        processor = ParallelProcessor(max_workers=2, chunk_size=1000)
+        processor = ParallelProcessor(max_workers=2, chunk_size=1000, use_processes=False)
 
         # Define processing function
         def process_chunk(chunk):
-            chunk['processed_value'] = chunk['value'] * 2
-            chunk['processed_at'] = datetime.now().isoformat()
-            return chunk
+            # Create a copy to avoid SettingWithCopyWarning
+            chunk_copy = chunk.copy()
+            chunk_copy['processed_value'] = chunk_copy['value'] * 2
+            chunk_copy['processed_at'] = datetime.now().isoformat()
+            return chunk_copy
 
         # Process data in parallel
         start_time = time.time()

@@ -22,7 +22,7 @@ import talib
 # --- Data Preparation ---
 def generate_ohlcv_data(n_samples=2000, seed=42):
     np.random.seed(seed)
-    dates = pd.date_range('2023-01-01', periods=n_samples, freq='H')
+    dates = pd.date_range('2023-01-01', periods=n_samples, freq='h')
     price = 100 + np.cumsum(np.random.randn(n_samples))
     high = price + np.abs(np.random.randn(n_samples))
     low = price - np.abs(np.random.randn(n_samples))
@@ -192,4 +192,4 @@ def main():
     print("Done. Features saved to hybrid_xgboost_features.npz")
 
 if __name__ == '__main__':
-    main() 
+    main()

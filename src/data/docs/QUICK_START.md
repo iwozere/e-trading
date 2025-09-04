@@ -13,13 +13,13 @@
 ### Option 1: Use the Populate Script (Recommended)
 ```bash
 # Test the system first
-python src/data/populate_cache.py --test-all
+python src/data/cache/populate_cache.py --test-all
 
 # Populate cache with mock data (for testing)
-python src/data/populate_cache.py --populate --symbols BTCUSDT,ETHUSDT --intervals 1h,4h,1d --days 30
+python src/data/cache/populate_cache.py --populate --symbols BTCUSDT,ETHUSDT --intervals 1h,4h,1d --days 30
 
 # Validate cache structure
-python src/data/populate_cache.py --validate-cache
+python src/data/cache/populate_cache.py --validate-cache
 ```
 
 ### Option 2: Use Data Handler Directly
@@ -175,7 +175,7 @@ d:/data-cache/
 
 ## 🎯 Next Steps
 
-1. **Test the system**: Run `python src/data/populate_cache.py --test-all`
+1. **Test the system**: Run `python src/data/cache/populate_cache.py --test-all`
 2. **Populate cache**: Use the populate script with your preferred symbols
 3. **Integrate**: Use the new data handlers in your trading strategies
 4. **Monitor**: Check performance metrics and cache statistics

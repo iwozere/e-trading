@@ -68,6 +68,18 @@ class PerformanceMetrics:
         if self.duration_ms > 0:
             self.throughput_mbps = (self.data_size_mb / self.duration_ms) * 1000
 
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.finalize()
+
+    def add_metric(self, name: str, value: Any):
+        """Add a custom metric."""
+        setattr(self, name, value)
+
 
 class DataCompressor:
     """Advanced data compression utilities."""
@@ -544,6 +556,11 @@ class PerformanceMonitor:
         """Clear all metrics."""
         with self._lock:
             self.metrics.clear()
+
+    def get_metrics(self) -> List[PerformanceMetrics]:
+        """Get all metrics."""
+        with self._lock:
+            return self.metrics.copy()
 
 
 # Global instances

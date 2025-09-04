@@ -21,7 +21,9 @@ def validate_ohlcv_data(
     allow_duplicate_timestamps: bool = False,
     require_volume_data: bool = True,
     price_sanity_check: bool = True,
-    max_price_change_pct: float = 50.0
+    max_price_change_pct: float = 50.0,
+    symbol: Optional[str] = None,
+    interval: Optional[str] = None
 ) -> Tuple[bool, List[str]]:
     """
     Validate OHLCV data for quality and consistency.
@@ -85,14 +87,14 @@ def validate_ohlcv_data(
 
     # Check timestamp format and order (handle both column and index cases)
     if 'timestamp' in df.columns:
-        # Determine appropriate gap tolerance based on data frequency
-        gap_tolerance = _determine_gap_tolerance(df['timestamp'])
+        # Determine appropriate gap tolerance based on symbol, interval, and data frequency
+        gap_tolerance = _determine_smart_gap_tolerance(df['timestamp'], symbol, interval)
         timestamp_errors = validate_timestamps(df['timestamp'], max_gap_hours=gap_tolerance)
         if timestamp_errors:
             errors.extend(timestamp_errors)
     elif isinstance(df.index, pd.DatetimeIndex):
-        # Determine appropriate gap tolerance based on data frequency
-        gap_tolerance = _determine_gap_tolerance(df.index)
+        # Determine appropriate gap tolerance based on symbol, interval, and data frequency
+        gap_tolerance = _determine_smart_gap_tolerance(df.index, symbol, interval)
         timestamp_errors = validate_timestamps(df.index, max_gap_hours=gap_tolerance)
         if timestamp_errors:
             errors.extend(timestamp_errors)
@@ -143,13 +145,18 @@ def validate_timestamps(
     if timestamps.isna().any():
         errors.append("Timestamps contain None/NaT values")
 
-    # Check timezone awareness
-    if timezone_aware:
-        if not timestamps.tz:
+    # Check timezone awareness - handle both Series and DatetimeIndex
+    try:
+        if timezone_aware:
+            if not timestamps.dt.tz:
+                errors.append("Timestamps must be timezone-aware")
+        else:
+            if timestamps.dt.tz:
+                errors.append("Timestamps must be timezone-naive")
+    except AttributeError:
+        # If .dt accessor is not available, assume timezone-naive
+        if timezone_aware:
             errors.append("Timestamps must be timezone-aware")
-    else:
-        if timestamps.tz:
-            errors.append("Timestamps must be timezone-naive")
 
     # Check order
     if check_order and len(timestamps) > 1:
@@ -395,18 +402,27 @@ def get_data_quality_score(
     }
 
 
-def _determine_gap_tolerance(timestamps: Union[pd.Series, pd.DatetimeIndex]) -> int:
+def _determine_smart_gap_tolerance(
+    timestamps: Union[pd.Series, pd.DatetimeIndex],
+    symbol: Optional[str] = None,
+    interval: Optional[str] = None
+) -> int:
     """
-    Determine appropriate gap tolerance based on timestamp frequency.
+    Determine appropriate gap tolerance based on symbol type, interval, and timestamp frequency.
 
     Args:
         timestamps: Series or DatetimeIndex of timestamps
+        symbol: Symbol name (e.g., 'BTCUSDT', 'AAPL')
+        interval: Time interval (e.g., '5m', '1h', '1d')
 
     Returns:
         Gap tolerance in hours
     """
     if len(timestamps) < 2:
         return 24  # Default tolerance
+
+    # Determine asset type
+    is_crypto = _is_crypto_symbol(symbol)
 
     # Calculate typical gaps
     gaps = timestamps.diff().dropna()
@@ -425,12 +441,84 @@ def _determine_gap_tolerance(timestamps: Union[pd.Series, pd.DatetimeIndex]) -> 
         # Fallback to median if mode fails
         mode_gap = gap_hours.median() if not gap_hours.empty else 24
 
-    # Set tolerance based on frequency
-    if mode_gap <= 1:  # 1 hour or less (intraday)
-        return 2  # Allow 2 hour gaps
-    elif mode_gap <= 24:  # Daily data
-        return 168  # Allow 7 days (for weekends, holidays, and extended closures)
-    elif mode_gap <= 168:  # Weekly data
-        return 336  # Allow 2 weeks
-    else:  # Monthly or longer
-        return 720  # Allow 1 month
+    # Set tolerance based on asset type, interval, and frequency
+    if is_crypto:
+        # Crypto markets are 24/7, but allow 24h gaps for any timeframe < 1d
+        if interval in ['5m', '15m', '1h', '4h']:
+            return 24  # Allow 24 hour gaps for intraday crypto
+        elif interval == '1d':
+            return 24  # Allow 1 day gaps for daily crypto
+        else:
+            # Fallback based on frequency
+            if mode_gap <= 1:
+                return 24
+            elif mode_gap <= 24:
+                return 24
+            else:
+                return 48
+    else:
+        # Stock markets have weekends and holidays
+        if interval in ['5m', '15m']:
+            return 72  # Allow 3 days (weekend + holiday) for intraday stocks
+        elif interval in ['1h', '4h']:
+            return 168  # Allow 7 days for hourly stocks
+        elif interval == '1d':
+            return 168  # Allow 7 days for daily stocks (weekends + holidays)
+        else:
+            # Fallback based on frequency
+            if mode_gap <= 1:
+                return 72
+            elif mode_gap <= 24:
+                return 168
+            else:
+                return 336
+
+
+def _is_crypto_symbol(symbol: Optional[str]) -> bool:
+    """
+    Determine if a symbol is a cryptocurrency.
+
+    Args:
+        symbol: Symbol name
+
+    Returns:
+        True if crypto, False if stock/other
+    """
+    if not symbol:
+        return False
+
+    # Common crypto patterns
+    crypto_patterns = [
+        'BTC', 'ETH', 'LTC', 'XRP', 'ADA', 'DOT', 'LINK', 'UNI', 'AAVE', 'COMP',
+        'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'USDP', 'GUSD', 'FRAX', 'LUSD'
+    ]
+
+    symbol_upper = symbol.upper()
+
+    # Check if symbol contains crypto patterns
+    for pattern in crypto_patterns:
+        if pattern in symbol_upper:
+            return True
+
+    # Check if symbol ends with common crypto pairs
+    crypto_suffixes = ['USDT', 'USDC', 'BUSD', 'BTC', 'ETH', 'BNB']
+    for suffix in crypto_suffixes:
+        if symbol_upper.endswith(suffix):
+            return True
+
+    return False
+
+
+def _determine_gap_tolerance(timestamps: Union[pd.Series, pd.DatetimeIndex]) -> int:
+    """
+    Legacy function - use _determine_smart_gap_tolerance instead.
+
+    Determine appropriate gap tolerance based on timestamp frequency.
+
+    Args:
+        timestamps: Series or DatetimeIndex of timestamps
+
+    Returns:
+        Gap tolerance in hours
+    """
+    return _determine_smart_gap_tolerance(timestamps, None, None)

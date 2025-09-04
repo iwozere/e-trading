@@ -144,8 +144,10 @@ class RedisCache:
 
         _logger.info(f"Redis cache initialized: {host}:{port}/db{db}")
 
-    def _get_redis(self) -> redis.Redis:
+    def _get_redis(self):
         """Get Redis client from pool."""
+        if not REDIS_AVAILABLE:
+            raise ImportError("Redis package not available")
         return redis.Redis(connection_pool=self.pool)
 
     def _make_key(self, key: str) -> str:

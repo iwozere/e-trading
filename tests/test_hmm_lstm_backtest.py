@@ -220,7 +220,7 @@ class TestHMMLSTMBacktest(unittest.TestCase):
         # Mock DataFrame
         import pandas as pd
         mock_df = pd.DataFrame({
-            'datetime': pd.date_range('2023-01-01', periods=100, freq='H'),
+            'datetime': pd.date_range('2023-01-01', periods=100, freq='h'),
             'open': [100] * 100,
             'high': [110] * 100,
             'low': [90] * 100,
