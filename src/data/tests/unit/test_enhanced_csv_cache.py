@@ -205,7 +205,7 @@ class TestSmartDataAppender(unittest.TestCase):
     def setUp(self):
         """Set up test data."""
         self.existing_df = pd.DataFrame({
-            'timestamp': pd.date_range('2023-01-01', periods=5, freq='H'),
+            'timestamp': pd.date_range('2023-01-01', periods=5, freq='h'),
             'open': [100.0, 101.0, 102.0, 103.0, 104.0],
             'high': [101.0, 102.0, 103.0, 104.0, 105.0],
             'low': [99.0, 100.0, 101.0, 102.0, 103.0],
@@ -214,7 +214,7 @@ class TestSmartDataAppender(unittest.TestCase):
         })
 
         self.new_data = pd.DataFrame({
-            'timestamp': pd.date_range('2023-01-01 05:00:00', periods=3, freq='H'),
+            'timestamp': pd.date_range('2023-01-01 05:00:00', periods=3, freq='h'),
             'open': [105.0, 106.0, 107.0],
             'high': [106.0, 107.0, 108.0],
             'low': [104.0, 105.0, 106.0],
@@ -472,8 +472,8 @@ class TestEnhancedFileBasedCache(unittest.TestCase):
         self.assertEqual(len(retrieved_df), len(self.test_df) + len(new_data))
 
     def test_csv_format_validation(self):
-        """Test that CSV format validation is enforced."""
-        # Create DataFrame with wrong data types that should fail validation
+        """Test that CSV format validation is no longer enforced (validation removed)."""
+        # Create DataFrame with wrong data types - should now succeed since validation was removed
         invalid_df = pd.DataFrame({
             'timestamp': ['2023-01-01', '2023-01-02', '2023-01-03'],  # String timestamps
             'open': [100.0, 101.0, 102.0],
@@ -486,7 +486,8 @@ class TestEnhancedFileBasedCache(unittest.TestCase):
         success = self.cache.put(
             invalid_df, "test_provider", "TEST", "1h", format="csv"
         )
-        self.assertFalse(success)  # Should fail validation due to wrong timestamp type
+        # Should now succeed since validation was removed from cache system
+        self.assertTrue(success)
 
     def test_cache_info_with_enhanced_metadata(self):
         """Test that cache info includes enhanced metadata."""

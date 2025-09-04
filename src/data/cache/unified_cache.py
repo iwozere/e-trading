@@ -30,6 +30,7 @@ class UnifiedCache:
     │   ├── 5m/
     │   │   ├── 2025.csv.gz
     │   │   ├── 2025.metadata.json
+    │   │   ├── 2024.metadata.json
     │   │   └── 2024.csv.gz
     │   └── 1h/
     ├── AAPL/

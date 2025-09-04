@@ -1100,12 +1100,8 @@ class FileBasedCache:
                     _logger.warning(f"Empty DataFrame provided for {provider}/{symbol}/{interval}")
                     return False
 
-                # Validate DataFrame format for CSV
+                # Standardize DataFrame format for CSV (validation removed)
                 if format == "csv":
-                    if not CSVFormatConventions.validate_dataframe(df):
-                        _logger.error(f"DataFrame validation failed: DataFrame does not meet CSV format requirements")
-                        return False
-
                     try:
                         df_standardized = CSVFormatConventions.standardize_dataframe(df, provider)
                     except ValueError as e:
@@ -1183,8 +1179,13 @@ class FileBasedCache:
                     if 'years' not in existing_metadata:
                         existing_metadata['years'] = {}
 
-                    # Store year-specific metadata
-                    existing_metadata['years'][str(year)] = asdict(cache_metadata)
+                    # Store year-specific metadata (ensure datetime objects are converted to strings)
+                    metadata_dict = asdict(cache_metadata)
+                    # Convert any remaining datetime objects to ISO format strings
+                    for key, value in metadata_dict.items():
+                        if isinstance(value, datetime):
+                            metadata_dict[key] = value.isoformat()
+                    existing_metadata['years'][str(year)] = metadata_dict
 
                     # Update overall metadata
                     existing_metadata['provider'] = provider

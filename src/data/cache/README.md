@@ -42,33 +42,73 @@ python src/data/cache/populate_cache.py --validate-cache
 - **Stock symbols with daily intervals** (1d) → Yahoo Finance
 - **Stock symbols with intraday intervals** (5m, 15m, 1h, 4h) → Alpha Vantage
 
-### 2. `validate_and_fill_gaps.py` - Data Validation and Gap Filling
+### 2. `validate_gaps.py` - Data Validation and Gap Analysis
 
-**Purpose**: Validates cached data quality and attempts to fill gaps using alternative providers.
+**Purpose**: Analyzes cached data for gaps and quality issues, generating comprehensive validation reports.
 
 **Key Features**:
+- Year-by-year data validation with detailed gap analysis
 - OHLCV data validation with smart gap tolerance
 - Asset-type aware validation (crypto vs stocks)
-- Gap detection and analysis
-- Alternative provider fallback for gap filling
+- Comprehensive JSON metadata generation
 - Data quality scoring and reporting
 
 **Usage**:
 ```bash
+# Validate all cached data (default behavior)
+python src/data/cache/validate_gaps.py
+
 # Validate specific symbols and timeframes
-python src/data/cache/validate_and_fill_gaps.py --validate --symbols BTCUSDT,ETHUSDT --intervals 5m,15m,1h
+python src/data/cache/validate_gaps.py --symbols BTCUSDT,ETHUSDT --intervals 5m,15m,1h
 
-# Validate all cached data
-python src/data/cache/validate_and_fill_gaps.py --validate-all
+# Validate all cached data explicitly
+python src/data/cache/validate_gaps.py --validate-all
 
-# Fill gaps for specific data
-python src/data/cache/validate_and_fill_gaps.py --fill-gaps --symbols BTCUSDT --intervals 5m
-
-# Comprehensive validation and gap filling
-python src/data/cache/validate_and_fill_gaps.py --validate --fill-gaps --symbols BTCUSDT,ETHUSDT,AAPL
+# Use custom cache directory
+python src/data/cache/validate_gaps.py --cache-dir /path/to/cache
 ```
 
-### 3. `migrate_to_unified_cache.py` - Cache Migration Utility
+**Output**: Generates `validate-metadata.json` in the cache directory with detailed gap analysis.
+
+### 3. `fill_gaps.py` - Gap Filling with Alternative Providers
+
+**Purpose**: Reads validation metadata and fills gaps using alternative data providers.
+
+**Key Features**:
+- Reads gap information from `validate-metadata.json`
+- Alternative provider selection (since gaps exist in primary provider data):
+  - **Crypto symbols**: CoinGecko (alternative to Binance, which is primary in populate_cache.py)
+  - **Stock symbols**: Alpha Vantage (alternative to Yahoo Finance, which is primary in populate_cache.py)
+- Configurable gap size limits
+- Safe data merging with duplicate removal
+- Comprehensive progress tracking
+
+**Usage**:
+```bash
+# Fill gaps for all data in validate-metadata.json
+python src/data/cache/fill_gaps.py
+
+# Fill gaps for specific symbols only
+python src/data/cache/fill_gaps.py --symbols BTCUSDT,ETHUSDT
+
+# Fill gaps for specific intervals only
+python src/data/cache/fill_gaps.py --intervals 5m,15m,1h
+
+# Only fill gaps <= 12 hours
+python src/data/cache/fill_gaps.py --max-gap-hours 12
+
+# Use custom cache directory
+python src/data/cache/fill_gaps.py --cache-dir /path/to/cache
+```
+
+**Prerequisites**: Run `validate_gaps.py` first to generate the validation metadata.
+
+**API Limitations**: 
+- CoinGecko free API is limited to 365 days of historical data
+- Alpha Vantage free API has a 25 requests per day limit (no historical data range limit)
+- For gaps older than 365 days, CoinGecko cannot fill them, but Alpha Vantage can (if within rate limits)
+
+### 4. `migrate_to_unified_cache.py` - Cache Migration Utility
 
 **Purpose**: Migrates data from the old provider-based cache structure to the new unified structure.
 
@@ -91,7 +131,7 @@ python src/data/cache/migrate_to_unified_cache.py --migrate
 python src/data/cache/migrate_to_unified_cache.py --migrate --old-cache ./old-cache --new-cache ./new-cache
 ```
 
-### 4. `cleanup_failed_cache.py` - Cache Cleanup and Validation
+### 5. `cleanup_failed_cache.py` - Cache Cleanup and Validation
 
 **Purpose**: Validates cache files and removes corrupted or invalid data.
 
@@ -114,7 +154,7 @@ python src/data/cache/cleanup_failed_cache.py --cleanup
 python src/data/cache/cleanup_failed_cache.py --validate-and-cleanup
 ```
 
-### 5. `unified_cache.py` - Core Cache Implementation
+### 6. `unified_cache.py` - Core Cache Implementation
 
 **Purpose**: Core implementation of the unified cache system (not a standalone script).
 
@@ -151,14 +191,21 @@ python src/data/cache/cleanup_failed_cache.py --validate-and-cleanup
 
 ### Regular Maintenance
 
-1. **Validate Cache Data**:
+1. **Validate Cache Data and Analyze Gaps**:
    ```bash
-   python src/data/cache/validate_and_fill_gaps.py --validate-all
+   python src/data/cache/validate_gaps.py
    ```
 
-2. **Fill Data Gaps** (if needed):
+2. **Fill Data Gaps** (if gaps are found):
    ```bash
-   python src/data/cache/validate_and_fill_gaps.py --fill-gaps --symbols BTCUSDT,ETHUSDT --intervals 5m,15m
+   # Fill all gaps found in validation
+   python src/data/cache/fill_gaps.py
+   
+   # Fill gaps for specific symbols only
+   python src/data/cache/fill_gaps.py --symbols BTCUSDT,ETHUSDT
+   
+   # Only fill small gaps (<= 12 hours)
+   python src/data/cache/fill_gaps.py --max-gap-hours 12
    ```
 
 3. **Clean Up Invalid Files** (if needed):
