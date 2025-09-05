@@ -13,7 +13,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.fmp_data_downloader import FMPDataDownloader
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)

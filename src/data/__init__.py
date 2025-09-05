@@ -99,7 +99,7 @@ __all__ = [
     'FMPDataDownloader',
     'TiingoDataDownloader',
     'PolygonDataDownloader',
-    'TwelveDataDownloader',
+    'TwelveDataDataDownloader',
     'FinnhubDataDownloader',
     'CoinGeckoDataDownloader',
 

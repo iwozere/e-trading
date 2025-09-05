@@ -13,7 +13,7 @@ Available Downloaders:
 - FMPDataDownloader: For Financial Modeling Prep data
 - TiingoDataDownloader: For Tiingo financial data
 - PolygonDataDownloader: For Polygon.io data
-- TwelveDataDownloader: For Twelve Data API
+- TwelveDataDataDownloader: For Twelve Data API
 - FinnhubDataDownloader: For Finnhub data
 - CoinGeckoDataDownloader: For cryptocurrency data via CoinGecko
 
@@ -28,7 +28,7 @@ from .alpha_vantage_data_downloader import AlphaVantageDataDownloader
 from .fmp_data_downloader import FMPDataDownloader
 from .tiingo_data_downloader import TiingoDataDownloader
 from .polygon_data_downloader import PolygonDataDownloader
-from .twelvedata_data_downloader import TwelveDataDownloader
+from .twelvedata_data_downloader import TwelveDataDataDownloader
 from .finnhub_data_downloader import FinnhubDataDownloader
 from .coingecko_data_downloader import CoinGeckoDataDownloader
 
@@ -40,7 +40,7 @@ __all__ = [
     'FMPDataDownloader',
     'TiingoDataDownloader',
     'PolygonDataDownloader',
-    'TwelveDataDownloader',
+    'TwelveDataDataDownloader',
     'FinnhubDataDownloader',
     'CoinGeckoDataDownloader',
 ]

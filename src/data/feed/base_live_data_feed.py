@@ -25,7 +25,6 @@ from datetime import datetime, timedelta
 import backtrader as bt
 import pandas as pd
 from src.notification.logger import setup_logger
-from src.data.data_manager import DataManager
 
 _logger = setup_logger(__name__)
 
@@ -56,7 +55,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                  lookback_bars: int = 1000,
                  retry_interval: int = 60,
                  on_new_bar: Optional[Callable] = None,
-                 data_manager: Optional[DataManager] = None,
+                 data_manager: Optional[Any] = None,
                  **kwargs):
         """
         Initialize the live data feed.
@@ -77,7 +76,12 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         self.on_new_bar = on_new_bar
 
         # Initialize DataManager if not provided
-        self.data_manager = data_manager or DataManager()
+        if data_manager is None:
+            # Import DataManager dynamically to avoid circular imports
+            from src.data.data_manager import DataManager
+            self.data_manager = DataManager()
+        else:
+            self.data_manager = data_manager
 
         # Initialize data storage
         self.df = None

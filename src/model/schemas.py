@@ -5,7 +5,7 @@ This module provides type definitions, protocols, and data structures used acros
 the data management system, ensuring consistency and type safety.
 """
 
-from typing import Protocol, runtime_checkable, Optional, Union, Dict, Any
+from typing import Protocol, runtime_checkable, Optional, Union, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -329,3 +329,95 @@ class Fundamentals:
         """Get 52-week low price."""
         # This field doesn't exist in the original, but we can add it
         return getattr(self, 'fifty_two_week_low', None)
+
+
+# Configuration Schema Classes
+@dataclass
+class ConfigSchema:
+    """Base configuration schema."""
+    version: str = "1.0.0"
+    description: Optional[str] = None
+    environment: str = "development"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+@dataclass
+class TradingConfig(ConfigSchema):
+    """Trading bot configuration schema."""
+    bot_id: str = ""
+    broker: Dict[str, Any] = field(default_factory=dict)
+    trading: Dict[str, Any] = field(default_factory=dict)
+    risk_management: Dict[str, Any] = field(default_factory=dict)
+    notifications: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class OptimizerConfig(ConfigSchema):
+    """Optimizer configuration schema."""
+    optimizer_id: str = ""
+    strategy: Dict[str, Any] = field(default_factory=dict)
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    optimization: Dict[str, Any] = field(default_factory=dict)
+    backtest: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class DataConfig(ConfigSchema):
+    """Data configuration schema."""
+    data_source: str = "binance"
+    symbol: str = "BTCUSDT"
+    interval: str = "1h"
+    cache: Dict[str, Any] = field(default_factory=dict)
+    providers: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class NotificationConfig(ConfigSchema):
+    """Notification configuration schema."""
+    notification_id: str = ""
+    type: str = "email"
+    enabled: bool = True
+    settings: Dict[str, Any] = field(default_factory=dict)
+    recipients: List[str] = field(default_factory=list)
+
+
+@dataclass
+class RiskManagementConfig(ConfigSchema):
+    """Risk management configuration schema."""
+    risk_id: str = ""
+    max_position_size: float = 0.1
+    stop_loss: float = 0.02
+    take_profit: float = 0.04
+    max_drawdown: float = 0.15
+    risk_per_trade: float = 0.02
+
+
+@dataclass
+class LoggingConfig(ConfigSchema):
+    """Logging configuration schema."""
+    log_level: str = "INFO"
+    log_file: Optional[str] = None
+    log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    max_file_size: int = 10485760  # 10MB
+    backup_count: int = 5
+
+
+@dataclass
+class SchedulingConfig(ConfigSchema):
+    """Scheduling configuration schema."""
+    schedule_id: str = ""
+    cron_expression: str = "0 0 * * *"
+    timezone: str = "UTC"
+    enabled: bool = True
+    max_retries: int = 3
+
+
+@dataclass
+class PerformanceConfig(ConfigSchema):
+    """Performance configuration schema."""
+    performance_id: str = ""
+    benchmark: str = "SPY"
+    risk_free_rate: float = 0.02
+    max_leverage: float = 1.0
+    rebalance_frequency: str = "monthly"

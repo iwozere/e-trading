@@ -20,7 +20,7 @@ from src.data import (
     create_data_source,
     DataAggregator
 )
-from src.data.binance_live_feed import BinanceLiveDataFeed
+from src.data.feed.binance_live_feed import BinanceLiveDataFeed
 from src.data.utils import get_data_handler, validate_ohlcv_data
 
 

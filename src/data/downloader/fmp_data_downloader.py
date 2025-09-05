@@ -18,8 +18,8 @@ import logging
 from pathlib import Path
 import sys
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.notification.logger import setup_logger
 from config.donotshare.donotshare import FMP_API_KEY

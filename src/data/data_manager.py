@@ -42,7 +42,7 @@ from .downloader import (
     FMPDataDownloader,
     TiingoDataDownloader,
     PolygonDataDownloader,
-    TwelveDataDownloader,
+    TwelveDataDataDownloader,
     FinnhubDataDownloader,
     CoinGeckoDataDownloader,
 )
@@ -128,7 +128,7 @@ class ProviderSelector:
             'fmp': FMPDataDownloader,
             'tiingo': TiingoDataDownloader,
             'polygon': PolygonDataDownloader,
-            'twelvedata': TwelveDataDownloader,
+            'twelvedata': TwelveDataDataDownloader,
             'finnhub': FinnhubDataDownloader,
             'coingecko': CoinGeckoDataDownloader,
         }

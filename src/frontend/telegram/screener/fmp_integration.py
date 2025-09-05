@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from config.donotshare.donotshare import FMP_API_KEY
-from src.data.fmp_data_downloader import FMPDataDownloader
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

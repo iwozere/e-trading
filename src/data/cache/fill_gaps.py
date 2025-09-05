@@ -29,9 +29,9 @@ sys.path.insert(0, str(project_root))
 
 from config.donotshare.donotshare import ALPHA_VANTAGE_KEY
 from src.data.cache.unified_cache import configure_unified_cache
-from src.data.binance_data_downloader import BinanceDataDownloader
-from src.data.yahoo_data_downloader import YahooDataDownloader
-from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -100,7 +100,7 @@ def initialize_downloaders() -> Dict[str, Any]:
 
     # Initialize CoinGecko downloader for crypto gap filling
     try:
-        from src.data.coingecko_data_downloader import CoinGeckoDataDownloader
+        from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
         downloaders['coingecko'] = CoinGeckoDataDownloader()
         print("  ✅ CoinGecko downloader initialized")
     except Exception as e:
