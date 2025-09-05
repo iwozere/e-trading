@@ -10,8 +10,8 @@ from typing import Dict, Type, Optional, List, Any
 from pathlib import Path
 import yaml
 
-from .base_data_source import BaseDataSource
-from .utils import get_cache, configure_cache
+from src.data.sources.base_data_source import BaseDataSource
+from src.data.utils import configure_cache
 
 _logger = logging.getLogger(__name__)
 

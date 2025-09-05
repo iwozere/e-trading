@@ -6,19 +6,19 @@ It automatically wraps existing downloaders with intelligent caching capabilitie
 """
 
 from typing import Optional, Dict, Any
-from src.data.base_data_downloader import BaseDataDownloader
-from src.data.cached_data_downloader import CachedDataDownloader, create_cached_downloader
+from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.data.downloader.cached_data_downloader import CachedDataDownloader, create_cached_downloader
 from src.data.utils.file_based_cache import configure_file_cache
 
 # Import all available downloaders
-from src.data.binance_data_downloader import BinanceDataDownloader
-from src.data.yahoo_data_downloader import YahooDataDownloader
-from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
-from src.data.polygon_data_downloader import PolygonDataDownloader
-from src.data.fmp_data_downloader import FMPDataDownloader
-from src.data.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.coingecko_data_downloader import CoinGeckoDataDownloader
-from src.data.twelvedata_data_downloader import TwelveDataDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
+from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
 
 
 class CachedDownloaderFactory:

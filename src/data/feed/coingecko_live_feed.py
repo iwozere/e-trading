@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from src.data.base_live_data_feed import BaseLiveDataFeed
+from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

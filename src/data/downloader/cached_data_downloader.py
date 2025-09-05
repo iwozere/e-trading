@@ -16,13 +16,12 @@ Features:
 - Support for all data downloader types
 """
 
-import logging
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any, Tuple, Union
+from typing import List
 from dataclasses import dataclass
 import pandas as pd
 
-from src.data.base_data_downloader import BaseDataDownloader
+from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.data.utils.file_based_cache import FileBasedCache
 from src.notification.logger import setup_logger
 

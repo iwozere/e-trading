@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 import pandas as pd
 import requests
-from src.data.base_data_downloader import BaseDataDownloader
+from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.notification.logger import setup_logger
 from src.model.schemas import OptionalFundamentals
 

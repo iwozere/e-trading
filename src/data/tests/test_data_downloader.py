@@ -9,13 +9,13 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # Import all downloaders
-from src.data.binance_data_downloader import BinanceDataDownloader
-from src.data.coingecko_data_downloader import CoinGeckoDataDownloader
-from src.data.yahoo_data_downloader import YahooDataDownloader
-from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
-from src.data.polygon_data_downloader import PolygonDataDownloader
-from src.data.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.twelvedata_data_downloader import TwelveDataDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
 
 REQUIRED_COLUMNS = ["timestamp", "open", "high", "low", "close", "volume"]
 

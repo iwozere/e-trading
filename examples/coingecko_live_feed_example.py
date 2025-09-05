@@ -19,7 +19,7 @@ import time
 import signal
 import sys
 from datetime import datetime
-from src.data.coingecko_live_feed import CoinGeckoLiveDataFeed
+from src.data.feed.coingecko_live_feed import CoinGeckoLiveDataFeed
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

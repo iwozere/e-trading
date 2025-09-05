@@ -24,9 +24,9 @@ import tempfile
 from datetime import datetime, timedelta
 
 import pandas as pd
-from src.data.base_data_downloader import BaseDataDownloader
-from src.data.binance_data_downloader import BinanceDataDownloader
-from src.data.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 
 
 class DummyDownloader(BaseDataDownloader):

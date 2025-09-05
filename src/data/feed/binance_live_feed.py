@@ -26,7 +26,7 @@ import pandas as pd
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
-from src.data.base_live_data_feed import BaseLiveDataFeed
+from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
 from src.data.utils.retry import retry_on_exception
 from src.data.utils.rate_limiting import get_provider_limiter
@@ -100,8 +100,10 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         }
         return interval_map.get(interval, Client.KLINE_INTERVAL_1MINUTE)
 
-    @retry_on_exception(max_attempts=3, base_delay=1.0, max_delay=10.0)
-    def _load_historical_data(self) -> Optional[pd.DataFrame]:
+    # Note: _load_historical_data() is now inherited from BaseLiveDataFeed
+    # which uses DataManager for historical data loading. This ensures
+    # consistent data access and caching across all live feeds.
+    def _load_historical_data_old(self) -> Optional[pd.DataFrame]:
         """
         Load historical data from Binance REST API with proper pagination.
 

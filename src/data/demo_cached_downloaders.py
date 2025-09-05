@@ -22,7 +22,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.cached_downloader_factory import (
+from src.data.downloader.cached_downloader_factory import (
     create_cached_binance_downloader,
     create_cached_yahoo_downloader,
     get_cached_downloader_factory

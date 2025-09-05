@@ -5,7 +5,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
-from src.data.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
 
 # Define test scenarios
 TEST_SCENARIOS = {

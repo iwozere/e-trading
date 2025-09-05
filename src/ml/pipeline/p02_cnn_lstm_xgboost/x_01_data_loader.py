@@ -30,7 +30,7 @@ sys.path.append(str(project_root))
 
 from src.common import get_ohlcv, analyze_period_interval
 from src.notification.logger import setup_logger
-from src.data.data_downloader_factory import DataDownloaderFactory
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 _logger = setup_logger(__name__)
 
 class DataLoader:

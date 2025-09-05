@@ -12,18 +12,44 @@ This module provides comprehensive data management capabilities including:
 - Performance optimization
 """
 
-from .base_data_downloader import BaseDataDownloader
-from .base_data_source import BaseDataSource
-from .data_source_factory import (
+# New unified DataManager (main entry point)
+from .data_manager import DataManager, get_data_manager, ProviderSelector
+
+# Base classes
+from .sources import BaseDataSource
+from .downloader import BaseDataDownloader
+from .feed import BaseLiveDataFeed
+
+# Legacy components (to be deprecated)
+from .sources.data_source_factory import (
     DataSourceFactory,
     get_data_source_factory,
     register_data_source,
     create_data_source,
     get_data_source
 )
-from .data_aggregator import DataAggregator
-from .binance_live_feed import BinanceLiveDataFeed
-from .binance_data_feed import BinanceEnhancedFeed
+from .sources.data_aggregator import DataAggregator
+from .feed.binance_data_feed import BinanceEnhancedFeed
+
+# Specific implementations (now organized in submodules)
+from .downloader import (
+    BinanceDataDownloader,
+    YahooDataDownloader,
+    AlphaVantageDataDownloader,
+    FMPDataDownloader,
+    TiingoDataDownloader,
+    PolygonDataDownloader,
+    TwelveDataDataDownloader,
+    FinnhubDataDownloader,
+    CoinGeckoDataDownloader,
+)
+
+from .feed import (
+    BinanceLiveDataFeed,
+    YahooLiveDataFeed,
+    IBKRLiveDataFeed,
+    CoinGeckoLiveDataFeed,
+)
 from .utils.advanced_caching import get_advanced_cache, configure_advanced_cache
 
 # Utilities
@@ -56,22 +82,40 @@ from .utils import (
 )
 
 __all__ = [
+    # New unified DataManager (main entry point)
+    'DataManager',
+    'get_data_manager',
+    'ProviderSelector',
+
     # Base classes
     'BaseDataDownloader',
+    'BaseLiveDataFeed',
     'BaseDataSource',
 
-    # Factory and management
+    # Data downloaders
+    'BinanceDataDownloader',
+    'YahooDataDownloader',
+    'AlphaVantageDataDownloader',
+    'FMPDataDownloader',
+    'TiingoDataDownloader',
+    'PolygonDataDownloader',
+    'TwelveDataDownloader',
+    'FinnhubDataDownloader',
+    'CoinGeckoDataDownloader',
+
+    # Live feeds
+    'BinanceLiveDataFeed',
+    'YahooLiveDataFeed',
+    'IBKRLiveDataFeed',
+    'CoinGeckoLiveDataFeed',
+
+    # Legacy components (to be deprecated)
     'DataSourceFactory',
     'get_data_source_factory',
     'register_data_source',
     'create_data_source',
     'get_data_source',
-
-    # Data aggregation
     'DataAggregator',
-
-    # Specific implementations
-    'BinanceLiveDataFeed',
     'BinanceEnhancedFeed',
     'get_advanced_cache',
     'configure_advanced_cache',

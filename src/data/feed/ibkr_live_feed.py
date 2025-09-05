@@ -21,7 +21,7 @@ from typing import Optional, Dict, Any
 import pandas as pd
 from ib_insync import *
 
-from src.data.base_live_data_feed import BaseLiveDataFeed
+from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

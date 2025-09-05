@@ -20,11 +20,12 @@ import time
 import threading
 from abc import abstractmethod
 from typing import Optional, Callable, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import backtrader as bt
 import pandas as pd
 from src.notification.logger import setup_logger
+from src.data.data_manager import DataManager
 
 _logger = setup_logger(__name__)
 
@@ -55,6 +56,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
                  lookback_bars: int = 1000,
                  retry_interval: int = 60,
                  on_new_bar: Optional[Callable] = None,
+                 data_manager: Optional[DataManager] = None,
                  **kwargs):
         """
         Initialize the live data feed.
@@ -65,6 +67,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
             lookback_bars: Number of historical bars to load initially
             retry_interval: Seconds to wait before retrying on connection failure
             on_new_bar: Optional callback function when new data arrives
+            data_manager: DataManager instance for historical data loading
             **kwargs: Additional arguments passed to PandasData
         """
         self.symbol = symbol
@@ -72,6 +75,9 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         self.lookback_bars = lookback_bars
         self.retry_interval = retry_interval
         self.on_new_bar = on_new_bar
+
+        # Initialize DataManager if not provided
+        self.data_manager = data_manager or DataManager()
 
         # Initialize data storage
         self.df = None
@@ -92,14 +98,91 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         # Start real-time updates
         self._start_realtime_updates()
 
-    @abstractmethod
     def _load_historical_data(self) -> Optional[pd.DataFrame]:
         """
-        Load historical data from the data source.
+        Load historical data using DataManager.
+
+        This method provides a default implementation that uses DataManager
+        to load historical data. Subclasses can override this method if they
+        need custom historical data loading logic.
 
         Returns:
             DataFrame with columns: datetime, open, high, low, close, volume
         """
+        try:
+            # Calculate date range based on lookback_bars and interval
+            end_date = datetime.now()
+            start_date = self._calculate_start_date(end_date)
+
+            _logger.info("Loading historical data for %s %s from %s to %s",
+                        self.symbol, self.interval, start_date, end_date)
+
+            # Use DataManager to get historical data
+            df = self.data_manager.get_ohlcv(
+                symbol=self.symbol,
+                timeframe=self.interval,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            if df is not None and not df.empty:
+                _logger.info("Loaded %d historical bars for %s %s", len(df), self.symbol, self.interval)
+                return df
+            else:
+                _logger.warning("No historical data returned for %s %s", self.symbol, self.interval)
+                return None
+
+        except Exception as e:
+            _logger.error("Error loading historical data for %s %s: %s", self.symbol, self.interval, e)
+            return None
+
+    def _calculate_start_date(self, end_date: datetime) -> datetime:
+        """
+        Calculate start date based on lookback_bars and interval.
+
+        Args:
+            end_date: End date for the data range
+
+        Returns:
+            Calculated start date
+        """
+        # Convert interval to minutes
+        interval_minutes = self._parse_interval_to_minutes(self.interval)
+        if interval_minutes == 0:
+            # Default to 1 day if interval is unknown
+            interval_minutes = 1440
+
+        # Calculate total minutes for lookback_bars
+        total_minutes = self.lookback_bars * interval_minutes
+
+        # Calculate start date
+        start_date = end_date - timedelta(minutes=total_minutes)
+
+        return start_date
+
+    def _parse_interval_to_minutes(self, interval: str) -> int:
+        """
+        Parse interval string to minutes.
+
+        Args:
+            interval: Interval string (e.g., '1m', '1h', '1d')
+
+        Returns:
+            Interval in minutes
+        """
+        interval = interval.lower()
+
+        if interval.endswith('m'):
+            return int(interval[:-1])
+        elif interval.endswith('h'):
+            return int(interval[:-1]) * 60
+        elif interval.endswith('d'):
+            return int(interval[:-1]) * 24 * 60
+        elif interval.endswith('w'):
+            return int(interval[:-1]) * 7 * 24 * 60
+        else:
+            _logger.warning(f"Unknown interval format: {interval}")
+            return 0
 
     @abstractmethod
     def _connect_realtime(self) -> bool:

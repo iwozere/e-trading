@@ -6,7 +6,7 @@ import requests
 from src.notification.logger import setup_logger
 from src.model.schemas import OptionalFundamentals, Fundamentals
 _logger = setup_logger(__name__)
-from src.data.base_data_downloader import BaseDataDownloader
+from src.data.downloader.base_data_downloader import BaseDataDownloader
 
 """
 Data downloader implementation for Alpha Vantage, fetching historical market data for analysis and backtesting.

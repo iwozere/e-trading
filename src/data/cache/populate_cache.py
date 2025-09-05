@@ -29,7 +29,7 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.data.cache.unified_cache import configure_unified_cache, get_unified_cache
-from src.data.base_data_source import BaseDataSource
+from src.data.sources.base_data_source import BaseDataSource
 
 # Import API keys from donotshare
 from config.donotshare.donotshare import ALPHA_VANTAGE_KEY
@@ -37,14 +37,12 @@ from config.donotshare.donotshare import ALPHA_VANTAGE_KEY
 from src.notification.logger import setup_logger
 
 # Import data downloaders
-from src.data.binance_data_downloader import BinanceDataDownloader
-from src.data.yahoo_data_downloader import YahooDataDownloader
-from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
-# Import ticker classifier for automatic provider selection
-import sys
-sys.path.insert(0, str(Path(__file__).parent.parent / 'common'))
-from src.common.ticker_classifier import TickerClassifier, DataProvider
+# Import provider selector for automatic provider selection
+from src.data.data_manager import ProviderSelector
 
 # Initialize logger
 _logger = setup_logger(__name__)
@@ -154,9 +152,9 @@ def populate_cache(symbols: List[str], intervals: List[str],
     except Exception as e:
         print(f"  ⚠️  Alpha Vantage downloader failed: {str(e)}")
 
-    # Initialize ticker classifier for automatic provider selection
-    ticker_classifier = TickerClassifier()
-    print("  ✅ Ticker classifier initialized")
+    # Initialize provider selector for automatic provider selection
+    provider_selector = ProviderSelector()
+    print("  ✅ Provider selector initialized")
 
     if not downloaders:
         print("  ❌ No data downloaders could be initialized!")
@@ -186,11 +184,11 @@ def populate_cache(symbols: List[str], intervals: List[str],
                 df = None
                 used_provider = None
 
-                # Use ticker classifier to determine the best provider for this symbol and interval
-                best_provider = ticker_classifier.get_provider_for_interval(symbol, interval)
-                provider_config = ticker_classifier.get_data_provider_config(symbol, interval)
+                # Use provider selector to determine the best provider for this symbol and interval
+                best_provider = provider_selector.get_best_provider(symbol, interval)
+                provider_config = provider_selector.get_data_provider_config(symbol, interval)
 
-                print(f"  🔍 Ticker classification: {symbol} -> {provider_config['original_provider']}")
+                print(f"  🔍 Symbol classification: {symbol} -> {provider_config['symbol_type']}")
                 print(f"  🎯 Best provider for {interval}: {best_provider}")
                 print(f"  💡 Reason: {provider_config.get('reason', 'No reason provided')}")
 

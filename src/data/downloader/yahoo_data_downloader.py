@@ -26,7 +26,7 @@ import yfinance as yf
 
 from src.notification.logger import setup_logger
 from src.model.schemas import OptionalFundamentals, Fundamentals
-from src.data.base_data_downloader import BaseDataDownloader
+from src.data.downloader.base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
 
@@ -42,19 +42,13 @@ class YahooDataDownloader(BaseDataDownloader):
     - Support for all Yahoo Finance intervals and periods
     """
 
-    def __init__(self, data_dir: str = "data"):
-        super().__init__(data_dir)
-        self.last_request_time = 0
-        self.min_request_interval = 0.1  # 100ms between requests
+    def __init__(self):
+        """Initialize Yahoo Finance data downloader."""
+        super().__init__()
 
-    def _rate_limit(self):
-        """Apply rate limiting between requests."""
-        current_time = time.time()
-        time_since_last = current_time - self.last_request_time
-        if time_since_last < self.min_request_interval:
-            sleep_time = self.min_request_interval - time_since_last
-            time.sleep(sleep_time)
-        self.last_request_time = time.time()
+    def get_supported_intervals(self) -> List[str]:
+        """Return list of supported intervals for Yahoo Finance."""
+        return ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo']
 
     def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
@@ -113,9 +107,6 @@ class YahooDataDownloader(BaseDataDownloader):
 
     def _download_ohlcv_single(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Download OHLCV data for a single request (no batching)."""
-        # Apply rate limiting
-        self._rate_limit()
-
         _logger.debug("Downloading OHLCV data for %s (%s to %s)", symbol, start_date, end_date)
 
         ticker = yf.Ticker(symbol)
@@ -198,9 +189,6 @@ class YahooDataDownloader(BaseDataDownloader):
             Dict[str, pd.DataFrame]: Dictionary mapping symbols to OHLCV DataFrames
         """
         try:
-            # Apply rate limiting
-            self._rate_limit()
-
             _logger.info("Downloading batch OHLCV data for %d symbols (%s to %s)", len(symbols), start_date, end_date)
 
             # Use yf.download for batch operation
@@ -314,9 +302,6 @@ class YahooDataDownloader(BaseDataDownloader):
             Fundamentals: Comprehensive fundamental data for the stock
         """
         try:
-            # Apply rate limiting
-            self._rate_limit()
-
             ticker = yf.Ticker(symbol)
             info = ticker.info
 
@@ -394,9 +379,6 @@ class YahooDataDownloader(BaseDataDownloader):
             Dict[str, Fundamentals]: Dictionary mapping symbols to Fundamentals objects
         """
         try:
-            # Apply rate limiting
-            self._rate_limit()
-
             _logger.info("Downloading batch fundamentals for %d symbols", len(symbols))
 
             # Use yf.Tickers for batch operation - this is the most efficient method
@@ -498,9 +480,6 @@ class YahooDataDownloader(BaseDataDownloader):
             Dict[str, Fundamentals]: Dictionary mapping symbols to Fundamentals objects
         """
         try:
-            # Apply rate limiting
-            self._rate_limit()
-
             _logger.info("Downloading optimized batch fundamentals for %d symbols", len(symbols))
 
             # Method 1: Use yf.download for basic info (most efficient)
@@ -663,9 +642,7 @@ class YahooDataDownloader(BaseDataDownloader):
                 filepath = self.save_data(df, symbol, interval, start_date, end_date)
                 results[symbol] = filepath
 
-                # Rate limiting between symbols (already handled in get_ohlcv, but extra safety)
-                if len(results) < len(symbols):  # Don't sleep after the last symbol
-                    self._rate_limit()
+                # Process next symbol
 
             except Exception as e:
                 _logger.exception("Error processing %s: %s", symbol, str(e))

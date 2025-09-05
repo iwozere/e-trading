@@ -22,7 +22,7 @@ from typing import Optional, Dict, Any
 import pandas as pd
 import yfinance as yf
 
-from src.data.base_live_data_feed import BaseLiveDataFeed
+from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -83,50 +83,9 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
         }
         return interval_map.get(interval, '1d')
 
-    def _load_historical_data(self) -> Optional[pd.DataFrame]:
-        """
-        Load historical data from Yahoo Finance.
-
-        Returns:
-            DataFrame with historical OHLCV data
-        """
-        try:
-            _logger.info("Loading %d historical bars for %s", self.lookback_bars, self.symbol)
-
-            # Create ticker object
-            self.ticker = yf.Ticker(self.symbol)
-
-            # Calculate period based on lookback_bars and interval
-            period = self._calculate_period()
-
-            # Get historical data
-            df = self.ticker.history(
-                period=period,
-                interval=self.yahoo_interval,
-                prepost=True
-            )
-
-            if df.empty:
-                _logger.warning("No historical data found for %s", self.symbol)
-                return None
-
-            # Ensure we have the right number of bars
-            if len(df) > self.lookback_bars:
-                df = df.tail(self.lookback_bars)
-
-            # Rename columns to match expected format
-            df.columns = [col.lower() for col in df.columns]
-
-            # Select only required columns
-            required_columns = ['open', 'high', 'low', 'close', 'volume']
-            df = df[required_columns]
-
-            _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
-            return df
-
-        except Exception as e:
-            _logger.exception("Error loading historical data for %s: %s")
-            return None
+    # Note: _load_historical_data() is now inherited from BaseLiveDataFeed
+    # which uses DataManager for historical data loading. This ensures
+    # consistent data access and caching across all live feeds.
 
     def _calculate_period(self) -> str:
         """

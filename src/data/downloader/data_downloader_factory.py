@@ -11,14 +11,14 @@ Classes:
 
 import os
 from typing import Dict, Any, Optional, Type
-from src.data.base_data_downloader import BaseDataDownloader
-from src.data.yahoo_data_downloader import YahooDataDownloader
-from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
-from src.data.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.polygon_data_downloader import PolygonDataDownloader
-from src.data.twelvedata_data_downloader import TwelveDataDataDownloader
-from src.data.binance_data_downloader import BinanceDataDownloader
-from src.data.coingecko_data_downloader import CoinGeckoDataDownloader
+from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
+from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

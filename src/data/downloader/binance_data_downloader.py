@@ -27,7 +27,7 @@ from binance.client import Client
 from src.notification.logger import setup_logger
 import time
 
-from src.data   .base_data_downloader import BaseDataDownloader
+from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.model.schemas import Fundamentals
 
 _logger = setup_logger(__name__)
@@ -80,27 +80,16 @@ class BinanceDataDownloader(BaseDataDownloader):
     >>>     print(f"Not supported: {e}")
     """
 
-    def __init__(
-        self,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        data_dir: Optional[str] = None,
-        interval: Optional[str] = None,
-    ):
-        super().__init__(data_dir=data_dir, interval=interval)
-        self.client = Client(api_key, api_secret)
-        # Rate limiting: 1200 requests per minute = 1 request per 0.05 seconds
-        self.min_request_interval = 0.05
-        self.last_request_time = 0
+    def __init__(self, api_key: Optional[str] = None, api_secret: Optional[str] = None):
+        """
+        Initialize Binance data downloader.
 
-    def _rate_limit(self):
-        """Ensure minimum time between requests to respect rate limits."""
-        current_time = time.time()
-        time_since_last = current_time - self.last_request_time
-        if time_since_last < self.min_request_interval:
-            sleep_time = self.min_request_interval - time_since_last
-            time.sleep(sleep_time)
-        self.last_request_time = time.time()
+        Args:
+            api_key: Binance API key (optional for public data)
+            api_secret: Binance API secret (optional for public data)
+        """
+        super().__init__()
+        self.client = Client(api_key, api_secret)
 
     def _calculate_batch_dates(self, start_date: datetime, end_date: datetime, interval: str) -> List[tuple]:
         """
@@ -138,28 +127,11 @@ class BinanceDataDownloader(BaseDataDownloader):
 
         return batches
 
-    def download_multiple_symbols(
-        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ):
-        """Download historical data for multiple symbols with rate limiting."""
-
-        def download_func(symbol, interval, start_date, end_date):
-            return self.get_ohlcv(symbol, interval, start_date, end_date)
-
-        return super().download_multiple_symbols(
-            symbols, download_func, interval, start_date, end_date
-        )
-
-    def get_periods(self) -> list:
-        return ['1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y']
-
-    def get_intervals(self) -> list:
+    def get_supported_intervals(self) -> List[str]:
+        """Return list of supported intervals for Binance."""
         return ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
 
-    def is_valid_period_interval(self, period, interval) -> bool:
-        return interval in self.get_intervals() and period in self.get_periods()
-
-    def get_ohlcv(self, symbol, interval, start_date: datetime, end_date: datetime):
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
         Download historical klines/candlestick data from Binance with batching to respect 1000 bar limit.
 
@@ -179,9 +151,6 @@ class BinanceDataDownloader(BaseDataDownloader):
             all_klines = []
 
             for batch_start, batch_end in batches:
-                # Apply rate limiting
-                self._rate_limit()
-
                 # Convert dates to timestamps
                 start_timestamp = int(batch_start.timestamp() * 1000)
                 end_timestamp = int(batch_end.timestamp() * 1000)

@@ -6,17 +6,14 @@ data from multiple data sources and providers.
 """
 
 import pandas as pd
-import logging
 from typing import Dict, List, Optional, Union, Any, Tuple
 from datetime import datetime, timedelta
-from pathlib import Path
 import numpy as np
 
-from .data_source_factory import get_data_source_factory
-from .base_data_source import BaseDataSource
-from .utils import get_data_handler
-
-_logger = logging.getLogger(__name__)
+from src.data.sources.data_source_factory import get_data_source_factory
+from src.data.utils import get_data_handler
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 
 class DataAggregator:

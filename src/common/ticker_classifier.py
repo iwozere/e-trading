@@ -7,6 +7,8 @@ class DataProvider(Enum):
     BINANCE = "binance"
     YFINANCE = "yfinance"
     ALPHA_VANTAGE = "alpha_vantage"
+    FMP = "fmp"
+    TIINGO = "tiingo"
     UNKNOWN = "unknown"
 
 @dataclass
@@ -493,11 +495,15 @@ class TickerClassifier:
         # Stock symbols: Choose based on interval
         if ticker_info.provider == DataProvider.YFINANCE:
             if interval == '1d':
-                # Daily data: Use yfinance (free, reliable)
-                return DataProvider.YFINANCE
+                # Daily data: Use yfinance (free, reliable) or Tiingo (comprehensive historical data)
+                return DataProvider.YFINANCE  # Primary choice
+            elif interval in ['1w', '1m']:
+                # Weekly/Monthly data: Use Tiingo (excellent historical coverage back to 1962)
+                return DataProvider.TIINGO
             else:
-                # Intraday data: Use Alpha Vantage (no 60-day limit)
-                return DataProvider.ALPHA_VANTAGE
+                # Intraday data: Use FMP (generous free tier: 3,000 calls/minute)
+                # Fallback to Alpha Vantage if FMP fails
+                return DataProvider.FMP
 
         # Unknown symbols: Default to original provider
         return ticker_info.provider

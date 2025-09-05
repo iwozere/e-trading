@@ -44,6 +44,52 @@ class DataProvider(Enum):
     IBKR = "ibkr"
 
 
+class Environment(Enum):
+    """Environment types for the trading system."""
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
+
+
+class BrokerType(Enum):
+    """Supported broker types."""
+    BINANCE_PAPER = "binance_paper"
+    BINANCE_LIVE = "binance_live"
+    IBKR_PAPER = "ibkr_paper"
+    IBKR_LIVE = "ibkr_live"
+
+
+class DataSourceType(Enum):
+    """Data source types."""
+    BINANCE = "binance"
+    YAHOO = "yahoo"
+    ALPHA_VANTAGE = "alpha_vantage"
+    FINNHUB = "finnhub"
+    POLYGON = "polygon"
+    TWELVE_DATA = "twelve_data"
+    FMP = "fmp"
+    COINGECKO = "coingecko"
+    IBKR = "ibkr"
+
+
+class StrategyType(Enum):
+    """Strategy types."""
+    CUSTOM = "custom"
+    MOMENTUM = "momentum"
+    MEAN_REVERSION = "mean_reversion"
+    ARBITRAGE = "arbitrage"
+    SCALPING = "scalping"
+
+
+class NotificationType(Enum):
+    """Notification types."""
+    TRADE_ENTRY = "trade_entry"
+    TRADE_EXIT = "trade_exit"
+    ERROR = "error"
+    STATUS = "status"
+    ALERT = "alert"
+
+
 @runtime_checkable
 class Fundamentals(Protocol):
     """

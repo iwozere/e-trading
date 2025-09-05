@@ -1,340 +1,349 @@
-# E-Trading System Data Module Refactoring Plan
+# Refactoring Plan: Unified Financial Data Services Module
 
-## 1) CURRENT STATE ANALYSIS
+## 1. Executive Summary & Goals
 
-### 1.1) Code Structure Issues
-- **Tight Coupling**: `Fundamentals` class is imported in `telegram_bot` and `base_data_downloader.py`
-- **Scattered Configuration**: API endpoints, rate limits, and settings are hardcoded throughout the codebase
-- **Inconsistent Error Handling**: Different error handling approaches across modules
-- **No Centralized Data Models**: Each module defines its own data structures
+This document outlines a comprehensive refactoring and design plan for the data module. The primary objective is to create a robust, provider-agnostic data access layer that simplifies data acquisition for both historical OHLCV data and live feeds. The architecture will be unified around a single, intelligent data manager that leverages a provider-agnostic file-based cache.
 
-### 1.2) Data Quality Issues
-- **Missing Validation**: No systematic data quality checks
-- **Timezone Inconsistencies**: Mixed UTC and local time handling
-- **Data Gaps**: No handling of missing or corrupted data points
-- **No Quality Metrics**: No way to assess data reliability
+**Key Goals:**
+1.  **Unified Architecture:** Establish a single, coherent architecture by implementing a provider-agnostic "Unified Cache" (`SYMBOL/TIMEFRAME/year.csv.gz`) and deprecating the conflicting provider-specific cache structure.
+2.  **Simplified Data Access:** Introduce a `DataManager` facade as the sole entry point for all data requests, abstracting away the complexities of provider selection, rate limiting, and caching from the application layer.
+3.  **Enhanced Live Feeds:** Ensure live data feeds are seamlessly integrated, using the unified cache for efficient historical data backfilling.
 
-### 1.3) Performance Issues
-- **No Caching**: Data is re-downloaded every time
-- **Inefficient Rate Limiting**: Basic sleep-based rate limiting
-- **No Retry Logic**: Failures cause immediate termination
-- **Memory Inefficiency**: Large datasets loaded entirely into memory
+## 2. Current Situation Analysis
 
-## 2) REFACTORING OBJECTIVES
+The existing data module has a strong foundation with several well-designed components:
+-   Modular, provider-specific data downloaders inheriting from a `BaseDataDownloader`.
+-   Dedicated utility modules for crucial cross-cutting concerns like rate limiting (`rate_limiting.py`), retries (`retry.py`), and data validation (`validation.py`).
+-   Extensive documentation and a comprehensive test suite.
 
-### 2.1) Decouple Modules
-- Remove `Fundamentals` dependency from `telegram_bot`
-- Create shared models module
-- Implement dependency injection pattern
+## 3. Proposed Solution / Refactoring Strategy
 
-### 2.2) Improve Data Quality
-- Implement comprehensive data validation
-- Standardize timezone handling (UTC everywhere)
-- Add data quality scoring
-- Handle data gaps and corruption
+### 3.1. High-Level Design / Architectural Overview
 
-### 2.3) Enhance Performance
-- Implement intelligent caching system
-- Add exponential backoff retry logic
-- Optimize rate limiting
-- Add data compression
+The proposed architecture centralizes data access through a `DataManager` facade. This component orchestrates the process of retrieving data, ensuring that consumers (e.g., trading strategies, analytics tools) are completely decoupled from the underlying data sources and caching mechanisms.
 
-### 2.4) Centralize Configuration
-- Externalize all settings to YAML files
-- Environment-specific configurations
-- Runtime configuration updates
+The data retrieval flow will be as follows:
 
-## 3) PROPOSED ARCHITECTURE
+```mermaid
+graph TD
+    A[Application Layer] --> B{DataManager};
+    B --> C{UnifiedCache.get()};
+    C -- Cache Miss --> D{ProviderSelector};
+    C -- Cache Hit --> E[Return Data];
+    D -- Selects Provider --> F[Provider-Specific Downloader];
+    F -- Fetches Raw Data --> G{DataHandler};
+    G -- Standardizes & Validates --> H{UnifiedCache.put()};
+    H --> E;
+    E --> A;
 
-### 3.1) New Module Structure
-```
-src/
-├── model/
-│   └── schemas.py          # Shared data models and protocols
-├── config/
-│   └── data/
-│       └── config.yaml     # Centralized configuration
-├── data/
-│   ├── utils/              # Shared utilities
-│   │   ├── retry.py        # Retry mechanisms
-│   │   ├── validation.py   # Data validation
-│   │   ├── rate_limiting.py # Rate limiting
-│   │   ├── caching.py      # Data caching
-│   │   ├── data_handler.py # Standardized data handling
-│   │   ├── advanced_caching.py # Advanced caching with Redis
-│   │   ├── data_streaming.py # Real-time data streaming
-│   │   └── performance_optimization.py # Performance optimization
-│   ├── base_data_source.py # Abstract base class
-│   ├── data_source_factory.py # Factory pattern
-│   ├── data_aggregator.py  # Multi-source aggregation
-│   └── providers/          # Provider-specific implementations
-│       ├── binance/
-│       ├── yahoo/
-│       └── ibkr/
+    subgraph Data Services Core
+        B; C; D; F; G; H;
+    end
+
+    subgraph External
+        I[Data Provider APIs];
+    end
+
+    F --> I;
 ```
 
-### 3.2) Key Design Patterns
-- **Factory Pattern**: Centralized data source creation
-- **Strategy Pattern**: Pluggable validation and caching strategies
-- **Observer Pattern**: Real-time data updates
-- **Repository Pattern**: Data persistence abstraction
+**Description of Flow:**
+1.  The **Application Layer** requests data from the `DataManager`.
+2.  The `DataManager` first attempts to retrieve the data from the `UnifiedCache`.
+3.  **On a cache hit**, the data is returned immediately.
+4.  **On a cache miss**, the `DataManager` consults the `ProviderSelector` to determine the best provider for the given symbol and timeframe.
+5.  The `DataManager` invokes the appropriate provider-specific **Downloader** to fetch the data from the external API.
+6.  The raw data is passed to a `DataHandler` for standardization (ensuring a consistent OHLCV format) and validation.
+7.  The clean, standardized data is then stored in the `UnifiedCache` for future requests.
+8.  Finally, the data is returned to the application.
 
-## 4) IMPLEMENTATION ACTION PLAN
+### 3.2. Key Components / Modules
 
-### Phase 1: Critical Bug Fixes & Hardening ✅ COMPLETED
-- [x] **Step 1.1: Fix Data Preparation Issues**
-  - [x] Refactor `prepare_data_frame` in `run_optimizer.py`
-  - [x] Refactor `prepare_data_feed` in `run_optimizer.py`
-  - [x] Remove fallback mechanism from `base_strategy.py`
-  - [x] Add robust validation in `base_strategy.py`
-- [x] **Step 1.2: Create Infrastructure**
-  - [x] Create `src/model/schemas.py` with data models
-  - [x] Create `src/config/data/config.yaml` with configuration
-  - [x] Create `src/data/utils/` package with utilities
-- [x] **Step 1.3: Refactor Existing Modules**
-  - [x] Update `base_data_downloader.py` to remove coupling
-  - [x] Update `binance_live_feed.py` with timezone fixes and pagination
-  - [x] Update `binance_data_feed.py` with Backtrader fixes
+1.  **`DataManager` (New Facade):**
+    -   **Responsibilities:** Acts as the single public entry point for all data operations. Implements the logic shown in the diagram above. Manages interactions between the cache, provider selector, and downloaders.
+    -   **Key Methods:** `get_ohlcv(symbol, timeframe, start, end)`, `get_live_feed(symbol, timeframe)`.
 
-### Phase 2: Code Quality & Robustness ✅ COMPLETED
-- [x] **Step 2.1: Improve Error Handling & Logging**
-  - [x] Integrate retry mechanisms with `@retry_on_exception` decorator
-  - [x] Integrate data validation using `validate_ohlcv_data` and `get_data_quality_score`
-  - [x] Fix linter errors and improve code quality
-- [x] **Step 2.2: Standardize Data Handling**
-  - [x] Create `DataHandler` class for consistent data processing
-  - [x] Implement data standardization, validation, and caching
-  - [x] Add data transformation and cleaning capabilities
-- [x] **Step 2.3: Implement Data Source Abstraction**
-  - [x] Create `BaseDataSource` abstract base class
-  - [x] Implement common functionality for all data sources
-  - [x] Add health monitoring and error handling
-- [x] **Step 2.4: Create Data Source Factory**
-  - [x] Implement `DataSourceFactory` for centralized management
-  - [x] Add configuration-based data source creation
-  - [x] Implement lifecycle management and health monitoring
-- [x] **Step 2.5: Create Data Aggregator**
-  - [x] Implement `DataAggregator` for multi-source data combination
-  - [x] Add data synchronization and conflict resolution strategies
-  - [x] Implement quality assessment across sources
-- [x] **Step 2.6: Integration & Testing**
-  - [x] Update module `__init__.py` files
-  - [x] Create integration test script
-  - [x] Verify all components work together
+2.  **`UnifiedCache` (Refactored `utils/file_based_cache.py`):**
+    -   **Responsibilities:** Manages the physical storage and retrieval of data. Strictly adheres to the `SYMBOL/TIMEFRAME/year.csv.gz` structure. Handles data serialization (to gzipped CSV) and deserialization. Manages associated metadata files (`.json`).
+    -   **Key Methods:** `get(symbol, timeframe, year)`, `put(symbol, timeframe, year, data, metadata)`, `exists(...)`.
 
-### Phase 3: Advanced Features & Optimization ✅ COMPLETED
-- [x] **Step 3.1: Implement Advanced Caching**
-  - [x] Add Redis support for distributed caching
-  - [x] Implement cache invalidation strategies
-  - [x] Add cache performance metrics
-- [x] **Step 3.2: Add Data Streaming**
-  - [x] Implement real-time data streaming
-  - [x] Add WebSocket connection pooling
-  - [x] Implement backpressure handling
-- [x] **Step 3.3: Performance Optimization**
-  - [x] Add data compression (Parquet, Zstandard)
-  - [x] Implement lazy loading for large datasets
-  - [x] Add parallel data processing
-- [x] **Step 3.4: Integration & Testing**
-  - [x] Update module exports and integration
-  - [x] Create comprehensive Phase 3 test script
-  - [x] Verify all advanced features work together
+3.  **`ProviderSelector` (New Module):**
+    -   **Responsibilities:** Encapsulates the logic for choosing the best data provider based on rules defined in `PROVIDER_COMPARISON.md` and `Design.md` (e.g., asset type, timeframe, data quality).
+    -   **Key Methods:** `get_best_provider(symbol, timeframe)`.
 
-### Phase 4: Testing & Documentation ✅ COMPLETED
-- [x] **Step 4.1: Comprehensive Testing**
-  - [x] Unit tests for all new components
-  - [x] Integration tests for data flows
-  - [x] Performance benchmarks
-- [x] **Step 4.2: Documentation**
-  - [x] API documentation
-  - [x] Usage examples and tutorials
-  - [x] Architecture diagrams
+4.  **`LiveFeedManager` (Refactored `DataFeedFactory`):**
+    -   **Responsibilities:** Manages the lifecycle of live data feeds.
+    -   **Key Change:** It will be refactored to use the `DataManager` to acquire historical data for backfilling, ensuring that live feeds benefit from the unified cache.
 
-## 5) SUCCESS METRICS
+5.  **Data Downloaders (Refactored):**
+    -   **Responsibilities:** Each downloader class (e.g., `BinanceDataDownloader`) will be simplified to a single responsibility: fetching raw data from its specific API. All caching, validation, and rate-limiting logic will be removed from them and handled by the `DataManager` and its utilities.
 
-### 5.1) Code Quality
-- **Reduced Coupling**: Zero circular imports
-- **Increased Test Coverage**: >80% for new components
-- **Linter Compliance**: Zero warnings/errors
+### 3.3. Detailed Action Plan / Phases
 
-### 5.2) Data Quality
-- **Validation Coverage**: 100% of data validated
-- **Quality Scoring**: >90% average quality score
-- **Error Reduction**: <1% data corruption rate
+#### Phase 1: Foundational Refactoring & Unification
 
-### 5.3) Performance
-- **Cache Hit Rate**: >80% for historical data
-- **Response Time**: <100ms for cached data
-- **Memory Usage**: <50% reduction in peak usage
+-   **Objective(s):** Establish the core components of the new architecture.
+-   **Priority:** High
 
-## 6) FILES TO CREATE/MODIFY
+-   **Task 1.1: Implement `UnifiedCache`**
+    -   **Rationale/Goal:** Create the cornerstone of the new architecture, aligning with the user's specified cache structure.
+    -   **Estimated Effort:** M
+    -   **Deliverable/Criteria for Completion:** A class in a new `data/cache.py` module that can read and write gzipped pandas DataFrames to a `[cache_root]/[SYMBOL]/[TIMEFRAME]/[year].csv.gz` path. It must also handle a corresponding `[year].metadata.json` file. Unit tests must pass.
 
-### 6.1) New Files Created in Phase 1 ✅
-- `src/model/schemas.py`
-- `src/config/data/config.yaml`
-- `src/data/utils/__init__.py`
-- `src/data/utils/retry.py`
-- `src/data/utils/validation.py`
-- `src/data/utils/rate_limiting.py`
-- `src/data/utils/caching.py`
+-   **Task 1.2: Implement `ProviderSelector`**
+    -   **Rationale/Goal:** Centralize the provider selection logic into a testable and maintainable component.
+    -   **Estimated Effort:** S
+    -   **Deliverable/Criteria for Completion:** A class in a new `data/providers/selector.py` that implements the selection logic from `Design.md` (e.g., crypto -> binance, stock daily -> yfinance). Unit tests covering various symbols and timeframes must pass.
 
-### 6.2) New Files Created in Phase 2 ✅
-- `src/data/utils/data_handler.py`
-- `src/data/base_data_source.py`
-- `src/data/data_source_factory.py`
-- `src/data/data_aggregator.py`
-- `src/data/test_integration.py`
+-   **Task 1.3: Create the `DataManager` Facade**
+    -   **Rationale/Goal:** Establish the single entry point for data access.
+    -   **Estimated Effort:** M
+    -   **Deliverable/Criteria for Completion:** A new `DataManager` class in `data/manager.py`. It should have a `get_ohlcv` method that correctly orchestrates `UnifiedCache` and `ProviderSelector`. Initially, it can be tested with a mock downloader.
 
-### 6.3) New Files Created in Phase 3 ✅
-- `src/data/utils/advanced_caching.py`
-- `src/data/utils/data_streaming.py`
-- `src/data/utils/performance_optimization.py`
-- `src/data/test_phase3_integration.py`
+#### Phase 2: Integrating Historical Downloaders
 
-### 6.4) New Files Created in Phase 4 ✅
-- `src/data/utils/file_based_cache.py`
-- `src/data/tests/unit/test_file_based_cache.py`
-- `src/data/tests/integration/test_phase4_integration.py`
-- `src/data/tests/performance/test_performance_benchmarks.py`
-- `src/data/tests/run_phase4_tests.py`
-- `src/data/docs/PHASE4_DOCUMENTATION.md`
+-   **Objective(s):** Connect the existing data downloaders to the new `DataManager` and migrate existing cached data.
+-   **Priority:** High (Dependent on Phase 1)
 
-### 6.5) Modified Files ✅
-- `src/data/base_data_downloader.py`
-- `src/data/binance_live_feed.py`
-- `src/data/binance_data_feed.py`
-- `src/data/__init__.py`
-- `src/data/utils/__init__.py`
+-   **Task 2.1: Refactor `BaseDataDownloader` and Concrete Implementations**
+    -   **Rationale/Goal:** Decouple downloaders from caching and other concerns, enforcing the Single Responsibility Principle.
+    -   **Estimated Effort:** L
+    -   **Deliverable/Criteria for Completion:** All downloader classes are updated. They only contain logic for API communication and returning a raw pandas DataFrame. All caching calls (`self.cache.put`, etc.) are removed. The `DataManager` now calls the appropriate downloader on a cache miss.
 
-## 7) PHASE 3 IMPLEMENTATION SUMMARY
+-   **Task 2.2: Implement Rate Limiting and Retries in `DataManager`**
+    -   **Rationale/Goal:** Centralize control over external API interactions to ensure compliance and robustness.
+    -   **Estimated Effort:** M
+    -   **Deliverable/Criteria for Completion:** The `DataManager` uses the existing `utils/rate_limiting.py` and `utils/retry.py` modules before calling a downloader. Provider-specific limits from `PROVIDER_COMPARISON.md` are configured.
 
-Phase 3 has been successfully completed, implementing advanced features and performance optimization:
+#### Phase 3: Integrating Live Feeds
 
-### 7.1) Advanced Caching System
-- **Redis Support**: Distributed caching with Redis for high-performance data storage
-- **Cache Invalidation**: Time-based and version-based invalidation strategies
-- **Compression**: Built-in data compression with Zstandard and Gzip support
-- **Performance Metrics**: Comprehensive cache performance monitoring and analytics
-- **Metadata Management**: Automatic metadata tracking for cache entries
+-   **Objective(s):** Align live data feeds with the new unified data access layer.
+-   **Priority:** Medium (Dependent on Phase 1 & 2)
 
-### 7.2) Real-Time Data Streaming
-- **WebSocket Connection Pooling**: Multiple connections for load balancing and redundancy
-- **Stream Multiplexing**: Unified interface for managing multiple data streams
-- **Backpressure Handling**: Intelligent message dropping and queue management
-- **Data Processing Pipelines**: Configurable processors and filters for real-time data
-- **Connection Management**: Automatic reconnection with exponential backoff
+-   **Task 3.1: Refactor `BaseLiveDataFeed`**
+    -   **Rationale/Goal:** Ensure live feeds use the same robust, cached data source for historical backfilling as the rest of the application.
+    -   **Estimated Effort:** M
+    -   **Deliverable/Criteria for Completion:** The `_load_historical_data` method in `BaseLiveDataFeed` is refactored to call `DataManager.get_ohlcv` instead of performing its own download.
 
-### 7.3) Performance Optimization
-- **Data Compression**: Advanced compression algorithms (Parquet, Zstandard) with automatic format selection
-- **Lazy Loading**: Memory-efficient loading of large datasets with chunked processing
-- **Parallel Processing**: Multi-threaded and multi-process data processing with configurable workers
-- **Memory Optimization**: Automatic DataFrame optimization with dtype reduction and categorization
-- **Performance Monitoring**: Real-time performance metrics and throughput analysis
+-   **Task 3.2: Update Concrete Live Feeds**
+    -   **Rationale/Goal:** Ensure all live feeds conform to the updated base class.
+    -   **Estimated Effort:** S
+    -   **Deliverable/Criteria for Completion:** `BinanceLiveFeed`, `YahooLiveFeed`, etc., are updated and tested to ensure they correctly backfill data from the unified cache.
 
-### 7.4) Advanced Features
-- **Cache Compression**: Automatic compression of cached data with configurable algorithms
-- **Stream Processing**: Real-time data transformation and filtering capabilities
-- **Memory Management**: Intelligent memory usage optimization and monitoring
-- **Parallel Computing**: Map-reduce operations and distributed processing
-- **Performance Analytics**: Comprehensive performance tracking and reporting
+#### Phase 4: Finalization and Cleanup
 
-### 7.5) Integration & Testing
-- **Module Integration**: All Phase 3 components properly integrated and exported
-- **Comprehensive Testing**: Full test suite covering all advanced features
-- **Performance Validation**: Performance benchmarks and optimization verification
-- **Error Handling**: Robust error handling and recovery mechanisms
+-   **Objective(s):** Solidify the new architecture with comprehensive testing and updated documentation.
+-   **Priority:** Medium
 
-## 8) COMPLETE SYSTEM CAPABILITIES
+-   **Task 4.1: Create Integration Tests for `DataManager`**
+    -   **Rationale/Goal:** Verify the entire data retrieval flow works as designed.
+    -   **Estimated Effort:** M
+    -   **Deliverable/Criteria for Completion:** New integration tests that cover scenarios like: first-time download (cache miss), subsequent request (cache hit), and data requests spanning multiple years.
 
-The refactored data module now provides:
+-   **Task 4.2: Update and Unify Documentation**
+    -   **Rationale/Goal:** Eliminate architectural ambiguity and provide a single source of truth for developers.
+    -   **Estimated Effort:** M
+    -   **Deliverable/Criteria for Completion:** `README.md`, `Design.md`, and other key documents are updated to reflect the `DataManager` and `UnifiedCache` architecture. Conflicting documents like `PHASE4_DOCUMENTATION.md` are either removed or heavily revised to align with the new standard.
 
-### 8.1) Core Data Management
-- **Multi-Source Support**: Unified interface for multiple data providers
-- **Data Validation**: Comprehensive data quality checks and scoring
-- **Caching System**: Multi-level caching with file and Redis support
-- **Rate Limiting**: Intelligent rate limiting with burst handling
-- **Error Recovery**: Robust retry mechanisms and error handling
+### 3.4. Data Model Changes
 
-### 8.2) Advanced Features
-- **Real-Time Streaming**: High-performance real-time data processing
-- **Data Aggregation**: Multi-source data combination and conflict resolution
-- **Performance Optimization**: Memory and processing optimization
-- **Distributed Caching**: Redis-based distributed caching system
-- **Parallel Processing**: Multi-threaded and multi-process data handling
+The primary data model change is the **cache structure on the file system** (done).
 
-### 8.3) Production Readiness
-- **Scalability**: Designed for high-volume data processing
-- **Reliability**: Comprehensive error handling and recovery
-- **Monitoring**: Performance metrics and health monitoring
-- **Configuration**: Externalized configuration management
-- **Testing**: Comprehensive test coverage and validation
+-   **Current :** `[cache_root]/[SYMBOL]/[TIMEFRAME]/[year].csv.gz`
 
-The Phase 3 implementation completes the advanced features and optimization phase, providing a production-ready data management system with enterprise-level capabilities for real-time trading applications.
+The **metadata file** (`[year].metadata.json`) associated with each data file will be crucial. It should be standardized to include:
+```json
+{
+  "symbol": "LTCUSDT",
+  "timeframe": "15m",
+  "year": 2019,
+  "data_source": "binance",
+  "created_at": "2025-09-04T10:54:50.186152",
+  "last_updated": "2025-09-04T10:54:50.186158",
+  "start_date": "2019-12-31T23:00:00",
+  "end_date": "2019-12-31T23:45:00",
+  "data_quality": {
+    "score": 1.0,
+    "validation_errors": [],
+    "gaps": 0,
+    "duplicates": 0
+  },
+  "file_info": {
+    "format": "csv.gz",
+    "size_bytes": 345,
+    "rows": 4,
+    "columns": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "close_time",
+      "quote_asset_volume",
+      "number_of_trades",
+      "taker_buy_base_asset_volume",
+      "taker_buy_quote_asset_volume",
+      "ignore"
+    ]
+  },
+  "provider_info": {
+    "name": "binance",
+    "reliability": 0.95,
+    "rate_limit": "unknown"
+  }
+}
+```
 
-## 9) PHASE 4 IMPLEMENTATION SUMMARY
+### 3.5. API Design / Interface Changes
 
-Phase 4 has been successfully completed, implementing comprehensive testing, documentation, and file-based caching:
+The main public-facing API change will be the introduction of the `DataManager`. All other components will become internal implementation details.
 
-### 9.1) File-Based Cache System
-- **Redis Dependency Removal**: Completely eliminated Redis dependencies with file-based caching
-- **Hierarchical Structure**: Implemented `provider/symbol/interval/year/` folder structure as requested
-- **Multiple Formats**: Support for CSV and Parquet files with automatic compression
-- **Cache Invalidation**: Time-based and version-based invalidation strategies
-- **Performance Metrics**: Comprehensive cache performance monitoring and analytics
-- **Metadata Management**: Automatic metadata tracking for cache entries
+**Proposed `DataManager` Interface:**
+```python
+class DataManager:
+    def get_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str,
+        start_date: datetime,
+        end_date: datetime
+    ) -> pd.DataFrame:
+        """
+        Retrieves historical OHLCV data, handling caching and provider selection.
+        """
+        # ... implementation ...
 
-### 9.2) Comprehensive Testing Framework
-- **Test Organization**: Organized tests into unit, integration, and performance categories
-- **Unit Tests**: Complete unit test coverage for file-based cache system
-- **Integration Tests**: System-wide integration testing for all components
-- **Performance Tests**: Benchmark tests for cache performance and system optimization
-- **Test Runner**: Comprehensive test runner with detailed reporting and analysis
+    def get_live_feed(
+        self,
+        symbol: str,
+        timeframe: str,
+        # ... other relevant params ...
+    ) -> BaseLiveDataFeed:
+        """
+        Creates and returns a live data feed instance, pre-filled with historical data.
+        """
+        # ... implementation ...
+```
 
-### 9.3) Documentation and Examples
-- **API Documentation**: Complete API documentation for all new components
-- **Usage Examples**: Comprehensive examples for common use cases
-- **Migration Guide**: Step-by-step guide for migrating from Redis to file-based cache
-- **Performance Characteristics**: Detailed performance benchmarks and characteristics
-- **Troubleshooting Guide**: Common issues and solutions
+## 4. Key Considerations & Risk Mitigation
 
-### 9.4) Production Readiness
-- **No External Dependencies**: Eliminates Redis server requirements
-- **Portable**: Works on any system with file system access
-- **Scalable**: Can handle large datasets with year-based partitioning
-- **Configurable**: Flexible cache directory and retention policies
-- **Performance Optimized**: High-performance file-based caching with compression
+### 4.1. Technical Risks & Challenges
 
-### 9.5) Key Benefits Achieved
-- **Simplified Deployment**: No Redis server configuration required
-- **Better Performance**: File system access often faster than network calls
-- **Data Persistence**: Data survives application restarts
-- **Hierarchical Organization**: Better data organization and management
-- **Comprehensive Testing**: >90% test coverage with automated test execution
-- **Complete Documentation**: Production-ready documentation with examples
+-   **Cache Migration Complexity:** Migrating existing data from the provider-specific cache can be complex, especially if metadata formats differ.
+    -   **Mitigation:** The migration script (Task 2.3) must be developed carefully and tested on a copy of the cache. It should be idempotent and include a dry-run mode.
+-   **Data Standardization:** Different providers return data in slightly different formats (e.g., column names, timestamp formats).
+    -   **Mitigation:** The `DataHandler` component is critical. It must contain robust logic to transform all incoming data into the single, canonical format before validation and caching.
+-   **Performance of Gzipped CSV:** While `gzip` provides good compression, reading large gzipped CSV files can be slower than binary formats like Parquet.
+    -   **Mitigation:** Data is partitioned by year, which keeps individual file sizes manageable. For performance-critical applications, the `UnifiedCache` could be extended in the future to support Parquet as an alternative format, selectable via configuration.
 
-## 10) FINAL SYSTEM CAPABILITIES
+### 4.2. Dependencies
 
-The complete refactored data module now provides:
+-   The successful completion of **Phase 1** is a hard dependency for all subsequent phases.
+-   **Phase 2** (Historical Downloaders) must be completed before **Phase 3** (Live Feeds), as the live feeds will depend on the `DataManager` for backfilling.
+-   The project relies on external provider APIs. Any changes to these APIs could impact the downloader implementations.
 
-### 10.1) Core Data Management
-- **Multi-Source Support**: Unified interface for multiple data providers
-- **Data Validation**: Comprehensive data quality checks and scoring
-- **File-Based Caching**: Hierarchical file-based caching system
-- **Rate Limiting**: Intelligent rate limiting with burst handling
-- **Error Recovery**: Robust retry mechanisms and error handling
+### 4.3. Non-Functional Requirements (NFRs) Addressed
 
-### 10.2) Advanced Features
-- **Real-Time Streaming**: High-performance real-time data processing
-- **Data Aggregation**: Multi-source data combination and conflict resolution
-- **Performance Optimization**: Memory and processing optimization
-- **Parallel Processing**: Multi-threaded and multi-process data handling
-- **Lazy Loading**: Memory-efficient loading of large datasets
+-   **Maintainability:** Greatly improved by centralizing data access logic in the `DataManager` and enforcing the Single Responsibility Principle for downloaders.
+-   **Reliability:** Centralized error handling, retry logic, and validation within the `DataManager` will lead to more consistent and robust behavior.
+-   **Performance:** The `UnifiedCache` ensures that data is downloaded only once, significantly speeding up subsequent requests. Partitioning by year prevents individual files from becoming excessively large.
+-   **Extensibility:** Adding a new data provider becomes much simpler: only a new downloader class needs to be created and registered with the `ProviderSelector`. No changes to caching or other core logic are required.
 
-### 10.3) Production Features
-- **Comprehensive Testing**: Unit, integration, and performance test coverage
-- **Performance Monitoring**: Real-time performance metrics and health monitoring
-- **Configuration Management**: Externalized configuration management
-- **Documentation**: Complete API documentation and usage examples
-- **Migration Support**: Tools and guides for system migration
+## 5. Success Metrics / Validation Criteria
 
-The Phase 4 implementation completes the data module refactoring, providing a production-ready, enterprise-level data management system with comprehensive testing, documentation, and file-based caching capabilities for real-time trading applications.
+The success of this refactoring plan will be measured by the following criteria:
+1.  **Architectural Unification:** The codebase exclusively uses the `DataManager` for data access.
+2.  **Functional Correctness:** All existing unit and integration tests pass after the refactoring. New integration tests for the `DataManager` (covering cache hits/misses) are implemented and pass.
+3.  **Performance:** For a given symbol and timeframe, the second request for data is at least 10x faster than the first (demonstrating a successful cache hit).
+4.  **Developer Experience:** A developer can add a new data provider by implementing a single downloader class and adding one line to the `ProviderSelector` configuration.
+
+## 6. Assumptions Made
+
+-   The "Unified Cache" architecture (`SYMBOL/TIMEFRAME/year.gz`) is the desired end state, as it aligns with the user's request and the strategic goal of provider-agnosticism.
+-   The existing utility modules (`rate_limiting.py`, `retry.py`, `validation.py`) are functionally sound and can be integrated into the `DataManager` without major rewrites.
+-   The performance of reading gzipped CSV files partitioned by year is acceptable for the system's requirements.
+-   API keys will continue to be managed via environment variables.
+
+## 7. Implementation Progress
+
+### ✅ Completed (Phase 1 - Foundational Refactoring)
+
+-   **Task 1.1: Implement `UnifiedCache`** ✅
+    -   **Status**: Completed
+    -   **Location**: `src/data/cache/unified_cache.py`
+    -   **Features**: Provider-agnostic caching with `SYMBOL/TIMEFRAME/year.csv.gz` structure
+
+-   **Task 1.2: Implement `ProviderSelector`** ✅
+    -   **Status**: Completed and Enhanced
+    -   **Location**: `src/data/data_manager.py` (ProviderSelector class)
+    -   **Features**: Configuration-driven provider selection with comprehensive ticker classification
+    -   **Enhancement**: Replaced `TickerClassifier` functionality with improved, configurable approach
+
+-   **Task 1.3: Create the `DataManager` Facade** ✅
+    -   **Status**: Completed
+    -   **Location**: `src/data/data_manager.py` (DataManager class)
+    -   **Features**: Single entry point for all data operations with orchestration logic
+
+### ✅ Additional Completed Tasks
+
+-   **Base Classes Reorganization** ✅
+    -   **Status**: Completed
+    -   **Changes**: Moved `BaseDataSource` to `src/data/sources/` subfolder
+    -   **Benefits**: Better code organization and clearer module structure
+
+-   **TickerClassifier Replacement** ✅
+    -   **Status**: Completed
+    -   **Replacement**: Enhanced `ProviderSelector` with configuration-driven rules
+    -   **Benefits**: Better maintainability, extensibility, and integration with unified architecture
+    -   **Migration Guide**: `src/data/docs/TICKER_CLASSIFIER_MIGRATION.md`
+
+### ✅ Completed (Phase 2 - Historical Downloaders)
+
+-   **Task 2.1: Refactor `BaseDataDownloader` and Concrete Implementations** ✅
+    -   **Status**: Completed
+    -   **Changes**: Removed caching, file management, and rate limiting logic from downloaders
+    -   **Benefits**: Downloaders now focus solely on API communication, following Single Responsibility Principle
+
+-   **Task 2.2: Implement Rate Limiting and Retries in `DataManager`** ✅
+    -   **Status**: Completed
+    -   **Implementation**: DataManager now handles rate limiting and retries centrally
+    -   **Benefits**: Consistent rate limiting across all providers, centralized error handling
+
+-   **Task 2.3: Create Cache Migration Script** ✅
+    -   **Status**: Completed (but not needed - cache structure already correct)
+    -   **Note**: Migration script created but cache structure was already in correct format
+
+### ✅ Completed (Phase 3 - Live Feed Integration)
+
+-   **Task 3.1: Refactor `BaseLiveDataFeed`** ✅
+    -   **Status**: Completed
+    -   **Changes**: Updated `BaseLiveDataFeed` to use `DataManager.get_ohlcv()` for historical data loading
+    -   **Benefits**: Consistent data access and caching across all live feeds
+
+-   **Task 3.2: Update Concrete Live Feeds** ✅
+    -   **Status**: Completed
+    -   **Changes**: Updated `YahooLiveDataFeed` and `BinanceLiveDataFeed` to inherit the new base implementation
+    -   **Benefits**: All live feeds now use unified data access layer
+
+### ✅ Completed (Phase 4 - Finalization)
+
+-   **Task 4.1: Create Integration Tests for `DataManager`** ✅
+    -   **Status**: Completed
+    -   **Location**: `src/data/tests/integration/test_data_manager_integration.py`
+    -   **Coverage**: Cache hit/miss scenarios, provider selection, data validation, live feed integration, error handling
+
+-   **Performance Validation** ✅
+    -   **Status**: Completed
+    -   **Location**: `src/data/tests/performance/test_cache_performance.py`
+    -   **Validation**: Cache performance improvements, concurrent access, memory usage, compression efficiency
+
+### 📋 Remaining Tasks
+
+-   **Documentation Updates**: Update all documentation to reflect new architecture
+-   **Final Testing**: Run comprehensive test suite to ensure all functionality works
+
+## 8. Open Questions / Areas for Further Investigation
+
+-   **Provider Failover Strategy:** ✅ **RESOLVED** - Implemented in `ProviderSelector.get_provider_with_failover()`
+-   **Data Quality Conflict Resolution:** If cached data from one provider has a low quality score, should a new request automatically try to fetch from a higher-quality provider? (Recommendation: This should be a configurable behavior).
+-   **Configuration of `ProviderSelector`:** ✅ **RESOLVED** - Now uses `config/data/provider_rules.yaml` for all rules

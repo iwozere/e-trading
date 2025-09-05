@@ -28,14 +28,14 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # Import all data downloaders
-from src.data.yahoo_data_downloader import YahooDataDownloader
-from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
-from src.data.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.polygon_data_downloader import PolygonDataDownloader
-from src.data.twelvedata_data_downloader import TwelveDataDataDownloader
-from src.data.binance_data_downloader import BinanceDataDownloader
-from src.data.coingecko_data_downloader import CoinGeckoDataDownloader
-from src.data.data_downloader_factory import DataDownloaderFactory
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
+from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
+from src.data.downloader.binance_data_downloader import BinanceDataDownloader
+from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
 
 
@@ -88,7 +88,7 @@ class TestYahooDataDownloader(TestDataDownloaders):
         super().setUp()
         self.downloader = YahooDataDownloader(data_dir=self.temp_dir)
         # Patch yf.Ticker for all tests in this class
-        self.ticker_patcher = patch('src.data.yahoo_data_downloader.yf.Ticker')
+        self.ticker_patcher = patch('src.data.downloader.yahoo_data_downloader.yf.Ticker')
         self.mock_ticker_class = self.ticker_patcher.start()
         self.addCleanup(self.ticker_patcher.stop)
 

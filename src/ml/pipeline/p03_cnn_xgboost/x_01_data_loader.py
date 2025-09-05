@@ -29,7 +29,7 @@ sys.path.append(str(project_root))
 
 from src.notification.logger import setup_logger
 from src.common import get_ohlcv, analyze_period_interval
-from src.data.data_downloader_factory import DataDownloaderFactory
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
