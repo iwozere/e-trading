@@ -16,6 +16,9 @@ sys.path.append(str(PROJECT_ROOT))
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.notification.logger import setup_logger
 
+# Import API key from donotshare configuration
+from config.donotshare.donotshare import FMP_API_KEY
+
 logger = setup_logger(__name__)
 
 
@@ -25,11 +28,10 @@ def demo_fmp_screener():
     print("=" * 50)
 
     # Check if API key is available
-    api_key = os.getenv('FMP_API_KEY')
+    api_key = FMP_API_KEY
     if not api_key:
-        print("❌ FMP_API_KEY environment variable not set")
-        print("Please set your FMP API key:")
-        print("export FMP_API_KEY='your_api_key_here'")
+        print("❌ FMP_API_KEY not found in donotshare.py")
+        print("Please add your FMP API key to config/donotshare/donotshare.py")
         return
 
     try:
@@ -116,9 +118,9 @@ def demo_fundamentals_retrieval():
     print("\n💰 FMP Fundamentals Retrieval Demo")
     print("=" * 50)
 
-    api_key = os.getenv('FMP_API_KEY')
+    api_key = FMP_API_KEY
     if not api_key:
-        print("❌ FMP_API_KEY environment variable not set")
+        print("❌ FMP_API_KEY not found in donotshare.py")
         return
 
     try:
@@ -152,9 +154,9 @@ def demo_company_profile():
     print("\n🏢 FMP Company Profile Demo")
     print("=" * 50)
 
-    api_key = os.getenv('FMP_API_KEY')
+    api_key = FMP_API_KEY
     if not api_key:
-        print("❌ FMP_API_KEY environment variable not set")
+        print("❌ FMP_API_KEY not found in donotshare.py")
         return
 
     try:
@@ -200,5 +202,5 @@ if __name__ == "__main__":
     print("\n🎉 FMP Data Downloader demo completed!")
     print("\n💡 To use FMP in your screener:")
     print("1. Get an API key from https://financialmodelingprep.com/")
-    print("2. Set environment variable: export FMP_API_KEY='your_key'")
+    print("2. Add your API key to config/donotshare/donotshare.py")
     print("3. Use FMPDataDownloader in your screener logic")

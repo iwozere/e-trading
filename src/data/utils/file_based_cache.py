@@ -676,13 +676,25 @@ class FileBasedCache:
 
         # Split by years
         years_data = {}
-        for year in timestamps.dt.year.unique():
-            year_mask = timestamps.dt.year == year
-            year_df = filtered_df[year_mask].copy()
-
-            if not year_df.empty:
-                years_data[year] = year_df
-                _logger.debug(f"Split data for year {year}: {len(year_df)} rows")
+        # Handle both Series (with .dt accessor) and DatetimeIndex (direct .year access)
+        if hasattr(timestamps, 'dt'):
+            # Series with .dt accessor
+            years = timestamps.dt.year.unique()
+            for year in years:
+                year_mask = timestamps.dt.year == year
+                year_df = filtered_df[year_mask].copy()
+                if not year_df.empty:
+                    years_data[year] = year_df
+                    _logger.debug(f"Split data for year {year}: {len(year_df)} rows")
+        else:
+            # DatetimeIndex with direct .year access
+            years = timestamps.year.unique()
+            for year in years:
+                year_mask = timestamps.year == year
+                year_df = filtered_df[year_mask].copy()
+                if not year_df.empty:
+                    years_data[year] = year_df
+                    _logger.debug(f"Split data for year {year}: {len(year_df)} rows")
 
         return years_data
 

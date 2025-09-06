@@ -17,6 +17,14 @@ from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
 
+# Import API keys from donotshare configuration
+from config.donotshare.donotshare import (
+    ALPHA_VANTAGE_KEY,
+    POLYGON_KEY,
+    FINNHUB_KEY,
+    TWELVE_DATA_KEY
+)
+
 REQUIRED_COLUMNS = ["timestamp", "open", "high", "low", "close", "volume"]
 
 @pytest.mark.parametrize("downloader_class", [
@@ -77,9 +85,16 @@ def test_get_ohlcv_smoke(downloader_class, symbol, interval, api_env):
         end_date = datetime.now() - timedelta(days=29)
     # API key logic
     if api_env:
-        api_key = os.environ.get(api_env)
+        # Map environment variable names to imported API keys
+        api_key_map = {
+            'ALPHA_VANTAGE_KEY': ALPHA_VANTAGE_KEY,
+            'POLYGON_KEY': POLYGON_KEY,
+            'FINNHUB_KEY': FINNHUB_KEY,
+            'TWELVE_DATA_KEY': TWELVE_DATA_KEY
+        }
+        api_key = api_key_map.get(api_env)
         if not api_key:
-            pytest.skip(f"API key for {downloader_class.__name__} not set in env {api_env}")
+            pytest.skip(f"API key for {downloader_class.__name__} not found in donotshare.py ({api_env})")
         instance = downloader_class(api_key=api_key)
     else:
         instance = downloader_class()

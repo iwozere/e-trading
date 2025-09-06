@@ -108,6 +108,12 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             total_minutes = self.lookback_bars * interval_minutes
             start_time = datetime.now() - timedelta(minutes=total_minutes)
 
+            # CoinGecko free API limit: 365 days maximum
+            max_start_time = datetime.now() - timedelta(days=365)
+            if start_time < max_start_time:
+                start_time = max_start_time
+                _logger.warning("CoinGecko API limited to 365 days, adjusting start time to %s", start_time)
+
             # Convert to UNIX timestamps
             start_timestamp = int(start_time.timestamp())
             end_timestamp = int(datetime.now().timestamp())

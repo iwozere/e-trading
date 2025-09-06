@@ -28,7 +28,7 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-class BaseLiveDataFeed(bt.feeds.PandasData):
+class BaseLiveDataFeed:
     """
     Base class for live data feeds that provide real-time market data to Backtrader.
 
@@ -83,8 +83,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         else:
             self.data_manager = data_manager
 
-        # Initialize data storage
-        self.df = None
+        # Data storage is now handled by the PandasData composition pattern
         self.last_update = None
         self.is_connected = False
         self.should_stop = False
@@ -96,20 +95,53 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         if historical_data is None or historical_data.empty:
             raise ValueError("Failed to load historical data for %s", symbol)
 
+        # Prepare data for Backtrader PandasData
+        # Reset index to make datetime a column instead of index
+        df_copy = historical_data.copy(deep=True)
+        df_copy = df_copy.reset_index()
+        df_copy = df_copy.rename(columns={'datetime': 'timestamp'})
+
+        # Ensure timestamp column is datetime
+        df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'])
+
+        # Ensure the index is timezone-naive for Backtrader compatibility
+        if df_copy['timestamp'].dt.tz is not None:
+            df_copy['timestamp'] = df_copy['timestamp'].dt.tz_localize(None)
+
         # Filter out parameters that are not valid for PandasData
         pandas_kwargs = {}
         for key, value in kwargs.items():
             if key not in ['api_key', 'api_secret', 'testnet', 'data_manager']:
                 pandas_kwargs[key] = value
 
-        # Initialize PandasData without arguments first
-        super().__init__()
+        # Create PandasData instance with the prepared data
+        self.pandas_data = bt.feeds.PandasData(
+            dataname=df_copy,
+            datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
+            open=1,      # open is now column 1
+            high=2,      # high is now column 2
+            low=3,       # low is now column 3
+            close=4,     # close is now column 4
+            volume=5,    # volume is now column 5
+            openinterest=None,
+            name=symbol,
+            **pandas_kwargs
+        )
 
-        # Set the data after initialization
-        self._dataname = historical_data
+        # Delegate to PandasData for Backtrader compatibility
+        self.p = self.pandas_data.p
 
         # Start real-time updates
         self._start_realtime_updates()
+
+    def __getattr__(self, name):
+        """Delegate attribute access to PandasData instance for Backtrader compatibility."""
+        return getattr(self.pandas_data, name)
+
+    @property
+    def df(self):
+        """Get the DataFrame for backward compatibility with tests."""
+        return self.pandas_data.p.dataname
 
     def _load_historical_data(self) -> Optional[pd.DataFrame]:
         """
@@ -194,7 +226,7 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         elif interval.endswith('w'):
             return int(interval[:-1]) * 7 * 24 * 60
         else:
-            _logger.warning(f"Unknown interval format: {interval}")
+            _logger.warning("Unknown interval format: %s", interval)
             return 0
 
     @abstractmethod
@@ -341,5 +373,6 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
             'is_connected': self.is_connected,
             'last_update': self.last_update,
             'data_points': len(self.df) if self.df is not None else 0,
-            'should_stop': self.should_stop
+            'should_stop': self.should_stop,
+            'data_source': self.__class__.__name__.replace('LiveDataFeed', '').lower()
         }

@@ -72,17 +72,17 @@ The system automatically selects the best data provider based on symbol type and
 ### Usage
 
 ```python
-from src.common.ticker_classifier import TickerClassifier
+from src.data.data_manager import ProviderSelector
 
-classifier = TickerClassifier()
+selector = ProviderSelector()
 
 # Get best provider for a symbol and timeframe
-provider = classifier.get_provider_for_interval("BTCUSDT", "5m")  # Returns "binance"
-provider = classifier.get_provider_for_interval("AAPL", "1d")     # Returns "yfinance"
-provider = classifier.get_provider_for_interval("AAPL", "5m")     # Returns "alpha_vantage"
+provider = selector.get_best_provider("BTCUSDT", "5m")  # Returns "binance"
+provider = selector.get_best_provider("AAPL", "1d")     # Returns "yfinance"
+provider = selector.get_best_provider("AAPL", "5m")     # Returns "alpha_vantage"
 
 # Get detailed provider configuration
-config = classifier.get_data_provider_config("AAPL", "5m")
+config = selector.get_data_provider_config("AAPL", "5m")
 print(f"Provider: {config['best_provider']}")
 print(f"Reason: {config['reason']}")
 ```

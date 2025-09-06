@@ -19,15 +19,15 @@ Classes:
 """
 
 import os
+import time
 from datetime import datetime, timedelta
 from typing import List, Optional, Union
 
 import pandas as pd
 from binance.client import Client
-from src.notification.logger import setup_logger
-import time
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.notification.logger import setup_logger
 from src.model.schemas import Fundamentals
 
 _logger = setup_logger(__name__)
@@ -97,7 +97,7 @@ class BinanceDataDownloader(BaseDataDownloader):
             try:
                 self.client = Client(self.api_key, self.api_secret)
             except Exception as e:
-                _logger.warning(f"Failed to initialize Binance client: {e}")
+                _logger.warning("Failed to initialize Binance client: %s", e)
                 # Create a mock client for testing
                 self.client = None
         return self.client
@@ -228,9 +228,8 @@ class BinanceDataDownloader(BaseDataDownloader):
             # Remove duplicates and sort by timestamp
             df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp').reset_index(drop=True)
 
-            # Set timestamp as index to match other downloaders
-            df = df.set_index('timestamp')
-            df.index.name = 'timestamp'
+            # Keep timestamp as a column for consistency with other downloaders
+            # The timestamp will be used as index by the data manager if needed
 
             _logger.info("Successfully downloaded %d bars for %s %s", len(df), symbol, interval)
             return df

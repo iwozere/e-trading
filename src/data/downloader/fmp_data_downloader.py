@@ -68,7 +68,7 @@ class FMPDataDownloader(BaseDataDownloader):
             # Convert interval to FMP format
             fmp_interval = self._convert_interval(interval)
             if not fmp_interval:
-                _logger.error(f"Unsupported interval: {interval}")
+                _logger.error("Unsupported interval: %s", interval)
                 return None
 
             # Format dates
@@ -97,7 +97,7 @@ class FMPDataDownloader(BaseDataDownloader):
             if limit:
                 params['limit'] = min(limit, 1000)  # FMP max limit is 1000
 
-            _logger.info(f"Fetching {symbol} {interval} data from {start_str} to {end_str}")
+            _logger.info("Fetching %s %s data from %s to %s", symbol, interval, start_str, end_str)
 
             # Make request with rate limiting
             time.sleep(self.rate_limit_delay)
@@ -110,18 +110,18 @@ class FMPDataDownloader(BaseDataDownloader):
             if fmp_interval == '1day':
                 # Daily data structure: {"historical": [...]}
                 if 'historical' not in data:
-                    _logger.warning(f"No historical data found for {symbol}")
+                    _logger.warning("No historical data found for %s", symbol)
                     return None
                 historical_data = data['historical']
             else:
                 # Intraday data structure: [...] (direct array)
                 if not isinstance(data, list):
-                    _logger.warning(f"No intraday data found for {symbol}")
+                    _logger.warning("No intraday data found for %s", symbol)
                     return None
                 historical_data = data
 
             if not historical_data:
-                _logger.warning(f"No data returned for {symbol} {interval}")
+                _logger.warning("No data returned for %s %s", symbol, interval)
                 return None
 
             # Convert to DataFrame
@@ -130,14 +130,14 @@ class FMPDataDownloader(BaseDataDownloader):
             # Standardize column names
             df = self._standardize_dataframe(df, symbol, interval)
 
-            _logger.info(f"Successfully fetched {len(df)} data points for {symbol} {interval}")
+            _logger.info("Successfully fetched %d data points for %s %s", len(df), symbol, interval)
             return df
 
         except requests.exceptions.RequestException as e:
-            _logger.error(f"Request failed for {symbol} {interval}: {e}")
+            _logger.error("Request failed for %s %s: %s", symbol, interval, e)
             return None
         except Exception as e:
-            _logger.error(f"Error fetching data for {symbol} {interval}: {e}")
+            _logger.error("Error fetching data for %s %s: %s", symbol, interval, e)
             return None
 
     def _convert_interval(self, interval: str) -> Optional[str]:
@@ -173,7 +173,7 @@ class FMPDataDownloader(BaseDataDownloader):
             required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
             for col in required_columns:
                 if col not in df.columns:
-                    _logger.error(f"Missing required column: {col}")
+                    _logger.error("Missing required column: %s", col)
                     return pd.DataFrame()
 
             # Convert timestamp to datetime
@@ -197,7 +197,7 @@ class FMPDataDownloader(BaseDataDownloader):
             return df
 
         except Exception as e:
-            _logger.error(f"Error standardizing DataFrame for {symbol} {interval}: {e}")
+            _logger.error("Error standardizing DataFrame for %s %s: %s", symbol, interval, e)
             return pd.DataFrame()
 
     def get_available_symbols(self) -> List[str]:
@@ -239,7 +239,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 **criteria
             }
 
-            _logger.info(f"Running FMP stock screener with criteria: {criteria}")
+            _logger.info("Running FMP stock screener with criteria: %s", criteria)
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -248,14 +248,14 @@ class FMPDataDownloader(BaseDataDownloader):
             data = response.json()
 
             if isinstance(data, list):
-                _logger.info(f"FMP screener returned {len(data)} stocks")
+                _logger.info("FMP screener returned %d stocks", len(data))
                 return data
             else:
                 _logger.warning("FMP screener returned unexpected data format")
                 return []
 
         except Exception as e:
-            _logger.error(f"Error in FMP stock screener: {e}")
+            _logger.error("Error in FMP stock screener: %s", e)
             return []
 
     def get_fundamentals_batch(self, tickers: List[str]) -> Dict[str, Any]:
@@ -276,11 +276,11 @@ class FMPDataDownloader(BaseDataDownloader):
                 if ticker_fundamentals:
                     fundamentals[ticker] = ticker_fundamentals
 
-            _logger.info(f"Retrieved fundamentals for {len(fundamentals)} tickers")
+            _logger.info("Retrieved fundamentals for %d tickers", len(fundamentals))
             return fundamentals
 
         except Exception as e:
-            _logger.error(f"Error getting batch fundamentals: {e}")
+            _logger.error("Error getting batch fundamentals: %s", e)
             return {}
 
     def get_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -313,11 +313,11 @@ class FMPDataDownloader(BaseDataDownloader):
                 'ratios': ratios or {}
             }
 
-            _logger.info(f"Retrieved fundamentals for {symbol}")
+            _logger.info("Retrieved fundamentals for %s", symbol)
             return fundamentals
 
         except Exception as e:
-            _logger.error(f"Error getting fundamentals for {symbol}: {e}")
+            _logger.error("Error getting fundamentals for %s: %s", symbol, e)
             return None
 
     def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -340,7 +340,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 return None
 
         except Exception as e:
-            _logger.error(f"Error getting company profile for {symbol}: {e}")
+            _logger.error("Error getting company profile for %s: %s", symbol, e)
             return None
 
     def get_key_metrics(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -361,7 +361,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 return None
 
         except Exception as e:
-            _logger.error(f"Error getting key metrics for {symbol}: {e}")
+            _logger.error("Error getting key metrics for %s: %s", symbol, e)
             return None
 
     def get_financial_ratios(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -382,7 +382,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 return None
 
         except Exception as e:
-            _logger.error(f"Error getting financial ratios for {symbol}: {e}")
+            _logger.error("Error getting financial ratios for %s: %s", symbol, e)
             return None
 
     def get_income_statement(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
@@ -399,7 +399,7 @@ class FMPDataDownloader(BaseDataDownloader):
             return data if isinstance(data, list) else None
 
         except Exception as e:
-            _logger.error(f"Error getting income statement for {symbol}: {e}")
+            _logger.error("Error getting income statement for %s: %s", symbol, e)
             return None
 
     def get_balance_sheet(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
@@ -416,7 +416,7 @@ class FMPDataDownloader(BaseDataDownloader):
             return data if isinstance(data, list) else None
 
         except Exception as e:
-            _logger.error(f"Error getting balance sheet for {symbol}: {e}")
+            _logger.error("Error getting balance sheet for %s: %s", symbol, e)
             return None
 
     def get_cash_flow(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
@@ -433,7 +433,7 @@ class FMPDataDownloader(BaseDataDownloader):
             return data if isinstance(data, list) else None
 
         except Exception as e:
-            _logger.error(f"Error getting cash flow for {symbol}: {e}")
+            _logger.error("Error getting cash flow for %s: %s", symbol, e)
             return None
 
     def get_enterprise_value(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -454,7 +454,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 return None
 
         except Exception as e:
-            _logger.error(f"Error getting enterprise value for {symbol}: {e}")
+            _logger.error("Error getting enterprise value for %s: %s", symbol, e)
             return None
 
     def get_dcf_valuation(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -475,7 +475,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 return None
 
         except Exception as e:
-            _logger.error(f"Error getting DCF valuation for {symbol}: {e}")
+            _logger.error("Error getting DCF valuation for %s: %s", symbol, e)
             return None
 
     def test_connection(self) -> bool:
@@ -492,7 +492,7 @@ class FMPDataDownloader(BaseDataDownloader):
             return True
 
         except Exception as e:
-            _logger.error(f"FMP API connection test failed: {e}")
+            _logger.error("FMP API connection test failed: %s", e)
             return False
 
 

@@ -197,7 +197,16 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
 
             # Check if we have new data
             if self.df is not None and not self.df.empty:
-                last_known_time = self.df.index[-1]
+                # Get the current DataFrame and ensure it has a datetime index
+                current_df = self.df.copy()
+                if not isinstance(current_df.index, pd.DatetimeIndex):
+                    if 'timestamp' in current_df.columns:
+                        current_df = current_df.set_index('timestamp')
+                    else:
+                        # If no timestamp column, create a dummy datetime index
+                        current_df.index = pd.date_range('2023-01-01', periods=len(current_df), freq='D')
+
+                last_known_time = current_df.index[-1]
                 new_data = recent_data[recent_data.index > last_known_time]
 
                 if not new_data.empty:
@@ -235,6 +244,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             'polling_interval': self.polling_interval,
             'yahoo_interval': self.yahoo_interval,
             'last_poll_time': self.last_poll_time,
-            'ticker_valid': self.ticker is not None
+            'ticker_valid': self.ticker is not None,
+            'data_source': 'Yahoo Finance'  # Override the base class data_source
         })
         return status

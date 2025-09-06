@@ -21,20 +21,40 @@ import os
 import re
 import yaml
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List, Union
 from pathlib import Path
+from typing import Dict, Any, Optional, List, Union
 
 import pandas as pd
+
 from src.notification.logger import setup_logger
 
+# Import API keys from donotshare configuration
+try:
+    from config.donotshare.donotshare import (
+        ALPHA_VANTAGE_KEY,
+        FMP_API_KEY,
+        POLYGON_KEY,
+        TWELVE_DATA_KEY,
+        FINNHUB_KEY,
+        TIINGO_API_KEY
+    )
+except ImportError:
+    # Fallback to environment variables if donotshare is not available
+    ALPHA_VANTAGE_KEY = os.getenv('ALPHA_VANTAGE_KEY')
+    FMP_API_KEY = os.getenv('FMP_API_KEY')
+    POLYGON_KEY = os.getenv('POLYGON_KEY')
+    TWELVE_DATA_KEY = os.getenv('TWELVE_DATA_KEY')
+    FINNHUB_KEY = os.getenv('FINNHUB_KEY')
+    TIINGO_API_KEY = os.getenv('TIINGO_API_KEY')
+
 # Import cache and utilities
-from .cache.unified_cache import UnifiedCache
-from .utils.rate_limiting import RateLimiter
-from .utils.retry import retry_on_exception
-from .utils.validation import validate_ohlcv_data
+from src.data.cache.unified_cache import UnifiedCache
+from src.data.utils.rate_limiting import RateLimiter
+from src.data.utils.retry import retry_on_exception
+from src.data.utils.validation import validate_ohlcv_data
 
 # Import downloaders
-from .downloader import (
+from src.data.downloader import (
     BaseDataDownloader,
     BinanceDataDownloader,
     YahooDataDownloader,
@@ -48,7 +68,7 @@ from .downloader import (
 )
 
 # Import live feeds
-from .feed import (
+from src.data.feed import (
     BaseLiveDataFeed,
     BinanceLiveDataFeed,
     YahooLiveDataFeed,
@@ -90,7 +110,7 @@ class ProviderSelector:
                 # Default rules if config file doesn't exist
                 return self._get_default_rules()
         except Exception as e:
-            _logger.warning(f"Failed to load provider rules from {self.config_path}: {e}")
+            _logger.warning("Failed to load provider rules from %s: %s", self.config_path, e)
             return self._get_default_rules()
 
     def _get_default_rules(self) -> Dict[str, Any]:
@@ -145,30 +165,45 @@ class ProviderSelector:
                     # Yahoo Finance doesn't require API keys
                     self.downloaders[name] = downloader_class()
                 elif name == 'alpha_vantage':
-                    if not os.getenv('ALPHA_VANTAGE_API_KEY'):
-                        _logger.warning(f"Skipping {name} downloader: No API key found")
+                    if not ALPHA_VANTAGE_KEY:
+                        _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
-                    self.downloaders[name] = downloader_class(api_key=os.getenv('ALPHA_VANTAGE_API_KEY'))
+                    self.downloaders[name] = downloader_class(api_key=ALPHA_VANTAGE_KEY)
                 elif name == 'fmp':
-                    if not os.getenv('FMP_API_KEY'):
-                        _logger.warning(f"Skipping {name} downloader: No API key found")
+                    if not FMP_API_KEY:
+                        _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
-                    self.downloaders[name] = downloader_class(api_key=os.getenv('FMP_API_KEY'))
+                    self.downloaders[name] = downloader_class(api_key=FMP_API_KEY)
                 elif name == 'polygon':
-                    if not os.getenv('POLYGON_API_KEY'):
-                        _logger.warning(f"Skipping {name} downloader: No API key found")
+                    if not POLYGON_KEY:
+                        _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
-                    self.downloaders[name] = downloader_class(api_key=os.getenv('POLYGON_API_KEY'))
+                    self.downloaders[name] = downloader_class(api_key=POLYGON_KEY)
                 elif name == 'coingecko':
                     # CoinGecko doesn't require API key or data_dir
                     self.downloaders[name] = downloader_class()
+                elif name == 'twelvedata':
+                    if not TWELVE_DATA_KEY:
+                        _logger.warning("Skipping %s downloader: No API key found", name)
+                        continue
+                    self.downloaders[name] = downloader_class(api_key=TWELVE_DATA_KEY)
+                elif name == 'finnhub':
+                    if not FINNHUB_KEY:
+                        _logger.warning("Skipping %s downloader: No API key found", name)
+                        continue
+                    self.downloaders[name] = downloader_class(api_key=FINNHUB_KEY)
+                elif name == 'tiingo':
+                    if not TIINGO_API_KEY:
+                        _logger.warning("Skipping %s downloader: No API key found", name)
+                        continue
+                    self.downloaders[name] = downloader_class(api_key=TIINGO_API_KEY)
                 else:
                     # For other downloaders, try to initialize without parameters
                     self.downloaders[name] = downloader_class()
 
-                _logger.info(f"Initialized {name} downloader")
+                _logger.info("Initialized %s downloader", name)
             except Exception as e:
-                _logger.warning(f"Failed to initialize {name} downloader: {e}")
+                _logger.warning("Failed to initialize %s downloader: %s", name, e)
 
     def _classify_symbol(self, symbol: str) -> str:
         """
@@ -262,19 +297,19 @@ class ProviderSelector:
         # Map symbol type + timeframe to rule name
         rule_name = self._get_rule_name(symbol_type, timeframe)
         if not rule_name:
-            _logger.warning(f"No rule found for {symbol_type} {timeframe}")
+            _logger.warning("No rule found for %s %s", symbol_type, timeframe)
             return None
 
         # Get rules for this rule name
         if rule_name not in self.rules:
-            _logger.warning(f"No rules found for rule: {rule_name}")
+            _logger.warning("No rules found for rule: %s", rule_name)
             return None
 
         rules = self.rules[rule_name]
 
         # Check if timeframe is supported
         if timeframe not in rules.get('timeframes', []):
-            _logger.warning(f"Timeframe {timeframe} not supported for {rule_name}")
+            _logger.warning("Timeframe %s not supported for %s", timeframe, rule_name)
             return None
 
         # Return primary provider if available
@@ -288,7 +323,7 @@ class ProviderSelector:
             if provider in self.downloaders:
                 return provider
 
-        _logger.error(f"No suitable provider found for {symbol} ({timeframe})")
+        _logger.error("No suitable provider found for %s (%s)", symbol, timeframe)
         return None
 
     def get_best_downloader(self, symbol: str, timeframe: str) -> Optional[BaseDataDownloader]:
@@ -320,11 +355,24 @@ class ProviderSelector:
         """
         symbol_type = self._classify_symbol(symbol)
 
-        if symbol_type not in self.rules:
+        # Map symbol type + timeframe to rule name (same logic as get_best_provider)
+        rule_name = self._get_rule_name(symbol_type, timeframe)
+        if not rule_name:
+            _logger.warning("No rule found for %s %s", symbol_type, timeframe)
             return []
 
-        rules = self.rules[symbol_type]
+        # Get rules for this rule name
+        if rule_name not in self.rules:
+            _logger.warning("No rules found for rule: %s", rule_name)
+            return []
+
+        rules = self.rules[rule_name]
         providers = []
+
+        # Check if timeframe is supported
+        if timeframe not in rules.get('timeframes', []):
+            _logger.warning("Timeframe %s not supported for %s", timeframe, rule_name)
+            return []
 
         # Add primary provider
         primary = rules.get('primary')
@@ -341,7 +389,7 @@ class ProviderSelector:
 
     def get_ticker_info(self, symbol: str) -> Dict[str, Any]:
         """
-        Get comprehensive ticker information similar to TickerClassifier.
+        Get comprehensive ticker information for symbol classification and provider selection.
 
         Args:
             symbol: Trading symbol
@@ -575,17 +623,17 @@ class DataManager:
         if not symbol or not timeframe:
             raise ValueError("symbol and timeframe are required")
 
-        _logger.info(f"Requesting data for {symbol} {timeframe} from {start_date} to {end_date}")
+        _logger.info("Requesting data for %s %s from %s to %s", symbol, timeframe, start_date, end_date)
 
         # Check cache first (unless force refresh)
         if not force_refresh:
             cached_data = self._get_cached_data(symbol, timeframe, start_date, end_date)
             if cached_data is not None and not cached_data.empty:
-                _logger.info(f"Cache hit for {symbol} {timeframe}")
+                _logger.info("Cache hit for %s %s", symbol, timeframe)
                 return cached_data
 
         # Cache miss or force refresh - get from provider
-        _logger.info(f"Cache miss for {symbol} {timeframe}, fetching from provider")
+        _logger.info("Cache miss for %s %s, fetching from provider", symbol, timeframe)
 
         # Get providers with failover support
         providers = self.provider_selector.get_provider_with_failover(symbol, timeframe)
@@ -596,7 +644,7 @@ class DataManager:
         last_error = None
         for provider in providers:
             try:
-                _logger.info(f"Trying provider: {provider}")
+                _logger.info("Trying provider: %s", provider)
 
                 # Apply rate limiting
                 if provider in self.rate_limiters:
@@ -609,22 +657,27 @@ class DataManager:
                 data = downloader.get_ohlcv(symbol, timeframe, start_date, end_date)
 
                 if data is not None and not data.empty:
+                    # Convert timezone-aware timestamps to timezone-naive for validation
+                    data_copy = data.copy()
+                    if 'timestamp' in data_copy.columns and data_copy['timestamp'].dt.tz is not None:
+                        data_copy['timestamp'] = data_copy['timestamp'].dt.tz_localize(None)
+
                     # Validate data
-                    is_valid, errors = validate_ohlcv_data(data, symbol=symbol, interval=timeframe)
+                    is_valid, errors = validate_ohlcv_data(data_copy, symbol=symbol, interval=timeframe)
                     if not is_valid:
-                        _logger.warning(f"Data validation failed for {symbol} {timeframe}: {errors}")
+                        _logger.warning("Data validation failed for %s %s: %s", symbol, timeframe, errors)
                         # Continue with invalid data but log warning
 
                     # Cache the data
                     self._cache_data(data, symbol, timeframe, start_date, end_date, provider)
 
-                    _logger.info(f"Successfully retrieved data from {provider}")
+                    _logger.info("Successfully retrieved data from %s", provider)
                     return data
                 else:
-                    _logger.warning(f"Provider {provider} returned empty data")
+                    _logger.warning("Provider %s returned empty data", provider)
 
             except Exception as e:
-                _logger.warning(f"Provider {provider} failed: {e}")
+                _logger.warning("Provider %s failed: %s", provider, e)
                 last_error = e
                 continue
 
@@ -638,11 +691,11 @@ class DataManager:
             # Use UnifiedCache get method with date range
             cached_df = self.cache.get(symbol, timeframe, start_date, end_date)
             if cached_df is not None and not cached_df.empty:
-                _logger.info(f"Cache hit for {symbol} {timeframe}: {len(cached_df)} rows")
+                _logger.info("Cache hit for %s %s: %d rows", symbol, timeframe, len(cached_df))
                 return cached_df
 
         except Exception as e:
-            _logger.warning(f"Error retrieving cached data: {e}")
+            _logger.warning("Error retrieving cached data: %s", e)
 
         return None
 
@@ -653,12 +706,12 @@ class DataManager:
             # Use UnifiedCache put method with the full data and date range
             success = self.cache.put(data, symbol, timeframe, start_date, end_date, provider)
             if success:
-                _logger.info(f"Cached {len(data)} rows for {symbol} {timeframe} from {provider}")
+                _logger.info("Cached %d rows for %s %s from %s", len(data), symbol, timeframe, provider)
             else:
-                _logger.warning(f"Failed to cache data for {symbol} {timeframe}")
+                _logger.warning("Failed to cache data for %s %s", symbol, timeframe)
 
         except Exception as e:
-            _logger.error(f"Error caching data: {e}")
+            _logger.error("Error caching data: %s", e)
 
     def get_live_feed(self, symbol: str, timeframe: str,
                      lookback_bars: int = 1000, **kwargs) -> Optional[BaseLiveDataFeed]:
@@ -678,7 +731,7 @@ class DataManager:
             # Get the best provider for live feeds
             provider = self.provider_selector.get_best_provider(symbol, timeframe)
             if not provider:
-                _logger.error(f"No suitable provider found for live feed: {symbol} {timeframe}")
+                _logger.error("No suitable provider found for live feed: %s %s", symbol, timeframe)
                 return None
 
             # Map provider to live feed class
@@ -689,7 +742,7 @@ class DataManager:
             }
 
             if provider not in feed_classes:
-                _logger.error(f"No live feed available for provider: {provider}")
+                _logger.error("No live feed available for provider: %s", provider)
                 return None
 
             feed_class = feed_classes[provider]
@@ -705,11 +758,11 @@ class DataManager:
 
             # Create and return feed instance
             feed = feed_class(**config)
-            _logger.info(f"Created live feed for {symbol} {timeframe} using {provider}")
+            _logger.info("Created live feed for %s %s using %s", symbol, timeframe, provider)
             return feed
 
         except Exception as e:
-            _logger.error(f"Failed to create live feed for {symbol} {timeframe}: {e}")
+            _logger.error("Failed to create live feed for %s %s: %s", symbol, timeframe, e)
             return None
 
     def get_cache_stats(self) -> Dict[str, Any]:
@@ -731,7 +784,7 @@ class DataManager:
         else:
             self.cache.clear_all()
 
-        _logger.info(f"Cache cleared for {symbol or 'all'} {timeframe or 'all timeframes'}")
+        _logger.info("Cache cleared for %s %s", symbol or 'all', timeframe or 'all timeframes')
 
 
 # Convenience function for easy access

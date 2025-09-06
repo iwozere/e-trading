@@ -332,6 +332,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             'ws_connected': self.ws is not None and self.ws.sock is not None and self.ws.sock.connected,
             'ws_url': self.ws_url,
             'binance_interval': self.binance_interval,
-            'testnet': self.testnet
+            'testnet': self.testnet,
+            'data_source': 'Binance'  # Override the base class data_source
         })
         return status

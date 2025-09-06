@@ -96,10 +96,10 @@ UnifiedCache
 
 **Key Components:**
 ```python
-TickerClassifier
-├── get_provider_for_interval() -> Select best provider
+ProviderSelector
+├── get_best_provider() -> Select best provider
 ├── get_data_provider_config() -> Get provider configuration
-├── _select_best_provider() -> Apply selection logic
+├── get_ticker_info() -> Get comprehensive ticker information
 ├── _classify_symbol() -> Determine symbol type
 └── _get_provider_capabilities() -> Check provider features
 
@@ -161,7 +161,7 @@ populate_cache()
 
 ```
 1. Request → populate_cache.py with symbols and timeframes
-2. Classification → TickerClassifier determines symbol type
+2. Classification → ProviderSelector determines symbol type
 3. Provider Selection → Select best provider based on symbol/timeframe
 4. Cache Check → Check existing data in unified cache
 5. Download → Fetch data from selected provider (if needed)

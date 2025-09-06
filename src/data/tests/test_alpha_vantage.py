@@ -17,6 +17,9 @@ sys.path.insert(0, str(project_root))
 
 from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
+# Import API key from donotshare configuration
+from config.donotshare.donotshare import ALPHA_VANTAGE_KEY
+
 
 def test_alpha_vantage_intraday():
     """Test Alpha Vantage intraday data download."""
@@ -24,11 +27,11 @@ def test_alpha_vantage_intraday():
     print("=" * 60)
 
     # Check if API key is available
-    api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+    api_key = ALPHA_VANTAGE_KEY
     if not api_key:
-        print("❌ ALPHA_VANTAGE_API_KEY environment variable not set!")
+        print("❌ ALPHA_VANTAGE_KEY not found in donotshare.py!")
         print("Please get a free API key from: https://www.alphavantage.co/support/#api-key")
-        print("Then set: export ALPHA_VANTAGE_API_KEY=your_key_here")
+        print("Then add it to config/donotshare/donotshare.py")
         return False
 
     try:
@@ -80,9 +83,9 @@ def test_alpha_vantage_crypto():
     print("\n🧪 Testing Alpha Vantage Crypto Data Download")
     print("=" * 60)
 
-    api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+    api_key = ALPHA_VANTAGE_KEY
     if not api_key:
-        print("❌ API key not available")
+        print("❌ ALPHA_VANTAGE_KEY not found in donotshare.py")
         return False
 
     try:
@@ -141,7 +144,7 @@ def main():
         print(f"\n⚠️  Some tests failed. Check the error messages above.")
 
     print(f"\n🔑 To use Alpha Vantage in populate_cache.py:")
-    print(f"   1. Set your API key: export ALPHA_VANTAGE_API_KEY=your_key")
+    print(f"   1. Add your API key to config/donotshare/donotshare.py")
     print(f"   2. Run: python src/data/cache/populate_cache.py --populate --intervals 5m,15m")
 
 

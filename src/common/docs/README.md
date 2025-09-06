@@ -569,23 +569,23 @@ print(f"RSI: {analysis.technicals.rsi}")
 The enhanced ticker classification system provides intelligent provider selection and comprehensive pattern recognition:
 
 ```python
-from src.common.ticker_classifier import TickerClassifier
+from src.data.data_manager import ProviderSelector
 
-classifier = TickerClassifier()
+selector = ProviderSelector()
 
-# Classify tickers
-info = classifier.classify_ticker("AAPL")
-print(f"Provider: {info.provider.value}")  # yfinance
-print(f"Exchange: {info.exchange}")        # US Markets (NASDAQ/NYSE)
+# Get ticker information
+info = selector.get_ticker_info("AAPL")
+print(f"Symbol Type: {info['symbol_type']}")  # stock
+print(f"Exchange: {info['exchange']}")        # US Markets (NASDAQ/NYSE)
 
-info = classifier.classify_ticker("BTCUSDT")
-print(f"Provider: {info.provider.value}")  # binance
-print(f"Base Asset: {info.base_asset}")    # BTC
-print(f"Quote Asset: {info.quote_asset}")  # USDT
+info = selector.get_ticker_info("BTCUSDT")
+print(f"Symbol Type: {info['symbol_type']}")  # crypto
+print(f"Base Asset: {info['base_asset']}")    # BTC
+print(f"Quote Asset: {info['quote_asset']}")  # USDT
 
-info = classifier.classify_ticker("NOVO.CO")
-print(f"Provider: {info.provider.value}")  # yfinance
-print(f"Exchange: {info.exchange}")        # Copenhagen Stock Exchange (Denmark)
+info = selector.get_ticker_info("NOVO.CO")
+print(f"Symbol Type: {info['symbol_type']}")  # stock
+print(f"Exchange: {info['exchange']}")        # Copenhagen Stock Exchange (Denmark)
 ```
 
 ### Enhanced Features

@@ -33,7 +33,7 @@ src/common/
 ├── __init__.py              # Public interface
 ├── indicator_service.py     # Unified indicator service
 ├── recommendation_engine.py # Recommendation system
-├── ticker_classifier.py     # Ticker classification
+├── (ticker_classifier.py removed - functionality moved to ProviderSelector)
 ├── fundamentals.py          # Fundamental analysis
 ├── technicals.py           # Technical analysis (legacy)
 ├── ticker_analyzer.py      # Complete ticker analysis
@@ -50,24 +50,25 @@ src/common/
 
 ```python
 def determine_provider(ticker: str) -> str:
-    ticker_info = _ticker_classifier.classify_ticker(ticker)
-    if ticker_info.provider == DataProvider.BINANCE:
+    from src.data.data_manager import ProviderSelector
+    selector = ProviderSelector()
+    ticker_info = selector.get_ticker_info(ticker)
+    if ticker_info['symbol_type'] == 'crypto':
         return "bnc"
-    elif ticker_info.provider == DataProvider.YFINANCE:
+    elif ticker_info['symbol_type'] == 'stock':
         return "yf"
     return "yf"  # Default fallback
 ```
 
 ### 2. Strategy Pattern
-**Location**: `src/common/ticker_classifier.py`
+**Location**: `src/data/data_manager.py` (ProviderSelector)
 **Purpose**: Different classification strategies for different asset types
 
 ```python
-class TickerClassifier:
+class ProviderSelector:
     def __init__(self):
-        self.crypto_patterns = [...]
-        self.stock_exchange_suffixes = {...}
-        self.us_stock_patterns = [...]
+        self.rules = self._load_provider_rules()
+        self.symbol_patterns = self._load_symbol_patterns()
 ```
 
 ### 3. Singleton Pattern
@@ -135,9 +136,10 @@ class TickerInfo:
     base_asset: Optional[str] = None
     quote_asset: Optional[str] = None
 
-class TickerClassifier:
-    def classify_ticker(self, ticker: str) -> TickerInfo
+class ProviderSelector:
+    def get_ticker_info(self, ticker: str) -> Dict
     def get_data_provider_config(self, ticker: str) -> Dict
+    def get_best_provider(self, ticker: str, interval: str) -> str
 ```
 
 #### Supported Patterns

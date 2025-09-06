@@ -21,12 +21,13 @@ import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
+
 import pandas as pd
 import yfinance as yf
 
-from src.notification.logger import setup_logger
-from src.model.schemas import OptionalFundamentals, Fundamentals
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.model.schemas import OptionalFundamentals, Fundamentals
+from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 

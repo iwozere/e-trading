@@ -210,6 +210,14 @@ class TestYahooLiveFeed(TestLiveFeeds):
             'regularMarketPrice': 150.0,
             'regularMarketVolume': 1000000
         }
+        # Mock the history method to return data with a future timestamp
+        mock_ticker_instance.history.return_value = pd.DataFrame({
+            'Open': [150.0],
+            'High': [155.0],
+            'Low': [149.0],
+            'Close': [151.0],
+            'Volume': [1000000]
+        }, index=pd.date_range('2025-09-07', periods=1, freq='D'))  # Future date to ensure new data
         mock_ticker.return_value = mock_ticker_instance
 
         feed = YahooLiveDataFeed(
@@ -217,6 +225,9 @@ class TestYahooLiveFeed(TestLiveFeeds):
             interval=self.interval,
             polling_interval=1  # Short interval for testing
         )
+
+        # Initialize the ticker by connecting
+        feed._connect_realtime()
 
         # Test polling
         latest_data = feed._get_latest_data()
@@ -256,11 +267,32 @@ class TestIBKRLiveFeed(TestLiveFeeds):
         self.client_id = 1
 
     @patch('ibapi.client.EClient.connect')
-    @patch('ibapi.client.EClient.reqHistoricalData')
-    def test_connection(self, mock_req_historical, mock_connect):
+    @patch('ib_insync.ib.IB.reqHistoricalData')
+    @patch('ib_insync.ib.IB.reqContractDetails')
+    @patch('ib_insync.ib.IB.connect')
+    def test_connection(self, mock_ib_connect, mock_req_contract, mock_req_historical, mock_connect):
         """Test IBKR connection."""
         # Mock connection
         mock_connect.return_value = None
+        mock_ib_connect.return_value = None
+        # Mock contract details
+        mock_req_contract.return_value = True
+        # Mock historical data with some sample data
+        from ib_insync import BarData
+        from datetime import datetime
+        mock_bars = [
+            BarData(
+                date=datetime.now(),
+                open=150.0,
+                high=155.0,
+                low=149.0,
+                close=154.0,
+                volume=1000000,
+                barCount=1,
+                average=152.0
+            )
+        ]
+        mock_req_historical.return_value = mock_bars
 
         feed = IBKRLiveDataFeed(
             symbol=self.test_symbol,
@@ -277,9 +309,31 @@ class TestIBKRLiveFeed(TestLiveFeeds):
         mock_connect.assert_called_once_with(self.host, self.port, self.client_id)
 
     @patch('ibapi.client.EClient.connect')
-    def test_get_status(self, mock_connect):
+    @patch('ib_insync.ib.IB.reqHistoricalData')
+    @patch('ib_insync.ib.IB.reqContractDetails')
+    @patch('ib_insync.ib.IB.connect')
+    def test_get_status(self, mock_ib_connect, mock_req_contract, mock_req_historical, mock_connect):
         """Test status retrieval."""
         mock_connect.return_value = None
+        mock_ib_connect.return_value = None
+        # Mock contract details
+        mock_req_contract.return_value = True
+        # Mock historical data with some sample data
+        from ib_insync import BarData
+        from datetime import datetime
+        mock_bars = [
+            BarData(
+                date=datetime.now(),
+                open=150.0,
+                high=155.0,
+                low=149.0,
+                close=154.0,
+                volume=1000000,
+                barCount=1,
+                average=152.0
+            )
+        ]
+        mock_req_historical.return_value = mock_bars
 
         feed = IBKRLiveDataFeed(
             symbol=self.test_symbol,
@@ -449,7 +503,29 @@ class TestDataFeedFactory(unittest.TestCase):
             "client_id": 1
         }
 
-        with patch('ibapi.client.EClient.connect'):
+        with patch('ibapi.client.EClient.connect'), \
+             patch('ib_insync.ib.IB.reqContractDetails') as mock_req_contract, \
+             patch('ib_insync.ib.IB.reqHistoricalData') as mock_req_historical, \
+             patch('ib_insync.ib.IB.sleep'):
+            # Mock the contract details response
+            mock_req_contract.return_value = True
+            # Mock historical data response with some sample data
+            from ib_insync import BarData
+            from datetime import datetime
+            mock_bars = [
+                BarData(
+                    date=datetime.now(),
+                    open=150.0,
+                    high=155.0,
+                    low=149.0,
+                    close=154.0,
+                    volume=1000000,
+                    barCount=1,
+                    average=152.0
+                )
+            ]
+            mock_req_historical.return_value = mock_bars
+
             feed = DataFeedFactory.create_data_feed(config)
 
             self.assertIsInstance(feed, IBKRLiveDataFeed)
