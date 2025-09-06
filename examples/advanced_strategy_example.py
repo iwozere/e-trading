@@ -30,7 +30,7 @@ def create_sample_data():
     """Create sample market data for demonstration."""
     # Generate 1000 bars of sample data
     np.random.seed(42)
-    dates = pd.date_range(start='2023-01-01', periods=1000, freq='1H')
+    dates = pd.date_range(start='2023-01-01', periods=1000, freq='1h')
 
     # Create realistic price data with trends and volatility
     base_price = 100.0

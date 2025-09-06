@@ -64,7 +64,7 @@ class TestCachePerformance:
                 'low': [99.0 + i * 0.1 for i in range(100)],
                 'close': [100.5 + i * 0.1 for i in range(100)],
                 'volume': [1000 + i * 10 for i in range(100)]
-            }, index=pd.date_range('2024-01-01', periods=100, freq='1H'))
+            }, index=pd.date_range('2024-01-01', periods=100, freq='1h'))
 
         downloader.get_ohlcv.side_effect = slow_get_ohlcv
         return downloader
@@ -167,7 +167,7 @@ class TestCachePerformance:
             'low': [99.0 + i * 0.1 for i in range(8760)],
             'close': [100.5 + i * 0.1 for i in range(8760)],
             'volume': [1000 + i * 10 for i in range(8760)]
-        }, index=pd.date_range('2024-01-01', periods=8760, freq='1H'))
+        }, index=pd.date_range('2024-01-01', periods=8760, freq='1h'))
 
         large_downloader.get_ohlcv.return_value = large_data
 

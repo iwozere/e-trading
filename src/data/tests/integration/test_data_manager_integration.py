@@ -62,7 +62,7 @@ class TestDataManagerIntegration:
             'low': [99.0, 100.0, 101.0],
             'close': [100.5, 101.5, 102.5],
             'volume': [1000, 1100, 1200]
-        }, index=pd.date_range('2024-01-01', periods=3, freq='1H'))
+        }, index=pd.date_range('2024-01-01', periods=3, freq='1h'))
         return downloader
 
     def test_cache_miss_then_hit(self, data_manager, mock_downloader):
@@ -119,7 +119,7 @@ class TestDataManagerIntegration:
         fallback_downloader.get_ohlcv.return_value = pd.DataFrame({
             'open': [100.0], 'high': [101.0], 'low': [99.0],
             'close': [100.5], 'volume': [1000]
-        }, index=pd.date_range('2024-01-01', periods=1, freq='1H'))
+        }, index=pd.date_range('2024-01-01', periods=1, freq='1h'))
 
         # Mock provider selector to return failover chain
         with patch.object(data_manager.provider_selector, 'get_provider_with_failover') as mock_failover:
@@ -151,7 +151,7 @@ class TestDataManagerIntegration:
             'low': [99.0, 100.0, 101.0],
             'close': [100.5, 101.5, 102.5],
             'volume': [1000, 1100, 1200]
-        }, index=pd.date_range('2024-01-01', periods=3, freq='1H'))
+        }, index=pd.date_range('2024-01-01', periods=3, freq='1h'))
 
         mock_downloader.get_ohlcv.return_value = invalid_data
 

@@ -135,7 +135,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             elif interval == '15m':
                 df = df.set_index('timestamp').resample('15T').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
             elif interval == '1h':
-                df = df.set_index('timestamp').resample('1H').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
+                df = df.set_index('timestamp').resample('1h').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
             # For '1m' and '1d', no resampling needed
             return df
         except Exception as e:

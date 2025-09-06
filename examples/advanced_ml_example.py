@@ -34,7 +34,7 @@ def create_sample_data(n_samples: int = 1000) -> pd.DataFrame:
     np.random.seed(42)
 
     # Generate time series data
-    dates = pd.date_range(start='2023-01-01', periods=n_samples, freq='1H')
+    dates = pd.date_range(start='2023-01-01', periods=n_samples, freq='1h')
 
     # Generate price data with some patterns
     base_price = 100

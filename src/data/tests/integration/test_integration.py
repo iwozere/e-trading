@@ -34,7 +34,7 @@ def test_data_handler():
 
         # Create sample data
         sample_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=100, freq='1H'),
+            'timestamp': pd.date_range('2024-01-01', periods=100, freq='1h'),
             'open': [100 + i * 0.1 for i in range(100)],
             'high': [101 + i * 0.1 for i in range(100)],
             'low': [99 + i * 0.1 for i in range(100)],
@@ -93,7 +93,7 @@ def test_data_aggregator():
 
         # Create sample datasets for comparison
         data1 = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=50, freq='1H'),
+            'timestamp': pd.date_range('2024-01-01', periods=50, freq='1h'),
             'open': [100 + i * 0.1 for i in range(50)],
             'high': [101 + i * 0.1 for i in range(50)],
             'low': [99 + i * 0.1 for i in range(50)],
@@ -102,7 +102,7 @@ def test_data_aggregator():
         })
 
         data2 = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01 12:00:00', periods=50, freq='1H'),
+            'timestamp': pd.date_range('2024-01-01 12:00:00', periods=50, freq='1h'),
             'open': [100 + i * 0.1 for i in range(50)],
             'high': [101 + i * 0.1 for i in range(50)],
             'low': [99 + i * 0.1 for i in range(50)],
@@ -128,7 +128,7 @@ def test_utility_functions():
     try:
         # Create sample data for validation
         sample_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=100, freq='1H'),
+            'timestamp': pd.date_range('2024-01-01', periods=100, freq='1h'),
             'open': [100 + i * 0.1 for i in range(100)],
             'high': [101 + i * 0.1 for i in range(100)],
             'low': [99 + i * 0.1 for i in range(100)],
