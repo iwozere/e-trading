@@ -64,7 +64,7 @@ def test_is_valid_period_interval(downloader_class, period, interval):
     (AlphaVantageDataDownloader, 'AAPL', '1d', 'ALPHA_VANTAGE_KEY'),
     (PolygonDataDownloader, 'AAPL', '1d', 'POLYGON_KEY'),
     (FinnhubDataDownloader, 'AAPL', '1d', 'FINNHUB_KEY'),
-    (TwelveDataDataDownloader, 'AAPL', '1d', 'TWELVEDATA_API_KEY'),
+    (TwelveDataDataDownloader, 'AAPL', '1d', 'TWELVE_DATA_KEY'),
 ])
 @pytest.mark.network
 def test_get_ohlcv_smoke(downloader_class, symbol, interval, api_env):

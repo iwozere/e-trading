@@ -233,7 +233,7 @@ Coverage reports are generated in multiple formats:
 ALPHA_VANTAGE_API_KEY=your_key
 FINNHUB_API_KEY=your_key
 POLYGON_API_KEY=your_key
-TWELVEDATA_API_KEY=your_key
+TWELVE_DATA_KEY=your_key
 BINANCE_API_KEY=your_key
 BINANCE_SECRET_KEY=your_secret
 ```
