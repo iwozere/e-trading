@@ -4,6 +4,31 @@
 
 ### High Priority
 
+#### Fundamentals Cache System Implementation
+- [ ] **Implement JSON fundamentals cache system**
+  - Create `src/data/cache/fundamentals_cache.py` with cache helper functions
+  - Implement 7-day cache-first rule for all stock providers
+  - Add provider symbol timestamp naming convention (`{provider}_{timestamp}.json`)
+  - Create cache validation and cleanup mechanisms
+
+- [ ] **Add get_fundamentals method to DataManager**
+  - Implement `get_fundamentals(symbol, providers=None, force_refresh=False)`
+  - Add cache-first logic with 7-day expiration
+  - Integrate with existing provider fundamentals methods
+  - Add multi-provider data combination
+
+- [ ] **Implement multi-provider snapshot combination**
+  - Create `FundamentalsCombiner` class with pluggable strategies
+  - Implement priority-based field selection (FMP > Yahoo > Alpha Vantage > IBKR)
+  - Add data validation and consistency checks across providers
+  - Create fallback mechanisms for missing data
+
+- [ ] **Implement stale data cleanup**
+  - Add automatic removal of outdated fundamentals when new data is downloaded
+  - Implement safety mechanisms to keep at least one backup copy
+  - Add cleanup logging and monitoring
+  - Create cleanup validation and rollback capabilities
+
 #### Cache System Enhancements
 - [ ] **Add cache health monitoring**
   - Implement cache integrity checking and validation

@@ -82,6 +82,14 @@
 - **Metadata**: JSON files for data source and quality information
 - **Storage**: Local file system (no database required)
 
+### Fundamentals Cache Structure
+- **Directory Structure**: `fundamentals/{symbol}/` (e.g., `fundamentals/AAPL/`)
+- **File Format**: JSON files with provider and timestamp naming
+- **Naming Convention**: `{provider}_{timestamp}.json` (e.g., `yfinance_20250106_143022.json`)
+- **Cache Duration**: 7-day cache-first rule for all stock providers
+- **Multi-Provider Support**: Combine snapshots from multiple providers (yfinance, IBKR, FMP, Alpha Vantage)
+- **Stale Data Cleanup**: Automatic removal of outdated fundamentals data
+
 ### Cache Directory Permissions
 - **Write Access**: Full write permissions to cache directory
 - **Read Access**: Read access for data retrieval
@@ -93,6 +101,13 @@
 - **Configurable**: Adjustable via `max_size_gb` parameter
 - **Cleanup**: Automatic cleanup of old data (configurable age limit)
 - **Compression**: All data files are gzip compressed for efficiency
+
+### Fundamentals Cache Management
+- **Cache Duration**: 7-day maximum age for fundamentals data
+- **Provider Priority**: FMP > Yahoo Finance > Alpha Vantage > IBKR > others
+- **Data Combination**: Merge snapshots from multiple providers for comprehensive data
+- **Stale Data Cleanup**: Automatic removal of outdated fundamentals when new data is downloaded
+- **Storage Efficiency**: JSON format with provider-specific field optimization
 
 ## Development Dependencies (Optional)
 

@@ -765,9 +765,131 @@ class DataManager:
             _logger.error("Failed to create live feed for %s %s: %s", symbol, timeframe, e)
             return None
 
+    def get_fundamentals(self, symbol: str, providers: Optional[List[str]] = None,
+                        force_refresh: bool = False, combination_strategy: str = "priority_based") -> Dict[str, Any]:
+        """
+        Retrieve fundamentals data with caching and multi-provider combination.
+
+        This method implements the fundamentals data retrieval flow:
+        1. Check cache for valid data (7-day rule)
+        2. If cache miss or force_refresh, fetch from multiple providers
+        3. Combine data from multiple providers using specified strategy
+        4. Cache new data and cleanup stale data
+        5. Return combined fundamentals data
+
+        Args:
+            symbol: Trading symbol (e.g., 'AAPL', 'GOOGL')
+            providers: List of specific providers to use (None for auto-selection)
+            force_refresh: Force refresh even if cache is valid
+            combination_strategy: Strategy for combining data ('priority_based', 'quality_based', 'consensus')
+
+        Returns:
+            Dictionary containing combined fundamentals data
+        """
+        try:
+            # Import here to avoid circular imports
+            from src.data.cache.fundamentals_cache import get_fundamentals_cache
+            from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
+
+            fundamentals_cache = get_fundamentals_cache(self.cache.cache_dir)
+            combiner = get_fundamentals_combiner()
+
+            # Check cache first (unless force refresh)
+            if not force_refresh:
+                cached_data = fundamentals_cache.find_latest_json(symbol)
+                if cached_data:
+                    _logger.info("Using cached fundamentals for %s from %s", symbol, cached_data.provider)
+                    return fundamentals_cache.read_json(cached_data.file_path) or {}
+
+            # Determine providers to use
+            if providers is None:
+                # Auto-select providers based on symbol type
+                ticker_info = self.provider_selector.get_ticker_info(symbol)
+                if ticker_info['symbol_type'] == 'crypto':
+                    providers = ['binance', 'coingecko']
+                else:
+                    # Stock providers in priority order
+                    providers = ['fmp', 'yfinance', 'alpha_vantage', 'ibkr']
+
+            _logger.info("Fetching fundamentals for %s from providers: %s", symbol, providers)
+
+            # Fetch data from multiple providers
+            provider_data = {}
+            successful_providers = []
+
+            for provider_name in providers:
+                try:
+                    downloader = self.provider_selector.get_best_downloader(symbol, '1d')  # Use daily timeframe for fundamentals
+                    if downloader and hasattr(downloader, 'get_fundamentals'):
+                        fundamentals = downloader.get_fundamentals(symbol)
+                        if fundamentals:
+                            # Convert Fundamentals object to dictionary if needed
+                            if hasattr(fundamentals, '__dict__'):
+                                # It's a dataclass or object, convert to dict
+                                fundamentals_dict = fundamentals.__dict__
+                            elif isinstance(fundamentals, dict):
+                                # It's already a dictionary
+                                fundamentals_dict = fundamentals
+                            else:
+                                # Try to convert using vars()
+                                fundamentals_dict = vars(fundamentals) if hasattr(fundamentals, '__dict__') else {}
+
+                            provider_data[provider_name] = fundamentals_dict
+                            successful_providers.append(provider_name)
+                            _logger.debug("Successfully fetched fundamentals for %s from %s", symbol, provider_name)
+                        else:
+                            _logger.warning("No fundamentals data returned from %s for %s", provider_name, symbol)
+                    else:
+                        _logger.warning("Downloader for %s does not support fundamentals", provider_name)
+
+                except Exception as e:
+                    _logger.error("Failed to fetch fundamentals from %s for %s: %s", provider_name, symbol, e)
+                    continue
+
+            if not provider_data:
+                _logger.error("No fundamentals data available for %s from any provider", symbol)
+                return {}
+
+            # Combine data from multiple providers
+            combined_data = combiner.combine_snapshots(provider_data, combination_strategy)
+
+            if not combined_data:
+                _logger.error("Failed to combine fundamentals data for %s", symbol)
+                return {}
+
+            # Cache the combined data for each successful provider
+            timestamp = datetime.now()
+            for provider_name in successful_providers:
+                try:
+                    # Cache individual provider data
+                    fundamentals_cache.write_json(symbol, provider_name, provider_data[provider_name], timestamp)
+
+                    # Cleanup stale data for this provider
+                    removed_files = fundamentals_cache.cleanup_stale_data(symbol, provider_name, timestamp)
+                    if removed_files:
+                        _logger.info("Cleaned up %d stale cache files for %s %s", len(removed_files), symbol, provider_name)
+
+                except Exception as e:
+                    _logger.error("Failed to cache fundamentals for %s %s: %s", symbol, provider_name, e)
+
+            # Cache the combined data as well
+            try:
+                fundamentals_cache.write_json(symbol, 'combined', combined_data, timestamp)
+            except Exception as e:
+                _logger.error("Failed to cache combined fundamentals for %s: %s", symbol, e)
+
+            _logger.info("Successfully retrieved and combined fundamentals for %s from %d providers",
+                        symbol, len(successful_providers))
+
+            return combined_data
+
+        except Exception as e:
+            _logger.error("Error retrieving fundamentals for %s: %s", symbol, e)
+            return {}
+
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
-        return self.cache.get_cache_stats()
+        return self.cache.get_stats()
 
     def clear_cache(self, symbol: Optional[str] = None, timeframe: Optional[str] = None):
         """

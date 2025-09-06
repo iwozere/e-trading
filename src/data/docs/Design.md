@@ -185,6 +185,29 @@ populate_cache()
 
 ### Data Models
 
+#### Fundamentals Cache System
+
+**Cache-First Architecture:**
+- **7-Day Cache Rule**: All fundamentals data cached for 7 days before refresh
+- **Multi-Provider Support**: Combine data from multiple providers (FMP, Yahoo, Alpha Vantage, IBKR)
+- **Provider Priority**: FMP > Yahoo Finance > Alpha Vantage > IBKR > others
+- **Stale Data Cleanup**: Automatic removal of outdated data when new data is downloaded
+
+**Data Combination Strategy:**
+```python
+class FundamentalsCombiner:
+    def combine_snapshots(self, provider_data: Dict[str, Any]) -> Dict[str, Any]:
+        # Priority-based field selection
+        # Fill missing fields from lower-priority providers
+        # Validate data consistency across providers
+```
+
+**Cache Operations:**
+- `find_latest_json(symbol, provider)` - Find most recent cached data
+- `write_json(symbol, provider, data, timestamp)` - Cache new fundamentals
+- `is_cache_valid(timestamp, max_age_days=7)` - Validate cache age
+- `cleanup_stale_data(symbol, provider, new_timestamp)` - Remove old data
+
 #### Unified Cache Data Model
 
 **File Structure:**
@@ -199,7 +222,11 @@ data-cache/
 │   └── 1h/
 ├── AAPL/
 │   ├── 5m/
-│   └── 1d/
+│   ├── 1d/
+│   └── fundamentals/
+│       ├── yfinance_20250106_143022.json
+│       ├── fmp_20250106_143045.json
+│       └── alpha_vantage_20250106_143067.json
 └── _metadata/
     ├── symbols.json             # Global symbol metadata
     ├── providers.json           # Provider information

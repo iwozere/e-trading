@@ -296,9 +296,35 @@ class BaseLiveDataFeed:
             if self.df is None or new_data.index[-1] not in self.df.index:
                 # Add new data to DataFrame
                 if self.df is None:
-                    self.df = new_data
+                    # Create new pandas_data with the new data
+                    self.pandas_data = bt.feeds.PandasData(
+                        dataname=new_data,
+                        datetime=0,
+                        open=1,
+                        high=2,
+                        low=3,
+                        close=4,
+                        volume=5,
+                        openinterest=None,
+                        name=self.symbol
+                    )
+                    self.p = self.pandas_data.p
                 else:
-                    self.df = pd.concat([self.df, new_data])
+                    # Concatenate new data with existing data
+                    combined_data = pd.concat([self.df, new_data])
+                    # Update the pandas_data with combined data
+                    self.pandas_data = bt.feeds.PandasData(
+                        dataname=combined_data,
+                        datetime=0,
+                        open=1,
+                        high=2,
+                        low=3,
+                        close=4,
+                        volume=5,
+                        openinterest=None,
+                        name=self.symbol
+                    )
+                    self.p = self.pandas_data.p
 
                 # Update Backtrader lines
                 latest = self.df.iloc[-1]
