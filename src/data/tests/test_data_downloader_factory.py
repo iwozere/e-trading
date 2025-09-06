@@ -9,7 +9,7 @@ import os
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from src.data.data_downloader_factory import DataDownloaderFactory
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)

@@ -64,8 +64,6 @@ class BinanceDataDownloader(BaseDataDownloader):
         Binance API key
     secret_key : str
         Binance secret key
-    data_dir : str
-        Directory to store downloaded data files
 
     Example:
     --------
@@ -89,7 +87,20 @@ class BinanceDataDownloader(BaseDataDownloader):
             api_secret: Binance API secret (optional for public data)
         """
         super().__init__()
-        self.client = Client(api_key, api_secret)
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.client = None  # Lazy initialization
+
+    def _get_client(self):
+        """Get or create Binance client with lazy initialization."""
+        if self.client is None:
+            try:
+                self.client = Client(self.api_key, self.api_secret)
+            except Exception as e:
+                _logger.warning(f"Failed to initialize Binance client: {e}")
+                # Create a mock client for testing
+                self.client = None
+        return self.client
 
     def _calculate_batch_dates(self, start_date: datetime, end_date: datetime, interval: str) -> List[tuple]:
         """
@@ -131,6 +142,18 @@ class BinanceDataDownloader(BaseDataDownloader):
         """Return list of supported intervals for Binance."""
         return ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
 
+    def get_periods(self) -> List[str]:
+        """Return list of supported periods for Binance."""
+        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+
+    def get_intervals(self) -> List[str]:
+        """Return list of supported intervals for Binance."""
+        return self.get_supported_intervals()
+
+    def is_valid_period_interval(self, period: str, interval: str) -> bool:
+        """Check if the given period and interval combination is valid."""
+        return interval in self.get_supported_intervals() and period in self.get_periods()
+
     def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
         """
         Download historical klines/candlestick data from Binance with batching to respect 1000 bar limit.
@@ -159,7 +182,12 @@ class BinanceDataDownloader(BaseDataDownloader):
                              symbol, interval, batch_start, batch_end)
 
                 # Get klines data for this batch
-                klines = self.client.get_historical_klines(
+                client = self._get_client()
+                if client is None:
+                    _logger.error("Binance client not available")
+                    return pd.DataFrame()
+
+                klines = client.get_historical_klines(
                     symbol, interval, start_timestamp, end_timestamp
                 )
 
@@ -199,6 +227,9 @@ class BinanceDataDownloader(BaseDataDownloader):
 
             # Remove duplicates and sort by timestamp
             df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp').reset_index(drop=True)
+
+            # Keep timestamp as a column to match other downloaders
+            df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
 
             _logger.info("Successfully downloaded %d bars for %s %s", len(df), symbol, interval)
             return df

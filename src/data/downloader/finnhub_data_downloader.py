@@ -75,8 +75,8 @@ class FinnhubDataDownloader(BaseDataDownloader):
     >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
     """
 
-    def __init__(self, api_key: str, data_dir: Optional[str] = "data"):
-        super().__init__(data_dir=data_dir)
+    def __init__(self, api_key: str):
+        super().__init__()
         self.api_key = api_key
         self.base_url = "https://finnhub.io/api/v1/stock/candle"
 
@@ -279,3 +279,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
         return super().download_multiple_symbols(
             symbols, download_func, interval, start_date, end_date
         )
+
+    def get_supported_intervals(self) -> List[str]:
+        """Return list of supported intervals for Finnhub."""
+        return ['1m', '5m', '15m', '30m', '1h', '1d']

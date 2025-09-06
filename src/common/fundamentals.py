@@ -5,7 +5,7 @@ Usage:
     from src.common.fundamentals import get_fundamentals
     fundamentals = get_fundamentals('AAPL', provider='yf')
 """
-from src.data.data_downloader_factory import DataDownloaderFactory
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
 from src.common.indicator_service import get_indicator_service
 from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory

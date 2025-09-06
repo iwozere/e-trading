@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.data.alpha_vantage_data_downloader import AlphaVantageDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
 
 def test_alpha_vantage_intraday():
@@ -34,7 +34,7 @@ def test_alpha_vantage_intraday():
     try:
         # Initialize downloader
         print("🔑 API Key: Found")
-        downloader = AlphaVantageDownloader(api_key=api_key)
+        downloader = AlphaVantageDataDownloader(api_key=api_key)
         print("✅ Alpha Vantage downloader initialized")
 
         # Test parameters
@@ -86,7 +86,7 @@ def test_alpha_vantage_crypto():
         return False
 
     try:
-        downloader = AlphaVantageDownloader(api_key=api_key)
+        downloader = AlphaVantageDataDownloader(api_key=api_key)
 
         # Test crypto
         symbol = "BTCUSD"

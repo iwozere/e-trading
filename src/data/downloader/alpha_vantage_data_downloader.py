@@ -64,8 +64,6 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
     -----------
     api_key : str
         Alpha Vantage API key
-    data_dir : str
-        Directory to store downloaded data files
 
     Example:
     --------
@@ -78,8 +76,8 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
     >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
     """
 
-    def __init__(self, api_key: str, data_dir: Optional[str] = "data"):
-        super().__init__(data_dir=data_dir)
+    def __init__(self, api_key: str):
+        super().__init__()
         self.api_key = api_key
         self.base_url = "https://www.alphavantage.co/query"
 
@@ -169,63 +167,6 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             _logger.exception("Error downloading data for %s: %s")
             raise
 
-    def save_data(
-        self,
-        df: pd.DataFrame,
-        symbol: str,
-        interval: str,
-        start_date: datetime,
-        end_date: datetime,
-    ) -> str:
-        try:
-            if start_date is None:
-                start_date = df["timestamp"].min().strftime("%Y-%m-%d")
-            if end_date is None:
-                end_date = df["timestamp"].max().strftime("%Y-%m-%d")
-            return super().save_data(df, symbol, interval, start_date, end_date)
-        except Exception as e:
-            _logger.exception("Error saving data for %s: %s")
-            raise
-
-    def load_data(self, filepath: str) -> pd.DataFrame:
-        try:
-            return super().load_data(filepath)
-        except Exception as e:
-            _logger.exception("Error loading data from %s: %s")
-            raise
-
-    def update_data(self, symbol: str, interval: str) -> str:
-        try:
-            existing_files = [
-                f
-                for f in os.listdir(self.data_dir)
-                if f.startswith(f"{symbol}_{interval}_")
-            ]
-            if not existing_files:
-                df = self.get_ohlcv(
-                    symbol,
-                    interval,
-                    datetime.fromtimestamp(0),
-                    datetime.now(),
-                )
-                return self.save_data(df, symbol, interval, datetime.fromtimestamp(0), datetime.now())
-            latest_file = max(existing_files)
-            filepath = os.path.join(self.data_dir, latest_file)
-            existing_df = self.load_data(filepath)
-            last_date = existing_df["timestamp"].max()
-            new_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-            new_end = datetime.now().strftime("%Y-%m-%d")
-            new_df = self.get_ohlcv(symbol, interval, datetime.fromtimestamp(int(new_start)), datetime.fromtimestamp(int(new_end)))
-            if new_df.empty:
-                _logger.info("No new data available for %s", symbol)
-                return filepath
-            combined_df = pd.concat([existing_df, new_df])
-            combined_df = combined_df.drop_duplicates(subset=["timestamp"])
-            combined_df = combined_df.sort_values("timestamp")
-            return self.save_data(combined_df, symbol, interval, datetime.fromtimestamp(int(new_start)), datetime.fromtimestamp(int(new_end)))
-        except Exception as e:
-            _logger.exception("Error updating data for %s: %s")
-            raise
 
     def get_periods(self) -> list:
         return ['1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y']
@@ -347,11 +288,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
 
-    def download_multiple_symbols(
-        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ) -> Dict[str, str]:
-        def download_func(symbol, interval, start_date, end_date):
-            return self.get_ohlcv(symbol, interval, start_date, end_date)
-        return super().download_multiple_symbols(
-            symbols, download_func, interval, start_date, end_date
-        )
+    def get_supported_intervals(self) -> List[str]:
+        """Return list of supported intervals for Alpha Vantage."""
+        return ['1m', '5m', '15m', '30m', '60m', '1d', '1wk', '1mo']
+

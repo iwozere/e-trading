@@ -22,12 +22,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.notification.logger import setup_logger
+from src.data.downloader.base_data_downloader import BaseDataDownloader
 from config.donotshare.donotshare import FMP_API_KEY
 
 _logger = setup_logger(__name__)
 
 
-class FMPDataDownloader:
+class FMPDataDownloader(BaseDataDownloader):
     """Financial Modeling Prep (FMP) data downloader."""
 
     def __init__(self, api_key: Optional[str] = None, rate_limit_delay: float = 0.1):
@@ -38,6 +39,7 @@ class FMPDataDownloader:
             api_key: FMP API key. If None, uses FMP_API_KEY from donotshare.py
             rate_limit_delay: Delay between requests in seconds
         """
+        super().__init__()
         self.api_key = api_key or FMP_API_KEY
         self.rate_limit_delay = rate_limit_delay
         self.base_url = "https://financialmodelingprep.com/api/v3"
@@ -207,6 +209,18 @@ class FMPDataDownloader:
     def get_supported_intervals(self) -> List[str]:
         """Get list of supported intervals."""
         return ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
+
+    def get_periods(self) -> List[str]:
+        """Return list of supported periods for FMP."""
+        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+
+    def get_intervals(self) -> List[str]:
+        """Return list of supported intervals for FMP."""
+        return self.get_supported_intervals()
+
+    def is_valid_period_interval(self, period: str, interval: str) -> bool:
+        """Check if the given period and interval combination is valid."""
+        return interval in self.get_supported_intervals() and period in self.get_periods()
 
     def get_stock_screener(self, criteria: Dict[str, Any]) -> List[Dict[str, Any]]:
         """

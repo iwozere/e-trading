@@ -22,12 +22,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.notification.logger import setup_logger
+from src.data.downloader.base_data_downloader import BaseDataDownloader
 from config.donotshare.donotshare import TIINGO_API_KEY
 
 _logger = setup_logger(__name__)
 
 
-class TiingoDataDownloader:
+class TiingoDataDownloader(BaseDataDownloader):
     """Tiingo data downloader."""
 
     def __init__(self, api_key: Optional[str] = None, rate_limit_delay: float = 0.1):
@@ -38,6 +39,7 @@ class TiingoDataDownloader:
             api_key: Tiingo API key. If None, uses TIINGO_API_KEY from donotshare.py
             rate_limit_delay: Delay between requests in seconds
         """
+        super().__init__()
         self.api_key = api_key or TIINGO_API_KEY
         self.rate_limit_delay = rate_limit_delay
         self.base_url = "https://api.tiingo.com/tiingo"
@@ -460,6 +462,18 @@ class TiingoDataDownloader:
     def get_supported_intervals(self) -> List[str]:
         """Get list of supported intervals."""
         return ['1d', '1w', '1m']  # Tiingo supports daily, weekly, monthly
+
+    def get_periods(self) -> List[str]:
+        """Return list of supported periods for Tiingo."""
+        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+
+    def get_intervals(self) -> List[str]:
+        """Return list of supported intervals for Tiingo."""
+        return self.get_supported_intervals()
+
+    def is_valid_period_interval(self, period: str, interval: str) -> bool:
+        """Check if the given period and interval combination is valid."""
+        return interval in self.get_supported_intervals() and period in self.get_periods()
 
     def test_connection(self) -> bool:
         """Test API connection."""

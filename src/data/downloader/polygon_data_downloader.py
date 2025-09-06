@@ -75,8 +75,8 @@ class PolygonDataDownloader(BaseDataDownloader):
     >>> print(f"Market Cap: ${fundamentals.market_cap:,.0f}")
     """
 
-    def __init__(self, api_key: str, data_dir: Optional[str] = "data"):
-        super().__init__(data_dir=data_dir)
+    def __init__(self, api_key: str):
+        super().__init__()
         self.api_key = api_key
         self.base_url = "https://api.polygon.io/v2/aggs/ticker"
 
@@ -257,6 +257,10 @@ class PolygonDataDownloader(BaseDataDownloader):
                 data_source="Polygon.io",
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
+
+    def get_supported_intervals(self) -> List[str]:
+        """Return list of supported intervals for Polygon.io."""
+        return ['1m', '5m', '15m', '1h', '1d']
 
     def download_multiple_symbols(
         self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime

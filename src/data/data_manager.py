@@ -30,7 +30,7 @@ from src.notification.logger import setup_logger
 # Import cache and utilities
 from .cache.unified_cache import UnifiedCache
 from .utils.rate_limiting import RateLimiter
-from .utils.retry import request_with_backoff
+from .utils.retry import retry_on_exception
 from .utils.validation import validate_ohlcv_data
 
 # Import downloaders
@@ -67,14 +67,16 @@ class ProviderSelector:
     and allows for configuration-driven provider selection.
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, cache_dir: Optional[str] = None):
         """
         Initialize provider selector.
 
         Args:
             config_path: Path to YAML configuration file for provider rules
+            cache_dir: Cache directory for downloaders that need it
         """
         self.config_path = config_path or "config/data/provider_rules.yaml"
+        self.cache_dir = cache_dir
         self.rules = self._load_provider_rules()
         self._initialize_downloaders()
 
@@ -157,6 +159,9 @@ class ProviderSelector:
                         _logger.warning(f"Skipping {name} downloader: No API key found")
                         continue
                     self.downloaders[name] = downloader_class(api_key=os.getenv('POLYGON_API_KEY'))
+                elif name == 'coingecko':
+                    # CoinGecko doesn't require API key or data_dir
+                    self.downloaders[name] = downloader_class()
                 else:
                     # For other downloaders, try to initialize without parameters
                     self.downloaders[name] = downloader_class()
@@ -465,7 +470,7 @@ class DataManager:
             config_path: Path to provider configuration file
         """
         self.cache = UnifiedCache(cache_dir)
-        self.provider_selector = ProviderSelector(config_path)
+        self.provider_selector = ProviderSelector(config_path, cache_dir)
         self.rate_limiters = {}
 
         # Initialize rate limiters for each provider
@@ -479,9 +484,9 @@ class DataManager:
         rate_limits = {
             'binance': {'requests_per_minute': 1200},
             'yahoo': {'requests_per_minute': 100},
-            'alpha_vantage': {'requests_per_minute': 5, 'requests_per_day': 25},
+            'alpha_vantage': {'requests_per_minute': 5},
             'fmp': {'requests_per_minute': 3000},
-            'tiingo': {'requests_per_day': 1000},
+            'tiingo': {'requests_per_minute': 100},
             'polygon': {'requests_per_minute': 5},
             'coingecko': {'requests_per_minute': 50},
         }
@@ -489,7 +494,7 @@ class DataManager:
         for provider, limits in rate_limits.items():
             self.rate_limiters[provider] = RateLimiter(**limits)
 
-    @request_with_backoff(max_attempts=3, base_delay=1.0)
+    @retry_on_exception(max_attempts=3, base_delay=1.0)
     def get_ohlcv(self, symbol: str, timeframe: str,
                   start_date: datetime, end_date: datetime,
                   force_refresh: bool = False) -> pd.DataFrame:

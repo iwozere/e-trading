@@ -81,3 +81,15 @@ class BaseDataDownloader(ABC):
             Fundamentals data or None if not supported
         """
         return None
+
+    def get_periods(self) -> List[str]:
+        """Return the list of supported periods for this data downloader."""
+        return ['1d', '7d', '1mo', '3mo', '6mo', '1y', '2y']
+
+    def get_intervals(self) -> List[str]:
+        """Return the list of supported intervals for this data downloader."""
+        return self.get_supported_intervals()
+
+    def is_valid_period_interval(self, period: str, interval: str) -> bool:
+        """Check if the given period and interval combination is valid."""
+        return interval in self.get_supported_intervals() and period in self.get_periods()

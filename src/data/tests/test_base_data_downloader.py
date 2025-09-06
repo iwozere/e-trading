@@ -32,13 +32,15 @@ from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 class DummyDownloader(BaseDataDownloader):
     def get_fundamentals(self, symbol):
         return None
+    def get_supported_intervals(self):
+        return ["1d"]
     def get_intervals(self):
         return ["1d"]
     def get_periods(self):
         return ["1d"]
     def is_valid_period_interval(self, period, interval):
         return True
-    def get_ohlcv(self, symbol, start_date, end_date=None):
+    def get_ohlcv(self, symbol, interval, start_date, end_date):
         # Return a dummy DataFrame
         data = {
             "timestamp": [datetime(2023, 1, 1), datetime(2023, 1, 2)],
@@ -52,31 +54,28 @@ class DummyDownloader(BaseDataDownloader):
 
 
 def test_save_and_load_data():
-    temp_dir = tempfile.mkdtemp()
-    try:
-        downloader = DummyDownloader(data_dir=temp_dir, interval="1d")
-        df = downloader.get_ohlcv(datetime(2023, 1, 1), datetime(2023, 1, 2))
-        filepath = downloader.save_data(df, "TEST", datetime(2023, 1, 1), datetime(2023, 1, 2))
-        assert os.path.exists(filepath)
-        loaded_df = downloader.load_data(filepath)
-        pd.testing.assert_frame_equal(df, loaded_df)
-    finally:
-        shutil.rmtree(temp_dir)
+    # Note: save_data and load_data methods removed - file operations now handled by DataManager
+    # Test basic data retrieval instead
+    downloader = DummyDownloader()
+    df = downloader.get_ohlcv("TEST", "1d", datetime(2023, 1, 1), datetime(2023, 1, 2))
+    assert len(df) > 0
+    assert 'timestamp' in df.columns
+    assert 'open' in df.columns
+    assert 'high' in df.columns
+    assert 'low' in df.columns
+    assert 'close' in df.columns
+    assert 'volume' in df.columns
 
 
 def test_download_multiple_symbols():
-    temp_dir = tempfile.mkdtemp()
-    try:
-        downloader = DummyDownloader(data_dir=temp_dir, interval="1d")
-        symbols = ["AAA", "BBB"]
-        results = downloader.download_multiple_symbols(
-            symbols, downloader.get_ohlcv, datetime(2023, 1, 1), datetime(2023, 1, 2)
-        )
-        assert set(results.keys()) == set(symbols)
-        for path in results.values():
-            assert os.path.exists(path)
-    finally:
-        shutil.rmtree(temp_dir)
+    # Note: download_multiple_symbols method removed - batch operations now handled by DataManager
+    # Test individual downloads instead
+    downloader = DummyDownloader()
+    symbols = ["AAA", "BBB"]
+    for symbol in symbols:
+        df = downloader.get_ohlcv(symbol, "1d", datetime(2023, 1, 1), datetime(2023, 1, 2))
+        assert len(df) > 0
+        assert 'timestamp' in df.columns
 
 
 # Mock BinanceDataDownloader and YahooDataDownloader for isolated tests
@@ -88,7 +87,7 @@ def test_binance_data_downloader_integration(monkeypatch):
     try:
         # Patch BinanceDataDownloader to not call real API
         bdd = BinanceDataDownloader(
-            api_key="fake", api_secret="fake", data_dir=temp_dir, interval="1d"
+            api_key="fake", api_secret="fake"
         )
 
         def fake_download(
@@ -109,18 +108,16 @@ def test_binance_data_downloader_integration(monkeypatch):
                 "ignore": [0, 0],
             }
             df = pd.DataFrame(data)
-            if save_to_csv:
-                bdd.save_data(df, symbol, start_date, end_date)
+            # Note: save_data method removed - caching is now handled by DataManager
             return df
 
         bdd.get_ohlcv = fake_download
         symbols = ["BTCUSDT", "ETHUSDT"]
-        results = bdd.download_multiple_symbols(
-            symbols, "1d", datetime(2023, 1, 1), datetime(2023, 1, 2)
-        )
-        assert set(results.keys()) == set(symbols)
-        for path in results.values():
-            assert os.path.exists(path)
+        # Note: download_multiple_symbols method removed - batch operations now handled by DataManager
+        # Test individual downloads instead
+        for symbol in symbols:
+            df = bdd.get_ohlcv(symbol, "1d", datetime(2023, 1, 1), datetime(2023, 1, 2))
+            assert len(df) > 0
     finally:
         shutil.rmtree(temp_dir)
 
@@ -128,7 +125,7 @@ def test_binance_data_downloader_integration(monkeypatch):
 def test_yahoo_data_downloader_integration(monkeypatch):
     temp_dir = tempfile.mkdtemp()
     try:
-        ydd = YahooDataDownloader(data_dir=temp_dir)
+        ydd = YahooDataDownloader()
         # Use a bigger date range in the past
         start_date = datetime(2023, 1, 1)
         end_date = datetime(2023, 1, 7)

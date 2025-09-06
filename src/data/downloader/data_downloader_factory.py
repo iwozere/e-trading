@@ -19,6 +19,8 @@ from src.data.downloader.polygon_data_downloader import PolygonDataDownloader
 from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloader
 from src.data.downloader.binance_data_downloader import BinanceDataDownloader
 from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
+from src.data.downloader.tiingo_data_downloader import TiingoDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -39,6 +41,8 @@ class DataDownloaderFactory:
     - "td" or "twelvedata" -> Twelve Data
     - "bnc" or "binance" -> Binance
     - "cg" or "coingecko" -> CoinGecko
+    - "fmp" or "financial_modeling_prep" -> Financial Modeling Prep
+    - "tiingo" -> Tiingo
     """
 
     # Provider code mapping
@@ -74,7 +78,15 @@ class DataDownloaderFactory:
         # CoinGecko
         "cg": "coingecko",
         "coingecko": "coingecko",
-        "coin_gecko": "coingecko"
+        "coin_gecko": "coingecko",
+
+        # Financial Modeling Prep
+        "fmp": "fmp",
+        "financial_modeling_prep": "fmp",
+        "financialmodelingprep": "fmp",
+
+        # Tiingo
+        "tiingo": "tiingo"
     }
 
     @staticmethod
@@ -152,6 +164,8 @@ class DataDownloaderFactory:
             "twelvedata": TwelveDataDataDownloader,
             "binance": BinanceDataDownloader,
             "coingecko": CoinGeckoDataDownloader,
+            "fmp": FMPDataDownloader,
+            "tiingo": TiingoDataDownloader,
         }
         return downloader_classes.get(provider)
 
@@ -169,47 +183,55 @@ class DataDownloaderFactory:
         Returns:
             Configured downloader instance
         """
-        # Extract common parameters
-        data_dir = kwargs.get("data_dir", "data")
-
         # Provider-specific parameter extraction
         if provider == "alphavantage":
             api_key = kwargs.get("api_key") or os.getenv("ALPHA_VANTAGE_KEY")
             if not api_key:
                 raise ValueError("Alpha Vantage API key is required")
-            return downloader_class(api_key=api_key, data_dir=data_dir)
+            return downloader_class(api_key=api_key)
 
         elif provider == "finnhub":
             api_key = kwargs.get("api_key") or os.getenv("FINNHUB_KEY")
             if not api_key:
                 raise ValueError("Finnhub API key is required")
-            return downloader_class(api_key=api_key, data_dir=data_dir)
+            return downloader_class(api_key=api_key)
 
         elif provider == "polygon":
             api_key = kwargs.get("api_key") or os.getenv("POLYGON_KEY")
             if not api_key:
                 raise ValueError("Polygon.io API key is required")
-            return downloader_class(api_key=api_key, data_dir=data_dir)
+            return downloader_class(api_key=api_key)
 
         elif provider == "twelvedata":
             api_key = kwargs.get("api_key") or os.getenv("TWELVE_DATA_KEY")
             if not api_key:
                 raise ValueError("Twelve Data API key is required")
-            return downloader_class(api_key=api_key, data_dir=data_dir)
+            return downloader_class(api_key=api_key)
 
         elif provider == "binance":
             api_key = kwargs.get("api_key")
             api_secret = kwargs.get("api_secret")
-            data_dir = kwargs.get("data_dir", "data")
-            return downloader_class(api_key=api_key, api_secret=api_secret, data_dir=data_dir)
+            return downloader_class(api_key=api_key, api_secret=api_secret)
+
+        elif provider == "fmp":
+            api_key = kwargs.get("api_key") or os.getenv("FMP_API_KEY")
+            if not api_key:
+                raise ValueError("FMP API key is required")
+            return downloader_class(api_key=api_key)
+
+        elif provider == "tiingo":
+            api_key = kwargs.get("api_key") or os.getenv("TIINGO_API_KEY")
+            if not api_key:
+                raise ValueError("Tiingo API key is required")
+            return downloader_class(api_key=api_key)
 
         elif provider in ["yahoo", "coingecko"]:
             # These don't require API keys
-            return downloader_class(data_dir=data_dir)
+            return downloader_class()
 
         else:
             # Fallback for unknown providers
-            return downloader_class(data_dir=data_dir)
+            return downloader_class()
 
     @staticmethod
     def get_supported_providers() -> list:
@@ -299,6 +321,26 @@ class DataDownloaderFactory:
                 "cost": "Free",
                 "fundamental_data": "Not applicable (crypto)",
                 "coverage": "Cryptocurrencies only"
+            },
+            "fmp": {
+                "codes": ["fmp", "financial_modeling_prep"],
+                "name": "Financial Modeling Prep",
+                "description": "Comprehensive financial data and fundamentals",
+                "requires_api_key": True,
+                "rate_limits": "3000 calls/minute (free tier)",
+                "cost": "Free tier available",
+                "fundamental_data": "Comprehensive",
+                "coverage": "Global stocks and ETFs"
+            },
+            "tiingo": {
+                "codes": ["tiingo"],
+                "name": "Tiingo",
+                "description": "Historical data back to 1962 for active tickers",
+                "requires_api_key": True,
+                "rate_limits": "1000 calls/day (free tier)",
+                "cost": "Free tier available",
+                "fundamental_data": "Basic",
+                "coverage": "US stocks and ETFs"
             }
         }
 

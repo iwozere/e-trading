@@ -28,7 +28,7 @@ from typing import Dict, Any
 
 import backtrader as bt
 
-from src.data.data_feed_factory import DataFeedFactory, DataFeedFactory
+from src.data.feed.data_feed_factory import DataFeedFactory
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

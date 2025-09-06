@@ -68,8 +68,8 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
     >>>     print(f"Not supported: {e}")
     """
 
-    def __init__(self, data_dir: Optional[str] = None, interval: Optional[str] = None):
-        super().__init__(data_dir=data_dir, interval=interval)
+    def __init__(self):
+        super().__init__()
         self.base_url = "https://api.coingecko.com/api/v3"
 
     def download_historical_data(
@@ -190,3 +190,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         return super().download_multiple_symbols(
             symbols, download_func, interval, start_date, end_date
         )
+
+    def get_supported_intervals(self) -> List[str]:
+        """Return list of supported intervals for CoinGecko."""
+        return ['1d']  # CoinGecko only supports daily data

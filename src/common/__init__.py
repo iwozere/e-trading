@@ -10,19 +10,19 @@ Supported providers:
     'yf' (Yahoo Finance, default), 'av', 'fh', 'td', 'pg', 'bnc', 'cg'
 """
 import datetime
-from src.data.data_downloader_factory import DataDownloaderFactory
-from src.common.ticker_classifier import TickerClassifier, DataProvider
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+from src.data.data_manager import ProviderSelector
 
 PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
 
-# Initialize the ticker classifier
-_ticker_classifier = TickerClassifier()
+# Initialize the provider selector
+_provider_selector = ProviderSelector()
 
 
 def determine_provider(ticker: str) -> str:
     """
     Intelligently determine the appropriate data provider based on ticker characteristics.
-    Uses the TickerClassifier for comprehensive pattern matching.
+    Uses the ProviderSelector for comprehensive pattern matching.
 
     Args:
         ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT', 'VUSD.L')
@@ -30,29 +30,37 @@ def determine_provider(ticker: str) -> str:
     Returns:
         str: Provider code ('yf' for stocks, 'bnc' for crypto)
     """
-    ticker_info = _ticker_classifier.classify_ticker(ticker)
+    ticker_info = _provider_selector.get_ticker_info(ticker)
 
-    # Map DataProvider enum to provider codes
-    if ticker_info.provider == DataProvider.BINANCE:
-        return "bnc"
-    elif ticker_info.provider == DataProvider.YFINANCE:
-        return "yf"
-    else:
-        # For unknown providers, default to Yahoo Finance (safer for stocks)
-        return "yf"
+    # Map provider names to provider codes
+    provider_mapping = {
+        'binance': 'bnc',
+        'yahoo': 'yf',
+        'alpha_vantage': 'av',
+        'finnhub': 'fh',
+        'twelvedata': 'td',
+        'polygon': 'pg',
+        'coingecko': 'cg'
+    }
+
+    # Get the best provider for this ticker
+    best_provider = _provider_selector.get_best_provider(ticker, "1d")
+    provider_name = best_provider.__class__.__name__.lower().replace('datadownloader', '')
+
+    return provider_mapping.get(provider_name, "yf")  # Default fallback
 
 
 def get_ticker_info(ticker: str):
     """
-    Get comprehensive ticker information using the TickerClassifier.
+    Get comprehensive ticker information using the ProviderSelector.
 
     Args:
         ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT', 'VUSD.L')
 
     Returns:
-        TickerInfo object with provider, exchange, and asset information
+        Dictionary with ticker information including provider, exchange, and asset information
     """
-    return _ticker_classifier.classify_ticker(ticker)
+    return _provider_selector.get_ticker_info(ticker)
 
 
 def get_data_provider_config(ticker: str):
@@ -65,7 +73,7 @@ def get_data_provider_config(ticker: str):
     Returns:
         Dictionary with provider-specific configuration
     """
-    return _ticker_classifier.get_data_provider_config(ticker)
+    return _provider_selector.get_data_provider_config(ticker)
 
 
 def analyze_period_interval(period: str = "2y", interval: str = "1d"):

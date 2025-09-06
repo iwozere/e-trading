@@ -76,8 +76,8 @@ class TwelveDataDataDownloader(BaseDataDownloader):
     >>> print(f"Earnings Per Share: {fundamentals.earnings_per_share}")
     """
 
-    def __init__(self, api_key: str, data_dir: Optional[str] = "data"):
-        super().__init__(data_dir=data_dir)
+    def __init__(self, api_key: str):
+        super().__init__()
         self.api_key = api_key
         self.base_url = "https://api.twelvedata.com/time_series"
 
@@ -281,3 +281,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
         return super().download_multiple_symbols(
             symbols, download_func, interval, start_date, end_date
         )
+
+    def get_supported_intervals(self) -> List[str]:
+        """Return list of supported intervals for Twelve Data."""
+        return ['1m', '5m', '15m', '1h', '1d']
