@@ -17,7 +17,8 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 from collections import deque, defaultdict
 import logging
-import websocket
+import asyncio
+import websockets
 import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -97,17 +98,10 @@ class WebSocketConnection:
         try:
             self._metrics.connection_attempts += 1
 
-            self.ws = websocket.WebSocketApp(
-                self.url,
-                on_open=self._on_open,
-                on_message=self._on_message,
-                on_error=self._on_error,
-                on_close=self._on_close
-            )
-
-            # Start connection in separate thread
+            # Start async event loop in separate thread
+            self.loop = asyncio.new_event_loop()
             self._connection_thread = threading.Thread(
-                target=self._run_forever,
+                target=self._run_websocket_loop,
                 daemon=True
             )
             self._connection_thread.start()
@@ -127,22 +121,38 @@ class WebSocketConnection:
             self.on_error(e)
             return False
 
-    def _run_forever(self):
-        """Run WebSocket connection."""
+    def _run_websocket_loop(self):
+        """Run the WebSocket event loop in a separate thread."""
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_until_complete(self._websocket_handler())
+
+    async def _websocket_handler(self):
+        """Handle WebSocket connection and messages."""
         try:
-            self.ws.run_forever(
+            async with websockets.connect(
+                self.url,
                 ping_interval=self.config.ping_interval,
-                ping_timeout=self.config.ping_timeout
-            )
+                ping_timeout=self.config.ping_timeout,
+                close_timeout=10
+            ) as websocket:
+                self.ws = websocket
+                self.is_connected = True
+                _logger.info(f"WebSocket connected: {self.url}")
+
+                async for message in websocket:
+                    await self._on_message(message)
+
+        except websockets.exceptions.ConnectionClosed:
+            _logger.warning(f"WebSocket disconnected: {self.url}")
+            self.is_connected = False
+            if not self.is_closing:
+                self.on_close()
         except Exception as e:
-            _logger.error(f"WebSocket run_forever error: {e}")
+            _logger.error(f"WebSocket error: {e}")
+            self.is_connected = False
+            self.on_error(e)
 
-    def _on_open(self, ws):
-        """WebSocket connection opened."""
-        self.is_connected = True
-        _logger.info(f"WebSocket connected: {self.url}")
-
-    def _on_message(self, ws, message):
+    async def _on_message(self, message):
         """WebSocket message received."""
         try:
             self.last_message_time = datetime.now()
@@ -151,24 +161,14 @@ class WebSocketConnection:
         except Exception as e:
             _logger.error(f"Error handling message: {e}")
 
-    def _on_error(self, ws, error):
-        """WebSocket error occurred."""
-        self.is_connected = False
-        _logger.error(f"WebSocket error: {error}")
-        self.on_error(error)
-
-    def _on_close(self, ws, close_status_code, close_msg):
-        """WebSocket connection closed."""
-        self.is_connected = False
-        if not self.is_closing:
-            _logger.warning(f"WebSocket disconnected: {close_msg}")
-            self.on_close()
-
     def disconnect(self):
         """Disconnect WebSocket."""
         self.is_closing = True
+        if self.loop and not self.loop.is_closed():
+            self.loop.call_soon_threadsafe(self.loop.stop)
         if self.ws:
-            self.ws.close()
+            self.ws = None
+        self.is_connected = False
 
     def get_metrics(self) -> StreamMetrics:
         """Get connection metrics."""

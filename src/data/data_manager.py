@@ -219,8 +219,32 @@ class ProviderSelector:
             if symbol_upper.endswith(suffix):
                 return 'stock'
 
-        # Default to stock for unknown symbols
-        return 'stock'
+        # Default to unknown for unrecognized symbols
+        return 'unknown'
+
+    def _get_rule_name(self, symbol_type: str, timeframe: str) -> Optional[str]:
+        """
+        Map symbol type and timeframe to the appropriate rule name.
+
+        Args:
+            symbol_type: Type of symbol (crypto, stock, etc.)
+            timeframe: Data timeframe (e.g., '1m', '1h', '1d')
+
+        Returns:
+            Rule name or None if no mapping found
+        """
+        if symbol_type == 'crypto':
+            return 'crypto'
+        elif symbol_type == 'stock':
+            # Map stock timeframes to appropriate rules
+            if timeframe in ['1m', '5m', '15m', '30m', '1h']:
+                return 'stock_intraday'
+            elif timeframe in ['1d']:
+                return 'stock_daily'
+            elif timeframe in ['1w', '1M']:
+                return 'stock_weekly_monthly'
+
+        return None
 
     def get_best_provider(self, symbol: str, timeframe: str) -> Optional[str]:
         """
@@ -235,16 +259,22 @@ class ProviderSelector:
         """
         symbol_type = self._classify_symbol(symbol)
 
-        # Get rules for this symbol type
-        if symbol_type not in self.rules:
-            _logger.warning(f"No rules found for symbol type: {symbol_type}")
+        # Map symbol type + timeframe to rule name
+        rule_name = self._get_rule_name(symbol_type, timeframe)
+        if not rule_name:
+            _logger.warning(f"No rule found for {symbol_type} {timeframe}")
             return None
 
-        rules = self.rules[symbol_type]
+        # Get rules for this rule name
+        if rule_name not in self.rules:
+            _logger.warning(f"No rules found for rule: {rule_name}")
+            return None
+
+        rules = self.rules[rule_name]
 
         # Check if timeframe is supported
         if timeframe not in rules.get('timeframes', []):
-            _logger.warning(f"Timeframe {timeframe} not supported for {symbol_type}")
+            _logger.warning(f"Timeframe {timeframe} not supported for {rule_name}")
             return None
 
         # Return primary provider if available
@@ -259,6 +289,22 @@ class ProviderSelector:
                 return provider
 
         _logger.error(f"No suitable provider found for {symbol} ({timeframe})")
+        return None
+
+    def get_best_downloader(self, symbol: str, timeframe: str) -> Optional[BaseDataDownloader]:
+        """
+        Get the best downloader for a given symbol and timeframe.
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Data timeframe (e.g., '1m', '1h', '1d')
+
+        Returns:
+            Best downloader instance, or None if no suitable provider found
+        """
+        provider_name = self.get_best_provider(symbol, timeframe)
+        if provider_name and provider_name in self.downloaders:
+            return self.downloaders[provider_name]
         return None
 
     def get_provider_with_failover(self, symbol: str, timeframe: str) -> List[str]:
@@ -589,26 +635,11 @@ class DataManager:
                         start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
         """Get data from cache for the specified date range."""
         try:
-            # Get all years in the date range
-            years = list(range(start_date.year, end_date.year + 1))
-            all_data = []
-
-            for year in years:
-                # Determine year start/end dates
-                year_start = max(start_date, datetime(year, 1, 1))
-                year_end = min(end_date, datetime(year + 1, 1, 1) - timedelta(seconds=1))
-
-                # Try to get data from cache
-                cached_df = self.cache.get(symbol, timeframe, year)
-                if cached_df is not None and not cached_df.empty:
-                    # Filter by date range
-                    mask = (cached_df.index >= year_start) & (cached_df.index <= year_end)
-                    filtered_data = cached_df[mask]
-                    if not filtered_data.empty:
-                        all_data.append(filtered_data)
-
-            if all_data:
-                return pd.concat(all_data, ignore_index=False).sort_index()
+            # Use UnifiedCache get method with date range
+            cached_df = self.cache.get(symbol, timeframe, start_date, end_date)
+            if cached_df is not None and not cached_df.empty:
+                _logger.info(f"Cache hit for {symbol} {timeframe}: {len(cached_df)} rows")
+                return cached_df
 
         except Exception as e:
             _logger.warning(f"Error retrieving cached data: {e}")
@@ -619,19 +650,12 @@ class DataManager:
                    start_date: datetime, end_date: datetime, provider: str):
         """Cache data using UnifiedCache."""
         try:
-            # Cache data by year
-            years = list(range(start_date.year, end_date.year + 1))
-
-            for year in years:
-                year_start = max(start_date, datetime(year, 1, 1))
-                year_end = min(end_date, datetime(year + 1, 1, 1) - timedelta(seconds=1))
-
-                # Filter data for this year
-                mask = (data.index >= year_start) & (data.index <= year_end)
-                year_data = data[mask]
-
-                if not year_data.empty:
-                    self.cache.put(year_data, symbol, timeframe, year_start, year_end, provider)
+            # Use UnifiedCache put method with the full data and date range
+            success = self.cache.put(data, symbol, timeframe, start_date, end_date, provider)
+            if success:
+                _logger.info(f"Cached {len(data)} rows for {symbol} {timeframe} from {provider}")
+            else:
+                _logger.warning(f"Failed to cache data for {symbol} {timeframe}")
 
         except Exception as e:
             _logger.error(f"Error caching data: {e}")

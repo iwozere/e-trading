@@ -5,7 +5,8 @@ import requests
 import time
 import pandas as pd
 from datetime import datetime
-import websocket
+import asyncio
+import websockets
 import backtrader as bt
 from src.notification.logger import setup_logger
 from src.data.utils.retry import retry_on_exception
@@ -128,35 +129,43 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
             _logger.exception("Error fetching historical data: %s", e)
 
     def _start_websocket(self):
-        self.ws_thread = threading.Thread(target=self._run_websocket, daemon=True)
+        self.loop = asyncio.new_event_loop()
+        self.ws_thread = threading.Thread(target=self._run_websocket_loop, daemon=True)
         self.ws_thread.start()
 
-    def _run_websocket(self):
+    def _run_websocket_loop(self):
+        """Run the WebSocket event loop in a separate thread."""
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_until_complete(self._run_websocket())
+
+    async def _run_websocket(self):
         ws_url = f"wss://stream.binance.com:9443/ws/{self.p.symbol.lower()}@kline_{self.p.interval}"
         backoff = 1
 
         while True:
-            self.ws = websocket.WebSocketApp(
-                ws_url,
-                on_open=self._on_open,
-                on_message=self._on_message,
-                on_error=self._on_error,
-                on_close=None
-            )
-
             try:
-                self.ws.run_forever(ping_interval=20, ping_timeout=10)
+                async with websockets.connect(
+                    ws_url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    close_timeout=10
+                ) as websocket:
+                    self.ws = websocket
+                    _logger.info("WebSocket connected for %s", self.p.symbol)
+
+                    async for message in websocket:
+                        await self._on_message(message)
+
+            except websockets.exceptions.ConnectionClosed:
+                _logger.info("WebSocket disconnected for %s", self.p.symbol)
             except Exception as e:
-                _logger.exception("WS run_forever exception: %s", e)
+                _logger.exception("WebSocket error for %s: %s", self.p.symbol, e)
 
             _logger.info("WS disconnected; retrying in %ss", backoff)
-            time.sleep(backoff)
+            await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60)
 
-    def _on_open(self, ws):
-        _logger.info("WebSocket connected for %s", self.p.symbol)
-
-    def _on_message(self, ws, message):
+    async def _on_message(self, message):
         msg = json.loads(message)
         if msg['e'] == 'kline' and msg['k']['x']:
             k = msg['k']
@@ -179,8 +188,6 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
             else:
                 _logger.warning("Invalid WebSocket data point: %s", errors)
 
-    def _on_error(self, ws, error):
-        _logger.error("WebSocket error: %s", error)
 
     def _load(self):
         if self._state == self._ST_LIVE and not self.data_queue.empty():

@@ -18,7 +18,8 @@ Classes:
 
 import time
 import json
-import websocket
+import asyncio
+import websockets
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 
@@ -73,6 +74,8 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         # WebSocket connection
         self.ws = None
         self.ws_url = None
+        self.ws_task = None
+        self.loop = None
 
         # Convert interval to Binance format
         self.binance_interval = self._convert_interval(interval)
@@ -216,26 +219,18 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             stream_name = f"{self.symbol.lower()}@kline_{self.binance_interval}"
             self.ws_url = f"wss://stream.binance.com:9443/ws/{stream_name}"
 
-            # Create WebSocket connection
-            self.ws = websocket.WebSocketApp(
-                self.ws_url,
-                on_message=self._on_ws_message,
-                on_error=self._on_ws_error,
-                on_close=self._on_ws_close,
-                on_open=self._on_ws_open
-            )
-
-            # Start WebSocket in a separate thread with ping/pong
+            # Start async event loop in a separate thread
             import threading
+            self.loop = asyncio.new_event_loop()
             self.ws_thread = threading.Thread(
-                target=lambda: self.ws.run_forever(ping_interval=20, ping_timeout=10),
+                target=self._run_websocket_loop,
                 daemon=True
             )
             self.ws_thread.start()
 
             # Wait briefly but also check repeatedly for connection
             for _ in range(20):
-                if self.ws and self.ws.sock and self.ws.sock.connected:
+                if self.is_connected:
                     return True
                 time.sleep(0.1)
             return False
@@ -244,27 +239,43 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             _logger.exception("Error connecting to Binance WebSocket: %s", e)
             return False
 
+    def _run_websocket_loop(self):
+        """Run the WebSocket event loop in a separate thread."""
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_until_complete(self._websocket_handler())
+
+    async def _websocket_handler(self):
+        """Handle WebSocket connection and messages."""
+        try:
+            async with websockets.connect(
+                self.ws_url,
+                ping_interval=20,
+                ping_timeout=10,
+                close_timeout=10
+            ) as websocket:
+                self.ws = websocket
+                self.is_connected = True
+                _logger.info("Binance WebSocket connected for %s", self.symbol)
+
+                async for message in websocket:
+                    await self._on_ws_message(message)
+
+        except websockets.exceptions.ConnectionClosed:
+            _logger.warning("Binance WebSocket disconnected for %s", self.symbol)
+            self.is_connected = False
+        except Exception as e:
+            _logger.exception("Binance WebSocket error for %s: %s", self.symbol, e)
+            self.is_connected = False
+
     def _disconnect_realtime(self):
         """Disconnect from Binance WebSocket."""
+        if self.loop and not self.loop.is_closed():
+            self.loop.call_soon_threadsafe(self.loop.stop)
         if self.ws:
-            self.ws.close()
             self.ws = None
-
-    def _on_ws_open(self, ws):
-        """WebSocket connection opened."""
-        _logger.info("Binance WebSocket connected for %s", self.symbol)
-
-    def _on_ws_close(self, ws, close_status_code, close_msg):
-        """WebSocket connection closed."""
-        _logger.warning("Binance WebSocket disconnected for %s: %s", self.symbol, close_msg)
         self.is_connected = False
 
-    def _on_ws_error(self, ws, error):
-        """WebSocket error occurred."""
-        _logger.exception("Binance WebSocket error for %s: %s", self.symbol, error)
-        self.is_connected = False
-
-    def _on_ws_message(self, ws, message):
+    async def _on_ws_message(self, message):
         """WebSocket message received."""
         try:
             data = json.loads(message)

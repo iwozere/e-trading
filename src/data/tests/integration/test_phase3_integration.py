@@ -45,7 +45,7 @@ def test_advanced_caching():
     try:
         # Create sample data
         sample_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=1000, freq='1H'),
+            'timestamp': pd.date_range('2024-01-01', periods=1000, freq='1h'),
             'open': np.random.uniform(100, 200, 1000),
             'high': np.random.uniform(200, 300, 1000),
             'low': np.random.uniform(50, 100, 1000),
@@ -136,7 +136,7 @@ def test_performance_optimization():
     try:
         # Create large sample data
         large_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=100000, freq='1H'),
+            'timestamp': pd.date_range('2024-01-01', periods=100000, freq='1h'),
             'open': np.random.uniform(100, 200, 100000),
             'high': np.random.uniform(200, 300, 100000),
             'low': np.random.uniform(50, 100, 100000),
@@ -185,7 +185,7 @@ def test_lazy_loading():
     try:
         # Create a temporary CSV file for testing
         test_data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=10000, freq='1H'),
+            'timestamp': pd.date_range('2024-01-01', periods=10000, freq='1h'),
             'value': np.random.uniform(100, 200, 10000)
         })
 
@@ -261,7 +261,7 @@ def test_integration_features():
     try:
         # Create sample data
         data = pd.DataFrame({
-            'timestamp': pd.date_range('2024-01-01', periods=5000, freq='1H'),
+            'timestamp': pd.date_range('2024-01-01', periods=5000, freq='1h'),
             'price': np.random.uniform(100, 200, 5000),
             'volume': np.random.uniform(1000, 10000, 5000)
         })

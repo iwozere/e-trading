@@ -96,8 +96,17 @@ class BaseLiveDataFeed(bt.feeds.PandasData):
         if historical_data is None or historical_data.empty:
             raise ValueError("Failed to load historical data for %s", symbol)
 
-        # Initialize PandasData with data as a parameter
-        super().__init__(dataname=historical_data, **kwargs)
+        # Filter out parameters that are not valid for PandasData
+        pandas_kwargs = {}
+        for key, value in kwargs.items():
+            if key not in ['api_key', 'api_secret', 'testnet', 'data_manager']:
+                pandas_kwargs[key] = value
+
+        # Initialize PandasData without arguments first
+        super().__init__()
+
+        # Set the data after initialization
+        self._dataname = historical_data
 
         # Start real-time updates
         self._start_realtime_updates()

@@ -17,13 +17,13 @@ from torch.utils.data import DataLoader, TensorDataset
 # DATA PROCESSING
 # -------------------------------
 def load_btc_data():
-    df = yf.download("BTC-USD", start="2017-01-01", end="2024-06-30")
+    df = yf.download("BTCUSDT", start="2017-01-01", end="2024-06-30")
     df = df.asfreq("D")
     return df[["Close"]].dropna()
 
 
 def load_btc_data2():
-    df = yf.download("BTC-USD", start="2024-05-01", end="2025-06-01")
+    df = yf.download("BTCUSDT", start="2024-05-01", end="2025-06-01")
     df = df.asfreq("D")
     return df[["Close"]].dropna()
 
@@ -269,7 +269,7 @@ def test_minimal_pipeline():
         dropout=dropout,
     )
 
-    df = yf.download("BTC-USD", start="2017-01-01", end="2024-06-30")
+    df = yf.download("BTCUSDT", start="2017-01-01", end="2024-06-30")
     print("Downloaded data shape:", df.shape)
     print(df.head())
     df = df.asfreq("D")

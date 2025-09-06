@@ -103,18 +103,18 @@ class TestBinanceLiveFeed(TestLiveFeeds):
         self.assertGreater(len(feed.df), 0)
         self.assert_valid_ohlcv_data(feed.df)
 
-    @patch('websocket.WebSocketApp')
+    @patch('websockets.connect')
     @patch('binance.client.Client.get_historical_klines')
-    def test_websocket_connection(self, mock_klines, mock_websocket):
+    def test_websocket_connection(self, mock_klines, mock_websockets_connect):
         """Test WebSocket connection."""
         # Mock historical data
         mock_klines.return_value = [
             [1672531200000, "150.0", "155.0", "149.0", "151.0", "1000000", 1672617600000, "0", "0", "0", "0", "0"]
         ]
 
-        # Mock WebSocket
+        # Mock WebSocket connection
         mock_ws = MagicMock()
-        mock_websocket.return_value = mock_ws
+        mock_websockets_connect.return_value.__aenter__.return_value = mock_ws
 
         feed = BinanceLiveDataFeed(
             symbol="BTCUSDT",
@@ -127,7 +127,7 @@ class TestBinanceLiveFeed(TestLiveFeeds):
         # Test connection
         connected = feed._connect_realtime()
         self.assertTrue(connected)
-        mock_websocket.assert_called_once()
+        mock_websockets_connect.assert_called_once()
 
     @patch('binance.client.Client.get_historical_klines')
     def test_interval_conversion(self, mock_klines):
@@ -180,7 +180,7 @@ class TestYahooLiveFeed(TestLiveFeeds):
         mock_download.return_value = mock_data
 
         feed = YahooLiveDataFeed(
-            symbol="BTC-USD",
+            symbol="BTCUSDT",
             interval=self.interval,
             lookback_bars=self.lookback_bars
         )
@@ -213,7 +213,7 @@ class TestYahooLiveFeed(TestLiveFeeds):
         mock_ticker.return_value = mock_ticker_instance
 
         feed = YahooLiveDataFeed(
-            symbol="BTC-USD",
+            symbol="BTCUSDT",
             interval=self.interval,
             polling_interval=1  # Short interval for testing
         )
@@ -235,13 +235,13 @@ class TestYahooLiveFeed(TestLiveFeeds):
         mock_download.return_value = mock_data
 
         feed = YahooLiveDataFeed(
-            symbol="BTC-USD",
+            symbol="BTCUSDT",
             interval=self.interval
         )
 
         status = feed.get_status()
         self.assert_valid_status(status)
-        self.assertEqual(status['symbol'], "BTC-USD")
+        self.assertEqual(status['symbol'], "BTCUSDT")
         self.assertEqual(status['interval'], self.interval)
         self.assertEqual(status['data_source'], "Yahoo Finance")
 
@@ -535,13 +535,13 @@ class TestBaseLiveDataFeed(unittest.TestCase):
             }, index=pd.date_range('2023-01-01', periods=1, freq='D'))
 
             feed = YahooLiveDataFeed(
-                symbol="BTC-USD",
+                symbol="BTCUSDT",
                 interval="1d",
                 lookback_bars=1
             )
 
             # Test common properties
-            self.assertEqual(feed.symbol, "BTC-USD")
+            self.assertEqual(feed.symbol, "BTCUSDT")
             self.assertEqual(feed.interval, "1d")
             self.assertEqual(feed.lookback_bars, 1)
             self.assertFalse(feed.is_connected)

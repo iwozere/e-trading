@@ -228,8 +228,9 @@ class BinanceDataDownloader(BaseDataDownloader):
             # Remove duplicates and sort by timestamp
             df = df.drop_duplicates(subset=['timestamp']).sort_values('timestamp').reset_index(drop=True)
 
-            # Keep timestamp as a column to match other downloaders
-            df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+            # Set timestamp as index to match other downloaders
+            df = df.set_index('timestamp')
+            df.index.name = 'timestamp'
 
             _logger.info("Successfully downloaded %d bars for %s %s", len(df), symbol, interval)
             return df
