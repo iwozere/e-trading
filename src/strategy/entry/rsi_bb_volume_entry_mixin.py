@@ -27,6 +27,7 @@ from typing import Any, Dict, Optional
 
 import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
+from src.strategy.indicator.wrappers import create_indicator_wrapper
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -112,6 +113,45 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             logger.exception("Error initializing indicators: ")
             raise
 
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are ready to be used"""
+        # Use base class implementation first
+        if not super().are_indicators_ready():
+            return False
+
+        try:
+            # Check if we have enough data points
+            data_length = len(self.strategy.data)
+            required_length = max(
+                self.get_param("e_rsi_period"),
+                self.get_param("e_bb_period"),
+                self.get_param("e_vol_ma_period")
+            )
+            if data_length < required_length:
+                return False
+
+            # Check if indicators are registered
+            if (
+                self.rsi_name not in self.indicators
+                or self.bb_name not in self.indicators
+                or self.vol_ma_name not in self.indicators
+            ):
+                return False
+
+            # Check if we can access the first value of each indicator
+            rsi = self.indicators[self.rsi_name]
+            bb = self.indicators[self.bb_name]
+            vol_ma = self.indicators[self.vol_ma_name]
+
+            # Try to access the first value of each indicator using unified access
+            _ = rsi[0]
+            _ = bb.bot[0]  # Use unified access
+            _ = vol_ma[0]
+
+            return True
+        except (IndexError, AttributeError):
+            return False
+
     def should_enter(self) -> bool:
         """Check if we should enter a position"""
         if (
@@ -142,9 +182,9 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             else:
                 # For Backtrader's native BB, use lines.bot
                 if self.get_param("e_use_bb_touch"):
-                    bb_condition = current_price <= bb.lines.bot[0]
+                    bb_condition = current_price <= bb.bot[0]  # Use unified access
                 else:
-                    bb_condition = current_price < bb.lines.bot[0]
+                    bb_condition = current_price < bb.bot[0]   # Use unified access
 
             # Check Volume
             volume_condition = current_volume > vol_ma[0] * self.get_param(
@@ -154,7 +194,7 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             return_value = rsi_condition and bb_condition and volume_condition
             if return_value:
                 logger.debug(
-                    f"ENTRY: Price: {current_price}, RSI: {rsi[0]}, BB Lower: {bb.bb_lower[0] if self.strategy.use_talib else bb.lines.bot[0]}, Volume: {current_volume}, Volume MA: {vol_ma[0]}"
+                    f"ENTRY: Price: {current_price}, RSI: {rsi[0]}, BB Lower: {bb.bot[0]}, Volume: {current_volume}, Volume MA: {vol_ma[0]}"
                 )
             return return_value
         except Exception as e:

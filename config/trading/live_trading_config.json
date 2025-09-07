@@ -1,0 +1,7 @@
+{
+    "trading_settings": {
+        "enable_database_logging": true,
+        "bot_type": "live",
+        "description": "Live trading configuration - database logging enabled for trade tracking and compliance"
+    }
+}

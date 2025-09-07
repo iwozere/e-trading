@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    CheckConstraint, Column, DateTime, Index, Integer, String, Numeric
+    CheckConstraint, Column, DateTime, Index, Integer, String, Numeric, Boolean
 )
 from sqlalchemy.dialects.sqlite import JSON
 from sqlalchemy.ext.declarative import declarative_base
@@ -75,6 +75,17 @@ class Trade(Base):
     exit_value = Column(Numeric(20, 8), nullable=True)
     size = Column(Numeric(20, 8), nullable=True)
     direction = Column(String(10), nullable=False)  # 'long', 'short'
+
+    # Partial exit tracking
+    original_position_size = Column(Numeric(20, 8), nullable=True)
+    partial_exit_sequence = Column(Integer, nullable=True)  # 1, 2, 3, etc.
+    parent_trade_id = Column(String(36), nullable=True, index=True)
+    remaining_position_size = Column(Numeric(20, 8), nullable=True)
+    is_partial_exit = Column(Boolean, default=False, index=True)
+
+    # Position tracking
+    position_id = Column(String(36), nullable=True, index=True)  # Groups related trades
+    total_position_pnl = Column(Numeric(20, 8), nullable=True)  # Cumulative PnL for position
 
     # Financial calculations
     commission = Column(Numeric(20, 8), nullable=True)
@@ -139,6 +150,13 @@ class Trade(Base):
             'exit_value': float(self.exit_value) if self.exit_value else None,
             'size': float(self.size) if self.size else None,
             'direction': self.direction,
+            'original_position_size': float(self.original_position_size) if self.original_position_size else None,
+            'partial_exit_sequence': self.partial_exit_sequence,
+            'parent_trade_id': self.parent_trade_id,
+            'remaining_position_size': float(self.remaining_position_size) if self.remaining_position_size else None,
+            'is_partial_exit': self.is_partial_exit,
+            'position_id': self.position_id,
+            'total_position_pnl': float(self.total_position_pnl) if self.total_position_pnl else None,
             'commission': float(self.commission) if self.commission else None,
             'gross_pnl': float(self.gross_pnl) if self.gross_pnl else None,
             'net_pnl': float(self.net_pnl) if self.net_pnl else None,

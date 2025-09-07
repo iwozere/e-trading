@@ -257,6 +257,18 @@ class ProviderSelector:
         # Default to unknown for unrecognized symbols
         return 'unknown'
 
+    def classify_symbol(self, symbol: str) -> str:
+        """
+        Public method to classify symbol type (crypto, stock, etc.).
+
+        Args:
+            symbol: Trading symbol (e.g., 'BTCUSDT', 'AAPL')
+
+        Returns:
+            Symbol classification ('crypto', 'stock', 'unknown')
+        """
+        return self._classify_symbol(symbol)
+
     def _get_rule_name(self, symbol_type: str, timeframe: str) -> Optional[str]:
         """
         Map symbol type and timeframe to the appropriate rule name.

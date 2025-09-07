@@ -23,6 +23,7 @@ from typing import Any, Dict, Optional
 
 import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
+from src.strategy.indicator.wrappers import create_indicator_wrapper
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -59,7 +60,6 @@ class RSIBBEntryMixin(BaseEntryMixin):
 
     def _init_indicators(self):
         """Initialize indicators"""
-        logger.debug("RSIBBEntryMixin._init_indicators called")
         if not hasattr(self, "strategy"):
             logger.error("No strategy available in _init_indicators")
             return
@@ -88,33 +88,28 @@ class RSIBBEntryMixin(BaseEntryMixin):
                 logger.warning("Invalid BB deviation factor: %s, using default value 2.0", bb_dev_factor)
                 bb_dev_factor = 2.0
 
+            # Create raw indicators
             if self.strategy.use_talib:
-                self.rsi = bt.talib.RSI(self.strategy.data.close, timeperiod=rsi_period)
-                self.bb = bt.talib.BBANDS(
+                rsi_raw = bt.talib.RSI(self.strategy.data.close, timeperiod=rsi_period)
+                bb_raw = bt.talib.BBANDS(
                     self.strategy.data.close,
                     timeperiod=bb_period,
                     nbdevup=bb_dev_factor,
                     nbdevdn=bb_dev_factor,
                 )
-                self.bb_top = self.bb.upperband
-                self.bb_mid = self.bb.middleband
-                self.bb_bot = self.bb.lowerband
             else:
-                self.rsi = bt.indicators.RSI(
-                    self.strategy.data.close, period=rsi_period
-                )
-                self.bb = bt.indicators.BollingerBands(
+                rsi_raw = bt.indicators.RSI(self.strategy.data.close, period=rsi_period)
+                bb_raw = bt.indicators.BollingerBands(
                     self.strategy.data.close, period=bb_period, devfactor=bb_dev_factor
                 )
-                self.bb_top = self.bb.top
-                self.bb_mid = self.bb.mid
-                self.bb_bot = self.bb.bot
 
-            # Register indicators after they are created
-            if self.rsi is not None:
-                self.register_indicator(self.rsi_name, self.rsi)
-            if self.bb is not None:
-                self.register_indicator(self.bb_name, self.bb)
+            # Create wrapped indicators for unified access
+            self.rsi = create_indicator_wrapper(rsi_raw, 'rsi', self.strategy.use_talib)
+            self.bb = create_indicator_wrapper(bb_raw, 'bb', self.strategy.use_talib)
+
+            # Register wrapped indicators
+            self.register_indicator(self.rsi_name, self.rsi)
+            self.register_indicator(self.bb_name, self.bb)
 
         except Exception as e:
             logger.exception("Error initializing indicators: ")
@@ -122,17 +117,18 @@ class RSIBBEntryMixin(BaseEntryMixin):
 
     def are_indicators_ready(self) -> bool:
         """Check if indicators are ready to be used"""
-        if not hasattr(self, "indicators"):
+        # Use base class implementation first
+        if not super().are_indicators_ready():
             return False
 
         try:
             # Check if we have enough data points
-            if len(self.strategy.data) < max(
-                self.get_param("e_rsi_period"), self.get_param("e_bb_period")
-            ):
+            data_length = len(self.strategy.data)
+            required_length = max(self.get_param("e_rsi_period"), self.get_param("e_bb_period"))
+            if data_length < required_length:
                 return False
 
-            # Check if indicators are registered and have values
+            # Check if indicators are registered
             if (
                 self.rsi_name not in self.indicators
                 or self.bb_name not in self.indicators
@@ -143,11 +139,11 @@ class RSIBBEntryMixin(BaseEntryMixin):
             rsi = self.indicators[self.rsi_name]
             bb = self.indicators[self.bb_name]
 
-            # Try to access the first value of each indicator
+            # Try to access the first value of each indicator using unified access
             _ = rsi[0]
-            _ = bb.lines.top[0]
-            _ = bb.lines.mid[0]
-            _ = bb.lines.bot[0]
+            _ = bb.bot[0]  # Use unified access - works for both TALib and standard
+            _ = bb.mid[0]
+            _ = bb.top[0]
 
             return True
         except (IndexError, AttributeError):
@@ -173,7 +169,8 @@ class RSIBBEntryMixin(BaseEntryMixin):
             rsi_condition = rsi_value <= self.get_param("e_rsi_oversold")
 
             # Defensive check: Ensure Bollinger Bands values are valid
-            bb_bot_value = self.bb_bot[0]
+            bb = self.indicators[self.bb_name]
+            bb_bot_value = bb.bot[0]  # Use unified access
             if bb_bot_value is None:
                 logger.warning("Bollinger Bands lower value is None, skipping entry check")
                 return False

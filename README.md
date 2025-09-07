@@ -23,6 +23,12 @@ A comprehensive, production-ready framework for developing, testing, and optimiz
   - Advanced strategy framework guide
   - Working examples and best practices
 
+- **🎯 Advanced ATR Exit Strategy** (New)
+  - Sophisticated volatility-adaptive trailing stop
+  - Multi-timeframe ATR analysis with state machine
+  - Structural ratcheting and time-based tightening
+  - Partial take-profit capabilities
+
 ## Project Structure
 
 ```

@@ -149,30 +149,51 @@ def prepare_data_feed(df : pd.DataFrame, symbol : str):
     # Ensure the index is properly formatted
     df_copy.index = pd.to_datetime(df_copy.index)
 
-    # Reset index to make datetime a column instead of index to avoid Backtrader issues
-    df_copy = df_copy.reset_index()
-    df_copy = df_copy.rename(columns={'datetime': 'timestamp'})
+    # Keep datetime as index - this is the preferred approach for PandasData
+    # Ensure we have the required columns in the right order
+    df_copy = df_copy[["open", "high", "low", "close", "volume"]]
 
-    # Ensure timestamp column is datetime
-    df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'])
-
-    # Create the data feed with datetime as column 0
+    # Create the data feed with datetime as index (default behavior)
     data_feed = bt.feeds.PandasData(
         dataname=df_copy,
-        datetime=0,  # 0 indicates datetime is in column 0 (timestamp)
-        open=1,      # open is now column 1
-        high=2,      # high is now column 2
-        low=3,       # low is now column 3
-        close=4,     # close is now column 4
-        volume=5,    # volume is now column 5
+        # No datetime parameter needed when datetime is the index
+        open=0,      # open is column 0
+        high=1,      # high is column 1
+        low=2,       # low is column 2
+        close=3,     # close is column 3
+        volume=4,    # volume is column 4
         openinterest=None,
+        fromdate=df_copy.index.min(),  # Use index min/max
+        todate=df_copy.index.max(),    # Use index min/max
         name=symbol,
     )
 
         # Debug: Check the created data feed
     print(f"Created data feed type: {type(data_feed)}")
     print(f"DataFrame columns: {df_copy.columns.tolist()}")
-    print(f"DataFrame timestamp column type: {type(df_copy.iloc[0, 0])}")
+    print(f"DataFrame shape: {df_copy.shape}")
+    print(f"DataFrame index type: {type(df_copy.index)}")
+    print(f"DataFrame index length: {len(df_copy.index)}")
+    if len(df_copy.index) > 0:
+        print(f"First index value: {df_copy.index[0]} (type: {type(df_copy.index[0])})")
+        print(f"Last index value: {df_copy.index[-1]} (type: {type(df_copy.index[-1])})")
+
+    # Debug: Check data feed parameters
+    print(f"Data feed fromdate: {getattr(data_feed, 'fromdate', 'Not set')}")
+    print(f"Data feed todate: {getattr(data_feed, 'todate', 'Not set')}")
+    print(f"Data feed datetime param: {getattr(data_feed, 'datetime', 'Not set (using index)')}")
+
+    # Debug: Check actual index values
+    print(f"Index min: {df_copy.index.min()}")
+    print(f"Index max: {df_copy.index.max()}")
+    print(f"First few index values: {df_copy.index[:3].tolist()}")
+
+    # Debug: Check original DataFrame (before reset_index)
+    print(f"Original DataFrame index type: {type(df.index)}")
+    print(f"Original DataFrame index length: {len(df.index)}")
+    if len(df.index) > 0:
+        print(f"Original first index value: {df.index[0]} (type: {type(df.index[0])})")
+        print(f"Original last index value: {df.index[-1]} (type: {type(df.index[-1])})")
 
     return data_feed
 
@@ -426,6 +447,7 @@ if __name__ == "__main__":
                             objective,
                             n_trials=optimizer_config.get("optimizer_settings", {}).get("n_trials", 100),
                             n_jobs=optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1),
+                            #n_jobs=1,
                         )
                     except Exception as e:
                         _logger.exception("Error during optimization for %s + %s: %s", entry_logic_name, exit_logic_name, e)

@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, Optional
 
+from src.strategy.entry.rsi_bb_entry_mixin import RSIBBEntryMixin
 from src.strategy.entry.rsi_or_bb_entry_mixin import RSIOrBBEntryMixin
 from src.strategy.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
 from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
@@ -13,7 +14,7 @@ from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupert
 # Registry of all available entry mixins
 ENTRY_MIXIN_REGISTRY = {
     "RSIOrBBEntryMixin": RSIOrBBEntryMixin,  # 1
-    #"RSIBBEntryMixin": RSIBBEntryMixin,  # 1
+    "RSIBBEntryMixin": RSIBBEntryMixin,  # 1
     #"RSIIchimokuEntryMixin": RSIIchimokuEntryMixin,
     #"RSIBBVolumeEntryMixin": RSIBBVolumeEntryMixin,
     #"RSIVolumeSupertrendEntryMixin": RSIVolumeSupertrendEntryMixin,

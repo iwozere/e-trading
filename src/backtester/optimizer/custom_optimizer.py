@@ -147,6 +147,8 @@ class CustomOptimizer:
             },
             "use_talib": self.use_talib,
             "position_size": self.optimizer_settings.get("position_size", 0.10),
+            "enable_database_logging": self.optimizer_settings.get("enable_database_logging", False),
+            "bot_type": "optimization",  # Mark as optimization run
         }
 
         # Add strategy with parameters

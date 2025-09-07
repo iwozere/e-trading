@@ -434,7 +434,7 @@ class HMMLSTMEntryMixin:
 
             if entry_signal:
                 _logger.info("Entry signal: Regime=%d (conf=%.3f), Prediction=%.6f",
-                           regime, regime_confidence, prediction)
+                           regime or 0, regime_confidence or 0.0, prediction or 0.0)
 
             return entry_signal
 

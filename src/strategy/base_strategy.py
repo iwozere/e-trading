@@ -6,10 +6,18 @@ It extracts common functionality like trade tracking, position management,
 and performance monitoring that is shared across different strategy implementations.
 """
 
+from datetime import datetime
 from typing import Dict, Any
 import backtrader as bt
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(PROJECT_ROOT))
+
 
 from src.notification.logger import setup_logger
+from src.data.data_manager import ProviderSelector
 
 _logger = setup_logger(__name__)
 
@@ -31,6 +39,8 @@ class BaseStrategy(bt.Strategy):
         ("position_size", 0.1),    # Default position size as fraction of capital
         ("symbol", ""),            # Trading symbol
         ("timeframe", ""),         # Trading timeframe
+        ("asset_type", "crypto"),  # Asset type: "crypto" or "stock"
+        ("min_order_value", 0.0),  # Minimum order value (for stocks)
     )
 
     def __init__(self):
@@ -43,12 +53,27 @@ class BaseStrategy(bt.Strategy):
         self.config = self.p.strategy_config or {}
         self.symbol = self.p.symbol
         self.timeframe = self.p.timeframe
+        self.asset_type = self.config.get('asset_type', self.p.asset_type)
+        self.min_order_value = self.config.get('min_order_value', self.p.min_order_value)
+
+        # Auto-detect asset type from symbol if not explicitly set
+        if not self.asset_type or self.asset_type == "crypto":
+            self.asset_type = self._detect_asset_type()
 
         # Position and trade tracking
         self.current_trade = None
         self.current_exit_reason = None
         self.entry_price = None
+        self.current_position_size = None  # Track current position size (handles partial exits)
+        self.exit_size = None  # Track the size being exited for accurate trade notifications
         self.highest_profit = 0.0
+
+        # Database integration
+        self.trade_repository = None
+        self.bot_instance_id = None
+        self.enable_database_logging = self.config.get('enable_database_logging', False)
+        self.bot_type = self.config.get('bot_type', 'paper')  # paper, live, optimization
+        self.current_position_id = None  # Track current position ID for partial exits
 
         # Trade history
         self.trades = []
@@ -69,6 +94,66 @@ class BaseStrategy(bt.Strategy):
         self.min_position_size = self.config.get('min_position_size', 0.05)
 
         _logger.debug("BaseBacktraderStrategy initialized")
+
+        # Initialize database if enabled
+        if self.enable_database_logging:
+            self._initialize_database()
+
+    def _detect_asset_type(self) -> str:
+        """
+        Auto-detect asset type from symbol using ProviderSelector.
+
+        Returns:
+            str: "crypto", "stock", or "unknown"
+        """
+        if not self.symbol:
+            return "crypto"  # Default to crypto
+
+        try:
+            # Use ProviderSelector for sophisticated symbol classification
+            provider_selector = ProviderSelector()
+            asset_type = provider_selector.classify_symbol(self.symbol)
+
+            # Map 'unknown' to 'stock' for backward compatibility
+            if asset_type == "unknown":
+                return "stock"
+
+            return asset_type
+
+        except Exception as e:
+            _logger.warning("Failed to classify symbol %s using ProviderSelector: %s", self.symbol, e)
+            # Fallback to simple detection
+            return self._simple_asset_type_detection()
+
+    def _simple_asset_type_detection(self) -> str:
+        """
+        Simple fallback asset type detection.
+
+        Returns:
+            str: "crypto" or "stock"
+        """
+        if not self.symbol:
+            return "crypto"
+
+        symbol_upper = self.symbol.upper()
+
+        # Common crypto patterns
+        crypto_patterns = [
+            "BTC", "ETH", "USDT", "USDC", "BNB", "ADA", "SOL", "DOT", "MATIC",
+            "AVAX", "LINK", "UNI", "LTC", "BCH", "XRP", "DOGE", "SHIB"
+        ]
+
+        # Check if symbol contains crypto patterns
+        for pattern in crypto_patterns:
+            if pattern in symbol_upper:
+                return "crypto"
+
+        # Check for common crypto exchange suffixes
+        if any(suffix in symbol_upper for suffix in ["USDT", "USDC", "BUSD", "BTC", "ETH"]):
+            return "crypto"
+
+        # Default to stock for unknown symbols
+        return "stock"
 
     def start(self):
         """Called once at the start of the strategy."""
@@ -103,14 +188,82 @@ class BaseStrategy(bt.Strategy):
 
             # Safely get current date, handling edge cases
             try:
-                current_date = self.data.num2date(0)
+                # Try different approaches to get current bar datetime
+                try:
+                    # Method 1: Use self.data.datetime.datetime() - get full datetime with time
+                    current_date = self.data.datetime.datetime()
+                    #_logger.debug("Current datetime from self.data.datetime.datetime(): %s (type: %s)",
+                    #             current_date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(current_date, 'strftime') else str(current_date),
+                    #             type(current_date))
+                except Exception as e1:
+                    _logger.debug("Method 1 failed: %s", e1)
+                    try:
+                        # Method 2: Use num2date with current bar index
+                        current_date = self.data.num2date(self.data.idx)
+                        _logger.debug("Current date from num2date(idx): %s (type: %s)",
+                                     current_date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(current_date, 'strftime') else str(current_date),
+                                     type(current_date))
+                    except Exception as e2:
+                        _logger.debug("Method 2 failed: %s", e2)
+                        # Method 3: Use num2date(1) as fallback
+                        current_date = self.data.num2date(1)
+                        _logger.debug("Current date from num2date(1): %s (type: %s)",
+                                     current_date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(current_date, 'strftime') else str(current_date),
+                                     type(current_date))
+
                 self.equity_dates.append(current_date)
             except (ValueError, IndexError) as e:
                 # Fallback to current datetime if num2date fails
-                from datetime import datetime
                 current_date = datetime.now()
                 self.equity_dates.append(current_date)
+
+                # DEBUG: Detailed analysis of why num2date failed
+                _logger.debug("=== NUM2DATE FAILURE ANALYSIS ===")
+                _logger.debug("Error type: %s", type(e).__name__)
+                _logger.debug("Error message: %s", str(e))
+                _logger.debug("Data feed type: %s", type(self.data))
+                _logger.debug("Data feed name: %s", getattr(self.data, 'name', 'Unknown'))
+
+                # Check if we can access the datetime line directly
+                try:
+                    _logger.debug("self.data.datetime type: %s", type(self.data.datetime))
+                    _logger.debug("self.data.datetime value: %s", self.data.datetime)
+                    if hasattr(self.data.datetime, 'date'):
+                        _logger.debug("self.data.datetime.date(): %s", self.data.datetime.date())
+                except Exception as dt_e:
+                    _logger.debug("Error accessing self.data.datetime: %s", dt_e)
+
+                # Check data feed attributes
+                try:
+                    _logger.debug("Data feed dataname type: %s", type(self.data.dataname))
+                    if hasattr(self.data.dataname, 'columns'):
+                        _logger.debug("DataFrame columns: %s", list(self.data.dataname.columns))
+                    if hasattr(self.data.dataname, 'index'):
+                        _logger.debug("DataFrame index type: %s", type(self.data.dataname.index))
+                        _logger.debug("DataFrame index length: %s", len(self.data.dataname.index))
+                        if len(self.data.dataname.index) > 0:
+                            _logger.debug("First index value: %s (type: %s)", self.data.dataname.index[0], type(self.data.dataname.index[0]))
+                except Exception as debug_e:
+                    _logger.debug("Error accessing data feed attributes: %s", debug_e)
+
+                # Check data feed parameters
+                try:
+                    _logger.debug("Data feed datetime param: %s", getattr(self.data, 'datetime', 'Not set'))
+                    _logger.debug("Data feed fromdate: %s", getattr(self.data, 'fromdate', 'Not set'))
+                    _logger.debug("Data feed todate: %s", getattr(self.data, 'todate', 'Not set'))
+                except Exception as debug_e:
+                    _logger.debug("Error accessing data feed parameters: %s", debug_e)
+
+                # Check current bar information
+                try:
+                    _logger.debug("Current bar index: %s", self.data.idx)
+                    _logger.debug("Data length: %s", len(self.data))
+                    _logger.debug("Data buflen: %s", self.data.buflen())
+                except Exception as debug_e:
+                    _logger.debug("Error accessing bar information: %s", debug_e)
+
                 _logger.debug("Using fallback date for equity curve: %s", current_date)
+                _logger.debug("=== END ANALYSIS ===")
 
             # Update peak equity and drawdown
             if current_equity > self.peak_equity:
@@ -150,6 +303,7 @@ class BaseStrategy(bt.Strategy):
     def _calculate_shares(self, position_size: float) -> float:
         """
         Calculate number of shares based on position size and current price.
+        Handles both crypto (fractional) and stock (whole shares) trading.
 
         Args:
             position_size: Position size as fraction of capital
@@ -164,7 +318,25 @@ class BaseStrategy(bt.Strategy):
             if price <= 0:
                 return 0.0
 
+            # Calculate raw shares
             shares = (cash * position_size) / price
+
+            # Apply asset type-specific rules
+            if self.asset_type.lower() == "stock":
+                # For stocks: round down to whole shares
+                shares = int(shares)
+
+                # Check minimum order value
+                order_value = shares * price
+                if self.min_order_value > 0 and order_value < self.min_order_value:
+                    _logger.debug(f"Order value {order_value:.2f} below minimum {self.min_order_value:.2f}")
+                    return 0.0
+
+            elif self.asset_type.lower() == "crypto":
+                # For crypto: allow fractional shares, but ensure minimum precision
+                # Round to 8 decimal places (typical crypto precision)
+                shares = round(shares, 8)
+
             return shares
 
         except Exception as e:
@@ -190,8 +362,8 @@ class BaseStrategy(bt.Strategy):
             position_size = self._calculate_position_size(confidence, risk_multiplier)
             shares = self._calculate_shares(position_size)
 
-            if shares < 1:
-                _logger.debug("Insufficient capital for position")
+            # Validate position size based on asset type
+            if not self._validate_position_size(shares):
                 return
 
             if direction.lower() == 'long':
@@ -208,10 +380,51 @@ class BaseStrategy(bt.Strategy):
 
             if order:
                 self.entry_price = self.data.close[0]
+                self.current_position_size = abs(shares)  # Store the actual position size in shares/units
                 self.highest_profit = 0.0
+
+                # Notify exit mixin of position entry
+                if hasattr(self, 'exit_mixin') and self.exit_mixin:
+                    try:
+                        self.exit_mixin.on_entry(
+                            entry_price=self.entry_price,
+                            entry_time=self.data.datetime[0],
+                            position_size=abs(shares),
+                            direction=direction
+                        )
+                    except Exception as e:
+                        _logger.warning("Error notifying exit mixin of entry: %s", e)
 
         except Exception as e:
             _logger.exception("Error entering position")
+
+    def _validate_position_size(self, shares: float) -> bool:
+        """
+        Validate position size based on asset type.
+
+        Args:
+            shares: Number of shares/units to trade
+
+        Returns:
+            bool: True if valid, False otherwise
+        """
+        if self.asset_type.lower() == "stock":
+            # For stocks, size must be a whole number >= 1
+            if shares < 1 or not shares.is_integer():
+                _logger.debug("Invalid stock position size: %s (must be whole number >= 1)", shares)
+                return False
+        elif self.asset_type.lower() == "crypto":
+            # For crypto, size must be positive (can be fractional)
+            if shares <= 0:
+                _logger.debug("Invalid crypto position size: %s (must be positive)", shares)
+                return False
+        else:
+            # Default behavior for unknown asset types
+            if shares < 1:
+                _logger.debug("Invalid position size: %s (must be >= 1)", shares)
+                return False
+
+        return True
 
     def _exit_position(self, reason: str = ""):
         """
@@ -224,15 +437,197 @@ class BaseStrategy(bt.Strategy):
             if self.position.size == 0:
                 return
 
-            self.close()
-            _logger.info("Position exit - Reason: %s", reason)
+            # Store the size being exited BEFORE closing
+            self.exit_size = abs(self.position.size)
 
-            # Reset trade tracking
-            self.entry_price = None
-            self.highest_profit = 0.0
+            # Store the exit reason for trade recording
+            self.current_exit_reason = reason
+
+            self.close()
+            _logger.info("Position exit - Size: %.6f, Reason: %s", self.exit_size, reason)
+
+            # Note: Don't reset entry_price here - it will be reset in notify_trade after the trade is actually closed
 
         except Exception as e:
             _logger.exception("Error exiting position")
+
+    def _exit_partial_position(self, exit_size: float, reason: str = ""):
+        """
+        Exit a partial position.
+
+        Args:
+            exit_size: Number of shares/units to exit
+            reason: Reason for partial exit
+        """
+        try:
+            if self.position.size == 0:
+                _logger.debug("No position to exit")
+                return
+
+            # Validate exit size
+            if not self._validate_position_size(exit_size):
+                _logger.warning("Invalid exit size: %s", exit_size)
+                return
+
+            # Check if exit size is valid for current position
+            if abs(exit_size) > abs(self.position.size):
+                _logger.warning("Exit size %s exceeds position size %s", exit_size, self.position.size)
+                return
+
+            # Determine order direction based on position
+            if self.position.size > 0:  # Long position
+                order = self.sell(size=exit_size)
+            else:  # Short position
+                order = self.buy(size=exit_size)
+
+            if order:
+                # Store the size being exited BEFORE closing
+                self.exit_size = exit_size
+
+                # Store the exit reason for trade recording
+                self.current_exit_reason = reason
+
+                # Update current position size
+                self.current_position_size = abs(self.position.size - exit_size)
+                _logger.info("Partial exit - Size: %.6f, Remaining: %.6f, Reason: %s",
+                           exit_size, self.current_position_size, reason)
+
+        except Exception as e:
+            _logger.exception("Error in partial exit")
+
+    def _calculate_actual_trade_size(self, trade) -> float:
+        """Calculate the actual trade size for closed trades."""
+        if not trade.isclosed:
+            return abs(trade.size)
+
+        # Use the stored exit size if available (most reliable)
+        if hasattr(self, 'exit_size') and self.exit_size is not None:
+            return self.exit_size
+
+        # Fallback: use current position size (for full closes)
+        if self.current_position_size is not None:
+            return self.current_position_size
+
+        # Fallback: calculate from PnL and price difference
+        if self.entry_price and self.entry_price != 0 and trade.pnl != 0:
+            price_diff = abs(trade.price - self.entry_price)
+            if price_diff > 0:
+                return abs(trade.pnl / price_diff)
+
+        # Final fallback
+        return 1.0
+
+    def _initialize_database(self):
+        """Initialize database connection and bot instance."""
+        if not self.enable_database_logging:
+            return
+
+        try:
+            from src.data.trade_repository import TradeRepository
+            self.trade_repository = TradeRepository()
+
+            # Create or get bot instance
+            bot_data = {
+                'name': self.config.get('bot_instance_name', f"{self.__class__.__name__}_{self.symbol}"),
+                'type': self.bot_type,  # Use the bot_type from config
+                'status': 'running',
+                'strategy_name': self.__class__.__name__,
+                'symbol': self.symbol,
+                'timeframe': self.timeframe,
+                'config': self.config
+            }
+
+            bot_instance = self.trade_repository.create_bot_instance(bot_data)
+            self.bot_instance_id = bot_instance.id
+
+            _logger.info("Database initialized for bot instance: %s", self.bot_instance_id)
+
+        except Exception as e:
+            _logger.exception("Error initializing database: %s", e)
+            self.enable_database_logging = False
+
+    def _store_trade_in_database(self, trade_record: Dict[str, Any], is_partial_exit: bool = False):
+        """Store trade in database with proper partial exit handling."""
+        if not self.enable_database_logging or not self.trade_repository:
+            return
+
+        try:
+            import uuid
+
+            if is_partial_exit:
+                # Store as partial exit
+                trade_data = {
+                    'bot_id': self.bot_instance_id,
+                    'symbol': self.symbol,
+                    'trade_type': self.bot_type,  # Use the bot_type from config
+                    'strategy_name': self.__class__.__name__,
+                    'entry_logic_name': getattr(self, 'entry_logic', {}).get('name', 'unknown'),
+                    'exit_logic_name': getattr(self, 'exit_logic', {}).get('name', 'unknown'),
+                    'interval': self.timeframe,
+                    'entry_time': trade_record['entry_time'],
+                    'exit_time': trade_record['exit_time'],
+                    'entry_price': trade_record['entry_price'],
+                    'exit_price': trade_record['exit_price'],
+                    'size': trade_record['size'],
+                    'direction': trade_record['trade_type'],
+                    'commission': trade_record['commission'],
+                    'gross_pnl': trade_record['gross_pnl'],
+                    'net_pnl': trade_record['net_pnl'],
+                    'pnl_percentage': trade_record['pnl_percentage'],
+                    'exit_reason': trade_record['exit_reason'],
+                    'status': 'closed',
+                    'position_id': self.current_position_id,
+                    'extra_metadata': {
+                        'duration_minutes': trade_record['duration_minutes'],
+                        'strategy_config': self.config
+                    }
+                }
+
+                # Get the original position trade
+                original_trade = self.trade_repository.get_trade_by_id(self.current_position_id)
+                if original_trade:
+                    self.trade_repository.create_partial_exit_trade(trade_data, original_trade.id)
+                else:
+                    _logger.warning("Original position trade not found for partial exit")
+
+            else:
+                # Store as new position
+                trade_data = {
+                    'bot_id': self.bot_instance_id,
+                    'symbol': self.symbol,
+                    'trade_type': self.bot_type,  # Use the bot_type from config
+                    'strategy_name': self.__class__.__name__,
+                    'entry_logic_name': getattr(self, 'entry_logic', {}).get('name', 'unknown'),
+                    'exit_logic_name': getattr(self, 'exit_logic', {}).get('name', 'unknown'),
+                    'interval': self.timeframe,
+                    'entry_time': trade_record['entry_time'],
+                    'exit_time': trade_record['exit_time'],
+                    'entry_price': trade_record['entry_price'],
+                    'exit_price': trade_record['exit_price'],
+                    'size': trade_record['size'],
+                    'direction': trade_record['trade_type'],
+                    'commission': trade_record['commission'],
+                    'gross_pnl': trade_record['gross_pnl'],
+                    'net_pnl': trade_record['net_pnl'],
+                    'pnl_percentage': trade_record['pnl_percentage'],
+                    'exit_reason': trade_record['exit_reason'],
+                    'status': 'closed',
+                    'original_position_size': trade_record['size'],
+                    'remaining_position_size': 0,  # Fully closed
+                    'is_partial_exit': False,
+                    'extra_metadata': {
+                        'duration_minutes': trade_record['duration_minutes'],
+                        'strategy_config': self.config
+                    }
+                }
+
+                trade = self.trade_repository.create_trade(trade_data)
+                self.current_position_id = trade.id
+
+            _logger.debug("Stored trade in database: %s", trade_data.get('id', 'unknown'))
+
+        except Exception as e:
+            _logger.exception("Error storing trade in database: %s", e)
 
     def _update_trade_tracking(self):
         """Update trade tracking metrics."""
@@ -256,21 +651,45 @@ class BaseStrategy(bt.Strategy):
     def notify_trade(self, trade):
         """Handle trade notifications and update metrics."""
         try:
+            # Calculate actual trade size (handles both full and partial closes)
+            actual_size = self._calculate_actual_trade_size(trade)
+            trade_pnl = trade.pnl if trade.pnl is not None else 0.0
+            trade_price = trade.price if trade.price is not None else 0.0
+
+            # Log trade notification with correct size
             _logger.info(
-                "Trade notification - Status: %s, Size: %s, PnL: %s, Price: %s",
+                "Trade notification - Status: %s, Size: %.6f, PnL: %s, Price: %s",
                 'CLOSED' if trade.isclosed else 'OPEN',
-                trade.size, trade.pnl, trade.price
+                actual_size, trade_pnl, trade_price
             )
 
             if trade.isclosed:
+                # Determine if this is a partial exit
+                is_partial_exit = self.position.size != 0
+
+                # Debug: Log trade details for investigation
+                _logger.debug("Trade closed details - Size: %.6f, PnL: %s, Entry Price: %s, Exit Price: %s",
+                             actual_size, trade_pnl, self.entry_price, self.data.close[0])
+
                 # Calculate trade metrics
                 duration_days = trade.dtclose - trade.dtopen
                 duration_minutes = duration_days * 24 * 60
 
                 # Calculate PnL
-                entry_value = self.entry_price * abs(trade.size) if self.entry_price else 0
-                exit_value = self.data.close[0] * abs(trade.size)
-                gross_pnl = exit_value - entry_value if trade.size > 0 else entry_value - exit_value
+                entry_value = self.entry_price * actual_size if self.entry_price else 0
+                exit_value = self.data.close[0] * actual_size
+
+                # Determine position direction for PnL calculation
+                # For closed trades, we need to determine if it was a long or short position
+                # We can use the stored exit_size and current position to determine this
+                if hasattr(self, 'exit_size') and self.exit_size is not None:
+                    # If we have exit_size, we can determine direction from the original position
+                    # For now, assume long position (this could be improved with direction tracking)
+                    gross_pnl = exit_value - entry_value
+                else:
+                    # Fallback: use trade.pnl directly as it's already calculated correctly by Backtrader
+                    gross_pnl = trade.pnl + trade.commission  # Add commission back to get gross PnL
+
                 net_pnl = gross_pnl - trade.commission
 
                 # Update trade record
@@ -279,19 +698,22 @@ class BaseStrategy(bt.Strategy):
                     "exit_time": self.data.num2date(trade.dtclose),
                     "entry_price": self.entry_price,
                     "exit_price": self.data.close[0],
-                    "size": trade.size,
+                    "size": actual_size,  # Use corrected size
                     "symbol": self.symbol,
                     "commission": trade.commission,
                     "duration_minutes": duration_minutes,
                     "gross_pnl": gross_pnl,
                     "net_pnl": net_pnl,
                     "pnl_percentage": ((net_pnl / entry_value) * 100 if entry_value != 0 else 0),
-                    "trade_type": "long" if trade.size > 0 else "short",
+                    "trade_type": "long" if gross_pnl >= 0 or (self.entry_price and self.data.close[0] >= self.entry_price) else "short",
                     "exit_reason": self.current_exit_reason or "unknown",
                     "status": "closed"
                 }
 
                 self.trades.append(trade_record)
+
+                # Store in database
+                self._store_trade_in_database(trade_record, is_partial_exit)
 
                 # Update performance metrics
                 self.total_trades += 1
@@ -303,29 +725,42 @@ class BaseStrategy(bt.Strategy):
                     self.losing_trades += 1
 
                 _logger.info(
-                    "Trade closed - Entry: %.4f, Exit: %.4f, PnL: %.2f (%.2f%%), Duration: %.1f min",
-                    self.entry_price, self.data.close[0], net_pnl,
+                    "Trade closed - Entry: %.4f, Exit: %.4f, Size: %.6f, PnL: %.2f (%.2f%%), Duration: %.1f min",
+                    self.entry_price if self.entry_price is not None else 0.0,
+                    self.data.close[0], actual_size, net_pnl,
                     trade_record["pnl_percentage"], duration_minutes
                 )
 
-                # Reset trade tracking
-                self.current_trade = None
-                self.current_exit_reason = None
-                self.entry_price = None
-                self.highest_profit = 0.0
+                # Reset trade tracking only if entire position is closed
+                if self.position.size == 0:
+                    self.current_trade = None
+                    self.current_exit_reason = None
+                    self.entry_price = None
+                    self.current_position_size = None
+                    self.current_position_id = None  # Reset position ID
+                    self.exit_size = None  # Reset exit size
+                    self.highest_profit = 0.0
+                else:
+                    # Partial exit - update remaining position size
+                    self.current_position_size = abs(self.position.size)
+                    # Don't reset exit_size for partial exits as it might be needed for the next partial exit
 
             else:
-                # Trade opened
+                # Trade opened - create new position ID
+                import uuid
+                self.current_position_id = str(uuid.uuid4())
+
                 self.current_trade = {
                     "entry_time": self.data.num2date(trade.dtopen),
-                    "entry_price": trade.price,
-                    "size": trade.size,
+                    "entry_price": trade_price,
+                    "size": actual_size,
                     "symbol": self.symbol,
                     "status": "open",
-                    "trade_type": "long" if trade.size > 0 else "short"
+                    "trade_type": "long" if actual_size > 0 else "short"
                 }
 
-                _logger.info("Trade opened - Price: %.4f, Size: %s", trade.price, trade.size)
+                _logger.info("Trade opened - Price: %.4f, Size: %.6f, Position ID: %s",
+                           trade_price, actual_size, self.current_position_id)
 
         except Exception as e:
             _logger.exception("Error in notify_trade")

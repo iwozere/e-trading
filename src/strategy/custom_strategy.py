@@ -107,8 +107,17 @@ class CustomStrategy(BaseStrategy):
                 and self.exit_mixin
                 and self.exit_mixin.should_exit()
             ):
+                # Get specific exit reason from mixin
+                exit_reason = "unknown"
+                if hasattr(self.exit_mixin, 'get_exit_reason'):
+                    try:
+                        exit_reason = self.exit_mixin.get_exit_reason()
+                    except Exception as e:
+                        _logger.warning("Error getting exit reason from mixin: %s", e)
+                        exit_reason = "mixin_error"
+
                 # Use base class method for position exit
-                self._exit_position(reason="Exit mixin signal")
+                self._exit_position(reason=exit_reason)
 
         except Exception as e:
             _logger.exception("Error in _execute_strategy_logic")

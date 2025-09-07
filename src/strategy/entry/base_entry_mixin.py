@@ -220,6 +220,31 @@ class BaseEntryMixin(ABC):
     def _init_indicators(self):
         """Initialization of technical indicators"""
 
+    def are_indicators_ready(self) -> bool:
+        """
+        Check if indicators are ready to be used.
+        Default implementation checks if indicators dictionary exists and has entries.
+        Subclasses can override for more specific checks.
+
+        Returns:
+            bool: True if indicators are ready, False otherwise
+        """
+        if not hasattr(self, "indicators"):
+            return False
+
+        if not self.indicators:
+            return False
+
+        # Check if we have enough data points (basic check)
+        if hasattr(self, "strategy") and self.strategy and hasattr(self.strategy, "data"):
+            try:
+                if len(self.strategy.data) < 2:  # Minimum data requirement
+                    return False
+            except Exception:
+                return False
+
+        return True
+
     @abstractmethod
     def should_enter(self) -> bool:
         """

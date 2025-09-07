@@ -20,7 +20,8 @@
         "report_filename_pattern": null,
         "include_plots_in_report": true,
         "output_dir": "results",
-        "position_size": 0.10
+        "position_size": 0.10,
+        "enable_database_logging": false
     },
     "visualization_settings": {
         "plot_size": [60, 30],

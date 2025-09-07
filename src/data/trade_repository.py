@@ -486,3 +486,134 @@ class TradeRepository:
             self.rollback()
             _logger.exception("Error cleaning up old data: %s")
             return 0
+
+    # Partial Exit Operations
+    def create_partial_exit_trade(self, trade_data: Dict[str, Any], parent_trade_id: str) -> Trade:
+        """
+        Create a partial exit trade linked to parent trade.
+
+        Args:
+            trade_data: Dictionary containing trade data
+            parent_trade_id: ID of the parent trade
+
+        Returns:
+            Created Trade object
+        """
+        try:
+            # Get parent trade
+            parent_trade = self.get_trade_by_id(parent_trade_id)
+            if not parent_trade:
+                raise ValueError(f"Parent trade {parent_trade_id} not found")
+
+            # Calculate partial exit sequence
+            partial_exits = self.get_partial_exits_for_position(parent_trade.position_id)
+            sequence = len(partial_exits) + 1
+
+            # Update trade data
+            trade_data.update({
+                'parent_trade_id': parent_trade_id,
+                'position_id': parent_trade.position_id,
+                'partial_exit_sequence': sequence,
+                'is_partial_exit': True,
+                'original_position_size': parent_trade.original_position_size,
+                'remaining_position_size': float(parent_trade.remaining_position_size or 0) - float(trade_data['size'])
+            })
+
+            # Create partial exit trade
+            trade = Trade(**trade_data)
+            self.session.add(trade)
+
+            # Update parent trade
+            parent_trade.remaining_position_size = trade_data['remaining_position_size']
+            parent_trade.total_position_pnl = (float(parent_trade.total_position_pnl or 0) + float(trade_data['net_pnl']))
+
+            self.commit()
+            _logger.info("Created partial exit trade: %s (sequence: %s)", trade.id, sequence)
+            return trade
+
+        except Exception as e:
+            self.rollback()
+            _logger.exception("Error creating partial exit trade: %s", e)
+            raise
+
+    def get_partial_exits_for_position(self, position_id: str) -> List[Trade]:
+        """
+        Get all partial exits for a position.
+
+        Args:
+            position_id: Position ID
+
+        Returns:
+            List of partial exit Trade objects
+        """
+        try:
+            return (self.session.query(Trade)
+                    .filter(Trade.position_id == position_id)
+                    .filter(Trade.is_partial_exit == True)
+                    .order_by(Trade.partial_exit_sequence)
+                    .all())
+        except Exception as e:
+            _logger.exception("Error getting partial exits: %s", e)
+            return []
+
+    def get_position_summary(self, position_id: str) -> Dict[str, Any]:
+        """
+        Get complete position summary including all partial exits.
+
+        Args:
+            position_id: Position ID
+
+        Returns:
+            Dictionary with position summary
+        """
+        try:
+            # Get original position
+            original_trade = (self.session.query(Trade)
+                             .filter(Trade.position_id == position_id)
+                             .filter(Trade.is_partial_exit == False)
+                             .first())
+
+            if not original_trade:
+                return {}
+
+            # Get all partial exits
+            partial_exits = self.get_partial_exits_for_position(position_id)
+
+            # Calculate totals
+            total_exited_size = sum(float(trade.size or 0) for trade in partial_exits)
+            total_pnl = sum(float(trade.net_pnl or 0) for trade in partial_exits)
+            remaining_size = float(original_trade.original_position_size or 0) - total_exited_size
+
+            return {
+                'position_id': position_id,
+                'original_size': float(original_trade.original_position_size or 0),
+                'total_exited_size': total_exited_size,
+                'remaining_size': remaining_size,
+                'total_pnl': total_pnl,
+                'partial_exits_count': len(partial_exits),
+                'partial_exits': [trade.to_dict() for trade in partial_exits],
+                'is_fully_closed': remaining_size <= 0
+            }
+
+        except Exception as e:
+            _logger.exception("Error getting position summary: %s", e)
+            return {}
+
+    def get_trades_by_position(self, position_id: str) -> List[Trade]:
+        """
+        Get all trades for a specific position (original + partial exits).
+
+        Args:
+            position_id: Position ID
+
+        Returns:
+            List of Trade objects
+        """
+        try:
+            return (self.session.query(Trade)
+                    .filter(Trade.position_id == position_id)
+                    .order_by(Trade.partial_exit_sequence.asc().nullsfirst())
+                    .all())
+        except Exception as e:
+            _logger.exception("Error getting trades by position: %s", e)
+            return []

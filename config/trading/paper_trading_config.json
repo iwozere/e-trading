@@ -1,0 +1,7 @@
+{
+    "trading_settings": {
+        "enable_database_logging": true,
+        "bot_type": "paper",
+        "description": "Paper trading configuration - database logging enabled for trade tracking"
+    }
+}
