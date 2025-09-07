@@ -4,9 +4,11 @@ from typing import Any, Dict, Optional
 
 from src.strategy.exit.atr_exit_mixin import ATRExitMixin
 from src.strategy.exit.advanced_atr_exit_mixin import AdvancedATRExitMixin
+from src.strategy.exit.simple_atr_exit_mixin import SimpleATRExitMixin
 from src.strategy.exit.fixed_ratio_exit_mixin import FixedRatioExitMixin
 from src.strategy.exit.ma_crossover_exit_mixin import MACrossoverExitMixin
 from src.strategy.exit.rsi_bb_exit_mixin import RSIBBExitMixin
+from src.strategy.exit.rsi_or_bb_exit_mixin import RSIOrBBExitMixin
 from src.strategy.exit.time_based_exit_mixin import TimeBasedExitMixin
 from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
 
@@ -15,10 +17,12 @@ from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
 # Registry of all available exit mixins
 EXIT_MIXIN_REGISTRY = {
     #"ATRExitMixin": ATRExitMixin,
-    "AdvancedATRExitMixin": AdvancedATRExitMixin,
+    #"AdvancedATRExitMixin": AdvancedATRExitMixin,
+    #"SimpleATRExitMixin": SimpleATRExitMixin,
     #"FixedRatioExitMixin": FixedRatioExitMixin,
     #"MACrossoverExitMixin": MACrossoverExitMixin,
     #"RSIBBExitMixin": RSIBBExitMixin,
+    "RSIOrBBExitMixin": RSIOrBBExitMixin,
     #"TimeBasedExitMixin": TimeBasedExitMixin,
     #"TrailingStopExitMixin": TrailingStopExitMixin,
     # Add other mixins...

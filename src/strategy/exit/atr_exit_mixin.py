@@ -183,3 +183,7 @@ class ATRExitMixin(BaseExitMixin):
         # Reset highest price when position is closed
         if not self.strategy.position:
             self.highest_price = None
+
+    def get_exit_reason(self) -> str:
+        """Get the reason for exit"""
+        return getattr(self.strategy, 'current_exit_reason', 'atr_exit')

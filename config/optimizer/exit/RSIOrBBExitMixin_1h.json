@@ -1,9 +1,11 @@
 {
-    "name": "RSIBBExitMixin",
+    "name": "RSIOrBBExitMixin",
+    "timeframe": "1h",
+    "trading_style": "swing_trading",
     "params": {
         "x_rsi_period": {
             "type": "int",
-            "low": 10,
+            "low": 12,
             "high": 20,
             "default": 14
         },
@@ -26,5 +28,5 @@
             "default": 2.0
         }
     },
-    "description": "Exit strategy based on RSI and Bollinger Bands cross-over conditions. Exits when RSI crosses overbought line (previous above, current below) AND price crosses BB top line (previous above, current below)."
-} 
+    "description": "1h timeframe exit strategy - RSI or BB cross-over conditions for swing trading"
+}

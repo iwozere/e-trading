@@ -42,6 +42,7 @@ class RSIBBEntryMixin(BaseEntryMixin):
         self.bb_bot = None
         self.bb_mid = None
         self.bb_top = None
+        self.last_entry_bar = None
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -56,6 +57,9 @@ class RSIBBEntryMixin(BaseEntryMixin):
             "e_bb_period": 20,
             "e_bb_dev": 2.0,
             "e_use_bb_touch": True,
+            "e_rsi_cross": False,
+            "e_bb_reentry": False,
+            "e_cooldown_bars": 0,
         }
 
     def _init_indicators(self):
@@ -155,35 +159,59 @@ class RSIBBEntryMixin(BaseEntryMixin):
             return False
 
         try:
+            # Check cooldown period
+            if self.get_param("e_cooldown_bars", 0) > 0:
+                current_bar = len(self.strategy.data)
+                if (self.last_entry_bar is not None and
+                    current_bar - self.last_entry_bar < self.get_param("e_cooldown_bars")):
+                    return False
+
             # Get indicators from mixin's indicators dictionary
             rsi = self.indicators[self.rsi_name]
+            bb = self.indicators[self.bb_name]
             current_price = self.strategy.data.close[0]
 
             # Defensive check: Ensure RSI value is valid
             rsi_value = rsi[0]
-            if rsi_value is None:
+            rsi_prev = rsi[-1] if len(rsi) > 1 else rsi_value
+            if rsi_value is None or rsi_prev is None:
                 logger.warning("RSI value is None, skipping entry check")
                 return False
 
-            # Check RSI
-            rsi_condition = rsi_value <= self.get_param("e_rsi_oversold")
-
             # Defensive check: Ensure Bollinger Bands values are valid
-            bb = self.indicators[self.bb_name]
             bb_bot_value = bb.bot[0]  # Use unified access
-            if bb_bot_value is None:
-                logger.warning("Bollinger Bands lower value is None, skipping entry check")
+            bb_mid_value = bb.mid[0]
+            if bb_bot_value is None or bb_mid_value is None:
+                logger.warning("Bollinger Bands values are None, skipping entry check")
                 return False
 
-            if self.get_param("e_use_bb_touch"):
-                bb_condition = current_price <= bb_bot_value
+
+            # RSI condition with optional cross confirmation
+            if self.get_param("e_rsi_cross", False):
+                # RSI cross upward: require RSI to cross back above oversold threshold
+                rsi_condition = (rsi_prev <= self.get_param("e_rsi_oversold") and
+                               rsi_value > self.get_param("e_rsi_oversold"))
             else:
-                bb_condition = current_price < bb_bot_value
+                # Original RSI condition
+                rsi_condition = rsi_value <= self.get_param("e_rsi_oversold")
+
+            # Bollinger Bands condition with optional re-entry confirmation
+            if self.get_param("e_bb_reentry", False):
+                # BB re-entry: require close > lower BB after touching below
+                bb_condition = current_price > bb_bot_value
+            else:
+                # Original BB condition
+                if self.get_param("e_use_bb_touch"):
+                    bb_condition = current_price <= bb_bot_value
+                else:
+                    bb_condition = current_price < bb_bot_value
 
             return_value = rsi_condition and bb_condition
             if return_value:
+                self.last_entry_bar = len(self.strategy.data)
                 logger.debug(
-                    f"ENTRY: Price: {current_price}, RSI: {rsi_value}, BB Lower: {bb_bot_value}"
+                    f"ENTRY: Price: {current_price}, RSI: {rsi_value}, BB Lower: {bb_bot_value}, "
+                    f"RSI Cross: {self.get_param('e_rsi_cross')}, BB Reentry: {self.get_param('e_bb_reentry')}"
                 )
             return return_value
         except Exception as e:

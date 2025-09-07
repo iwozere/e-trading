@@ -27,13 +27,13 @@
         "p_fast": {
             "type": "int",
             "low": 5,
-            "high": 21,
+            "high": 15,
             "default": 7
         },
         "p_slow": {
             "type": "int",
             "low": 14,
-            "high": 100,
+            "high": 50,
             "default": 21
         },
         "use_htf_atr": {
@@ -43,20 +43,20 @@
         },
         "alpha_fast": {
             "type": "float",
-            "low": 0.25,
-            "high": 2.0,
+            "low": 0.5,
+            "high": 1.5,
             "default": 1.0
         },
         "alpha_slow": {
             "type": "float",
-            "low": 0.25,
-            "high": 2.0,
+            "low": 0.5,
+            "high": 1.5,
             "default": 1.0
         },
         "alpha_htf": {
             "type": "float",
-            "low": 0.25,
-            "high": 2.0,
+            "low": 0.5,
+            "high": 1.5,
             "default": 1.0
         },
         "arm_at_R": {
@@ -85,7 +85,7 @@
         "swing_lookback": {
             "type": "int",
             "low": 5,
-            "high": 30,
+            "high": 20,
             "default": 10
         },
         "struct_buffer_atr": {
@@ -133,8 +133,8 @@
         "min_bars_between_tighten": {
             "type": "int",
             "low": 1,
-            "high": 10,
-            "default": 5
+            "high": 5,
+            "default": 2
         },
         "tick_size": {
             "type": "float",
@@ -143,25 +143,7 @@
             "default": 0.01
         }
     },
-    "description": "Advanced ATR-based trailing stop with multi-timeframe analysis, state machine, structural ratcheting, and time-based tightening",
-    "optimization_stages": {
-        "stage_a": {
-            "description": "Core ATR parameters",
-            "params": ["k_init", "k_run", "p_fast", "p_slow", "use_htf_atr"]
-        },
-        "stage_b": {
-            "description": "Risk management and phases",
-            "params": ["arm_at_R", "breakeven_offset_atr", "phase2_at_R", "k_phase2", "use_swing_ratchet", "struct_buffer_atr"]
-        },
-        "stage_c": {
-            "description": "Fine-tuning and filters",
-            "params": ["tighten_if_stagnant_bars", "tighten_k_factor", "noise_filter_atr", "alpha_fast", "alpha_slow", "alpha_htf"]
-        }
-    },
-    "constraints": {
-        "max_drawdown": 0.15,
-        "min_trades": 10,
-        "max_loss_streak": 5
-    },
-    "objectives": ["sharpe_ratio", "calmar_ratio", "profit_factor"]
+    "description": "Advanced ATR-based trailing stop optimized for 5-minute timeframe - aggressive settings for scalping",
+    "timeframe": "5m",
+    "trading_style": "scalping"
 }

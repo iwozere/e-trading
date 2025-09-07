@@ -7,6 +7,13 @@
         "bollinger_bands": "overlay"
       }
     },
+    "RSIOrBBEntryMixin": {
+      "indicators": ["rsi", "bollinger_bands"],
+      "subplot_type": {
+        "rsi": "separate",
+        "bollinger_bands": "overlay"
+      }
+    },
     "RSIBBVolumeEntryMixin": {
       "indicators": ["rsi", "bollinger_bands", "volume"],
       "subplot_type": {

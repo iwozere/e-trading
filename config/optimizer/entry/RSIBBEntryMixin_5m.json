@@ -1,23 +1,25 @@
 {
-    "name": "RSIOrBBEntryMixin",
+    "name": "RSIBBEntryMixin",
+    "timeframe": "5m",
+    "trading_style": "day_trading",
     "params": {
         "e_rsi_period": {
             "type": "int",
-            "low": 10,
-            "high": 20,
-            "default": 14
+            "low": 7,
+            "high": 9,
+            "default": 8
         },
         "e_rsi_oversold": {
             "type": "int",
             "low": 18,
             "high": 32,
-            "default": 25
+            "default": 22
         },
         "e_bb_period": {
             "type": "int",
-            "low": 15,
-            "high": 25,
-            "default": 20
+            "low": 10,
+            "high": 14,
+            "default": 12
         },
         "e_bb_dev": {
             "type": "float",
@@ -42,4 +44,4 @@
             "default": 3
         }
     }
-} 
+}

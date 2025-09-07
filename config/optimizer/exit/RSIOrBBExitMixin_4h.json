@@ -1,0 +1,32 @@
+{
+    "name": "RSIOrBBExitMixin",
+    "timeframe": "4h",
+    "trading_style": "swing_trading",
+    "params": {
+        "x_rsi_period": {
+            "type": "int",
+            "low": 14,
+            "high": 24,
+            "default": 18
+        },
+        "x_rsi_overbought": {
+            "type": "float",
+            "low": 65,
+            "high": 80,
+            "default": 70
+        },
+        "x_bb_period": {
+            "type": "int",
+            "low": 16,
+            "high": 24,
+            "default": 20
+        },
+        "x_bb_dev": {
+            "type": "float",
+            "low": 2.0,
+            "high": 2.5,
+            "default": 2.2
+        }
+    },
+    "description": "4h timeframe exit strategy - RSI or BB cross-over conditions for swing trading"
+}

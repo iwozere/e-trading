@@ -1,9 +1,11 @@
 {
-    "name": "RSIOrBBEntryMixin",
+    "name": "RSIBBEntryMixin",
+    "timeframe": "1h",
+    "trading_style": "swing_trading",
     "params": {
         "e_rsi_period": {
             "type": "int",
-            "low": 10,
+            "low": 12,
             "high": 20,
             "default": 14
         },
@@ -15,8 +17,8 @@
         },
         "e_bb_period": {
             "type": "int",
-            "low": 15,
-            "high": 25,
+            "low": 14,
+            "high": 22,
             "default": 20
         },
         "e_bb_dev": {
@@ -42,4 +44,4 @@
             "default": 3
         }
     }
-} 
+}

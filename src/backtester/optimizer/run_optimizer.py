@@ -198,6 +198,44 @@ def prepare_data_feed(df : pd.DataFrame, symbol : str):
     return data_feed
 
 
+def load_mixin_config(mixin_name: str, config_type: str, timeframe: str) -> dict:
+    """
+    Load mixin configuration with timeframe-specific fallback logic.
+
+    Args:
+        mixin_name: Name of the mixin (e.g., 'RSIBBEntryMixin')
+        config_type: Type of config ('entry' or 'exit')
+        timeframe: Trading timeframe (e.g., '1h', '4h', '1d')
+
+    Returns:
+        Configuration dictionary
+    """
+    try:
+        # Try to load timeframe-specific configuration first
+        tf_specific_path = os.path.join("config", "optimizer", config_type, f"{mixin_name}_{timeframe}.json")
+        if os.path.exists(tf_specific_path):
+            _logger.info("Loading timeframe-specific config: %s", tf_specific_path)
+            with open(tf_specific_path, 'r') as f:
+                config = json.load(f)
+            _logger.debug("Loaded %s config for %s: %s", timeframe, mixin_name, config.get('params', {}))
+            return config
+
+        # Fallback to generic configuration
+        generic_path = os.path.join("config", "optimizer", config_type, f"{mixin_name}.json")
+        if os.path.exists(generic_path):
+            _logger.info("Using generic config (timeframe-specific not found): %s", generic_path)
+            with open(generic_path, 'r') as f:
+                config = json.load(f)
+            _logger.debug("Loaded generic config for %s: %s", mixin_name, config.get('params', {}))
+            return config
+
+        _logger.warning("No configuration found for %s (neither timeframe-specific nor generic)", mixin_name)
+        raise FileNotFoundError(f"No configuration found for {mixin_name}")
+
+    except Exception as e:
+        _logger.exception("Error loading configuration for %s: %s", mixin_name, e)
+        raise
+
 def parse_data_file_name(data_file : str) -> dict:
     """Parse data file name and return a dictionary with symbol, interval, start_date, end_date"""
     parts = data_file.replace(".csv", "").split("_")
@@ -399,9 +437,8 @@ if __name__ == "__main__":
         symbol, interval, start_date, end_date = parse_data_file_name(data_file)
 
         for entry_logic_name in ENTRY_MIXIN_REGISTRY.keys():
-            # Load entry logic configuration
-            with open(os.path.join("config", "optimizer", "entry", f"{entry_logic_name}.json"), "r") as f:
-                entry_logic_config = json.load(f)
+            # Load entry logic configuration (timeframe-specific with fallback)
+            entry_logic_config = load_mixin_config(entry_logic_name, "entry", interval)
 
             for exit_logic_name in EXIT_MIXIN_REGISTRY.keys():
                 processed_combinations += 1
@@ -412,9 +449,8 @@ if __name__ == "__main__":
                     _logger.info("Progress: %d/%d (Skipped: %d)", processed_combinations, total_combinations, skipped_combinations)
                     continue
 
-                # Load exit logic configuration
-                with open(os.path.join("config", "optimizer", "exit", f"{exit_logic_name}.json"), "r") as f:
-                    exit_logic_config = json.load(f)
+                # Load exit logic configuration (timeframe-specific with fallback)
+                exit_logic_config = load_mixin_config(exit_logic_name, "exit", interval)
 
                 _logger.info("Running optimization %d/%d: %s + %s + %s", processed_combinations, total_combinations, data_file, entry_logic_name, exit_logic_name)
 

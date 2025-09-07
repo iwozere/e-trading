@@ -1,0 +1,29 @@
+{
+    "name": "SimpleATRExitMixin",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 10,
+            "high": 20,
+            "default": 14
+        },
+        "x_atr_multiplier": {
+            "type": "float",
+            "low": 1.5,
+            "high": 3.0,
+            "default": 2.0
+        },
+        "x_breakeven_atr": {
+            "type": "float",
+            "low": 0.5,
+            "high": 2.0,
+            "default": 1.0
+        },
+        "x_use_breakeven": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        }
+    },
+    "description": "Simple ATR-based trailing stop exit strategy with breakeven functionality. Uses only 4 parameters for easy optimization."
+}

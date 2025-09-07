@@ -1,23 +1,21 @@
 """
-RSI and Bollinger Bands Exit Mixin
+RSI or Bollinger Bands Exit Mixin
 
-This module implements an exit strategy based on the combination of:
-1. RSI (Relative Strength Index)
-2. Bollinger Bands
+This module implements an exit strategy based on either:
+1. RSI (Relative Strength Index) crossing overbought line, OR
+2. Price crossing Bollinger Bands top line
 
-The strategy exits a position when:
-1. RSI is overbought
-2. Price touches or crosses above the upper Bollinger Band
+The strategy exits a position when either condition is met:
+1. RSI crosses overbought line (previous value above, current below the overbought line)
+2. Price crosses BB top line (previous price above, current price below BB top)
 
 Parameters:
-    rsi_period (int): Period for RSI calculation (default: 14)
-    rsi_overbought (float): Overbought threshold for RSI (default: 70)
-    bb_period (int): Period for Bollinger Bands calculation (default: 20)
-    bb_stddev (float): Standard deviation multiplier for Bollinger Bands (default: 2.0)
-    use_bb_touch (bool): Whether to require price touching the upper band (default: True)
-    use_talib (bool): Whether to use TA-Lib for calculations (default: True)
+    x_rsi_period (int): Period for RSI calculation (default: 14)
+    x_rsi_overbought (float): Overbought threshold for RSI (default: 70)
+    x_bb_period (int): Period for Bollinger Bands calculation (default: 20)
+    x_bb_stddev (float): Standard deviation multiplier for Bollinger Bands (default: 2.0)
 
-This strategy combines mean reversion (RSI + BB) to identify potential reversal points.
+This strategy provides more flexible exit conditions by allowing either RSI or BB signals.
 """
 
 from typing import Any, Dict, Optional
@@ -29,8 +27,8 @@ from src.notification.logger import setup_logger
 logger = setup_logger(__name__)
 
 
-class RSIBBExitMixin(BaseExitMixin):
-    """Exit mixin that combines RSI and Bollinger Bands for exit signals."""
+class RSIOrBBExitMixin(BaseExitMixin):
+    """Exit mixin that uses either RSI or Bollinger Bands for exit signals."""
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
@@ -59,7 +57,7 @@ class RSIBBExitMixin(BaseExitMixin):
 
     def _init_indicators(self):
         """Initialize indicators"""
-        logger.debug("RSIBBExitMixin._init_indicators called")
+        logger.debug("RSIOrBBExitMixin._init_indicators called")
         if not hasattr(self, "strategy"):
             logger.error("No strategy available in _init_indicators")
             return
@@ -128,15 +126,23 @@ class RSIBBExitMixin(BaseExitMixin):
             bb_cross_condition = (previous_price >= previous_bb_top and
                                 current_price < current_bb_top)
 
-            # Both conditions must be met for exit
-            should_exit = rsi_cross_condition and bb_cross_condition
+            # Either condition can trigger exit
+            should_exit = rsi_cross_condition or bb_cross_condition
 
             if should_exit:
+                exit_reason = []
+                if rsi_cross_condition:
+                    exit_reason.append("rsi_cross")
+                if bb_cross_condition:
+                    exit_reason.append("bb_cross")
+
+                reason_text = "_".join(exit_reason)
+                self.strategy.current_exit_reason = f"rsi_or_bb_{reason_text}"
+
                 logger.debug(
-                    f"EXIT: RSI cross from {previous_rsi:.2f} to {current_rsi:.2f} (overbought: {self.get_param('x_rsi_overbought')}), "
-                    f"Price cross from {previous_price:.2f} to {current_price:.2f} (BB top: {current_bb_top:.2f})"
+                    f"EXIT: RSI cross: {rsi_cross_condition} (from {previous_rsi:.2f} to {current_rsi:.2f}), "
+                    f"BB cross: {bb_cross_condition} (price from {previous_price:.2f} to {current_price:.2f}, BB top: {current_bb_top:.2f})"
                 )
-                self.strategy.current_exit_reason = "rsi_bb_cross_exit"
 
             return should_exit
         except Exception as e:
@@ -145,4 +151,4 @@ class RSIBBExitMixin(BaseExitMixin):
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
-        return getattr(self.strategy, 'current_exit_reason', 'rsi_bb_cross_exit')
+        return getattr(self.strategy, 'current_exit_reason', 'rsi_or_bb_exit')

@@ -78,3 +78,7 @@ class FixedRatioExitMixin(BaseExitMixin):
                 f"Stop Loss: {self.get_param('x_stop_loss')*100:.2f}%"
             )
         return return_value
+
+    def get_exit_reason(self) -> str:
+        """Get the reason for exit"""
+        return getattr(self.strategy, 'current_exit_reason', 'fixed_ratio')

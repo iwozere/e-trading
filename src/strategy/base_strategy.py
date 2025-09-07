@@ -379,7 +379,14 @@ class BaseStrategy(bt.Strategy):
                 return
 
             if order:
-                self.entry_price = self.data.close[0]
+                # Validate price before setting entry_price
+                current_price = self.data.close[0]
+                import math
+                if math.isnan(current_price) or math.isinf(current_price):
+                    _logger.error(f"Invalid price data: {current_price}, cannot set entry price")
+                    return
+
+                self.entry_price = current_price
                 self.current_position_size = abs(shares)  # Store the actual position size in shares/units
                 self.highest_profit = 0.0
 

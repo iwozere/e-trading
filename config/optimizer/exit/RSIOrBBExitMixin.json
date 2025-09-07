@@ -1,5 +1,5 @@
 {
-    "name": "RSIBBExitMixin",
+    "name": "RSIOrBBExitMixin",
     "params": {
         "x_rsi_period": {
             "type": "int",
@@ -26,5 +26,5 @@
             "default": 2.0
         }
     },
-    "description": "Exit strategy based on RSI and Bollinger Bands cross-over conditions. Exits when RSI crosses overbought line (previous above, current below) AND price crosses BB top line (previous above, current below)."
-} 
+    "description": "Exit strategy based on either RSI or Bollinger Bands cross-over conditions. Exits when RSI crosses overbought line (previous above, current below) OR price crosses BB top line (previous above, current below)."
+}

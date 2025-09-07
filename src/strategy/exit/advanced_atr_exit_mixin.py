@@ -248,6 +248,13 @@ class AdvancedATRExitMixin(BaseExitMixin):
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered."""
+        import math
+
+        # Validate entry_price
+        if math.isnan(entry_price) or math.isinf(entry_price):
+            logger.error(f"Invalid entry_price: {entry_price}, cannot proceed with entry")
+            return
+
         self.entry_price = entry_price
         self.entry_time = entry_time
         self.direction = direction.lower()  # Store direction for proper stop hit detection
@@ -275,6 +282,8 @@ class AdvancedATRExitMixin(BaseExitMixin):
     def _get_effective_atr(self) -> float:
         """Calculate effective ATR using multi-timeframe aggregation."""
         try:
+            import math
+
             atr_fast_val = self.atr_fast[0] if self.atr_fast[0] is not None else 0.0
             atr_slow_val = self.atr_slow[0] if self.atr_slow[0] is not None else 0.0
 
@@ -283,6 +292,14 @@ class AdvancedATRExitMixin(BaseExitMixin):
             if self.use_htf_atr and hasattr(self, 'atr_htf') and self.atr_htf[0] is not None:
                 atr_htf_val = self.atr_htf[0]
 
+            # Check for NaN or infinite values
+            if math.isnan(atr_fast_val) or math.isinf(atr_fast_val):
+                atr_fast_val = 0.0
+            if math.isnan(atr_slow_val) or math.isinf(atr_slow_val):
+                atr_slow_val = 0.0
+            if math.isnan(atr_htf_val) or math.isinf(atr_htf_val):
+                atr_htf_val = 0.0
+
             # Calculate effective ATR
             atr_eff = max(
                 self.alpha_fast * atr_fast_val,
@@ -290,6 +307,11 @@ class AdvancedATRExitMixin(BaseExitMixin):
                 self.alpha_htf * atr_htf_val,
                 self.atr_floor
             )
+
+            # Final check for NaN result
+            if math.isnan(atr_eff) or math.isinf(atr_eff):
+                logger.warning(f"Effective ATR calculation resulted in invalid value: {atr_eff}, using floor value")
+                return self.atr_floor
 
             return atr_eff
 
@@ -560,6 +582,13 @@ class AdvancedATRExitMixin(BaseExitMixin):
         """Round price to tick size."""
         if self.tick_size <= 0:
             return price
+
+        # Handle NaN values
+        import math
+        if math.isnan(price) or math.isinf(price):
+            logger.warning(f"Invalid price value for rounding: {price}, returning original value")
+            return price
+
         return round(price / self.tick_size) * self.tick_size
 
     def get_current_stop(self) -> float:

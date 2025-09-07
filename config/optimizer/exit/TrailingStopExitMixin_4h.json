@@ -1,11 +1,13 @@
 {
     "name": "TrailingStopExitMixin",
+    "timeframe": "4h",
+    "trading_style": "swing_trading",
     "params": {
         "x_trail_pct": {
             "type": "float",
-            "low": 0.01,
-            "high": 0.04,
-            "default": 0.02
+            "low": 0.02,
+            "high": 0.05,
+            "default": 0.03
         },
         "x_activation_pct": {   
             "type": "float",
@@ -15,7 +17,7 @@
         },
         "x_atr_period": {
             "type": "int",
-            "low": 10,
+            "low": 12,
             "high": 18,
             "default": 14
         },
@@ -25,9 +27,10 @@
         },
         "x_atr_multiplier": {
             "type": "float",
-            "low": 1.5,
+            "low": 1.8,
             "high": 2.5,
             "default": 2.0
         }
-    }
+    },
+    "description": "4h timeframe trailing stop - swing trading with wider stops"
 }

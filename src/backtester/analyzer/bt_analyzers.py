@@ -95,6 +95,10 @@ class SortinoRatio(bt.Analyzer):
         self.rets = {}
         returns = np.array(self.returns)
 
+        if len(returns) == 0:
+            self.rets["sortino"] = 0.0
+            return
+
         # Рассчитываем downside deviation
         downside_returns = returns[returns < self.p.riskfreerate]
         if len(downside_returns) > 0:
@@ -102,14 +106,17 @@ class SortinoRatio(bt.Analyzer):
                 np.mean((downside_returns - self.p.riskfreerate) ** 2)
             )
         else:
-            downside_dev = 0.0
+            # If no downside returns, use the standard deviation of all returns
+            # This is a more conservative approach for the Sortino ratio
+            downside_dev = np.std(returns)
 
         mean_return = np.mean(returns)
 
-        if downside_dev != 0:
+        if downside_dev > 0:
             sortino = (mean_return - self.p.riskfreerate) / downside_dev
         else:
-            sortino = float("inf")
+            # If no volatility at all, return 0
+            sortino = 0.0
 
         self.rets["sortino"] = sortino
 

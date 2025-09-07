@@ -117,3 +117,7 @@ class TimeBasedExitMixin(BaseExitMixin):
             # Trade opened, record entry bar
             self.entry_bar = len(self.strategy.data)
             self.entry_time = self.strategy.data.datetime.datetime(0)
+
+    def get_exit_reason(self) -> str:
+        """Get the reason for exit"""
+        return getattr(self.strategy, 'current_exit_reason', 'time_limit')

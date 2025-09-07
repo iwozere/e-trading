@@ -1,11 +1,13 @@
 {
     "name": "TrailingStopExitMixin",
+    "timeframe": "5m",
+    "trading_style": "day_trading",
     "params": {
         "x_trail_pct": {
             "type": "float",
-            "low": 0.01,
-            "high": 0.04,
-            "default": 0.02
+            "low": 0.005,
+            "high": 0.02,
+            "default": 0.01
         },
         "x_activation_pct": {   
             "type": "float",
@@ -15,9 +17,9 @@
         },
         "x_atr_period": {
             "type": "int",
-            "low": 10,
-            "high": 18,
-            "default": 14
+            "low": 7,
+            "high": 10,
+            "default": 7
         },
         "x_use_atr": {
             "type": "bool",
@@ -25,9 +27,10 @@
         },
         "x_atr_multiplier": {
             "type": "float",
-            "low": 1.5,
-            "high": 2.5,
-            "default": 2.0
+            "low": 1.0,
+            "high": 2.0,
+            "default": 1.5
         }
-    }
+    },
+    "description": "5m timeframe trailing stop - tight stops for day trading"
 }
