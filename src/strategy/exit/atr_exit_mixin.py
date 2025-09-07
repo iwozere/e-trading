@@ -105,6 +105,20 @@ class ATRExitMixin(BaseExitMixin):
             logger.exception("Error initializing indicators: ")
             raise
 
+    def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
+        """Called when a position is entered"""
+        logger.debug(f"ATRExitMixin.on_entry: price={entry_price}, direction={direction}, size={position_size}")
+
+        # Reset variables for new position
+        self.highest_price = entry_price  # Start with entry price as highest
+        self.stop_loss = None
+
+        # Validate entry price
+        import math
+        if math.isnan(entry_price) or math.isinf(entry_price):
+            logger.warning(f"Invalid entry price: {entry_price}, skipping ATR exit setup")
+            return
+
     def should_exit(self) -> bool:
         """Check if we should exit a position"""
         if not self.are_indicators_ready():
@@ -135,9 +149,13 @@ class ATRExitMixin(BaseExitMixin):
             # Initialize or update trailing stop loss (only moves up, never down)
             if self.stop_loss is None:
                 self.stop_loss = new_stop_loss
+                logger.debug(f"ATR Stop Loss initialized: {self.stop_loss} (Highest: {self.highest_price}, ATR: {atr_val}, Multiplier: {sl_multiplier})")
             else:
                 # Only update if the new stop loss is higher (trailing up)
+                old_stop_loss = self.stop_loss
                 self.stop_loss = max(self.stop_loss, new_stop_loss)
+                if self.stop_loss > old_stop_loss:
+                    logger.debug(f"ATR Stop Loss updated: {old_stop_loss} -> {self.stop_loss} (Highest: {self.highest_price})")
 
             # Check if current price has fallen below the trailing stop loss
             if current_price <= self.stop_loss:
