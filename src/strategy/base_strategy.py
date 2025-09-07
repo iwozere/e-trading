@@ -576,7 +576,7 @@ class BaseStrategy(bt.Strategy):
                     'entry_price': trade_record['entry_price'],
                     'exit_price': trade_record['exit_price'],
                     'size': trade_record['size'],
-                    'direction': trade_record['trade_type'],
+                    'direction': trade_record['direction'],
                     'commission': trade_record['commission'],
                     'gross_pnl': trade_record['gross_pnl'],
                     'net_pnl': trade_record['net_pnl'],
@@ -612,7 +612,7 @@ class BaseStrategy(bt.Strategy):
                     'entry_price': trade_record['entry_price'],
                     'exit_price': trade_record['exit_price'],
                     'size': trade_record['size'],
-                    'direction': trade_record['trade_type'],
+                    'direction': trade_record['direction'],
                     'commission': trade_record['commission'],
                     'gross_pnl': trade_record['gross_pnl'],
                     'net_pnl': trade_record['net_pnl'],
@@ -712,7 +712,7 @@ class BaseStrategy(bt.Strategy):
                     "gross_pnl": gross_pnl,
                     "net_pnl": net_pnl,
                     "pnl_percentage": ((net_pnl / entry_value) * 100 if entry_value != 0 else 0),
-                    "trade_type": "long" if gross_pnl >= 0 or (self.entry_price and self.data.close[0] >= self.entry_price) else "short",
+                    "direction": "long" if actual_size > 0 else "short",
                     "exit_reason": self.current_exit_reason or "unknown",
                     "status": "closed"
                 }
@@ -763,7 +763,7 @@ class BaseStrategy(bt.Strategy):
                     "size": actual_size,
                     "symbol": self.symbol,
                     "status": "open",
-                    "trade_type": "long" if actual_size > 0 else "short"
+                    "direction": "long" if actual_size > 0 else "short"
                 }
 
                 _logger.info("Trade opened - Price: %.4f, Size: %.6f, Position ID: %s",

@@ -2,30 +2,24 @@
 ATR Exit Mixin
 -------------
 
-This module implements an exit strategy based on Average True Range (ATR) with both stop loss and take profit levels.
-The strategy uses ATR to dynamically adjust stop loss and take profit levels based on market volatility.
-
-Stop Loss Logic:
---------------
-- Stop loss is calculated as: current_high - (ATR * sl_multiplier)
-- Stop loss is trailing, meaning it only moves up, never down
-- Once set, stop loss remains at its highest level until triggered
+This module implements a trailing stop loss strategy based on Average True Range (ATR).
+The strategy uses ATR to dynamically adjust the stop loss level based on market volatility.
+The stop loss trails the price upward, never moving down, allowing profits to run while protecting against reversals.
 
 Trailing Stop Logic:
 ------------------
-- Stop loss is calculated as: current_high - (ATR * sl_multiplier)
+- Tracks the highest price since entry
+- Stop loss is calculated as: highest_price - (ATR * sl_multiplier)
 - Stop loss is trailing, meaning it only moves up, never down
 - Stop loss follows the price with an ATR-based gap for protection
 - Example: If sl_multiplier is 2.0, stop loss trails 2 ATR below the highest price
 
 Parameters:
 -----------
-atr_period : int
+x_atr_period : int
     Period for ATR calculation (default: 14)
-sl_multiplier : float
-    Multiplier for ATR to determine stop loss distance (default: 1.0)
-use_talib : bool
-    Whether to use TA-Lib for calculations (default: True)
+x_sl_multiplier : float
+    Multiplier for ATR to determine stop loss distance (default: 2.0)
 
 Exit Reasons:
 -----------
@@ -48,17 +42,13 @@ class ATRExitMixin(BaseExitMixin):
     The strategy uses ATR to dynamically adjust the stop loss level based on market volatility.
     The stop loss trails the price upward, never moving down, allowing profits to run while protecting against reversals.
 
-    Stop Loss:
-    - Trailing stop loss that only moves up
-    - Distance from current high is determined by ATR * sl_multiplier
+    Trailing Stop Loss:
+    - Tracks the highest price since entry
+    - Distance from highest price is determined by ATR * sl_multiplier
+    - Stop loss only moves up, never down
     - Once triggered, resets for next trade
 
-    Take Profit:
-    - Fixed level set at entry
-    - Level is entry_price * (1 + tp_multiplier)
-    - Once triggered, resets for next trade
-
-    Both stop loss and take profit levels are reset when a position is closed.
+    All variables are reset when a position is closed.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
@@ -67,7 +57,7 @@ class ATRExitMixin(BaseExitMixin):
         self.atr_name = "exit_atr"
         self.atr = None
         self.stop_loss = None
-        self.take_profit = None
+        self.highest_price = None
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -132,25 +122,32 @@ class ATRExitMixin(BaseExitMixin):
                 logger.warning("Invalid ATR value: %s, skipping exit check", atr_val)
                 return False
 
-            # Calculate stop loss from highest price
+            # Track the highest price since entry
+            if self.highest_price is None:
+                self.highest_price = current_high
+            else:
+                self.highest_price = max(self.highest_price, current_high)
+
+            # Calculate trailing stop loss from highest price
             sl_multiplier = self.get_param("x_sl_multiplier")
-            stop_loss = current_high - (atr_val * sl_multiplier)
+            new_stop_loss = self.highest_price - (atr_val * sl_multiplier)
 
+            # Initialize or update trailing stop loss (only moves up, never down)
             if self.stop_loss is None:
-                self.stop_loss = stop_loss
-            elif self.stop_loss < stop_loss:
-                self.stop_loss = stop_loss
+                self.stop_loss = new_stop_loss
+            else:
+                # Only update if the new stop loss is higher (trailing up)
+                self.stop_loss = max(self.stop_loss, new_stop_loss)
 
-            if current_price < stop_loss:
+            # Check if current price has fallen below the trailing stop loss
+            if current_price <= self.stop_loss:
                 logger.debug(
-                    f"EXIT: Current Price: {current_price}, Stop Loss: {stop_loss}, ATR: {atr_val}, ATR Multiplier: {sl_multiplier}"
+                    f"EXIT: Current Price: {current_price}, Stop Loss: {self.stop_loss}, "
+                    f"Highest Price: {self.highest_price}, ATR: {atr_val}, ATR Multiplier: {sl_multiplier}"
                 )
                 # Set the exit reason in the strategy
                 self.strategy.current_exit_reason = "stop_loss"
-                self.stop_loss = None
-                self.take_profit = None
                 return True
-
 
             return False
         except Exception as e:
@@ -160,9 +157,10 @@ class ATRExitMixin(BaseExitMixin):
     def next(self):
         """Called for each new bar"""
         super().next()
-        # Reset highest price when position is closed
+        # Reset variables when position is closed
         if not self.strategy.position:
             self.highest_price = None
+            self.stop_loss = None
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""
