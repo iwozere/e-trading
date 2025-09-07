@@ -11,11 +11,12 @@ Stop Loss Logic:
 - Stop loss is trailing, meaning it only moves up, never down
 - Once set, stop loss remains at its highest level until triggered
 
-Take Profit Logic:
----------------
-- Take profit is calculated as: entry_price + (entry_price * tp_multiplier)
-- Take profit is fixed at entry and doesn't trail
-- Example: If tp_multiplier is 2.0, take profit is set at 200% of entry price
+Trailing Stop Logic:
+------------------
+- Stop loss is calculated as: current_high - (ATR * sl_multiplier)
+- Stop loss is trailing, meaning it only moves up, never down
+- Stop loss follows the price with an ATR-based gap for protection
+- Example: If sl_multiplier is 2.0, stop loss trails 2 ATR below the highest price
 
 Parameters:
 -----------
@@ -23,15 +24,12 @@ atr_period : int
     Period for ATR calculation (default: 14)
 sl_multiplier : float
     Multiplier for ATR to determine stop loss distance (default: 1.0)
-tp_multiplier : float
-    Multiplier for entry price to determine take profit level (default: 2.0)
 use_talib : bool
     Whether to use TA-Lib for calculations (default: True)
 
 Exit Reasons:
 -----------
 - "stop_loss": When price falls below the trailing stop loss
-- "take_profit": When price rises above the take profit level
 """
 
 from typing import Any, Dict, Optional
@@ -45,10 +43,10 @@ logger = setup_logger(__name__)
 
 class ATRExitMixin(BaseExitMixin):
     """
-    Exit mixin that implements a trailing stop loss and fixed take profit strategy using ATR.
+    Exit mixin that implements a trailing stop loss strategy using ATR.
 
-    The strategy uses ATR to dynamically adjust the stop loss level based on market volatility,
-    while maintaining a fixed take profit level based on the entry price.
+    The strategy uses ATR to dynamically adjust the stop loss level based on market volatility.
+    The stop loss trails the price upward, never moving down, allowing profits to run while protecting against reversals.
 
     Stop Loss:
     - Trailing stop loss that only moves up
@@ -80,8 +78,7 @@ class ATRExitMixin(BaseExitMixin):
         """Default parameters"""
         return {
             "x_atr_period": 14,
-            "x_tp_multiplier": 2.0,
-            "x_sl_multiplier": 1.0,
+            "x_sl_multiplier": 2.0,
         }
 
     def _init_indicators(self):
@@ -154,23 +151,6 @@ class ATRExitMixin(BaseExitMixin):
                 self.take_profit = None
                 return True
 
-            # Check take profit logic
-            if self.take_profit is None and self.strategy.current_trade is not None:
-                entry_price = self.strategy.current_trade["entry_price"]
-                tp_multiplier = self.get_param("x_tp_multiplier")
-                take_profit = entry_price + (entry_price * tp_multiplier)
-                self.take_profit = take_profit
-
-            # Check if take profit is set and current price exceeds it
-            if self.take_profit is not None and current_price > self.take_profit:
-                logger.debug(
-                    f"EXIT: Current Price: {current_price}, Take Profit: {self.take_profit}, ATR: {atr_val}, TP Multiplier: {self.get_param('x_tp_multiplier')}"
-                )
-                # Set the exit reason in the strategy
-                self.strategy.current_exit_reason = "take_profit"
-                self.stop_loss = None
-                self.take_profit = None
-                return True
 
             return False
         except Exception as e:

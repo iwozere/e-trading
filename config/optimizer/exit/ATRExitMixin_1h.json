@@ -1,18 +1,20 @@
 {
     "name": "ATRExitMixin",
+    "timeframe": "1h",
+    "trading_style": "swing_trading",
     "params": {
         "x_atr_period": {
             "type": "int",
-            "low": 5,
-            "high": 90,
+            "low": 10,
+            "high": 25,
             "default": 14
         },
         "x_sl_multiplier": {
             "type": "float",
-            "low": 2.2,
+            "low": 2.0,
             "high": 3.0,
             "default": 2.5
         }
     },
-    "description": "ATR-based trailing stop loss strategy. Uses ATR to dynamically adjust stop loss distance, allowing profits to run while protecting against reversals."
-} 
+    "description": "1h timeframe ATR trailing stop - standard trailing distance for swing trading"
+}

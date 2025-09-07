@@ -1,0 +1,20 @@
+{
+    "name": "ATRExitMixin",
+    "timeframe": "15m",
+    "trading_style": "day_trading",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 8,
+            "high": 18,
+            "default": 12
+        },
+        "x_sl_multiplier": {
+            "type": "float",
+            "low": 1.8,
+            "high": 2.8,
+            "default": 2.2
+        }
+    },
+    "description": "15m timeframe ATR trailing stop - balanced trailing distance for intraday trading"
+}
