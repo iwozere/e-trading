@@ -321,7 +321,7 @@ def save_results(result, data_file):
                     "exit_value": float(trade.get("exit_value", 0.0)),
                     "size": float(trade["size"]),
                     "symbol": str(trade["symbol"]),
-                    "trade_type": str(trade["trade_type"]),
+                    "direction": str(trade["direction"]),
                     "commission": float(trade["commission"]),
                     "gross_pnl": float(trade["gross_pnl"]),
                     "net_pnl": float(trade["net_pnl"]),
@@ -337,7 +337,7 @@ def save_results(result, data_file):
                     f"Exit={serializable_trade['exit_price']} @ {serializable_trade['exit_time']}"
                 )
             except Exception as e:
-                _logger.exception("Error processing trade: %s")
+                _logger.exception("Error processing trade:")
                 continue
 
         # Process analyzer results
