@@ -80,23 +80,38 @@ fundamentals = dm.get_fundamentals('MSFT', force_refresh=True)
 
 # Use different combination strategy
 fundamentals = dm.get_fundamentals('TSLA', combination_strategy='consensus')
+
+# Get specific data type with appropriate TTL
+fundamentals = dm.get_fundamentals('AAPL', data_type='ratios')  # 3-day TTL
+fundamentals = dm.get_fundamentals('AAPL', data_type='statements')  # 90-day TTL
 ```
 
 ### Advanced Usage
 ```python
-# Direct cache operations
+# Direct cache operations with configuration
 from src.data.cache.fundamentals_cache import get_fundamentals_cache
+from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
 
-cache = get_fundamentals_cache("data-cache")
+# Initialize with configuration
+combiner = get_fundamentals_combiner()
+cache = get_fundamentals_cache("data-cache", combiner)
 
-# Check for cached data
-cached_data = cache.find_latest_json('AAPL')
-if cached_data and cache.is_cache_valid(cached_data.timestamp):
+# Check for cached data with data-type specific TTL
+cached_data = cache.find_latest_json('AAPL', data_type='ratios')
+if cached_data and cache.is_cache_valid(cached_data.timestamp, data_type='ratios'):
     data = cache.read_json(cached_data.file_path)
 
 # Manual cache operations
 cache.write_json('AAPL', 'yfinance', fundamentals_data)
 removed_files = cache.cleanup_stale_data('AAPL', 'yfinance', new_timestamp)
+
+# Get provider sequence for specific data type
+provider_sequence = combiner.get_provider_sequence('statements')
+print(f"Provider sequence for statements: {provider_sequence}")
+
+# Get TTL for specific data type
+ttl_days = combiner.get_ttl_for_data_type('ratios')
+print(f"TTL for ratios: {ttl_days} days")
 ```
 
 ## Provider Priority System
@@ -169,6 +184,48 @@ python src/data/examples/fundamentals_example.py
 
 ## Configuration
 
+### Fundamentals Configuration File
+The system now uses a comprehensive JSON configuration file at `config/data/fundamentals.json` that defines:
+
+#### Provider Sequences
+```json
+{
+  "provider_sequences": {
+    "statements": ["fmp", "alphavantage", "yfinance", "twelvedata"],
+    "ratios": ["yfinance", "fmp", "alphavantage", "twelvedata"],
+    "profile": ["fmp", "yfinance", "alphavantage", "twelvedata"]
+  }
+}
+```
+
+#### Refresh Intervals (TTL)
+```json
+{
+  "refresh_intervals": {
+    "profiles": "14d",
+    "ratios": "3d",
+    "statements": "90d",
+    "calendar": "7d"
+  }
+}
+```
+
+#### Field-Specific Provider Priorities
+```json
+{
+  "field_priorities": {
+    "ttm_metrics": {
+      "pe_ratio": ["yfinance", "fmp", "alphavantage"],
+      "pb_ratio": ["yfinance", "fmp", "alphavantage"]
+    },
+    "company_profile": {
+      "sector": ["fmp", "yfinance", "alphavantage"],
+      "industry": ["fmp", "yfinance", "alphavantage"]
+    }
+  }
+}
+```
+
 ### Environment Variables
 The system uses existing API key configuration:
 - `FMP_API_KEY` - Financial Modeling Prep API key
@@ -236,3 +293,164 @@ The fundamentals cache system successfully implements all requirements from `REF
 ✅ **Comprehensive testing and documentation**
 
 The system provides a robust, efficient, and extensible foundation for fundamentals data management in the e-trading platform.
+
+
+--------------
+Got it. For **free-tier fundamentals**, here’s a practical priority order and how I’d merge/cache them for the best quality.
+
+# Priority (free tiers)
+
+1. **FMP (Financial Modeling Prep)**
+
+   * **Why first:** Broadest free endpoints for US stocks, reasonably structured (JSON), decent coverage of historical statements, profiles, and many ratios.
+   * **Caveats:** Daily call cap and some richer fields paywalled; occasional gaps for smaller non-US names.
+
+2. **yfinance (Yahoo Finance scrape)**
+
+   * **Why second:** Excellent ticker coverage (US + international), lots of **calculated** ratios/TTM figures, sector/industry, calendar events. Great as a **filler** where FMP is missing or stale.
+   * **Caveats:** It’s scraping → fields change names, occasional outages or silent nulls; some numbers are point-in-time **computed** (not raw statements).
+
+3. **Alpha Vantage**
+
+   * **Why third:** Reliable company **Overview** plus annual/quarterly statements; consistent JSON shape.
+   * **Caveats:** Strict rate limits; some non-US tickers hit-and-miss, and historical depth may be thin versus FMP.
+
+4. **Twelve Data**
+
+   * **Why fourth:** Free tier has **very limited** fundamentals; good API design but most detailed fundamentals need a paid plan.
+   * **Caveats:** Expect mostly profile-level info on free.
+
+> TL;DR default order: **FMP → yfinance → Alpha Vantage → Twelve Data**.
+> If you’re **heavy on international** tickers, swap #2 and #1 for some fields: **yfinance → FMP → Alpha Vantage → Twelve Data**.
+
+---
+
+# Merge strategy (per field)
+
+Use **per-field precedence**, not per-provider blanket precedence.
+
+* **Raw financial statements (IS/BS/CF), historical:** `FMP > AlphaVantage > yfinance > Twelve`
+* **TTM metrics & popular ratios (P/E, P/B, ROIC, margins):** `yfinance > FMP > AlphaVantage > Twelve`
+* **Company profile (name, sector, industry, description, website, country):** `FMP ≈ yfinance` (take whichever is non-empty & newer; prefer FMP for structure)
+* **Share count / float / insider %:** `yfinance > FMP > AlphaVantage`
+* **Dividends & split history (fundamentals-adjacent):** `yfinance > FMP`
+* **Calendar (earnings date) / guidance:** `yfinance > FMP`
+
+When sources disagree, keep **both**: store `value`, `source`, `asof`, and a `confidence` (e.g., 0.9 for raw statements, 0.7 for computed ratios). Pick a **resolved\_value** by rule above and keep alternates under `candidates`.
+
+---
+
+# Freshness (TTL) recommendations
+
+* **Profiles/static metadata:** 7–30 days (default **14d**)
+* **Ratios & TTM metrics:** **3–7 days** (default **3d**)
+* **Annual/Quarterly statements:** refresh **when a new filing hits** or every **90d**
+* **Dividend/split calendars:** **3–7 days** during earnings/dividend season; else 30d
+
+Use the newest `asof` (provider timestamp or your fetch time). If cache is **younger than TTL**, don’t refetch.
+
+---
+
+# Cache layout (fits your project)
+
+**Raw cache (one file per provider snapshot):**
+`/data-cache/fundamentals/<SYMBOL>/<PROVIDER>/<provider_symbol>_<YYYYMMDDThhmmssZ>.json`
+
+**Normalized/merged cache (provider-agnostic view):**
+`/data-cache/fundamentals/<SYMBOL>/merged_<YYYYMMDD>.json` (or `latest.json`)
+
+Keep **both** layers:
+
+* Raw = auditability & diffing across providers.
+* Merged = what your app consumes.
+
+---
+
+# Minimal merge schema (suggestion)
+
+```json
+{
+  "symbol": "AAPL",
+  "currency": "USD",
+  "asof": "2025-09-09T14:00:00Z",
+  "sources": {
+    "fmp": {"fetched_at":"...","ttl":"P14D","url":"..."},
+    "yfinance": {"fetched_at":"...","ttl":"P3D"},
+    "alphavantage": {"fetched_at":"...","ttl":"P14D"},
+    "twelvedata": {"fetched_at":"...","ttl":"P14D"}
+  },
+  "fields": {
+    "profile.sector": {
+      "resolved_value": "Technology",
+      "candidates": [
+        {"value":"Technology","source":"fmp","asof":"..."},
+        {"value":"Technology","source":"yfinance","asof":"..."}
+      ]
+    },
+    "ratios.ttm.pe": {
+      "resolved_value": 28.4,
+      "candidates": [
+        {"value":28.4,"source":"yfinance","asof":"..."},
+        {"value":29.1,"source":"fmp","asof":"..."}
+      ]
+    },
+    "statements.annual": {
+      "resolved_value": {"2024":{ /* IS/BS/CF standardized */ }},
+      "candidates": [
+        {"value":{ /* raw FMP year */ },"source":"fmp","asof":"..."},
+        {"value":{ /* raw AV year */ },"source":"alphavantage","asof":"..."}
+      ]
+    }
+  }
+}
+```
+
+---
+
+# Normalization tips
+
+* **Currencies & units:** normalize all statements to **reported currency** and store it; don’t auto-convert. If you convert, keep **both** and the FX rate used.
+* **TTM vs FY/Q:** tag each value with `basis: "TTM" | "FY" | "Q"` to avoid mixing.
+* **Per-share metrics:** recompute from normalized **shares\_basic / shares\_diluted** when possible to avoid provider inconsistencies.
+* **Point-in-time vs restated:** mark `restated: true/false` if the provider flags it; otherwise infer by comparing past snapshots.
+
+---
+
+# Practical call order (pseudocode)
+
+```python
+providers_by_field = {
+  "statements": ["fmp", "alphavantage", "yfinance", "twelvedata"],
+  "ratios":     ["yfinance", "fmp", "alphavantage", "twelvedata"],
+  "profile":    ["fmp", "yfinance", "alphavantage", "twelvedata"]
+}
+
+for field_group, providers in providers_by_field.items():
+    for p in providers:
+        snap = load_from_cache(symbol, p, field_group)
+        if not snap or is_stale(snap, ttl[field_group]):
+            snap = fetch_and_cache(symbol, p, field_group)
+        add_candidate(field_group, snap)
+    resolve_field_group(field_group, rule=providers)
+save_merged(symbol)
+```
+
+---
+
+# Provider-specific gotchas
+
+* **Ticker mapping:** normalize tickers (`BRK.B` vs `BRK-B`, London suffixes `.L`, Toronto `.TO`, Swiss `.SW`, etc.). Keep a mapping layer per provider.
+* **Rate limits:** add jittered backoff (e.g., 429 → exponential sleep). Batch symbols where possible (FMP multi-symbol endpoints).
+* **Nulls:** treat empty strings, `"None"`, `0` (for ratios), and `nan` carefully. Many scrapes return empty dicts.
+* **ADR vs local line:** decide which one is canonical in your universe and map the other as an alias.
+
+---
+
+## Final recommendation
+
+* Start with **FMP as your backbone** for structured statements + profiles.
+* Use **yfinance to enrich** with TTM/ratios, calendar, and to backfill non-US gaps.
+* Add **Alpha Vantage** for redundancy on statements/overview and to cross-check anomalies.
+* Use **Twelve Data** last on free tier (profile-level only).
+
+If you want, I can draft a tiny Python helper (provider adapters + merge rules + TTLs) that drops straight into your `data-cache` layout.

@@ -1,7 +1,7 @@
 """
 Fundamentals Cache System
 
-This module provides JSON-based caching for fundamentals data with a 7-day cache-first rule.
+This module provides JSON-based caching for fundamentals data with configurable TTL rules.
 It supports multiple providers and automatic stale data cleanup.
 
 Cache Structure:
@@ -9,7 +9,7 @@ Cache Structure:
 - Example: fundamentals/AAPL/yfinance_20250106_143022.json
 
 Features:
-- 7-day cache expiration
+- Configurable TTL based on data type (profiles: 14d, ratios: 3d, statements: 90d)
 - Multi-provider support
 - Automatic stale data cleanup
 - Provider priority-based data combination
@@ -43,32 +43,36 @@ class CacheMetadata:
 
 class FundamentalsCache:
     """
-    JSON-based fundamentals cache with 7-day expiration and multi-provider support.
+    JSON-based fundamentals cache with configurable TTL and multi-provider support.
     """
 
-    def __init__(self, cache_dir: str = DATA_CACHE_DIR):
+    def __init__(self, cache_dir: str = DATA_CACHE_DIR, combiner=None):
         """
         Initialize the fundamentals cache.
 
         Args:
             cache_dir: Base cache directory path
+            combiner: FundamentalsCombiner instance for TTL configuration
         """
         self.cache_dir = Path(cache_dir)
         self.fundamentals_dir = self.cache_dir / "fundamentals"
-        self.max_cache_age_days = 7
+        self.combiner = combiner
+        self.default_ttl_days = 7
 
         # Create directories if they don't exist
         self.fundamentals_dir.mkdir(parents=True, exist_ok=True)
 
         _logger.info("Fundamentals cache initialized at %s", self.fundamentals_dir)
 
-    def find_latest_json(self, symbol: str, provider: Optional[str] = None) -> Optional[CacheMetadata]:
+    def find_latest_json(self, symbol: str, provider: Optional[str] = None,
+                        data_type: str = "general") -> Optional[CacheMetadata]:
         """
         Find the most recent cached fundamentals data for a symbol.
 
         Args:
             symbol: Trading symbol (e.g., 'AAPL')
             provider: Specific provider to look for (optional)
+            data_type: Type of data to determine TTL (profiles, ratios, statements, etc.)
 
         Returns:
             CacheMetadata object if valid cache found, None otherwise
@@ -106,8 +110,8 @@ class FundamentalsCache:
 
                 # Check if this is the latest
                 if latest_timestamp is None or timestamp > latest_timestamp:
-                    # Check if cache is still valid
-                    if self.is_cache_valid(timestamp):
+                    # Check if cache is still valid with data-type specific TTL
+                    if self.is_cache_valid(timestamp, data_type=data_type):
                         latest_timestamp = timestamp
                         latest_metadata = CacheMetadata(
                             provider=provider_name,
@@ -204,25 +208,31 @@ class FundamentalsCache:
             _logger.error("Failed to read cache file %s: %s", file_path, e)
             return None
 
-    def is_cache_valid(self, timestamp: datetime, max_age_days: Optional[int] = None) -> bool:
+    def is_cache_valid(self, timestamp: datetime, max_age_days: Optional[int] = None,
+                      data_type: str = "general") -> bool:
         """
-        Check if cached data is still valid based on age.
+        Check if cached data is still valid based on age and data type.
 
         Args:
             timestamp: Timestamp of the cached data
-            max_age_days: Maximum age in days (defaults to 7)
+            max_age_days: Maximum age in days (overrides data_type TTL if provided)
+            data_type: Type of data to determine TTL (profiles, ratios, statements, etc.)
 
         Returns:
             True if cache is still valid, False otherwise
         """
         if max_age_days is None:
-            max_age_days = self.max_cache_age_days
+            # Get TTL from combiner configuration if available
+            if self.combiner:
+                max_age_days = self.combiner.get_ttl_for_data_type(data_type)
+            else:
+                max_age_days = self.default_ttl_days
 
         age = datetime.now() - timestamp
         is_valid = age.days < max_age_days
 
         if not is_valid:
-            _logger.debug("Cache expired: %s days old (max: %s)", age.days, max_age_days)
+            _logger.debug("Cache expired: %s days old (max: %s for %s)", age.days, max_age_days, data_type)
 
         return is_valid
 
@@ -351,18 +361,24 @@ class FundamentalsCache:
 
         return min(score, 1.0)
 
-    def cleanup_expired_data(self, max_age_days: Optional[int] = None) -> Dict[str, int]:
+    def cleanup_expired_data(self, max_age_days: Optional[int] = None,
+                           data_type: str = "general") -> Dict[str, int]:
         """
         Clean up all expired cache data.
 
         Args:
-            max_age_days: Maximum age in days (defaults to 7)
+            max_age_days: Maximum age in days (overrides data_type TTL if provided)
+            data_type: Type of data to determine TTL (profiles, ratios, statements, etc.)
 
         Returns:
             Dictionary with cleanup statistics
         """
         if max_age_days is None:
-            max_age_days = self.max_cache_age_days
+            # Get TTL from combiner configuration if available
+            if self.combiner:
+                max_age_days = self.combiner.get_ttl_for_data_type(data_type)
+            else:
+                max_age_days = self.default_ttl_days
 
         stats = {"removed_files": 0, "removed_symbols": 0}
 
@@ -385,7 +401,7 @@ class FundamentalsCache:
                     file_timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
 
                     # Remove if expired
-                    if not self.is_cache_valid(file_timestamp, max_age_days):
+                    if not self.is_cache_valid(file_timestamp, max_age_days, data_type):
                         file_path.unlink()
                         removed_files += 1
                         stats["removed_files"] += 1
@@ -408,17 +424,18 @@ class FundamentalsCache:
 # Global cache instance
 _fundamentals_cache = None
 
-def get_fundamentals_cache(cache_dir: str = DATA_CACHE_DIR) -> FundamentalsCache:
+def get_fundamentals_cache(cache_dir: str = DATA_CACHE_DIR, combiner=None) -> FundamentalsCache:
     """
     Get the global fundamentals cache instance.
 
     Args:
         cache_dir: Base cache directory path
+        combiner: FundamentalsCombiner instance for TTL configuration
 
     Returns:
         FundamentalsCache instance
     """
     global _fundamentals_cache
     if _fundamentals_cache is None:
-        _fundamentals_cache = FundamentalsCache(cache_dir)
+        _fundamentals_cache = FundamentalsCache(cache_dir, combiner)
     return _fundamentals_cache

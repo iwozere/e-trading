@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+"""
+Fundamentals Cache Refresh Script
+
+This script can be used to periodically refresh fundamentals cache data.
+It supports:
+- Refreshing specific symbols or all cached symbols
+- Force refresh (bypass TTL)
+- Cleanup expired data
+- Batch processing with rate limiting
+
+Usage:
+    python src/data/utils/refresh_fundamentals_cache.py --symbols AAPL,GOOGL,MSFT
+    python src/data/utils/refresh_fundamentals_cache.py --all-symbols
+    python src/data/utils/refresh_fundamentals_cache.py --cleanup-only
+    python src/data/utils/refresh_fundamentals_cache.py --force-refresh --symbols AAPL
+"""
+
+import argparse
+import sys
+import os
+from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+import time
+
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.data.data_manager import DataManager
+from src.data.cache.fundamentals_cache import get_fundamentals_cache
+from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
+def get_cached_symbols(cache_dir: str) -> List[str]:
+    """Get list of symbols that have cached fundamentals data."""
+    try:
+        combiner = get_fundamentals_combiner()
+        cache = get_fundamentals_cache(cache_dir, combiner)
+
+        # Get cache statistics to find all symbols
+        stats = cache.get_cache_stats()
+        return stats.get('symbols', [])
+    except Exception as e:
+        _logger.error("Error getting cached symbols: %s", e)
+        return []
+
+def refresh_symbol_fundamentals(dm: DataManager, symbol: str, data_types: List[str],
+                               force_refresh: bool = False) -> Dict[str, Any]:
+    """Refresh fundamentals for a specific symbol."""
+    results = {
+        'symbol': symbol,
+        'data_types': {},
+        'success': True,
+        'errors': []
+    }
+
+    for data_type in data_types:
+        try:
+            _logger.info("Refreshing %s fundamentals for %s (force_refresh=%s)",
+                        data_type, symbol, force_refresh)
+
+            fundamentals = dm.get_fundamentals(
+                symbol=symbol,
+                data_type=data_type,
+                force_refresh=force_refresh,
+                combination_strategy='priority_based'
+            )
+
+            if fundamentals:
+                results['data_types'][data_type] = {
+                    'success': True,
+                    'fields_count': len(fundamentals),
+                    'has_metadata': '_metadata' in fundamentals
+                }
+                _logger.info("Successfully refreshed %s for %s: %d fields",
+                           data_type, symbol, len(fundamentals))
+            else:
+                results['data_types'][data_type] = {
+                    'success': False,
+                    'error': 'No data returned'
+                }
+                results['errors'].append(f"No data for {data_type}")
+
+        except Exception as e:
+            error_msg = f"Error refreshing {data_type} for {symbol}: {e}"
+            _logger.error(error_msg)
+            results['data_types'][data_type] = {
+                'success': False,
+                'error': str(e)
+            }
+            results['errors'].append(error_msg)
+            results['success'] = False
+
+    return results
+
+def cleanup_expired_cache(cache_dir: str, data_types: List[str]) -> Dict[str, Any]:
+    """Clean up expired cache data."""
+    cleanup_results = {
+        'data_types': {},
+        'total_removed_files': 0,
+        'total_removed_symbols': 0
+    }
+
+    try:
+        combiner = get_fundamentals_combiner()
+        cache = get_fundamentals_cache(cache_dir, combiner)
+
+        for data_type in data_types:
+            _logger.info("Cleaning up expired %s cache data", data_type)
+
+            stats = cache.cleanup_expired_data(data_type=data_type)
+            cleanup_results['data_types'][data_type] = stats
+            cleanup_results['total_removed_files'] += stats.get('removed_files', 0)
+            cleanup_results['total_removed_symbols'] += stats.get('removed_symbols', 0)
+
+            _logger.info("Cleaned up %s: %d files, %d symbols removed",
+                        data_type, stats.get('removed_files', 0), stats.get('removed_symbols', 0))
+
+    except Exception as e:
+        _logger.error("Error during cache cleanup: %s", e)
+        cleanup_results['error'] = str(e)
+
+    return cleanup_results
+
+def main():
+    """Main function to run the fundamentals cache refresh script."""
+    parser = argparse.ArgumentParser(description='Refresh fundamentals cache data')
+
+    # Symbol selection
+    symbol_group = parser.add_mutually_exclusive_group(required=True)
+    symbol_group.add_argument('--symbols', type=str,
+                             help='Comma-separated list of symbols to refresh (e.g., AAPL,GOOGL,MSFT)')
+    symbol_group.add_argument('--all-symbols', action='store_true',
+                             help='Refresh all cached symbols')
+    symbol_group.add_argument('--cleanup-only', action='store_true',
+                             help='Only cleanup expired cache data, no refresh')
+
+    # Data types
+    parser.add_argument('--data-types', type=str, default='ratios,profile,statements',
+                       help='Comma-separated list of data types to refresh (default: ratios,profile,statements)')
+
+    # Options
+    parser.add_argument('--force-refresh', action='store_true',
+                       help='Force refresh even if cache is valid')
+    parser.add_argument('--cache-dir', type=str, default='data-cache',
+                       help='Cache directory path (default: data-cache)')
+    parser.add_argument('--delay', type=float, default=1.0,
+                       help='Delay between symbol refreshes in seconds (default: 1.0)')
+    parser.add_argument('--dry-run', action='store_true',
+                       help='Show what would be done without actually doing it')
+
+    args = parser.parse_args()
+
+    # Parse data types
+    data_types = [dt.strip() for dt in args.data_types.split(',')]
+
+    _logger.info("Starting fundamentals cache refresh")
+    _logger.info("Cache directory: %s", args.cache_dir)
+    _logger.info("Data types: %s", data_types)
+    _logger.info("Force refresh: %s", args.force_refresh)
+    _logger.info("Dry run: %s", args.dry_run)
+
+    if args.dry_run:
+        _logger.info("DRY RUN MODE - No actual changes will be made")
+
+    try:
+        # Initialize DataManager
+        dm = DataManager(args.cache_dir)
+
+        if args.cleanup_only:
+            # Only cleanup expired data
+            _logger.info("Running cache cleanup only")
+            cleanup_results = cleanup_expired_cache(args.cache_dir, data_types)
+
+            _logger.info("Cleanup completed:")
+            _logger.info("  Total files removed: %d", cleanup_results['total_removed_files'])
+            _logger.info("  Total symbols removed: %d", cleanup_results['total_removed_symbols'])
+
+            return
+
+        # Determine symbols to refresh
+        if args.all_symbols:
+            symbols = get_cached_symbols(args.cache_dir)
+            _logger.info("Found %d cached symbols to refresh", len(symbols))
+        else:
+            symbols = [s.strip().upper() for s in args.symbols.split(',')]
+            _logger.info("Refreshing %d specified symbols", len(symbols))
+
+        if not symbols:
+            _logger.warning("No symbols to refresh")
+            return
+
+        # Refresh fundamentals for each symbol
+        results = []
+        for i, symbol in enumerate(symbols):
+            _logger.info("Processing symbol %d/%d: %s", i+1, len(symbols), symbol)
+
+            if not args.dry_run:
+                result = refresh_symbol_fundamentals(dm, symbol, data_types, args.force_refresh)
+                results.append(result)
+
+                # Add delay between symbols to respect rate limits
+                if i < len(symbols) - 1 and args.delay > 0:
+                    time.sleep(args.delay)
+            else:
+                _logger.info("DRY RUN: Would refresh %s for data types: %s", symbol, data_types)
+
+        # Summary
+        if not args.dry_run:
+            successful_symbols = [r for r in results if r['success']]
+            failed_symbols = [r for r in results if not r['success']]
+
+            _logger.info("Refresh completed:")
+            _logger.info("  Successful symbols: %d", len(successful_symbols))
+            _logger.info("  Failed symbols: %d", len(failed_symbols))
+
+            if failed_symbols:
+                _logger.warning("Failed symbols:")
+                for result in failed_symbols:
+                    _logger.warning("  %s: %s", result['symbol'], ', '.join(result['errors']))
+
+        # Optional cleanup after refresh
+        if not args.dry_run and not args.cleanup_only:
+            _logger.info("Running post-refresh cleanup")
+            cleanup_results = cleanup_expired_cache(args.cache_dir, data_types)
+            _logger.info("Post-refresh cleanup: %d files removed",
+                        cleanup_results['total_removed_files'])
+
+    except Exception as e:
+        _logger.error("Error during cache refresh: %s", e)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

@@ -2,17 +2,19 @@
 Fundamentals Data Combiner
 
 This module provides strategies for combining fundamentals data from multiple providers.
-It implements priority-based field selection and data validation.
+It implements priority-based field selection and data validation using configuration-based
+provider sequences and field-specific priorities.
 
-Provider Priority (highest to lowest):
-1. FMP (Financial Modeling Prep) - Most comprehensive
-2. Yahoo Finance - Good coverage, reliable
-3. Alpha Vantage - Good for US stocks
-4. IBKR - Professional data
-5. Others - Fallback providers
+Configuration is loaded from config/data/fundamentals.json and provides:
+- Provider sequences for different data types
+- Field-specific provider priorities
+- TTL settings for different data categories
+- Combination strategies and validation rules
 """
 
 import logging
+import json
+import os
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,21 +35,20 @@ class FundamentalsCombiner:
     Combines fundamentals data from multiple providers using configurable strategies.
     """
 
-    def __init__(self):
-        """Initialize the fundamentals combiner with default provider priorities."""
-        # Provider priority (lower number = higher priority)
-        self.provider_priorities = {
-            'fmp': 1,
-            'yfinance': 2,
-            'alpha_vantage': 3,
-            'ibkr': 4,
-            'polygon': 5,
-            'twelvedata': 6,
-            'finnhub': 7,
-            'tiingo': 8,
-            'binance': 9,
-            'coingecko': 10
-        }
+    def __init__(self, config_path: Optional[str] = None):
+        """
+        Initialize the fundamentals combiner with configuration-based settings.
+
+        Args:
+            config_path: Path to fundamentals configuration file. If None, uses default path.
+        """
+        self.config = self._load_configuration(config_path)
+        self.provider_priorities = self._build_provider_priorities()
+        self.provider_sequences = self.config.get('provider_sequences', {})
+        self.field_priorities = self.config.get('field_priorities', {})
+        self.combination_strategies = self.config.get('combination_strategies', {})
+        self.cache_settings = self.config.get('cache_settings', {})
+        self.data_validation = self.config.get('data_validation', {})
 
         # Field-specific validation rules
         self.field_validators = {
@@ -63,8 +64,161 @@ class FundamentalsCombiner:
             'book_value': self._validate_positive_number
         }
 
+    def _load_configuration(self, config_path: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Load fundamentals configuration from JSON file with validation.
+
+        Args:
+            config_path: Path to configuration file. If None, uses default path.
+
+        Returns:
+            Configuration dictionary
+        """
+        if config_path is None:
+            # Default path relative to project root
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+            config_path = os.path.join(project_root, 'config', 'data', 'fundamentals.json')
+
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+
+            # Validate configuration
+            from src.data.config.fundamentals_config_validator import validate_fundamentals_config
+            is_valid, errors = validate_fundamentals_config(config_path)
+
+            if not is_valid:
+                _logger.error("Fundamentals configuration validation failed:")
+                for error in errors:
+                    _logger.error("  - %s", error)
+                _logger.warning("Using default configuration due to validation errors")
+                return self._get_default_config()
+
+            _logger.debug("Loaded and validated fundamentals configuration from %s", config_path)
+            return config
+
+        except FileNotFoundError:
+            _logger.warning("Fundamentals configuration file not found at %s, using defaults", config_path)
+            return self._get_default_config()
+        except json.JSONDecodeError as e:
+            _logger.error("Invalid JSON in fundamentals configuration file %s: %s", config_path, e)
+            return self._get_default_config()
+        except Exception as e:
+            _logger.error("Error loading fundamentals configuration from %s: %s", config_path, e)
+            return self._get_default_config()
+
+    def _get_default_config(self) -> Dict[str, Any]:
+        """Get default configuration when file loading fails."""
+        return {
+            'provider_sequences': {
+                'statements': ['fmp', 'alphavantage', 'yfinance', 'twelvedata'],
+                'ratios': ['yfinance', 'fmp', 'alphavantage', 'twelvedata'],
+                'profile': ['fmp', 'yfinance', 'alphavantage', 'twelvedata']
+            },
+            'field_priorities': {},
+            'combination_strategies': {
+                'priority_based': {'default': True}
+            },
+            'cache_settings': {
+                'default_ttl_days': 7
+            },
+            'data_validation': {
+                'enabled': True,
+                'min_quality_score': 0.8
+            }
+        }
+
+    def _build_provider_priorities(self) -> Dict[str, int]:
+        """
+        Build provider priorities from configuration.
+
+        Returns:
+            Dictionary mapping provider names to priority numbers (lower = higher priority)
+        """
+        priorities = {}
+        provider_settings = self.config.get('provider_settings', {})
+
+        for provider, settings in provider_settings.items():
+            priorities[provider] = settings.get('priority', 999)
+
+        # Fallback to default priorities if not configured
+        if not priorities:
+            priorities = {
+                'fmp': 1,
+                'yfinance': 2,
+                'alpha_vantage': 3,
+                'ibkr': 4,
+                'polygon': 5,
+                'twelvedata': 6,
+                'finnhub': 7,
+                'tiingo': 8,
+                'binance': 9,
+                'coingecko': 10
+            }
+
+        return priorities
+
+    def get_provider_sequence(self, data_type: str) -> List[str]:
+        """
+        Get provider sequence for a specific data type.
+
+        Args:
+            data_type: Type of data (statements, ratios, profile, etc.)
+
+        Returns:
+            List of providers in priority order
+        """
+        return self.provider_sequences.get(data_type, ['fmp', 'yfinance', 'alpha_vantage'])
+
+    def get_field_provider_priority(self, field_path: str) -> List[str]:
+        """
+        Get provider priority for a specific field.
+
+        Args:
+            field_path: Dot-separated field path (e.g., 'ttm_metrics.pe_ratio')
+
+        Returns:
+            List of providers in priority order for this field
+        """
+        # Navigate through nested field priorities
+        current = self.field_priorities
+        for part in field_path.split('.'):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                # Fall back to general provider sequence
+                return self.get_provider_sequence('ratios' if 'ratio' in field_path.lower() else 'profile')
+
+        if isinstance(current, list):
+            return current
+        else:
+            # Fall back to general provider sequence
+            return self.get_provider_sequence('ratios' if 'ratio' in field_path.lower() else 'profile')
+
+    def get_ttl_for_data_type(self, data_type: str) -> int:
+        """
+        Get TTL in days for a specific data type.
+
+        Args:
+            data_type: Type of data (profiles, ratios, statements, etc.)
+
+        Returns:
+            TTL in days
+        """
+        refresh_intervals = self.config.get('refresh_intervals', {})
+        interval_str = refresh_intervals.get(data_type, '7d')
+
+        # Parse interval string (e.g., '7d', '14d', '90d')
+        if interval_str.endswith('d'):
+            return int(interval_str[:-1])
+        elif interval_str.endswith('h'):
+            return int(interval_str[:-1]) / 24
+        else:
+            return 7  # Default to 7 days
+
     def combine_snapshots(self, provider_data: Dict[str, Dict[str, Any]],
-                         strategy: str = "priority_based") -> Dict[str, Any]:
+                         strategy: str = "priority_based", data_type: str = "general") -> Dict[str, Any]:
         """
         Combine fundamentals data from multiple providers.
 
@@ -109,22 +263,45 @@ class FundamentalsCombiner:
 
     def _priority_based_combination(self, providers: List[ProviderData]) -> Dict[str, Any]:
         """
-        Combine data using priority-based field selection.
-        Higher priority providers take precedence for each field.
+        Combine data using priority-based field selection with field-specific priorities.
+        For each field, use the provider with the highest priority for that specific field.
         """
         combined = {}
         field_sources = {}
 
-        # Process providers in priority order
+        # Get all unique fields across all providers
+        all_fields = set()
         for provider in providers:
-            for field, value in provider.data.items():
-                if value is not None and self._is_valid_field_value(field, value):
-                    if field not in combined:
-                        combined[field] = value
-                        field_sources[field] = provider.provider
-                    else:
-                        # Higher priority provider already has this field
-                        continue
+            all_fields.update(provider.data.keys())
+
+        # For each field, find the best provider based on field-specific priority
+        for field in all_fields:
+            best_value = None
+            best_provider = None
+            best_priority = float('inf')
+
+            # Get field-specific provider priority
+            field_priority_list = self.get_field_provider_priority(field)
+
+            for provider in providers:
+                if field in provider.data:
+                    value = provider.data[field]
+                    if value is not None and self._is_valid_field_value(field, value):
+                        # Get priority for this provider for this field
+                        try:
+                            field_priority = field_priority_list.index(provider.provider)
+                        except ValueError:
+                            # Provider not in field priority list, use general priority
+                            field_priority = self.provider_priorities.get(provider.provider, 999)
+
+                        if field_priority < best_priority:
+                            best_value = value
+                            best_provider = provider.provider
+                            best_priority = field_priority
+
+            if best_value is not None:
+                combined[field] = best_value
+                field_sources[field] = best_provider
 
         # Add metadata about data sources
         combined['_metadata'] = {
@@ -386,14 +563,17 @@ class FundamentalsCombiner:
 # Global combiner instance
 _fundamentals_combiner = None
 
-def get_fundamentals_combiner() -> FundamentalsCombiner:
+def get_fundamentals_combiner(config_path: Optional[str] = None) -> FundamentalsCombiner:
     """
     Get the global fundamentals combiner instance.
+
+    Args:
+        config_path: Path to fundamentals configuration file. If None, uses default path.
 
     Returns:
         FundamentalsCombiner instance
     """
     global _fundamentals_combiner
     if _fundamentals_combiner is None:
-        _fundamentals_combiner = FundamentalsCombiner()
+        _fundamentals_combiner = FundamentalsCombiner(config_path)
     return _fundamentals_combiner

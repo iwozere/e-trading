@@ -780,12 +780,13 @@ class DataManager:
             return None
 
     def get_fundamentals(self, symbol: str, providers: Optional[List[str]] = None,
-                        force_refresh: bool = False, combination_strategy: str = "priority_based") -> Dict[str, Any]:
+                        force_refresh: bool = False, combination_strategy: str = "priority_based",
+                        data_type: str = "general") -> Dict[str, Any]:
         """
         Retrieve fundamentals data with caching and multi-provider combination.
 
         This method implements the fundamentals data retrieval flow:
-        1. Check cache for valid data (7-day rule)
+        1. Check cache for valid data (TTL based on data type)
         2. If cache miss or force_refresh, fetch from multiple providers
         3. Combine data from multiple providers using specified strategy
         4. Cache new data and cleanup stale data
@@ -796,6 +797,7 @@ class DataManager:
             providers: List of specific providers to use (None for auto-selection)
             force_refresh: Force refresh even if cache is valid
             combination_strategy: Strategy for combining data ('priority_based', 'quality_based', 'consensus')
+            data_type: Type of data to determine TTL and provider sequence (profiles, ratios, statements, etc.)
 
         Returns:
             Dictionary containing combined fundamentals data
@@ -805,25 +807,24 @@ class DataManager:
             from src.data.cache.fundamentals_cache import get_fundamentals_cache
             from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
 
-            fundamentals_cache = get_fundamentals_cache(self.cache.cache_dir)
+            # Initialize combiner with configuration
             combiner = get_fundamentals_combiner()
+            fundamentals_cache = get_fundamentals_cache(self.cache.cache_dir, combiner)
 
             # Check cache first (unless force refresh)
             if not force_refresh:
-                cached_data = fundamentals_cache.find_latest_json(symbol)
+                cached_data = fundamentals_cache.find_latest_json(symbol, data_type=data_type)
                 if cached_data:
                     _logger.info("Using cached fundamentals for %s from %s", symbol, cached_data.provider)
                     return fundamentals_cache.read_json(cached_data.file_path) or {}
 
             # Determine providers to use
             if providers is None:
-                # Auto-select providers based on symbol type
-                ticker_info = self.provider_selector.get_ticker_info(symbol)
-                if ticker_info['symbol_type'] == 'crypto':
-                    providers = ['binance', 'coingecko']
-                else:
-                    # Stock providers in priority order
-                    providers = ['fmp', 'yfinance', 'alpha_vantage', 'ibkr']
+                # Use configuration-based provider sequence for data type
+                providers = combiner.get_provider_sequence(data_type)
+                _logger.debug("Using provider sequence for %s: %s", data_type, providers)
+            else:
+                _logger.debug("Using specified providers: %s", providers)
 
             _logger.info("Fetching fundamentals for %s from providers: %s", symbol, providers)
 
@@ -865,7 +866,7 @@ class DataManager:
                 return {}
 
             # Combine data from multiple providers
-            combined_data = combiner.combine_snapshots(provider_data, combination_strategy)
+            combined_data = combiner.combine_snapshots(provider_data, combination_strategy, data_type)
 
             if not combined_data:
                 _logger.error("Failed to combine fundamentals data for %s", symbol)
