@@ -12,6 +12,12 @@ from pathlib import Path
 import pandas as pd
 from dataclasses import dataclass, field
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "c:/data-cache"
+
 
 class DataInterval(Enum):
     """Standard data intervals supported by the system."""
@@ -205,7 +211,7 @@ class DataCacheConfig:
 
     def __init__(
         self,
-        cache_dir: Union[str, Path] = "d:/data-cache",
+        cache_dir: Union[str, Path] = DATA_CACHE_DIR,
         max_cache_size_gb: float = 10.0,
         compression: str = "snappy",
         partition_by: list = None

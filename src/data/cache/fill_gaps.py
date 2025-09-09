@@ -460,7 +460,7 @@ def main():
     parser.add_argument('--intervals', type=str, help='Comma-separated list of intervals (e.g., 5m,15m,1h)')
 
     # Configuration arguments
-    parser.add_argument('--cache-dir', type=str, default='d:/data-cache', help='Cache directory path')
+    parser.add_argument('--cache-dir', type=str, default=DATA_CACHE_DIR, help='Cache directory path')
     parser.add_argument('--max-gap-hours', type=float, default=24.0, help='Maximum gap size to attempt filling (hours)')
 
     args = parser.parse_args()

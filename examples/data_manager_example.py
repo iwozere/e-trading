@@ -22,10 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.data import DataManager, get_data_manager
 
 # Import cache directory setting
-try:
-    from config.donotshare.donotshare import DATA_CACHE_DIR
-except ImportError:
-    DATA_CACHE_DIR = "d:/data-cache"
+from config.donotshare.donotshare import DATA_CACHE_DIR
 
 
 def main():

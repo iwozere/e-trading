@@ -28,6 +28,12 @@ sys.path.insert(0, str(project_root))
 from src.data.utils.file_based_cache import configure_file_cache
 from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "c:/data-cache"
+
 
 def validate_cache_file(file_path: Path) -> Dict[str, Any]:
     """Validate a single cache file and return validation results."""
@@ -189,7 +195,7 @@ def main():
                        help="Remove invalid files from cache")
     parser.add_argument("--validate-and-cleanup", action="store_true",
                        help="Validate and then cleanup invalid files")
-    parser.add_argument("--cache-dir", type=str, default="d:/data-cache",
+    parser.add_argument("--cache-dir", type=str, default=DATA_CACHE_DIR,
                        help="Cache directory path")
     parser.add_argument("--dry-run", action="store_true",
                        help="Show what would be deleted without actually deleting")

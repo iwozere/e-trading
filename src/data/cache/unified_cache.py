@@ -17,10 +17,7 @@ from typing import Dict, Any, Optional, List
 import pandas as pd
 
 # Import cache directory setting
-try:
-    from config.donotshare.donotshare import DATA_CACHE_DIR
-except ImportError:
-    DATA_CACHE_DIR = "d:/data-cache"
+from config.donotshare.donotshare import DATA_CACHE_DIR
 
 # Validation removed - data is cached as-is without validation
 # Validation will be handled by validate_and_fill_gaps.py script
@@ -409,7 +406,7 @@ class UnifiedCache:
         return removed_files
 
 
-def configure_unified_cache(cache_dir: str = "d:/data-cache", max_size_gb: float = 10.0) -> UnifiedCache:
+def configure_unified_cache(cache_dir: str = DATA_CACHE_DIR, max_size_gb: float = 10.0) -> UnifiedCache:
     """Configure and return unified cache instance."""
     return UnifiedCache(cache_dir=cache_dir, max_size_gb=max_size_gb)
 

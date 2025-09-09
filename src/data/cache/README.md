@@ -253,7 +253,7 @@ cache-dir/
 
 ### Environment Variables
 - `ALPHA_VANTAGE_KEY`: Required for intraday stock data from Alpha Vantage
-- Cache directory can be specified via `--cache-dir` parameter (defaults to `d:/data-cache`)
+- Cache directory can be specified via `--cache-dir` parameter (defaults to `c:/data-cache`)
 
 ### API Keys
 API keys are managed through `config/donotshare/donotshare.py`:

@@ -47,7 +47,7 @@ except ImportError:
     TWELVE_DATA_KEY = os.getenv('TWELVE_DATA_KEY')
     FINNHUB_KEY = os.getenv('FINNHUB_KEY')
     TIINGO_API_KEY = os.getenv('TIINGO_API_KEY')
-    DATA_CACHE_DIR = os.getenv('DATA_CACHE_DIR', 'd:/data-cache')
+    DATA_CACHE_DIR = os.getenv('DATA_CACHE_DIR', 'c:/data-cache')  # Fallback if import fails
 
 # Import cache and utilities
 from src.data.cache.unified_cache import UnifiedCache

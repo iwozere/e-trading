@@ -31,7 +31,7 @@ from src.notification.logger import setup_logger
 try:
     from config.donotshare.donotshare import DATA_CACHE_DIR
 except ImportError:
-    DATA_CACHE_DIR = "d:/data-cache"
+    DATA_CACHE_DIR = "c:/data-cache"  # Fallback if import fails
 
 _logger = setup_logger(__name__)
 
@@ -287,7 +287,7 @@ def main():
     parser.add_argument('--validate-all', action='store_true', help='Validate all cached data')
 
     # Configuration arguments
-    parser.add_argument('--cache-dir', type=str, default='d:/data-cache', help='Cache directory path')
+    parser.add_argument('--cache-dir', type=str, default=DATA_CACHE_DIR, help='Cache directory path')
 
     args = parser.parse_args()
 

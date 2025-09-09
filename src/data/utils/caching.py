@@ -15,6 +15,12 @@ import pandas as pd
 import logging
 import json
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "c:/data-cache"
+
 _logger = logging.getLogger(__name__)
 
 
@@ -28,7 +34,7 @@ class DataCache:
 
     def __init__(
         self,
-        cache_dir: Union[str, Path] = "d:/data-cache",
+        cache_dir: Union[str, Path] = DATA_CACHE_DIR,
         max_size_gb: float = 10.0,
         compression: str = "snappy",
         partition_by: Optional[List[str]] = None,
@@ -463,7 +469,7 @@ def get_cache() -> DataCache:
 
 
 def configure_cache(
-    cache_dir: Union[str, Path] = "d:/data-cache",
+    cache_dir: Union[str, Path] = DATA_CACHE_DIR,
     max_size_gb: float = 10.0,
     **kwargs
 ):

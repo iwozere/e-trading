@@ -32,10 +32,7 @@ import numpy as np
 from io import StringIO
 
 # Import cache directory setting
-try:
-    from config.donotshare.donotshare import DATA_CACHE_DIR
-except ImportError:
-    DATA_CACHE_DIR = "d:/data-cache"
+from config.donotshare.donotshare import DATA_CACHE_DIR
 
 try:
     import zstandard as zstd
@@ -1474,7 +1471,7 @@ _file_cache_instance: Optional[FileBasedCache] = None
 
 
 def get_file_cache(
-    cache_dir: Union[str, Path] = "d:/data-cache",
+    cache_dir: Union[str, Path] = DATA_CACHE_DIR,
     max_size_gb: float = 10.0,
     retention_days: int = 30,
     compression_enabled: bool = True
@@ -1505,7 +1502,7 @@ def get_file_cache(
 
 
 def configure_file_cache(
-    cache_dir: Union[str, Path] = "d:/data-cache",
+    cache_dir: Union[str, Path] = DATA_CACHE_DIR,
     max_size_gb: float = 10.0,
     retention_days: int = 100,
     compression_enabled: bool = False,

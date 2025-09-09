@@ -24,10 +24,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass
 
 # Import cache directory setting
-try:
-    from config.donotshare.donotshare import DATA_CACHE_DIR
-except ImportError:
-    DATA_CACHE_DIR = "d:/data-cache"
+from config.donotshare.donotshare import DATA_CACHE_DIR
 
 _logger = logging.getLogger(__name__)
 

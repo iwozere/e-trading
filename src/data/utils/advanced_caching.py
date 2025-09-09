@@ -34,6 +34,12 @@ except ImportError:
 
 from .caching import DataCache
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "c:/data-cache"
+
 _logger = logging.getLogger(__name__)
 
 
@@ -369,7 +375,7 @@ class AdvancedDataCache(DataCache):
 
     def __init__(
         self,
-        cache_dir: Union[str, Path] = "d:/data-cache",
+        cache_dir: Union[str, Path] = DATA_CACHE_DIR,
         max_size_gb: float = 10.0,
         retention_days: int = 30,
         redis_config: Optional[Dict[str, Any]] = None,
@@ -576,7 +582,7 @@ _advanced_cache_instance: Optional[AdvancedDataCache] = None
 
 
 def get_advanced_cache(
-    cache_dir: Union[str, Path] = "d:/data-cache",
+    cache_dir: Union[str, Path] = DATA_CACHE_DIR,
     redis_config: Optional[Dict[str, Any]] = None,
     **kwargs
 ) -> AdvancedDataCache:
@@ -604,7 +610,7 @@ def get_advanced_cache(
 
 
 def configure_advanced_cache(
-    cache_dir: Union[str, Path] = "d:/data-cache",
+    cache_dir: Union[str, Path] = DATA_CACHE_DIR,
     redis_config: Optional[Dict[str, Any]] = None,
     invalidation_strategies: Optional[List[CacheInvalidationStrategy]] = None,
     **kwargs

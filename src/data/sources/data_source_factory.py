@@ -13,6 +13,12 @@ import yaml
 from src.data.sources.base_data_source import BaseDataSource
 from src.data.utils import configure_cache
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "c:/data-cache"
+
 _logger = logging.getLogger(__name__)
 
 
@@ -43,7 +49,7 @@ class DataSourceFactory:
         if self._config.get('caching', {}).get('enabled', True):
             cache_config = self._config['caching']
             configure_cache(
-                cache_dir=cache_config.get('directory', 'd:/data-cache'),
+                cache_dir=cache_config.get('directory', DATA_CACHE_DIR),
                 max_size_gb=cache_config.get('max_size_gb', 10.0),
                 retention_days=cache_config.get('retention_days', 30)
             )
