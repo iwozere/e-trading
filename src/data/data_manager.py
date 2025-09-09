@@ -20,12 +20,14 @@ Classes:
 import os
 import re
 import yaml
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 
 import pandas as pd
 
+from src.data.cache.fundamentals_cache import get_fundamentals_cache
+from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
 from src.notification.logger import setup_logger
 
 # Import API keys from donotshare configuration
@@ -671,10 +673,32 @@ class DataManager:
                 data = downloader.get_ohlcv(symbol, timeframe, start_date, end_date)
 
                 if data is not None and not data.empty:
-                    # Convert timezone-aware timestamps to timezone-naive for validation
+                    # Normalize schema: lowercase columns, ensure 'timestamp' column and tz-naive
                     data_copy = data.copy()
-                    if 'timestamp' in data_copy.columns and data_copy['timestamp'].dt.tz is not None:
-                        data_copy['timestamp'] = data_copy['timestamp'].dt.tz_localize(None)
+
+                    # If index is datetime and no 'timestamp' column, create it from index
+                    if 'timestamp' not in data_copy.columns and isinstance(data_copy.index, pd.DatetimeIndex):
+                        ts_index = data_copy.index
+                        if ts_index.tz is not None:
+                            ts_index = ts_index.tz_localize(None)
+                        data_copy.insert(0, 'timestamp', ts_index)
+
+                    # Lowercase known OHLCV columns
+                    rename_map = {c: c.lower() for c in data_copy.columns}
+                    data_copy = data_copy.rename(columns=rename_map)
+
+                    # Ensure required columns exist
+                    required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                    missing = [c for c in required_cols if c not in data_copy.columns]
+                    if missing:
+                        _logger.warning("Missing required columns after normalization: %s", missing)
+
+                    # Make timestamp tz-naive and set as index for downstream consumers
+                    if 'timestamp' in data_copy.columns:
+                        data_copy['timestamp'] = pd.to_datetime(data_copy['timestamp'], errors='coerce')
+                        if data_copy['timestamp'].dt.tz is not None:
+                            data_copy['timestamp'] = data_copy['timestamp'].dt.tz_localize(None)
+                        data_copy = data_copy.set_index('timestamp')
 
                     # Validate data
                     is_valid, errors = validate_ohlcv_data(data_copy, symbol=symbol, interval=timeframe)
@@ -683,10 +707,10 @@ class DataManager:
                         # Continue with invalid data but log warning
 
                     # Cache the data
-                    self._cache_data(data, symbol, timeframe, start_date, end_date, provider)
+                    self._cache_data(data_copy, symbol, timeframe, start_date, end_date, provider)
 
                     _logger.info("Successfully retrieved data from %s", provider)
-                    return data
+                    return data_copy
                 else:
                     _logger.warning("Provider %s returned empty data", provider)
 
@@ -804,9 +828,6 @@ class DataManager:
         """
         try:
             # Import here to avoid circular imports
-            from src.data.cache.fundamentals_cache import get_fundamentals_cache
-            from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
-
             # Initialize combiner with configuration
             combiner = get_fundamentals_combiner()
             fundamentals_cache = get_fundamentals_cache(self.cache.cache_dir, combiner)

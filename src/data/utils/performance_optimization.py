@@ -550,6 +550,9 @@ class PerformanceMonitor:
                     'total_data_mb': sum(m.data_size_mb for m in metrics_list)
                 }
 
+            # Add backward-compatibility aggregate
+            summary['total_operations'] = sum(v['count'] for k, v in summary.items() if isinstance(v, dict) and 'count' in v)
+
             return summary
 
     def clear_metrics(self):

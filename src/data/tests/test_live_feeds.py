@@ -539,15 +539,18 @@ class TestDataFeedFactory(unittest.TestCase):
             "interval": "1d"
         }
 
-        with patch('requests.get') as mock_get:
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
-                "prices": [[1672531200000, 150.0]],
-                "total_volumes": [[1672531200000, 1000000]]
-            }
-            mock_get.return_value = mock_response
+        # Mock the historical data loading to avoid network calls
+        mock_df = pd.DataFrame({
+            'timestamp': pd.date_range('2024-01-01', periods=10, freq='1d'),
+            'open': [100.0] * 10,
+            'high': [110.0] * 10,
+            'low': [90.0] * 10,
+            'close': [105.0] * 10,
+            'volume': [1000000] * 10
+        })
+        mock_df = mock_df.set_index('timestamp')
 
+        with patch.object(CoinGeckoLiveDataFeed, '_load_historical_data', return_value=mock_df):
             feed = DataFeedFactory.create_data_feed(config)
 
             self.assertIsInstance(feed, CoinGeckoLiveDataFeed)

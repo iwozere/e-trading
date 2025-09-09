@@ -117,30 +117,29 @@ class YahooDataDownloader(BaseDataDownloader):
             _logger.warning("No data returned for %s", symbol)
             return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-        # Convert to standard format
+        # Convert to standard format (lowercase columns, timestamp index to column)
         df = df.reset_index()
-
-        # Handle different column structures from YFinance
-        expected_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
-        actual_columns = list(df.columns)
-
-        _logger.debug("YFinance returned columns for %s: %s", symbol, actual_columns)
-
-        # If we have more columns than expected, handle it gracefully
-        if len(actual_columns) > len(expected_columns):
-            # YFinance sometimes returns additional columns like 'Adj Close', 'Dividends'
-            # We'll take the first 6 columns and rename them
-            df = df.iloc[:, :6]  # Take first 6 columns
-            df.columns = expected_columns
-        elif len(actual_columns) == len(expected_columns):
-            # Exact match, just rename
-            df.columns = expected_columns
-        else:
-            # Fewer columns than expected, this is an error
-            _logger.error("Unexpected column count for %s: expected %d, got %d", symbol, len(expected_columns), len(actual_columns))
-            raise ValueError(f"Unexpected column structure for {symbol}: {actual_columns}")
-
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        # Lowercase
+        df.columns = [str(c).lower() for c in df.columns]
+        # Map yfinance names to standard
+        rename_map = {
+            'date': 'timestamp',
+            'open': 'open',
+            'high': 'high',
+            'low': 'low',
+            'close': 'close',
+            'adj close': 'close',
+            'volume': 'volume'
+        }
+        df = df.rename(columns=rename_map)
+        # Keep only required columns if present
+        cols = [c for c in ['timestamp','open','high','low','close','volume'] if c in df.columns]
+        df = df[cols]
+        # Ensure timestamp
+        if 'timestamp' in df.columns:
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+            if df['timestamp'].dt.tz is not None:
+                df['timestamp'] = df['timestamp'].dt.tz_localize(None)
 
         _logger.debug("Downloaded %d rows for %s", len(df), symbol)
         return df

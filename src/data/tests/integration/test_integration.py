@@ -20,6 +20,7 @@ from src.data import (
     create_data_source,
     DataAggregator
 )
+from unittest.mock import patch
 from src.data.feed.binance_live_feed import BinanceLiveDataFeed
 from src.data.utils import get_data_handler, validate_ohlcv_data
 
@@ -63,8 +64,11 @@ def test_data_source_factory():
     print("\nTesting Data Source Factory...")
 
     try:
-        # Get factory instance
-        factory = get_data_source_factory()
+        # Get factory instance with mocked config (avoid drive D:, use temp on C:)
+        with patch('src.data.sources.data_source_factory.DataSourceFactory._load_config') as mock_cfg:
+            temp_cache = str(Path.cwd() / 'temp_cache')
+            mock_cfg.return_value = {'caching': {'enabled': True, 'cache_dir': temp_cache}, 'data_sources': {}}
+            factory = get_data_source_factory()
         print("✓ Factory instance created")
 
         # Register a test data source
