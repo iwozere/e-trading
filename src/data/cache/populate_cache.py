@@ -32,7 +32,7 @@ from src.data.cache.unified_cache import configure_unified_cache, get_unified_ca
 from src.data.sources.base_data_source import BaseDataSource
 
 # Import API keys from donotshare
-from config.donotshare.donotshare import ALPHA_VANTAGE_KEY
+from config.donotshare.donotshare import ALPHA_VANTAGE_KEY, DATA_CACHE_DIR
 # Validation removed - data is cached as-is without validation
 from src.notification.logger import setup_logger
 
@@ -109,7 +109,7 @@ class MockDataSource(BaseDataSource):
 
 def populate_cache(symbols: List[str], intervals: List[str],
                    start_date: datetime, end_date: datetime,
-                   cache_dir: str = "d:/data-cache", file_format: str = "csv") -> Dict[str, Any]:
+                   cache_dir: str = DATA_CACHE_DIR, file_format: str = "csv") -> Dict[str, Any]:
     """Populate the file-based cache with historical data."""
 
     print(f"🚀 Populating cache at: {cache_dir}")
@@ -448,7 +448,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
     return results
 
 
-def validate_cache_structure(cache_dir: str = "d:/data-cache") -> Dict[str, Any]:
+def validate_cache_structure(cache_dir: str = DATA_CACHE_DIR) -> Dict[str, Any]:
     """Validate the cache directory structure and contents."""
     print("🔍 Validating cache structure...")
     print()
@@ -516,7 +516,7 @@ def main():
                        help="Test all system components")
     parser.add_argument("--validate-cache", action="store_true",
                        help="Validate cache structure and contents")
-    parser.add_argument("--symbols", type=str, default="BTCUSDT,ETHUSDT,LTCUSDT,ADAUSDT,VT,GOOG,TSLA,NVDA,NFLX",
+    parser.add_argument("--symbols", type=str, default="BTCUSDT,ETHUSDT,LTCUSDT,ADAUSDT,VT,GOOG,TSLA,NVDA,NFLX,VT,PSNY,VUSD,SMCI,RPD,QTUM,QBTS,PFE,MRNA,MASI,LULU,IONQ",
                        help="Comma-separated list of symbols to download")
     parser.add_argument("--intervals", type=str, default="1h,4h,1d,5m,15m",
                        help="Comma-separated list of intervals to download")
@@ -524,7 +524,7 @@ def main():
                        help="Start date in YYYY-MM-DD format")
     parser.add_argument("--end-date", type=str, default=None,
                        help="End date in YYYY-MM-DD format (defaults to today)")
-    parser.add_argument("--cache-dir", type=str, default="d:/data-cache",
+    parser.add_argument("--cache-dir", type=str, default=DATA_CACHE_DIR,
                        help="Cache directory path")
 
     args = parser.parse_args()

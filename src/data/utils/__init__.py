@@ -10,11 +10,11 @@ from .file_based_cache import (
     TimeBasedInvalidation, VersionBasedInvalidation,
     get_file_cache, configure_file_cache
 )
-from .data_streaming import (
-    StreamConfig, StreamMetrics, WebSocketConnection, ConnectionPool,
-    DataStreamProcessor, StreamMultiplexer, BackpressureHandler,
-    get_stream_multiplexer, create_stream_config
-)
+# from .data_streaming import (
+#     StreamConfig, StreamMetrics, WebSocketConnection, ConnectionPool,
+#     DataStreamProcessor, StreamMultiplexer, BackpressureHandler,
+#     get_stream_multiplexer, create_stream_config
+# )
 from .performance_optimization import (
     PerformanceMetrics, DataCompressor, LazyDataLoader, ParallelProcessor,
     MemoryOptimizer, PerformanceMonitor,
@@ -35,10 +35,10 @@ __all__ = [
                 'TimeBasedInvalidation', 'VersionBasedInvalidation',
                 'get_file_cache', 'configure_file_cache',
 
-    # Phase 3: Data Streaming
-    'StreamConfig', 'StreamMetrics', 'WebSocketConnection', 'ConnectionPool',
-    'DataStreamProcessor', 'StreamMultiplexer', 'BackpressureHandler',
-    'get_stream_multiplexer', 'create_stream_config',
+    # Phase 3: Data Streaming (commented out - module not available)
+    # 'StreamConfig', 'StreamMetrics', 'WebSocketConnection', 'ConnectionPool',
+    # 'DataStreamProcessor', 'StreamMultiplexer', 'BackpressureHandler',
+    # 'get_stream_multiplexer', 'create_stream_config',
 
     # Phase 3: Performance Optimization
     'PerformanceMetrics', 'DataCompressor', 'LazyDataLoader', 'ParallelProcessor',

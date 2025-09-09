@@ -21,6 +21,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.data import DataManager, get_data_manager
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "d:/data-cache"
+
 
 def main():
     """Demonstrate DataManager usage."""
@@ -31,7 +37,7 @@ def main():
     # Initialize DataManager
     print("\n1. Initializing DataManager...")
     dm = get_data_manager(
-        cache_dir="d:/data-cache",
+        cache_dir=DATA_CACHE_DIR,
         config_path="config/data/provider_rules.yaml"
     )
     print("✅ DataManager initialized successfully")

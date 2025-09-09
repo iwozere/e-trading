@@ -23,6 +23,12 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "d:/data-cache"
+
 _logger = logging.getLogger(__name__)
 
 @dataclass
@@ -40,7 +46,7 @@ class FundamentalsCache:
     JSON-based fundamentals cache with 7-day expiration and multi-provider support.
     """
 
-    def __init__(self, cache_dir: str = "data-cache"):
+    def __init__(self, cache_dir: str = DATA_CACHE_DIR):
         """
         Initialize the fundamentals cache.
 
@@ -402,7 +408,7 @@ class FundamentalsCache:
 # Global cache instance
 _fundamentals_cache = None
 
-def get_fundamentals_cache(cache_dir: str = "data-cache") -> FundamentalsCache:
+def get_fundamentals_cache(cache_dir: str = DATA_CACHE_DIR) -> FundamentalsCache:
     """
     Get the global fundamentals cache instance.
 

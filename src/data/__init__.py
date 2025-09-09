@@ -67,9 +67,9 @@ from .utils import (
                 VersionBasedInvalidation,
                 FileCacheInvalidationStrategy,
                 FileCacheCompressor,
-    StreamMultiplexer,
-    get_stream_multiplexer,
-    create_stream_config,
+    # StreamMultiplexer,
+    # get_stream_multiplexer,
+    # create_stream_config,
     LazyDataLoader,
     ParallelProcessor,
     MemoryOptimizer,
@@ -136,10 +136,10 @@ __all__ = [
                 'FileCacheInvalidationStrategy',
                 'FileCacheCompressor',
 
-    # Phase 3: Data Streaming
-    'StreamMultiplexer',
-    'get_stream_multiplexer',
-    'create_stream_config',
+    # Phase 3: Data Streaming (commented out - module not available)
+    # 'StreamMultiplexer',
+    # 'get_stream_multiplexer',
+    # 'create_stream_config',
 
     # Phase 3: Performance Optimization
     'LazyDataLoader',

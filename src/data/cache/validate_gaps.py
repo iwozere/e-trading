@@ -27,13 +27,19 @@ from src.data.cache.unified_cache import configure_unified_cache
 from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
 from src.notification.logger import setup_logger
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "d:/data-cache"
+
 _logger = setup_logger(__name__)
 
 
 def validate_cached_data(
     symbols: List[str],
     intervals: List[str],
-    cache_dir: str = "d:/data-cache"
+    cache_dir: str = DATA_CACHE_DIR
 ) -> Dict[str, Any]:
     """
     Validate cached data for quality and gaps by examining each year's data file.

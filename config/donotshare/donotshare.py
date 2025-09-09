@@ -62,3 +62,6 @@ API_PASSWORD = os.getenv("API_PASSWORD")
 # Admin credentials for Flask-Login
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+# Data cache directory
+DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "c:/data-cache")

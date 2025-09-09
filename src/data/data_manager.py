@@ -36,7 +36,8 @@ try:
         POLYGON_KEY,
         TWELVE_DATA_KEY,
         FINNHUB_KEY,
-        TIINGO_API_KEY
+        TIINGO_API_KEY,
+        DATA_CACHE_DIR
     )
 except ImportError:
     # Fallback to environment variables if donotshare is not available
@@ -46,6 +47,7 @@ except ImportError:
     TWELVE_DATA_KEY = os.getenv('TWELVE_DATA_KEY')
     FINNHUB_KEY = os.getenv('FINNHUB_KEY')
     TIINGO_API_KEY = os.getenv('TIINGO_API_KEY')
+    DATA_CACHE_DIR = os.getenv('DATA_CACHE_DIR', 'd:/data-cache')
 
 # Import cache and utilities
 from src.data.cache.unified_cache import UnifiedCache
@@ -567,7 +569,7 @@ class DataManager:
     - Centralized error handling and retry logic
     """
 
-    def __init__(self, cache_dir: str = "d:/data-cache", config_path: Optional[str] = None):
+    def __init__(self, cache_dir: str = DATA_CACHE_DIR, config_path: Optional[str] = None):
         """
         Initialize DataManager.
 
@@ -922,7 +924,7 @@ class DataManager:
 
 
 # Convenience function for easy access
-def get_data_manager(cache_dir: str = "d:/data-cache", config_path: Optional[str] = None) -> DataManager:
+def get_data_manager(cache_dir: str = DATA_CACHE_DIR, config_path: Optional[str] = None) -> DataManager:
     """
     Get a DataManager instance.
 

@@ -27,7 +27,7 @@ import pandas as pd
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from config.donotshare.donotshare import ALPHA_VANTAGE_KEY
+from config.donotshare.donotshare import ALPHA_VANTAGE_KEY, DATA_CACHE_DIR
 from src.data.cache.unified_cache import configure_unified_cache
 from src.data.downloader.binance_data_downloader import BinanceDataDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
@@ -372,7 +372,7 @@ def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str
 def fill_data_gaps(
     symbols: List[str],
     intervals: List[str],
-    cache_dir: str = "d:/data-cache",
+    cache_dir: str = DATA_CACHE_DIR,
     max_gap_hours: float = 24.0
 ) -> Dict[str, Any]:
     """

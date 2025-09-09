@@ -31,6 +31,12 @@ import pandas as pd
 import numpy as np
 from io import StringIO
 
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "d:/data-cache"
+
 try:
     import zstandard as zstd
     ZSTD_AVAILABLE = True
@@ -513,7 +519,7 @@ class FileBasedCache:
 
     def __init__(
         self,
-        cache_dir: Union[str, Path] = "d:/data-cache",
+        cache_dir: Union[str, Path] = DATA_CACHE_DIR,
         max_size_gb: float = 10.0,
         retention_days: int = 30,
         invalidation_strategies: Optional[List[FileCacheInvalidationStrategy]] = None,
