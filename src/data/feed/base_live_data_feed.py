@@ -328,13 +328,20 @@ class BaseLiveDataFeed:
 
                 # Update Backtrader lines
                 latest = self.df.iloc[-1]
-                self.lines.datetime[0] = bt.date2num(self.df.index[-1])
-                self.lines.open[0] = latest["open"]
-                self.lines.high[0] = latest["high"]
-                self.lines.low[0] = latest["low"]
-                self.lines.close[0] = latest["close"]
-                self.lines.volume[0] = latest["volume"]
-                self.lines.openinterest[0] = 0
+                try:
+                    # Ensure lines are properly initialized before accessing
+                    if hasattr(self.lines, 'datetime') and len(self.lines.datetime) > 0:
+                        self.lines.datetime[0] = bt.date2num(self.df.index[-1])
+                        self.lines.open[0] = latest["open"]
+                        self.lines.high[0] = latest["high"]
+                        self.lines.low[0] = latest["low"]
+                        self.lines.close[0] = latest["close"]
+                        self.lines.volume[0] = latest["volume"]
+                        self.lines.openinterest[0] = 0
+                    else:
+                        _logger.warning("Lines not properly initialized for %s, skipping line update", self.symbol)
+                except (IndexError, AttributeError) as e:
+                    _logger.warning("Failed to update lines for %s: %s", self.symbol, str(e))
 
                 self.last_update = datetime.now()
 

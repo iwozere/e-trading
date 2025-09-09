@@ -5,14 +5,17 @@ Fundamentals Cache Refresh Script
 This script can be used to periodically refresh fundamentals cache data.
 It supports:
 - Refreshing specific symbols or all cached symbols
+- Loading symbols from text files (default: example_tickers.txt)
 - Force refresh (bypass TTL)
 - Cleanup expired data
 - Batch processing with rate limiting
 
 Usage:
+    python src/data/utils/refresh_fundamentals_cache.py                    # Use default example_tickers.txt
     python src/data/utils/refresh_fundamentals_cache.py --symbols AAPL,GOOGL,MSFT
     python src/data/utils/refresh_fundamentals_cache.py --all-symbols
     python src/data/utils/refresh_fundamentals_cache.py --cleanup-only
+    python src/data/utils/refresh_fundamentals_cache.py --symbols-file my_symbols.txt
     python src/data/utils/refresh_fundamentals_cache.py --force-refresh --symbols AAPL
 """
 
@@ -25,13 +28,19 @@ from typing import List, Dict, Any, Optional
 import time
 
 # Add project root to path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.data.data_manager import DataManager
 from src.data.cache.fundamentals_cache import get_fundamentals_cache
 from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
 from src.notification.logger import setup_logger
+
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "data-cache"
 
 _logger = setup_logger(__name__)
 
@@ -46,6 +55,22 @@ def get_cached_symbols(cache_dir: str) -> List[str]:
         return stats.get('symbols', [])
     except Exception as e:
         _logger.error("Error getting cached symbols: %s", e)
+        return []
+
+def load_symbols_from_file(file_path: str) -> List[str]:
+    """Load symbols from a text file (one symbol per line)."""
+    try:
+        symbols = []
+        with open(file_path, 'r') as f:
+            for line in f:
+                symbol = line.strip()
+                if symbol and not symbol.startswith('#'):  # Skip empty lines and comments
+                    symbols.append(symbol.upper())
+
+        _logger.info("Loaded %d symbols from %s", len(symbols), file_path)
+        return symbols
+    except Exception as e:
+        _logger.error("Error loading symbols from %s: %s", file_path, e)
         return []
 
 def refresh_symbol_fundamentals(dm: DataManager, symbol: str, data_types: List[str],
@@ -131,13 +156,15 @@ def main():
     parser = argparse.ArgumentParser(description='Refresh fundamentals cache data')
 
     # Symbol selection
-    symbol_group = parser.add_mutually_exclusive_group(required=True)
+    symbol_group = parser.add_mutually_exclusive_group(required=False)
     symbol_group.add_argument('--symbols', type=str,
                              help='Comma-separated list of symbols to refresh (e.g., AAPL,GOOGL,MSFT)')
     symbol_group.add_argument('--all-symbols', action='store_true',
                              help='Refresh all cached symbols')
     symbol_group.add_argument('--cleanup-only', action='store_true',
                              help='Only cleanup expired cache data, no refresh')
+    symbol_group.add_argument('--symbols-file', type=str,
+                             help='Path to text file containing symbols (one per line). Default: example_tickers.txt')
 
     # Data types
     parser.add_argument('--data-types', type=str, default='ratios,profile,statements',
@@ -146,8 +173,8 @@ def main():
     # Options
     parser.add_argument('--force-refresh', action='store_true',
                        help='Force refresh even if cache is valid')
-    parser.add_argument('--cache-dir', type=str, default='data-cache',
-                       help='Cache directory path (default: data-cache)')
+    parser.add_argument('--cache-dir', type=str, default=DATA_CACHE_DIR,
+                       help=f'Cache directory path (default: {DATA_CACHE_DIR})')
     parser.add_argument('--delay', type=float, default=1.0,
                        help='Delay between symbol refreshes in seconds (default: 1.0)')
     parser.add_argument('--dry-run', action='store_true',
@@ -186,9 +213,18 @@ def main():
         if args.all_symbols:
             symbols = get_cached_symbols(args.cache_dir)
             _logger.info("Found %d cached symbols to refresh", len(symbols))
-        else:
+        elif args.symbols:
             symbols = [s.strip().upper() for s in args.symbols.split(',')]
             _logger.info("Refreshing %d specified symbols", len(symbols))
+        elif args.symbols_file:
+            symbols = load_symbols_from_file(args.symbols_file)
+            _logger.info("Refreshing %d symbols from file", len(symbols))
+        else:
+            # Default: use example_tickers.txt
+            default_file = os.path.join(os.path.dirname(__file__), 'example_tickers.txt')
+            symbols = load_symbols_from_file(default_file)
+            _logger.info("No symbols specified, using default file: %s", default_file)
+            _logger.info("Refreshing %d symbols from default file", len(symbols))
 
         if not symbols:
             _logger.warning("No symbols to refresh")

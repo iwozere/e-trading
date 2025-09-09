@@ -230,8 +230,8 @@ class TestDataManagerIntegration:
                 # Make a request
                 data_manager.get_ohlcv(symbol, timeframe, start_date, end_date)
 
-                # Check cache structure
-                cache_path = Path(temp_cache_dir) / symbol / timeframe
+                # Check cache structure (new structure: ohlcv/symbol/timeframe)
+                cache_path = Path(temp_cache_dir) / "ohlcv" / symbol / timeframe
                 assert cache_path.exists()
 
                 # Check for data file

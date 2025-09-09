@@ -224,9 +224,14 @@ def test_fundamentals_retrieval_mock():
     }]
 
     with patch('requests.get') as mock_get:
-        mock_get.return_value.json.return_value = mock_response
+        # Set up the mock to return different responses for different calls
+        mock_responses = [mock_profile, mock_metrics, mock_ratios]
         mock_get.return_value.raise_for_status.return_value = None
-        mock_get.side_effect = [mock_profile, mock_metrics, mock_ratios]
+
+        def mock_json():
+            return mock_responses.pop(0) if mock_responses else []
+
+        mock_get.return_value.json = mock_json
 
         try:
             fundamentals = downloader.get_fundamentals("AAPL")

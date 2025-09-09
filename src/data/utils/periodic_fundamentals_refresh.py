@@ -6,7 +6,10 @@ This script can be run periodically (e.g., via cron) to refresh fundamentals cac
 It's designed to be lightweight and safe for automated execution.
 
 Usage:
-    # Refresh all cached symbols (recommended for daily cron)
+    # Use default example_tickers.txt (recommended for daily cron)
+    python src/data/utils/periodic_fundamentals_refresh.py
+
+    # Refresh all cached symbols
     python src/data/utils/periodic_fundamentals_refresh.py --all-symbols
 
     # Refresh specific symbols (for testing)
@@ -24,15 +27,22 @@ from datetime import datetime
 import logging
 
 # Add project root to path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.data.utils.refresh_fundamentals_cache import (
     get_cached_symbols,
     refresh_symbol_fundamentals,
-    cleanup_expired_cache
+    cleanup_expired_cache,
+    load_symbols_from_file
 )
 from src.data.data_manager import DataManager
+
+# Import cache directory setting
+try:
+    from config.donotshare.donotshare import DATA_CACHE_DIR
+except ImportError:
+    DATA_CACHE_DIR = "data-cache"
 
 # Setup simple logging for cron jobs
 logging.basicConfig(
@@ -50,7 +60,7 @@ def main():
     parser = argparse.ArgumentParser(description='Periodic fundamentals cache refresh')
 
     # Symbol selection
-    symbol_group = parser.add_mutually_exclusive_group(required=True)
+    symbol_group = parser.add_mutually_exclusive_group(required=False)
     symbol_group.add_argument('--symbols', type=str,
                              help='Comma-separated list of symbols to refresh')
     symbol_group.add_argument('--all-symbols', action='store_true',
@@ -59,8 +69,8 @@ def main():
                              help='Only cleanup expired cache data')
 
     # Options
-    parser.add_argument('--cache-dir', type=str, default='data-cache',
-                       help='Cache directory path')
+    parser.add_argument('--cache-dir', type=str, default=DATA_CACHE_DIR,
+                       help=f'Cache directory path (default: {DATA_CACHE_DIR})')
     parser.add_argument('--data-types', type=str, default='ratios,profile',
                        help='Data types to refresh (default: ratios,profile)')
     parser.add_argument('--max-symbols', type=int, default=50,
@@ -92,9 +102,16 @@ def main():
             symbols = all_symbols[:args.max_symbols]  # Limit for safety
             logger.info("Found %d cached symbols, processing first %d",
                        len(all_symbols), len(symbols))
-        else:
+        elif args.symbols:
             symbols = [s.strip().upper() for s in args.symbols.split(',')]
             logger.info("Processing %d specified symbols", len(symbols))
+        else:
+            # Default: use example_tickers.txt
+            default_file = os.path.join(os.path.dirname(__file__), 'example_tickers.txt')
+            symbols = load_symbols_from_file(default_file)
+            symbols = symbols[:args.max_symbols]  # Limit for safety
+            logger.info("No symbols specified, using default file: %s", default_file)
+            logger.info("Processing first %d symbols from default file", len(symbols))
 
         if not symbols:
             logger.warning("No symbols to process")

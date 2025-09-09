@@ -66,16 +66,16 @@ def test_alpha_vantage_intraday():
             print(f"\n📋 Sample data (first 5 rows):")
             print(df.head())
 
-            return True
+            assert True  # Test passed
         else:
             print("❌ No data returned")
-            return False
+            assert False, "No data returned"
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return False
+        assert False, f"Test failed: {str(e)}"
 
 
 def test_alpha_vantage_crypto():
@@ -109,14 +109,14 @@ def test_alpha_vantage_crypto():
             print(f"✅ Success! Downloaded {len(df)} rows")
             print(f"📊 Data shape: {df.shape}")
             print(f"📅 Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
-            return True
+            assert True  # Test passed
         else:
             print("❌ No crypto data returned")
-            return False
+            assert False, "No crypto data returned"
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
-        return False
+        assert False, f"Test failed: {str(e)}"
 
 
 def main():

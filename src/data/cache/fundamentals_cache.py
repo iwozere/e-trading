@@ -5,8 +5,8 @@ This module provides JSON-based caching for fundamentals data with configurable 
 It supports multiple providers and automatic stale data cleanup.
 
 Cache Structure:
-- fundamentals/{symbol}/{provider}_{timestamp}.json
-- Example: fundamentals/AAPL/yfinance_20250106_143022.json
+- {cache_dir}/fundamentals/{symbol}/{provider}_{timestamp}.json
+- Example: c:/data-cache/fundamentals/AAPL/yfinance_20250106_143022.json
 
 Features:
 - Configurable TTL based on data type (profiles: 14d, ratios: 3d, statements: 90d)

@@ -4,6 +4,30 @@
 
 This document describes the implementation of the JSON-based fundamentals cache system as specified in `REFACTOR.md`. The system provides a 7-day cache-first rule for all stock providers with multi-provider data combination and automatic stale data cleanup.
 
+## Cache Structure
+
+The system uses a hierarchical cache structure with separate directories for different data types:
+
+```
+DATA_CACHE_DIR/
+├── ohlcv/                    # Technical/OHLCV data
+│   ├── AAPL/
+│   │   ├── 1d/
+│   │   │   ├── 2024.csv.gz
+│   │   │   ├── 2024.metadata.json
+│   │   │   └── 2023.csv.gz
+│   │   ├── 1h/
+│   │   └── 5m/
+│   ├── BTCUSDT/
+│   └── _metadata/
+└── fundamentals/             # Fundamentals data
+    ├── AAPL/
+    │   ├── yfinance_20250106_143022.json
+    │   ├── fmp_20250106_143025.json
+    │   └── alphavantage_20250106_143028.json
+    └── BTCUSDT/
+```
+
 ## Implementation Summary
 
 ### ✅ Completed Features
@@ -13,7 +37,7 @@ This document describes the implementation of the JSON-based fundamentals cache 
    - `write_json(symbol, provider, data, timestamp)` - Write fundamentals to cache
    - `is_cache_valid(timestamp, max_age_days=7)` - Check cache validity
    - `cleanup_stale_data(symbol, provider, new_timestamp)` - Remove old data
-   - Cache structure: `fundamentals/{symbol}/{provider}_{timestamp}.json`
+   - Cache structure: `{cache_dir}/fundamentals/{symbol}/{provider}_{timestamp}.json`
 
 2. **Multi-Provider Data Combination** (`src/data/cache/fundamentals_combiner.py`)
    - `FundamentalsCombiner` class with pluggable strategies

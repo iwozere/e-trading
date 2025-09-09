@@ -207,6 +207,15 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
                         current_df.index = pd.date_range('2023-01-01', periods=len(current_df), freq='D')
 
                 last_known_time = current_df.index[-1]
+
+                # Ensure both timestamps are timezone-naive for comparison
+                if last_known_time.tz is not None:
+                    last_known_time = last_known_time.tz_localize(None)
+
+                # Make sure recent_data index is also timezone-naive
+                if recent_data.index.tz is not None:
+                    recent_data.index = recent_data.index.tz_localize(None)
+
                 new_data = recent_data[recent_data.index > last_known_time]
 
                 if not new_data.empty:

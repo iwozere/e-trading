@@ -8,7 +8,7 @@ Deliverables:
 
 Installable library (pip package) + optional REST API (FastAPI).
 
-Unified interface: DataManager.get_olhcv(...), DataManager.stream_candles(...), DataManager.get_fundamentals_snapshot(...).
+Unified interface: DataManager.get_ohlcv(...), DataManager.stream_candles(...), DataManager.get_fundamentals_snapshot(...).
 
 Normalized data format (OHLCV) and unified timeframes.
 
@@ -53,7 +53,7 @@ Fundamentals snapshot: immutable set of fundamental metrics at as_of date.
 
 4.1 Candle data
 
-1. DataManager.get_olhcv(symbol, timeframe, start, end, *, asset_type=None, adjusted=True, source_priority=None, force_refresh=False) -> pd.DataFrame
+1. DataManager.get_ohlcv(symbol, timeframe, start, end, *, asset_type=None, adjusted=True, source_priority=None, force_refresh=False) -> pd.DataFrame
 
 Auto-detect asset type (crypto/equity) via SymbolRegistry; fallback heuristics.
 
@@ -261,7 +261,7 @@ class FundamentalsProvider(Protocol):
     async def snapshot(self, symbols: list[str], as_of: date | None, fields: list[str] | None) -> pd.DataFrame:
         ...
 
-6.3 DataManager façade: get_olhcv algorithm
+6.3 DataManager façade: get_ohlcv algorithm
 
 1. Detect asset_type and provider priorities.
 
@@ -404,7 +404,7 @@ Pandas feed: already returns standardized DataFrames.
 
 Backtrader: BtParquetFeed / BtPandasLive:
 
-History: load via DataManager.get_olhcv → feed.
+History: load via DataManager.get_ohlcv → feed.
 
 Live: stream_candles → queue/callback, update the last bar and emit ondata.
 
@@ -515,7 +515,7 @@ from datetime import datetime, timezone
 mgr = DataManager.from_yaml("config.yml")
 
 # History
-df = mgr.get_olhcv("BTCUSDT", "15m", start=datetime(2020,1,1,tzinfo=timezone.utc), end=datetime(2021,1,1,tzinfo=timezone.utc))
+df = mgr.get_ohlcv("BTCUSDT", "15m", start=datetime(2020,1,1,tzinfo=timezone.utc), end=datetime(2021,1,1,tzinfo=timezone.utc))
 
 # Live stream
 async def on_tick(bar):
@@ -534,7 +534,7 @@ class DataManager:
     @classmethod
     def from_yaml(cls, path: str) -> "DataManager": ...
 
-    def get_olhcv(self, symbol: str, timeframe: str, start, end, *, asset_type=None, adjusted=True, source_priority=None, force_refresh=False) -> pd.DataFrame: ...
+    def get_ohlcv(self, symbol: str, timeframe: str, start, end, *, asset_type=None, adjusted=True, source_priority=None, force_refresh=False) -> pd.DataFrame: ...
 
     async def stream_candles(self, symbol: str, timeframe: str, *, poll_interval: float = 2.0, on_tick=None, backfill: bool = True): ...
 

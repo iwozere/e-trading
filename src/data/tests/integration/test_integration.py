@@ -51,11 +51,11 @@ def test_data_handler():
         print(f"✓ Data validation: {validation_result['is_valid']}")
         print(f"✓ Quality score: {validation_result['quality_score']['quality_score']:.2f}")
 
-        return True
+        assert True  # Test passed
 
     except Exception as e:
         print(f"✗ Data handler test failed: {e}")
-        return False
+        assert False, f"Data handler test failed: {e}"
 
 
 def test_data_source_factory():
@@ -75,11 +75,11 @@ def test_data_source_factory():
         providers = factory.get_available_providers()
         print(f"✓ Available providers: {providers}")
 
-        return True
+        assert True  # Test passed
 
     except Exception as e:
         print(f"✗ Data source factory test failed: {e}")
-        return False
+        assert False, f"Data source factory test failed: {e}"
 
 
 def test_data_aggregator():
@@ -114,11 +114,11 @@ def test_data_aggregator():
         sync1, sync2 = aggregator.synchronize_data(data1, data2, "TEST")
         print(f"✓ Data synchronization: {len(sync1)} synchronized points")
 
-        return True
+        assert True  # Test passed
 
     except Exception as e:
         print(f"✗ Data aggregator test failed: {e}")
-        return False
+        assert False, f"Data aggregator test failed: {e}"
 
 
 def test_utility_functions():
@@ -142,11 +142,11 @@ def test_utility_functions():
         if errors:
             print(f"  Validation errors: {errors}")
 
-        return True
+        assert True  # Test passed
 
     except Exception as e:
         print(f"✗ Utility functions test failed: {e}")
-        return False
+        assert False, f"Utility functions test failed: {e}"
 
 
 def main():

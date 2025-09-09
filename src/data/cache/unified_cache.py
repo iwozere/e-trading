@@ -25,24 +25,27 @@ from config.donotshare.donotshare import DATA_CACHE_DIR
 
 class UnifiedCache:
     """
-    Unified cache system with simplified structure: symbol/timeframe/
+    Unified cache system with simplified structure: ohlcv/symbol/timeframe/
 
     Structure:
     cache_dir/
-    ├── BTCUSDT/
-    │   ├── 5m/
-    │   │   ├── 2025.csv.gz
-    │   │   ├── 2025.metadata.json
-    │   │   ├── 2024.metadata.json
-    │   │   └── 2024.csv.gz
-    │   └── 1h/
-    ├── AAPL/
-    │   ├── 5m/
-    │   └── 1d/
-    └── _metadata/
-        ├── symbols.json
-        ├── providers.json
-        └── quality_scores.json
+    ├── ohlcv/
+    │   ├── BTCUSDT/
+    │   │   ├── 5m/
+    │   │   │   ├── 2025.csv.gz
+    │   │   │   ├── 2025.metadata.json
+    │   │   │   ├── 2024.metadata.json
+    │   │   │   └── 2024.csv.gz
+    │   │   └── 1h/
+    │   ├── AAPL/
+    │   │   ├── 5m/
+    │   │   └── 1d/
+    │   └── _metadata/
+    │       ├── symbols.json
+    │       ├── providers.json
+    │       └── quality_scores.json
+    └── fundamentals/
+        └── [fundamentals cache structure]
     """
 
     def __init__(self, cache_dir: str = DATA_CACHE_DIR, max_size_gb: float = 10.0):
@@ -54,11 +57,13 @@ class UnifiedCache:
             max_size_gb: Maximum cache size in GB
         """
         self.cache_dir = Path(cache_dir)
+        self.ohlcv_dir = self.cache_dir / "ohlcv"
         self.max_size_gb = max_size_gb
-        self.metadata_dir = self.cache_dir / "_metadata"
+        self.metadata_dir = self.ohlcv_dir / "_metadata"
 
         # Create directories
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.ohlcv_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_dir.mkdir(exist_ok=True)
 
         # Initialize metadata
@@ -85,7 +90,7 @@ class UnifiedCache:
 
     def _get_cache_path(self, symbol: str, timeframe: str) -> Path:
         """Get cache path for symbol/timeframe."""
-        return self.cache_dir / symbol / timeframe
+        return self.ohlcv_dir / symbol / timeframe
 
     def _get_data_file_path(self, symbol: str, timeframe: str, year: int) -> Path:
         """Get data file path (compressed CSV)."""
@@ -277,7 +282,7 @@ class UnifiedCache:
 
     def _get_available_years(self, symbol: str, timeframe: str) -> List[int]:
         """Get list of available years for symbol/timeframe."""
-        timeframe_dir = self.cache_dir / symbol / timeframe
+        timeframe_dir = self.ohlcv_dir / symbol / timeframe
         if not timeframe_dir.exists():
             return []
 
@@ -331,7 +336,7 @@ class UnifiedCache:
             total_size = 0
             files_count = 0
 
-            for item in self.cache_dir.rglob('*.csv.gz'):
+            for item in self.ohlcv_dir.rglob('*.csv.gz'):
                 if item.is_file():
                     total_size += item.stat().st_size
                     files_count += 1
@@ -353,14 +358,14 @@ class UnifiedCache:
     def list_symbols(self) -> List[str]:
         """List all symbols in cache."""
         symbols = []
-        for item in self.cache_dir.iterdir():
+        for item in self.ohlcv_dir.iterdir():
             if item.is_dir() and not item.name.startswith('_'):
                 symbols.append(item.name)
         return sorted(symbols)
 
     def list_timeframes(self, symbol: str) -> List[str]:
         """List all timeframes for a symbol."""
-        symbol_dir = self.cache_dir / symbol
+        symbol_dir = self.ohlcv_dir / symbol
         if not symbol_dir.exists():
             return []
 
@@ -391,7 +396,7 @@ class UnifiedCache:
         cutoff_date = datetime.now() - timedelta(days=max_age_days)
         removed_files = 0
 
-        for item in self.cache_dir.rglob('*.csv.gz'):
+        for item in self.ohlcv_dir.rglob('*.csv.gz'):
             if item.is_file():
                 try:
                     # Get file modification time
