@@ -51,6 +51,7 @@ class DataDownloaderFactory:
         "yf": "yahoo",
         "yahoo": "yahoo",
         "yf_finance": "yahoo",
+        "yfinance": "yahoo",
 
         # Alpha Vantage
         "av": "alphavantage",

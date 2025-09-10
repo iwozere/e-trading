@@ -19,6 +19,7 @@ It is intended for both human developers and AI agents contributing to the codeb
 ## 2. Imports
 
 - Use **absolute imports** (preferred) over relative imports.
+- Place imports at the beginning of the file.
 - Import order:
   1. Standard library
   2. Third-party packages

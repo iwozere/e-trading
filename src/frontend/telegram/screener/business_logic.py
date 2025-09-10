@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 
@@ -15,6 +14,8 @@ from src.common.technicals import calculate_technicals_unified
 from src.model.telegram_bot import TickerAnalysis
 from src.frontend.telegram import db
 from src.common.ticker_analyzer import format_ticker_report, analyze_ticker
+from src.common.ticker_analyzer import analyze_ticker
+from src.frontend.telegram.screener.report_config_parser import ReportConfigParser
 
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
@@ -173,7 +174,6 @@ async def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     if config_json:
         # Validate and parse JSON configuration
         try:
-            from src.frontend.telegram.screener.report_config_parser import ReportConfigParser
             is_valid, errors = ReportConfigParser.validate_report_config(config_json)
             if not is_valid:
                 return {"status": "error", "title": "Report Error", "message": f"Invalid report configuration: {'; '.join(errors)}"}
@@ -275,8 +275,6 @@ async def analyze_ticker_business(
     try:
         # Use the analyze_ticker function from src.common.ticker_analyzer
         # This ensures that indicators are properly calculated and added to the DataFrame
-        from src.common.ticker_analyzer import analyze_ticker
-
         analysis = await analyze_ticker(
             ticker=ticker,
             provider=provider,

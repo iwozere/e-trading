@@ -7,7 +7,9 @@ from src.common.indicator_service import get_indicator_service
 from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
 from src.notification.logger import setup_logger
 #from src.backtester.plotter.base_plotter import
+from src.model.telegram_bot import Technicals
 import numpy as np
+import talib
 
 
 _logger = setup_logger(__name__)
@@ -21,8 +23,6 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
         if not provider:
             provider = determine_provider(ticker)
 
-
-
         # Get OHLCV data using common function
         df = get_ohlcv(ticker, interval, period, provider)
 
@@ -30,8 +30,6 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
         fundamentals = None
         if provider.lower() in ["yf", "av", "fh", "td", "pg"]:
             fundamentals = get_fundamentals(ticker, provider)
-
-
 
         # Get unified indicator service
         indicator_service = get_indicator_service()
@@ -49,8 +47,6 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
         indicator_set = await indicator_service.get_indicators(request)
 
         # Extract technical indicators from unified result
-        from src.model.telegram_bot import Technicals
-
         # Initialize technical data with default values
         technical_data = {
             'rsi': None,
@@ -137,7 +133,6 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
         # Calculate full time series for key indicators using TA-Lib
         # This ensures the chart has the complete indicator data
         try:
-            import talib
 
             # Validate data types and quality
             close = df_with_indicators['close'].values.astype(float)
