@@ -9,6 +9,7 @@ from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
 from src.common.indicator_service import get_indicator_service
 from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
+from src.data.data_manager import get_data_manager
 
 PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
 
@@ -18,22 +19,10 @@ async def get_fundamentals_unified(ticker: str, provider: str = None, **kwargs) 
     Get fundamentals using the unified indicator service.
     This is the new recommended approach.
     """
-    indicator_service = get_indicator_service()
+    # First, try DataManager path which handles caching and multi-provider merge
+    dm = get_data_manager()
+    combined = dm.get_fundamentals(symbol=ticker)
 
-    request = IndicatorCalculationRequest(
-        ticker=ticker,
-        indicators=["PE_RATIO", "PB_RATIO", "PS_RATIO", "PEG_RATIO", "ROE", "ROA", "DEBT_TO_EQUITY", "CURRENT_RATIO", "QUICK_RATIO", "OPERATING_MARGIN", "PROFIT_MARGIN", "REVENUE_GROWTH", "NET_INCOME_GROWTH", "FREE_CASH_FLOW", "DIVIDEND_YIELD", "PAYOUT_RATIO", "MARKET_CAP", "ENTERPRISE_VALUE"],
-        timeframe="1d",
-        period="1y",
-        provider=provider
-    )
-
-    indicator_set = await indicator_service.get_indicators(request)
-    # Convert IndicatorSet to Fundamentals object for backward compatibility
-    from src.model.telegram_bot import Fundamentals
-
-    # Extract fundamental indicators from the indicator set
-    # Map indicator names to Fundamentals class fields
     fundamental_data = {
         'ticker': ticker,
         'company_name': None,
@@ -75,69 +64,101 @@ async def get_fundamentals_unified(ticker: str, provider: str = None, **kwargs) 
         'sources': {}
     }
 
-    # Map indicator names to Fundamentals fields
-    indicator_mapping = {
-        'PE_RATIO': 'pe_ratio',
-        'FORWARD_PE': 'forward_pe',
-        'PB_RATIO': 'price_to_book',
-        'PS_RATIO': 'price_to_sales',
-        'PEG_RATIO': 'peg_ratio',
-        'ROE': 'return_on_equity',
-        'ROA': 'return_on_assets',
-        'DEBT_TO_EQUITY': 'debt_to_equity',
-        'CURRENT_RATIO': 'current_ratio',
-        'QUICK_RATIO': 'quick_ratio',
-        'OPERATING_MARGIN': 'operating_margin',
-        'PROFIT_MARGIN': 'profit_margin',
-        'REVENUE_GROWTH': 'revenue_growth',
-        'NET_INCOME_GROWTH': 'net_income_growth',
-        'FREE_CASH_FLOW': 'free_cash_flow',
-        'DIVIDEND_YIELD': 'dividend_yield',
-        'PAYOUT_RATIO': 'payout_ratio',
-        'MARKET_CAP': 'market_cap',
-        'ENTERPRISE_VALUE': 'enterprise_value',
-    }
+    # If DataManager returned combined fundamentals, map known fields
+    if isinstance(combined, dict) and combined:
+        mapping = {
+            'ticker': 'ticker',
+            'company_name': 'company_name',
+            'current_price': 'current_price',
+            'market_cap': 'market_cap',
+            'pe_ratio': 'pe_ratio',
+            'forward_pe': 'forward_pe',
+            'dividend_yield': 'dividend_yield',
+            'earnings_per_share': 'earnings_per_share',
+            'price_to_book': 'price_to_book',
+            'return_on_equity': 'return_on_equity',
+            'return_on_assets': 'return_on_assets',
+            'debt_to_equity': 'debt_to_equity',
+            'current_ratio': 'current_ratio',
+            'quick_ratio': 'quick_ratio',
+            'revenue': 'revenue',
+            'revenue_growth': 'revenue_growth',
+            'net_income': 'net_income',
+            'net_income_growth': 'net_income_growth',
+            'free_cash_flow': 'free_cash_flow',
+            'operating_margin': 'operating_margin',
+            'profit_margin': 'profit_margin',
+            'beta': 'beta',
+            'sector': 'sector',
+            'industry': 'industry',
+            'country': 'country',
+            'exchange': 'exchange',
+            'currency': 'currency',
+            'shares_outstanding': 'shares_outstanding',
+            'float_shares': 'float_shares',
+            'short_ratio': 'short_ratio',
+            'payout_ratio': 'payout_ratio',
+            'peg_ratio': 'peg_ratio',
+            'price_to_sales': 'price_to_sales',
+            'enterprise_value': 'enterprise_value',
+            'enterprise_value_to_ebitda': 'enterprise_value_to_ebitda',
+            'data_source': 'data_source',
+            'last_updated': 'last_updated',
+        }
+        for src_key, dest_key in mapping.items():
+            if src_key in combined and combined[src_key] is not None:
+                fundamental_data[dest_key] = combined[src_key]
+    else:
+        # Fall back to indicator service if DataManager had no data
+        indicator_service = get_indicator_service()
 
-    for name, indicator in indicator_set.fundamental_indicators.items():
-        if name in indicator_mapping:
-            field_name = indicator_mapping[name]
-            fundamental_data[field_name] = indicator.value
+        request = IndicatorCalculationRequest(
+            ticker=ticker,
+            indicators=["PE_RATIO", "PB_RATIO", "PS_RATIO", "PEG_RATIO", "ROE", "ROA", "DEBT_TO_EQUITY", "CURRENT_RATIO", "QUICK_RATIO", "OPERATING_MARGIN", "PROFIT_MARGIN", "REVENUE_GROWTH", "NET_INCOME_GROWTH", "FREE_CASH_FLOW", "DIVIDEND_YIELD", "PAYOUT_RATIO", "MARKET_CAP", "ENTERPRISE_VALUE"],
+            timeframe="1d",
+            period="1y",
+            provider=provider
+        )
 
-    # Get company name and other metadata from traditional fundamentals service
+        indicator_set = await indicator_service.get_indicators(request)
+
+        indicator_mapping = {
+            'PE_RATIO': 'pe_ratio',
+            'FORWARD_PE': 'forward_pe',
+            'PB_RATIO': 'price_to_book',
+            'PS_RATIO': 'price_to_sales',
+            'PEG_RATIO': 'peg_ratio',
+            'ROE': 'return_on_equity',
+            'ROA': 'return_on_assets',
+            'DEBT_TO_EQUITY': 'debt_to_equity',
+            'CURRENT_RATIO': 'current_ratio',
+            'QUICK_RATIO': 'quick_ratio',
+            'OPERATING_MARGIN': 'operating_margin',
+            'PROFIT_MARGIN': 'profit_margin',
+            'REVENUE_GROWTH': 'revenue_growth',
+            'NET_INCOME_GROWTH': 'net_income_growth',
+            'FREE_CASH_FLOW': 'free_cash_flow',
+            'DIVIDEND_YIELD': 'dividend_yield',
+            'PAYOUT_RATIO': 'payout_ratio',
+            'MARKET_CAP': 'market_cap',
+            'ENTERPRISE_VALUE': 'enterprise_value',
+        }
+
+        for name, indicator in indicator_set.fundamental_indicators.items():
+            if name in indicator_mapping:
+                field_name = indicator_mapping[name]
+                fundamental_data[field_name] = indicator.value
+
+    # Enrich with traditional fundamentals if still missing key metadata
     try:
         traditional_fundamentals = get_fundamentals(ticker, provider)
-        if traditional_fundamentals and traditional_fundamentals.company_name:
-            fundamental_data['company_name'] = traditional_fundamentals.company_name
-        if traditional_fundamentals and traditional_fundamentals.current_price:
-            fundamental_data['current_price'] = traditional_fundamentals.current_price
-        if traditional_fundamentals and traditional_fundamentals.sector:
-            fundamental_data['sector'] = traditional_fundamentals.sector
-        if traditional_fundamentals and traditional_fundamentals.industry:
-            fundamental_data['industry'] = traditional_fundamentals.industry
-        if traditional_fundamentals and traditional_fundamentals.country:
-            fundamental_data['country'] = traditional_fundamentals.country
-        if traditional_fundamentals and traditional_fundamentals.exchange:
-            fundamental_data['exchange'] = traditional_fundamentals.exchange
-        if traditional_fundamentals and traditional_fundamentals.currency:
-            fundamental_data['currency'] = traditional_fundamentals.currency
-        if traditional_fundamentals and traditional_fundamentals.earnings_per_share:
-            fundamental_data['earnings_per_share'] = traditional_fundamentals.earnings_per_share
-        if traditional_fundamentals and traditional_fundamentals.revenue:
-            fundamental_data['revenue'] = traditional_fundamentals.revenue
-        if traditional_fundamentals and traditional_fundamentals.net_income:
-            fundamental_data['net_income'] = traditional_fundamentals.net_income
-        if traditional_fundamentals and traditional_fundamentals.beta:
-            fundamental_data['beta'] = traditional_fundamentals.beta
-        if traditional_fundamentals and traditional_fundamentals.shares_outstanding:
-            fundamental_data['shares_outstanding'] = traditional_fundamentals.shares_outstanding
-        if traditional_fundamentals and traditional_fundamentals.float_shares:
-            fundamental_data['float_shares'] = traditional_fundamentals.float_shares
-        if traditional_fundamentals and traditional_fundamentals.short_ratio:
-            fundamental_data['short_ratio'] = traditional_fundamentals.short_ratio
-        if traditional_fundamentals and traditional_fundamentals.enterprise_value_to_ebitda:
-            fundamental_data['enterprise_value_to_ebitda'] = traditional_fundamentals.enterprise_value_to_ebitda
-    except Exception as e:
-        # If traditional fundamentals fail, continue with indicator service data
+        if traditional_fundamentals:
+            for key in ['company_name','current_price','sector','industry','country','exchange','currency','earnings_per_share','revenue','net_income','beta','shares_outstanding','float_shares','short_ratio','enterprise_value_to_ebitda']:
+                val = getattr(traditional_fundamentals, key, None)
+                if val is not None and fundamental_data.get(key) is None:
+                    fundamental_data[key] = val
+    except Exception:
+        # Ignore failures; we already have best-effort data
         pass
 
     return Fundamentals(**fundamental_data)
@@ -148,8 +169,7 @@ def get_fundamentals(ticker: str, provider: str = None, **kwargs) -> Fundamental
     Retrieve fundamentals for a ticker using the specified data provider.
     If provider is None, try all providers and merge results for the most complete Fundamentals.
     """
-    if len(ticker) > 4:
-        return None
+    # Allow all reasonable ticker lengths (supports tickers like GOOGL, BRK.B, etc.)
 
     if provider:
         prov = provider

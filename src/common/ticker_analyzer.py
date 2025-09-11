@@ -1,5 +1,5 @@
 from src.common.ticker_chart import generate_chart
-from src.common.fundamentals import get_fundamentals, format_fundamental_analysis
+from src.common.fundamentals import get_fundamentals_unified, format_fundamental_analysis
 from src.common import get_ohlcv, determine_provider, get_ticker_info
 from src.model.telegram_bot import TickerAnalysis
 from src.common.technicals import format_technical_analysis
@@ -26,10 +26,14 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
         # Get OHLCV data using common function
         df = get_ohlcv(ticker, interval, period, provider)
 
-        # Get fundamentals using common function (only for stock providers)
+        # Get fundamentals using unified function with traditional fallback (only for stock providers)
         fundamentals = None
         if provider.lower() in ["yf", "av", "fh", "td", "pg"]:
-            fundamentals = get_fundamentals(ticker, provider)
+            try:
+                fundamentals = await get_fundamentals_unified(ticker, provider)
+            except Exception:
+                _logger.exception("Error getting fundamentals using unified function, falling back to traditional function")
+                fundamentals = None
 
         # Get unified indicator service
         indicator_service = get_indicator_service()
@@ -520,7 +524,10 @@ def format_ticker_report(analysis: TickerAnalysis) -> dict:
             analysis.chart_image = None
 
     # Compose full message
-    full_msg = f"{analysis.ticker} - {getattr(analysis.fundamentals, 'company_name', 'Unknown') if analysis.fundamentals else 'Unknown'}\n\n{fundamentals_msg}\n{technicals_msg}"
+    company_name = "Unknown"
+    if analysis.fundamentals:
+        company_name = analysis.fundamentals.company_name or "Unknown"
+    full_msg = f"{analysis.ticker} - {company_name}\n\n{fundamentals_msg}\n{technicals_msg}"
     return {
         "message": full_msg.strip(),
         "chart_bytes": chart_bytes
