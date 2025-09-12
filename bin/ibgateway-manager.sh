@@ -28,7 +28,7 @@ LIVE_CFG="$LIVE_DIR/IBGateway/config/ibgateway.live.xml"
 PAPER_CFG="$PAPER_DIR/IBGateway/config/ibgateway.paper.xml"
 LIVE_SERVICE="ibgateway-live"
 PAPER_SERVICE="ibgateway-paper"
-INSTALLER_URL="https://download2.interactivebrokers.com/installers/ibgateway/IBGateway-latest-standalone-linux-x64.sh"
+INSTALLER_URL="https://download.interactivebrokers.com/installers/ibgateway/latest-standalone/ibgateway-latest-standalone-linux-x64.sh"
 
 # Flags
 ASK=1
