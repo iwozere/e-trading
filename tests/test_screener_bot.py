@@ -12,10 +12,8 @@ from datetime import datetime, timedelta
 import random
 import shutil
 
-from src.frontend.telegram.db import (
-    add_ticker, delete_ticker, list_tickers, all_tickers_with_providers_for_status, get_or_create_user,
-    set_user_email, get_user_email, get_user_verification_status, get_user_verification_code, set_user_verified, get_conn, get_ticker_settings
-)
+# TODO: Update imports after ticker management functions are implemented
+# from src.data.db import telegram_service as db
 from src.common.technicals import format_technical_analysis
 from src.common.ticker_chart import generate_chart
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority

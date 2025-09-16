@@ -22,7 +22,7 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
-from src.frontend.telegram import db
+from src.data.db import telegram_service as db
 from src.notification.logger import setup_logger
 
 logger = setup_logger("create_admin")

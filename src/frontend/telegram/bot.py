@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 
@@ -18,7 +17,7 @@ from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PAS
 from src.frontend.telegram.screener.notifications import (
     process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_screener_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
 )
-from src.frontend.telegram import db
+from src.data.db import telegram_service as db
 
 # Configure logging
 from src.notification.logger import setup_logger, set_logging_context
@@ -315,7 +314,15 @@ async def cmd_start(message: Message):
 
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
-    await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_manager)
+    try:
+        await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_manager)
+    except Exception as e:
+        _logger.exception("Error processing /help command for user %s", message.from_user.id)
+        # Fallback: send built-in help text directly
+        try:
+            await message.answer(HELP_TEXT)
+        except Exception:
+            await message.answer("Sorry, there was an error processing your command. Please try again.")
 
 @dp.message(Command("info"))
 async def cmd_info(message: Message):

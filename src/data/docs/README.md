@@ -138,7 +138,7 @@ df = downloader.get_ohlcv("BTCUSDT", "5m", "2023-01-01", "2023-12-31")
 **Coverage:** Global stocks and ETFs
 
 ```python
-from src.data.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 
 downloader = YahooDataDownloader()
 fundamentals = downloader.get_fundamentals("AAPL")
@@ -256,7 +256,7 @@ Real-time stock data streaming from Yahoo Finance.
 - Automatic reconnection
 
 ```python
-from src.data.yahoo_live_feed import YahooLiveFeed
+from src.data.downloader.yahoo_live_feed import YahooLiveFeed
 
 feed = YahooLiveFeed(["AAPL", "GOOGL"])
 feed.start()

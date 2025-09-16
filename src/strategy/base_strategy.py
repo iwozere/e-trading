@@ -530,7 +530,7 @@ class BaseStrategy(bt.Strategy):
             return
 
         try:
-            from src.data.trade_repository import TradeRepository
+            from src.data.db.trade_repository import TradeRepository
             self.trade_repository = TradeRepository()
 
             # Create or get bot instance

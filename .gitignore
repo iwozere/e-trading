@@ -45,6 +45,7 @@ htmlcov/
 db/
 data/
 !src/data/
+!src/data/db/
 results/
 temp/
 

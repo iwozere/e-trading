@@ -8,7 +8,7 @@ sys.path.append(str(PROJECT_ROOT))
 import asyncio
 import time
 from typing import List, Dict, Any
-from src.frontend.telegram import db
+from src.data.db import telegram_service as db
 from src.common import get_ohlcv
 from src.frontend.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
 from src.frontend.telegram.screener.alert_logic_evaluator import AlertLogicEvaluator, evaluate_alert

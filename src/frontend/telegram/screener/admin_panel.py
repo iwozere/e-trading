@@ -62,7 +62,7 @@ from datetime import datetime, timedelta
 import asyncio
 import aiohttp
 import json
-from src.frontend.telegram import db
+from src.data.db import telegram_service as db
 from config.donotshare.donotshare import WEBGUI_LOGIN, WEBGUI_PASSWORD, WEBGUI_PORT, TELEGRAM_BOT_TOKEN
 
 from src.notification.logger import setup_logger

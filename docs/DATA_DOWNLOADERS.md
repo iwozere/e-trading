@@ -69,7 +69,7 @@ df = downloader.get_ohlcv('bitcoin', '1d', '2023-01-01', '2023-02-01')
 - **Limits:** Public API, subject to Yahoo's own limits
 - **Example:**
 ```python
-from src.data.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 downloader = YahooDataDownloader()
 df = downloader.get_ohlcv('AAPL', '1d', '2023-01-01', '2023-02-01')
 ```

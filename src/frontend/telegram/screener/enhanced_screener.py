@@ -25,11 +25,12 @@ from src.util.tickers_list import (
     get_us_large_cap_tickers,
     get_six_tickers
 )
+
+# Use optimized batch fundamentals download for maximum performance
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.common import get_ohlcv
 from src.common.technicals import calculate_technicals_unified
-from src.frontend.telegram.screener.screener_config_parser import (
-    ScreenerConfig, FundamentalCriteria, TechnicalCriteria
-)
+from src.frontend.telegram.screener.screener_config_parser import (ScreenerConfig, FundamentalCriteria, TechnicalCriteria)
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -165,8 +166,6 @@ class EnhancedScreener:
         _logger.info("Starting fundamental data collection for %d tickers", len(tickers))
 
         try:
-            # Use optimized batch fundamentals download for maximum performance
-            from src.data.yahoo_data_downloader import YahooDataDownloader
             downloader = YahooDataDownloader()
 
             # Use the most optimized batch method that minimizes individual API calls
@@ -224,8 +223,6 @@ class EnhancedScreener:
         _logger.info("Starting technical data collection for %d tickers", len(tickers))
 
         try:
-            # Use batch OHLCV download for better performance
-            from src.data.yahoo_data_downloader import YahooDataDownloader
             downloader = YahooDataDownloader()
 
             # Calculate date range

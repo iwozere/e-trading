@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)

@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 sys.path.append('src')
 
 from src.data.database import get_database_manager, Trade, BotInstance, PerformanceMetrics
-from src.data.trade_repository import TradeRepository
+from src.data.db.trade_repository import TradeRepository
 
 
 def test_database_connection():
@@ -350,4 +350,4 @@ def main():
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1) 
+    sys.exit(0 if success else 1)

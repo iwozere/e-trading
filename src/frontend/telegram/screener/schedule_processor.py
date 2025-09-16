@@ -9,7 +9,7 @@ import asyncio
 import time
 from datetime import datetime, timezone
 from typing import List, Dict, Any
-from src.frontend.telegram import db
+from src.data.db import telegram_service as db
 from src.frontend.telegram.screener.business_logic import analyze_ticker_business
 from src.common.ticker_analyzer import format_ticker_report
 from src.frontend.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
@@ -209,7 +209,7 @@ class ScheduleProcessor:
             if email:
                 # Send via email
                 try:
-                    from src.frontend.telegram import db
+                    from src.data.db import telegram_service as db
                     user_status = db.get_user_status(user_id)
                     if user_status and user_status.get("email"):
                         from src.frontend.telegram.screener.notifications import send_screener_email
@@ -407,7 +407,7 @@ async def execute_screener_schedule(self, schedule: Dict[str, Any]):
             if email:
                 # Send via email
                 try:
-                    from src.frontend.telegram import db
+                    from src.data.db import telegram_service as db
                     user_status = db.get_user_status(user_id)
                     if user_status and user_status.get("email"):
                         from src.frontend.telegram.screener.notifications import send_screener_email

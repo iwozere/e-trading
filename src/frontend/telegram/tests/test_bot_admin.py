@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from src.frontend.telegram import bot as bot_module
-from src.frontend.telegram import db as db_module
+from src.data.db import telegram_service as db_module
 
 @pytest.mark.asyncio
 @patch("src.frontend.telegram.bot.is_admin_user", return_value=True)

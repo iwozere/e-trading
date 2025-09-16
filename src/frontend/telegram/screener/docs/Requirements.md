@@ -53,7 +53,7 @@
 ```python
 # Business Logic Dependencies
 from src.frontend.telegram.command_parser import ParsedCommand, parse_command
-from src.frontend.telegram import db  # Database operations
+from src.data.db import telegram_service as db  # Database operations
 from src.common import get_ohlcv  # Market data retrieval
 from src.common.fundamentals import get_fundamentals  # Fundamental data
 from src.common.technicals import calculate_technicals_from_df  # Technical indicators
@@ -311,7 +311,7 @@ cp .env.example .env
 ### Database Initialization
 ```bash
 # Initialize SQLite database
-python -c "from src.frontend.telegram.db import init_db; init_db()"
+python -c "from src.data.db.telegram_service import init_db; init_db()"
 
 # Or run the bot once to auto-initialize
 python src/frontend/telegram/bot.py

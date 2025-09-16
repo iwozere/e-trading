@@ -15,7 +15,7 @@ from datetime import datetime
 sys.path.append('src')
 
 from src.trading.live_trading_bot import LiveTradingBot
-from src.data.trade_repository import TradeRepository
+from src.data.db.trade_repository import TradeRepository
 
 
 def create_test_config():
@@ -248,4 +248,4 @@ def main():
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1) 
+    sys.exit(0 if success else 1)

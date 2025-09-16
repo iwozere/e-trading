@@ -28,6 +28,11 @@ from sqlalchemy import create_engine
 
 Base = declarative_base()
 
+# Ensure Telegram models are registered with this Base so metadata creates all tables
+# Import placed after Base definition to avoid circular imports
+from src.data.db import telegram_models  # noqa: F401
+
+
 
 class Trade(Base):
     """

@@ -27,7 +27,7 @@ This returns a multi-level DataFrame with all tickers' data.
 Our enhanced `YahooDataDownloader` class provides batch methods:
 
 ```python
-from src.data.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from datetime import datetime
 
 downloader = YahooDataDownloader()
@@ -67,7 +67,7 @@ info = tickers_obj.info
 ### Enhanced YahooDataDownloader
 
 ```python
-from src.data.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 
 downloader = YahooDataDownloader()
 
@@ -88,7 +88,7 @@ fundamentals_data = downloader.get_fundamentals_batch(tickers)
 For maximum performance and minimal API calls, use the optimized batch method:
 
 ```python
-from src.data.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 
 downloader = YahooDataDownloader()
 
