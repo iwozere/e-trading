@@ -465,7 +465,12 @@ def _alert_to_dict(alert) -> Dict[str, Any]:
         'alert_type': alert.alert_type,
         'timeframe': alert.timeframe,
         'config_json': alert.config_json,
-        'alert_action': alert.alert_action
+        'alert_action': alert.alert_action,
+        # Re-arm system fields
+        're_arm_config': alert.re_arm_config,
+        'is_armed': bool(alert.is_armed) if hasattr(alert, 'is_armed') else True,
+        'last_price': float(alert.last_price) if hasattr(alert, 'last_price') and alert.last_price is not None else None,
+        'last_triggered_at': alert.last_triggered_at if hasattr(alert, 'last_triggered_at') else None
     }
 
 

@@ -831,7 +831,7 @@ def handle_alerts_list(telegram_user_id: str) -> Dict[str, Any]:
 
 
 def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condition: str, email: bool = False) -> Dict[str, Any]:
-    """Add a new price alert."""
+    """Add a new price alert with re-arm functionality."""
     try:
         # Validate condition
         if condition.lower() not in ["above", "below"]:
@@ -856,14 +856,39 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
                 "message": f"Alert limit reached ({max_alerts}). Delete some alerts first or contact admin."
             }
 
-        # Add the alert (convert ticker to uppercase)
+        # Create enhanced alert configuration
+        from src.frontend.telegram.screener.rearm_alert_system import EnhancedAlertConfig
+
+        enhanced_config = EnhancedAlertConfig.from_simple_params(
+            ticker=ticker.upper(),
+            threshold=price,
+            direction=condition.lower(),
+            email=email,
+            rearm_enabled=True
+        )
+
+        # Add the alert with enhanced configuration
         alert_id = db.add_alert(telegram_user_id, ticker.upper(), price, condition.lower(), email)
 
+        # Update with re-arm configuration
+        db.update_alert(
+            alert_id,
+            re_arm_config=enhanced_config.to_json(),
+            is_armed=True,
+            last_price=None,
+            last_triggered_at=None
+        )
+
         email_text = " and email" if email else ""
+        rearm_level = enhanced_config.re_arm_config.hysteresis
+        rearm_type = enhanced_config.re_arm_config.hysteresis_type
+
         return {
             "status": "ok",
-            "title": "Alert Added",
-            "message": f"Alert #{alert_id} created: {ticker.upper()} {condition.lower()} ${price:.2f}{email_text}"
+            "title": "Re-Arm Alert Added",
+            "message": (f"Alert #{alert_id} created: {ticker.upper()} {condition.lower()} ${price:.2f}{email_text}\n"
+                       f"🔄 Re-arm enabled with {rearm_level}{'' if rearm_type == 'fixed' else '%'} hysteresis\n"
+                       f"Alert will re-trigger when price crosses back and forth across threshold.")
         }
 
     except Exception as e:

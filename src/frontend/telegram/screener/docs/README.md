@@ -306,6 +306,42 @@ If FMP is unavailable (no API key, network issues, etc.), the system automatical
 | `/alerts pause ALERT_ID`                | Pause a specific alert.                                   | `/alerts pause 2`             |
 | `/alerts resume ALERT_ID`               | Resume a paused alert.                                    | `/alerts resume 2`            |
 
+#### 🔄 Re-Arm Alert System (Default Behavior)
+
+**All new price alerts automatically use the enhanced re-arm system to prevent notification spam:**
+
+**How Re-Arm Alerts Work:**
+- **Crossing Detection**: Alerts trigger only when price **crosses** the threshold (not just exceeds it)
+- **Automatic Re-Arming**: Alert re-arms when price moves back across hysteresis level
+- **Smart Hysteresis**: 0.25% buffer prevents noise from small fluctuations
+- **No Spam**: No repeated notifications while price stays above/below threshold
+
+**Example: AAPL "above $150" alert with 0.25% hysteresis**
+1. **Setup**: Alert created and ARMED
+2. **Price $149.50**: Alert remains ARMED (below threshold)
+3. **Price $150.25**: Alert TRIGGERS! 📢 Notification sent, alert DISARMED
+4. **Price $151.00**: No notification (alert disarmed)
+5. **Price $149.63**: Alert RE-ARMS (crossed hysteresis level: 150 - 0.25%)
+6. **Price $150.10**: Alert TRIGGERS again! 📢
+
+**Notification Example:**
+```
+🚨 Price Alert Triggered!
+
+Ticker: AAPL
+Current Price: $150.25
+Alert: above $150.00
+Alert ID: #123
+
+Alert will re-arm below $149.63.
+```
+
+**Default Re-Arm Settings:**
+- **Hysteresis**: 0.25% of threshold price
+- **Cooldown**: 15 minutes between triggers
+- **Re-arm**: Enabled by default for all new alerts
+- **Channels**: Telegram + Email (if configured)
+
 **Alert Flags:**
 - `-email`: Send alert notification to email.
 - `-timeframe=...`: Set timeframe (5m, 15m, 1h, 4h, 1d). Default: 15m.

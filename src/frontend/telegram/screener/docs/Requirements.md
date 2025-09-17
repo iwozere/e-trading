@@ -150,7 +150,7 @@ CREATE TABLE users (
     max_schedules INTEGER DEFAULT 5
 );
 
--- Price alerts system
+-- Enhanced price alerts system with re-arm functionality
 CREATE TABLE alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ticker TEXT NOT NULL,
@@ -160,6 +160,11 @@ CREATE TABLE alerts (
     active INTEGER DEFAULT 1,
     created TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    -- Re-arm system fields
+    re_arm_config TEXT,  -- JSON configuration for re-arm behavior
+    is_armed INTEGER DEFAULT 1,  -- Whether alert is currently armed
+    last_price REAL,  -- Last known price for crossing detection
+    last_triggered_at TEXT,  -- ISO timestamp of last trigger
     FOREIGN KEY (user_id) REFERENCES users(telegram_user_id)
 );
 
@@ -622,7 +627,59 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 - **User Management**: Admins can approve, reject, and manage user access
 - **System Monitoring**: Admins receive notifications for approval requests and system events
 
+## Re-Arm Alert System Requirements
+
+### Core Re-Arm Functionality
+- **Crossing Detection**: Alerts trigger only when price crosses threshold (not just exceeds)
+- **Automatic Re-Arming**: Alert re-arms when price moves back across hysteresis level
+- **Hysteresis Configuration**: Configurable buffer to prevent noise (percentage, fixed, or ATR-based)
+- **Cooldown Management**: Minimum time between triggers to prevent spam
+- **State Persistence**: Maintain alert state across system restarts
+
+### Re-Arm Configuration Options
+- **Hysteresis Types**: 
+  - `percentage`: Percentage of threshold (e.g., 0.25%)
+  - `fixed`: Fixed dollar amount (e.g., $0.50)
+  - `atr`: ATR-based dynamic adjustment (future enhancement)
+- **Cooldown Periods**: Configurable minutes between triggers (default: 15)
+- **Persistence Requirements**: Number of bars condition must persist (default: 1)
+- **Price Evaluation**: Close-only or all price data options
+
+### Default Re-Arm Settings
+```json
+{
+  "enabled": true,
+  "hysteresis": 0.25,
+  "hysteresis_type": "percentage",
+  "cooldown_minutes": 15,
+  "persistence_bars": 1,
+  "close_only": false
+}
+```
+
+### Migration Requirements
+- **Backward Compatibility**: Existing alerts continue working unchanged
+- **Safe Migration**: Conversion script with rollback capability
+- **Data Integrity**: Preserve all existing alert data during migration
+- **Verification**: Post-migration validation of all alerts
+
+### JSON Generator Requirements
+- **Interactive UI**: Web-based interface for creating complex configurations
+- **Real-time Generation**: Live JSON preview as user configures options
+- **Template System**: Pre-built templates for common alert scenarios
+- **Validation**: Client-side and server-side JSON validation
+- **Integration**: Seamless integration with admin panel
+
 ## Recent Architectural Improvements
+
+### Re-Arm Alert System Implementation
+- **Problem Solved**: Alert spam when price stays above/below threshold
+- **Solution**: Professional-grade crossing detection with automatic re-arming
+- **Benefits**: 
+  - Eliminates notification spam while maintaining utility
+  - Matches professional trading platform behavior
+  - Configurable sensitivity for different trading styles
+  - Backward compatible with existing alerts
 
 ### Case-Insensitive Command Processing
 - **Problem Solved**: Commands were case-sensitive, causing user confusion and errors

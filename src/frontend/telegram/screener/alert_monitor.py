@@ -12,6 +12,7 @@ from src.data.db import telegram_service as db
 from src.common import get_ohlcv
 from src.frontend.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
 from src.frontend.telegram.screener.alert_logic_evaluator import AlertLogicEvaluator, evaluate_alert
+from src.frontend.telegram.screener.rearm_alert_system import ReArmAlertEvaluator
 
 from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger(__name__)
@@ -27,6 +28,7 @@ class AlertMonitor:
         self.api_client = api_client
         self.running = False
         self.evaluator = AlertLogicEvaluator()
+        self.rearm_evaluator = ReArmAlertEvaluator()
 
     async def start(self):
         """Start the alert monitoring loop."""
@@ -76,22 +78,44 @@ class AlertMonitor:
             ticker = alert["ticker"]
             alert_type = alert.get("alert_type", "price")
 
-            # Use the new alert logic evaluator
-            triggered, evaluation_details = self.evaluator.evaluate_alert(alert)
-
-            if "error" in evaluation_details:
-                _logger.error("Error evaluating alert %d for %s: %s", alert_id, ticker, evaluation_details["error"])
-                # Send error notification to admin if this is an indicator alert
-                if alert_type == "indicator":
-                    await self._notify_admin_of_error(alert, evaluation_details["error"])
+            # Get current price
+            current_price = await self._get_current_price(ticker)
+            if current_price is None:
+                _logger.warning("Could not get current price for %s, skipping alert %d", ticker, alert_id)
                 return
 
-            if triggered:
-                await self.trigger_alert(alert, evaluation_details)
+            # Check if this is a re-arm alert (has re_arm_config)
+            if alert.get("re_arm_config"):
+                # Use re-arm evaluator
+                triggered, evaluation_details = self.rearm_evaluator.evaluate_alert(alert, current_price)
+
+                # Update alert state based on evaluation
+                updates = self.rearm_evaluator.update_alert_state(alert_id, evaluation_details, current_price)
+                if updates:
+                    db.update_alert(alert_id, **updates)
+
+                if triggered:
+                    await self.trigger_rearm_alert(alert, evaluation_details)
+
+            else:
+                # Use legacy evaluator for indicator alerts or old price alerts
+                if alert_type == "indicator":
+                    triggered, evaluation_details = self.evaluator.evaluate_alert(alert)
+                else:
+                    # Legacy price alert logic
+                    triggered, evaluation_details = self._evaluate_legacy_price_alert(alert, current_price)
+
+                if "error" in evaluation_details:
+                    _logger.error("Error evaluating alert %d for %s: %s", alert_id, ticker, evaluation_details["error"])
+                    if alert_type == "indicator":
+                        await self._notify_admin_of_error(alert, evaluation_details["error"])
+                    return
+
+                if triggered:
+                    await self.trigger_alert(alert, evaluation_details)
 
         except Exception as e:
             _logger.exception("Error checking alert %s: ", alert.get("id"))
-            # Send error notification to admin
             await self._notify_admin_of_error(alert, str(e))
 
     async def trigger_alert(self, alert: Dict[str, Any], evaluation_details: Dict[str, Any]):
@@ -303,6 +327,85 @@ class AlertMonitor:
 
         except Exception as e:
             _logger.error("Failed to send admin error notification: %s", e)
+
+    async def _get_current_price(self, ticker: str) -> Optional[float]:
+        """Get current price for ticker."""
+        try:
+            # Use existing OHLCV function to get current price
+            data = get_ohlcv(ticker, period="1d", interval="1m", provider="yf")
+            if data is not None and not data.empty:
+                return float(data['Close'].iloc[-1])
+            return None
+        except Exception as e:
+            _logger.warning("Error getting current price for %s: %s", ticker, e)
+            return None
+
+    def _evaluate_legacy_price_alert(self, alert: Dict[str, Any], current_price: float) -> Tuple[bool, Dict[str, Any]]:
+        """Evaluate legacy price alert (simple threshold check)."""
+        try:
+            threshold = float(alert["price"])
+            condition = alert["condition"]
+
+            if condition == "above":
+                triggered = current_price > threshold
+            else:  # "below"
+                triggered = current_price < threshold
+
+            return triggered, {
+                "current_price": current_price,
+                "threshold": threshold,
+                "condition": condition,
+                "alert_type": "legacy_price"
+            }
+
+        except Exception as e:
+            return False, {"error": f"Error evaluating legacy price alert: {str(e)}"}
+
+    async def trigger_rearm_alert(self, alert: Dict[str, Any], evaluation_details: Dict[str, Any]):
+        """Trigger a re-arm alert notification."""
+        try:
+            from src.frontend.telegram.screener.rearm_alert_system import EnhancedAlertConfig
+
+            ticker = alert["ticker"]
+            user_id = alert["user_id"]
+            alert_id = alert["id"]
+
+            # Parse enhanced config
+            config_json = alert.get("re_arm_config", "{}")
+            try:
+                import json
+                config_dict = json.loads(config_json)
+                config = EnhancedAlertConfig.from_dict(config_dict)
+            except (json.JSONDecodeError, KeyError) as e:
+                _logger.error("Invalid re_arm_config for alert %d: %s", alert_id, e)
+                return
+
+            # Format message using enhanced config
+            message = self.rearm_evaluator.format_notification_message(config, evaluation_details)
+            title = f"🚨 Price Alert: {ticker}"
+
+            # Get user info for email notification
+            user_status = db.get_user_status(user_id)
+            user_email = user_status.get("email") if user_status and user_status.get("verified") else None
+
+            # Send Telegram notification
+            success = await send_notification_via_api(
+                user_id=user_id,
+                message=message,
+                title=title
+            )
+
+            if success:
+                _logger.info("Re-arm alert #%d triggered for user %s: %s", alert_id, user_id, ticker)
+            else:
+                _logger.error("Failed to send re-arm alert notification for user %s, alert #%d", user_id, alert_id)
+
+            # Send email notification if configured and user has verified email
+            if "email" in config.notification_config.channels and user_email:
+                await self._send_email_alert(user_email, alert, evaluation_details, title)
+
+        except Exception as e:
+            _logger.exception("Error triggering re-arm alert %s: ", alert.get("id"))
 
 
 async def main():

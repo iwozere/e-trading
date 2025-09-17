@@ -107,9 +107,32 @@ class TelegramRepository:
 
     # Alerts
     def add_alert(self, user_id: str, ticker: str, price: float, condition: str, email: bool = False) -> int:
+        from src.frontend.telegram.screener.rearm_alert_system import EnhancedAlertConfig
+
         created = datetime.now(timezone.utc).isoformat()
-        alert = Alert(ticker=ticker, user_id=user_id, price=price, condition=condition, active=True,
-                      email=email, created=created)
+
+        # Create enhanced alert config with re-arm enabled by default
+        enhanced_config = EnhancedAlertConfig.from_simple_params(
+            ticker=ticker,
+            threshold=price,
+            direction=condition,
+            email=email,
+            rearm_enabled=True  # Re-arm enabled by default
+        )
+
+        alert = Alert(
+            ticker=ticker,
+            user_id=user_id,
+            price=price,
+            condition=condition,
+            active=True,
+            email=email,
+            created=created,
+            re_arm_config=enhanced_config.to_json(),  # Store enhanced config
+            is_armed=True,  # Initially armed
+            last_price=None,  # Will be set on first evaluation
+            last_triggered_at=None
+        )
         self.session.add(alert)
         self.session.commit()
         return alert.id

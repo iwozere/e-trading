@@ -578,6 +578,62 @@
                             </select>
                         </div>
                     </div>
+
+                    <!-- Re-Arm Configuration Section -->
+                    <div class="form-section" style="background: #e8f5e8; border-color: #28a745;">
+                        <h4 style="color: #28a745;">🔄 Re-Arm Alert Configuration (Default: Enabled)</h4>
+                        <p class="form-text">Re-arm alerts automatically reset after triggering, preventing spam while maintaining useful notifications.</p>
+                        
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="rearm-enabled" checked onchange="toggleRearmConfig(); generateJSON();">
+                            <label for="rearm-enabled">Enable Re-Arm (Recommended)</label>
+                        </div>
+
+                        <div id="rearm-config-details">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="rearm-hysteresis">Hysteresis Value</label>
+                                    <input type="number" id="rearm-hysteresis" placeholder="0.25" step="0.01" value="0.25" onchange="generateJSON()">
+                                    <small class="form-text">Distance from threshold before alert can re-arm</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rearm-hysteresis-type">Hysteresis Type</label>
+                                    <select id="rearm-hysteresis-type" onchange="generateJSON()">
+                                        <option value="percentage" selected>Percentage (%)</option>
+                                        <option value="fixed">Fixed Amount ($)</option>
+                                        <option value="atr">ATR-based (Advanced)</option>
+                                    </select>
+                                    <small class="form-text">How hysteresis is calculated</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rearm-cooldown">Cooldown (minutes)</label>
+                                    <input type="number" id="rearm-cooldown" placeholder="15" min="0" value="15" onchange="generateJSON()">
+                                    <small class="form-text">Minimum time between triggers</small>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="rearm-persistence">Persistence Bars</label>
+                                    <input type="number" id="rearm-persistence" placeholder="1" min="1" value="1" onchange="generateJSON()">
+                                    <small class="form-text">Number of bars condition must persist</small>
+                                </div>
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="rearm-close-only" onchange="generateJSON()">
+                                    <label for="rearm-close-only">Close Price Only</label>
+                                    <small class="form-text">Only use closing prices for evaluation</small>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-success" style="margin-top: 15px;">
+                                <strong>💡 Re-Arm Example:</strong><br>
+                                Alert: AAPL above $150 with 0.25% hysteresis<br>
+                                • Triggers when price crosses above $150<br>
+                                • Re-arms when price falls below $149.63 (150 - 0.25%)<br>
+                                • Can trigger again when price crosses above $150
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Indicator Alert Fields -->
@@ -1996,14 +2052,39 @@
             const email = document.getElementById('alert-email').checked;
             
             if (alertType === 'price') {
-                return {
-                    type: "price",
+                const rearmEnabled = document.getElementById('rearm-enabled').checked;
+                const baseConfig = {
+                    alert_type: "price",
                     ticker: ticker,
-                    price: parseFloat(document.getElementById('alert-price').value),
-                    condition: document.getElementById('alert-condition').value,
-                    timeframe: timeframe,
-                    email: email
+                    threshold: parseFloat(document.getElementById('alert-price').value),
+                    direction: document.getElementById('alert-condition').value,
+                    notification_config: {
+                        channels: email ? ["telegram", "email"] : ["telegram"],
+                        template: "{ticker} crossed {direction} {threshold} at {current_price}"
+                    }
                 };
+
+                if (rearmEnabled) {
+                    baseConfig.re_arm_config = {
+                        enabled: true,
+                        hysteresis: parseFloat(document.getElementById('rearm-hysteresis').value) || 0.25,
+                        hysteresis_type: document.getElementById('rearm-hysteresis-type').value || "percentage",
+                        cooldown_minutes: parseInt(document.getElementById('rearm-cooldown').value) || 15,
+                        persistence_bars: parseInt(document.getElementById('rearm-persistence').value) || 1,
+                        close_only: document.getElementById('rearm-close-only').checked || false
+                    };
+                } else {
+                    baseConfig.re_arm_config = {
+                        enabled: false,
+                        hysteresis: 0,
+                        hysteresis_type: "percentage",
+                        cooldown_minutes: 0,
+                        persistence_bars: 1,
+                        close_only: false
+                    };
+                }
+
+                return baseConfig;
             } else {
                 const logicElement = document.getElementById('alert-indicator-logic');
                 if (!logicElement) {
@@ -3796,6 +3877,26 @@
             
             console.log('JSON generator initialized successfully');
         });
+    </script>
+</body>
+</html>
+        // Re-arm configuration functions
+        function toggleRearmConfig() {
+            const rearmEnabled = document.getElementById('rearm-enabled').checked;
+            const rearmDetails = document.getElementById('rearm-config-details');
+            
+            if (rearmEnabled) {
+                rearmDetails.style.display = 'block';
+            } else {
+                rearmDetails.style.display = 'none';
+            }
+        }
+
+        // Initialize re-arm config visibility on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleRearmConfig();
+        });
+
     </script>
 </body>
 </html>

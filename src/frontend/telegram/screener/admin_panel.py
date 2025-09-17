@@ -27,6 +27,7 @@ URL Structure:
 - Schedules: http://localhost:5000/schedules
 - Feedback: http://localhost:5000/feedback
 - Broadcast: http://localhost:5000/broadcast
+- JSON Generator: http://localhost:5000/json-generator (Interactive UI for creating JSON configurations for alerts, schedules, reports, and screeners with advanced options including re-arm alert settings, hysteresis configuration, and technical indicators)
 - Logout: http://localhost:5000/logout
 
 Configuration:
@@ -57,12 +58,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from flask import Flask, render_template_string, render_template, request, jsonify, redirect, url_for, flash, session
-import sqlite3
 from datetime import datetime, timedelta
 import asyncio
 import aiohttp
 import json
 from src.data.db import telegram_service as db
+from src.data.database_service import get_database_service
 from config.donotshare.donotshare import WEBGUI_LOGIN, WEBGUI_PASSWORD, WEBGUI_PORT, TELEGRAM_BOT_TOKEN
 
 from src.notification.logger import setup_logger
@@ -95,6 +96,64 @@ def check_credentials(username, password):
 # TODO: Change this to a random secret key in production and put it into the .env file
 app.secret_key = 'alkotrader'
 
+def get_database_stats():
+    """Get database statistics using the existing telegram service."""
+    try:
+        # Use the existing telegram_service functions which work with the new system
+        active_alerts = db.get_active_alerts()
+        active_schedules = db.get_active_schedules()
+
+        return {
+            'active_alerts': len(active_alerts),
+            'active_schedules': len(active_schedules),
+            'open_feedback': 0  # Placeholder - feedback system needs to be implemented
+        }
+    except Exception as e:
+        _logger.error("Error getting database stats: %s", e)
+        return {
+            'active_alerts': 0,
+            'active_schedules': 0,
+            'open_feedback': 0
+        }
+
+def get_all_alerts():
+    """Get all alerts using the existing telegram service."""
+    try:
+        # Use existing service function that works with new database system
+        return db.get_alerts_by_type()  # Gets all alerts regardless of type
+    except Exception as e:
+        _logger.error("Error getting alerts: %s", e)
+        return []
+
+def get_all_schedules():
+    """Get all schedules using the existing telegram service."""
+    try:
+        # Use existing service function that works with new database system
+        return db.get_schedules_by_config()  # Gets all schedules regardless of config
+    except Exception as e:
+        _logger.error("Error getting schedules: %s", e)
+        return []
+
+def get_broadcast_history():
+    """Get broadcast history - placeholder for now."""
+    try:
+        # For now, return empty list since broadcast_log table may not exist in new schema
+        # This can be implemented later when broadcast logging is properly integrated
+        return []
+    except Exception as e:
+        _logger.error("Error getting broadcast history: %s", e)
+        return []
+
+def log_broadcast_to_db(message_text: str, sent_by: str, success_count: int, total_count: int):
+    """Log broadcast to database - placeholder for now."""
+    try:
+        # For now, just log to application logs
+        # This can be implemented later when broadcast logging is properly integrated
+        _logger.info("Broadcast logged: %s sent by %s to %d/%d users",
+                    message_text[:100], sent_by, success_count, total_count)
+    except Exception as e:
+        _logger.error("Error logging broadcast: %s", e)
+
 async def send_broadcast_message(message_text: str, sent_by: str = "admin") -> tuple[int, int]:
     """Send broadcast message to all registered users using bot API. Returns (success_count, total_count)."""
     try:
@@ -112,17 +171,7 @@ async def send_broadcast_message(message_text: str, sent_by: str = "admin") -> t
                     _logger.info("Broadcast API call successful: %d/%d messages queued", success_count, total_count)
 
                     # Log broadcast to database for history
-                    try:
-                        conn = sqlite3.connect(db.DB_PATH)
-                        c = conn.cursor()
-                        c.execute("""INSERT INTO broadcast_log
-                                    (message, sent_by, success_count, total_count, created)
-                                    VALUES (?, ?, ?, ?, ?)""",
-                                (message_text[:500], sent_by, success_count, total_count, datetime.now().isoformat()))
-                        conn.commit()
-                        conn.close()
-                    except Exception as e:
-                        _logger.error("Failed to log broadcast to database: %s", e)
+                    log_broadcast_to_db(message_text, sent_by, success_count, total_count)
 
                     return success_count, total_count
                 else:
@@ -340,22 +389,18 @@ def dashboard():
         approved_users = sum(1 for user in users if user['approved'])
         pending_approvals = sum(1 for user in users if user['verified'] and not user['approved'])
 
-        conn = sqlite3.connect(db.DB_PATH)
-        c = conn.cursor()
-
-        c.execute("SELECT COUNT(*) FROM alerts WHERE active=1")
-        active_alerts = c.fetchone()[0]
-
-        c.execute("SELECT COUNT(*) FROM schedules WHERE active=1")
-        active_schedules = c.fetchone()[0]
-
-        c.execute("SELECT COUNT(*) FROM feedback WHERE status='open'")
-        open_feedback = c.fetchone()[0]
+        # Get database statistics using new service
+        db_stats = get_database_stats()
+        active_alerts = db_stats['active_alerts']
+        active_schedules = db_stats['active_schedules']
+        open_feedback = db_stats['open_feedback']
 
         # Get audit statistics
         audit_stats = db.get_command_audit_stats()
 
-        conn.close()
+        # Add missing keys with default values if they don't exist
+        if 'recent_activity_24h' not in audit_stats:
+            audit_stats['recent_activity_24h'] = 0
 
         content = f"""
         <h3>Dashboard</h3>
@@ -677,11 +722,8 @@ def alerts():
     """Alert management page."""
     try:
         db.init_db()
-        conn = sqlite3.connect(db.DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT * FROM alerts ORDER BY created DESC")
-        alerts_list = c.fetchall()
-        conn.close()
+        # Get alerts using new database service
+        alerts_list = get_all_alerts()
 
         # Apply filters
         filter_type = request.args.get('filter', '')
@@ -805,11 +847,8 @@ def schedules():
     """Schedule management page."""
     try:
         db.init_db()
-        conn = sqlite3.connect(db.DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT * FROM schedules ORDER BY created DESC")
-        schedules_list = c.fetchall()
-        conn.close()
+        # Get schedules using new database service
+        schedules_list = get_all_schedules()
 
         # Apply filters
         filter_type = request.args.get('filter', '')
@@ -1431,6 +1470,14 @@ def audit():
         # Get audit statistics
         stats = db.get_command_audit_stats()
 
+        # Add missing keys with default values if they don't exist
+        if 'recent_activity_24h' not in stats:
+            stats['recent_activity_24h'] = 0
+        if 'registered_users' not in stats:
+            stats['registered_users'] = 0
+        if 'non_registered_users' not in stats:
+            stats['non_registered_users'] = 0
+
         content = f"""
         <h3>Command Audit Log</h3>
 
@@ -1854,11 +1901,8 @@ def broadcast_history():
     """Broadcast history page."""
     try:
         db.init_db()
-        conn = sqlite3.connect(db.DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT * FROM broadcast_log ORDER BY created DESC LIMIT 50")
-        broadcasts = c.fetchall()
-        conn.close()
+        # Get broadcast history using new database service
+        broadcasts_list = get_broadcast_history()
 
         content = """
         <h3>Broadcast History</h3>
@@ -1876,17 +1920,24 @@ def broadcast_history():
             <tbody>
         """
 
-        for broadcast in broadcasts:
-            success_rate = f"{broadcast[3]}/{broadcast[4]}" if broadcast[4] > 0 else "0/0"
-            message_preview = broadcast[1][:100] + "..." if len(broadcast[1]) > 100 else broadcast[1]
+        if broadcasts_list:
+            for broadcast in broadcasts_list:
+                success_rate = f"{broadcast[3]}/{broadcast[4]}" if broadcast[4] > 0 else "0/0"
+                message_preview = broadcast[1][:100] + "..." if len(broadcast[1]) > 100 else broadcast[1]
 
-            content += f"""
+                content += f"""
+                    <tr>
+                        <td>#{broadcast[0]}</td>
+                        <td title="{broadcast[1]}">{message_preview}</td>
+                        <td>{broadcast[2]}</td>
+                        <td>{success_rate}</td>
+                        <td>{broadcast[5]}</td>
+                    </tr>
+                """
+        else:
+            content += """
                 <tr>
-                    <td>#{broadcast[0]}</td>
-                    <td title="{broadcast[1]}">{message_preview}</td>
-                    <td>{broadcast[2]}</td>
-                    <td>{success_rate}</td>
-                    <td>{broadcast[5]}</td>
+                    <td colspan="5" style="text-align: center; color: #666;">No broadcast history available</td>
                 </tr>
             """
 

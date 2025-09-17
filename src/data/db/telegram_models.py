@@ -52,9 +52,15 @@ class Alert(Base):
     timeframe = Column(String(10), default='15m')
     config_json = Column(Text, nullable=True)
     alert_action = Column(String(50), default='notify')
+    # Re-arm system fields
+    re_arm_config = Column(Text, nullable=True)  # JSON config for re-arm behavior
+    is_armed = Column(Boolean, default=True, index=True)  # Whether alert is currently armed
+    last_price = Column(Numeric(20, 8), nullable=True)  # Last known price for crossing detection
+    last_triggered_at = Column(String(40), nullable=True)  # ISO timestamp of last trigger
 
     __table_args__ = (
         Index('idx_alerts_user_active', 'user_id', 'active'),
+        Index('idx_alerts_armed', 'is_armed'),
     )
 
 

@@ -395,6 +395,55 @@ Command Specifications:
 └── schedules: {action, ticker, time, flags}
 ```
 
+#### 6. Re-Arm Alert System Architecture
+
+**Enhanced Alert Processing:**
+- Professional-grade crossing detection eliminates notification spam
+- Automatic re-arming when price moves back across hysteresis level
+- Configurable parameters for different trading styles
+
+```python
+ReArmAlertSystem:
+├── ReArmAlertEvaluator: Core crossing detection and re-arming logic
+├── EnhancedAlertConfig: JSON-based configuration management
+├── ReArmConfig: Re-arm specific settings (hysteresis, cooldown, persistence)
+├── NotificationConfig: Multi-channel notification preferences
+└── Migration System: Safe conversion of existing alerts
+
+Alert State Machine:
+[ARMED] → Price crosses threshold → [TRIGGERED] → Send notification
+    ↑                                      ↓
+    └── Price crosses hysteresis level ←──┘
+
+Database Schema Extensions:
+├── is_armed: BOOLEAN - Current armed state
+├── last_price: DECIMAL - Last known price for crossing detection  
+├── last_triggered_at: TIMESTAMP - When alert last triggered
+└── re_arm_config: TEXT - JSON configuration for re-arm behavior
+```
+
+**Re-Arm Configuration Options:**
+```json
+{
+  "alert_type": "price",
+  "ticker": "AAPL", 
+  "threshold": 150.00,
+  "direction": "above",
+  "re_arm_config": {
+    "enabled": true,
+    "hysteresis": 0.25,
+    "hysteresis_type": "percentage",
+    "cooldown_minutes": 15,
+    "persistence_bars": 1,
+    "close_only": false
+  },
+  "notification_config": {
+    "channels": ["telegram", "email"],
+    "template": "{ticker} crossed {direction} {threshold} at {current_price}. Will re-arm below {rearm_level}."
+  }
+}
+```
+
 **Business Logic (`business_logic.py`):**
 - Command execution orchestration
 - Data retrieval and processing coordination
