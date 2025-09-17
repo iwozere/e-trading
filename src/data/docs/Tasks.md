@@ -4,6 +4,19 @@
 
 ### High Priority
 
+#### Database System Enhancements
+- [ ] **Add database migration system**
+  - Implement Alembic for schema migrations
+  - Create migration scripts for database schema changes
+  - Add version control for database schema
+  - Test migration procedures with existing data
+
+- [ ] **Enhance database monitoring**
+  - Add database health checks and monitoring
+  - Implement query performance monitoring
+  - Create database backup and restore procedures
+  - Add database size and growth monitoring
+
 #### Fundamentals Cache System Implementation
 - [ ] **Implement JSON fundamentals cache system**
   - Create `src/data/cache/fundamentals_cache.py` with cache helper functions
@@ -165,6 +178,25 @@
 
 ### Completed Features
 
+#### Unified Database System (Q1 2025)
+- [x] **Database consolidation** (Q1 2025)
+  - Moved all database logic to `src/data/db/` directory
+  - Created unified `DatabaseService` for session management and orchestration
+  - Implemented repository pattern with automatic session cleanup
+  - Consolidated telegram database operations into clean service interface
+
+- [x] **Database architecture cleanup** (Q1 2025)
+  - Removed duplicate database code from frontend layer
+  - Created clean separation between frontend and data layers
+  - Implemented context managers for automatic resource management
+  - Added missing repository methods for complete functionality
+
+- [x] **Single database design** (Q1 2025)
+  - Unified trading and telegram data in single SQLite database
+  - Shared SQLAlchemy Base for all models with unified metadata
+  - Optimized for user management simplicity and data consistency
+  - Prepared architecture for future database separation if needed
+
 #### Unified Cache System (Q1 2025)
 - [x] **Unified cache architecture** (Q1 2025)
   - Implemented simplified cache structure: `symbol/timeframe/`
@@ -268,6 +300,12 @@
 ## Technical Debt
 
 ### Code Quality Issues
+- [x] **Database code consolidation** (Q1 2025)
+  - Removed duplicate database logic from telegram frontend
+  - Consolidated all database operations into unified service layer
+  - Eliminated raw SQL code in favor of SQLAlchemy ORM
+  - Standardized error handling across all database operations
+
 - [ ] **Refactor large downloader classes**
   - AlphaVantageDataDownloader has grown large (350+ lines)
   - Split into separate modules for different data types

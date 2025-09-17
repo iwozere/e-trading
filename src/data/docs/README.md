@@ -5,11 +5,92 @@ This module provides comprehensive data downloading, caching, and live feed capa
 ## Overview
 
 The data module consists of:
+- **Unified Database System**: Single SQLite database with service layer and repository pattern
 - **Unified Cache System**: Intelligent file-based caching with gzip compression
 - **Data Downloaders**: For fetching historical OHLCV data and fundamental information
 - **Live Data Feeds**: For real-time market data streaming
 - **Provider Selection**: Automatic selection of the best data provider based on symbol and timeframe
 - **Data Validation**: Comprehensive data quality checks and validation
+
+## Unified Database System
+
+### Database Architecture
+
+The data module uses a unified database architecture with clean separation of concerns:
+
+```
+Application Layer (Telegram Bot, Trading Strategies)
+         ↓
+Service Interface (telegram_service.py)
+         ↓
+Service Layer (database_service.py)
+         ↓
+Repository Pattern (telegram_repository.py, trade_repository.py)
+         ↓
+Database Models (telegram_models.py, database.py)
+         ↓
+SQLite Database (single unified database)
+```
+
+### Key Features
+
+- **Single Database**: All data (trading + telegram) in one SQLite database
+- **Service Layer**: `DatabaseService` provides session management and orchestration
+- **Repository Pattern**: Clean data access with automatic session cleanup
+- **Context Managers**: Automatic resource management and error handling
+- **Model Separation**: Trading and Telegram models with shared base
+
+### Database Usage
+
+```python
+# Telegram operations
+from src.data.db import telegram_service as db
+
+# User management
+db.set_user_email("123456", "user@example.com", "code123", timestamp)
+user_status = db.get_user_status("123456")
+db.approve_user("123456")
+
+# Alert management
+alert_id = db.add_alert("123456", "BTCUSDT", 50000.0, "above")
+alerts = db.list_alerts("123456")
+db.update_alert(alert_id, active=False)
+
+# Schedule management
+schedule_id = db.add_schedule("123456", "AAPL", "09:30", "daily")
+schedules = db.get_active_schedules()
+```
+
+### Database Models
+
+**Trading Models:**
+- `Trade` - Complete trade lifecycle tracking with P&L calculations
+- `BotInstance` - Bot session management and performance tracking
+- `PerformanceMetrics` - Strategy performance data and analytics
+
+**Telegram Models:**
+- `TelegramUser` - User management with verification and approval
+- `Alert` - Price and indicator-based alerts
+- `Schedule` - Automated report scheduling
+- `Setting` - Global application settings
+- `CommandAudit` - Command usage tracking and analytics
+
+### Database Benefits
+
+**Single Database Advantages:**
+- **Unified User Identity**: One user record across all features (trading + telegram)
+- **Simplified Authentication**: Single source of truth for user permissions
+- **Cross-Feature Relationships**: Easy to link trades to telegram users, alerts to trading activity
+- **Atomic Transactions**: Can update user data and trading data in single transaction
+- **Simpler Deployment**: One database to backup, monitor, and maintain
+- **Better Consistency**: ACID properties work across all your data
+
+**Clean Architecture Benefits:**
+- **Frontend Separation**: Frontend layer only contains UI logic
+- **Data Layer Isolation**: All database operations centralized in `src/data/db/`
+- **Service Layer**: Clean interface between frontend and data with automatic session management
+- **Repository Pattern**: Consistent data access patterns with proper error handling
+- **Future-Proof**: Easy to separate databases later if scaling requirements change
 
 ## Unified Cache System
 

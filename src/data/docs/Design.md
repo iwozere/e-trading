@@ -16,7 +16,7 @@ The data module provides a comprehensive, extensible framework for acquiring, pr
 
 ### High-Level Overview
 
-The data module follows a layered architecture with clear separation of concerns and intelligent provider selection:
+The data module follows a layered architecture with clear separation of concerns, intelligent provider selection, and unified database management:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -58,11 +58,49 @@ The data module follows a layered architecture with clear separation of concerns
 │  │ Structure       │  │ (.csv.gz)       │  │ (.json)     │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘ │
 └─────────────────────────────────────────────────────────────┘
+              │
+┌─────────────▼───────────────────────────────────────────────┐
+│                 Unified Database Layer                     │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
+│  │ Database Service│  │ Repository      │  │ Models &    │ │
+│  │ (Orchestration) │  │ Pattern         │  │ Connections │ │
+│  │                 │  │ (Data Access)   │  │ (Core DB)   │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Architecture
 
-#### 1. Unified Cache System
+#### 1. Unified Database Layer
+
+**New Database Architecture:**
+- **Single Database**: Unified SQLite database for all operations (trading + telegram)
+- **Service Layer**: `DatabaseService` provides orchestration and session management
+- **Repository Pattern**: Clean data access with automatic session cleanup
+- **Model Separation**: Trading models (Trade, BotInstance, PerformanceMetrics) and Telegram models (User, Alert, Schedule)
+
+**Key Components:**
+```python
+DatabaseService
+├── get_trading_repo() -> TradeRepository with session management
+├── get_telegram_repo() -> TelegramRepository with session management
+├── trading_manager -> DatabaseManager for trading operations
+└── telegram_manager -> DatabaseManager for telegram operations (same DB)
+
+TelegramService (Clean Interface)
+├── User Management -> set_user_email(), verify_code(), approve_user()
+├── Alert Management -> add_alert(), get_active_alerts(), update_alert()
+├── Schedule Management -> add_schedule(), get_active_schedules()
+├── Settings Management -> set_setting(), get_setting()
+└── Audit Logging -> log_command_audit(), get_command_audit_stats()
+```
+
+**Database Models:**
+- **Trading**: Trade, BotInstance, PerformanceMetrics (financial data with UUID keys)
+- **Telegram**: TelegramUser, Alert, Schedule, Setting, Feedback, CommandAudit (user management)
+- **Shared Base**: Single SQLAlchemy Base for all models with unified metadata
+
+#### 2. Unified Cache System
 
 **New Architecture Pattern:**
 - Simplified directory structure: `symbol/timeframe/` instead of `provider/symbol/timeframe/year/`
@@ -86,7 +124,7 @@ UnifiedCache
 └── cleanup_old_data() -> Remove old data
 ```
 
-#### 2. Intelligent Provider Selection
+#### 3. Intelligent Provider Selection
 
 **Ticker Classification System:**
 - Automatic symbol type detection (crypto vs stock)
@@ -109,7 +147,7 @@ Provider Selection Logic:
 └── Stock Symbols (Intraday) → Alpha Vantage
 ```
 
-#### 3. Data Downloaders (Historical Data)
+#### 4. Data Downloaders (Historical Data)
 
 **Base Architecture Pattern:**
 - Abstract base class (`BaseDataDownloader`) defines common interface
@@ -132,7 +170,7 @@ Concrete Implementations:
 └── MockDataSource (Testing fallback)
 ```
 
-#### 4. Cache Population System
+#### 5. Cache Population System
 
 **Automated Cache Management:**
 - Intelligent provider selection for each symbol/timeframe
@@ -156,6 +194,31 @@ populate_cache()
 ```
 
 ### Data Flow
+
+#### Database Operations Flow
+
+```
+1. Application Request → telegram_service.py (Clean Interface)
+2. Service Layer → database_service.py (Session Management)
+3. Repository Pattern → telegram_repository.py (Data Access)
+4. Database Models → telegram_models.py (SQLAlchemy ORM)
+5. Database Engine → database.py (Core Connection)
+6. SQLite Database → Single unified database file
+```
+
+**Example Flow:**
+```python
+# Application Layer
+from src.data.db import telegram_service as db
+user_status = db.get_user_status("123456")
+
+# Service Layer (automatic)
+service = get_database_service()
+with service.get_telegram_repo() as repo:
+    # Repository Layer (automatic)
+    return repo.get_user_status("123456")
+    # Session automatically closed
+```
 
 #### Historical Data Flow with Intelligent Selection
 

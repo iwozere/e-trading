@@ -11,7 +11,9 @@
 - `alpha_vantage >= 2.3.1` - Alpha Vantage API wrapper for financial data
 - `python-binance >= 1.0.19` - Binance API for cryptocurrency data
 
-### Data Compression and Storage
+### Database and Storage
+- `sqlalchemy >= 2.0.0` - ORM and database abstraction layer
+- `sqlite3` - Built-in Python SQLite database support (no additional dependency)
 - `gzip` - Built-in Python compression for cache files (no additional dependency)
 - `pathlib` - Built-in Python path handling (no additional dependency)
 
@@ -55,6 +57,31 @@
 - **Rate limits**: 1200 requests/minute
 - **Usage**: Cryptocurrency symbols (no API key needed for basic data)
 
+## Database Requirements
+
+### Database System
+- **SQLite**: Built-in Python support, no additional installation required
+- **Single Database**: Unified database for all operations (trading + telegram)
+- **File Location**: `db/trading.db` (automatically created)
+- **Schema Management**: Automatic table creation via SQLAlchemy metadata
+
+### Database Features
+- **ACID Compliance**: Full transaction support for data integrity
+- **Concurrent Access**: SQLite supports multiple readers, single writer
+- **Backup Support**: Standard SQLite backup tools and file-based backups
+- **Migration Support**: SQLAlchemy-based schema migrations
+
+### Database Models
+- **Trading Models**: Trade lifecycle, bot instances, performance metrics
+- **Telegram Models**: User management, alerts, schedules, audit logs
+- **Shared Base**: Single SQLAlchemy Base for unified metadata management
+
+### Database Performance
+- **Indexes**: Optimized indexes for common query patterns
+- **Connection Pooling**: SQLAlchemy connection pooling for efficiency
+- **Session Management**: Automatic session cleanup via context managers
+- **Query Optimization**: Repository pattern with optimized queries
+
 ## System Requirements
 
 ### Network Requirements
@@ -64,7 +91,8 @@
 
 ### Hardware Requirements
 - **Memory**: Minimum 4GB RAM (8GB+ recommended for live trading)
-- **Storage**: 10GB+ available space for historical data cache
+- **Storage**: 10GB+ available space for historical data cache and database
+  - Database file: 10-100MB typical size for trading and telegram data
   - Cache files are gzip compressed for efficient storage
   - Typical cache size: 1-5GB for comprehensive historical data
 - **CPU**: Multi-core processor recommended for parallel data processing
