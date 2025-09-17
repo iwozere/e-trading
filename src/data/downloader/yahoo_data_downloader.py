@@ -47,6 +47,21 @@ class YahooDataDownloader(BaseDataDownloader):
         """Initialize Yahoo Finance data downloader."""
         super().__init__()
 
+    def _convert_debt_to_equity_ratio(self, value) -> Optional[float]:
+        """Convert Yahoo Finance debt/equity percentage to ratio format.
+
+        Yahoo Finance returns debt/equity as percentage (e.g., 47.997)
+        but we want it as ratio (e.g., 0.47997) to match FMP format.
+        """
+        if value is None:
+            return None
+        try:
+            float_value = float(value)
+            # Convert percentage to ratio (divide by 100)
+            return float_value / 100.0
+        except (ValueError, TypeError):
+            return None
+
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Yahoo Finance."""
         return ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo']
@@ -322,7 +337,7 @@ class YahooDataDownloader(BaseDataDownloader):
 
             _logger.debug("Retrieved fundamentals for %s: %s", symbol, info.get('shortName', 'Unknown'))
 
-            return Fundamentals(
+            fundamentals = Fundamentals(
                 ticker=symbol.upper(),
                 company_name=info.get("longName", "Unknown"),
                 current_price=info.get("regularMarketPrice", 0.0),
@@ -335,7 +350,7 @@ class YahooDataDownloader(BaseDataDownloader):
                 price_to_book=info.get("priceToBook", None),
                 return_on_equity=info.get("returnOnEquity", None),
                 return_on_assets=info.get("returnOnAssets", None),
-                debt_to_equity=info.get("debtToEquity", None),
+                debt_to_equity=self._convert_debt_to_equity_ratio(info.get("debtToEquity", None)),
                 current_ratio=info.get("currentRatio", None),
                 quick_ratio=info.get("quickRatio", None),
                 revenue=info.get("totalRevenue", None),
@@ -362,6 +377,8 @@ class YahooDataDownloader(BaseDataDownloader):
                 data_source="Yahoo Finance",
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
+
+            return fundamentals
 
         except Exception as e:
             _logger.exception("Error getting fundamentals for %s: %s", symbol, str(e))
@@ -422,7 +439,7 @@ class YahooDataDownloader(BaseDataDownloader):
                             price_to_book=info.get("priceToBook", None),
                             return_on_equity=info.get("returnOnEquity", None),
                             return_on_assets=info.get("returnOnAssets", None),
-                            debt_to_equity=info.get("debtToEquity", None),
+                            debt_to_equity=self._convert_debt_to_equity_ratio(info.get("debtToEquity", None)),
                             current_ratio=info.get("currentRatio", None),
                             quick_ratio=info.get("quickRatio", None),
                             revenue=info.get("totalRevenue", None),
@@ -543,7 +560,7 @@ class YahooDataDownloader(BaseDataDownloader):
                             price_to_book=info.get("priceToBook", None),
                             return_on_equity=info.get("returnOnEquity", None),
                             return_on_assets=info.get("returnOnAssets", None),
-                            debt_to_equity=info.get("debtToEquity", None),
+                            debt_to_equity=self._convert_debt_to_equity_ratio(info.get("debtToEquity", None)),
                             current_ratio=info.get("currentRatio", None),
                             quick_ratio=info.get("quickRatio", None),
                             revenue=info.get("totalRevenue", None),

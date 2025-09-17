@@ -80,10 +80,24 @@ class DatabaseService:
    - Repository pattern with proper session management
    - Context managers for automatic cleanup
 
+### ✅ RECENT FIXES (September 2025)
+4. **Debt/Equity Ratio Standardization**: 
+   - Fixed Yahoo Finance debt/equity format inconsistency (percentage → ratio)
+   - Added `_convert_debt_to_equity_ratio()` method to YahooDataDownloader
+   - Applied to all fundamentals methods (single, batch, batch_optimized)
+   - Test results: INTC 47.997% → 0.47997, AAPL 154.486% → 1.54486
+
+5. **Screener Cache Integration**: 
+   - Modified enhanced screener to use DataManager instead of direct Yahoo calls
+   - Leverages existing file-based cache with 7-day TTL
+   - Added dict-to-Fundamentals conversion for API compatibility
+   - Proper integration with existing cache infrastructure
+
 ### 🔄 TODO
 1. **Ticker Management Functions**: Some functions from old db.py need to be implemented
 2. **Database Separation**: Consider if separate DBs are needed (currently using single DB)
 3. **Migrations and Monitoring**: Future enhancements
+4. **Add Unit Tests**: For debt/equity conversion and cache integration
 
 ## Risk Assessment
 

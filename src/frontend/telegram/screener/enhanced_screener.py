@@ -159,16 +159,93 @@ class EnhancedScreener:
             return [], {}
 
     def collect_fundamentals(self, tickers: List[str]) -> Dict[str, Fundamentals]:
-        """Collect fundamental data for a list of tickers using optimized batch operations."""
+        """Collect fundamental data for a list of tickers using DataManager with file caching."""
         if not tickers:
             return {}
 
-        _logger.info("Starting fundamental data collection for %d tickers", len(tickers))
+        _logger.info("Starting fundamental data collection for %d tickers using DataManager cache", len(tickers))
 
         try:
-            downloader = YahooDataDownloader()
+            # Use DataManager for cached fundamentals retrieval
+            from src.data.data_manager import get_data_manager
+            dm = get_data_manager()
 
-            # Use the most optimized batch method that minimizes individual API calls
+            valid_fundamentals = {}
+            for ticker in tickers:
+                try:
+                    # Get fundamentals from DataManager (uses file cache)
+                    fundamentals_dict = dm.get_fundamentals(ticker, force_refresh=False)
+
+                    if fundamentals_dict:
+                        # Convert dict to Fundamentals object
+                        fundamentals = self._dict_to_fundamentals(ticker, fundamentals_dict)
+
+                        if self._validate_fundamental_data(fundamentals):
+                            valid_fundamentals[ticker] = fundamentals
+                        else:
+                            _logger.warning("Insufficient fundamental data for %s, skipping", ticker)
+                    else:
+                        _logger.warning("No fundamental data returned for %s", ticker)
+
+                except Exception as e:
+                    _logger.warning("Failed to get fundamentals for %s: %s", ticker, e)
+                    continue
+
+            _logger.info("Fundamental data collection completed. %d/%d tickers processed successfully",
+                        len(valid_fundamentals), len(tickers))
+            return valid_fundamentals
+
+        except Exception as e:
+            _logger.error("Error in DataManager fundamental collection: %s", str(e))
+            _logger.info("Falling back to direct downloader collection")
+            return self._collect_fundamentals_fallback(tickers)
+
+    def _dict_to_fundamentals(self, ticker: str, data_dict: Dict[str, Any]) -> Fundamentals:
+        """Convert DataManager dict to Fundamentals object."""
+        return Fundamentals(
+            ticker=ticker.upper(),
+            company_name=data_dict.get("company_name"),
+            current_price=data_dict.get("current_price"),
+            market_cap=data_dict.get("market_cap"),
+            pe_ratio=data_dict.get("pe_ratio"),
+            forward_pe=data_dict.get("forward_pe"),
+            dividend_yield=data_dict.get("dividend_yield"),
+            earnings_per_share=data_dict.get("earnings_per_share"),
+            price_to_book=data_dict.get("price_to_book"),
+            return_on_equity=data_dict.get("return_on_equity"),
+            return_on_assets=data_dict.get("return_on_assets"),
+            debt_to_equity=data_dict.get("debt_to_equity"),
+            current_ratio=data_dict.get("current_ratio"),
+            quick_ratio=data_dict.get("quick_ratio"),
+            revenue=data_dict.get("revenue"),
+            revenue_growth=data_dict.get("revenue_growth"),
+            net_income=data_dict.get("net_income"),
+            net_income_growth=data_dict.get("net_income_growth"),
+            free_cash_flow=data_dict.get("free_cash_flow"),
+            operating_margin=data_dict.get("operating_margin"),
+            profit_margin=data_dict.get("profit_margin"),
+            beta=data_dict.get("beta"),
+            sector=data_dict.get("sector"),
+            industry=data_dict.get("industry"),
+            country=data_dict.get("country"),
+            exchange=data_dict.get("exchange"),
+            currency=data_dict.get("currency"),
+            shares_outstanding=data_dict.get("shares_outstanding"),
+            float_shares=data_dict.get("float_shares"),
+            short_ratio=data_dict.get("short_ratio"),
+            payout_ratio=data_dict.get("payout_ratio"),
+            peg_ratio=data_dict.get("peg_ratio"),
+            price_to_sales=data_dict.get("price_to_sales"),
+            enterprise_value=data_dict.get("enterprise_value"),
+            enterprise_value_to_ebitda=data_dict.get("enterprise_value_to_ebitda"),
+            data_source=data_dict.get("data_source", "DataManager"),
+            last_updated=data_dict.get("last_updated")
+        )
+
+    def _collect_fundamentals_fallback(self, tickers: List[str]) -> Dict[str, Fundamentals]:
+        """Fallback method using direct Yahoo downloader when DataManager fails."""
+        try:
+            downloader = YahooDataDownloader()
             fundamentals_data = downloader.get_fundamentals_batch_optimized(tickers, include_financials=False)
 
             # Filter out invalid data
@@ -179,41 +256,11 @@ class EnhancedScreener:
                 else:
                     _logger.warning("Insufficient fundamental data for %s, skipping", ticker)
 
-            _logger.info("Fundamental data collection completed. %d/%d tickers processed successfully",
-                        len(valid_fundamentals), len(tickers))
             return valid_fundamentals
 
         except Exception as e:
-            _logger.error("Error in optimized batch fundamental collection: %s", str(e))
-            _logger.info("Falling back to regular batch fundamental collection")
-            return self._collect_fundamentals_individual(tickers)
-
-    def _collect_fundamentals_individual(self, tickers: List[str]) -> Dict[str, Fundamentals]:
-        """Fallback method for individual fundamental data collection."""
-        fundamentals_data = {}
-        total_tickers = len(tickers)
-
-        for i, ticker in enumerate(tickers, 1):
-            try:
-                _logger.info("Processing %s (%d/%d)", ticker, i, total_tickers)
-
-                # Get fundamental data using yfinance
-                fundamentals = self._get_ticker_fundamentals(ticker)
-
-                if fundamentals and self._validate_fundamental_data(fundamentals):
-                    fundamentals_data[ticker] = fundamentals
-                    _logger.info("Successfully collected fundamental data for %s", ticker)
-                else:
-                    _logger.warning("Insufficient fundamental data for %s, skipping", ticker)
-
-                # Rate limiting - sleep between requests
-                time.sleep(0.1)  # 100ms delay between requests
-
-            except Exception as e:
-                _logger.error("Error collecting fundamental data for %s: %s", ticker, e)
-                continue
-
-        return fundamentals_data
+            _logger.error("Fallback fundamental collection also failed: %s", str(e))
+            return {}
 
     async def collect_technical_data(self, tickers: List[str], period: str, interval: str, provider: str) -> Dict[str, Dict[str, Any]]:
         """Collect technical data for a list of tickers using batch operations."""
