@@ -98,14 +98,17 @@ PID files for process tracking are stored in `logs/pids/`:
 1. **Telegram Bot** (`telegram_bot`)
    - File: `src/frontend/telegram/bot.py`
    - Purpose: Main Telegram bot interface
+   - Service script: `svc_telegram_bot.sh`
 
 2. **Admin Panel** (`admin_panel`)
    - File: `src/frontend/telegram/screener/admin_panel.py`
-   - Purpose: Web-based admin interface
+   - Purpose: Web-based admin interface (port 5000)
+   - Service script: `svc_telegram_admin_panel.sh`
 
 3. **Background Services** (`background_services`)
    - File: `src/frontend/telegram/screener/background_services.py`
-   - Purpose: Background monitoring and services
+   - Purpose: Background monitoring, alerts, and scheduled services
+   - Service script: `svc_telegram_screener_background.sh`
 
 4. **JSON to CSV Converter** (`json2csv`)
    - File: `src/backtester/optimizer/run_json2csv.py`
@@ -122,6 +125,10 @@ PID files for process tracking are stored in `logs/pids/`:
 7. **LSTM Optimizer** (`lstm_optimizer`)
    - File: `src/ml/lstm/lstm_optuna_log_return_from_csv.py`
    - Purpose: Machine learning optimization
+
+8. **HMM LSTM Backtest** (`hmm_lstm_backtest`)
+   - File: `src/ml/hmm_lstm/backtest.py`
+   - Purpose: Hidden Markov Model LSTM backtesting
 
 ## Troubleshooting
 
@@ -162,6 +169,59 @@ PID files for process tracking are stored in `logs/pids/`:
 - Consider log rotation for long-running scripts
 - Monitor disk usage for log files
 
+## Systemd Service Integration
+
+For production deployments, systemd service scripts are available for the main components:
+
+### Service Scripts
+- `svc_telegram_bot.sh` - Telegram bot service
+- `svc_telegram_admin_panel.sh` - Admin panel service  
+- `svc_telegram_screener_background.sh` - Background services
+
+### Key Differences from Regular Scripts
+- **Foreground execution**: Use `exec` instead of `nohup &` for proper systemd management
+- **Shell compatibility**: Use `/bin/sh` instead of `/bin/bash` for better portability
+- **Robust path resolution**: Handle symlinks and absolute paths correctly
+- **Logging**: Output to both systemd journal and log files
+- **Process management**: Designed for systemd's process supervision
+
+### Example Systemd Service File
+```ini
+[Unit]
+Description=E-Trading Telegram Bot
+After=network.target
+
+[Service]
+Type=exec
+User=trading
+Group=trading
+WorkingDirectory=/opt/apps/e-trading
+ExecStart=/opt/apps/e-trading/bin/svc_telegram_bot.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Service Management Commands
+```bash
+# Enable and start service
+sudo systemctl enable e-trading-bot.service
+sudo systemctl start e-trading-bot.service
+
+# Check status
+sudo systemctl status e-trading-bot.service
+
+# View logs
+journalctl -u e-trading-bot.service -f
+
+# Stop service
+sudo systemctl stop e-trading-bot.service
+```
+
 ## Migration from Old System
 
 If you were using the old script launcher:
@@ -170,3 +230,9 @@ If you were using the old script launcher:
 3. New features are additive (no breaking changes)
 4. Old log files are preserved
 5. Gradual migration is supported
+
+### Migration to Systemd Services
+1. Use `svc_*.sh` scripts for systemd service definitions
+2. Update existing service files to use new service scripts
+3. Service scripts automatically handle logging and process management
+4. Test services in development before production deployment
