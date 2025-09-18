@@ -59,20 +59,15 @@ class ScheduleProcessor:
             current_time_str = current_time.strftime("%H:%M")
             current_date = current_time.date()
 
-            # Get all active schedules
-            conn = db.sqlite3.connect(db.DB_PATH)
-            c = conn.cursor()
-            c.execute("SELECT * FROM schedules WHERE active=1")
-            schedules = c.fetchall()
-            conn.close()
+            # Get all active schedules using the new database service
+            schedules = db.get_active_schedules()
 
             if not schedules:
                 return
 
             _logger.debug("Checking %d active schedules at %s", len(schedules), current_time_str)
 
-            for schedule_row in schedules:
-                schedule = dict(zip([d[0] for d in c.description], schedule_row))
+            for schedule in schedules:
                 await self.check_single_schedule(schedule, current_time_str, current_date)
 
         except Exception as e:

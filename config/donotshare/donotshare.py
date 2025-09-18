@@ -69,3 +69,6 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 # Data cache directory
 DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "c:/data-cache")
+
+# Database configuration
+DB_PATH = os.getenv("DB_PATH", "db/trading.db")

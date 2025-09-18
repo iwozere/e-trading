@@ -272,6 +272,13 @@ ADMIN_TEMPLATE = """
         .json-expandable:hover { color: #0056b3; }
         .json-full { display: none; background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 5px; font-family: monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; }
         .json-full.show { display: block; }
+        .rearm-state { cursor: help; font-weight: bold; }
+        .rearm-armed { color: #28a745; }
+        .rearm-waiting { color: #ffc107; }
+        .rearm-cooldown { color: #17a2b8; }
+        .rearm-paused { color: #6c757d; }
+        .rearm-legacy { color: #dc3545; }
+        .rearm-error { color: #dc3545; }
         .stats { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
         .stat-card { background: #f8f9fa; padding: 20px; border-radius: 8px; flex: 1; text-align: center; min-width: 200px; }
         .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }
@@ -728,9 +735,13 @@ def alerts():
         # Apply filters
         filter_type = request.args.get('filter', '')
         if filter_type == 'active':
-            alerts_list = [a for a in alerts_list if a[5]]  # a[5] is the active field
+            alerts_list = [a for a in alerts_list if a.get('active', False)]
+        elif filter_type == 'rearm':
+            alerts_list = [a for a in alerts_list if a.get('re_arm_config')]
+        elif filter_type == 'legacy':
+            alerts_list = [a for a in alerts_list if not a.get('re_arm_config')]
         elif filter_type == 'advanced':
-            alerts_list = [a for a in alerts_list if len(a) > 10 and a[10]]  # config_json field
+            alerts_list = [a for a in alerts_list if a.get('config_json')]
 
         filter_info = ""
         if filter_type:
@@ -742,6 +753,8 @@ def alerts():
         <div style="margin-bottom: 20px;">
             <a href="/alerts" class="btn btn-secondary">All Alerts</a>
             <a href="/alerts?filter=active" class="btn btn-secondary">Active Only</a>
+            <a href="/alerts?filter=rearm" class="btn btn-secondary">Re-Arm Alerts</a>
+            <a href="/alerts?filter=legacy" class="btn btn-secondary">Legacy Alerts</a>
             <a href="/alerts?filter=advanced" class="btn btn-secondary">JSON Alerts</a>
         </div>
 
@@ -757,6 +770,7 @@ def alerts():
                     <th>Action</th>
                     <th>Email</th>
                     <th>Status</th>
+                    <th>Re-Arm State</th>
                     <th>Created</th>
                     <th>JSON Config</th>
                     <th>Actions</th>
@@ -766,19 +780,99 @@ def alerts():
         """
 
         for alert in alerts_list:
-            status_badge = "🟢 Active" if alert[5] else "🔴 Inactive"
-            email_badge = "📧" if alert[6] else "💬"
+            status_badge = "🟢 Active" if alert.get('active', False) else "🔴 Inactive"
+            email_badge = "📧" if alert.get('email', False) else "💬"
 
             # Get alert type and additional fields
-            alert_type = alert[8] if len(alert) > 8 else "price"  # alert_type field
-            timeframe = alert[9] if len(alert) > 9 else "15m"  # timeframe field
-            config_json = alert[10] if len(alert) > 10 else None  # config_json field
-            alert_action = alert[11] if len(alert) > 11 else "notify"  # alert_action field
+            alert_type = alert.get('alert_type', 'price')
+            timeframe = alert.get('timeframe', '15m')
+            config_json = alert.get('config_json')
+            alert_action = alert.get('alert_action', 'notify')
+
+            # Determine re-arm state with detailed information
+            rearm_state_badge = "❓ Unknown"
+            rearm_tooltip = "Re-arm status unknown"
+
+            if alert.get('re_arm_config'):
+                # This is a re-arm alert
+                is_armed = alert.get('is_armed', True)
+                last_triggered_at = alert.get('last_triggered_at')
+                last_price = alert.get('last_price')
+
+                try:
+                    # Parse re_arm_config to get details
+                    import json
+                    rearm_config = json.loads(alert.get('re_arm_config', '{}'))
+                    threshold = rearm_config.get('threshold', alert.get('price', 0))
+                    direction = rearm_config.get('direction', alert.get('condition', 'above'))
+                    hysteresis = rearm_config.get('re_arm_config', {}).get('hysteresis', 0.25)
+                    hysteresis_type = rearm_config.get('re_arm_config', {}).get('hysteresis_type', 'percentage')
+                    cooldown_minutes = rearm_config.get('re_arm_config', {}).get('cooldown_minutes', 15)
+
+                    # Calculate re-arm level
+                    if hysteresis_type == "percentage":
+                        hysteresis_amount = threshold * (hysteresis / 100.0)
+                    else:  # fixed
+                        hysteresis_amount = hysteresis
+
+                    if direction == "above":
+                        rearm_level = threshold - hysteresis_amount
+                    else:  # below
+                        rearm_level = threshold + hysteresis_amount
+
+                    # Build detailed tooltip
+                    base_info = f"Threshold: ${threshold:.2f} {direction}\\nRe-arm level: ${rearm_level:.2f}"
+                    if last_price:
+                        base_info += f"\\nLast price: ${last_price:.2f}"
+
+                    if not alert.get('active', False):
+                        rearm_state_badge = "⏸️ PAUSED"
+                        rearm_tooltip = f"Alert is paused by user\\n{base_info}"
+                    elif is_armed:
+                        rearm_state_badge = "🎯 ARMED"
+                        rearm_tooltip = f"Ready to trigger when price crosses threshold\\n{base_info}"
+                    else:
+                        # Check if in cooldown
+                        if last_triggered_at:
+                            from datetime import datetime, timedelta
+                            try:
+                                # Parse last triggered time
+                                if isinstance(last_triggered_at, str):
+                                    last_triggered = datetime.fromisoformat(last_triggered_at.replace('Z', '+00:00'))
+                                else:
+                                    last_triggered = last_triggered_at
+
+                                # Check if still in cooldown
+                                cooldown_period = timedelta(minutes=cooldown_minutes)
+                                time_since_trigger = datetime.now() - last_triggered
+                                if time_since_trigger < cooldown_period:
+                                    remaining_minutes = int((cooldown_period - time_since_trigger).total_seconds() / 60)
+                                    rearm_state_badge = f"⏳ COOLDOWN"
+                                    rearm_tooltip = f"In cooldown for {remaining_minutes} more minutes\\nLast triggered: {last_triggered.strftime('%H:%M:%S')}\\n{base_info}"
+                                else:
+                                    rearm_state_badge = "🔄 WAITING"
+                                    rearm_tooltip = f"Waiting for price to cross re-arm level\\nLast triggered: {last_triggered.strftime('%H:%M:%S')}\\n{base_info}"
+                            except Exception as e:
+                                rearm_state_badge = "🔄 WAITING"
+                                rearm_tooltip = f"Waiting for price to cross re-arm level\\n{base_info}"
+                        else:
+                            rearm_state_badge = "🔄 WAITING"
+                            rearm_tooltip = f"Waiting for price to cross re-arm level\\n{base_info}"
+
+                except Exception as e:
+                    rearm_state_badge = "❓ ERROR"
+                    rearm_tooltip = f"Error parsing re-arm config: {str(e)[:50]}"
+            else:
+                # Legacy alert without re-arm
+                rearm_state_badge = "🔒 LEGACY"
+                rearm_tooltip = "Legacy alert (triggers every time condition is met)\\nConsider migrating to re-arm system"
 
             # Determine display values based on alert type
             if alert_type == "price":
                 type_badge = "💰 Price"
-                price_condition = f"${alert[3]:.2f} {alert[4]}"
+                price = alert.get('price', 0)
+                condition = alert.get('condition', 'above')
+                price_condition = f"${price:.2f} {condition}"
             else:
                 type_badge = "⚙️ Indicator"
                 price_condition = "Complex"
@@ -812,20 +906,21 @@ def alerts():
 
             content += f"""
                 <tr>
-                    <td>#{alert[0]}</td>
-                    <td class="id-cell">{alert[2]}</td>
-                    <td>{alert[1]}</td>
+                    <td>#{alert.get('id', 'N/A')}</td>
+                    <td class="id-cell">{alert.get('user_id', 'N/A')}</td>
+                    <td>{alert.get('ticker', 'N/A')}</td>
                     <td>{type_badge}</td>
                     <td>{price_condition}</td>
                     <td>{timeframe}</td>
                     <td>{alert_action}</td>
                     <td class="status-cell">{email_badge}</td>
                     <td class="status-cell">{status_badge}</td>
-                    <td>{alert[7]}</td>
+                    <td class="status-cell rearm-state" title="{rearm_tooltip}">{rearm_state_badge}</td>
+                    <td>{alert.get('created', 'N/A')}</td>
                     <td class="json-cell" title="{config_json or 'No JSON config'}">{json_display or 'N/A'}{' 🔍' if config_json else ''}</td>
                     <td>
-                        <a href="/alerts/{alert[0]}/toggle" class="btn">Toggle</a>
-                        <a href="/alerts/{alert[0]}/delete" class="btn btn-danger">Delete</a>
+                        <a href="/alerts/{alert.get('id', 0)}/toggle" class="btn">Toggle</a>
+                        <a href="/alerts/{alert.get('id', 0)}/delete" class="btn btn-danger">Delete</a>
                     </td>
                 </tr>
             """
@@ -853,9 +948,9 @@ def schedules():
         # Apply filters
         filter_type = request.args.get('filter', '')
         if filter_type == 'active':
-            schedules_list = [s for s in schedules_list if s[5]]  # s[5] is the active field
+            schedules_list = [s for s in schedules_list if s.get('active', False)]
         elif filter_type == 'advanced':
-            schedules_list = [s for s in schedules_list if len(s) > 13 and s[13]]  # config_json field
+            schedules_list = [s for s in schedules_list if s.get('config_json')]
 
         filter_info = ""
         if filter_type:
@@ -892,20 +987,20 @@ def schedules():
         """
 
         for schedule in schedules_list:
-            status_badge = "🟢 Active" if schedule[5] else "🔴 Inactive"
-            email_badge = "📧" if schedule[6] else "💬"
+            status_badge = "🟢 Active" if schedule.get('active', False) else "🔴 Inactive"
+            email_badge = "📧" if schedule.get('email', False) else "💬"
 
             # Handle different schedule types
-            schedule_config = schedule[14] if len(schedule) > 14 else "simple"  # schedule_config field
-            config_json = schedule[13] if len(schedule) > 13 else None  # config_json field
-            schedule_type = schedule[11] if len(schedule) > 11 else "report"  # schedule_type field
-            list_type = schedule[12] if len(schedule) > 12 else None  # list_type field
+            schedule_config = schedule.get('schedule_config', 'simple')
+            config_json = schedule.get('config_json')
+            schedule_type = schedule.get('schedule_type', 'report')
+            list_type = schedule.get('list_type')
 
             if schedule_config == "simple":
                 # Simple schedule
                 schedule_type_display = "📊 Report"
-                details = f"{schedule[1] or 'N/A'}"
-                time = schedule[3] or 'N/A'
+                details = f"{schedule.get('ticker', 'N/A')}"
+                time = schedule.get('scheduled_time', 'N/A')
             else:
                 # JSON-based schedule
                 try:
@@ -924,15 +1019,15 @@ def schedules():
                         else:
                             schedule_type_display = "⚙️ JSON"
                             details = "Error parsing"
-                            time = schedule[3] or 'N/A'
+                            time = schedule.get('scheduled_time', 'N/A')
                     else:
                         schedule_type_display = "⚙️ JSON"
                         details = "No config"
-                        time = schedule[3] or 'N/A'
+                        time = schedule.get('scheduled_time', 'N/A')
                 except Exception as e:
                     schedule_type_display = "⚙️ JSON"
                     details = "Parse error"
-                    time = schedule[3] or 'N/A'
+                    time = schedule.get('scheduled_time', 'N/A')
 
             # Format JSON config for display
             json_display = ""
@@ -969,21 +1064,21 @@ def schedules():
 
             content += f"""
                 <tr>
-                    <td>#{schedule[0]}</td>
-                    <td class="id-cell">{schedule[2]}</td>
+                    <td>#{schedule.get('id', 'N/A')}</td>
+                    <td class="id-cell">{schedule.get('user_id', 'N/A')}</td>
                     <td>{schedule_type_display}</td>
                     <td>{details}</td>
                     <td>{time}</td>
-                    <td>{schedule[4] or 'N/A'}</td>
-                    <td>{schedule[8] or 'N/A'}</td>
-                    <td>{schedule[9] or 'N/A'}</td>
+                    <td>{schedule.get('period', 'N/A')}</td>
+                    <td>{schedule.get('indicators', 'N/A')}</td>
+                    <td>{schedule.get('interval', 'N/A')}</td>
                     <td class="status-cell">{email_badge}</td>
                     <td class="status-cell">{status_badge}</td>
-                    <td>{schedule[10]}</td>
+                    <td>{schedule.get('created', 'N/A')}</td>
                     <td class="json-cell" title="{config_json or 'No JSON config'}">{json_display or 'N/A'}{' 🔍' if config_json else ''}</td>
                     <td>
-                        <a href="/schedules/{schedule[0]}/toggle" class="btn">Toggle</a>
-                        <a href="/schedules/{schedule[0]}/delete" class="btn btn-danger">Delete</a>
+                        <a href="/schedules/{schedule.get('id', 0)}/toggle" class="btn">Toggle</a>
+                        <a href="/schedules/{schedule.get('id', 0)}/delete" class="btn btn-danger">Delete</a>
                     </td>
                 </tr>
             """

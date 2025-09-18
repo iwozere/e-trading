@@ -128,7 +128,7 @@ class ProviderSelector:
             'stock_intraday': {
                 'primary': 'fmp',
                 'backup': ['alpha_vantage', 'polygon'],
-                'timeframes': ['1m', '5m', '15m', '30m', '1h']
+                'timeframes': ['1m', '5m', '15m', '30m', '1h', '4h']
             },
             'stock_daily': {
                 'primary': 'yahoo',
@@ -288,7 +288,7 @@ class ProviderSelector:
             return 'crypto'
         elif symbol_type == 'stock':
             # Map stock timeframes to appropriate rules
-            if timeframe in ['1m', '5m', '15m', '30m', '1h']:
+            if timeframe in ['1m', '5m', '15m', '30m', '1h', '4h']:
                 return 'stock_intraday'
             elif timeframe in ['1d']:
                 return 'stock_daily'

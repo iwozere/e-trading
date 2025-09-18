@@ -7,7 +7,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 import asyncio
 import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 from src.data.db import telegram_service as db
 from src.common import get_ohlcv
 from src.frontend.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
@@ -41,7 +41,7 @@ class AlertMonitor:
         while self.running:
             try:
                 await self.check_alerts()
-                await asyncio.sleep(15 * 60)  # Check every 15 minutes
+                await asyncio.sleep(5 * 60)  # Check every 5 minutes
             except Exception as e:
                 _logger.exception("Error in alert monitor: ")
                 await asyncio.sleep(5 * 60)  # Shorter sleep on error (5 minutes)
@@ -78,10 +78,13 @@ class AlertMonitor:
             ticker = alert["ticker"]
             alert_type = alert.get("alert_type", "price")
 
-            # Get current price
+            # Get current price with improved error handling
             current_price = await self._get_current_price(ticker)
             if current_price is None:
                 _logger.warning("Could not get current price for %s, skipping alert %d", ticker, alert_id)
+
+                # If this alert has failed multiple times, consider notifying admin
+                # For now, just skip and continue
                 return
 
             # Check if this is a re-arm alert (has re_arm_config)
@@ -329,16 +332,34 @@ class AlertMonitor:
             _logger.error("Failed to send admin error notification: %s", e)
 
     async def _get_current_price(self, ticker: str) -> Optional[float]:
-        """Get current price for ticker."""
-        try:
-            # Use existing OHLCV function to get current price
-            data = get_ohlcv(ticker, period="1d", interval="1m", provider="yf")
-            if data is not None and not data.empty:
-                return float(data['Close'].iloc[-1])
-            return None
-        except Exception as e:
-            _logger.warning("Error getting current price for %s: %s", ticker, e)
-            return None
+        """Get current price for ticker with fallback providers."""
+        providers_to_try = ["yf", "alpha_vantage", "polygon"]
+
+        for provider in providers_to_try:
+            try:
+                # Try different intervals and periods for better success rate
+                # Start with 5m interval as requested, fallback to others if needed
+                intervals_to_try = ["5m", "1m", "1d"]
+                periods_to_try = ["1d", "5d"]
+
+                for interval in intervals_to_try:
+                    for period in periods_to_try:
+                        try:
+                            data = get_ohlcv(ticker, period=period, interval=interval, provider=provider)
+                            if data is not None and not data.empty and 'Close' in data.columns:
+                                current_price = float(data['Close'].iloc[-1])
+                                _logger.debug("Got current price for %s from %s: $%.2f", ticker, provider, current_price)
+                                return current_price
+                        except Exception as e:
+                            _logger.debug("Failed to get price for %s with %s/%s/%s: %s", ticker, provider, period, interval, e)
+                            continue
+
+            except Exception as e:
+                _logger.debug("Provider %s failed for %s: %s", provider, ticker, e)
+                continue
+
+        _logger.warning("Could not get current price for %s from any provider", ticker)
+        return None
 
     def _evaluate_legacy_price_alert(self, alert: Dict[str, Any], current_price: float) -> Tuple[bool, Dict[str, Any]]:
         """Evaluate legacy price alert (simple threshold check)."""

@@ -6,9 +6,11 @@ Clean, unified interface for all telegram bot database operations.
 Uses the repository pattern with proper session management.
 """
 
+import sqlite3
 from typing import Optional, List, Dict, Any
 from src.data.database_service import get_database_service
 from src.notification.logger import setup_logger
+from config.donotshare.donotshare import DB_PATH
 
 _logger = setup_logger(__name__)
 

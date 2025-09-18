@@ -105,38 +105,35 @@ def analyze_period_interval(period: str = "2y", interval: str = "1d"):
 
 def get_ohlcv(ticker: str, interval: str, period: str, provider: str = None, **kwargs):
     """
-    Retrieve OHLCV data for a ticker using the specified data provider.
-    If provider is None, try to infer from ticker characteristics using intelligent logic.
+    Retrieve OHLCV data for a ticker using the DataManager with caching support.
+    If provider is None, the DataManager will automatically select the best provider.
 
     Args:
         ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT', 'VUSD.L')
         interval: Data interval (e.g., '1m', '5m', '15m', '1h', '1d')
         period: Period string (e.g., '1d', '7d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y')
-        provider: Data provider code (e.g., 'yf', 'bnc', 'av', etc.)
-        **kwargs: Additional arguments to pass to the downloader
+        provider: Data provider code (e.g., 'yf', 'bnc', 'av', etc.) - optional, auto-selected if None
+        **kwargs: Additional arguments (force_refresh, etc.)
 
     Returns:
         pd.DataFrame: OHLCV data with columns ['timestamp', 'open', 'high', 'low', 'close', 'volume']
 
     Raises:
-        ValueError: If provider is unknown or period/interval combination is invalid
+        ValueError: If period/interval combination is invalid
         RuntimeError: If data retrieval fails
     """
-    # Infer provider if not specified
-    if provider is None:
-        provider = determine_provider(ticker)
-
-    # Get downloader
-    downloader = DataDownloaderFactory.create_downloader(provider, **kwargs)
-    if downloader is None:
-        raise ValueError(f"Unknown or unsupported provider: {provider}")
-
-    # Validate period/interval combination
-    if not downloader.is_valid_period_interval(period, interval):
-        raise ValueError(f"Invalid period/interval combination for provider {provider}: {period}/{interval}")
+    from src.data.data_manager import DataManager
 
     # Calculate date range
     start_date, end_date = analyze_period_interval(period, interval)
 
-    # Get OHLCV data
-    return downloader.get_ohlcv(ticker, interval, start_date, end_date)
+    # Initialize DataManager with caching
+    try:
+        from config.donotshare.donotshare import DATA_CACHE_DIR
+    except ImportError:
+        DATA_CACHE_DIR = "c:/data-cache"
+
+    data_manager = DataManager(cache_dir=DATA_CACHE_DIR)
+
+    # Get OHLCV data with caching
+    return data_manager.get_ohlcv(ticker, interval, start_date, end_date, **kwargs)
