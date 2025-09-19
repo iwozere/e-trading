@@ -16,6 +16,7 @@ Available Downloaders:
 - TwelveDataDataDownloader: For Twelve Data API
 - FinnhubDataDownloader: For Finnhub data
 - CoinGeckoDataDownloader: For cryptocurrency data via CoinGecko
+- AlpacaDataDownloader: For US stocks and ETFs via Alpaca Markets
 
 Base Class:
 - BaseDataDownloader: Abstract base class defining the downloader interface
@@ -31,6 +32,7 @@ from .polygon_data_downloader import PolygonDataDownloader
 from .twelvedata_data_downloader import TwelveDataDataDownloader
 from .finnhub_data_downloader import FinnhubDataDownloader
 from .coingecko_data_downloader import CoinGeckoDataDownloader
+from .alpaca_data_downloader import AlpacaDataDownloader
 
 __all__ = [
     'BaseDataDownloader',
@@ -43,4 +45,5 @@ __all__ = [
     'TwelveDataDataDownloader',
     'FinnhubDataDownloader',
     'CoinGeckoDataDownloader',
+    'AlpacaDataDownloader',
 ]

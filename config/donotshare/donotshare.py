@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="config/donotshare/.env")
 
+ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
+ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 
 BINANCE_KEY = os.getenv("BINANCE_KEY")
 BINANCE_SECRET = os.getenv("BINANCE_SECRET")

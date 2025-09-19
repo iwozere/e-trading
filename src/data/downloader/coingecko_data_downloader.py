@@ -149,7 +149,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
 
             return ohlcv
         except Exception as e:
-            _logger.exception("Error processing CoinGecko data for %s: %s")
+            _logger.exception("Error processing CoinGecko data for %s: %s", symbol, str(e))
             raise
 
     def get_periods(self) -> list:

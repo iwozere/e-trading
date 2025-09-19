@@ -149,6 +149,7 @@ The system automatically selects the best data provider based on symbol type and
 - **Cryptocurrency Symbols**: Always use Binance
 - **Stock Symbols (Daily)**: Use Yahoo Finance
 - **Stock Symbols (Intraday)**: Use Alpha Vantage (full historical data, no 60-day limit)
+- **US Stock Symbols (Professional)**: Use Alpaca (professional-grade data, 10k bars per request)
 
 ### Usage
 
@@ -246,6 +247,32 @@ from src.data.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
 downloader = AlphaVantageDataDownloader(api_key="YOUR_API_KEY")
 df = downloader.get_ohlcv("AAPL", "5m", "2020-01-01", "2023-12-31")  # Full history!
+```
+
+#### 4. Alpaca Data Downloader (`AlpacaDataDownloader`)
+
+**Best for:** Professional-grade US market data with trading integration
+
+**Capabilities:**
+- ✅ **US Stocks & ETFs**: Comprehensive coverage of US equity markets
+- ✅ **Multiple Timeframes**: 1m, 5m, 15m, 30m, 1h, 1d
+- ✅ **Professional Data**: Exchange-sourced, high-quality market data
+- ✅ **Trading Integration**: Direct integration with Alpaca trading platform
+- ✅ **Fundamental Data**: Basic company information and asset details
+- ✅ **Good Rate Limits**: 200 requests/minute (free tier)
+- ✅ **High Bar Limits**: 10,000 bars per request (free tier)
+
+**Data Quality:** Excellent - Professional-grade, exchange-sourced data
+**Rate Limits:** 200 requests/minute (free tier)
+**Coverage:** US stocks and ETFs
+**Bar Limits:** 10,000 bars per request (free tier)
+
+```python
+from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
+
+downloader = AlpacaDataDownloader()
+df = downloader.get_ohlcv("AAPL", "1m", "2023-01-01", "2023-12-31")  # Up to 10k bars
+fundamentals = downloader.get_fundamentals("AAPL")
 ```
 
 ## Cache Population Script

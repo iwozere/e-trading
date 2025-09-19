@@ -6,21 +6,21 @@ This document compares different data providers for the E-Trading Data Module, h
 
 ## 📊 **Provider Comparison Matrix**
 
-| Feature | Binance | Yahoo Finance | Alpha Vantage | FMP | Tiingo | Polygon.io | IEX Cloud* |
-|---------|---------|---------------|----------------|-----|--------|------------|------------|
-| **Intraday Data (5m, 15m, 30m, 1h)** | ✅ Full History | ❌ 60-day limit | ✅ Full History | ✅ Full History | ❌ None | ✅ Full History | ❌ Retired |
-| **Daily Data** | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ❌ Retired |
-| **Weekly/Monthly Data** | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Back to 1962 | ✅ Full History | ❌ Retired |
-| **Fundamental Data** | ❌ None | ✅ Basic | ✅ Basic | ✅ Comprehensive | ✅ Comprehensive | ✅ Basic | ❌ Retired |
-| **Stock Screening** | ❌ None | ❌ None | ❌ None | ✅ Advanced | ❌ None | ❌ None | ❌ Retired |
-| **Crypto Coverage** | ✅ Excellent | ❌ Limited | ✅ Good | ✅ Good | ❌ None | ✅ Excellent | ❌ Retired |
-| **Stock Coverage** | ❌ None | ✅ Excellent | ✅ Good | ✅ Excellent | ✅ Excellent | ✅ Excellent | ❌ Retired |
-| **Rate Limits (Free)** | 1200/min | 100/min | 5/min, 25/day | 3000/min | 1000/day | 5/min | ❌ Retired |
-| **Rate Limits (Paid)** | 1200/min | 100/min | 75-1200/min | 3000/min | 10000/day | 100-1000/min | ❌ Retired |
-| **Data Quality** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ❌ Retired |
-| **Reliability** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ❌ Retired |
-| **Cost (Free Tier)** | Free | Free | Free | Free | Free | Free | ❌ Retired |
-| **Cost (Paid)** | Free | Free | $49.99/month | $15/month | $20/month | $29/month | ❌ Retired |
+| Feature | Binance | Yahoo Finance | Alpha Vantage | FMP | Tiingo | Polygon.io | Alpaca | IEX Cloud* |
+|---------|---------|---------------|----------------|-----|--------|------------|--------|------------|
+| **Intraday Data (5m, 15m, 30m, 1h)** | ✅ Full History | ❌ 60-day limit | ✅ Full History | ✅ Full History | ❌ None | ✅ Full History | ✅ Full History | ❌ Retired |
+| **Daily Data** | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ❌ Retired |
+| **Weekly/Monthly Data** | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Full History | ✅ Back to 1962 | ✅ Full History | ✅ Full History | ❌ Retired |
+| **Fundamental Data** | ❌ None | ✅ Basic | ✅ Basic | ✅ Comprehensive | ✅ Comprehensive | ✅ Basic | ✅ Basic | ❌ Retired |
+| **Stock Screening** | ❌ None | ❌ None | ❌ None | ✅ Advanced | ❌ None | ❌ None | ❌ None | ❌ Retired |
+| **Crypto Coverage** | ✅ Excellent | ❌ Limited | ✅ Good | ✅ Good | ❌ None | ✅ Excellent | ❌ None | ❌ Retired |
+| **Stock Coverage** | ❌ None | ✅ Excellent | ✅ Good | ✅ Excellent | ✅ Excellent | ✅ Excellent | ✅ Excellent | ❌ Retired |
+| **Rate Limits (Free)** | 1200/min | 100/min | 5/min, 25/day | 3000/min | 1000/day | 5/min | 200/min | ❌ Retired |
+| **Rate Limits (Paid)** | 1200/min | 100/min | 75-1200/min | 3000/min | 10000/day | 100-1000/min | 200/min | ❌ Retired |
+| **Data Quality** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ❌ Retired |
+| **Reliability** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ❌ Retired |
+| **Cost (Free Tier)** | Free | Free | Free | Free | Free | Free | Free | ❌ Retired |
+| **Cost (Paid)** | Free | Free | $49.99/month | $15/month | $20/month | $29/month | Free | ❌ Retired |
 
 *IEX Cloud was officially retired on August 31, 2024
 
@@ -32,6 +32,7 @@ This document compares different data providers for the E-Trading Data Module, h
 
 ### **For Stock Intraday Data (5m, 15m, 30m, 1h):**
 - **Primary**: FMP (generous free tier: 3,000 calls/minute, full historical data)
+- **Secondary**: Alpaca (200 calls/minute, 10,000 bars per request, professional-grade data)
 - **Backup**: Alpha Vantage (full historical data, but limited to 25 calls/day)
 
 ### **For Stock Daily Data:**
@@ -77,6 +78,13 @@ This document compares different data providers for the E-Trading Data Module, h
 - **Rate Limits**: 5 requests/minute (free), 100-1000 requests/minute (paid)
 - **Coverage**: US stocks, crypto, forex
 
+### **Alpaca Markets**
+- **Free**: API key and secret required (get at https://alpaca.markets/)
+- **Rate Limits**: 200 requests/minute (free tier)
+- **Coverage**: US stocks and ETFs
+- **Bar Limits**: 10,000 bars per request (free tier)
+- **Best For**: Professional-grade US market data, paper trading, live trading integration
+
 ### **IEX Cloud** ⚠️ **RETIRED**
 - **Status**: Officially retired on August 31, 2024
 - **Alternative**: Use FMP or Alpha Vantage instead
@@ -112,6 +120,11 @@ This document compares different data providers for the E-Trading Data Module, h
 - **Pros**: Highest quality, real-time, comprehensive
 - **Cons**: Expensive, complex API
 - **Best For**: Professional trading, institutional use
+
+### **Alpaca Markets**
+- **Pros**: Professional-grade data, good rate limits (200/min), 10,000 bars per request, trading integration
+- **Cons**: US markets only, requires API key and secret
+- **Best For**: US stock trading, paper trading, professional backtesting, live trading integration
 
 ### **IEX Cloud** ⚠️ **RETIRED**
 - **Status**: No longer available (retired August 31, 2024)
@@ -176,22 +189,31 @@ export ALPHA_VANTAGE_API_KEY=your_key_here
 
 # Polygon.io
 export POLYGON_API_KEY=your_key_here
+
+# Alpaca Markets
+export ALPACA_API_KEY=your_key_here
+export ALPACA_SECRET_KEY=your_secret_here
+export ALPACA_BASE_URL=https://paper-api.alpaca.markets  # Optional, defaults to paper trading
 ```
 
 ### **Python Configuration**
 ```python
-from src.data.fmp_data_downloader import FMPDataDownloader
-from src.data.tiingo_data_downloader import TiingoDataDownloader
-from src.data.alpha_vantage_downloader import AlphaVantageDownloader
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
+from src.data.downloader.tiingo_data_downloader import TiingoDataDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
 
 # Initialize FMP downloader (RECOMMENDED for intraday)
 fmp_downloader = FMPDataDownloader()  # 3,000 requests/minute
+
+# Initialize Alpaca for professional US market data
+alpaca_downloader = AlpacaDataDownloader()  # 200 requests/minute, 10,000 bars per request
 
 # Initialize Tiingo for historical data and fundamentals
 tiingo_downloader = TiingoDataDownloader()  # 1,000 requests/day
 
 # Initialize Alpha Vantage as backup
-av_downloader = AlphaVantageDownloader()  # 25 requests/day
+av_downloader = AlphaVantageDataDownloader()  # 25 requests/day
 ```
 
 ## 📊 **Performance Benchmarks**
@@ -199,6 +221,7 @@ av_downloader = AlphaVantageDownloader()  # 25 requests/day
 ### **Download Speed (1000 bars)**
 - **Binance**: ~2-5 seconds
 - **FMP**: ~1-3 seconds (excellent rate limits)
+- **Alpaca**: ~2-4 seconds (professional-grade, 10k bars per request)
 - **Tiingo**: ~2-4 seconds (good for historical data)
 - **Yahoo Finance**: ~3-8 seconds
 - **Alpha Vantage**: ~5-15 seconds (rate limited)
@@ -207,6 +230,7 @@ av_downloader = AlphaVantageDownloader()  # 25 requests/day
 ### **Reliability Score**
 - **Binance**: 99.9%
 - **FMP**: 99.5%
+- **Alpaca**: 99.7%
 - **Tiingo**: 99.8%
 - **Yahoo Finance**: 95%
 - **Alpha Vantage**: 98%

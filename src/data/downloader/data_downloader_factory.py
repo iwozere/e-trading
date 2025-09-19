@@ -21,6 +21,7 @@ from src.data.downloader.binance_data_downloader import BinanceDataDownloader
 from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.downloader.tiingo_data_downloader import TiingoDataDownloader
+from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -87,7 +88,11 @@ class DataDownloaderFactory:
         "financialmodelingprep": "fmp",
 
         # Tiingo
-        "tiingo": "tiingo"
+        "tiingo": "tiingo",
+
+        # Alpaca
+        "alpaca": "alpaca",
+        "alp": "alpaca"
     }
 
     @staticmethod
@@ -130,7 +135,7 @@ class DataDownloaderFactory:
             return DataDownloaderFactory._create_downloader_instance(downloader_class, normalized_provider, **kwargs)
 
         except Exception as e:
-            _logger.exception("Error creating downloader for provider %s: %s")
+            _logger.exception("Error creating downloader for provider %s: %s", provider_code, str(e))
             return None
 
     @staticmethod
@@ -167,6 +172,7 @@ class DataDownloaderFactory:
             "coingecko": CoinGeckoDataDownloader,
             "fmp": FMPDataDownloader,
             "tiingo": TiingoDataDownloader,
+            "alpaca": AlpacaDataDownloader,
         }
         return downloader_classes.get(provider)
 
@@ -225,6 +231,14 @@ class DataDownloaderFactory:
             if not api_key:
                 raise ValueError("Tiingo API key is required")
             return downloader_class(api_key=api_key)
+
+        elif provider == "alpaca":
+            api_key = kwargs.get("api_key") or os.getenv("ALPACA_API_KEY")
+            secret_key = kwargs.get("secret_key") or os.getenv("ALPACA_SECRET_KEY")
+            base_url = kwargs.get("base_url") or os.getenv("ALPACA_BASE_URL")
+            if not api_key or not secret_key:
+                raise ValueError("Alpaca API key and secret key are required")
+            return downloader_class(api_key=api_key, secret_key=secret_key, base_url=base_url)
 
         elif provider in ["yahoo", "coingecko"]:
             # These don't require API keys
@@ -341,6 +355,16 @@ class DataDownloaderFactory:
                 "rate_limits": "1000 calls/day (free tier)",
                 "cost": "Free tier available",
                 "fundamental_data": "Basic",
+                "coverage": "US stocks and ETFs"
+            },
+            "alpaca": {
+                "codes": ["alpaca", "alp"],
+                "name": "Alpaca Markets",
+                "description": "Professional-grade US market data with comprehensive fundamentals",
+                "requires_api_key": True,
+                "rate_limits": "200 requests/minute (free tier)",
+                "cost": "Free tier available",
+                "fundamental_data": "Comprehensive",
                 "coverage": "US stocks and ETFs"
             }
         }

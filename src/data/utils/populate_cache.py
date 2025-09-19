@@ -109,6 +109,7 @@ class CachePopulator:
         - The data file doesn't exist
         - The metadata file doesn't exist
         - The provider in metadata is "mock"
+        - The data doesn't cover the full year (starts too late or ends too early)
 
         Args:
             ticker: Ticker symbol
@@ -131,7 +132,7 @@ class CachePopulator:
             _logger.warning("Missing metadata file for %s %s %d", ticker, interval, year)
             return False
 
-        # Check metadata for mock provider
+        # Check metadata for mock provider and date coverage
         try:
             with open(metadata_file, 'r') as f:
                 metadata = json.load(f)
@@ -149,7 +150,97 @@ class CachePopulator:
                 _logger.info("Found mock provider in provider_info for %s %s %d - marking for redownload", ticker, interval, year)
                 return False
 
-            return True
+            # Check date coverage - ensure data covers most of the year
+            start_date_str = metadata.get('start_date')
+            end_date_str = metadata.get('end_date')
+
+            if start_date_str and end_date_str:
+                try:
+                    # Parse dates from metadata
+                    start_date = pd.to_datetime(start_date_str).replace(tzinfo=None)
+                    end_date = pd.to_datetime(end_date_str).replace(tzinfo=None)
+
+                    # Define acceptable date ranges for the year based on interval
+                    # Intraday data (1m, 5m, 15m, 30m, 1h) often has limited historical availability
+                    # Daily data should have full year coverage
+                    if interval in ['1m', '5m', '15m', '30m', '1h']:
+                        # For intraday data, be very lenient - many providers only have 1-3 months
+                        # Some providers like FMP may only provide recent months for intraday data
+                        # Start can be as late as October for historical years
+                        # End should be no earlier than November 1st for historical years
+                        year_start_threshold = datetime(year, 10, 31)
+                        year_end_threshold = datetime(year, 11, 1)
+                    else:
+                        # For daily/weekly/monthly data, expect full year coverage
+                        # Start should be no later than January 10th (allowing for holidays/weekends)
+                        # End should be no earlier than December 20th (allowing for holidays/weekends)
+                        year_start_threshold = datetime(year, 1, 10)
+                        year_end_threshold = datetime(year, 12, 20)
+
+                    # For current year, adjust end threshold to today
+                    current_year = datetime.now().year
+                    if year == current_year:
+                        today = datetime.now()
+                        # If we're still early in the year, be more lenient
+                        if today.month <= 6:
+                            year_end_threshold = today - timedelta(days=7)  # Allow up to a week behind
+                        else:
+                            year_end_threshold = today - timedelta(days=3)  # Allow up to 3 days behind
+
+                    # Check if data coverage is adequate
+                    if start_date > year_start_threshold:
+                        _logger.info("Data for %s %s %d starts too late (%s) - marking for redownload",
+                                   ticker, interval, year, start_date.date())
+                        return False
+
+                    if end_date < year_end_threshold:
+                        _logger.info("Data for %s %s %d ends too early (%s) - marking for redownload",
+                                   ticker, interval, year, end_date.date())
+                        return False
+
+                    # Check minimum number of data points for the year
+                    file_info = metadata.get('file_info', {})
+                    rows = file_info.get('rows', 0)
+
+                    # Define minimum expected rows based on interval
+                    # Adjust expectations based on typical provider limitations
+                    min_rows_by_interval = {
+                        '1m': 10000,    # ~10k minutes (very limited historical intraday)
+                        '5m': 2000,     # ~2k 5-minute periods (very limited historical intraday)
+                        '15m': 700,     # ~700 15-minute periods (very limited historical intraday)
+                        '30m': 350,     # ~350 30-minute periods (very limited historical intraday)
+                        '1h': 175,      # ~175 hours (very limited historical intraday)
+                        '4h': 400,      # ~400 4-hour periods in a trading year
+                        '1d': 250,      # ~250 trading days in a year
+                        '1w': 52,       # 52 weeks in a year
+                        '1M': 12        # 12 months in a year
+                    }
+
+                    min_rows = min_rows_by_interval.get(interval, 100)
+
+                    # For current year, adjust minimum based on how much of the year has passed
+                    if year == current_year:
+                        days_passed = (datetime.now() - datetime(year, 1, 1)).days
+                        year_fraction = min(days_passed / 365.0, 1.0)
+                        min_rows = int(min_rows * year_fraction * 0.7)  # Allow 30% tolerance
+                    else:
+                        min_rows = int(min_rows * 0.7)  # Allow 30% tolerance for historical years
+
+                    if rows < min_rows:
+                        _logger.info("Data for %s %s %d has too few rows (%d < %d) - marking for redownload",
+                                   ticker, interval, year, rows, min_rows)
+                        return False
+
+                    _logger.debug("Data for %s %s %d is valid: %s to %s (%d rows)",
+                                ticker, interval, year, start_date.date(), end_date.date(), rows)
+                    return True
+
+                except (ValueError, TypeError) as e:
+                    _logger.warning("Error parsing dates for %s %s %d: %s", ticker, interval, year, e)
+                    return False
+            else:
+                _logger.warning("Missing date information in metadata for %s %s %d", ticker, interval, year)
+                return False
 
         except (json.JSONDecodeError, KeyError, IOError) as e:
             _logger.warning("Error reading metadata for %s %s %d: %s", ticker, interval, year, e)
@@ -344,6 +435,7 @@ class CachePopulator:
         _logger.info("  Tickers: %s", tickers)
         _logger.info("  Intervals: %s", intervals)
         _logger.info("  Date range: %s to %s", start_date.date(), end_date.date())
+        _logger.info("  Enhanced validation: Checking date coverage and data completeness")
 
         results = {}
         total_tickers = len(tickers)
