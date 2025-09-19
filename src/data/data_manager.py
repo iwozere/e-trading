@@ -30,6 +30,9 @@ from src.data.cache.fundamentals_cache import get_fundamentals_cache
 from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
 from src.notification.logger import setup_logger
 
+# Initialize logger
+_logger = setup_logger(__name__)
+
 # Import API keys from donotshare configuration
 try:
     from config.donotshare.donotshare import (
@@ -112,10 +115,27 @@ class ProviderSelector:
     def _load_provider_rules(self) -> Dict[str, Any]:
         """Load provider selection rules from configuration file."""
         try:
-            if os.path.exists(self.config_path):
-                with open(self.config_path, 'r') as f:
-                    return yaml.safe_load(f)
+            # Try multiple possible paths for the config file
+            possible_paths = [
+                self.config_path,
+                os.path.join(os.getcwd(), self.config_path),
+                os.path.join(Path(__file__).parent.parent.parent, self.config_path),
+                os.path.join(Path(__file__).parent.parent.parent.parent, self.config_path)
+            ]
+
+            config_file_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    config_file_path = path
+                    break
+
+            if config_file_path:
+                with open(config_file_path, 'r') as f:
+                    rules = yaml.safe_load(f)
+                    _logger.debug("Loaded provider rules from %s", config_file_path)
+                    return rules
             else:
+                _logger.warning("Provider rules config file not found at any of: %s", possible_paths)
                 # Default rules if config file doesn't exist
                 return self._get_default_rules()
         except Exception as e:
@@ -283,6 +303,313 @@ class ProviderSelector:
             Symbol classification ('crypto', 'stock', 'unknown')
         """
         return self._classify_symbol(symbol)
+
+    def classify_symbol_for_fundamentals(self, symbol: str) -> Dict[str, Any]:
+        """
+        Enhanced symbol classification specifically for fundamentals data retrieval.
+
+        This method provides detailed symbol information needed for optimal
+        fundamentals provider selection, including market detection, exchange
+        identification, and international symbol handling.
+
+        Args:
+            symbol: Trading symbol (e.g., 'AAPL', 'GOOGL', 'ASML.AS')
+
+        Returns:
+            Dictionary containing detailed symbol classification:
+            {
+                'symbol': str,           # Original symbol
+                'normalized': str,       # Normalized symbol
+                'symbol_type': str,      # 'stock', 'etf', 'reit', 'crypto', 'unknown'
+                'market': str,           # 'US', 'UK', 'EU', 'ASIA', 'unknown'
+                'exchange': str,         # 'NASDAQ', 'NYSE', 'LSE', 'AMS', etc.
+                'country': str,          # 'US', 'GB', 'NL', etc.
+                'international': bool,   # True if non-US symbol
+                'currency': str,         # 'USD', 'EUR', 'GBP', etc.
+                'fundamentals_support': str  # 'full', 'limited', 'none'
+            }
+        """
+        try:
+            # Handle None or invalid input
+            if not symbol or not isinstance(symbol, str):
+                return {
+                    'symbol': symbol,
+                    'normalized': '',
+                    'symbol_type': 'unknown',
+                    'market': 'unknown',
+                    'exchange': 'unknown',
+                    'country': 'unknown',
+                    'international': True,
+                    'currency': 'USD',
+                    'fundamentals_support': 'none'
+                }
+
+            symbol_upper = symbol.upper().strip()
+
+            # Handle empty string after stripping
+            if not symbol_upper:
+                return {
+                    'symbol': symbol,
+                    'normalized': '',
+                    'symbol_type': 'unknown',
+                    'market': 'unknown',
+                    'exchange': 'unknown',
+                    'country': 'unknown',
+                    'international': True,
+                    'currency': 'USD',
+                    'fundamentals_support': 'none'
+                }
+
+            # Initialize classification result
+            classification = {
+                'symbol': symbol,
+                'normalized': symbol_upper,
+                'symbol_type': 'unknown',
+                'market': 'unknown',
+                'exchange': 'unknown',
+                'country': 'unknown',
+                'international': False,
+                'currency': 'USD',  # Default to USD
+                'fundamentals_support': 'none'
+            }
+
+            # 1. Detect exchange from symbol suffix
+            exchange_info = self._detect_exchange_from_symbol(symbol_upper)
+            if exchange_info:
+                classification.update(exchange_info)
+
+            # 2. Classify symbol type
+            symbol_type = self._classify_symbol_type_detailed(symbol_upper, classification)
+            classification['symbol_type'] = symbol_type
+
+            # 3. Determine market and country
+            market_info = self._determine_market_and_country(symbol_upper, classification)
+            classification.update(market_info)
+
+            # 4. Assess fundamentals support
+            fundamentals_support = self._assess_fundamentals_support(classification)
+            classification['fundamentals_support'] = fundamentals_support
+
+            # 5. Set international flag
+            classification['international'] = classification['country'] != 'US'
+
+            return classification
+
+        except Exception as e:
+            _logger.error("Error classifying symbol %s for fundamentals: %s", symbol, e)
+            return {
+                'symbol': symbol,
+                'normalized': symbol.upper(),
+                'symbol_type': 'unknown',
+                'market': 'unknown',
+                'exchange': 'unknown',
+                'country': 'unknown',
+                'international': True,
+                'currency': 'USD',
+                'fundamentals_support': 'none'
+            }
+
+    def _detect_exchange_from_symbol(self, symbol: str) -> Optional[Dict[str, str]]:
+        """
+        Detect exchange information from symbol suffix.
+
+        Args:
+            symbol: Uppercase symbol
+
+        Returns:
+            Dictionary with exchange information or None
+        """
+        # Exchange suffix mappings
+        exchange_mappings = {
+            '.L': {'exchange': 'LSE', 'country': 'GB', 'market': 'UK', 'currency': 'GBP'},
+            '.TO': {'exchange': 'TSX', 'country': 'CA', 'market': 'CANADA', 'currency': 'CAD'},
+            '.SW': {'exchange': 'SWX', 'country': 'CH', 'market': 'SWISS', 'currency': 'CHF'},
+            '.DE': {'exchange': 'XETRA', 'country': 'DE', 'market': 'EU', 'currency': 'EUR'},
+            '.PA': {'exchange': 'EPA', 'country': 'FR', 'market': 'EU', 'currency': 'EUR'},
+            '.AS': {'exchange': 'AMS', 'country': 'NL', 'market': 'EU', 'currency': 'EUR'},
+            '.MI': {'exchange': 'BIT', 'country': 'IT', 'market': 'EU', 'currency': 'EUR'},
+            '.MC': {'exchange': 'BME', 'country': 'ES', 'market': 'EU', 'currency': 'EUR'},
+            '.BR': {'exchange': 'EURONEXT', 'country': 'BE', 'market': 'EU', 'currency': 'EUR'},
+            '.VI': {'exchange': 'WBAG', 'country': 'AT', 'market': 'EU', 'currency': 'EUR'},
+            '.HK': {'exchange': 'HKEX', 'country': 'HK', 'market': 'ASIA', 'currency': 'HKD'},
+            '.T': {'exchange': 'TSE', 'country': 'JP', 'market': 'ASIA', 'currency': 'JPY'},
+            '.SS': {'exchange': 'SSE', 'country': 'CN', 'market': 'ASIA', 'currency': 'CNY'},
+            '.SZ': {'exchange': 'SZSE', 'country': 'CN', 'market': 'ASIA', 'currency': 'CNY'},
+            '.AX': {'exchange': 'ASX', 'country': 'AU', 'market': 'OCEANIA', 'currency': 'AUD'},
+            '.NZ': {'exchange': 'NZX', 'country': 'NZ', 'market': 'OCEANIA', 'currency': 'NZD'},
+        }
+
+        for suffix, info in exchange_mappings.items():
+            if symbol.endswith(suffix):
+                # Remove suffix from normalized symbol
+                normalized = symbol[:-len(suffix)]
+                result = info.copy()
+                result['normalized'] = normalized
+                return result
+
+        return None
+
+    def _classify_symbol_type_detailed(self, symbol: str, classification: Dict[str, Any]) -> str:
+        """
+        Classify symbol type with detailed analysis.
+
+        Args:
+            symbol: Uppercase symbol
+            classification: Current classification info
+
+        Returns:
+            Symbol type ('stock', 'etf', 'reit', 'crypto', 'unknown')
+        """
+        # First check if it's crypto using the original symbol (before suffix removal)
+        original_symbol = classification.get('symbol', symbol).upper()
+        if self._classify_symbol(original_symbol) == 'crypto':
+            return 'crypto'
+
+        # ETF patterns (common ETF suffixes and patterns)
+        etf_patterns = [
+            r'.*ETF$',      # Ends with ETF
+            r'^SPY$',       # SPDR S&P 500
+            r'^QQQ$',       # Invesco QQQ
+            r'^IWM$',       # iShares Russell 2000
+            r'^VTI$',       # Vanguard Total Stock Market
+            r'^VOO$',       # Vanguard S&P 500
+            r'^VEA$',       # Vanguard FTSE Developed Markets
+            r'^VWO$',       # Vanguard FTSE Emerging Markets
+            r'^BND$',       # Vanguard Total Bond Market
+            r'^GLD$',       # SPDR Gold Shares
+            r'^SLV$',       # iShares Silver Trust
+        ]
+
+        for pattern in etf_patterns:
+            if re.match(pattern, symbol):
+                return 'etf'
+
+        # REIT patterns
+        reit_patterns = [
+            r'.*REIT$',     # Ends with REIT
+            r'^REI[T]?$',   # REI or REIT
+        ]
+
+        for pattern in reit_patterns:
+            if re.match(pattern, symbol):
+                return 'reit'
+
+        # Check for common stock patterns
+        # Most symbols without special suffixes are stocks
+        if re.match(r'^[A-Z]{1,5}$', symbol):  # 1-5 letter symbols
+            return 'stock'
+
+        # Symbols with numbers might be preferred shares or special classes
+        if re.match(r'^[A-Z]{1,4}[0-9]$', symbol):
+            return 'stock'
+
+        # Class shares (e.g., BRK-A, BRK-B, GOOGL, GOOG)
+        if re.match(r'^[A-Z]{1,4}[-.]?[A-Z]$', symbol):
+            return 'stock'
+
+        return 'stock'  # Default to stock for most cases
+
+    def _determine_market_and_country(self, symbol: str, classification: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Determine market and country information.
+
+        Args:
+            symbol: Uppercase symbol
+            classification: Current classification info
+
+        Returns:
+            Dictionary with market and country info
+        """
+        # If exchange info already determined market/country, use it
+        if classification.get('country') != 'unknown':
+            return {}
+
+        # For symbols without exchange suffix, assume US market
+        market_info = {
+            'market': 'US',
+            'country': 'US',
+            'exchange': self._determine_us_exchange(symbol),
+            'currency': 'USD'
+        }
+
+        return market_info
+
+    def _determine_us_exchange(self, symbol: str) -> str:
+        """
+        Determine likely US exchange for a symbol.
+
+        Args:
+            symbol: Uppercase symbol
+
+        Returns:
+            Exchange name ('NASDAQ', 'NYSE', 'AMEX', 'OTC')
+        """
+        # Common NASDAQ patterns (tech companies, biotech, etc.)
+        nasdaq_patterns = [
+            r'^[A-Z]{4,5}$',  # 4-5 letter symbols often NASDAQ
+            r'^Q[A-Z]{3}$',   # Q-prefixed symbols
+        ]
+
+        # Known NASDAQ symbols (partial list)
+        nasdaq_symbols = {
+            'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'TSLA', 'META', 'NVDA',
+            'NFLX', 'ADBE', 'CRM', 'ORCL', 'CSCO', 'INTC', 'AMD', 'QCOM'
+        }
+
+        # Known NYSE symbols (partial list)
+        nyse_symbols = {
+            'JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'V', 'MA', 'JNJ', 'PG',
+            'KO', 'PEP', 'WMT', 'HD', 'UNH', 'CVX', 'XOM', 'T', 'VZ'
+        }
+
+        if symbol in nasdaq_symbols:
+            return 'NASDAQ'
+        elif symbol in nyse_symbols:
+            return 'NYSE'
+        else:
+            # Use patterns as heuristic
+            for pattern in nasdaq_patterns:
+                if re.match(pattern, symbol):
+                    return 'NASDAQ'
+
+            # Default to NYSE for shorter symbols
+            if len(symbol) <= 3:
+                return 'NYSE'
+            else:
+                return 'NASDAQ'
+
+    def _assess_fundamentals_support(self, classification: Dict[str, Any]) -> str:
+        """
+        Assess level of fundamentals support for this symbol.
+
+        Args:
+            classification: Symbol classification info
+
+        Returns:
+            Support level ('full', 'limited', 'none')
+        """
+        symbol_type = classification.get('symbol_type', 'unknown')
+        country = classification.get('country', 'unknown')
+        market = classification.get('market', 'unknown')
+
+        # Crypto symbols have no fundamentals
+        if symbol_type == 'crypto':
+            return 'none'
+
+        # US stocks and ETFs have full support
+        if country == 'US' and symbol_type in ['stock', 'etf', 'reit']:
+            return 'full'
+
+        # Major international markets have good support
+        major_markets = ['UK', 'EU', 'CANADA', 'ASIA']
+        if market in major_markets and symbol_type in ['stock', 'etf']:
+            return 'limited'
+
+        # Other international markets have limited support
+        if country != 'unknown' and symbol_type in ['stock', 'etf']:
+            return 'limited'
+
+        return 'none'
 
     def _get_rule_name(self, symbol_type: str, timeframe: str) -> Optional[str]:
         """
@@ -821,12 +1148,13 @@ class DataManager:
         """
         Retrieve fundamentals data with caching and multi-provider combination.
 
-        This method implements the fundamentals data retrieval flow:
-        1. Check cache for valid data (TTL based on data type)
-        2. If cache miss or force_refresh, fetch from multiple providers
-        3. Combine data from multiple providers using specified strategy
-        4. Cache new data and cleanup stale data
-        5. Return combined fundamentals data
+        This method implements the enhanced fundamentals data retrieval flow:
+        1. Input validation and symbol normalization
+        2. Check cache for valid data (TTL based on data type)
+        3. If cache miss or force_refresh, fetch from multiple providers with retry logic
+        4. Combine data from multiple providers using specified strategy
+        5. Cache new data and cleanup stale data
+        6. Return combined fundamentals data
 
         Args:
             symbol: Trading symbol (e.g., 'AAPL', 'GOOGL')
@@ -839,101 +1167,564 @@ class DataManager:
             Dictionary containing combined fundamentals data
         """
         try:
-            # Import here to avoid circular imports
-            # Initialize combiner with configuration
+            # 1. Input validation and normalization
+            normalized_symbol = self._normalize_symbol(symbol)
+            if not normalized_symbol:
+                _logger.error("Invalid symbol provided: %s", symbol)
+                return {}
+
+            # Initialize combiner and cache with configuration
             combiner = get_fundamentals_combiner()
             fundamentals_cache = get_fundamentals_cache(self.cache.cache_dir, combiner)
 
-            # Check cache first (unless force refresh)
+            # 2. Cache validation with data-type specific TTL
             if not force_refresh:
-                cached_data = fundamentals_cache.find_latest_json(symbol, data_type=data_type)
+                cached_data = self._get_cached_fundamentals(normalized_symbol, data_type, fundamentals_cache)
                 if cached_data:
-                    _logger.info("Using cached fundamentals for %s from %s", symbol, cached_data.provider)
-                    return fundamentals_cache.read_json(cached_data.file_path) or {}
+                    return cached_data
 
-            # Determine providers to use
-            if providers is None:
-                # Use configuration-based provider sequence for data type
-                providers = combiner.get_provider_sequence(data_type)
-                _logger.debug("Using provider sequence for %s: %s", data_type, providers)
-            else:
-                _logger.debug("Using specified providers: %s", providers)
+            # 3. Enhanced provider selection
+            selected_providers = self._select_fundamentals_providers(normalized_symbol, providers, data_type, combiner)
+            if not selected_providers:
+                _logger.error("No suitable providers found for %s", normalized_symbol)
+                return {}
 
-            _logger.info("Fetching fundamentals for %s from providers: %s", symbol, providers)
+            _logger.info("Fetching fundamentals for %s from providers: %s", normalized_symbol, selected_providers)
 
-            # Fetch data from multiple providers
-            provider_data = {}
-            successful_providers = []
-
-            for provider_name in providers:
-                try:
-                    downloader = self.provider_selector.get_best_downloader(symbol, '1d')  # Use daily timeframe for fundamentals
-                    if downloader and hasattr(downloader, 'get_fundamentals'):
-                        fundamentals = downloader.get_fundamentals(symbol)
-                        if fundamentals:
-                            # Convert Fundamentals object to dictionary if needed
-                            if hasattr(fundamentals, '__dict__'):
-                                # It's a dataclass or object, convert to dict
-                                fundamentals_dict = fundamentals.__dict__
-                            elif isinstance(fundamentals, dict):
-                                # It's already a dictionary
-                                fundamentals_dict = fundamentals
-                            else:
-                                # Try to convert using vars()
-                                fundamentals_dict = vars(fundamentals) if hasattr(fundamentals, '__dict__') else {}
-
-                            provider_data[provider_name] = fundamentals_dict
-                            successful_providers.append(provider_name)
-                            _logger.debug("Successfully fetched fundamentals for %s from %s", symbol, provider_name)
-                        else:
-                            _logger.warning("No fundamentals data returned from %s for %s", provider_name, symbol)
-                    else:
-                        _logger.warning("Downloader for %s does not support fundamentals", provider_name)
-
-                except Exception as e:
-                    _logger.error("Failed to fetch fundamentals from %s for %s: %s", provider_name, symbol, e)
-                    continue
+            # 4. Fetch data from multiple providers with error handling
+            provider_data = self._fetch_fundamentals_from_providers(normalized_symbol, selected_providers)
 
             if not provider_data:
-                _logger.error("No fundamentals data available for %s from any provider", symbol)
+                _logger.error("No fundamentals data available for %s from any provider", normalized_symbol)
+                # Try to return cached data as fallback
+                cached_fallback = fundamentals_cache.find_latest_json(normalized_symbol, data_type=data_type)
+                if cached_fallback:
+                    _logger.info("Returning stale cached data as fallback for %s", normalized_symbol)
+                    return fundamentals_cache.read_json(cached_fallback.file_path) or {}
                 return {}
 
-            # Combine data from multiple providers
-            combined_data = combiner.combine_snapshots(provider_data, combination_strategy, data_type)
+            # 5. Data combination and validation
+            combined_data = self._combine_and_validate_fundamentals(provider_data, combination_strategy, data_type, combiner)
 
             if not combined_data:
-                _logger.error("Failed to combine fundamentals data for %s", symbol)
+                _logger.error("Failed to combine fundamentals data for %s", normalized_symbol)
                 return {}
 
-            # Cache the combined data for each successful provider
-            timestamp = datetime.now()
-            for provider_name in successful_providers:
-                try:
-                    # Cache individual provider data
-                    fundamentals_cache.write_json(symbol, provider_name, provider_data[provider_name], timestamp)
-
-                    # Cleanup stale data for this provider
-                    removed_files = fundamentals_cache.cleanup_stale_data(symbol, provider_name, timestamp)
-                    if removed_files:
-                        _logger.info("Cleaned up %d stale cache files for %s %s", len(removed_files), symbol, provider_name)
-
-                except Exception as e:
-                    _logger.error("Failed to cache fundamentals for %s %s: %s", symbol, provider_name, e)
-
-            # Cache the combined data as well
-            try:
-                fundamentals_cache.write_json(symbol, 'combined', combined_data, timestamp)
-            except Exception as e:
-                _logger.error("Failed to cache combined fundamentals for %s: %s", symbol, e)
+            # 6. Cache management and cleanup
+            self._cache_fundamentals_data(normalized_symbol, provider_data, combined_data, fundamentals_cache)
 
             _logger.info("Successfully retrieved and combined fundamentals for %s from %d providers",
-                        symbol, len(successful_providers))
+                        normalized_symbol, len(provider_data))
 
             return combined_data
 
         except Exception as e:
             _logger.error("Error retrieving fundamentals for %s: %s", symbol, e)
             return {}
+
+    def _normalize_symbol(self, symbol: str) -> str:
+        """
+        Normalize trading symbol for consistent processing.
+
+        Args:
+            symbol: Raw trading symbol
+
+        Returns:
+            Normalized symbol or empty string if invalid
+        """
+        if not symbol or not isinstance(symbol, str):
+            return ""
+
+        # Remove whitespace and convert to uppercase
+        normalized = symbol.strip().upper()
+
+        # Basic validation - symbol should contain only alphanumeric characters, dots, and hyphens
+        if not re.match(r'^[A-Z0-9.\-]+$', normalized):
+            _logger.warning("Symbol contains invalid characters: %s", symbol)
+            return ""
+
+        # Handle common symbol mappings
+        symbol_mappings = {
+            'BRK.B': 'BRK-B',
+            'BRK.A': 'BRK-A'
+        }
+
+        return symbol_mappings.get(normalized, normalized)
+
+    def _get_cached_fundamentals(self, symbol: str, data_type: str, fundamentals_cache) -> Optional[Dict[str, Any]]:
+        """
+        Get cached fundamentals data with data-type specific TTL validation.
+
+        Args:
+            symbol: Normalized trading symbol
+            data_type: Type of data for TTL determination
+            fundamentals_cache: Cache instance
+
+        Returns:
+            Cached data if valid, None otherwise
+        """
+        try:
+            cached_metadata = fundamentals_cache.find_latest_json(symbol, data_type=data_type)
+            if not cached_metadata:
+                _logger.debug("No cached data found for %s %s", symbol, data_type)
+                return None
+
+            # Load cached data
+            cached_data = fundamentals_cache.read_json(cached_metadata.file_path)
+            if not cached_data:
+                _logger.warning("Failed to read cached data for %s", symbol)
+                return None
+
+            _logger.info("Using cached fundamentals for %s from %s (age: %s)",
+                        symbol, cached_metadata.provider,
+                        datetime.now() - cached_metadata.timestamp)
+            return cached_data
+
+        except Exception as e:
+            _logger.error("Error accessing cached fundamentals for %s: %s", symbol, e)
+            return None
+
+    def _select_fundamentals_providers(self, symbol: str, requested_providers: Optional[List[str]],
+                                     data_type: str, combiner) -> List[str]:
+        """
+        Select optimal providers for fundamentals data retrieval with enhanced logic.
+
+        This method implements sophisticated provider selection based on:
+        - Symbol classification (US vs international stocks)
+        - Data type specific provider sequences
+        - Provider availability and capability validation
+        - Symbol compatibility filtering
+
+        Args:
+            symbol: Normalized trading symbol
+            requested_providers: User-specified providers (optional)
+            data_type: Type of data for provider selection
+            combiner: Fundamentals combiner instance
+
+        Returns:
+            List of provider names in priority order
+        """
+        try:
+            # Get detailed symbol classification for provider selection
+            symbol_classification = self.provider_selector.classify_symbol_for_fundamentals(symbol)
+
+            # Check if symbol supports fundamentals at all
+            if symbol_classification['fundamentals_support'] == 'none':
+                _logger.debug("Symbol %s does not support fundamentals data", symbol)
+                return []
+
+            if requested_providers:
+                # Validate and filter requested providers
+                valid_providers = self._validate_requested_providers(
+                    requested_providers, symbol_classification
+                )
+                if valid_providers:
+                    _logger.debug("Using validated requested providers for %s: %s", symbol, valid_providers)
+                    return valid_providers
+
+            # Get data-type specific provider sequence from configuration
+            provider_sequence = combiner.get_provider_sequence(data_type)
+            _logger.debug("Provider sequence for %s data type: %s", data_type, provider_sequence)
+
+            # Filter providers by symbol compatibility and availability
+            compatible_providers = self._filter_compatible_providers(
+                provider_sequence, symbol_classification
+            )
+
+            if compatible_providers:
+                _logger.debug("Using compatible providers for %s %s: %s",
+                            symbol, data_type, compatible_providers)
+                return compatible_providers
+
+            # Fallback: try general provider sequence if data-type specific failed
+            if data_type != 'general':
+                general_sequence = combiner.get_provider_sequence('general')
+                general_compatible = self._filter_compatible_providers(
+                    general_sequence, symbol_classification
+                )
+                if general_compatible:
+                    _logger.warning("Using general provider sequence for %s: %s", symbol, general_compatible)
+                    return general_compatible
+
+            # Last resort: find any available provider with fundamentals support
+            fallback_providers = self._get_fallback_providers(symbol_classification)
+            if fallback_providers:
+                _logger.warning("Using fallback providers for %s: %s", symbol, fallback_providers)
+                return fallback_providers
+
+            _logger.error("No suitable providers found for %s", symbol)
+            return []
+
+        except Exception as e:
+            _logger.error("Error selecting providers for %s: %s", symbol, e)
+            return []
+
+    def _validate_requested_providers(self, requested_providers: List[str],
+                                    symbol_classification: Dict[str, Any]) -> List[str]:
+        """
+        Validate user-requested providers for symbol compatibility.
+
+        Args:
+            requested_providers: List of provider names requested by user
+            symbol_classification: Symbol classification information
+
+        Returns:
+            List of valid provider names
+        """
+        valid_providers = []
+
+        for provider in requested_providers:
+            # Check if provider is available
+            if provider not in self.provider_selector.downloaders:
+                _logger.warning("Provider %s not available", provider)
+                continue
+
+            downloader = self.provider_selector.downloaders[provider]
+
+            # Check if provider supports fundamentals
+            if not hasattr(downloader, 'get_fundamentals'):
+                _logger.warning("Provider %s does not support fundamentals", provider)
+                continue
+
+            # Check symbol compatibility
+            if self._is_provider_compatible_with_symbol(provider, symbol_classification):
+                valid_providers.append(provider)
+            else:
+                _logger.warning("Provider %s not compatible with symbol %s",
+                              provider, symbol_classification['symbol'])
+
+        return valid_providers
+
+    def _filter_compatible_providers(self, provider_sequence: List[str],
+                                   symbol_classification: Dict[str, Any]) -> List[str]:
+        """
+        Filter provider sequence by symbol compatibility and availability.
+
+        Args:
+            provider_sequence: Ordered list of providers from configuration
+            symbol_classification: Symbol classification information
+
+        Returns:
+            List of compatible and available providers
+        """
+        compatible_providers = []
+
+        for provider in provider_sequence:
+            # Check availability
+            if provider not in self.provider_selector.downloaders:
+                _logger.debug("Provider %s not available, skipping", provider)
+                continue
+
+            downloader = self.provider_selector.downloaders[provider]
+
+            # Check fundamentals support
+            if not hasattr(downloader, 'get_fundamentals'):
+                _logger.debug("Provider %s does not support fundamentals, skipping", provider)
+                continue
+
+            # Check symbol compatibility
+            if self._is_provider_compatible_with_symbol(provider, symbol_classification):
+                compatible_providers.append(provider)
+            else:
+                _logger.debug("Provider %s not compatible with symbol %s, skipping",
+                            provider, symbol_classification['symbol'])
+
+        return compatible_providers
+
+    def _is_provider_compatible_with_symbol(self, provider: str,
+                                          symbol_classification: Dict[str, Any]) -> bool:
+        """
+        Check if a provider is compatible with a symbol based on classification.
+
+        Args:
+            provider: Provider name
+            symbol_classification: Symbol classification information
+
+        Returns:
+            True if provider is compatible with symbol
+        """
+        symbol_type = symbol_classification.get('symbol_type', 'unknown')
+        country = symbol_classification.get('country', 'unknown')
+        market = symbol_classification.get('market', 'unknown')
+        international = symbol_classification.get('international', False)
+
+        # Crypto symbols don't use fundamentals
+        if symbol_type == 'crypto':
+            return False
+
+        # Provider-specific compatibility rules
+        provider_compatibility = {
+            'yfinance': {
+                'symbol_types': ['stock', 'etf', 'reit'],
+                'markets': ['US', 'UK', 'EU', 'CANADA', 'ASIA', 'OCEANIA'],
+                'international_support': True,
+                'notes': 'Good international coverage'
+            },
+            'fmp': {
+                'symbol_types': ['stock', 'etf', 'reit'],
+                'markets': ['US'],
+                'international_support': False,
+                'notes': 'Primarily US market focused'
+            },
+            'alpha_vantage': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US', 'UK', 'EU'],
+                'international_support': True,
+                'notes': 'Limited international coverage'
+            },
+            'alpaca': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US'],
+                'international_support': False,
+                'notes': 'US market only'
+            },
+            'tiingo': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US'],
+                'international_support': False,
+                'notes': 'US market focused with excellent historical data'
+            },
+            'polygon': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US'],
+                'international_support': False,
+                'notes': 'US market only'
+            },
+            'twelvedata': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US', 'UK', 'EU', 'ASIA'],
+                'international_support': True,
+                'notes': 'Good international coverage'
+            },
+            'finnhub': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US', 'UK', 'EU'],
+                'international_support': True,
+                'notes': 'Limited international coverage'
+            }
+        }
+
+        # Get provider compatibility info
+        compat_info = provider_compatibility.get(provider, {
+            'symbol_types': ['stock', 'etf'],
+            'markets': ['US'],
+            'international_support': False,
+            'notes': 'Unknown provider compatibility'
+        })
+
+        # Check symbol type compatibility
+        if symbol_type not in compat_info['symbol_types']:
+            return False
+
+        # Check market compatibility
+        if market not in compat_info['markets']:
+            # If it's international and provider doesn't support international
+            if international and not compat_info['international_support']:
+                return False
+
+        return True
+
+    def _get_fallback_providers(self, symbol_classification: Dict[str, Any]) -> List[str]:
+        """
+        Get fallback providers when no configured providers are available.
+
+        Args:
+            symbol_classification: Symbol classification information
+
+        Returns:
+            List of fallback provider names (limited to 3)
+        """
+        fallback_providers = []
+
+        for provider_name, downloader in self.provider_selector.downloaders.items():
+            if hasattr(downloader, 'get_fundamentals'):
+                if self._is_provider_compatible_with_symbol(provider_name, symbol_classification):
+                    fallback_providers.append(provider_name)
+
+        # Limit to 3 providers and prioritize based on general quality
+        priority_order = ['yfinance', 'fmp', 'alpha_vantage', 'alpaca', 'tiingo', 'polygon', 'twelvedata', 'finnhub']
+
+        # Sort fallback providers by priority
+        sorted_fallback = []
+        for provider in priority_order:
+            if provider in fallback_providers:
+                sorted_fallback.append(provider)
+
+        # Add any remaining providers not in priority list
+        for provider in fallback_providers:
+            if provider not in sorted_fallback:
+                sorted_fallback.append(provider)
+
+        return sorted_fallback[:3]  # Limit to 3 providers
+
+    def _fetch_fundamentals_from_providers(self, symbol: str, providers: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Fetch fundamentals data from multiple providers with error handling and retry logic.
+
+        Args:
+            symbol: Normalized trading symbol
+            providers: List of provider names
+
+        Returns:
+            Dictionary mapping provider names to their fundamentals data
+        """
+        provider_data = {}
+        max_retries = 3
+
+        for provider_name in providers:
+            for attempt in range(max_retries):
+                try:
+                    downloader = self.provider_selector.downloaders.get(provider_name)
+                    if not downloader:
+                        _logger.warning("Downloader not available for provider: %s", provider_name)
+                        break
+
+                    if not hasattr(downloader, 'get_fundamentals'):
+                        _logger.warning("Provider %s does not support fundamentals", provider_name)
+                        break
+
+                    _logger.debug("Fetching fundamentals for %s from %s (attempt %d/%d)",
+                                symbol, provider_name, attempt + 1, max_retries)
+
+                    fundamentals = downloader.get_fundamentals(symbol)
+                    if fundamentals:
+                        # Convert to dictionary format
+                        fundamentals_dict = self._normalize_fundamentals_data(fundamentals)
+                        if fundamentals_dict:
+                            provider_data[provider_name] = fundamentals_dict
+                            _logger.debug("Successfully fetched fundamentals for %s from %s",
+                                        symbol, provider_name)
+                            break
+                        else:
+                            _logger.warning("Empty fundamentals data from %s for %s", provider_name, symbol)
+                    else:
+                        _logger.warning("No fundamentals data returned from %s for %s", provider_name, symbol)
+
+                except Exception as e:
+                    _logger.warning("Attempt %d failed for %s %s: %s", attempt + 1, provider_name, symbol, e)
+                    if attempt == max_retries - 1:
+                        _logger.error("All attempts failed for %s %s", provider_name, symbol)
+                    else:
+                        # Simple backoff - wait before retry
+                        import time
+                        time.sleep(0.5 * (attempt + 1))
+
+        return provider_data
+
+    def _normalize_fundamentals_data(self, fundamentals) -> Optional[Dict[str, Any]]:
+        """
+        Normalize fundamentals data to dictionary format.
+
+        Args:
+            fundamentals: Raw fundamentals data from provider
+
+        Returns:
+            Normalized dictionary or None if conversion fails
+        """
+        try:
+            if isinstance(fundamentals, dict):
+                return fundamentals
+            elif hasattr(fundamentals, '__dict__'):
+                return fundamentals.__dict__
+            elif hasattr(fundamentals, '_asdict'):  # namedtuple
+                return fundamentals._asdict()
+            else:
+                # Try to convert using vars()
+                return vars(fundamentals) if hasattr(fundamentals, '__dict__') else None
+        except Exception as e:
+            _logger.error("Failed to normalize fundamentals data: %s", e)
+            return None
+
+    def _combine_and_validate_fundamentals(self, provider_data: Dict[str, Dict[str, Any]],
+                                         combination_strategy: str, data_type: str, combiner) -> Dict[str, Any]:
+        """
+        Combine and validate fundamentals data from multiple providers.
+
+        Args:
+            provider_data: Dictionary mapping provider names to their data
+            combination_strategy: Strategy for combining data
+            data_type: Type of data for validation
+            combiner: Fundamentals combiner instance
+
+        Returns:
+            Combined and validated fundamentals data
+        """
+        try:
+            if not provider_data:
+                return {}
+
+            # Combine data using specified strategy
+            combined_data = combiner.combine_snapshots(provider_data, combination_strategy, data_type)
+
+            if not combined_data:
+                _logger.error("Data combination failed")
+                return {}
+
+            # Basic validation of combined data
+            if not self._validate_combined_fundamentals(combined_data):
+                _logger.error("Combined data failed validation")
+                return {}
+
+            return combined_data
+
+        except Exception as e:
+            _logger.error("Error combining fundamentals data: %s", e)
+            return {}
+
+    def _validate_combined_fundamentals(self, data: Dict[str, Any]) -> bool:
+        """
+        Validate combined fundamentals data.
+
+        Args:
+            data: Combined fundamentals data
+
+        Returns:
+            True if data is valid, False otherwise
+        """
+        try:
+            # Check if data is not empty
+            if not data:
+                return False
+
+            # Check for required fields (basic validation)
+            # This could be enhanced with more sophisticated validation
+            return True
+
+        except Exception as e:
+            _logger.error("Error validating fundamentals data: %s", e)
+            return False
+
+    def _cache_fundamentals_data(self, symbol: str, provider_data: Dict[str, Dict[str, Any]],
+                               combined_data: Dict[str, Any], fundamentals_cache) -> None:
+        """
+        Cache fundamentals data with enhanced management.
+
+        Args:
+            symbol: Trading symbol
+            provider_data: Individual provider data
+            combined_data: Combined data
+            fundamentals_cache: Cache instance
+        """
+        timestamp = datetime.now()
+
+        # Cache individual provider data
+        for provider_name, data in provider_data.items():
+            try:
+                fundamentals_cache.write_json(symbol, provider_name, data, timestamp)
+
+                # Cleanup stale data for this provider
+                removed_files = fundamentals_cache.cleanup_stale_data(symbol, provider_name, timestamp)
+                if removed_files:
+                    _logger.debug("Cleaned up %d stale files for %s %s", len(removed_files), symbol, provider_name)
+
+            except Exception as e:
+                _logger.error("Failed to cache data for %s %s: %s", symbol, provider_name, e)
+
+        # Cache combined data
+        try:
+            fundamentals_cache.write_json(symbol, 'combined', combined_data, timestamp)
+        except Exception as e:
+            _logger.error("Failed to cache combined data for %s: %s", symbol, e)
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
