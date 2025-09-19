@@ -155,7 +155,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
             interval: Data interval (e.g., '1m', '1h', '1d')
             start_date: Start date for data retrieval
             end_date: End date for data retrieval
-            **kwargs: Additional parameters (adjustment, limit, etc.)
+            **kwargs: Additional parameters (adjustment, limit, enable_chunking, etc.)
 
         Returns:
             DataFrame with OHLCV data (columns: open, high, low, close, volume)
@@ -177,60 +177,243 @@ class AlpacaDataDownloader(BaseDataDownloader):
 
             # Additional parameters
             adjustment = kwargs.get('adjustment', 'raw')
-            limit = kwargs.get('limit', None)
+            user_limit = kwargs.get('limit', None)
 
-            # Respect Alpaca's 10,000 bar limit for free tier
-            if limit is None:
-                limit = 10000  # Default to free tier limit
+            # Check if user wants chunking (default behavior) or single request
+            enable_chunking = kwargs.get('enable_chunking', True)
+
+            if not enable_chunking and user_limit:
+                # Single request with user-specified limit
+                return self._download_single_chunk(symbol, timeframe, start_date, end_date,
+                                                 adjustment, min(user_limit, 10000))
             else:
-                limit = min(limit, 10000)  # Ensure we don't exceed free tier limit
-
-            # Download data from Alpaca
-            bars = self.api.get_bars(
-                symbol=symbol,
-                timeframe=timeframe,
-                start=start_date.isoformat(),
-                end=end_date.isoformat(),
-                adjustment=adjustment,
-                limit=limit
-            )
-
-            if not bars:
-                _logger.warning("No data returned for %s", symbol)
-                return pd.DataFrame()
-
-            # Convert to DataFrame
-            data = []
-            for bar in bars:
-                data.append({
-                    'timestamp': bar.timestamp,
-                    'open': float(bar.open),
-                    'high': float(bar.high),
-                    'low': float(bar.low),
-                    'close': float(bar.close),
-                    'volume': int(bar.volume)
-                })
-
-            if not data:
-                _logger.warning("No bars data for %s", symbol)
-                return pd.DataFrame()
-
-            df = pd.DataFrame(data)
-
-            # Ensure timestamp is timezone-naive and set as index
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            if df['timestamp'].dt.tz is not None:
-                df['timestamp'] = df['timestamp'].dt.tz_localize(None)
-
-            df.set_index('timestamp', inplace=True)
-            df.sort_index(inplace=True)
-
-            _logger.debug("Downloaded %d rows for %s", len(df), symbol)
-            return df
+                # Download in chunks to get all data
+                return self._download_with_chunking(symbol, timeframe, start_date, end_date,
+                                                  adjustment, user_limit)
 
         except Exception as e:
             _logger.error("Error downloading data for %s: %s", symbol, str(e))
             raise
+
+    def _download_single_chunk(self, symbol: str, timeframe, start_date: datetime,
+                              end_date: datetime, adjustment: str, limit: int) -> pd.DataFrame:
+        """
+        Download data in a single API request (legacy behavior).
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Alpaca timeframe object
+            start_date: Start date
+            end_date: End date
+            adjustment: Price adjustment type
+            limit: Maximum bars to download
+
+        Returns:
+            DataFrame with OHLCV data
+        """
+        # Format dates as RFC3339 (Alpaca requirement)
+        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        bars = self.api.get_bars(
+            symbol=symbol,
+            timeframe=timeframe,
+            start=start_str,
+            end=end_str,
+            adjustment=adjustment,
+            limit=limit
+        )
+
+        return self._convert_bars_to_dataframe(bars, symbol, start_date, end_date)
+
+    def _download_with_chunking(self, symbol: str, timeframe, start_date: datetime,
+                               end_date: datetime, adjustment: str, user_limit: Optional[int]) -> pd.DataFrame:
+        """
+        Download data in chunks to handle large date ranges.
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Alpaca timeframe object
+            start_date: Start date
+            end_date: End date
+            adjustment: Price adjustment type
+            user_limit: User-specified limit (if any)
+
+        Returns:
+            DataFrame with OHLCV data
+        """
+        all_data = []
+        current_start = start_date
+        chunk_limit = 10000  # Alpaca's free tier limit
+        total_downloaded = 0
+
+        _logger.debug("Starting chunked download for %s from %s to %s",
+                     symbol, start_date.date(), end_date.date())
+
+        while current_start < end_date:
+            # Check if we've hit user limit
+            if user_limit and total_downloaded >= user_limit:
+                _logger.debug("Reached user limit of %d bars for %s", user_limit, symbol)
+                break
+
+            # Adjust chunk limit if user limit is specified
+            current_limit = chunk_limit
+            if user_limit:
+                remaining = user_limit - total_downloaded
+                current_limit = min(chunk_limit, remaining)
+
+            # Format dates as RFC3339
+            start_str = current_start.strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            _logger.debug("Downloading chunk for %s: %s to %s (limit: %d)",
+                         symbol, current_start.date(), end_date.date(), current_limit)
+
+            try:
+                bars = self.api.get_bars(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    start=start_str,
+                    end=end_str,
+                    adjustment=adjustment,
+                    limit=current_limit
+                )
+
+                if not bars:
+                    _logger.debug("No more data available for %s from %s", symbol, current_start.date())
+                    break
+
+                # Convert bars to list of dictionaries
+                chunk_data = []
+                last_timestamp = None
+
+                for bar in bars:
+                    bar_data = {
+                        'timestamp': bar.t,
+                        'open': float(bar.o),
+                        'high': float(bar.h),
+                        'low': float(bar.l),
+                        'close': float(bar.c),
+                        'volume': int(bar.v)
+                    }
+                    chunk_data.append(bar_data)
+                    last_timestamp = bar.t
+
+                if not chunk_data:
+                    _logger.debug("No data in chunk for %s", symbol)
+                    break
+
+                all_data.extend(chunk_data)
+                total_downloaded += len(chunk_data)
+
+                _logger.debug("Downloaded %d bars for %s (total: %d)",
+                             len(chunk_data), symbol, total_downloaded)
+
+                # If we got less than the limit, we've reached the end
+                if len(chunk_data) < current_limit:
+                    _logger.debug("Received partial chunk (%d < %d), reached end of data for %s",
+                                 len(chunk_data), current_limit, symbol)
+                    break
+
+                # Move to next chunk starting from the last timestamp + 1 minute
+                if last_timestamp:
+                    # Convert to datetime and add 1 minute for next chunk
+                    if hasattr(last_timestamp, 'to_pydatetime'):
+                        current_start = last_timestamp.to_pydatetime() + timedelta(minutes=1)
+                    else:
+                        current_start = pd.to_datetime(last_timestamp) + timedelta(minutes=1)
+
+                    # Remove timezone info if present
+                    if current_start.tzinfo:
+                        current_start = current_start.replace(tzinfo=None)
+                else:
+                    break
+
+                # Rate limiting between chunks
+                time.sleep(0.1)
+
+            except Exception as e:
+                _logger.warning("Error downloading chunk for %s from %s: %s",
+                               symbol, current_start.date(), str(e))
+                break
+
+        if not all_data:
+            _logger.warning("No data downloaded for %s", symbol)
+            return pd.DataFrame()
+
+        # Convert to DataFrame
+        df = pd.DataFrame(all_data)
+
+        # Ensure timestamp is timezone-naive and set as index
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        if df['timestamp'].dt.tz is not None:
+            df['timestamp'] = df['timestamp'].dt.tz_localize(None)
+
+        # Filter data to ensure it starts from the requested start_date (UTC)
+        df = df[df['timestamp'] >= start_date]
+        df = df[df['timestamp'] <= end_date]
+
+        # Remove duplicates and sort
+        df = df.drop_duplicates(subset=['timestamp'])
+        df.set_index('timestamp', inplace=True)
+        df.sort_index(inplace=True)
+
+        _logger.debug("Final dataset for %s: %d rows from %s to %s",
+                     symbol, len(df), df.index.min().date() if len(df) > 0 else 'N/A',
+                     df.index.max().date() if len(df) > 0 else 'N/A')
+
+        return df
+
+    def _convert_bars_to_dataframe(self, bars, symbol: str, start_date: datetime,
+                                  end_date: datetime) -> pd.DataFrame:
+        """
+        Convert Alpaca bars to DataFrame.
+
+        Args:
+            bars: Alpaca bars object
+            symbol: Trading symbol
+            start_date: Start date for filtering
+            end_date: End date for filtering
+
+        Returns:
+            DataFrame with OHLCV data
+        """
+        if not bars:
+            _logger.warning("No data returned for %s", symbol)
+            return pd.DataFrame()
+
+        # Convert to DataFrame
+        data = []
+        for bar in bars:
+            data.append({
+                'timestamp': bar.t,
+                'open': float(bar.o),
+                'high': float(bar.h),
+                'low': float(bar.l),
+                'close': float(bar.c),
+                'volume': int(bar.v)
+            })
+
+        if not data:
+            _logger.warning("No bars data for %s", symbol)
+            return pd.DataFrame()
+
+        df = pd.DataFrame(data)
+
+        # Ensure timestamp is timezone-naive and set as index
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        if df['timestamp'].dt.tz is not None:
+            df['timestamp'] = df['timestamp'].dt.tz_localize(None)
+
+        # Filter data to ensure it starts from the requested start_date (UTC)
+        df = df[df['timestamp'] >= start_date]
+        df = df[df['timestamp'] <= end_date]
+
+        df.set_index('timestamp', inplace=True)
+        df.sort_index(inplace=True)
+
+        _logger.debug("Downloaded %d rows for %s", len(df), symbol)
+        return df
 
     def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
         """

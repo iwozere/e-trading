@@ -5,12 +5,14 @@
 The data module provides a comprehensive, extensible framework for acquiring, processing, and streaming financial market data from multiple sources. It serves as the foundation for the e-trading platform's data infrastructure, supporting both historical analysis and real-time trading operations with an intelligent unified cache system.
 
 **Core Objectives:**
-- Unified interface for multiple data providers with intelligent selection
-- Support for both historical and real-time data
-- Consistent data formats across all sources
-- Robust error handling and failover capabilities
+- Unified interface through DataManager facade for all data operations
+- Intelligent provider selection with configuration-driven rules
+- Support for both historical and real-time data with caching
+- Consistent data formats across all sources with validation
+- Robust error handling and automatic failover capabilities
 - Scalable architecture for high-frequency operations
-- Efficient file-based caching with gzip compression
+- Efficient file-based caching with gzip compression and metadata
+- Multi-step pipeline system for data processing and transformation
 
 ## Architecture
 
@@ -25,37 +27,43 @@ The data module follows a layered architecture with clear separation of concerns
 └─────────────────────────┬───────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
-│                    Data Access Layer                       │
-│  ┌─────────────────┐    ┌─────────────────┐                │
-│  │ Unified Cache   │    │  Live Data Feed │                │
-│  │    System       │    │     Factory     │                │
-│  └─────────────────┘    └─────────────────┘                │
+│                    DataManager Facade                      │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
+│  │ get_ohlcv()     │  │ get_fundamentals│  │ get_live_   │ │
+│  │ (Historical)    │  │ (Cached JSON)   │  │ feed()      │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘ │
 └─────────────┬─────────────────────┬───────────────────────────┘
               │                     │
 ┌─────────────▼───────────┐ ┌───────▼─────────────────────────┐
-│   Intelligent Provider  │ │      Real-time Data             │
-│     Selection           │ │       Feeds                     │
+│   ProviderSelector      │ │      Cache Pipeline             │
+│   (Intelligent)         │ │      System                     │
 │ ┌─────────────────────┐ │ │ ┌─────────────────────────────┐ │
-│ │ Ticker Classifier   │ │ │ │ Binance WebSocket          │ │
-│ │ Provider Selection  │ │ │ │ Yahoo Finance Polling      │ │
-│ │ Cache Management    │ │ │ │ IBKR Native API           │ │
-│ └─────────────────────┘ │ │ │ CoinGecko Polling         │ │
-└─────────────────────────┘ │ └─────────────────────────────┘ │
-              │             └─────────────────────────────────┘
+│ │ Symbol Classifier   │ │ │ │ Step 1: Download Alpaca 1m │ │
+│ │ Config-Driven Rules │ │ │ │ Step 2: Calculate Timeframes│ │
+│ │ Provider Failover   │ │ │ │ Gap Filling & Validation   │ │
+│ └─────────────────────┘ │ │ └─────────────────────────────┘ │
+└─────────────────────────┘ └─────────────────────────────────┘
+              │                     │
 ┌─────────────▼───────────────────────────────────────────────┐
 │                    Data Providers                          │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
-│  │ Binance         │  │ Yahoo Finance   │  │Alpha Vantage│ │
-│  │ (Crypto)        │  │ (Stocks Daily)  │  │(Stocks Intra)│ │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘ │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────┐ │
+│  │ Binance     │ │ FMP         │ │ Yahoo       │ │ Alpaca│ │
+│  │ (Crypto)    │ │ (Stocks     │ │ (Stocks     │ │ (US   │ │
+│  │             │ │ Intraday)   │ │ Daily)      │ │ Pro)  │ │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └───────┘ │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────┐ │
+│  │ Alpha       │ │ Tiingo      │ │ Polygon     │ │ Others│ │
+│  │ Vantage     │ │ (Weekly/    │ │ (Pro Data)  │ │       │ │
+│  │             │ │ Monthly)    │ │             │ │       │ │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └───────┘ │
 └─────────────────────────────────────────────────────────────┘
               │
 ┌─────────────▼───────────────────────────────────────────────┐
 │                    Unified Cache Layer                     │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │
-│  │ Symbol/Timeframe│  │ Gzip Compressed │  │ Metadata    │ │
-│  │ Directory       │  │ CSV Files       │  │ JSON Files  │ │
-│  │ Structure       │  │ (.csv.gz)       │  │ (.json)     │ │
+│  │ OHLCV Cache     │  │ Fundamentals    │  │ Metadata &  │ │
+│  │ (ohlcv/symbol/  │  │ Cache (JSON)    │  │ Quality     │ │
+│  │ timeframe/)     │  │ (TTL-based)     │  │ Tracking    │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘ │
 └─────────────────────────────────────────────────────────────┘
               │

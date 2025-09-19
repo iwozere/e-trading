@@ -44,6 +44,7 @@ class DataDownloaderFactory:
     - "cg" or "coingecko" -> CoinGecko
     - "fmp" or "financial_modeling_prep" -> Financial Modeling Prep
     - "tiingo" -> Tiingo
+    - "alp" or "alpaca" -> Alpaca
     """
 
     # Provider code mapping

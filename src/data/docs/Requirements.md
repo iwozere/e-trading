@@ -10,6 +10,9 @@
 - `yfinance >= 0.2.18` - Yahoo Finance API for stock and ETF data (includes VIX data)
 - `alpha_vantage >= 2.3.1` - Alpha Vantage API wrapper for financial data
 - `python-binance >= 1.0.19` - Binance API for cryptocurrency data
+- `alpaca-trade-api >= 3.0.0` - Alpaca API for US stock market data
+- `requests >= 2.31.0` - HTTP library for API requests
+- `websocket-client >= 1.6.0` - WebSocket client for real-time data feeds
 
 ### Database and Storage
 - `sqlalchemy >= 2.0.0` - ORM and database abstraction layer
@@ -23,9 +26,15 @@
 
 ### Configuration and Environment
 - `python-dotenv >= 1.0.0` - Environment variable management
+- `pyyaml >= 6.0` - YAML configuration file support
 
 ### Logging and Monitoring
 - `colorlog >= 6.7.0` - Colored logging output for better debugging
+
+### Data Processing and Utilities
+- `scipy >= 1.11.0` - Scientific computing for data analysis
+- `ta-lib >= 0.4.25` - Technical analysis library (optional)
+- `ccxt >= 4.0.0` - Cryptocurrency exchange library (optional)
 
 ## External Services
 
@@ -37,6 +46,21 @@
 - **Environment variable**: `ALPHA_VANTAGE_API_KEY`
 - **Registration**: [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
 - **Usage**: Stock symbols with intraday timeframes (5m, 15m, 30m, 1h)
+
+#### FMP API Key (Recommended)
+- **Purpose**: Professional-grade financial data for stocks (primary provider for intraday data)
+- **Free tier**: Limited requests per day
+- **Paid tier**: 3000 requests/minute
+- **Environment variable**: `FMP_API_KEY`
+- **Registration**: [Financial Modeling Prep](https://financialmodelingprep.com/developer/docs)
+- **Usage**: Stock symbols with intraday timeframes (5m, 15m, 30m, 1h)
+
+#### Alpaca API Credentials (Optional)
+- **Purpose**: Professional-grade US market data and trading integration
+- **Rate limit**: 200 requests/minute (free tier)
+- **Environment variables**: `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`
+- **Registration**: [Alpaca](https://alpaca.markets/)
+- **Usage**: US stocks and ETFs with high-quality data
 
 #### Binance API Credentials (Optional)
 - **Purpose**: Higher rate limits for cryptocurrency data

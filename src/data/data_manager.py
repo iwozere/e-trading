@@ -39,6 +39,8 @@ try:
         TWELVE_DATA_KEY,
         FINNHUB_KEY,
         TIINGO_API_KEY,
+        ALPACA_API_KEY,
+        ALPACA_SECRET_KEY,
         DATA_CACHE_DIR
     )
 except ImportError:
@@ -49,6 +51,8 @@ except ImportError:
     TWELVE_DATA_KEY = os.getenv('TWELVE_DATA_KEY')
     FINNHUB_KEY = os.getenv('FINNHUB_KEY')
     TIINGO_API_KEY = os.getenv('TIINGO_API_KEY')
+    ALPACA_API_KEY = os.getenv('ALPACA_API_KEY')
+    ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY')
     DATA_CACHE_DIR = os.getenv('DATA_CACHE_DIR', 'c:/data-cache')  # Fallback if import fails
 
 # Import cache and utilities
@@ -69,6 +73,7 @@ from src.data.downloader import (
     TwelveDataDataDownloader,
     FinnhubDataDownloader,
     CoinGeckoDataDownloader,
+    AlpacaDataDownloader,
 )
 
 # Import live feeds
@@ -127,12 +132,12 @@ class ProviderSelector:
             },
             'stock_intraday': {
                 'primary': 'fmp',
-                'backup': ['alpha_vantage', 'polygon'],
+                'backup': ['alpaca', 'alpha_vantage', 'polygon'],
                 'timeframes': ['1m', '5m', '15m', '30m', '1h', '4h']
             },
             'stock_daily': {
                 'primary': 'yahoo',
-                'backup': ['tiingo', 'fmp'],
+                'backup': ['alpaca', 'tiingo', 'fmp'],
                 'timeframes': ['1d', '1w', '1M']
             },
             'stock_weekly_monthly': {
@@ -157,6 +162,7 @@ class ProviderSelector:
             'twelvedata': TwelveDataDataDownloader,
             'finnhub': FinnhubDataDownloader,
             'coingecko': CoinGeckoDataDownloader,
+            'alpaca': AlpacaDataDownloader,
         }
 
         for name, downloader_class in downloader_classes.items():
@@ -201,6 +207,11 @@ class ProviderSelector:
                         _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
                     self.downloaders[name] = downloader_class(api_key=TIINGO_API_KEY)
+                elif name == 'alpaca':
+                    if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
+                        _logger.warning("Skipping %s downloader: No API key or secret key found", name)
+                        continue
+                    self.downloaders[name] = downloader_class(api_key=ALPACA_API_KEY, secret_key=ALPACA_SECRET_KEY)
                 else:
                     # For other downloaders, try to initialize without parameters
                     self.downloaders[name] = downloader_class()
@@ -599,6 +610,7 @@ class DataManager:
             'tiingo': {'requests_per_minute': 100},
             'polygon': {'requests_per_minute': 5},
             'coingecko': {'requests_per_minute': 50},
+            'alpaca': {'requests_per_minute': 200},
         }
 
         for provider, limits in rate_limits.items():

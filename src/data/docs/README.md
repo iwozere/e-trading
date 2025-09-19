@@ -5,12 +5,43 @@ This module provides comprehensive data downloading, caching, and live feed capa
 ## Overview
 
 The data module consists of:
+- **Data Manager**: Main facade (`DataManager`) for all data operations with unified interface
 - **Unified Database System**: Single SQLite database with service layer and repository pattern
-- **Unified Cache System**: Intelligent file-based caching with gzip compression
-- **Data Downloaders**: For fetching historical OHLCV data and fundamental information
-- **Live Data Feeds**: For real-time market data streaming
-- **Provider Selection**: Automatic selection of the best data provider based on symbol and timeframe
+- **Unified Cache System**: Intelligent file-based caching with gzip compression and simplified structure
+- **Provider Selection**: Intelligent provider selection (`ProviderSelector`) based on symbol type and timeframe
+- **Data Downloaders**: Multiple provider implementations (Binance, Yahoo, Alpha Vantage, FMP, Alpaca, etc.)
+- **Live Data Feeds**: Real-time market data streaming with WebSocket support
+- **Cache Pipeline**: Multi-step data processing pipeline for efficient data management
+- **Fundamentals Cache**: JSON-based caching system for fundamental data with TTL support
 - **Data Validation**: Comprehensive data quality checks and validation
+
+## Data Manager - Main Entry Point
+
+The `DataManager` class serves as the unified facade for all data operations:
+
+```python
+from src.data import DataManager, get_data_manager
+
+# Get singleton instance
+data_manager = get_data_manager()
+
+# Retrieve historical data with intelligent provider selection
+df = data_manager.get_ohlcv("BTCUSDT", "5m", start_date, end_date)
+
+# Get fundamentals data with caching
+fundamentals = data_manager.get_fundamentals("AAPL")
+
+# Create live data feed
+live_feed = data_manager.get_live_feed("BTCUSDT", "5m")
+```
+
+### Key Features
+
+- **Unified Interface**: Single entry point for all data requests
+- **Intelligent Provider Selection**: Automatic selection of best provider based on symbol/timeframe
+- **Caching Integration**: Seamless integration with unified cache system
+- **Error Handling**: Comprehensive error handling with provider failover
+- **Rate Limiting**: Built-in rate limiting for all providers
 
 ## Unified Database System
 
@@ -94,26 +125,34 @@ schedules = db.get_active_schedules()
 
 ## Unified Cache System
 
-### New Cache Structure
+### Cache Structure
 
-The unified cache system provides a simplified, efficient structure for storing historical data with proper year splitting:
+The unified cache system provides a simplified, efficient structure for storing both OHLCV and fundamentals data:
 
 ```
 data-cache/
-├── BTCUSDT/
-│   ├── 5m/
-│   │   ├── 2025.csv.gz          # Data for 2025 only
-│   │   ├── 2025.metadata.json   # Metadata for 2025
-│   │   ├── 2024.csv.gz          # Data for 2024 only
-│   │   └── 2024.metadata.json   # Metadata for 2024
-│   └── 1h/
-├── AAPL/
-│   ├── 5m/
-│   └── 1d/
-└── _metadata/
-    ├── symbols.json
-    ├── providers.json
-    └── quality_scores.json
+├── ohlcv/
+│   ├── BTCUSDT/
+│   │   ├── 5m/
+│   │   │   ├── 2025.csv.gz          # Data for 2025 only
+│   │   │   ├── 2025.metadata.json   # Metadata for 2025
+│   │   │   ├── 2024.csv.gz          # Data for 2024 only
+│   │   │   └── 2024.metadata.json   # Metadata for 2024
+│   │   └── 1h/
+│   ├── AAPL/
+│   │   ├── 5m/
+│   │   └── 1d/
+│   └── _metadata/
+│       ├── symbols.json
+│       ├── providers.json
+│       └── quality_scores.json
+└── fundamentals/
+    ├── AAPL/
+    │   ├── yfinance_20250106_143022.json
+    │   ├── fmp_20250106_143045.json
+    │   └── alpha_vantage_20250106_143067.json
+    └── BTCUSDT/
+        └── binance_20250106_143089.json
 ```
 
 ### Key Features
@@ -125,31 +164,37 @@ data-cache/
 - **Intelligent Provider Selection**: Automatic selection of best provider based on symbol type and timeframe
 - **Data Validation**: Built-in OHLCV data validation and quality scoring
 
-### Usage
+### Cache Usage
 
 ```python
-from src.data.cache.unified_cache import configure_unified_cache
+from src.data.cache.unified_cache import UnifiedCache
 
-# Configure cache
-cache = configure_unified_cache(cache_dir="./data-cache")
+# Initialize cache
+cache = UnifiedCache(cache_dir="./data-cache")
 
-# Store data
+# Store OHLCV data
 cache.put(df, "BTCUSDT", "5m", start_date, end_date, provider="binance")
 
-# Retrieve data
+# Retrieve OHLCV data
 df = cache.get("BTCUSDT", "5m", start_date, end_date)
+
+# Fundamentals cache
+from src.data.cache.fundamentals_cache import FundamentalsCache
+
+fundamentals_cache = FundamentalsCache()
+metadata = fundamentals_cache.find_latest_json("AAPL", "yfinance")
 ```
 
 ## Intelligent Provider Selection
 
-The system automatically selects the best data provider based on symbol type and timeframe:
+The `ProviderSelector` class automatically selects the best data provider based on symbol type and timeframe using configuration-driven rules:
 
 ### Provider Selection Logic
 
-- **Cryptocurrency Symbols**: Always use Binance
-- **Stock Symbols (Daily)**: Use Yahoo Finance
-- **Stock Symbols (Intraday)**: Use Alpha Vantage (full historical data, no 60-day limit)
-- **US Stock Symbols (Professional)**: Use Alpaca (professional-grade data, 10k bars per request)
+- **Cryptocurrency Symbols**: Primary: Binance, Backup: CoinGecko, Alpha Vantage
+- **Stock Symbols (Intraday)**: Primary: FMP, Backup: Alpaca, Alpha Vantage, Polygon
+- **Stock Symbols (Daily)**: Primary: Yahoo Finance, Backup: Alpaca, Tiingo, FMP
+- **Stock Symbols (Weekly/Monthly)**: Primary: Tiingo, Backup: Yahoo Finance, FMP
 
 ### Usage
 
@@ -160,13 +205,20 @@ selector = ProviderSelector()
 
 # Get best provider for a symbol and timeframe
 provider = selector.get_best_provider("BTCUSDT", "5m")  # Returns "binance"
-provider = selector.get_best_provider("AAPL", "1d")     # Returns "yfinance"
-provider = selector.get_best_provider("AAPL", "5m")     # Returns "alpha_vantage"
+provider = selector.get_best_provider("AAPL", "1d")     # Returns "yahoo"
+provider = selector.get_best_provider("AAPL", "5m")     # Returns "fmp"
+
+# Get provider with failover support
+providers = selector.get_provider_with_failover("AAPL", "5m")  # ["fmp", "alpaca", "alpha_vantage", "polygon"]
 
 # Get detailed provider configuration
 config = selector.get_data_provider_config("AAPL", "5m")
 print(f"Provider: {config['best_provider']}")
 print(f"Reason: {config['reason']}")
+
+# Classify symbol type
+symbol_type = selector.classify_symbol("BTCUSDT")  # Returns "crypto"
+symbol_type = selector.classify_symbol("AAPL")     # Returns "stock"
 ```
 
 ## Data Downloaders
@@ -249,7 +301,31 @@ downloader = AlphaVantageDataDownloader(api_key="YOUR_API_KEY")
 df = downloader.get_ohlcv("AAPL", "5m", "2020-01-01", "2023-12-31")  # Full history!
 ```
 
-#### 4. Alpaca Data Downloader (`AlpacaDataDownloader`)
+#### 4. FMP Data Downloader (`FMPDataDownloader`)
+
+**Best for:** Professional-grade financial data with comprehensive coverage
+
+**Capabilities:**
+- ✅ **Global Stocks & ETFs**: Comprehensive coverage of global equity markets
+- ✅ **Multiple Timeframes**: 1m, 5m, 15m, 30m, 1h, 4h, 1d
+- ✅ **Professional Data**: High-quality financial data
+- ✅ **Fundamental Data**: Comprehensive fundamental data and ratios
+- ✅ **High Rate Limits**: 3000 requests/minute (paid tier)
+- ✅ **Real-time Data**: Real-time market data support
+
+**Data Quality:** Excellent - Professional-grade financial data
+**Rate Limits:** 3000 requests/minute (paid tier)
+**Coverage:** Global stocks, ETFs, and fundamental data
+
+```python
+from src.data.downloader.fmp_data_downloader import FMPDataDownloader
+
+downloader = FMPDataDownloader(api_key="YOUR_API_KEY")
+df = downloader.get_ohlcv("AAPL", "5m", "2023-01-01", "2023-12-31")
+fundamentals = downloader.get_fundamentals("AAPL")
+```
+
+#### 5. Alpaca Data Downloader (`AlpacaDataDownloader`)
 
 **Best for:** Professional-grade US market data with trading integration
 
@@ -275,6 +351,28 @@ df = downloader.get_ohlcv("AAPL", "1m", "2023-01-01", "2023-12-31")  # Up to 10k
 fundamentals = downloader.get_fundamentals("AAPL")
 ```
 
+## Cache Pipeline System
+
+The data module includes a multi-step pipeline system for efficient data processing:
+
+### Pipeline Steps
+
+1. **Step 1**: Download 1-minute data from Alpaca (`step01_download_alpaca_1m.py`)
+2. **Step 2**: Calculate higher timeframes from 1-minute data (`step02_calculate_timeframes.py`)
+
+### Pipeline Usage
+
+```bash
+# Run complete pipeline
+python src/data/cache/pipeline/run_pipeline.py
+
+# Run specific steps
+python src/data/cache/pipeline/run_pipeline.py --steps 1,2
+
+# Run with specific parameters
+python src/data/cache/pipeline/run_pipeline.py --tickers AAPL,MSFT --timeframes 5m,15m,1h
+```
+
 ## Cache Population Script
 
 The `populate_cache.py` script provides an easy way to populate the cache with historical data:
@@ -283,16 +381,19 @@ The `populate_cache.py` script provides an easy way to populate the cache with h
 
 ```bash
 # Populate cache with default symbols and timeframes
-python src/data/cache/populate_cache.py
+python src/data/utils/populate_cache.py
 
 # Custom symbols and timeframes
-python src/data/cache/populate_cache.py --symbols BTCUSDT,AAPL,GOOGL --intervals 5m,15m,1h,1d
+python src/data/utils/populate_cache.py --symbols BTCUSDT,AAPL,GOOGL --intervals 5m,15m,1h,1d
 
 # Specific date range
-python src/data/cache/populate_cache.py --start-date 2020-01-01 --end-date 2023-12-31
+python src/data/utils/populate_cache.py --start-date 2020-01-01 --end-date 2023-12-31
 
 # Custom cache directory
-python src/data/cache/populate_cache.py --cache-dir ./my-cache
+python src/data/utils/populate_cache.py --cache-dir ./my-cache
+
+# Fill gaps in existing data
+python src/data/utils/fill_gaps.py --symbols BTCUSDT,ETHUSDT --max-gap-hours 12
 ```
 
 ### Features

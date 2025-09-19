@@ -42,6 +42,7 @@ from .downloader import (
     TwelveDataDataDownloader,
     FinnhubDataDownloader,
     CoinGeckoDataDownloader,
+    AlpacaDataDownloader,
 )
 
 from .feed import (
@@ -99,6 +100,7 @@ __all__ = [
     'TwelveDataDataDownloader',
     'FinnhubDataDownloader',
     'CoinGeckoDataDownloader',
+    'AlpacaDataDownloader',
 
     # Live feeds
     'BinanceLiveDataFeed',

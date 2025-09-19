@@ -5,15 +5,19 @@ Fundamentals Cache Refresh Script
 This script can be used to periodically refresh fundamentals cache data.
 It supports:
 - Refreshing specific symbols or all cached symbols
-- Loading symbols from text files (default: example_tickers.txt)
+- Loading symbols from text files
 - Force refresh (bypass TTL)
 - Cleanup expired data
 - Batch processing with rate limiting
 
+Default Behavior:
+- Scans DATA_CACHE_DIR/fundamentals directory for all tickers with cached data
+- Refreshes fundamentals for all found tickers
+
 Usage:
-    python src/data/utils/refresh_fundamentals_cache.py                    # Use default example_tickers.txt
+    python src/data/utils/refresh_fundamentals_cache.py                    # Scan and refresh all cached tickers
     python src/data/utils/refresh_fundamentals_cache.py --symbols AAPL,GOOGL,MSFT
-    python src/data/utils/refresh_fundamentals_cache.py --all-symbols
+    python src/data/utils/refresh_fundamentals_cache.py --all-symbols      # Same as default
     python src/data/utils/refresh_fundamentals_cache.py --cleanup-only
     python src/data/utils/refresh_fundamentals_cache.py --symbols-file my_symbols.txt
     python src/data/utils/refresh_fundamentals_cache.py --force-refresh --symbols AAPL
@@ -45,16 +49,39 @@ except ImportError:
 _logger = setup_logger(__name__)
 
 def get_cached_symbols(cache_dir: str) -> List[str]:
-    """Get list of symbols that have cached fundamentals data."""
+    """Get list of symbols that have cached fundamentals data by scanning the fundamentals directory."""
     try:
-        combiner = get_fundamentals_combiner()
-        cache = get_fundamentals_cache(cache_dir, combiner)
+        fundamentals_dir = Path(cache_dir) / "fundamentals"
 
-        # Get cache statistics to find all symbols
-        stats = cache.get_cache_stats()
-        return stats.get('symbols', [])
+        if not fundamentals_dir.exists():
+            _logger.warning("Fundamentals directory does not exist: %s", fundamentals_dir)
+            return []
+
+        symbols = []
+        total_dirs = 0
+
+        # Scan all subdirectories in the fundamentals directory
+        for item in fundamentals_dir.iterdir():
+            if item.is_dir() and not item.name.startswith('.'):
+                total_dirs += 1
+                # Each subdirectory represents a ticker symbol
+                symbol = item.name.upper()
+
+                # Check if the directory contains any JSON files (cached data)
+                json_files = list(item.glob("*.json"))
+                if json_files:
+                    symbols.append(symbol)
+                    _logger.debug("Found cached fundamentals for %s (%d files)", symbol, len(json_files))
+                else:
+                    _logger.debug("Skipping %s (no JSON files found)", symbol)
+
+        symbols.sort()  # Sort alphabetically for consistent output
+        _logger.info("Scanned %d directories, found %d symbols with cached fundamentals data",
+                    total_dirs, len(symbols))
+        return symbols
+
     except Exception as e:
-        _logger.error("Error getting cached symbols: %s", e)
+        _logger.error("Error scanning fundamentals directory: %s", e)
         return []
 
 def load_symbols_from_file(file_path: str) -> List[str]:
@@ -153,18 +180,41 @@ def cleanup_expired_cache(cache_dir: str, data_types: List[str]) -> Dict[str, An
 
 def main():
     """Main function to run the fundamentals cache refresh script."""
-    parser = argparse.ArgumentParser(description='Refresh fundamentals cache data')
+    parser = argparse.ArgumentParser(
+        description='Refresh fundamentals cache data. By default, scans DATA_CACHE_DIR/fundamentals and refreshes all cached tickers.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Refresh all cached tickers (default behavior)
+  python src/data/utils/refresh_fundamentals_cache.py
+
+  # Refresh specific tickers
+  python src/data/utils/refresh_fundamentals_cache.py --symbols AAPL,MSFT,GOOGL
+
+  # Refresh from file
+  python src/data/utils/refresh_fundamentals_cache.py --symbols-file my_tickers.txt
+
+  # Force refresh (bypass TTL)
+  python src/data/utils/refresh_fundamentals_cache.py --force-refresh
+
+  # Dry run to see what would be refreshed
+  python src/data/utils/refresh_fundamentals_cache.py --dry-run
+
+  # Cleanup only
+  python src/data/utils/refresh_fundamentals_cache.py --cleanup-only
+        """
+    )
 
     # Symbol selection
     symbol_group = parser.add_mutually_exclusive_group(required=False)
     symbol_group.add_argument('--symbols', type=str,
                              help='Comma-separated list of symbols to refresh (e.g., AAPL,GOOGL,MSFT)')
     symbol_group.add_argument('--all-symbols', action='store_true',
-                             help='Refresh all cached symbols')
+                             help='Refresh all cached symbols (same as default behavior)')
     symbol_group.add_argument('--cleanup-only', action='store_true',
                              help='Only cleanup expired cache data, no refresh')
     symbol_group.add_argument('--symbols-file', type=str,
-                             help='Path to text file containing symbols (one per line). Default: example_tickers.txt')
+                             help='Path to text file containing symbols (one per line)')
 
     # Data types
     parser.add_argument('--data-types', type=str, default='ratios,profile,statements',
@@ -220,11 +270,21 @@ def main():
             symbols = load_symbols_from_file(args.symbols_file)
             _logger.info("Refreshing %d symbols from file", len(symbols))
         else:
-            # Default: use example_tickers.txt
-            default_file = os.path.join(os.path.dirname(__file__), 'example_tickers.txt')
-            symbols = load_symbols_from_file(default_file)
-            _logger.info("No symbols specified, using default file: %s", default_file)
-            _logger.info("Refreshing %d symbols from default file", len(symbols))
+            # Default: scan all tickers in DATA_CACHE_DIR/fundamentals
+            symbols = get_cached_symbols(args.cache_dir)
+            if symbols:
+                _logger.info("No symbols specified, scanning fundamentals directory")
+                _logger.info("Found %d symbols with cached fundamentals data to refresh", len(symbols))
+            else:
+                # Fallback to example_tickers.txt if no cached symbols found
+                default_file = os.path.join(os.path.dirname(__file__), 'example_tickers.txt')
+                if os.path.exists(default_file):
+                    symbols = load_symbols_from_file(default_file)
+                    _logger.info("No cached symbols found, using default file: %s", default_file)
+                    _logger.info("Refreshing %d symbols from default file", len(symbols))
+                else:
+                    _logger.warning("No cached symbols found and no default file available")
+                    symbols = []
 
         if not symbols:
             _logger.warning("No symbols to refresh")
