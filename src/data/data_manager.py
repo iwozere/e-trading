@@ -28,6 +28,24 @@ import pandas as pd
 
 from src.data.cache.fundamentals_cache import get_fundamentals_cache
 from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
+
+
+# Custom exception classes for enhanced error handling
+class RateLimitException(Exception):
+    """Exception raised when rate limits are exceeded."""
+    def __init__(self, message: str, retry_after: Optional[float] = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+class TimeoutException(Exception):
+    """Exception raised when requests timeout."""
+    pass
+
+
+class NetworkException(Exception):
+    """Exception raised for network-related errors."""
+    pass
 from src.notification.logger import setup_logger
 
 # Initialize logger
@@ -1291,9 +1309,10 @@ class DataManager:
 
         This method implements sophisticated provider selection based on:
         - Symbol classification (US vs international stocks)
-        - Data type specific provider sequences
+        - Data type specific provider sequences from fundamentals.json
         - Provider availability and capability validation
-        - Symbol compatibility filtering
+        - Symbol compatibility filtering with international support
+        - Fallback logic when preferred providers are unavailable
 
         Args:
             symbol: Normalized trading symbol
@@ -1322,8 +1341,8 @@ class DataManager:
                     _logger.debug("Using validated requested providers for %s: %s", symbol, valid_providers)
                     return valid_providers
 
-            # Get data-type specific provider sequence from configuration
-            provider_sequence = combiner.get_provider_sequence(data_type)
+            # Load provider sequences from fundamentals.json configuration
+            provider_sequence = self._load_data_type_provider_sequence(data_type, combiner)
             _logger.debug("Provider sequence for %s data type: %s", data_type, provider_sequence)
 
             # Filter providers by symbol compatibility and availability
@@ -1338,13 +1357,20 @@ class DataManager:
 
             # Fallback: try general provider sequence if data-type specific failed
             if data_type != 'general':
-                general_sequence = combiner.get_provider_sequence('general')
+                general_sequence = self._load_data_type_provider_sequence('general', combiner)
                 general_compatible = self._filter_compatible_providers(
                     general_sequence, symbol_classification
                 )
                 if general_compatible:
                     _logger.warning("Using general provider sequence for %s: %s", symbol, general_compatible)
                     return general_compatible
+
+            # Enhanced fallback: try international-optimized sequence for international symbols
+            if symbol_classification.get('international', False):
+                intl_providers = self._get_international_optimized_providers(symbol_classification)
+                if intl_providers:
+                    _logger.warning("Using international-optimized providers for %s: %s", symbol, intl_providers)
+                    return intl_providers
 
             # Last resort: find any available provider with fundamentals support
             fallback_providers = self._get_fallback_providers(symbol_classification)
@@ -1358,6 +1384,63 @@ class DataManager:
         except Exception as e:
             _logger.error("Error selecting providers for %s: %s", symbol, e)
             return []
+
+    def _load_data_type_provider_sequence(self, data_type: str, combiner) -> List[str]:
+        """
+        Load provider sequence from fundamentals.json configuration for specific data type.
+
+        Args:
+            data_type: Type of data (e.g., 'statements', 'ratios', 'profile')
+            combiner: Fundamentals combiner instance
+
+        Returns:
+            List of provider names in priority order
+        """
+        try:
+            # Get provider sequence from combiner configuration
+            provider_sequence = combiner.get_provider_sequence(data_type)
+
+            if provider_sequence:
+                _logger.debug("Loaded provider sequence for %s: %s", data_type, provider_sequence)
+                return provider_sequence
+
+            # Fallback to general sequence if specific data type not found
+            general_sequence = combiner.get_provider_sequence('general')
+            if general_sequence:
+                _logger.debug("Using general provider sequence for %s: %s", data_type, general_sequence)
+                return general_sequence
+
+            # Default fallback sequence if configuration is missing
+            default_sequence = ['yfinance', 'fmp', 'alpha_vantage', 'twelvedata']
+            _logger.warning("Using default provider sequence for %s: %s", data_type, default_sequence)
+            return default_sequence
+
+        except Exception as e:
+            _logger.error("Error loading provider sequence for %s: %s", data_type, e)
+            # Return safe default
+            return ['yfinance', 'fmp', 'alpha_vantage']
+
+    def _get_international_optimized_providers(self, symbol_classification: Dict[str, Any]) -> List[str]:
+        """
+        Get provider sequence optimized for international symbols.
+
+        Args:
+            symbol_classification: Symbol classification information
+
+        Returns:
+            List of provider names optimized for international coverage
+        """
+        # Providers with good international coverage, in priority order
+        international_providers = ['yfinance', 'twelvedata', 'alpha_vantage', 'fmp']
+
+        # Filter by availability and compatibility
+        available_providers = []
+        for provider in international_providers:
+            if (provider in self.provider_selector.downloaders and
+                self._is_provider_compatible_with_symbol(provider, symbol_classification)):
+                available_providers.append(provider)
+
+        return available_providers
 
     def _validate_requested_providers(self, requested_providers: List[str],
                                     symbol_classification: Dict[str, Any]) -> List[str]:
@@ -1398,7 +1481,13 @@ class DataManager:
     def _filter_compatible_providers(self, provider_sequence: List[str],
                                    symbol_classification: Dict[str, Any]) -> List[str]:
         """
-        Filter provider sequence by symbol compatibility and availability.
+        Filter provider sequence by symbol compatibility and availability with enhanced logic.
+
+        This method implements comprehensive provider filtering based on:
+        - Provider availability in the system
+        - Fundamentals support capability
+        - Symbol compatibility (market, exchange, symbol type)
+        - Provider-specific limitations and strengths
 
         Args:
             provider_sequence: Ordered list of providers from configuration
@@ -1422,19 +1511,168 @@ class DataManager:
                 _logger.debug("Provider %s does not support fundamentals, skipping", provider)
                 continue
 
-            # Check symbol compatibility
-            if self._is_provider_compatible_with_symbol(provider, symbol_classification):
+            # Enhanced symbol compatibility check
+            compatibility_result = self._check_provider_symbol_compatibility(provider, symbol_classification)
+            if compatibility_result['compatible']:
                 compatible_providers.append(provider)
+                _logger.debug("Provider %s compatible with %s: %s",
+                            provider, symbol_classification['symbol'], compatibility_result['reason'])
             else:
-                _logger.debug("Provider %s not compatible with symbol %s, skipping",
-                            provider, symbol_classification['symbol'])
+                _logger.debug("Provider %s not compatible with symbol %s: %s",
+                            provider, symbol_classification['symbol'], compatibility_result['reason'])
 
         return compatible_providers
+
+    def _check_provider_symbol_compatibility(self, provider: str,
+                                           symbol_classification: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhanced provider compatibility checking with detailed reasoning.
+
+        Args:
+            provider: Provider name
+            symbol_classification: Symbol classification information
+
+        Returns:
+            Dictionary with compatibility result and reasoning
+        """
+        symbol_type = symbol_classification.get('symbol_type', 'unknown')
+        country = symbol_classification.get('country', 'unknown')
+        market = symbol_classification.get('market', 'unknown')
+        international = symbol_classification.get('international', False)
+        exchange = symbol_classification.get('exchange', 'unknown')
+
+        # Crypto symbols don't use fundamentals
+        if symbol_type == 'crypto':
+            return {
+                'compatible': False,
+                'reason': 'Crypto symbols do not support fundamentals data'
+            }
+
+        # Enhanced provider-specific compatibility rules
+        provider_compatibility = {
+            'yfinance': {
+                'symbol_types': ['stock', 'etf', 'reit'],
+                'markets': ['US', 'UK', 'EU', 'CANADA', 'ASIA', 'OCEANIA'],
+                'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'TSX', 'AMS', 'EPA', 'XETRA', 'HKEX', 'TSE'],
+                'international_support': True,
+                'strengths': ['international_coverage', 'calculated_ratios', 'ttm_metrics'],
+                'limitations': ['scraping_based', 'occasional_outages'],
+                'quality_score': 4
+            },
+            'fmp': {
+                'symbol_types': ['stock', 'etf', 'reit'],
+                'markets': ['US'],
+                'exchanges': ['NYSE', 'NASDAQ', 'AMEX'],
+                'international_support': False,
+                'strengths': ['structured_statements', 'comprehensive_ratios', 'historical_data'],
+                'limitations': ['us_only', 'api_limits'],
+                'quality_score': 5
+            },
+            'alpha_vantage': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US', 'UK', 'EU'],
+                'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'XETRA', 'EPA'],
+                'international_support': True,
+                'strengths': ['consistent_json', 'reliable_overview'],
+                'limitations': ['strict_rate_limits', 'limited_international'],
+                'quality_score': 4
+            },
+            'alpaca': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US'],
+                'exchanges': ['NYSE', 'NASDAQ'],
+                'international_support': False,
+                'strengths': ['real_time_data', 'trading_integration'],
+                'limitations': ['us_only', 'limited_fundamentals'],
+                'quality_score': 3
+            },
+            'tiingo': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US'],
+                'exchanges': ['NYSE', 'NASDAQ'],
+                'international_support': False,
+                'strengths': ['historical_data', 'data_quality'],
+                'limitations': ['us_only', 'limited_fundamentals'],
+                'quality_score': 4
+            },
+            'polygon': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US'],
+                'exchanges': ['NYSE', 'NASDAQ'],
+                'international_support': False,
+                'strengths': ['real_time_data', 'comprehensive_market_data'],
+                'limitations': ['us_only', 'expensive'],
+                'quality_score': 4
+            },
+            'twelvedata': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US', 'UK', 'EU', 'ASIA'],
+                'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'XETRA', 'EPA', 'AMS', 'HKEX'],
+                'international_support': True,
+                'strengths': ['good_api_design', 'international_coverage'],
+                'limitations': ['limited_free_fundamentals', 'paid_features'],
+                'quality_score': 4
+            },
+            'finnhub': {
+                'symbol_types': ['stock', 'etf'],
+                'markets': ['US', 'UK', 'EU'],
+                'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'XETRA'],
+                'international_support': True,
+                'strengths': ['real_time_data', 'news_integration'],
+                'limitations': ['limited_fundamentals', 'rate_limits'],
+                'quality_score': 3
+            }
+        }
+
+        # Get provider compatibility info
+        compat_info = provider_compatibility.get(provider, {
+            'symbol_types': ['stock', 'etf'],
+            'markets': ['US'],
+            'exchanges': ['NYSE', 'NASDAQ'],
+            'international_support': False,
+            'strengths': [],
+            'limitations': ['unknown_provider'],
+            'quality_score': 2
+        })
+
+        # Check symbol type compatibility
+        if symbol_type not in compat_info['symbol_types']:
+            return {
+                'compatible': False,
+                'reason': f'Provider {provider} does not support {symbol_type} symbols'
+            }
+
+        # Check market compatibility
+        if market not in compat_info['markets']:
+            if international and not compat_info['international_support']:
+                return {
+                    'compatible': False,
+                    'reason': f'Provider {provider} does not support international markets ({market})'
+                }
+
+        # Check exchange compatibility (if exchange is known)
+        if (exchange != 'unknown' and
+            'exchanges' in compat_info and
+            exchange not in compat_info['exchanges']):
+            return {
+                'compatible': False,
+                'reason': f'Provider {provider} does not support exchange {exchange}'
+            }
+
+        # Provider is compatible
+        strengths = ', '.join(compat_info.get('strengths', []))
+        return {
+            'compatible': True,
+            'reason': f'Compatible - strengths: {strengths}',
+            'quality_score': compat_info.get('quality_score', 3),
+            'strengths': compat_info.get('strengths', []),
+            'limitations': compat_info.get('limitations', [])
+        }
 
     def _is_provider_compatible_with_symbol(self, provider: str,
                                           symbol_classification: Dict[str, Any]) -> bool:
         """
-        Check if a provider is compatible with a symbol based on classification.
+        Legacy compatibility method for backward compatibility.
 
         Args:
             provider: Provider name
@@ -1443,123 +1681,81 @@ class DataManager:
         Returns:
             True if provider is compatible with symbol
         """
-        symbol_type = symbol_classification.get('symbol_type', 'unknown')
-        country = symbol_classification.get('country', 'unknown')
-        market = symbol_classification.get('market', 'unknown')
-        international = symbol_classification.get('international', False)
-
-        # Crypto symbols don't use fundamentals
-        if symbol_type == 'crypto':
-            return False
-
-        # Provider-specific compatibility rules
-        provider_compatibility = {
-            'yfinance': {
-                'symbol_types': ['stock', 'etf', 'reit'],
-                'markets': ['US', 'UK', 'EU', 'CANADA', 'ASIA', 'OCEANIA'],
-                'international_support': True,
-                'notes': 'Good international coverage'
-            },
-            'fmp': {
-                'symbol_types': ['stock', 'etf', 'reit'],
-                'markets': ['US'],
-                'international_support': False,
-                'notes': 'Primarily US market focused'
-            },
-            'alpha_vantage': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US', 'UK', 'EU'],
-                'international_support': True,
-                'notes': 'Limited international coverage'
-            },
-            'alpaca': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US'],
-                'international_support': False,
-                'notes': 'US market only'
-            },
-            'tiingo': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US'],
-                'international_support': False,
-                'notes': 'US market focused with excellent historical data'
-            },
-            'polygon': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US'],
-                'international_support': False,
-                'notes': 'US market only'
-            },
-            'twelvedata': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US', 'UK', 'EU', 'ASIA'],
-                'international_support': True,
-                'notes': 'Good international coverage'
-            },
-            'finnhub': {
-                'symbol_types': ['stock', 'etf'],
-                'markets': ['US', 'UK', 'EU'],
-                'international_support': True,
-                'notes': 'Limited international coverage'
-            }
-        }
-
-        # Get provider compatibility info
-        compat_info = provider_compatibility.get(provider, {
-            'symbol_types': ['stock', 'etf'],
-            'markets': ['US'],
-            'international_support': False,
-            'notes': 'Unknown provider compatibility'
-        })
-
-        # Check symbol type compatibility
-        if symbol_type not in compat_info['symbol_types']:
-            return False
-
-        # Check market compatibility
-        if market not in compat_info['markets']:
-            # If it's international and provider doesn't support international
-            if international and not compat_info['international_support']:
-                return False
-
-        return True
+        result = self._check_provider_symbol_compatibility(provider, symbol_classification)
+        return result['compatible']
 
     def _get_fallback_providers(self, symbol_classification: Dict[str, Any]) -> List[str]:
         """
-        Get fallback providers when no configured providers are available.
+        Get intelligent fallback providers when no configured providers are available.
+
+        This method implements smart fallback logic that considers:
+        - Provider compatibility with symbol characteristics
+        - Provider quality scores and reliability
+        - International vs domestic symbol optimization
+        - Provider availability and fundamentals support
 
         Args:
             symbol_classification: Symbol classification information
 
         Returns:
-            List of fallback provider names (limited to 3)
+            List of fallback provider names (limited to 3, ordered by suitability)
         """
-        fallback_providers = []
+        fallback_candidates = []
 
+        # Evaluate all available providers
         for provider_name, downloader in self.provider_selector.downloaders.items():
             if hasattr(downloader, 'get_fundamentals'):
-                if self._is_provider_compatible_with_symbol(provider_name, symbol_classification):
-                    fallback_providers.append(provider_name)
+                compatibility_result = self._check_provider_symbol_compatibility(
+                    provider_name, symbol_classification
+                )
+                if compatibility_result['compatible']:
+                    fallback_candidates.append({
+                        'provider': provider_name,
+                        'quality_score': compatibility_result.get('quality_score', 3),
+                        'strengths': compatibility_result.get('strengths', []),
+                        'limitations': compatibility_result.get('limitations', [])
+                    })
 
-        # Limit to 3 providers and prioritize based on general quality
-        priority_order = ['yfinance', 'fmp', 'alpha_vantage', 'alpaca', 'tiingo', 'polygon', 'twelvedata', 'finnhub']
+        if not fallback_candidates:
+            return []
 
-        # Sort fallback providers by priority
-        sorted_fallback = []
-        for provider in priority_order:
-            if provider in fallback_providers:
-                sorted_fallback.append(provider)
+        # Sort by quality score and international support preference
+        international = symbol_classification.get('international', False)
 
-        # Add any remaining providers not in priority list
-        for provider in fallback_providers:
-            if provider not in sorted_fallback:
-                sorted_fallback.append(provider)
+        def sort_key(candidate):
+            provider = candidate['provider']
+            quality = candidate['quality_score']
 
-        return sorted_fallback[:3]  # Limit to 3 providers
+            # Boost score for international-friendly providers if needed
+            if international and provider in ['yfinance', 'twelvedata', 'alpha_vantage']:
+                quality += 1
+
+            # Boost score for US-optimized providers for US symbols
+            if not international and provider in ['fmp', 'alpaca', 'tiingo']:
+                quality += 0.5
+
+            return quality
+
+        # Sort candidates by adjusted quality score (descending)
+        sorted_candidates = sorted(fallback_candidates, key=sort_key, reverse=True)
+
+        # Extract provider names and limit to 3
+        fallback_providers = [candidate['provider'] for candidate in sorted_candidates[:3]]
+
+        _logger.debug("Selected fallback providers for %s: %s",
+                     symbol_classification['symbol'], fallback_providers)
+
+        return fallback_providers
 
     def _fetch_fundamentals_from_providers(self, symbol: str, providers: List[str]) -> Dict[str, Dict[str, Any]]:
         """
-        Fetch fundamentals data from multiple providers with error handling and retry logic.
+        Fetch fundamentals data from multiple providers with enhanced error handling and retry logic.
+
+        This method implements sophisticated retry mechanisms including:
+        - Configurable retry attempts with exponential backoff
+        - Rate limit detection and handling
+        - Provider-specific timeout handling
+        - Detailed error classification and logging
 
         Args:
             symbol: Normalized trading symbol
@@ -1569,47 +1765,279 @@ class DataManager:
             Dictionary mapping provider names to their fundamentals data
         """
         provider_data = {}
-        max_retries = 3
+
+        # Configuration for retry logic
+        retry_config = {
+            'max_retries': 3,
+            'base_delay': 1.0,  # Base delay in seconds
+            'max_delay': 30.0,  # Maximum delay in seconds
+            'exponential_base': 2.0,  # Exponential backoff base
+            'jitter': True  # Add random jitter to prevent thundering herd
+        }
 
         for provider_name in providers:
-            for attempt in range(max_retries):
+            success = False
+
+            # Validate provider availability first
+            if not self._validate_provider_availability(provider_name):
+                continue
+
+            for attempt in range(retry_config['max_retries']):
                 try:
-                    downloader = self.provider_selector.downloaders.get(provider_name)
-                    if not downloader:
-                        _logger.warning("Downloader not available for provider: %s", provider_name)
-                        break
-
-                    if not hasattr(downloader, 'get_fundamentals'):
-                        _logger.warning("Provider %s does not support fundamentals", provider_name)
-                        break
-
                     _logger.debug("Fetching fundamentals for %s from %s (attempt %d/%d)",
-                                symbol, provider_name, attempt + 1, max_retries)
+                                symbol, provider_name, attempt + 1, retry_config['max_retries'])
 
-                    fundamentals = downloader.get_fundamentals(symbol)
+                    # Get downloader with timeout handling
+                    downloader = self.provider_selector.downloaders[provider_name]
+
+                    # Fetch fundamentals with timeout
+                    fundamentals = self._fetch_with_timeout(downloader, symbol, provider_name)
+
                     if fundamentals:
-                        # Convert to dictionary format
+                        # Convert and validate data format
                         fundamentals_dict = self._normalize_fundamentals_data(fundamentals)
-                        if fundamentals_dict:
+                        if fundamentals_dict and self._validate_fundamentals_data(fundamentals_dict):
                             provider_data[provider_name] = fundamentals_dict
                             _logger.debug("Successfully fetched fundamentals for %s from %s",
                                         symbol, provider_name)
+                            success = True
                             break
                         else:
-                            _logger.warning("Empty fundamentals data from %s for %s", provider_name, symbol)
+                            _logger.warning("Invalid fundamentals data from %s for %s", provider_name, symbol)
                     else:
                         _logger.warning("No fundamentals data returned from %s for %s", provider_name, symbol)
 
+                except RateLimitException as e:
+                    # Handle rate limiting with longer delays
+                    delay = self._calculate_rate_limit_delay(e, attempt)
+                    _logger.warning("Rate limit hit for %s %s, waiting %.2f seconds",
+                                  provider_name, symbol, delay)
+                    self._sleep_with_jitter(delay, retry_config['jitter'])
+                    continue
+
+                except TimeoutException as e:
+                    # Handle timeouts with exponential backoff
+                    delay = self._calculate_exponential_backoff(attempt, retry_config)
+                    _logger.warning("Timeout for %s %s (attempt %d), waiting %.2f seconds: %s",
+                                  provider_name, symbol, attempt + 1, delay, e)
+                    if attempt < retry_config['max_retries'] - 1:
+                        self._sleep_with_jitter(delay, retry_config['jitter'])
+                    continue
+
+                except NetworkException as e:
+                    # Handle network errors with exponential backoff
+                    delay = self._calculate_exponential_backoff(attempt, retry_config)
+                    _logger.warning("Network error for %s %s (attempt %d), waiting %.2f seconds: %s",
+                                  provider_name, symbol, attempt + 1, delay, e)
+                    if attempt < retry_config['max_retries'] - 1:
+                        self._sleep_with_jitter(delay, retry_config['jitter'])
+                    continue
+
                 except Exception as e:
-                    _logger.warning("Attempt %d failed for %s %s: %s", attempt + 1, provider_name, symbol, e)
-                    if attempt == max_retries - 1:
-                        _logger.error("All attempts failed for %s %s", provider_name, symbol)
-                    else:
-                        # Simple backoff - wait before retry
-                        import time
-                        time.sleep(0.5 * (attempt + 1))
+                    # Handle other errors with classification
+                    error_type = self._classify_error(e)
+                    delay = self._calculate_exponential_backoff(attempt, retry_config)
+
+                    _logger.warning("Error (%s) for %s %s (attempt %d): %s",
+                                  error_type, provider_name, symbol, attempt + 1, e)
+
+                    # Don't retry for certain error types
+                    if error_type in ['authentication', 'invalid_symbol', 'not_supported']:
+                        _logger.error("Non-retryable error for %s %s: %s", provider_name, symbol, e)
+                        break
+
+                    if attempt < retry_config['max_retries'] - 1:
+                        self._sleep_with_jitter(delay, retry_config['jitter'])
+                    continue
+
+            if not success:
+                _logger.error("All attempts failed for %s %s after %d retries",
+                            provider_name, symbol, retry_config['max_retries'])
 
         return provider_data
+
+    def _validate_provider_availability(self, provider_name: str) -> bool:
+        """
+        Validate that a provider is available and supports fundamentals.
+
+        Args:
+            provider_name: Name of the provider to validate
+
+        Returns:
+            True if provider is available and supports fundamentals
+        """
+        if provider_name not in self.provider_selector.downloaders:
+            _logger.warning("Downloader not available for provider: %s", provider_name)
+            return False
+
+        downloader = self.provider_selector.downloaders[provider_name]
+        if not hasattr(downloader, 'get_fundamentals'):
+            _logger.warning("Provider %s does not support fundamentals", provider_name)
+            return False
+
+        return True
+
+    def _fetch_with_timeout(self, downloader, symbol: str, provider_name: str, timeout: float = 30.0):
+        """
+        Fetch fundamentals data with timeout handling.
+
+        Args:
+            downloader: Provider downloader instance
+            symbol: Trading symbol
+            provider_name: Provider name for logging
+            timeout: Timeout in seconds
+
+        Returns:
+            Fundamentals data or None
+
+        Raises:
+            TimeoutException: If request times out
+        """
+        import signal
+        import time
+
+        def timeout_handler(signum, frame):
+            raise TimeoutException(f"Request timed out after {timeout} seconds")
+
+        # Set up timeout handling (Unix-like systems)
+        if hasattr(signal, 'SIGALRM'):
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(int(timeout))
+
+        try:
+            start_time = time.time()
+            fundamentals = downloader.get_fundamentals(symbol)
+            elapsed_time = time.time() - start_time
+
+            _logger.debug("Fetched fundamentals for %s from %s in %.2f seconds",
+                        symbol, provider_name, elapsed_time)
+            return fundamentals
+
+        finally:
+            # Clean up timeout handling
+            if hasattr(signal, 'SIGALRM'):
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+
+    def _calculate_exponential_backoff(self, attempt: int, config: Dict[str, Any]) -> float:
+        """
+        Calculate exponential backoff delay.
+
+        Args:
+            attempt: Current attempt number (0-based)
+            config: Retry configuration
+
+        Returns:
+            Delay in seconds
+        """
+        delay = config['base_delay'] * (config['exponential_base'] ** attempt)
+        return min(delay, config['max_delay'])
+
+    def _calculate_rate_limit_delay(self, exception: Exception, attempt: int) -> float:
+        """
+        Calculate delay for rate limit exceptions.
+
+        Args:
+            exception: Rate limit exception
+            attempt: Current attempt number
+
+        Returns:
+            Delay in seconds
+        """
+        # Try to extract retry-after header if available
+        if hasattr(exception, 'retry_after') and exception.retry_after is not None:
+            return float(exception.retry_after)
+
+        # Default rate limit backoff (longer than normal exponential backoff)
+        base_delay = 60.0  # 1 minute base delay for rate limits
+        return base_delay * (2 ** attempt)
+
+    def _sleep_with_jitter(self, delay: float, use_jitter: bool = True) -> None:
+        """
+        Sleep with optional jitter to prevent thundering herd.
+
+        Args:
+            delay: Base delay in seconds
+            use_jitter: Whether to add random jitter
+        """
+        import time
+        import random
+
+        if use_jitter:
+            # Add up to 25% jitter
+            jitter = delay * 0.25 * random.random()
+            actual_delay = delay + jitter
+        else:
+            actual_delay = delay
+
+        time.sleep(actual_delay)
+
+    def _classify_error(self, exception: Exception) -> str:
+        """
+        Classify error types for appropriate retry handling.
+
+        Args:
+            exception: Exception to classify
+
+        Returns:
+            Error type string
+        """
+        error_message = str(exception).lower()
+
+        # Authentication errors
+        if any(term in error_message for term in ['unauthorized', 'api key', 'authentication', 'forbidden']):
+            return 'authentication'
+
+        # Invalid symbol errors
+        if any(term in error_message for term in ['invalid symbol', 'symbol not found', 'not found']):
+            return 'invalid_symbol'
+
+        # Not supported errors
+        if any(term in error_message for term in ['not supported', 'not available', 'not implemented']):
+            return 'not_supported'
+
+        # Rate limit errors
+        if any(term in error_message for term in ['rate limit', 'too many requests', 'quota exceeded']):
+            return 'rate_limit'
+
+        # Network errors
+        if any(term in error_message for term in ['connection', 'network', 'timeout', 'dns']):
+            return 'network'
+
+        # Server errors
+        if any(term in error_message for term in ['server error', '500', '502', '503', '504']):
+            return 'server'
+
+        return 'unknown'
+
+    def _validate_fundamentals_data(self, data: Dict[str, Any]) -> bool:
+        """
+        Validate fundamentals data structure and content.
+
+        Args:
+            data: Fundamentals data dictionary
+
+        Returns:
+            True if data is valid
+        """
+        if not data or not isinstance(data, dict):
+            return False
+
+        # Check for minimum required fields
+        required_fields = ['symbol']  # At minimum, should have symbol
+        for field in required_fields:
+            if field not in data:
+                return False
+
+        # Check for reasonable data (not all None/empty)
+        non_empty_fields = sum(1 for value in data.values() if value is not None and value != '')
+        if non_empty_fields < 2:  # Should have at least symbol + one other field
+            return False
+
+        return True
+
+
+
 
     def _normalize_fundamentals_data(self, fundamentals) -> Optional[Dict[str, Any]]:
         """
