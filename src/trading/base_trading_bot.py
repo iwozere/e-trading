@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 from src.data.db.trade_repository import TradeRepository
 from src.trading.risk.controller import RiskController
 from src.notification.async_notification_manager import initialize_notification_manager
+from src.trading.broker.enhanced_base_broker import PositionNotificationManager
 from config.donotshare.donotshare import (TELEGRAM_BOT_TOKEN, SMTP_USER)
 
 from src.notification.logger import setup_logger
@@ -76,14 +77,12 @@ class BaseTradingBot:
         self.trade_type = "paper" if paper_trading else "live"
         self.trade_repository = TradeRepository()
 
-        # Notification setup (async notification manager)
-        # Remove legacy notifiers
+        # Enhanced notification setup
         self.notification_manager = None
+        self.position_notification_manager = None
+
         try:
-            # Email API key is not used, so pass SMTP_USER as sender, SMTP_USER as receiver for now
-            # (If you use SendGrid or similar, adapt accordingly)
-            # Initialize notification manager for system-level trading notifications
-            # Admin notifications will be sent via HTTP API to admin users
+            # Initialize legacy notification manager for backward compatibility
             self.notification_manager = asyncio.run(
                 initialize_notification_manager(
                     telegram_token=TELEGRAM_BOT_TOKEN,
@@ -92,8 +91,21 @@ class BaseTradingBot:
                     email_receiver=SMTP_USER  # Or set to a config value for recipient
                 )
             )
+
+            # Initialize enhanced position notification manager
+            notification_config = config.get('notifications', {
+                'position_opened': True,
+                'position_closed': True,
+                'email_enabled': True,
+                'telegram_enabled': True,
+                'error_notifications': True
+            })
+            self.position_notification_manager = PositionNotificationManager({
+                'notifications': notification_config
+            })
+
         except Exception as e:
-            _logger.exception("Notification manager not initialized: %s")
+            _logger.exception("Notification managers not initialized: %s")
 
         self.max_drawdown_pct = config.get("max_drawdown_pct", 20.0)
         self.max_exposure = config.get("max_exposure", 1.0)  # 1.0 = 100% of balance
@@ -258,7 +270,23 @@ class BaseTradingBot:
                     "trade_id": str(trade.id) if trade else None
                 }
 
+                # Send both legacy and enhanced notifications
                 self.notify_trade_event("BUY", price, size, timestamp)
+
+                # Enhanced position notification
+                if self.position_notification_manager:
+                    position_data = {
+                        'symbol': self.trading_pair,
+                        'side': 'BUY',
+                        'price': price,
+                        'size': size,
+                        'timestamp': timestamp,
+                        'bot_id': self.bot_id,
+                        'trading_mode': 'paper' if self.paper_trading else 'live',
+                        'order_id': str(order) if order else trade_id,
+                        'strategy': self.strategy_class.__name__ if hasattr(self.strategy_class, '__name__') else 'Unknown'
+                    }
+                    asyncio.run(self.position_notification_manager.notify_position_opened(position_data))
 
             else:  # sell
                 if self.trading_pair in self.active_positions:
@@ -315,6 +343,7 @@ class BaseTradingBot:
                     # Remove from active positions
                     del self.active_positions[self.trading_pair]
 
+                    # Send both legacy and enhanced notifications
                     self.notify_trade_event(
                         "SELL",
                         price,
@@ -323,6 +352,40 @@ class BaseTradingBot:
                         entry_price=position["entry_price"],
                         pnl=pnl,
                     )
+
+                    # Enhanced position notification
+                    if self.position_notification_manager:
+                        # Calculate hold duration
+                        hold_duration = "Unknown"
+                        if position.get("entry_time"):
+                            duration = timestamp - position["entry_time"]
+                            days = duration.days
+                            hours, remainder = divmod(duration.seconds, 3600)
+                            minutes, seconds = divmod(remainder, 60)
+
+                            if days > 0:
+                                hold_duration = f"{days}d {hours}h {minutes}m"
+                            elif hours > 0:
+                                hold_duration = f"{hours}h {minutes}m {seconds}s"
+                            else:
+                                hold_duration = f"{minutes}m {seconds}s"
+
+                        position_data = {
+                            'symbol': self.trading_pair,
+                            'side': 'SELL',
+                            'entry_price': position["entry_price"],
+                            'exit_price': price,
+                            'size': size,
+                            'pnl': gross_pnl,
+                            'pnl_percentage': pnl,
+                            'timestamp': timestamp,
+                            'bot_id': self.bot_id,
+                            'trading_mode': 'paper' if self.paper_trading else 'live',
+                            'order_id': str(order) if order else trade_id,
+                            'strategy': self.strategy_class.__name__ if hasattr(self.strategy_class, '__name__') else 'Unknown',
+                            'hold_duration': hold_duration
+                        }
+                        asyncio.run(self.position_notification_manager.notify_position_closed(position_data))
 
         except Exception as e:
             _logger.exception("Error executing trade: %s")

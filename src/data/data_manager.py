@@ -1389,6 +1389,12 @@ class DataManager:
         """
         Load provider sequence from fundamentals.json configuration for specific data type.
 
+        This method implements enhanced data-type specific provider selection by:
+        - Loading provider sequences from fundamentals.json configuration
+        - Mapping data types to appropriate provider sequences
+        - Providing intelligent fallbacks for unmapped data types
+        - Validating provider availability before returning sequences
+
         Args:
             data_type: Type of data (e.g., 'statements', 'ratios', 'profile')
             combiner: Fundamentals combiner instance
@@ -1397,28 +1403,212 @@ class DataManager:
             List of provider names in priority order
         """
         try:
+            # Enhanced data type mapping for better provider selection
+            data_type_mappings = {
+                'general': 'profile',
+                'company': 'profile',
+                'overview': 'profile',
+                'financial_statements': 'statements',
+                'income_statement': 'statements',
+                'balance_sheet': 'statements',
+                'cash_flow': 'statements',
+                'financial_ratios': 'ratios',
+                'valuation_ratios': 'ratios',
+                'profitability_ratios': 'ratios',
+                'liquidity_ratios': 'ratios',
+                'efficiency_ratios': 'ratios',
+                'leverage_ratios': 'ratios',
+                'growth_ratios': 'ratios',
+                'ttm_metrics': 'ratios',
+                'earnings': 'calendar',
+                'earnings_calendar': 'calendar',
+                'dividend_history': 'dividends',
+                'dividend_calendar': 'dividends',
+                'stock_splits': 'splits',
+                'insider_transactions': 'insider_trading',
+                'analyst_recommendations': 'analyst_estimates',
+                'price_targets': 'analyst_estimates'
+            }
+
+            # Provider name mappings to handle configuration vs implementation differences
+            provider_name_mappings = {
+                'alphavantage': 'alpha_vantage',
+                'alpha_vantage': 'alpha_vantage',
+                'yfinance': 'yahoo',  # yfinance uses yahoo downloader
+                'yahoo': 'yahoo',
+                'fmp': 'fmp',
+                'twelvedata': 'twelvedata',
+                'tiingo': 'tiingo',
+                'polygon': 'polygon',
+                'finnhub': 'finnhub',
+                'alpaca': 'alpaca',
+                'binance': 'binance',
+                'coingecko': 'coingecko'
+            }
+
+            # Map data type to configuration key
+            config_key = data_type_mappings.get(data_type, data_type)
+
             # Get provider sequence from combiner configuration
-            provider_sequence = combiner.get_provider_sequence(data_type)
+            provider_sequence = combiner.get_provider_sequence(config_key)
 
             if provider_sequence:
-                _logger.debug("Loaded provider sequence for %s: %s", data_type, provider_sequence)
-                return provider_sequence
+                # Normalize provider names to match implementation
+                normalized_sequence = self._normalize_provider_names(provider_sequence, provider_name_mappings)
 
-            # Fallback to general sequence if specific data type not found
-            general_sequence = combiner.get_provider_sequence('general')
+                # Validate provider availability
+                available_providers = self._validate_provider_availability(normalized_sequence)
+                if available_providers:
+                    _logger.debug("Loaded provider sequence for %s (%s): %s",
+                                data_type, config_key, available_providers)
+                    return available_providers
+                else:
+                    _logger.warning("No providers available for %s sequence: %s",
+                                  config_key, normalized_sequence)
+
+            # Enhanced fallback logic with data-type specific preferences
+            fallback_sequence = self._get_data_type_fallback_sequence(data_type, combiner)
+            if fallback_sequence:
+                _logger.debug("Using fallback provider sequence for %s: %s", data_type, fallback_sequence)
+                return fallback_sequence
+
+            # Final fallback to general sequence
+            general_sequence = combiner.get_provider_sequence('profile')
             if general_sequence:
-                _logger.debug("Using general provider sequence for %s: %s", data_type, general_sequence)
-                return general_sequence
+                normalized_general = self._normalize_provider_names(general_sequence, provider_name_mappings)
+                available_general = self._validate_provider_availability(normalized_general)
+                if available_general:
+                    _logger.warning("Using general provider sequence for %s: %s", data_type, available_general)
+                    return available_general
 
-            # Default fallback sequence if configuration is missing
-            default_sequence = ['yfinance', 'fmp', 'alpha_vantage', 'twelvedata']
-            _logger.warning("Using default provider sequence for %s: %s", data_type, default_sequence)
-            return default_sequence
+            # Last resort: hardcoded default sequence (using implementation names)
+            default_sequence = ['yahoo', 'fmp', 'alpha_vantage']
+            available_default = self._validate_provider_availability(default_sequence)
+            if available_default:
+                _logger.warning("Using default provider sequence for %s: %s", data_type, available_default)
+                return available_default
+
+            # If no providers are available at all
+            _logger.error("No providers available for data type %s", data_type)
+            return []
 
         except Exception as e:
             _logger.error("Error loading provider sequence for %s: %s", data_type, e)
-            # Return safe default
-            return ['yfinance', 'fmp', 'alpha_vantage']
+            # Return safe default with availability check (using implementation names)
+            safe_default = ['yahoo', 'fmp', 'alpha_vantage']
+            return self._validate_provider_availability(safe_default)
+
+    def _validate_provider_availability(self, provider_sequence: List[str]) -> List[str]:
+        """
+        Validate that providers in the sequence are available and support fundamentals.
+
+        Args:
+            provider_sequence: List of provider names to validate
+
+        Returns:
+            List of available provider names
+        """
+        available_providers = []
+
+        # Handle case where provider_sequence might be None or empty
+        if not provider_sequence:
+            return available_providers
+
+        for provider_name in provider_sequence:
+            # Handle case where provider_name might be a list (nested structure)
+            if isinstance(provider_name, list):
+                _logger.warning("Found nested list in provider sequence: %s", provider_name)
+                continue
+
+            # Ensure provider_name is a string
+            if not isinstance(provider_name, str):
+                _logger.warning("Invalid provider name type: %s (%s)", provider_name, type(provider_name))
+                continue
+
+            # Check if provider is initialized and available
+            if provider_name not in self.provider_selector.downloaders:
+                _logger.debug("Provider %s not available (not initialized)", provider_name)
+                continue
+
+            downloader = self.provider_selector.downloaders[provider_name]
+
+            # Check if provider supports fundamentals
+            if not hasattr(downloader, 'get_fundamentals'):
+                _logger.debug("Provider %s not available (no fundamentals support)", provider_name)
+                continue
+
+            # Provider is available
+            available_providers.append(provider_name)
+
+        return available_providers
+
+    def _get_data_type_fallback_sequence(self, data_type: str, combiner) -> List[str]:
+        """
+        Get intelligent fallback provider sequence based on data type characteristics.
+
+        Args:
+            data_type: Type of data requested
+            combiner: Fundamentals combiner instance
+
+        Returns:
+            List of fallback provider names
+        """
+        # Data type categories for intelligent fallbacks
+        statement_types = ['statements', 'financial_statements', 'income_statement',
+                          'balance_sheet', 'cash_flow']
+        ratio_types = ['ratios', 'financial_ratios', 'valuation_ratios', 'profitability_ratios',
+                      'liquidity_ratios', 'efficiency_ratios', 'leverage_ratios', 'growth_ratios',
+                      'ttm_metrics']
+        profile_types = ['profile', 'company', 'overview', 'general']
+        calendar_types = ['calendar', 'earnings', 'earnings_calendar']
+        dividend_types = ['dividends', 'dividend_history', 'dividend_calendar']
+
+        # Select fallback based on data type category (using implementation names)
+        if data_type in statement_types:
+            # For statements, prefer FMP and Alpha Vantage
+            fallback_candidates = ['fmp', 'alpha_vantage', 'yahoo', 'twelvedata']
+        elif data_type in ratio_types:
+            # For ratios, prefer Yahoo Finance and FMP
+            fallback_candidates = ['yahoo', 'fmp', 'alpha_vantage', 'twelvedata']
+        elif data_type in profile_types:
+            # For profiles, prefer FMP and Yahoo Finance
+            fallback_candidates = ['fmp', 'yahoo', 'alpha_vantage', 'twelvedata']
+        elif data_type in calendar_types:
+            # For calendar events, prefer Yahoo Finance
+            fallback_candidates = ['yahoo', 'fmp', 'alpha_vantage']
+        elif data_type in dividend_types:
+            # For dividends, prefer Yahoo Finance and FMP
+            fallback_candidates = ['yahoo', 'fmp', 'alpha_vantage']
+        else:
+            # Default fallback for unknown data types
+            fallback_candidates = ['yahoo', 'fmp', 'alpha_vantage', 'twelvedata']
+
+        # Validate availability of fallback candidates
+        return self._validate_provider_availability(fallback_candidates)
+
+    def _normalize_provider_names(self, provider_sequence: List[str],
+                                 provider_mappings: Dict[str, str]) -> List[str]:
+        """
+        Normalize provider names from configuration to match implementation names.
+
+        Args:
+            provider_sequence: List of provider names from configuration
+            provider_mappings: Dictionary mapping config names to implementation names
+
+        Returns:
+            List of normalized provider names
+        """
+        normalized = []
+
+        for provider in provider_sequence:
+            if isinstance(provider, str):
+                # Map provider name using mappings
+                normalized_name = provider_mappings.get(provider, provider)
+                normalized.append(normalized_name)
+            else:
+                _logger.warning("Invalid provider name in sequence: %s (%s)", provider, type(provider))
+
+        return normalized
 
     def _get_international_optimized_providers(self, symbol_classification: Dict[str, Any]) -> List[str]:
         """
@@ -1430,8 +1620,8 @@ class DataManager:
         Returns:
             List of provider names optimized for international coverage
         """
-        # Providers with good international coverage, in priority order
-        international_providers = ['yfinance', 'twelvedata', 'alpha_vantage', 'fmp']
+        # Providers with good international coverage, in priority order (using implementation names)
+        international_providers = ['yahoo', 'twelvedata', 'alpha_vantage', 'fmp']
 
         # Filter by availability and compatibility
         available_providers = []
@@ -1488,13 +1678,14 @@ class DataManager:
         - Fundamentals support capability
         - Symbol compatibility (market, exchange, symbol type)
         - Provider-specific limitations and strengths
+        - Provider quality scores and reliability metrics
 
         Args:
             provider_sequence: Ordered list of providers from configuration
             symbol_classification: Symbol classification information
 
         Returns:
-            List of compatible and available providers
+            List of compatible and available providers, sorted by suitability
         """
         compatible_providers = []
 
@@ -1514,14 +1705,95 @@ class DataManager:
             # Enhanced symbol compatibility check
             compatibility_result = self._check_provider_symbol_compatibility(provider, symbol_classification)
             if compatibility_result['compatible']:
-                compatible_providers.append(provider)
+                # Add provider with compatibility metadata
+                provider_info = {
+                    'provider': provider,
+                    'quality_score': compatibility_result.get('quality_score', 3),
+                    'strengths': compatibility_result.get('strengths', []),
+                    'limitations': compatibility_result.get('limitations', []),
+                    'reason': compatibility_result.get('reason', 'Compatible')
+                }
+                compatible_providers.append(provider_info)
                 _logger.debug("Provider %s compatible with %s: %s",
                             provider, symbol_classification['symbol'], compatibility_result['reason'])
             else:
                 _logger.debug("Provider %s not compatible with symbol %s: %s",
                             provider, symbol_classification['symbol'], compatibility_result['reason'])
 
-        return compatible_providers
+        # Sort providers by suitability for this symbol
+        if compatible_providers:
+            sorted_providers = self._sort_providers_by_suitability(compatible_providers, symbol_classification)
+            provider_names = [p['provider'] for p in sorted_providers]
+
+            # Log the final selection with reasoning
+            if len(provider_names) > 1:
+                _logger.debug("Sorted providers for %s by suitability: %s",
+                            symbol_classification['symbol'], provider_names)
+
+            return provider_names
+
+        return []
+
+    def _sort_providers_by_suitability(self, compatible_providers: List[Dict[str, Any]],
+                                     symbol_classification: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Sort compatible providers by suitability for the specific symbol.
+
+        Args:
+            compatible_providers: List of compatible provider info dictionaries
+            symbol_classification: Symbol classification information
+
+        Returns:
+            Sorted list of provider info dictionaries
+        """
+        def calculate_suitability_score(provider_info: Dict[str, Any]) -> float:
+            """Calculate suitability score for provider."""
+            base_score = provider_info.get('quality_score', 3)
+
+            # Boost score based on symbol characteristics
+            international = symbol_classification.get('international', False)
+            market = symbol_classification.get('market', 'unknown')
+            symbol_type = symbol_classification.get('symbol_type', 'unknown')
+
+            # International symbol adjustments
+            if international:
+                if provider_info['provider'] in ['yfinance', 'twelvedata', 'alpha_vantage']:
+                    base_score += 1.0  # Boost for international-friendly providers
+                elif provider_info['provider'] in ['fmp', 'alpaca', 'tiingo']:
+                    base_score -= 0.5  # Penalty for US-only providers
+            else:
+                # US symbol adjustments
+                if provider_info['provider'] in ['fmp', 'alpaca', 'tiingo']:
+                    base_score += 0.5  # Boost for US-optimized providers
+
+            # Symbol type adjustments
+            if symbol_type == 'etf':
+                if provider_info['provider'] in ['yfinance', 'fmp']:
+                    base_score += 0.3  # ETFs work well with these providers
+            elif symbol_type == 'reit':
+                if provider_info['provider'] in ['yfinance', 'fmp']:
+                    base_score += 0.3  # REITs work well with these providers
+
+            # Market-specific adjustments
+            if market == 'EU':
+                if provider_info['provider'] in ['yfinance', 'twelvedata']:
+                    base_score += 0.5  # Better EU coverage
+            elif market == 'UK':
+                if provider_info['provider'] in ['yfinance', 'alpha_vantage']:
+                    base_score += 0.5  # Better UK coverage
+            elif market == 'ASIA':
+                if provider_info['provider'] == 'yfinance':
+                    base_score += 0.5  # Yahoo has good Asian coverage
+
+            return base_score
+
+        # Calculate suitability scores and sort
+        for provider_info in compatible_providers:
+            provider_info['suitability_score'] = calculate_suitability_score(provider_info)
+
+        # Sort by suitability score (descending), then by original order (ascending)
+        return sorted(compatible_providers,
+                     key=lambda p: (-p['suitability_score'], compatible_providers.index(p)))
 
     def _check_provider_symbol_compatibility(self, provider: str,
                                            symbol_classification: Dict[str, Any]) -> Dict[str, Any]:
@@ -1779,7 +2051,7 @@ class DataManager:
             success = False
 
             # Validate provider availability first
-            if not self._validate_provider_availability(provider_name):
+            if not self._validate_single_provider_availability(provider_name):
                 continue
 
             for attempt in range(retry_config['max_retries']):
@@ -1856,9 +2128,9 @@ class DataManager:
 
         return provider_data
 
-    def _validate_provider_availability(self, provider_name: str) -> bool:
+    def _validate_single_provider_availability(self, provider_name: str) -> bool:
         """
-        Validate that a provider is available and supports fundamentals.
+        Validate that a single provider is available and supports fundamentals.
 
         Args:
             provider_name: Name of the provider to validate

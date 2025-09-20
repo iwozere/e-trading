@@ -1,0 +1,117 @@
+{
+  "description": "Binance Paper Trading Configuration - Enhanced System",
+  "version": "2.0",
+  
+  "broker": {
+    "type": "binance",
+    "trading_mode": "paper",
+    "name": "binance_paper_bot",
+    "cash": 10000.0,
+    "paper_trading_config": {
+      "mode": "realistic",
+      "initial_balance": 10000.0,
+      "commission_rate": 0.001,
+      "slippage_model": "linear",
+      "base_slippage": 0.0005,
+      "latency_simulation": true,
+      "min_latency_ms": 20,
+      "max_latency_ms": 150,
+      "market_impact_enabled": true,
+      "market_impact_factor": 0.0001,
+      "realistic_fills": true,
+      "partial_fill_probability": 0.15,
+      "reject_probability": 0.02,
+      "enable_execution_quality": true
+    }
+  },
+  
+  "trading": {
+    "symbol": "BTCUSDT",
+    "position_size": 0.1,
+    "max_positions": 1,
+    "max_drawdown_pct": 20.0,
+    "max_exposure": 1.0
+  },
+  
+  "data": {
+    "data_source": "binance",
+    "symbol": "BTCUSDT",
+    "interval": "1h",
+    "lookback_bars": 1000,
+    "retry_interval": 60
+  },
+  
+  "strategy": {
+    "name": "CustomStrategy",
+    "entry_logic": {
+      "name": "RSIBBVolumeEntryMixin",
+      "params": {
+        "e_rsi_period": 14,
+        "e_rsi_oversold": 30,
+        "e_bb_period": 20,
+        "e_bb_dev": 2.0,
+        "e_vol_ma_period": 20,
+        "e_min_volume_ratio": 1.1,
+        "e_use_bb_touch": true
+      }
+    },
+    "exit_logic": {
+      "name": "RSIBBExitMixin",
+      "params": {
+        "x_rsi_period": 14,
+        "x_rsi_overbought": 70,
+        "x_bb_period": 20,
+        "x_bb_dev": 2.0,
+        "x_use_bb_touch": true
+      }
+    },
+    "position_size": 0.1
+  },
+  
+  "notifications": {
+    "position_opened": true,
+    "position_closed": true,
+    "email_enabled": true,
+    "telegram_enabled": true,
+    "error_notifications": true
+  },
+  
+  "risk_management": {
+    "max_position_size": 1000.0,
+    "max_daily_loss": 500.0,
+    "max_portfolio_risk": 0.02,
+    "position_sizing_method": "fixed_dollar",
+    "stop_loss_enabled": true,
+    "take_profit_enabled": true,
+    "stop_loss_pct": 5.0,
+    "take_profit_pct": 10.0,
+    "trailing_stop": {
+      "enabled": false,
+      "activation_pct": 3.0,
+      "trailing_pct": 2.0
+    },
+    "max_daily_trades": 10
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "save_trades": true,
+    "save_equity_curve": true,
+    "log_file": "logs/live/binance_paper_trading.log"
+  },
+  
+  "scheduling": {
+    "enabled": false,
+    "start_time": "09:00",
+    "end_time": "17:00",
+    "timezone": "UTC",
+    "trading_days": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+  },
+  
+  "performance": {
+    "target_sharpe_ratio": 1.0,
+    "target_win_rate": 60.0,
+    "target_profit_factor": 1.5,
+    "max_consecutive_losses": 5
+  }
+}
