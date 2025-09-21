@@ -29,7 +29,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.trading.broker.broker_factory import get_broker
 from src.trading.broker.binance_utils import create_binance_config_template
-from src.trading.broker.enhanced_base_broker import Order, OrderType, OrderSide
+from src.trading.broker.base_broker import Order, OrderType, OrderSide
 from config.donotshare.donotshare import BINANCE_KEY, BINANCE_SECRET, BINANCE_PAPER_KEY, BINANCE_PAPER_SECRET
 
 

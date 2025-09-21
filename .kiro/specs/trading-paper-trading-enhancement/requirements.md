@@ -42,7 +42,43 @@ This specification defines the requirements for enhancing the trading module to 
 4. WHEN I execute trades THEN the system SHALL handle broker-specific order types and execution rules transparently
 5. WHEN I monitor performance THEN the system SHALL provide normalized metrics across different brokers
 
-### Requirement 4: Advanced Risk Management
+### Requirement 4: System Service Architecture
+
+**User Story:** As a system administrator, I want to run multiple trading strategies as a single system service on my Raspberry Pi, so that I can efficiently manage resources and have centralized control.
+
+#### Acceptance Criteria
+
+1. WHEN I start the trading service THEN the system SHALL run as a single systemd service
+2. WHEN the service starts THEN the system SHALL load multiple strategy instances from JSON configuration
+3. WHEN each strategy instance runs THEN the system SHALL use independent broker configurations (paper/live)
+4. WHEN the system runs THEN the system SHALL monitor CPU, memory, and temperature on Raspberry Pi
+5. WHEN a strategy fails THEN the system SHALL automatically attempt recovery without affecting other strategies
+
+### Requirement 5: Multi-Strategy Management
+
+**User Story:** As a trader, I want to run multiple strategy instances simultaneously with different configurations, so that I can diversify my trading approach and test multiple setups.
+
+#### Acceptance Criteria
+
+1. WHEN I configure multiple strategies THEN the system SHALL run each strategy as an independent instance
+2. WHEN strategies use the same symbol THEN the system SHALL manage position conflicts intelligently
+3. WHEN I configure strategy parameters THEN each instance SHALL maintain its own settings and state
+4. WHEN strategies have different risk profiles THEN the system SHALL apply individual risk management rules
+5. WHEN I monitor strategies THEN the system SHALL provide individual performance metrics and status
+
+### Requirement 6: Configuration-Based Strategy Management
+
+**User Story:** As a trader, I want to configure and manage strategies through JSON configuration files, so that I can easily modify parameters without code changes.
+
+#### Acceptance Criteria
+
+1. WHEN I create a strategy configuration THEN the system SHALL validate all parameters before starting
+2. WHEN I modify configuration THEN the system SHALL support hot-reloading without service restart
+3. WHEN I define broker settings THEN each strategy SHALL use its own paper/live broker configuration
+4. WHEN I set risk parameters THEN each strategy SHALL enforce individual risk limits
+5. WHEN I save configurations THEN the system SHALL support configuration versioning and rollback
+
+### Requirement 7: Advanced Risk Management
 
 **User Story:** As a risk manager, I want comprehensive risk controls for paper trading to ensure realistic testing conditions.
 

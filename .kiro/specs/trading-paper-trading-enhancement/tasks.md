@@ -58,6 +58,7 @@ This implementation plan converts the trading paper trading enhancement design i
     - Add broker connection pooling and management
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
+
 - [ ] 2. Multi-Strategy Execution Engine
   - [ ] 2.1 Implement concurrent strategy execution manager
     - Create MultiStrategyExecutionManager for parallel strategy execution
@@ -402,38 +403,76 @@ This implementation plan converts the trading paper trading enhancement design i
     - Add performance tuning and optimization tools
     - _Requirements: 8.4, 8.5, 9.1, 9.5_
 
-- [ ] 15. Raspberry Pi Deployment and System Service
-  - [ ] 15.1 Create Raspberry Pi installation and service setup
+- [x] 15. Enhanced Multi-Strategy System Service (NEW)
+  - [x] 15.1 Create enhanced strategy manager
+    - ✅ **IMPLEMENTED**: EnhancedStrategyManager for multiple strategy instances
+    - ✅ **IMPLEMENTED**: Strategy lifecycle management (start, stop, restart)
+    - ✅ **IMPLEMENTED**: Per-strategy broker configuration (paper/live)
+    - ✅ **IMPLEMENTED**: Strategy isolation and error containment
+    - ✅ **IMPLEMENTED**: Auto-recovery and health monitoring
+    - ✅ **IMPLEMENTED**: JSON configuration-based strategy loading
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5_
+
+  - [x] 15.2 Create Raspberry Pi system service
+    - ✅ **IMPLEMENTED**: RaspberryPiTradingService as systemd service
+    - ✅ **IMPLEMENTED**: System resource monitoring (CPU, memory, temperature)
+    - ✅ **IMPLEMENTED**: Service management scripts and installation
+    - ✅ **IMPLEMENTED**: Graceful shutdown and restart capabilities
+    - ✅ **IMPLEMENTED**: Comprehensive logging and status reporting
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
+
+  - [x] 15.3 Implement configuration management system
+    - ✅ **IMPLEMENTED**: JSON-based strategy configuration
+    - ✅ **IMPLEMENTED**: Configuration validation and error handling
+    - ✅ **IMPLEMENTED**: Per-strategy broker and risk settings
+    - ✅ **IMPLEMENTED**: Configuration backup and versioning support
+    - ✅ **IMPLEMENTED**: Hot-reloading capabilities (framework ready)
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+
+  - [x] 15.4 Create service management tools
+    - ✅ **IMPLEMENTED**: enhanced-trading-service.sh management script
+    - ✅ **IMPLEMENTED**: Interactive service management menu
+    - ✅ **IMPLEMENTED**: Service installation and configuration
+    - ✅ **IMPLEMENTED**: System health monitoring and alerts
+    - ✅ **IMPLEMENTED**: Configuration backup and maintenance tools
+    - _Requirements: 4.5, 6.5_
+
+- [ ] 16. Original Raspberry Pi Deployment (Legacy)
+  - [ ] 16.1 Create Raspberry Pi installation and service setup
     - Implement trading-bot-install.sh for automated system service installation
     - Create systemd service configuration optimized for Raspberry Pi
     - Add user management and security configuration
     - Implement log rotation and system resource optimization
     - Create environment file management and API key security
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
+    - **STATUS**: 🔄 Superseded by enhanced system service (Task 15.2)
 
-  - [ ] 15.2 Implement development and testing tools
+  - [ ] 16.2 Implement development and testing tools
     - Create run_trading_bot.sh for local development and testing
     - Add interactive development menu with configuration validation
     - Implement system monitoring and resource checking
     - Create development configuration templates
     - Add debugging and troubleshooting utilities
     - _Requirements: 16.4, 16.5_
+    - **STATUS**: 🔄 Superseded by enhanced system service
 
-  - [ ] 15.3 Create service management and monitoring tools
+  - [ ] 16.3 Create service management and monitoring tools
     - Implement trading-bot-management.sh for service lifecycle management
     - Add comprehensive service status monitoring and control
     - Create interactive service management menu
     - Implement configuration editing and backup utilities
     - Add system information and performance monitoring
     - _Requirements: 16.3, 16.5_
+    - **STATUS**: ✅ Completed as enhanced-trading-service.sh (Task 15.4)
 
-  - [ ] 15.4 Implement system health monitoring
+  - [ ] 16.4 Implement system health monitoring
     - Create trading-bot-health.sh for comprehensive health monitoring
     - Add CPU temperature monitoring for Raspberry Pi
     - Implement memory, disk, and network connectivity checks
     - Create automated alerting for critical issues
     - Add continuous monitoring mode with real-time updates
     - _Requirements: 16.5_
+    - **STATUS**: ✅ Integrated into enhanced system service (Task 15.2)
 
 ## Task Dependencies
 

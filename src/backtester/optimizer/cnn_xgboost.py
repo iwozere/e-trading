@@ -27,7 +27,7 @@ sys.path.append(str(project_root))
 from src.backtester.optimizer.base_optimizer import BaseOptimizer
 from src.strategy.cnn_xgboost_strategy import CNNXGBoostStrategy
 from src.notification.logger import setup_logger
-from src.utils.config import load_config
+from src.util.config import load_config
 
 warnings.filterwarnings('ignore')
 

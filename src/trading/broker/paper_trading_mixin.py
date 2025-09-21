@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
 import logging
 
-from .enhanced_base_broker import (
+from .base_broker import (
     Order, Position, Portfolio, OrderStatus, OrderSide, OrderType,
     PaperTradingConfig, PaperTradingMode, ExecutionMetrics, ExecutionQuality
 )

@@ -34,8 +34,8 @@ from binance.client import Client
 from binance.enums import *
 from binance.exceptions import BinanceAPIException
 
-from .enhanced_base_broker import (
-    EnhancedBaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
+from .base_broker import (
+    BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
     OrderType, TradingMode, PaperTradingMode, ExecutionMetrics
 )
 from .paper_trading_mixin import PaperTradingMixin
@@ -45,7 +45,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-class BinanceBroker(EnhancedBaseBroker, PaperTradingMixin):
+class BinanceBroker(BaseBroker, PaperTradingMixin):
     """
     Enhanced Binance broker with seamless paper-to-live trading support.
 

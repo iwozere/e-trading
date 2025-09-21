@@ -24,7 +24,7 @@ project_root = Path(__file__).resolve().parents[3]
 sys.path.append(str(project_root))
 
 from src.notification.logger import setup_logger
-from src.utils.config import load_config
+from src.util.config import load_config
 
 warnings.filterwarnings('ignore')
 

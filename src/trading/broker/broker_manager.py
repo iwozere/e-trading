@@ -31,7 +31,7 @@ import threading
 import json
 
 from .broker_factory import get_broker, BrokerConfigurationError
-from .enhanced_base_broker import EnhancedBaseBroker
+from .base_broker import BaseBroker
 
 from src.notification.logger import setup_logger
 
@@ -96,7 +96,7 @@ class BrokerHealthMonitor:
         self.monitor_thread: Optional[threading.Thread] = None
         self.health_callbacks: List[Callable[[str, BrokerHealthMetrics], None]] = []
 
-    def add_broker(self, broker_id: str, broker: EnhancedBaseBroker):
+    def add_broker(self, broker_id: str, broker: BaseBroker):
         """Add a broker to health monitoring."""
         self.health_metrics[broker_id] = BrokerHealthMetrics(
             broker_id=broker_id,
@@ -196,11 +196,11 @@ class BrokerConnectionPool:
 
     def __init__(self, max_connections_per_type: int = 5):
         self.max_connections_per_type = max_connections_per_type
-        self.connections: Dict[str, List[EnhancedBaseBroker]] = {}
+        self.connections: Dict[str, List[BaseBroker]] = {}
         self.connection_usage: Dict[str, int] = {}
         self.pool_lock = threading.Lock()
 
-    def get_connection(self, broker_config: Dict[str, Any]) -> EnhancedBaseBroker:
+    def get_connection(self, broker_config: Dict[str, Any]) -> BaseBroker:
         """Get a broker connection from the pool or create a new one."""
         broker_type = broker_config.get('type', 'unknown')
         trading_mode = broker_config.get('trading_mode', 'paper')
@@ -225,7 +225,7 @@ class BrokerConnectionPool:
                 _logger.exception(f"Failed to create broker connection: {e}")
                 raise
 
-    def return_connection(self, broker: EnhancedBaseBroker):
+    def return_connection(self, broker: BaseBroker):
         """Return a broker connection to the pool."""
         broker_type = broker.config.get('type', 'unknown')
         trading_mode = broker.trading_mode.value
@@ -285,7 +285,7 @@ class BrokerManager:
 
     def __init__(self, config: Dict[str, Any] = None):
         self.config = config or {}
-        self.brokers: Dict[str, EnhancedBaseBroker] = {}
+        self.brokers: Dict[str, BaseBroker] = {}
         self.broker_configs: Dict[str, Dict[str, Any]] = {}
         self.broker_start_times: Dict[str, datetime] = {}
 
@@ -500,7 +500,7 @@ class BrokerManager:
 
         return results
 
-    def get_broker(self, broker_id: str) -> Optional[EnhancedBaseBroker]:
+    def get_broker(self, broker_id: str) -> Optional[BaseBroker]:
         """Get a managed broker by ID."""
         return self.brokers.get(broker_id)
 

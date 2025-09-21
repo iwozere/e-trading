@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 from src.data.db.trade_repository import TradeRepository
 from src.trading.risk.controller import RiskController
 from src.notification.async_notification_manager import initialize_notification_manager
-from src.trading.broker.enhanced_base_broker import PositionNotificationManager
+from src.trading.broker.base_broker import PositionNotificationManager
 from config.donotshare.donotshare import (TELEGRAM_BOT_TOKEN, SMTP_USER)
 
 from src.notification.logger import setup_logger

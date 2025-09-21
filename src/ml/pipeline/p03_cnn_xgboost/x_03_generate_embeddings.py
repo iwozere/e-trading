@@ -24,7 +24,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from src.notification.logger import setup_logger
-from src.utils.config import load_config
+from src.util.config import load_config
 _logger = setup_logger(__name__)
 
 

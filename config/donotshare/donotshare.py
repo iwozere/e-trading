@@ -9,6 +9,16 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="config/donotshare/.env")
 
+
+# Data cache directory
+DATA_CACHE_DIR = "c:/data-cache"
+
+# Database configuration
+DB_PATH = "db/trading.db"
+
+
+
+
 ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 
@@ -25,13 +35,14 @@ BINANCE_FUTURES_PAPER_SECRET=os.getenv("BINANCE_FUTURES_PAPER_SECRET")
 IBKR_HOST = os.getenv("IBKR_HOST")
 IBKR_PORT = os.getenv("IBKR_PORT")
 IBKR_CLIENT_ID = os.getenv("IBKR_CLIENT_ID")
-IBKR_PAPER_PORT = os.getenv("IBKR_PAPER_PORT")
 
 IBKR_KEY = os.getenv("IBKR_KEY")
 IBKR_SECRET = os.getenv("IBKR_SECRET")
 
 IBKR_PAPER_KEY = os.getenv("IBKR_PAPER_KEY")
 IBKR_PAPER_SECRET = os.getenv("IBKR_PAPER_SECRET")
+IBKR_PAPER_PORT = os.getenv("IBKR_PAPER_PORT")
+IBKR_PAPER_CLIENT_ID = os.getenv("IBKR_PAPER_CLIENT_ID")
 
 
 ALPHA_VANTAGE_KEY=os.getenv("ALPHA_VANTAGE_KEY")
@@ -41,10 +52,6 @@ POLYGON_KEY=os.getenv("POLYGON_KEY")
 FMP_API_KEY=os.getenv("FMP_API_KEY")
 TIINGO_API_KEY=os.getenv("TIINGO_API_KEY")
 
-
-#gmail_password = os.getenv("gmail_password")
-#gmail_username = os.getenv("gmail_username")
-#SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 
 SMTP_SERVER=os.getenv("SMTP_SERVER")
 SMTP_PORT=os.getenv("SMTP_PORT")
@@ -69,8 +76,3 @@ API_PASSWORD = os.getenv("API_PASSWORD")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
-# Data cache directory
-DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "c:/data-cache")
-
-# Database configuration
-DB_PATH = os.getenv("DB_PATH", "db/trading.db")

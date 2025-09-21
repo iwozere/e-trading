@@ -34,7 +34,7 @@ The Enhanced Trading Broker System provides a comprehensive framework for seamle
 
 ### Core Components
 
-1. **EnhancedBaseBroker**: Abstract base class with paper trading support
+1. **BaseBroker**: Abstract base class with paper trading support
 2. **PaperTradingMixin**: Mixin providing paper trading functionality
 3. **BrokerFactory**: Enhanced factory with automatic mode switching
 4. **ConfigValidator**: Comprehensive configuration validation

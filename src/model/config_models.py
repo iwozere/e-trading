@@ -10,7 +10,7 @@ management of defaults and validation rules.
 from typing import Optional, Dict, Any, List
 from enum import Enum
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, field_validator
 
 class Environment(str, Enum):
     """Environment types"""
@@ -67,17 +67,17 @@ class TradingBotConfig(BaseModel):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp")
-    @validator('bot_id')
+    @field_validator('bot_id')
     def validate_bot_id(cls, v):
         if not v or not v.strip():
             raise ValueError('Bot ID cannot be empty')
         return v.strip()
-    @validator('risk_per_trade')
+    @field_validator('risk_per_trade')
     def validate_risk_per_trade(cls, v):
         if v <= 0 or v > 100:
             raise ValueError('Risk per trade must be between 0 and 100')
         return v
-    @validator('initial_balance')
+    @field_validator('initial_balance')
     def validate_initial_balance(cls, v):
         if v <= 0:
             raise ValueError('Initial balance must be positive')

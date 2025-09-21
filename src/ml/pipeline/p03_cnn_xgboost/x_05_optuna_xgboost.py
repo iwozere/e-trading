@@ -23,7 +23,7 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import log_loss, accuracy_score, precision_score, recall_score, f1_score
 
 from src.notification.logger import setup_logger
-from src.utils.config import load_config
+from src.util.config import load_config
 
 _logger = setup_logger(__name__)
 

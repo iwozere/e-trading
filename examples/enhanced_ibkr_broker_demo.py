@@ -30,7 +30,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.trading.broker.broker_factory import get_broker
 from src.trading.broker.ibkr_utils import create_ibkr_config_template
-from src.trading.broker.enhanced_base_broker import Order, OrderType, OrderSide
+from src.trading.broker.base_broker import Order, OrderType, OrderSide
 
 
 async def demo_paper_trading():

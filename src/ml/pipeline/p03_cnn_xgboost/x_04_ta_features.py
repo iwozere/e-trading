@@ -20,7 +20,7 @@ import pandas as pd
 import talib
 
 from src.notification.logger import setup_logger
-from src.utils.config import load_config
+from src.util.config import load_config
 from src.ml.pipeline.p03_cnn_xgboost.utils.data_validation import convert_targets_to_numeric, log_data_quality_report
 _logger = setup_logger(__name__)
 

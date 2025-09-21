@@ -63,7 +63,7 @@ def test_config_loading():
     print("\nTesting configuration loading...")
 
     try:
-        from src.utils.config import load_config
+        from src.util.config import load_config
 
         config_path = Path("config/pipeline/p03.yaml")
         if config_path.exists():

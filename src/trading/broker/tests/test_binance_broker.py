@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.trading.broker.binance_broker import BinanceBroker
-from src.trading.broker.enhanced_base_broker import (
+from src.trading.broker.base_broker import (
     Order, OrderType, OrderSide, OrderStatus, TradingMode
 )
 from src.trading.broker.binance_utils import (

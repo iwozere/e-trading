@@ -25,7 +25,7 @@ import json
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.utils.config import load_config, validate_config
+from src.util.config import load_config, validate_config
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 

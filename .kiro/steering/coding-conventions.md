@@ -35,7 +35,7 @@ It is intended for both human developers and AI agents contributing to the codeb
 
   import pandas as pd
 
-  from src.utils.helpers import my_helper
+  from src.util.helpers import my_helper
   ```
 
 ### 2.1 Path Setup for Project Root

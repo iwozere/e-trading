@@ -25,7 +25,7 @@ from sklearn.metrics import confusion_matrix, classification_report, roc_curve, 
 from sklearn.model_selection import TimeSeriesSplit
 
 from src.notification.logger import setup_logger
-from src.utils.config import load_config
+from src.util.config import load_config
 
 _logger = setup_logger(__name__)
 

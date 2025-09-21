@@ -35,8 +35,8 @@ from ib_insync import MarketOrder, LimitOrder, StopOrder, StopLimitOrder, Bracke
 from ib_insync import Trade, Position as IBPosition, PortfolioItem, AccountValue
 from ib_insync import util, BarData, Ticker
 
-from .enhanced_base_broker import (
-    EnhancedBaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
+from .base_broker import (
+    BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
     OrderType, TradingMode, PaperTradingMode, ExecutionMetrics
 )
 from .paper_trading_mixin import PaperTradingMixin
@@ -46,7 +46,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-class IBKRBroker(EnhancedBaseBroker, PaperTradingMixin):
+class IBKRBroker(BaseBroker, PaperTradingMixin):
     """
     Enhanced IBKR broker with seamless paper-to-live trading support.
 
