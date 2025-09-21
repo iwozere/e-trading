@@ -26,7 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from config.donotshare.donotshare import TELEGRAM_API_PORT, TELEGRAM_WEBGUI_PORT
+from config.donotshare.donotshare import TRADING_API_PORT, TRADING_WEBGUI_PORT
 
 _logger = setup_logger(__name__)
 
@@ -110,7 +110,7 @@ def start_backend(dev_mode=False, port=None):
     """Start the backend server."""
     # Use configured port or default
     if port is None:
-        port = int(TELEGRAM_API_PORT) if TELEGRAM_API_PORT else 8000
+        port = int(TRADING_API_PORT) if TRADING_API_PORT else 8000
 
     print(f"🚀 Starting backend server on port {port}...")
 
@@ -157,15 +157,20 @@ def start_backend(dev_mode=False, port=None):
     return True
 
 
-def start_frontend_dev(port=8000):
+def start_frontend_dev(api_port=None):
     """Start the frontend development server."""
+    # Use configured ports
+    if api_port is None:
+        api_port = int(TRADING_API_PORT) if TRADING_API_PORT else 8000
+
+    frontend_port = int(TRADING_WEBGUI_PORT) if TRADING_WEBGUI_PORT else 5002
     frontend_dir = PROJECT_ROOT / "src/web_ui/frontend"
 
     if not frontend_dir.exists():
         print("❌ Frontend directory not found")
         return False
 
-    print("🎨 Starting frontend development server...")
+    print(f"🎨 Starting frontend development server on port {frontend_port}...")
 
     # Check if Node.js is available
     try:
@@ -180,28 +185,39 @@ def start_frontend_dev(port=8000):
         print("💡 Install Node.js from: https://nodejs.org/")
         return False
 
-    # Install dependencies if needed
-    node_modules = frontend_dir / "node_modules"
-    if not node_modules.exists():
-        print("📦 Installing frontend dependencies...")
+    # Install dependencies in .venv if needed
+    venv_dir = PROJECT_ROOT / ".venv"
+    venv_node_modules = venv_dir / "node_modules"
+    venv_package_json = venv_dir / "package.json"
+
+    if not venv_node_modules.exists() or not venv_package_json.exists():
+        print("📦 Installing frontend dependencies in .venv...")
         try:
-            subprocess.run(['npm', 'install'], cwd=frontend_dir, check=True)
-            print("✅ Dependencies installed")
+            import shutil
+            shutil.copy(frontend_dir / "package.json", venv_package_json)
+            subprocess.run(['npm', 'install'], cwd=venv_dir, check=True)
+            print("✅ Dependencies installed in .venv")
         except subprocess.CalledProcessError:
             print("❌ Failed to install dependencies")
             return False
 
     # Set environment variables
     env = os.environ.copy()
-    env['VITE_API_BASE_URL'] = f'http://localhost:{port}'
-    env['VITE_WS_URL'] = f'ws://localhost:{port}'
+    env['VITE_API_BASE_URL'] = f'http://localhost:{api_port}'
+    env['VITE_WS_URL'] = f'ws://localhost:{api_port}'
+    env['NODE_PATH'] = str(venv_dir / "node_modules")
 
     try:
-        print("🎨 Frontend will be available at: http://localhost:5173")
-        print("🔄 Starting frontend... (This will open in a new terminal)")
+        print(f"🎨 Frontend will be available at: http://localhost:{frontend_port}")
+        print("🔄 Starting frontend...")
 
-        # Start frontend development server
-        subprocess.run(['npm', 'run', 'dev'], cwd=frontend_dir, env=env)
+        # Start frontend development server using vite from .venv
+        vite_path = venv_dir / "node_modules" / ".bin" / "vite.cmd"
+        if vite_path.exists():
+            subprocess.run([str(vite_path)], cwd=frontend_dir, env=env)
+        else:
+            # Fallback to npx with NODE_PATH
+            subprocess.run(['npx', 'vite'], cwd=frontend_dir, env=env)
 
     except KeyboardInterrupt:
         print("\n🛑 Frontend stopped by user")
@@ -212,8 +228,14 @@ def start_frontend_dev(port=8000):
     return True
 
 
-def show_usage_info(dev_mode=False, port=8000):
+def show_usage_info(dev_mode=False, port=None):
     """Show usage information."""
+    # Use configured ports
+    if port is None:
+        port = int(TRADING_API_PORT) if TRADING_API_PORT else 8000
+
+    frontend_port = int(TRADING_WEBGUI_PORT) if TRADING_WEBGUI_PORT else 5002
+
     print("🎯 Trading Web UI Started Successfully!")
     print("=" * 50)
 
@@ -221,13 +243,14 @@ def show_usage_info(dev_mode=False, port=8000):
         print("🔧 Development Mode")
         print(f"📡 Backend API: http://localhost:{port}")
         print(f"📚 API Documentation: http://localhost:{port}/docs")
-        print(f"🎨 Frontend: http://localhost:5173")
+        print(f"🎨 Frontend: http://localhost:{frontend_port}")
         print()
         print("💡 The frontend will auto-reload when you make changes")
         print("💡 The backend will auto-reload when you modify Python files")
     else:
         print("🚀 Production Mode")
-        print(f"🌐 Web UI: http://localhost:{port}")
+        print(f"📡 Backend API: http://localhost:{port}")
+        print(f"🎨 Web UI: http://localhost:{frontend_port}")
         print(f"📚 API Documentation: http://localhost:{port}/docs")
 
     print()
@@ -245,15 +268,107 @@ def show_usage_info(dev_mode=False, port=8000):
     print("=" * 50)
 
 
+def start_both_services(dev_mode=False, api_port=None):
+    """Start both backend and frontend services concurrently."""
+    import threading
+    import signal
+
+    # Use configured port or default
+    if api_port is None:
+        api_port = int(TRADING_API_PORT) if TRADING_API_PORT else 8000
+
+    print("🚀 Starting both backend and frontend services...")
+    print(f"📡 Backend API will run on: http://localhost:{api_port}")
+    print(f"🎨 Frontend will run on: http://localhost:{int(TRADING_WEBGUI_PORT) if TRADING_WEBGUI_PORT else 5002}")
+    print()
+
+    # Start backend in a separate thread
+    def run_backend():
+        try:
+            if dev_mode:
+                cmd = [
+                    sys.executable, "-m", "uvicorn",
+                    "src.web_ui.backend.main:app",
+                    "--host", "0.0.0.0",
+                    "--port", str(api_port),
+                    "--reload",
+                    "--reload-dir", "src"
+                ]
+            else:
+                cmd = [
+                    sys.executable, "-m", "uvicorn",
+                    "src.web_ui.backend.main:app",
+                    "--host", "0.0.0.0",
+                    "--port", str(api_port)
+                ]
+
+            env = os.environ.copy()
+            env['PYTHONPATH'] = str(PROJECT_ROOT)
+            subprocess.run(cmd, env=env, cwd=PROJECT_ROOT)
+        except Exception as e:
+            print(f"❌ Backend error: {e}")
+
+    # Start frontend
+    def run_frontend():
+        try:
+            frontend_dir = PROJECT_ROOT / "src/web_ui/frontend"
+            venv_dir = PROJECT_ROOT / ".venv"
+
+            # Install dependencies in .venv if needed
+            venv_node_modules = venv_dir / "node_modules"
+            venv_package_json = venv_dir / "package.json"
+
+            if not venv_node_modules.exists() or not venv_package_json.exists():
+                print("📦 Installing frontend dependencies in .venv...")
+                # Copy package.json to .venv
+                import shutil
+                shutil.copy(frontend_dir / "package.json", venv_package_json)
+                subprocess.run(['npm', 'install'], cwd=venv_dir, check=True)
+                print("✅ Dependencies installed in .venv")
+
+            # Set environment variables
+            env = os.environ.copy()
+            env['VITE_API_BASE_URL'] = f'http://localhost:{api_port}'
+            env['VITE_WS_URL'] = f'ws://localhost:{api_port}'
+            env['NODE_PATH'] = str(venv_dir / "node_modules")
+
+            # Start frontend development server using vite from .venv
+            vite_path = venv_dir / "node_modules" / ".bin" / "vite.cmd"
+            if vite_path.exists():
+                subprocess.run([str(vite_path)], cwd=frontend_dir, env=env)
+            else:
+                # Fallback to npx with NODE_PATH
+                subprocess.run(['npx', 'vite'], cwd=frontend_dir, env=env)
+        except Exception as e:
+            print(f"❌ Frontend error: {e}")
+
+    # Start backend in background thread
+    backend_thread = threading.Thread(target=run_backend, daemon=True)
+    backend_thread.start()
+
+    # Give backend time to start
+    time.sleep(3)
+
+    # Start frontend in main thread (so we can catch Ctrl+C)
+    try:
+        run_frontend()
+    except KeyboardInterrupt:
+        print("\n🛑 Services stopped by user")
+
+
 def main():
     """Main function."""
     parser = argparse.ArgumentParser(description='Trading Web UI Quick Start')
     parser.add_argument('--dev', action='store_true',
                        help='Run in development mode with auto-reload')
     parser.add_argument('--port', type=int, default=None,
-                       help=f'Port to run the server on (default: {TELEGRAM_API_PORT or 8000})')
+                       help=f'Port to run the server on (default: {TRADING_API_PORT or 8000})')
     parser.add_argument('--setup', action='store_true',
                        help='Run setup first')
+    parser.add_argument('--backend-only', action='store_true',
+                       help='Start only the backend API server')
+    parser.add_argument('--frontend-only', action='store_true',
+                       help='Start only the frontend development server')
 
     args = parser.parse_args()
 
@@ -284,14 +399,16 @@ def main():
     # Show usage info
     show_usage_info(args.dev, args.port)
 
-    if args.dev:
-        print("🔧 Development mode selected")
-        print("💡 You'll need to start frontend separately in another terminal:")
-        print(f"   cd src/web_ui/frontend && npm run dev")
-        print()
-
-    # Start backend
-    start_backend(args.dev, args.port)
+    # Start services based on arguments
+    if args.backend_only:
+        print("🔧 Backend-only mode selected")
+        start_backend(args.dev, args.port)
+    elif args.frontend_only:
+        print("🔧 Frontend-only mode selected")
+        start_frontend_dev(args.port)
+    else:
+        print("🔧 Starting both backend and frontend services")
+        start_both_services(args.dev, args.port)
 
 
 if __name__ == "__main__":

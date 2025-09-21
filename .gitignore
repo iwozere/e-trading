@@ -3,6 +3,7 @@
 venv/
 env/
 ENV/
+src/web_ui/frontend/node_modules/
 
 # Python
 __pycache__/

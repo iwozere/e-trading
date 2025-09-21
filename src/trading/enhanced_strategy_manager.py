@@ -22,7 +22,7 @@ from typing import Dict, List, Optional, Any
 from pathlib import Path
 
 from src.trading.base_trading_bot import BaseTradingBot
-from src.trading.broker.broker_factory import BrokerFactory
+from src.trading.broker.broker_factory import get_broker
 from src.trading.broker.broker_manager import BrokerManager
 from src.strategy.custom_strategy import CustomStrategy
 from src.notification.logger import setup_logger
@@ -52,10 +52,7 @@ class StrategyInstance:
 
             # Create broker
             broker_config = self.config['broker']
-            self.broker = await BrokerFactory.create_broker(
-                broker_id=f"{self.instance_id}_broker",
-                config=broker_config
-            )
+            self.broker = get_broker(broker_config)
 
             if not self.broker:
                 raise Exception("Failed to create broker")
