@@ -20,40 +20,43 @@ _logger = setup_logger(__name__)
 class DatabaseService:
     """Unified database service for the entire application."""
 
-    def __init__(self, trading_db_url: str = None, telegram_db_url: str = None):
+    def __init__(self, database_url: str = None):
         """
-        Initialize database service.
+        Initialize database service with single consolidated database.
 
         Args:
-            trading_db_url: URL for trading database
-            telegram_db_url: URL for telegram database (defaults to same as trading)
+            database_url: URL for the consolidated database
         """
-        # For now, use single database until migration is complete
-        self.trading_db_url = trading_db_url or "sqlite:///db/trading.db"
-        self.telegram_db_url = telegram_db_url or self.trading_db_url
+        # Use single consolidated database
+        self.database_url = database_url or "sqlite:///db/trading.db"
+        self._database_manager = None
 
-        self._trading_manager = None
-        self._telegram_manager = None
+    @property
+    def database_manager(self) -> DatabaseManager:
+        """Get consolidated database manager."""
+        if self._database_manager is None:
+            self._database_manager = DatabaseManager(self.database_url)
+        return self._database_manager
 
     @property
     def trading_manager(self) -> DatabaseManager:
-        """Get trading database manager."""
-        if self._trading_manager is None:
-            self._trading_manager = DatabaseManager(self.trading_db_url)
-        return self._trading_manager
+        """Get trading database manager (same as consolidated database)."""
+        return self.database_manager
 
     @property
     def telegram_manager(self) -> DatabaseManager:
-        """Get telegram database manager."""
-        if self._telegram_manager is None:
-            # Use same database for now
-            self._telegram_manager = self.trading_manager
-        return self._telegram_manager
+        """Get telegram database manager (same as consolidated database)."""
+        return self.database_manager
+
+    @property
+    def webui_manager(self) -> DatabaseManager:
+        """Get web UI database manager (same as consolidated database)."""
+        return self.database_manager
 
     @contextmanager
     def get_trading_repo(self):
         """Get trading repository with automatic session management."""
-        session = self.trading_manager.get_session()
+        session = self.database_manager.get_session()
         try:
             yield TradeRepository(session)
         finally:
@@ -62,9 +65,27 @@ class DatabaseService:
     @contextmanager
     def get_telegram_repo(self):
         """Get telegram repository with automatic session management."""
-        session = self.telegram_manager.get_session()
+        session = self.database_manager.get_session()
         try:
             yield TelegramRepository(session)
+        finally:
+            session.close()
+
+    @contextmanager
+    def get_webui_session(self):
+        """Get web UI database session with automatic session management."""
+        session = self.database_manager.get_session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    @contextmanager
+    def get_session(self):
+        """Get database session with automatic session management."""
+        session = self.database_manager.get_session()
+        try:
+            yield session
         finally:
             session.close()
 
@@ -82,15 +103,11 @@ def get_database_service() -> DatabaseService:
 
 
 def init_databases():
-    """Initialize all databases and create tables."""
+    """Initialize consolidated database and create tables."""
     service = get_database_service()
 
-    # Initialize trading database
-    trading_session = service.trading_manager.get_session()
-    trading_session.close()
+    # Initialize consolidated database
+    session = service.database_manager.get_session()
+    session.close()
 
-    # Initialize telegram database (same for now)
-    telegram_session = service.telegram_manager.get_session()
-    telegram_session.close()
-
-    _logger.info("Databases initialized successfully")
+    _logger.info("Consolidated database initialized successfully")

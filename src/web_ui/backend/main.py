@@ -31,29 +31,65 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.trading.enhanced_strategy_manager import EnhancedStrategyManager
+# Make trading system import optional for testing
+try:
+    from src.trading.enhanced_strategy_manager import EnhancedStrategyManager
+    TRADING_SYSTEM_AVAILABLE = True
+except ImportError as e:
+    _logger.warning("Trading system not available: %s", e)
+    EnhancedStrategyManager = None
+    TRADING_SYSTEM_AVAILABLE = False
 from src.notification.logger import setup_logger
 from config.donotshare.donotshare import TRADING_API_PORT, TRADING_WEBGUI_PORT
+from src.web_ui.backend.database import init_database
+from src.web_ui.backend.auth_routes import router as auth_router
+from src.web_ui.backend.telegram_routes import router as telegram_router
+from src.web_ui.backend.auth import get_current_user, require_trader_or_admin, require_admin
+from src.web_ui.backend.models import User
+from src.web_ui.backend.services import (
+    StrategyManagementService, StrategyValidationError, StrategyOperationError,
+    SystemMonitoringService, SystemAlert
+)
 
 _logger = setup_logger(__name__)
 
-# Global strategy manager instance
+# Global strategy manager and service instances
 strategy_manager: Optional[EnhancedStrategyManager] = None
+strategy_service: Optional[StrategyManagementService] = None
+monitoring_service: Optional[SystemMonitoringService] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global strategy_manager
+    global strategy_manager, strategy_service, monitoring_service
 
     # Startup
     _logger.info("Starting Trading Web UI Backend...")
-    strategy_manager = EnhancedStrategyManager()
 
-    # Load existing strategies if config exists
-    config_file = "config/enhanced_trading/raspberry_pi_multi_strategy.json"
-    if Path(config_file).exists():
-        await strategy_manager.load_strategies_from_config(config_file)
-        _logger.info("Loaded existing strategy configurations")
+    # Initialize database
+    init_database()
+    _logger.info("Database initialized")
+
+    # Initialize strategy manager if available
+    if TRADING_SYSTEM_AVAILABLE:
+        strategy_manager = EnhancedStrategyManager()
+
+        # Load existing strategies if config exists
+        config_file = "config/enhanced_trading/raspberry_pi_multi_strategy.json"
+        if Path(config_file).exists():
+            await strategy_manager.load_strategies_from_config(config_file)
+            _logger.info("Loaded existing strategy configurations")
+    else:
+        strategy_manager = None
+        _logger.warning("Trading system not available - running in API-only mode")
+
+    # Initialize strategy service
+    strategy_service = StrategyManagementService(strategy_manager)
+    _logger.info("Strategy management service initialized")
+
+    # Initialize monitoring service
+    monitoring_service = SystemMonitoringService()
+    _logger.info("System monitoring service initialized")
 
     yield
 
@@ -73,11 +109,17 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React dev servers
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5002"],  # React dev servers
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include authentication routes
+app.include_router(auth_router)
+
+# Include Telegram bot management routes
+app.include_router(telegram_router)
 
 # Security
 security = HTTPBearer()
@@ -127,18 +169,7 @@ class StrategyAction(BaseModel):
     action: str = Field(..., description="Action to perform (start, stop, restart)")
     confirm_live_trading: bool = Field(False, description="Confirmation for live trading")
 
-# Authentication dependency (simplified for now)
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get current authenticated user (placeholder implementation)."""
-    # TODO: Implement proper JWT authentication
-    # For now, accept any token for development
-    if not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return {"username": "admin", "role": "admin"}  # Placeholder user
+# Remove old authentication dependency - now using proper JWT auth from auth.py
 
 # API Routes
 
@@ -150,56 +181,63 @@ async def root():
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "timestamp": asyncio.get_event_loop().time()}
+    return {
+        "status": "healthy",
+        "timestamp": asyncio.get_event_loop().time(),
+        "trading_system_available": TRADING_SYSTEM_AVAILABLE
+    }
+
+@app.get("/api/test-auth")
+async def test_auth(current_user: User = Depends(get_current_user)):
+    """Test authentication endpoint."""
+    return {
+        "message": "Authentication successful",
+        "user": current_user.to_dict()
+    }
 
 # Strategy Management Endpoints
 
 @app.get("/api/strategies", response_model=List[StrategyStatus])
-async def list_strategies(user: dict = Depends(get_current_user)):
+async def list_strategies(current_user: User = Depends(get_current_user)):
     """List all configured strategies."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
-        strategies = strategy_manager.get_all_status()
+        strategies = strategy_service.get_all_strategies_status()
         return [StrategyStatus(**strategy) for strategy in strategies]
     except Exception as e:
-        _logger.error(f"Error listing strategies: {e}")
+        _logger.error("Error listing strategies: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/strategies", response_model=Dict[str, str])
 async def create_strategy(
     strategy_config: StrategyConfig,
-    user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_trader_or_admin)
 ):
     """Create a new strategy."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
         # Convert Pydantic model to dict
         config_dict = strategy_config.dict()
 
-        # Create strategy instance
-        from src.trading.enhanced_strategy_manager import StrategyInstance
-        instance = StrategyInstance(strategy_config.id, config_dict)
-        strategy_manager.strategy_instances[strategy_config.id] = instance
+        # Create strategy using service
+        result = await strategy_service.create_strategy(config_dict)
 
-        _logger.info(f"Created strategy: {strategy_config.name}")
-        return {"message": "Strategy created successfully", "strategy_id": strategy_config.id}
+        return {
+            "message": result["message"],
+            "strategy_id": result["strategy_id"]
+        }
 
+    except StrategyValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except StrategyOperationError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        _logger.error(f"Error creating strategy: {e}")
+        _logger.error("Error creating strategy: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/strategies/{strategy_id}", response_model=StrategyStatus)
-async def get_strategy(strategy_id: str, user: dict = Depends(get_current_user)):
+async def get_strategy(strategy_id: str, current_user: User = Depends(get_current_user)):
     """Get details of a specific strategy."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
-        status = strategy_manager.get_strategy_status(strategy_id)
+        status = strategy_service.get_strategy_status(strategy_id)
         if not status:
             raise HTTPException(status_code=404, detail="Strategy not found")
 
@@ -208,61 +246,52 @@ async def get_strategy(strategy_id: str, user: dict = Depends(get_current_user))
     except HTTPException:
         raise
     except Exception as e:
-        _logger.error(f"Error getting strategy {strategy_id}: {e}")
+        _logger.error("Error getting strategy %s: %s", strategy_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/api/strategies/{strategy_id}", response_model=Dict[str, str])
 async def update_strategy(
     strategy_id: str,
     strategy_config: StrategyConfig,
-    user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_trader_or_admin)
 ):
     """Update an existing strategy."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
-        if strategy_id not in strategy_manager.strategy_instances:
-            raise HTTPException(status_code=404, detail="Strategy not found")
-
-        # Update strategy configuration
+        # Convert Pydantic model to dict
         config_dict = strategy_config.dict()
-        strategy_manager.strategy_instances[strategy_id].config = config_dict
 
-        _logger.info(f"Updated strategy: {strategy_config.name}")
-        return {"message": "Strategy updated successfully", "strategy_id": strategy_id}
+        # Update strategy using service
+        result = await strategy_service.update_strategy(strategy_id, config_dict)
 
-    except HTTPException:
-        raise
+        return {
+            "message": result["message"],
+            "strategy_id": result["strategy_id"]
+        }
+
+    except StrategyValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except StrategyOperationError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
     except Exception as e:
-        _logger.error(f"Error updating strategy {strategy_id}: {e}")
+        _logger.error("Error updating strategy %s: %s", strategy_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/strategies/{strategy_id}", response_model=Dict[str, str])
-async def delete_strategy(strategy_id: str, user: dict = Depends(get_current_user)):
+async def delete_strategy(strategy_id: str, current_user: User = Depends(require_trader_or_admin)):
     """Delete a strategy."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
-        if strategy_id not in strategy_manager.strategy_instances:
-            raise HTTPException(status_code=404, detail="Strategy not found")
+        # Delete strategy using service
+        result = await strategy_service.delete_strategy(strategy_id)
 
-        # Stop strategy if running
-        instance = strategy_manager.strategy_instances[strategy_id]
-        if instance.status == 'running':
-            await strategy_manager.stop_strategy(strategy_id)
+        return {
+            "message": result["message"],
+            "strategy_id": result["strategy_id"]
+        }
 
-        # Remove from manager
-        del strategy_manager.strategy_instances[strategy_id]
-
-        _logger.info(f"Deleted strategy: {strategy_id}")
-        return {"message": "Strategy deleted successfully", "strategy_id": strategy_id}
-
-    except HTTPException:
-        raise
+    except StrategyOperationError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 400, detail=str(e))
     except Exception as e:
-        _logger.error(f"Error deleting strategy {strategy_id}: {e}")
+        _logger.error("Error deleting strategy %s: %s", strategy_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 # Strategy Lifecycle Endpoints
@@ -271,170 +300,222 @@ async def delete_strategy(strategy_id: str, user: dict = Depends(get_current_use
 async def start_strategy(
     strategy_id: str,
     action: StrategyAction,
-    user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_trader_or_admin)
 ):
     """Start a strategy."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
-        if strategy_id not in strategy_manager.strategy_instances:
-            raise HTTPException(status_code=404, detail="Strategy not found")
+        # Start strategy using service
+        result = await strategy_service.start_strategy(
+            strategy_id,
+            confirm_live_trading=action.confirm_live_trading
+        )
 
-        instance = strategy_manager.strategy_instances[strategy_id]
+        return {
+            "message": result["message"],
+            "strategy_id": result["strategy_id"]
+        }
 
-        # Check for live trading confirmation
-        if (instance.config.get('broker', {}).get('trading_mode') == 'live' and
-            not action.confirm_live_trading):
-            raise HTTPException(
-                status_code=400,
-                detail="Live trading requires explicit confirmation"
-            )
-
-        success = await strategy_manager.start_strategy(strategy_id)
-
-        if success:
-            return {"message": "Strategy started successfully", "strategy_id": strategy_id}
+    except StrategyOperationError as e:
+        if "confirmation" in str(e).lower():
+            raise HTTPException(status_code=400, detail=str(e))
+        elif "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail=str(e))
         else:
-            raise HTTPException(status_code=500, detail="Failed to start strategy")
-
-    except HTTPException:
-        raise
+            raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        _logger.error(f"Error starting strategy {strategy_id}: {e}")
+        _logger.error("Error starting strategy %s: %s", strategy_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/strategies/{strategy_id}/stop", response_model=Dict[str, str])
-async def stop_strategy(strategy_id: str, user: dict = Depends(get_current_user)):
+async def stop_strategy(strategy_id: str, current_user: User = Depends(require_trader_or_admin)):
     """Stop a strategy."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
-        success = await strategy_manager.stop_strategy(strategy_id)
+        # Stop strategy using service
+        result = await strategy_service.stop_strategy(strategy_id)
 
-        if success:
-            return {"message": "Strategy stopped successfully", "strategy_id": strategy_id}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to stop strategy")
+        return {
+            "message": result["message"],
+            "strategy_id": result["strategy_id"]
+        }
 
+    except StrategyOperationError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
     except Exception as e:
-        _logger.error(f"Error stopping strategy {strategy_id}: {e}")
+        _logger.error("Error stopping strategy %s: %s", strategy_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/strategies/{strategy_id}/restart", response_model=Dict[str, str])
 async def restart_strategy(
     strategy_id: str,
     action: StrategyAction,
-    user: dict = Depends(get_current_user)
+    current_user: User = Depends(require_trader_or_admin)
 ):
     """Restart a strategy."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
-        if strategy_id not in strategy_manager.strategy_instances:
-            raise HTTPException(status_code=404, detail="Strategy not found")
+        # Restart strategy using service
+        result = await strategy_service.restart_strategy(
+            strategy_id,
+            confirm_live_trading=action.confirm_live_trading
+        )
 
-        instance = strategy_manager.strategy_instances[strategy_id]
+        return {
+            "message": result["message"],
+            "strategy_id": result["strategy_id"]
+        }
 
-        # Check for live trading confirmation
-        if (instance.config.get('broker', {}).get('trading_mode') == 'live' and
-            not action.confirm_live_trading):
-            raise HTTPException(
-                status_code=400,
-                detail="Live trading requires explicit confirmation"
-            )
-
-        success = await strategy_manager.restart_strategy(strategy_id)
-
-        if success:
-            return {"message": "Strategy restarted successfully", "strategy_id": strategy_id}
+    except StrategyOperationError as e:
+        if "confirmation" in str(e).lower():
+            raise HTTPException(status_code=400, detail=str(e))
+        elif "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail=str(e))
         else:
-            raise HTTPException(status_code=500, detail="Failed to restart strategy")
-
-    except HTTPException:
-        raise
+            raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        _logger.error(f"Error restarting strategy {strategy_id}: {e}")
+        _logger.error("Error restarting strategy %s: %s", strategy_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 # System Monitoring Endpoints
 
 @app.get("/api/system/status", response_model=SystemStatus)
-async def get_system_status(user: dict = Depends(get_current_user)):
+async def get_system_status(current_user: User = Depends(get_current_user)):
     """Get overall system status."""
-    if not strategy_manager:
-        raise HTTPException(status_code=503, detail="Strategy manager not available")
-
     try:
-        strategies = strategy_manager.get_all_status()
-        active_strategies = sum(1 for s in strategies if s['status'] == 'running')
+        # Get service status
+        service_status_info = strategy_service.get_service_status()
 
-        # Get system metrics (placeholder)
+        # Get real system metrics
+        metrics = monitoring_service.get_comprehensive_metrics()
         system_metrics = {
-            "cpu_percent": 0.0,
-            "memory_percent": 0.0,
-            "temperature_c": 0.0,
-            "disk_usage_percent": 0.0
+            "cpu_percent": metrics['cpu']['usage_percent'],
+            "memory_percent": metrics['memory']['usage_percent'],
+            "temperature_c": metrics['temperature']['average_celsius'] or 0.0,
+            "disk_usage_percent": max([
+                disk['usage_percent'] for disk in metrics['disk']['partitions'].values()
+            ], default=0.0)
         }
 
         return SystemStatus(
             service_name="Enhanced Multi-Strategy Trading System",
             version="2.0.0",
-            status="running" if strategy_manager.is_running else "stopped",
+            status="running" if service_status_info["available"] else "unavailable",
             uptime_seconds=0.0,  # TODO: Calculate actual uptime
-            active_strategies=active_strategies,
-            total_strategies=len(strategies),
+            active_strategies=service_status_info["active_strategies"],
+            total_strategies=service_status_info["total_strategies"],
             system_metrics=system_metrics
         )
 
     except Exception as e:
-        _logger.error(f"Error getting system status: {e}")
+        _logger.error("Error getting system status: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 # Configuration Management Endpoints
 
+# Strategy parameter update endpoint
+@app.put("/api/strategies/{strategy_id}/parameters", response_model=Dict[str, Any])
+async def update_strategy_parameters(
+    strategy_id: str,
+    parameters: Dict[str, Any],
+    current_user: User = Depends(require_trader_or_admin)
+):
+    """Update strategy parameters while running."""
+    try:
+        # Update parameters using service
+        result = await strategy_service.update_strategy_parameters(strategy_id, parameters)
+
+        return result
+
+    except StrategyOperationError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
+    except Exception as e:
+        _logger.error("Error updating strategy parameters %s: %s", strategy_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/config/templates")
-async def get_strategy_templates(user: dict = Depends(get_current_user)):
+async def get_strategy_templates(current_user: User = Depends(get_current_user)):
     """Get available strategy templates."""
     try:
-        # Load templates from config examples
-        templates_file = PROJECT_ROOT / "config/examples/enhanced_trading_config_examples.json"
-
-        if templates_file.exists():
-            with open(templates_file, 'r') as f:
-                templates = json.load(f)
-            return {"templates": templates}
-        else:
-            return {"templates": {}}
+        templates = strategy_service.get_strategy_templates()
+        return {"templates": templates}
 
     except Exception as e:
-        _logger.error(f"Error loading templates: {e}")
+        _logger.error("Error loading templates: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/config/validate")
 async def validate_configuration(
     config: Dict[str, Any],
-    user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Validate a strategy configuration."""
     try:
-        # Basic validation
-        required_fields = ['id', 'name', 'symbol', 'broker', 'strategy']
-        missing_fields = [field for field in required_fields if field not in config]
-
-        if missing_fields:
-            return {
-                "valid": False,
-                "errors": [f"Missing required field: {field}" for field in missing_fields]
-            }
-
-        # Additional validation can be added here
+        # Use strategy service for validation
+        strategy_service.validate_strategy_config(config)
         return {"valid": True, "errors": []}
 
+    except StrategyValidationError as e:
+        return {"valid": False, "errors": [str(e)]}
     except Exception as e:
-        _logger.error(f"Error validating configuration: {e}")
+        _logger.error("Error validating configuration: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# System monitoring endpoints
+@app.get("/api/monitoring/metrics")
+async def get_system_metrics(current_user: User = Depends(get_current_user)):
+    """Get comprehensive system metrics."""
+    try:
+        metrics = monitoring_service.get_comprehensive_metrics()
+        return metrics
+    except Exception as e:
+        _logger.error("Error getting system metrics: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/monitoring/alerts")
+async def get_system_alerts(
+    unacknowledged_only: bool = False,
+    current_user: User = Depends(get_current_user)
+):
+    """Get system alerts."""
+    try:
+        alerts = monitoring_service.get_alerts(unacknowledged_only)
+        return {"alerts": alerts}
+    except Exception as e:
+        _logger.error("Error getting system alerts: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/monitoring/alerts/{alert_index}/acknowledge")
+async def acknowledge_alert(
+    alert_index: int,
+    current_user: User = Depends(require_trader_or_admin)
+):
+    """Acknowledge a system alert."""
+    try:
+        success = monitoring_service.acknowledge_alert(alert_index)
+        if success:
+            return {"message": "Alert acknowledged successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Alert not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Error acknowledging alert: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/monitoring/history")
+async def get_performance_history(
+    hours: int = 1,
+    current_user: User = Depends(get_current_user)
+):
+    """Get performance history."""
+    try:
+        if hours < 1 or hours > 24:
+            raise HTTPException(status_code=400, detail="Hours must be between 1 and 24")
+
+        history = monitoring_service.get_performance_history(hours)
+        return {"history": history}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Error getting performance history: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

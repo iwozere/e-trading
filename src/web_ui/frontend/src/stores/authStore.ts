@@ -24,38 +24,57 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (username: string, password: string) => {
         try {
-          // TODO: Replace with actual API call
-          // For now, accept any credentials for development
-          if (username && password) {
-            const mockUser: User = {
-              username,
-              role: username === 'admin' ? 'admin' : 'trader',
-            };
-            
-            const mockToken = `mock-token-${Date.now()}`;
+          // Call the actual authentication API
+          const response = await fetch('/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
             
             set({
               isAuthenticated: true,
-              user: mockUser,
-              token: mockToken,
+              user: data.user,
+              token: data.access_token,
             });
             
             return true;
+          } else {
+            console.error('Login failed:', response.status, response.statusText);
+            return false;
           }
-          
-          return false;
         } catch (error) {
           console.error('Login error:', error);
           return false;
         }
       },
 
-      logout: () => {
-        set({
-          isAuthenticated: false,
-          user: null,
-          token: null,
-        });
+      logout: async () => {
+        try {
+          // Call logout API if we have a token
+          const currentState = get();
+          if (currentState.token) {
+            await fetch('/auth/logout', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${currentState.token}`,
+              },
+            });
+          }
+        } catch (error) {
+          console.error('Logout error:', error);
+        } finally {
+          // Always clear local state
+          set({
+            isAuthenticated: false,
+            user: null,
+            token: null,
+          });
+        }
       },
 
       setToken: (token: string, user: User) => {

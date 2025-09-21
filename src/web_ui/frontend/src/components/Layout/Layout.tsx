@@ -20,14 +20,23 @@ import {
   Menu as MenuIcon,
   Dashboard,
   TrendingUp,
-  Monitoring,
+  Monitor,
   Analytics,
   Settings,
   AccountCircle,
   Logout,
+  Telegram,
+  People,
+  NotificationsActive,
+  Schedule,
+  Campaign,
+  History,
+  ExpandLess,
+  ExpandMore,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
+import { useTelegramPermissions } from '../Telegram/TelegramRouteGuard';
 
 const drawerWidth = 240;
 
@@ -42,6 +51,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [telegramExpanded, setTelegramExpanded] = React.useState(false);
+  
+  const telegramPermissions = useTelegramPermissions();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -55,18 +67,31 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     setAnchorEl(null);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     handleClose();
   };
 
   const menuItems = [
     { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
     { text: 'Strategies', icon: <TrendingUp />, path: '/strategies' },
-    { text: 'Monitoring', icon: <Monitoring />, path: '/monitoring' },
+    { text: 'Monitoring', icon: <Monitor />, path: '/monitoring' },
     { text: 'Analytics', icon: <Analytics />, path: '/analytics' },
     { text: 'Administration', icon: <Settings />, path: '/administration' },
   ];
+
+  const telegramMenuItems = [
+    { text: 'Dashboard', icon: <Dashboard />, path: '/telegram/dashboard', permission: 'view' },
+    { text: 'User Management', icon: <People />, path: '/telegram/users', permission: 'manage_users' },
+    { text: 'Alert Management', icon: <NotificationsActive />, path: '/telegram/alerts', permission: 'manage_alerts' },
+    { text: 'Schedule Management', icon: <Schedule />, path: '/telegram/schedules', permission: 'manage_alerts' },
+    { text: 'Broadcast Center', icon: <Campaign />, path: '/telegram/broadcast', permission: 'send_broadcasts' },
+    { text: 'Audit Logs', icon: <History />, path: '/telegram/audit', permission: 'view_audit_logs' },
+  ];
+
+  const handleTelegramToggle = () => {
+    setTelegramExpanded(!telegramExpanded);
+  };
 
   const drawer = (
     <div>
@@ -89,6 +114,41 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </ListItem>
         ))}
       </List>
+      
+      {/* Telegram Bot Management Section */}
+      {telegramPermissions.canView && (
+        <>
+          <Divider />
+          <List>
+            <ListItem disablePadding>
+              <ListItemButton onClick={handleTelegramToggle}>
+                <ListItemIcon>
+                  <Telegram />
+                </ListItemIcon>
+                <ListItemText primary="Telegram Bot" />
+                {telegramExpanded ? <ExpandLess /> : <ExpandMore />}
+              </ListItemButton>
+            </ListItem>
+            
+            {telegramExpanded && telegramMenuItems.map((item) => {
+              const hasPermission = telegramPermissions.hasPermission(item.permission);
+              if (!hasPermission) return null;
+              
+              return (
+                <ListItem key={item.text} disablePadding sx={{ pl: 2 }}>
+                  <ListItemButton
+                    selected={location.pathname === item.path}
+                    onClick={() => navigate(item.path)}
+                  >
+                    <ListItemIcon>{item.icon}</ListItemIcon>
+                    <ListItemText primary={item.text} />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+        </>
+      )}
     </div>
   );
 

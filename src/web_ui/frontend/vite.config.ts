@@ -13,6 +13,10 @@ export default defineConfig({
         target: 'http://localhost:5003', // TRADING_API_PORT
         changeOrigin: true,
       },
+      '/auth': {
+        target: 'http://localhost:5003', // TRADING_API_PORT
+        changeOrigin: true,
+      },
       '/ws': {
         target: 'ws://localhost:5003', // TRADING_API_PORT WebSocket
         ws: true,

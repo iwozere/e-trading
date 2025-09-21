@@ -55,8 +55,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       return;
     }
 
-    const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
-    
+    const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:5003';
+
     const newSocket = io(WS_URL, {
       auth: {
         token,
@@ -93,7 +93,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         reconnectAttempts: prev.reconnectAttempts + 1,
         lastError: error.message,
       }));
-      
+
       if (connectionStats.reconnectAttempts === 0) {
         toast.error('Failed to connect to trading system');
       }
@@ -132,7 +132,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     newSocket.on('alert', (data) => {
       console.log('Alert:', data);
       const { priority, data: alertData } = data;
-      
+
       switch (priority) {
         case 'error':
           toast.error(alertData.message || 'System error occurred');

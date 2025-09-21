@@ -25,7 +25,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 // API functions
 import { getStrategies, getSystemStatus } from '../../api/tradingApi';
-import { useWebSocket } from '../../contexts/WebSocketContext';
+// import { useWebSocket } from '../../contexts/WebSocketContext';
 
 // Types
 interface StrategyStatus {
@@ -57,7 +57,9 @@ interface SystemStatus {
 }
 
 const Dashboard: React.FC = () => {
-  const { isConnected, connectionStats } = useWebSocket();
+  // Temporarily disable WebSocket until backend implements it
+  const isConnected = false;
+  // const { isConnected, connectionStats } = useWebSocket();
 
   // Fetch strategies
   const {

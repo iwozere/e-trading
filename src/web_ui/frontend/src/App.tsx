@@ -15,6 +15,17 @@ import Analytics from './pages/Analytics/Analytics';
 import Administration from './pages/Administration/Administration';
 import Login from './pages/Auth/Login';
 
+// Telegram Bot Management Components
+import {
+  TelegramDashboard,
+  UserManagement,
+  AlertManagement,
+  ScheduleManagement,
+  BroadcastCenter,
+  AuditLogs
+} from './pages/Telegram';
+import { TelegramRouteGuard } from './components/Telegram';
+
 // Hooks and Context
 import { useAuthStore } from './stores/authStore';
 import { WebSocketProvider } from './contexts/WebSocketContext';
@@ -99,7 +110,8 @@ const App: React.FC = () => {
         <Box sx={{ display: 'flex', minHeight: '100vh' }}>
           <Router>
             {isAuthenticated ? (
-              <WebSocketProvider>
+              // Temporarily disable WebSocket until backend implements it
+              // <WebSocketProvider>
                 <Layout>
                   <Routes>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -159,10 +171,83 @@ const App: React.FC = () => {
                         </ProtectedRoute>
                       }
                     />
+                    
+                    {/* Telegram Bot Management Routes */}
+                    <Route
+                      path="/telegram"
+                      element={
+                        <ProtectedRoute>
+                          <TelegramRouteGuard>
+                            <TelegramDashboard />
+                          </TelegramRouteGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/telegram/dashboard"
+                      element={
+                        <ProtectedRoute>
+                          <TelegramRouteGuard>
+                            <TelegramDashboard />
+                          </TelegramRouteGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/telegram/users"
+                      element={
+                        <ProtectedRoute>
+                          <TelegramRouteGuard requiredPermission="manage_users">
+                            <UserManagement />
+                          </TelegramRouteGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/telegram/alerts"
+                      element={
+                        <ProtectedRoute>
+                          <TelegramRouteGuard requiredPermission="manage_alerts">
+                            <AlertManagement />
+                          </TelegramRouteGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/telegram/schedules"
+                      element={
+                        <ProtectedRoute>
+                          <TelegramRouteGuard requiredPermission="manage_alerts">
+                            <ScheduleManagement />
+                          </TelegramRouteGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/telegram/broadcast"
+                      element={
+                        <ProtectedRoute>
+                          <TelegramRouteGuard requiredPermission="send_broadcasts">
+                            <BroadcastCenter />
+                          </TelegramRouteGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/telegram/audit"
+                      element={
+                        <ProtectedRoute>
+                          <TelegramRouteGuard requiredPermission="view_audit_logs">
+                            <AuditLogs />
+                          </TelegramRouteGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </Layout>
-              </WebSocketProvider>
+              // </WebSocketProvider>
             ) : (
               <Routes>
                 <Route path="/login" element={<Login />} />
