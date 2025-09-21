@@ -5,8 +5,8 @@ from aiogram import Dispatcher
 from aiogram.fsm.context import FSMContext
 from unittest.mock import AsyncMock, MagicMock
 import pandas as pd
-import src.frontend.telegram.bot as bot_module
-from src.frontend.telegram.screener.business_logic import analyze_ticker_business
+import src.telegram.bot as bot_module
+from src.telegram.screener.business_logic import analyze_ticker_business
 from src.model.telegram_bot import TickerAnalysis, Fundamentals, Technicals
 
 @pytest.mark.asyncio
@@ -101,9 +101,9 @@ def test_analyze_ticker_business_valid(monkeypatch):
         atr=2.0,
         recommendations={}
     )
-    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_ohlcv', lambda *args, **kwargs: mock_df)
-    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_fundamentals', lambda *args, **kwargs: mock_fundamentals)
-    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.calculate_technicals_unified', lambda *args, **kwargs: technicals)
+    monkeypatch.setattr('src.telegram.screener.business_logic.get_ohlcv', lambda *args, **kwargs: mock_df)
+    monkeypatch.setattr('src.telegram.screener.business_logic.get_fundamentals', lambda *args, **kwargs: mock_fundamentals)
+    monkeypatch.setattr('src.telegram.screener.business_logic.calculate_technicals_unified', lambda *args, **kwargs: technicals)
     # Patch TickerAnalysis to always include chart_image=None
     result = TickerAnalysis(
         ticker='AAPL', provider='yf', period='2y', interval='1d',
@@ -118,7 +118,7 @@ def test_analyze_ticker_business_valid(monkeypatch):
 def test_analyze_ticker_business_invalid_period(monkeypatch):
     def mock_get_ohlcv(*args, **kwargs):
         raise ValueError("Invalid period/interval combination")
-    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_ohlcv', mock_get_ohlcv)
+    monkeypatch.setattr('src.telegram.screener.business_logic.get_ohlcv', mock_get_ohlcv)
     try:
         TickerAnalysis(
             ticker='AAPL', provider='yf', period='bad', interval='bad',
@@ -130,7 +130,7 @@ def test_analyze_ticker_business_invalid_period(monkeypatch):
 def test_analyze_ticker_business_exception(monkeypatch):
     def mock_get_ohlcv(*args, **kwargs):
         raise Exception('fail')
-    monkeypatch.setattr('src.frontend.telegram.screener.business_logic.get_ohlcv', mock_get_ohlcv)
+    monkeypatch.setattr('src.telegram.screener.business_logic.get_ohlcv', mock_get_ohlcv)
     try:
         TickerAnalysis(
             ticker='AAPL', provider='yf', period='2y', interval='1d',

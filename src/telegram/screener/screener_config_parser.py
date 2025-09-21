@@ -360,7 +360,7 @@ class ScreenerConfigParser:
 
         # Import FMP integration for validation
         try:
-            from src.frontend.telegram.screener.fmp_integration import validate_fmp_criteria
+            from src.telegram.screener.fmp_integration import validate_fmp_criteria
             is_valid, fmp_errors = validate_fmp_criteria(fmp_criteria)
             if not is_valid:
                 errors.extend(fmp_errors)

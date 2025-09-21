@@ -30,7 +30,7 @@ from src.util.tickers_list import (
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.common import get_ohlcv
 from src.common.technicals import calculate_technicals_unified
-from src.frontend.telegram.screener.screener_config_parser import (ScreenerConfig, FundamentalCriteria, TechnicalCriteria)
+from src.telegram.screener.screener_config_parser import (ScreenerConfig, FundamentalCriteria, TechnicalCriteria)
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -139,7 +139,7 @@ class EnhancedScreener:
     def _run_fmp_screening(self, config: ScreenerConfig) -> Tuple[List[str], Dict[str, Any]]:
         """Run FMP screening to get initial list of tickers."""
         try:
-            from src.frontend.telegram.screener.fmp_integration import run_fmp_screening
+            from src.telegram.screener.fmp_integration import run_fmp_screening
 
             # Convert ScreenerConfig to dictionary for FMP integration
             screener_config = {

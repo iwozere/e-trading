@@ -13,9 +13,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.frontend.telegram.screener.fmp_integration import get_fmp_integration, run_fmp_screening
-from src.frontend.telegram.screener.screener_config_parser import parse_screener_config, validate_screener_config
-from src.frontend.telegram.screener.enhanced_screener import enhanced_screener
+from src.telegram.screener.fmp_integration import get_fmp_integration, run_fmp_screening
+from src.telegram.screener.screener_config_parser import parse_screener_config, validate_screener_config
+from src.telegram.screener.enhanced_screener import enhanced_screener
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)

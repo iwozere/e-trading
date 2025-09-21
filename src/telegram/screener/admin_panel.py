@@ -46,7 +46,7 @@ Security Note:
 Dependencies:
 - Flask
 - SQLite3 (for database operations)
-- Custom database module (src.frontend.telegram.db)
+- Custom database module (src.telegram.db)
 - Custom logger (src.notification.logger)
 """
 
@@ -1004,7 +1004,7 @@ def schedules():
             else:
                 # JSON-based schedule
                 try:
-                    from src.frontend.telegram.screener.schedule_config_parser import get_schedule_summary
+                    from src.telegram.screener.schedule_config_parser import get_schedule_summary
                     if config_json:
                         summary = get_schedule_summary(config_json)
                         if "error" not in summary:

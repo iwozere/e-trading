@@ -10,9 +10,9 @@ import time
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 from src.data.db import telegram_service as db
-from src.frontend.telegram.screener.business_logic import analyze_ticker_business
+from src.telegram.screener.business_logic import analyze_ticker_business
 from src.common.ticker_analyzer import format_ticker_report
-from src.frontend.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
+from src.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
 
 from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger(__name__)
@@ -182,7 +182,7 @@ class ScheduleProcessor:
             _logger.info("Executing enhanced screener schedule %s for user %s", schedule_id, user_id)
 
             # Parse configuration
-            from src.frontend.telegram.screener.screener_config_parser import parse_screener_config
+            from src.telegram.screener.screener_config_parser import parse_screener_config
             try:
                 screener_config = parse_screener_config(config_json)
             except Exception as e:
@@ -190,7 +190,7 @@ class ScheduleProcessor:
                 return
 
             # Run enhanced screener
-            from src.frontend.telegram.screener.enhanced_screener import EnhancedScreener
+            from src.telegram.screener.enhanced_screener import EnhancedScreener
             screener = EnhancedScreener()
             report = await screener.run_enhanced_screener(screener_config)
 
@@ -207,7 +207,7 @@ class ScheduleProcessor:
                     from src.data.db import telegram_service as db
                     user_status = db.get_user_status(user_id)
                     if user_status and user_status.get("email"):
-                        from src.frontend.telegram.screener.notifications import send_screener_email
+                        from src.telegram.screener.notifications import send_screener_email
 
                         # Create a mock config for the email function
                         class MockConfig:
@@ -223,7 +223,7 @@ class ScheduleProcessor:
                     _logger.exception("Error sending enhanced screener email for schedule %s", schedule_id)
 
             # Format report for Telegram
-            from src.frontend.telegram.screener.enhanced_screener import format_enhanced_telegram_message
+            from src.telegram.screener.enhanced_screener import format_enhanced_telegram_message
             message = format_enhanced_telegram_message(report, screener_config)
 
             # Send via HTTP API
@@ -284,7 +284,7 @@ async def execute_json_report_schedule(self, schedule: Dict[str, Any]):
         for ticker in tickers:
             try:
                 # Create a ParsedCommand-like structure for the report
-                from src.frontend.telegram.command_parser import ParsedCommand
+                from src.telegram.command_parser import ParsedCommand
                 parsed = ParsedCommand(
                     command="report",
                     args={
@@ -299,7 +299,7 @@ async def execute_json_report_schedule(self, schedule: Dict[str, Any]):
                 )
 
                 # Generate report
-                from src.frontend.telegram.screener.business_logic import handle_report
+                from src.telegram.screener.business_logic import handle_report
                 result = handle_report(parsed)
 
                 if result["status"] == "ok" and "data" in result:
@@ -385,7 +385,7 @@ async def execute_screener_schedule(self, schedule: Dict[str, Any]):
 
             # Import screener based on type
             if screener_type == "fundamental":
-                from src.frontend.telegram.screener.fundamental_screener import FundamentalScreener
+                from src.telegram.screener.fundamental_screener import FundamentalScreener
                 screener = FundamentalScreener()
                 report = screener.run_screener(list_type)
             else:
@@ -405,7 +405,7 @@ async def execute_screener_schedule(self, schedule: Dict[str, Any]):
                     from src.data.db import telegram_service as db
                     user_status = db.get_user_status(user_id)
                     if user_status and user_status.get("email"):
-                        from src.frontend.telegram.screener.notifications import send_screener_email
+                        from src.telegram.screener.notifications import send_screener_email
 
                         # Create a mock config for the email function
                         class MockConfig:
@@ -421,7 +421,7 @@ async def execute_screener_schedule(self, schedule: Dict[str, Any]):
                     _logger.exception("Error sending screener email for schedule %s", schedule_id)
 
             # Format screener report for Telegram
-            from src.frontend.telegram.screener.enhanced_screener import format_enhanced_telegram_message
+            from src.telegram.screener.enhanced_screener import format_enhanced_telegram_message
             message = format_enhanced_telegram_message(report)
 
             # Send via HTTP API

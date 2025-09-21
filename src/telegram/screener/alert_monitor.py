@@ -10,9 +10,9 @@ import time
 from typing import List, Dict, Any, Optional, Tuple
 from src.data.db import telegram_service as db
 from src.common import get_ohlcv
-from src.frontend.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
-from src.frontend.telegram.screener.alert_logic_evaluator import AlertLogicEvaluator, evaluate_alert
-from src.frontend.telegram.screener.rearm_alert_system import ReArmAlertEvaluator
+from src.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
+from src.telegram.screener.alert_logic_evaluator import AlertLogicEvaluator, evaluate_alert
+from src.telegram.screener.rearm_alert_system import ReArmAlertEvaluator
 
 from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger(__name__)
@@ -385,7 +385,7 @@ class AlertMonitor:
     async def trigger_rearm_alert(self, alert: Dict[str, Any], evaluation_details: Dict[str, Any]):
         """Trigger a re-arm alert notification."""
         try:
-            from src.frontend.telegram.screener.rearm_alert_system import EnhancedAlertConfig
+            from src.telegram.screener.rearm_alert_system import EnhancedAlertConfig
 
             ticker = alert["ticker"]
             user_id = alert["user_id"]

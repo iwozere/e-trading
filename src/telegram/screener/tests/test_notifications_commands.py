@@ -7,7 +7,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 import pytest
 from unittest.mock import AsyncMock, patch
-from src.frontend.telegram.screener.notifications import (
+from src.telegram.screener.notifications import (
     # process_start_command,  # REMOVED, see notification manager refactor
     process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_feedback_command, process_feature_command, process_unknown_command, process_report_command
 )
@@ -25,7 +25,7 @@ async def test_simple_commands_success(mocker, func, command, extra_args, result
     telegram_user_id = "3"
     notification_manager = mocker.Mock()
     notification_manager.send_notification = AsyncMock()
-    with patch("src.frontend.telegram.screener.notifications.handle_command") as mock_handle_command:
+    with patch("src.telegram.screener.notifications.handle_command") as mock_handle_command:
         mock_handle_command.return_value = {
             "status": "ok",
             result_key: result_value,
@@ -54,7 +54,7 @@ async def test_simple_commands_error(mocker, func, command, extra_args, result_k
     telegram_user_id = "3"
     notification_manager = mocker.Mock()
     notification_manager.send_notification = AsyncMock()
-    with patch("src.frontend.telegram.screener.notifications.handle_command") as mock_handle_command:
+    with patch("src.telegram.screener.notifications.handle_command") as mock_handle_command:
         mock_handle_command.return_value = {
             "status": "error",
             result_key: result_value,
@@ -91,7 +91,7 @@ async def test_commands_with_args(mocker, func, command, args, result_key, resul
     telegram_user_id = "3"
     notification_manager = mocker.Mock()
     notification_manager.send_notification = AsyncMock()
-    with patch("src.frontend.telegram.screener.notifications.handle_command") as mock_handle_command:
+    with patch("src.telegram.screener.notifications.handle_command") as mock_handle_command:
         # Use 'ok' for success, 'error' for error
         status = "ok" if expected_type == "INFO" else "error"
         mock_handle_command.return_value = {
@@ -225,7 +225,7 @@ async def test_process_report_command_basic(mocker, args, result, expected_calls
     telegram_user_id = "3"
     notification_manager = mocker.Mock()
     notification_manager.send_notification = AsyncMock()
-    with patch("src.frontend.telegram.screener.notifications.handle_command") as mock_handle_command:
+    with patch("src.telegram.screener.notifications.handle_command") as mock_handle_command:
         mock_handle_command.return_value = result
         await process_report_command(message, telegram_user_id, args, notification_manager)
     # Check calls
@@ -268,7 +268,7 @@ async def test_process_report_command_with_params(mocker, provider, period, inte
     telegram_user_id = "3"
     notification_manager = mocker.Mock()
     notification_manager.send_notification = AsyncMock()
-    with patch("src.frontend.telegram.screener.notifications.handle_command") as mock_handle_command:
+    with patch("src.telegram.screener.notifications.handle_command") as mock_handle_command:
         mock_handle_command.return_value = result
         await process_report_command(message, telegram_user_id, args, notification_manager)
     calls = notification_manager.send_notification.await_args_list

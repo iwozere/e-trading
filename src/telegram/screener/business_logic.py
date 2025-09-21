@@ -7,7 +7,7 @@ sys.path.append(str(PROJECT_ROOT))
 import sqlite3
 import time
 from typing import Any, Dict, List
-from src.frontend.telegram.command_parser import ParsedCommand
+from src.telegram.command_parser import ParsedCommand
 from src.common import get_ohlcv, determine_provider, get_ticker_info
 from src.common.fundamentals import get_fundamentals_unified
 from src.common.technicals import calculate_technicals_unified
@@ -15,7 +15,7 @@ from src.model.telegram_bot import TickerAnalysis
 from src.data.db import telegram_service as db
 from src.common.ticker_analyzer import format_ticker_report, analyze_ticker
 from src.common.ticker_analyzer import analyze_ticker
-from src.frontend.telegram.screener.report_config_parser import ReportConfigParser
+from src.telegram.screener.report_config_parser import ReportConfigParser
 
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
@@ -74,7 +74,7 @@ def handle_help(parsed: ParsedCommand) -> Dict[str, Any]:
         is_admin = is_admin_user(telegram_user_id)
 
         # Import help texts here to avoid circular imports
-        from src.frontend.telegram.bot import HELP_TEXT, ADMIN_HELP_TEXT
+        from src.telegram.bot import HELP_TEXT, ADMIN_HELP_TEXT
 
         # Show regular help text
         help_text = HELP_TEXT
@@ -806,7 +806,7 @@ def handle_alerts_list(telegram_user_id: str) -> Dict[str, Any]:
                 )
             else:
                 # Indicator alert
-                from src.frontend.telegram.screener.alert_logic_evaluator import get_alert_summary
+                from src.telegram.screener.alert_logic_evaluator import get_alert_summary
                 summary = get_alert_summary(alert)
                 alert_type_icon = "📊" if alert_type == "indicator" else "❓"
                 timeframe = alert.get("timeframe", "15m")
@@ -857,7 +857,7 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
             }
 
         # Create enhanced alert configuration
-        from src.frontend.telegram.screener.rearm_alert_system import EnhancedAlertConfig
+        from src.telegram.screener.rearm_alert_system import EnhancedAlertConfig
 
         enhanced_config = EnhancedAlertConfig.from_simple_params(
             ticker=ticker.upper(),
@@ -972,7 +972,7 @@ def handle_alerts_add_indicator(telegram_user_id: str, ticker: str, config_json:
 
         # Validate JSON configuration
         try:
-            from src.frontend.telegram.screener.alert_config_parser import validate_alert_config
+            from src.telegram.screener.alert_config_parser import validate_alert_config
             is_valid, errors = validate_alert_config(config_json)
             if not is_valid:
                 return {"status": "error", "message": f"Invalid alert configuration: {'; '.join(errors)}"}
@@ -1001,7 +1001,7 @@ def handle_alerts_add_indicator(telegram_user_id: str, ticker: str, config_json:
         )
 
         # Get alert summary for display
-        from src.frontend.telegram.screener.alert_logic_evaluator import get_alert_summary
+        from src.telegram.screener.alert_logic_evaluator import get_alert_summary
         alert_data = {
             "id": alert_id,
             "ticker": ticker.upper(),
@@ -1256,7 +1256,7 @@ def handle_schedules_add_json(telegram_user_id: str, config_json: str) -> Dict[s
         else:
             # Use existing validation for other schedule types
             try:
-                from src.frontend.telegram.screener.schedule_config_parser import validate_schedule_config
+                from src.telegram.screener.schedule_config_parser import validate_schedule_config
                 is_valid, errors = validate_schedule_config(config_json)
                 if not is_valid:
                     return {"status": "error", "message": f"Invalid schedule configuration: {'; '.join(errors)}"}
@@ -1317,7 +1317,7 @@ def handle_schedules_add_json(telegram_user_id: str, config_json: str) -> Dict[s
 
         else:
             # Use existing summary for other types
-            from src.frontend.telegram.screener.schedule_config_parser import get_schedule_summary
+            from src.telegram.screener.schedule_config_parser import get_schedule_summary
             summary = get_schedule_summary(config_json)
 
             if "error" in summary:
@@ -1344,7 +1344,7 @@ def handle_schedules_enhanced_screener(telegram_user_id: str, config_json: str) 
     try:
         # Validate JSON configuration
         try:
-            from src.frontend.telegram.screener.screener_config_parser import validate_screener_config
+            from src.telegram.screener.screener_config_parser import validate_screener_config
             is_valid, errors = validate_screener_config(config_json)
             if not is_valid:
                 return {"status": "error", "message": f"Invalid screener configuration: {'; '.join(errors)}"}
@@ -1363,7 +1363,7 @@ def handle_schedules_enhanced_screener(telegram_user_id: str, config_json: str) 
             }
 
         # Parse the configuration to get summary
-        from src.frontend.telegram.screener.screener_config_parser import get_screener_summary
+        from src.telegram.screener.screener_config_parser import get_screener_summary
         summary = get_screener_summary(config_json)
 
         if "error" in summary:
@@ -1442,7 +1442,7 @@ def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
                 )
             else:
                 # JSON-based schedule
-                from src.frontend.telegram.screener.schedule_config_parser import get_schedule_summary
+                from src.telegram.screener.schedule_config_parser import get_schedule_summary
                 config_json = schedule.get("config_json")
                 if config_json:
                     summary = get_schedule_summary(config_json)
@@ -2008,8 +2008,8 @@ async def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
             return access_check
 
         # Import screener modules
-        from src.frontend.telegram.screener.enhanced_screener import EnhancedScreener
-        from src.frontend.telegram.screener.screener_config_parser import (
+        from src.telegram.screener.enhanced_screener import EnhancedScreener
+        from src.telegram.screener.screener_config_parser import (
             parse_screener_config,
             validate_screener_config
         )
@@ -2047,7 +2047,7 @@ async def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
                 return {"status": "error", "message": "Email not registered. Please use /register email@example.com first"}
 
             # Send via email
-            from src.frontend.telegram.screener.notifications import send_screener_email
+            from src.telegram.screener.notifications import send_screener_email
             send_screener_email(user_status["email"], report, screener_config)
             return {"status": "success", "message": "Screener results sent to your email"}
         else:
@@ -2066,7 +2066,7 @@ def _get_predefined_screener_config(screener_name: str):
     try:
         import json
         from pathlib import Path
-        from src.frontend.telegram.screener.screener_config_parser import ScreenerConfigParser
+        from src.telegram.screener.screener_config_parser import ScreenerConfigParser
 
         # Load FMP screener criteria
         config_path = Path(__file__).resolve().parents[4] / "config" / "screener" / "fmp_screener_criteria.json"

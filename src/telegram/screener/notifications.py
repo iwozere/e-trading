@@ -5,8 +5,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.frontend.telegram.screener.business_logic import handle_command
-from src.frontend.telegram.command_parser import ParsedCommand, parse_command
+from src.telegram.screener.business_logic import handle_command
+from src.telegram.command_parser import ParsedCommand, parse_command
 from src.data.db import telegram_service as db
 from src.notification.logger import setup_logger
 from src.common.recommendation_engine import RecommendationEngine

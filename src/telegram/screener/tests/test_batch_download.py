@@ -154,8 +154,8 @@ def test_enhanced_screener_batch():
     print("\n🎯 Testing Enhanced Screener with Batch Operations")
     print("=" * 60)
 
-    from src.frontend.telegram.screener.enhanced_screener import enhanced_screener
-    from src.frontend.telegram.screener.screener_config_parser import parse_screener_config
+    from src.telegram.screener.enhanced_screener import enhanced_screener
+    from src.telegram.screener.screener_config_parser import parse_screener_config
 
     # Test configuration
     test_config = {

@@ -663,7 +663,7 @@ class PositionNotificationManager:
         """Send Telegram notification."""
         try:
             # Import here to avoid circular imports
-            from src.frontend.telegram.screener.http_api_client import send_notification_to_admins
+            from src.telegram.screener.http_api_client import send_notification_to_admins
 
             # Send to admin users via existing system
             await send_notification_to_admins(

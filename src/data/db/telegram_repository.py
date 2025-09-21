@@ -107,7 +107,7 @@ class TelegramRepository:
 
     # Alerts
     def add_alert(self, user_id: str, ticker: str, price: float, condition: str, email: bool = False) -> int:
-        from src.frontend.telegram.screener.rearm_alert_system import EnhancedAlertConfig
+        from src.telegram.screener.rearm_alert_system import EnhancedAlertConfig
 
         created = datetime.now(timezone.utc).isoformat()
 

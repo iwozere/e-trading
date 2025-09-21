@@ -115,8 +115,8 @@ fundamentals_data = downloader.get_fundamentals_batch_optimized(tickers, include
 The enhanced screener now uses optimized batch operations automatically:
 
 ```python
-from src.frontend.telegram.screener.enhanced_screener import enhanced_screener
-from src.frontend.telegram.screener.screener_config_parser import parse_screener_config
+from src.telegram.screener.enhanced_screener import enhanced_screener
+from src.telegram.screener.screener_config_parser import parse_screener_config
 
 # Configuration for hybrid screener
 config_json = '''

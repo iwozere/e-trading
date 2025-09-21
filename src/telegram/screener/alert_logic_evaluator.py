@@ -15,8 +15,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any, List, Optional, Tuple
 from src.notification.logger import setup_logger
-from src.frontend.telegram.screener.alert_config_parser import AlertConfig, IndicatorConfig, parse_alert_config
-from src.frontend.telegram.screener.indicator_calculator import IndicatorCalculator
+from src.telegram.screener.alert_config_parser import AlertConfig, IndicatorConfig, parse_alert_config
+from src.telegram.screener.indicator_calculator import IndicatorCalculator
 from src.common import get_ohlcv, determine_provider, get_ticker_info
 
 _logger = setup_logger(__name__)
@@ -300,7 +300,7 @@ class AlertLogicEvaluator:
     def validate_alert_config(self, config_json: str) -> Tuple[bool, List[str]]:
         """Validate alert configuration."""
         try:
-            from src.frontend.telegram.screener.alert_config_parser import validate_alert_config
+            from src.telegram.screener.alert_config_parser import validate_alert_config
             return validate_alert_config(config_json)
         except Exception as e:
             return False, [str(e)]

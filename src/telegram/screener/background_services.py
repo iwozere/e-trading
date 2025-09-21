@@ -13,9 +13,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 import asyncio
-from src.frontend.telegram.screener.alert_monitor import AlertMonitor
-from src.frontend.telegram.screener.schedule_processor import ScheduleProcessor
-from src.frontend.telegram.screener.http_api_client import BotHttpApiClient
+from src.telegram.screener.alert_monitor import AlertMonitor
+from src.telegram.screener.schedule_processor import ScheduleProcessor
+from src.telegram.screener.http_api_client import BotHttpApiClient
 
 from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger(__name__)

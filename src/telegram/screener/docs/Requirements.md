@@ -52,7 +52,7 @@
 ### Internal Module Dependencies
 ```python
 # Business Logic Dependencies
-from src.frontend.telegram.command_parser import ParsedCommand, parse_command
+from src.telegram.command_parser import ParsedCommand, parse_command
 from src.data.db import telegram_service as db  # Database operations
 from src.common import get_ohlcv  # Market data retrieval
 from src.common.fundamentals import get_fundamentals  # Fundamental data
@@ -61,7 +61,7 @@ from src.common.ticker_analyzer import format_ticker_report  # Report formatting
 from src.notification.logger import setup_logger  # Logging infrastructure
 
 # JSON Configuration Dependencies
-from src.frontend.telegram.screener.report_config_parser import ReportConfigParser, ReportConfig
+from src.telegram.screener.report_config_parser import ReportConfigParser, ReportConfig
 ```
 
 ## JSON Configuration Requirements

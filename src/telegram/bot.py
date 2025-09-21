@@ -14,7 +14,7 @@ import asyncio
 import random
 from src.notification.async_notification_manager import initialize_notification_manager
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PASSWORD
-from src.frontend.telegram.screener.notifications import (
+from src.telegram.screener.notifications import (
     process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_screener_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
 )
 from src.data.db import telegram_service as db

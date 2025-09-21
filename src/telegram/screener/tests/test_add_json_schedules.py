@@ -12,7 +12,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.frontend.telegram.command_parser import parse_command
+from src.telegram.command_parser import parse_command
 
 def test_add_json_schedules():
     """Test that the /schedules add_json command is parsed correctly for both single and multiple tickers."""

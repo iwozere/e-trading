@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from aiogram.types import Message
-import src.frontend.telegram.bot as bot_module
+import src.telegram.bot as bot_module
 
 @pytest.mark.asyncio
-@patch("src.frontend.telegram.bot.db")
+@patch("src.telegram.bot.db")
 async def test_register_valid_email(mock_db):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
@@ -18,7 +18,7 @@ async def test_register_valid_email(mock_db):
     assert "Verification code sent to user@example.com" in args[0]
 
 @pytest.mark.asyncio
-@patch("src.frontend.telegram.bot.db")
+@patch("src.telegram.bot.db")
 async def test_register_rate_limit(mock_db):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
@@ -42,7 +42,7 @@ async def test_register_invalid_email():
     assert "Usage: /register email@example.com" in args[0]
 
 @pytest.mark.asyncio
-@patch("src.frontend.telegram.bot.db")
+@patch("src.telegram.bot.db")
 async def test_verify_valid_code(mock_db):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
@@ -55,7 +55,7 @@ async def test_verify_valid_code(mock_db):
     assert "Email verified successfully" in args[0]
 
 @pytest.mark.asyncio
-@patch("src.frontend.telegram.bot.db")
+@patch("src.telegram.bot.db")
 async def test_verify_invalid_code(mock_db):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
@@ -79,7 +79,7 @@ async def test_verify_invalid_format():
     assert "Usage: /verify CODE" in args[0]
 
 @pytest.mark.asyncio
-@patch("src.frontend.telegram.bot.db")
+@patch("src.telegram.bot.db")
 async def test_info_verified_user(mock_db):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
@@ -92,7 +92,7 @@ async def test_info_verified_user(mock_db):
     assert "Verified: Yes" in args[0]
 
 @pytest.mark.asyncio
-@patch("src.frontend.telegram.bot.db")
+@patch("src.telegram.bot.db")
 async def test_info_unverified_user(mock_db):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
@@ -105,7 +105,7 @@ async def test_info_unverified_user(mock_db):
     assert "Verified: No" in args[0]
 
 @pytest.mark.asyncio
-@patch("src.frontend.telegram.bot.db")
+@patch("src.telegram.bot.db")
 async def test_info_no_user(mock_db):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
