@@ -33,6 +33,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.trading.enhanced_strategy_manager import EnhancedStrategyManager
 from src.notification.logger import setup_logger
+from config.donotshare.donotshare import TRAIDING_API_PORT, TRADING_WEBGUI_PORT
 
 _logger = setup_logger(__name__)
 
@@ -439,11 +440,14 @@ async def validate_configuration(
 if __name__ == "__main__":
     import uvicorn
 
+    # Get port from config, default to 8000 if not set
+    port = int(TELEGRAM_API_PORT) if TELEGRAM_API_PORT else 8000
+
     # Run the server
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True,
         log_level="info"
     )

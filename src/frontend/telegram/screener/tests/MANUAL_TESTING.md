@@ -37,7 +37,7 @@ Before testing, ensure you have:
    SMTP_PASSWORD=your_app_password
    WEBGUI_LOGIN=admin
    WEBGUI_PASSWORD=your_admin_password
-   WEBGUI_PORT=5000
+   TELEGRAM_WEBGUI_PORT=5000
    FMP_API_KEY=your_fmp_api_key_here
    ```
 3. **Database**: SQLite database will be auto-created on first run
@@ -69,7 +69,7 @@ cd /path/to/e-trading
 python src/frontend/telegram/screener/admin_panel.py
 ```
 **Purpose**: Web interface for admin functions, user management, and system monitoring
-**Port**: 5000 (configurable via WEBGUI_PORT)
+**Port**: 5000 (configurable via TELEGRAM_WEBGUI_PORT)
 **Status**: Required for Phase 6 (Web Admin Panel) testing
 
 #### 3. Admin User Creation Script (One-time setup)

@@ -16,7 +16,11 @@ DATA_CACHE_DIR = "c:/data-cache"
 # Database configuration
 DB_PATH = "db/trading.db"
 
+TELEGRAM_WEBGUI_PORT=5000
+TELEGRAM_API_PORT=5001
 
+TRADING_WEBGUI_PORT=5002
+TRADING_API_PORT=5003
 
 
 ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
@@ -64,11 +68,11 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 # This can be removed from environment variables
 #TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-WEBGUI_PORT = os.getenv("WEBGUI_PORT")
+TELEGRAM_WEBGUI_PORT = os.getenv("TELEGRAM_WEBGUI_PORT")
 WEBGUI_LOGIN = os.getenv("WEBGUI_LOGIN")
 WEBGUI_PASSWORD = os.getenv("WEBGUI_PASSWORD")
 
-API_PORT = os.getenv("API_PORT")
+TELEGRAM_API_PORT = os.getenv("TELEGRAM_API_PORT")
 API_LOGIN = os.getenv("API_LOGIN")
 API_PASSWORD = os.getenv("API_PASSWORD")
 

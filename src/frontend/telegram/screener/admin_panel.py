@@ -64,7 +64,7 @@ import aiohttp
 import json
 from src.data.db import telegram_service as db
 from src.data.database_service import get_database_service
-from config.donotshare.donotshare import WEBGUI_LOGIN, WEBGUI_PASSWORD, WEBGUI_PORT, TELEGRAM_BOT_TOKEN
+from config.donotshare.donotshare import WEBGUI_LOGIN, WEBGUI_PASSWORD, TELEGRAM_WEBGUI_PORT, TELEGRAM_BOT_TOKEN
 
 from src.notification.logger import setup_logger
 
@@ -2126,6 +2126,6 @@ if __name__ == '__main__':
         _logger.error("You can set them in config/donotshare/.env file")
         sys.exit(1)
 
-    _logger.info("Admin panel will be available at: http://localhost:%s", WEBGUI_PORT)
+    _logger.info("Admin panel will be available at: http://localhost:%s", TELEGRAM_WEBGUI_PORT)
     _logger.info("Login with username: %s", WEBGUI_LOGIN)
-    app.run(debug=False, host='0.0.0.0', port=WEBGUI_PORT)
+    app.run(debug=False, host='0.0.0.0', port=TELEGRAM_WEBGUI_PORT)

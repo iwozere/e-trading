@@ -42,7 +42,7 @@ SMTP_PASSWORD=your_app_password
 # Admin Panel Credentials
 WEBGUI_LOGIN=admin
 WEBGUI_PASSWORD=your_secure_password
-WEBGUI_PORT=5000
+TELEGRAM_WEBGUI_PORT=5000
 
 # FMP API Key (optional)
 FMP_API_KEY=your_fmp_api_key

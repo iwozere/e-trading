@@ -7,7 +7,7 @@ from src.management.bot_manager import (get_status, get_trades,
                                         start_bot, stop_bot)
 from src.notification.logger import setup_logger
 
-from config.donotshare.donotshare import API_LOGIN, API_PASSWORD, API_PORT
+from config.donotshare.donotshare import API_LOGIN, API_PASSWORD, TELEGRAM_API_PORT
 
 app = Flask(__name__)
 
@@ -164,4 +164,4 @@ def backtest() -> Response:
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=API_PORT)
+    app.run(host="0.0.0.0", port=TELEGRAM_API_PORT)

@@ -26,6 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
+from config.donotshare.donotshare import TELEGRAM_API_PORT, TELEGRAM_WEBGUI_PORT
 
 _logger = setup_logger(__name__)
 
@@ -105,8 +106,12 @@ def check_dependencies():
     return True
 
 
-def start_backend(dev_mode=False, port=8000):
+def start_backend(dev_mode=False, port=None):
     """Start the backend server."""
+    # Use configured port or default
+    if port is None:
+        port = int(TELEGRAM_API_PORT) if TELEGRAM_API_PORT else 8000
+
     print(f"🚀 Starting backend server on port {port}...")
 
     try:
@@ -245,8 +250,8 @@ def main():
     parser = argparse.ArgumentParser(description='Trading Web UI Quick Start')
     parser.add_argument('--dev', action='store_true',
                        help='Run in development mode with auto-reload')
-    parser.add_argument('--port', type=int, default=8000,
-                       help='Port to run the server on (default: 8000)')
+    parser.add_argument('--port', type=int, default=None,
+                       help=f'Port to run the server on (default: {TELEGRAM_API_PORT or 8000})')
     parser.add_argument('--setup', action='store_true',
                        help='Run setup first')
 

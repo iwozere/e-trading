@@ -131,7 +131,7 @@ SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 # Admin Panel Configuration
 WEBGUI_LOGIN = os.getenv('WEBGUI_LOGIN', 'admin')
 WEBGUI_PASSWORD = os.getenv('WEBGUI_PASSWORD', 'your-secure-password')
-WEBGUI_PORT = int(os.getenv('WEBGUI_PORT', '5000'))
+TELEGRAM_WEBGUI_PORT = int(os.getenv('TELEGRAM_WEBGUI_PORT', '5000'))
 
 # FMP API Key (for financial data)
 FMP_API_KEY = os.getenv('FMP_API_KEY')
@@ -155,7 +155,7 @@ SMTP_PASSWORD=your_app_password
 # Admin Panel Credentials
 WEBGUI_LOGIN=admin
 WEBGUI_PASSWORD=your_secure_password
-WEBGUI_PORT=5000
+TELEGRAM_WEBGUI_PORT=5000
 
 # FMP API Key (optional)
 FMP_API_KEY=your_fmp_api_key
