@@ -8,23 +8,26 @@ from src.data.database import Base
 
 
 class TelegramUser(Base):
-    __tablename__ = 'telegram_users'
+    __tablename__ = 'users'
 
-    telegram_user_id = Column(String(255), primary_key=True)
     email = Column(String(255), nullable=True)
-    verification_code = Column(String(32), nullable=True)
-    code_sent_time = Column(Integer, nullable=True)
-    verified = Column(Boolean, default=False, index=True)
-    approved = Column(Boolean, default=False, index=True)
-    language = Column(String(10), nullable=True)
-    is_admin = Column(Boolean, default=False, index=True)
-    max_alerts = Column(Integer, default=5)
-    max_schedules = Column(Integer, default=5)
+    role = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, index=False)
+    telegram_user_id = Column(String(255), primary_key=True)
+    telegram_verified = Column(Boolean, default=False, index=True)
+    telegram_approved = Column(Boolean, default=False, index=True)
+    telegram_language = Column(String(10), nullable=True)
+    telegram_is_admin = Column(Boolean, default=False, index=True)
+    telegram_max_alerts = Column(Integer, default=5)
+    telegram_max_schedules = Column(Integer, default=5)
+    telegram_verification_code = Column(String(32), nullable=True)
+    telegram_code_sent_time = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
 
     __table_args__ = (
-        Index('idx_telegram_users_email', 'email'),
+        Index('idx_users_email', 'email'),
     )
 
 
@@ -32,7 +35,7 @@ class VerificationCode(Base):
     __tablename__ = 'telegram_verification_codes'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    telegram_user_id = Column(String(255), ForeignKey('telegram_users.telegram_user_id'), nullable=False)
+    telegram_user_id = Column(String(255), ForeignKey('users.telegram_user_id'), nullable=False)
     code = Column(String(32), nullable=False)
     sent_time = Column(Integer, nullable=False)
 
@@ -42,7 +45,7 @@ class Alert(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ticker = Column(String(50), nullable=False, index=True)
-    user_id = Column(String(255), ForeignKey('telegram_users.telegram_user_id'), nullable=False, index=True)
+    user_id = Column(String(255), ForeignKey('users.telegram_user_id'), nullable=False, index=True)
     price = Column(Numeric(20, 8), nullable=True)
     condition = Column(String(50), nullable=True)
     active = Column(Boolean, default=True, index=True)
@@ -69,7 +72,7 @@ class Schedule(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ticker = Column(String(50), nullable=True)
-    user_id = Column(String(255), ForeignKey('telegram_users.telegram_user_id'), nullable=False, index=True)
+    user_id = Column(String(255), ForeignKey('users.telegram_user_id'), nullable=False, index=True)
     scheduled_time = Column(String(20), nullable=False)
     period = Column(String(20), nullable=True)
     active = Column(Boolean, default=True, index=True)
@@ -95,7 +98,7 @@ class Feedback(Base):
     __tablename__ = 'telegram_feedback'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(255), ForeignKey('telegram_users.telegram_user_id'), nullable=False)
+    user_id = Column(String(255), ForeignKey('users.telegram_user_id'), nullable=False)
     type = Column(String(50), nullable=False)  # 'feedback' or 'feature_request'
     message = Column(Text, nullable=False)
     created = Column(String(40), nullable=True)

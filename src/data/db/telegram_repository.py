@@ -54,11 +54,11 @@ class TelegramRepository:
             return None
         return {
             'email': user.email,
-            'verified': bool(user.verified),
-            'approved': bool(user.approved),
-            'code_sent_time': user.code_sent_time,
-            'language': user.language,
-            'is_admin': bool(user.is_admin)
+            'telegram_verified': bool(user.verified),
+            'telegram_approved': bool(user.approved),
+            'telegram_code_sent_time': user.code_sent_time,
+            'telegram_language': user.language,
+            'telegram_is_admin': bool(user.is_admin)
         }
 
     def set_verification_code(self, telegram_user_id: str, code: str, sent_time: int) -> VerificationCode:
