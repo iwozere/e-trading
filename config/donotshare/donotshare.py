@@ -16,6 +16,9 @@ DATA_CACHE_DIR = "c:/data-cache"
 # Database configuration
 DB_PATH = "db/trading.db"
 
+# 0 - off, 1 - log SQL queries into the log files
+SQL_ECHO = "1"
+
 TELEGRAM_WEBGUI_PORT=5000
 TELEGRAM_API_PORT=5001
 

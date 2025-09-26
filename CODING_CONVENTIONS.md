@@ -63,6 +63,10 @@ sys.path.append(str(PROJECT_ROOT))
 
 ---
 
+### 2.2 __init__.py files
+
+Try to keep all __init__.py files empty for all packages unless it is absolutely necessary to import functions from the subpackages.
+
 ## 3. Logging
 
 ### 3.1 Logger Initialization

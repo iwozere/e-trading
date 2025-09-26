@@ -1,0 +1,173 @@
+from __future__ import annotations
+
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Iterator
+
+from sqlalchemy.orm import Session
+
+# Engine / session factory
+from src.data.db.core import database as core_db
+
+# Model Bases — used by init_databases()
+from src.data.db.models.model_users import Base as UsersBase
+from src.data.db.models.model_telegram import Base as TelegramBase
+from src.data.db.models.model_trading import Base as TradingBase
+from src.data.db.models.model_webui import Base as WebUIBase
+
+# Repositories
+# NOTE: every repo must accept a sqlalchemy.orm.Session in __init__
+from src.data.db.repos.repo_users import UsersRepo
+
+from src.data.db.repos.repo_telegram import (
+    AlertsRepo as TelegramAlertsRepo,
+    SchedulesRepo as TelegramSchedulesRepo,
+    FeedbackRepo as TelegramFeedbackRepo,
+    CommandAuditRepo as TelegramCommandAuditRepo,
+    BroadcastRepo as TelegramBroadcastRepo,
+    SettingsRepo as TelegramSettingsRepo,
+    VerificationRepo as TelegramVerificationRepo,
+)
+
+from src.data.db.repos.repo_webui import (
+    AuditRepo as WebUIAuditRepo,
+    SnapshotRepo as WebUISnapshotRepo,
+    StrategyTemplateRepo as WebUIStrategyTemplateRepo,
+    SystemConfigRepo as WebUISystemConfigRepo,
+)
+
+from src.data.db.repos.repo_trading import (
+    BotsRepo as TradingBotsRepo,
+    TradesRepo as TradingTradesRepo,
+    PositionsRepo as TradingPositionsRepo,
+    MetricsRepo as TradingMetricsRepo,
+)
+
+
+# ------------------------------- UoW bundle ----------------------------------
+
+@dataclass
+class ReposBundle:
+    """A single-session bundle of all repos. Constructed per UoW."""
+    s: Session
+
+    # Users
+    users: UsersRepo
+
+    # Telegram
+    telegram_alerts: TelegramAlertsRepo
+    telegram_schedules: TelegramSchedulesRepo
+    telegram_feedback: TelegramFeedbackRepo
+    telegram_audit: TelegramCommandAuditRepo
+    telegram_broadcast: TelegramBroadcastRepo
+    telegram_settings: TelegramSettingsRepo
+    telegram_verification: TelegramVerificationRepo
+
+    # WebUI
+    webui_audit: WebUIAuditRepo
+    webui_snapshots: WebUISnapshotRepo
+    webui_templates: WebUIStrategyTemplateRepo
+    webui_config: WebUISystemConfigRepo
+
+    # Trading
+    bots: TradingBotsRepo
+    trades: TradingTradesRepo
+    positions: TradingPositionsRepo
+    metrics: TradingMetricsRepo
+
+
+# ----------------------------- Database service ------------------------------
+
+class DatabaseService:
+    """Provides Unit-of-Work sessions and database initialization."""
+
+    def __init__(self) -> None:
+        # Don't capture SessionLocal/engine here; tests monkeypatch them.
+        pass
+
+    def init_databases(self) -> None:
+        """Create all tables for every model base (idempotent)."""
+        eng = getattr(self, "engine", None) or engine
+        for base in (UsersBase, TelegramBase, TradingBase, WebUIBase):
+            base.metadata.create_all(bind=eng)
+
+    # for tests that call ds.get_database_service()
+    def get_database_service(self):
+        return self
+
+    @contextmanager
+    def uow(self) -> Iterator[ReposBundle]:
+        """
+        Open a new Session and yield a bundle of repos bound to that session.
+        Commits on success; rolls back on error; always closes the session.
+        """
+        sf = getattr(self, "SessionLocal", None) or SessionLocal
+        s: Session = sf()
+        try:
+            repos = ReposBundle(
+                s=s,
+
+                # Users
+                users=UsersRepo(s),
+
+                # Telegram
+                telegram_alerts=TelegramAlertsRepo(s),
+                telegram_schedules=TelegramSchedulesRepo(s),
+                telegram_feedback=TelegramFeedbackRepo(s),
+                telegram_audit=TelegramCommandAuditRepo(s),
+                telegram_broadcast=TelegramBroadcastRepo(s),
+                telegram_settings=TelegramSettingsRepo(s),
+                telegram_verification=TelegramVerificationRepo(s),
+
+                # WebUI
+                webui_audit=WebUIAuditRepo(s),
+                webui_snapshots=WebUISnapshotRepo(s),
+                webui_templates=WebUIStrategyTemplateRepo(s),
+                webui_config=WebUISystemConfigRepo(s),
+
+                # Trading
+                bots=TradingBotsRepo(s),
+                trades=TradingTradesRepo(s),
+                positions=TradingPositionsRepo(s),
+                metrics=TradingMetricsRepo(s),
+            )
+            yield repos
+            s.commit()
+        except Exception:
+            s.rollback()
+            raise
+        finally:
+            s.close()
+
+
+# ------------------------- Singleton-style accessors -------------------------
+# Make a module-level singleton that tests import as `ds`
+# ------------------------- Singleton-style accessors -------------------------
+_db_service_singleton: DatabaseService | None = None
+
+def get_database_service() -> DatabaseService:
+    """Global accessor used by services (webui_service, trading_service, telegram_service)."""
+    global _db_service_singleton
+    if _db_service_singleton is None:
+        _db_service_singleton = DatabaseService()
+    return _db_service_singleton
+
+# Make a module-level singleton that tests import as `ds`
+database_service = get_database_service()
+
+
+def init_databases() -> None:
+    """Convenience to match existing service init_db() calls."""
+    get_database_service().init_databases()
+
+
+# ------------------------------ Deprecated APIs ------------------------------
+# If you had helpers like get_telegram_repo() / get_webui_repo() / get_trading_repo(),
+# remove them. They encouraged ad-hoc sessions and made multi-repo transactions non-atomic.
+# Use:
+#   with get_database_service().uow() as r:
+#       r.telegram_alerts.create(...)
+#       r.telegram_audit.log(...)
+# which guarantees a single transaction and consistent session.
+
+

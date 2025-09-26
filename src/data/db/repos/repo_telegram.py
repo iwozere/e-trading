@@ -1,0 +1,259 @@
+# src/data/db/repos/repo_telegram.py
+from __future__ import annotations
+from datetime import datetime, timezone
+from typing import Optional, Sequence
+from sqlalchemy import select, update, delete, func
+from sqlalchemy.orm import Session
+
+from src.data.db.models.model_users import User, AuthIdentity
+from src.data.db.models.model_telegram import (
+    TelegramAlert,
+    TelegramSchedule,
+    TelegramSetting,
+    TelegramFeedback,
+    TelegramCommandAudit,
+    TelegramBroadcastLog,
+    TelegramVerificationCode,
+)
+
+UTC = timezone.utc
+utcnow = lambda: datetime.now(UTC)
+
+
+# -------------------- Alerts --------------------
+class AlertsRepo:
+    def __init__(self, s: Session) -> None:
+        self.s = s
+
+    def create(
+        self,
+        user_id: int,
+        ticker: str,
+        *,
+        price: Optional[float] = None,
+        condition: Optional[str] = None,
+        alert_type: str = "price",
+        timeframe: Optional[str] = None,
+        config_json: Optional[str] = None,
+        alert_action: Optional[str] = None,
+        email: Optional[bool] = None,
+        is_armed: bool = True,
+        active: bool = True,
+    ) -> TelegramAlert:
+        row = TelegramAlert(
+            user_id=user_id,
+            ticker=ticker,
+            price=price,
+            condition=condition,
+            alert_type=alert_type,
+            timeframe=timeframe or "1h",
+            config_json=config_json,
+            alert_action=alert_action,
+            email=bool(email) if email is not None else False,
+            is_armed=is_armed,
+            active=active,
+            created=utcnow(),
+        )
+        self.s.add(row); self.s.flush()
+        return row
+
+    def get(self, alert_id: int) -> Optional[TelegramAlert]:
+        return self.s.get(TelegramAlert, alert_id)
+
+    def list_for_user(self, user_id: int) -> Sequence[TelegramAlert]:
+        q = select(TelegramAlert).where(TelegramAlert.user_id == user_id)
+        return list(self.s.execute(q).scalars())
+
+    def list_active_global(self) -> Sequence[TelegramAlert]:
+        q = select(TelegramAlert).where(TelegramAlert.active.is_(True))
+        return list(self.s.execute(q).scalars())
+
+    def list_by_type(self, alert_type: str) -> Sequence[TelegramAlert]:
+        q = select(TelegramAlert).where(TelegramAlert.alert_type == alert_type)
+        return list(self.s.execute(q).scalars())
+
+    def update(self, alert_id: int, **values) -> bool:
+        if not values: return False
+        res = self.s.execute(update(TelegramAlert).where(TelegramAlert.id == alert_id).values(**values))
+        return (res.rowcount or 0) > 0
+
+    def delete(self, alert_id: int) -> None:
+        self.s.execute(delete(TelegramAlert).where(TelegramAlert.id == alert_id))
+        self.s.flush()
+
+
+# -------------------- Schedules --------------------
+class SchedulesRepo:
+    def __init__(self, s: Session) -> None:
+        self.s = s
+
+    def upsert(self, data: dict) -> TelegramSchedule:
+        # Accept alias 'schedule_time', map to 'scheduled_time'
+        if "schedule_time" in data and "scheduled_time" not in data:
+            data = {**data, "scheduled_time": data.pop("schedule_time")}
+        # Enforce NOT NULL scheduled_time
+        if not data.get("scheduled_time"):
+            data = {**data, "scheduled_time": "09:00"}
+
+        row = TelegramSchedule(**data)
+        self.s.add(row); self.s.flush()
+        return row
+
+    def get(self, schedule_id: int) -> Optional[TelegramSchedule]:
+        return self.s.get(TelegramSchedule, schedule_id)
+
+    def list_for_user(self, user_id: int) -> Sequence[TelegramSchedule]:
+        q = select(TelegramSchedule).where(TelegramSchedule.user_id == user_id)
+        return list(self.s.execute(q).scalars())
+
+    def list_active_global(self) -> Sequence[TelegramSchedule]:
+        q = select(TelegramSchedule).where(TelegramSchedule.active.is_(True))
+        return list(self.s.execute(q).scalars())
+
+    def list_by_config(self, schedule_config: str) -> Sequence[TelegramSchedule]:
+        q = select(TelegramSchedule).where(TelegramSchedule.schedule_config == schedule_config)
+        return list(self.s.execute(q).scalars())
+
+    def update(self, schedule_id: int, **values) -> bool:
+        if "schedule_time" in values and "scheduled_time" not in values:
+            values = {**values, "scheduled_time": values.pop("schedule_time")}
+        if "scheduled_time" in values and not values["scheduled_time"]:
+            values["scheduled_time"] = "09:00"
+        res = self.s.execute(update(TelegramSchedule).where(TelegramSchedule.id == schedule_id).values(**values))
+        return (res.rowcount or 0) > 0
+
+    def delete(self, schedule_id: int) -> None:
+        self.s.execute(delete(TelegramSchedule).where(TelegramSchedule.id == schedule_id))
+        self.s.flush()
+
+
+# -------------------- Settings --------------------
+class SettingsRepo:
+    def __init__(self, s: Session) -> None:
+        self.s = s
+
+    def get(self, key: str) -> Optional[TelegramSetting]:
+        return self.s.get(TelegramSetting, key)
+
+    def set(self, key: str, value: Optional[str]) -> None:
+        row = self.s.get(TelegramSetting, key)
+        if row is None:
+            row = TelegramSetting(key=key, value=value)
+            self.s.add(row)
+        else:
+            row.value = value
+        self.s.flush()
+
+
+# -------------------- Feedback --------------------
+class FeedbackRepo:
+    def __init__(self, s: Session) -> None:
+        self.s = s
+
+    def create(self, user_id: int, type_: str, message: str) -> TelegramFeedback:
+        row = TelegramFeedback(user_id=user_id, type=type_, message=message, status="open", created=utcnow())
+        self.s.add(row); self.s.flush(); return row
+
+    def list(self, type_: Optional[str] = None) -> Sequence[TelegramFeedback]:
+        q = select(TelegramFeedback)
+        if type_:
+            q = q.where(TelegramFeedback.type == type_)
+        return list(self.s.execute(q).scalars())
+
+    def set_status(self, feedback_id: int, status: str) -> bool:
+        res = self.s.execute(update(TelegramFeedback).where(TelegramFeedback.id == feedback_id).values(status=status))
+        return (res.rowcount or 0) > 0
+
+
+# -------------------- Broadcasts --------------------
+class BroadcastRepo:
+    def __init__(self, s: Session) -> None:
+        self.s = s
+
+    def log(self, message: str, sent_by: str, success_count: int = 0, total_count: int = 0) -> TelegramBroadcastLog:
+        row = TelegramBroadcastLog(message=message, sent_by=sent_by, success_count=success_count, total_count=total_count, created=utcnow())
+        self.s.add(row); self.s.flush(); return row
+
+
+# -------------------- Verification --------------------
+class VerificationRepo:
+    def __init__(self, s: Session) -> None:
+        self.s = s
+
+    def issue(self, user_id: int, *, code: str, sent_time: int) -> TelegramVerificationCode:
+        row = TelegramVerificationCode(user_id=user_id, code=code, sent_time=sent_time)
+        self.s.add(row); self.s.flush(); return row
+
+    def count_last_hour_by_user_id(self, user_id: int, now_unix: int) -> int:
+        cutoff = now_unix - 3600
+        q = select(func.count(TelegramVerificationCode.id)).where(
+            TelegramVerificationCode.user_id == user_id,
+            TelegramVerificationCode.sent_time >= cutoff,
+        )
+        return int(self.s.execute(q).scalar_one() or 0)
+
+
+# -------------------- Command audit --------------------
+class CommandAuditRepo:
+    def __init__(self, s: Session) -> None:
+        self.s = s
+
+    def log(self, telegram_user_id: str, command: str, **kwargs) -> TelegramCommandAudit:
+        row = TelegramCommandAudit(
+            telegram_user_id=telegram_user_id,
+            command=command,
+            full_message=kwargs.get("full_message"),
+            is_registered_user=bool(kwargs.get("is_registered_user")),
+            user_email=kwargs.get("user_email"),
+            success=bool(kwargs.get("success")),
+            error_message=kwargs.get("error_message"),
+            response_time_ms=int(kwargs.get("response_time_ms") or 0),
+            created=utcnow(),
+        )
+        self.s.add(row); self.s.flush(); return row
+
+    def last_commands(self, telegram_user_id: str, *, limit: int = 20) -> Sequence[TelegramCommandAudit]:
+        q = (
+            select(TelegramCommandAudit)
+            .where(TelegramCommandAudit.telegram_user_id == telegram_user_id)
+            .order_by(TelegramCommandAudit.id.desc())
+            .limit(limit)
+        )
+        return list(self.s.execute(q).scalars())
+
+    def list(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        user_id: Optional[str] = None,
+        command: Optional[str] = None,
+        success_only: Optional[bool] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Sequence[TelegramCommandAudit]:
+        q = select(TelegramCommandAudit)
+        if user_id:
+            q = q.where(TelegramCommandAudit.telegram_user_id == user_id)
+        if command:
+            q = q.where(TelegramCommandAudit.command == command)
+        if success_only:
+            q = q.where(TelegramCommandAudit.success.is_(True))
+        if start_date:
+            q = q.where(TelegramCommandAudit.created >= start_date)
+        if end_date:
+            q = q.where(TelegramCommandAudit.created <= end_date)
+        q = q.order_by(TelegramCommandAudit.id.desc()).offset(offset).limit(limit)
+        return list(self.s.execute(q).scalars())
+
+    def stats(self) -> dict:
+        total = int(self.s.execute(select(func.count(TelegramCommandAudit.id))).scalar_one() or 0)
+        rows = self.s.execute(
+            select(TelegramCommandAudit.command, func.count(TelegramCommandAudit.id)).group_by(TelegramCommandAudit.command)
+        ).all()
+        success = int(self.s.execute(select(func.count(TelegramCommandAudit.id)).where(TelegramCommandAudit.success.is_(True))).scalar_one() or 0)
+        return {"total": total, "by_command": {cmd: int(cnt) for cmd, cnt in rows}, "success_rate": (success / total) if total else None}
+
+    def unique_users_summary(self) -> list[dict]:
+        rows = self.s.execute(select(TelegramCommandAudit.telegram_user_id).distinct()).all()
+        return [{"telegram_user_id": r[0]} for r in rows]
