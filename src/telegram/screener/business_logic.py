@@ -12,7 +12,7 @@ from src.common import get_ohlcv, determine_provider, get_ticker_info
 from src.common.fundamentals import get_fundamentals_unified
 from src.common.technicals import calculate_technicals_unified
 from src.model.telegram_bot import TickerAnalysis
-from src.data.db import telegram_service as db
+from src.data.db.services import telegram_service as db
 from src.common.ticker_analyzer import format_ticker_report, analyze_ticker
 from src.common.ticker_analyzer import analyze_ticker
 from src.telegram.screener.report_config_parser import ReportConfigParser
