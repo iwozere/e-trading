@@ -337,6 +337,7 @@ CREATE TABLE trading_performance_metrics (
 
 | name | unique | origin | partial |
 |------|-------:|--------|---------|
+| ix_trading_performance_metrics_bot_id_calculated_at | 0 | c | 0 |
 | ix_trading_performance_metrics_symbol | 0 | c | 0 |
 | ix_trading_performance_metrics_calculated_at | 0 | c | 0 |
 | ix_trading_performance_metrics_bot_id | 0 | c | 0 |
@@ -392,6 +393,7 @@ CREATE TABLE trading_positions (
 
 | name | unique | origin | partial |
 |------|-------:|--------|---------|
+| ix_trading_positions_bot_id_status | 0 | c | 0 |
 | ix_trading_positions_symbol | 0 | c | 0 |
 | ix_trading_positions_bot_id | 0 | c | 0 |
 | sqlite_autoindex_trading_positions_1 | 1 | pk | 0 |
@@ -487,6 +489,9 @@ CREATE TABLE trading_trades (
 
 | name | unique | origin | partial |
 |------|-------:|--------|---------|
+| ix_trading_trades_bot_id_symbol | 0 | c | 0 |
+| ix_trading_trades_bot_id_entry_time | 0 | c | 0 |
+| ix_trading_trades_bot_id_status | 0 | c | 0 |
 | ix_trading_trades_strategy_name | 0 | c | 0 |
 | ix_trading_trades_trade_type | 0 | c | 0 |
 | ix_trading_trades_symbol | 0 | c | 0 |
@@ -506,16 +511,6 @@ CREATE TABLE "users" (
 
     -- Telegram integration fields
     telegram_user_id VARCHAR(255) UNIQUE,
-    telegram_verified BOOLEAN DEFAULT FALSE,
-    telegram_approved BOOLEAN DEFAULT FALSE,
-    telegram_language VARCHAR(10),
-    telegram_is_admin BOOLEAN DEFAULT FALSE,
-    telegram_max_alerts INTEGER,
-    telegram_max_schedules INTEGER,
-    telegram_verification_code VARCHAR(32),
-    telegram_code_sent_time INTEGER,
-
-    -- Audit fields
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME,
     last_login DATETIME,
@@ -532,23 +527,14 @@ CREATE TABLE "users" (
 | 2 | role | VARCHAR(20) | 1 | 'trader' | 0 |
 | 3 | is_active | BOOLEAN | 0 | TRUE | 0 |
 | 4 | telegram_user_id | VARCHAR(255) | 0 | None | 0 |
-| 5 | telegram_verified | BOOLEAN | 0 | FALSE | 0 |
-| 6 | telegram_approved | BOOLEAN | 0 | FALSE | 0 |
-| 7 | telegram_language | VARCHAR(10) | 0 | None | 0 |
-| 8 | telegram_is_admin | BOOLEAN | 0 | FALSE | 0 |
-| 9 | telegram_max_alerts | INTEGER | 0 | None | 0 |
-| 10 | telegram_max_schedules | INTEGER | 0 | None | 0 |
-| 11 | telegram_verification_code | VARCHAR(32) | 0 | None | 0 |
-| 12 | telegram_code_sent_time | INTEGER | 0 | None | 0 |
-| 13 | created_at | DATETIME | 0 | CURRENT_TIMESTAMP | 0 |
-| 14 | updated_at | DATETIME | 0 | None | 0 |
-| 15 | last_login | DATETIME | 0 | None | 0 |
+| 5 | created_at | DATETIME | 0 | CURRENT_TIMESTAMP | 0 |
+| 6 | updated_at | DATETIME | 0 | None | 0 |
+| 7 | last_login | DATETIME | 0 | None | 0 |
 
 **Indexes**
 
 | name | unique | origin | partial |
 |------|-------:|--------|---------|
-| ix_users_telegram_user_id | 0 | c | 0 |
 | ix_users_email | 0 | c | 0 |
 | sqlite_autoindex_users_2 | 1 | u | 0 |
 | sqlite_autoindex_users_1 | 1 | u | 0 |
