@@ -5,6 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 import time
+from datetime import datetime, timezone
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -67,9 +68,15 @@ def test_alerts_crud_and_filters(dbsess):
     uid = _mk_user(dbsess, "a@example.com")
     alerts = AlertsRepo(dbsess)
 
-    # create price alert
-    a = alerts.create(uid, "AAPL", price=150.0, condition="above", alert_type="price", email=True)
-    assert a.id is not None and a.ticker == "AAPL" and a.alert_type == "price" and a.active is True
+    # create JSON-based alert
+    a = alerts.create(
+        uid,
+        config_json='{"ticker":"AAPL","rule":{"price_above":170}}',
+        email=True,
+        status="ARMED",
+        re_arm_config='{"rearm_on_cross_below":170}',
+    )
+    assert a.id is not None and a.status == "ARMED" and a.trigger_count == 0
 
     # get + list_for_user
     got = alerts.get(a.id)
@@ -77,17 +84,25 @@ def test_alerts_crud_and_filters(dbsess):
     my = alerts.list_for_user(uid)
     assert any(x.id == a.id for x in my)
 
-    # list_by_type + list_active_global
-    by_type = alerts.list_by_type("price")
-    assert any(x.id == a.id for x in by_type)
-    active_global = alerts.list_active_global()
-    assert any(x.id == a.id for x in active_global)
+    # list_by_status (ARMED)
+    armed = alerts.list_by_status("ARMED")
+    assert any(x.id == a.id for x in armed)
 
-    # update -> deactivate
-    ok = alerts.update(a.id, active=False, is_armed=False)
+    # update -> triggered once, then deactivate
+    ok = alerts.update(
+        a.id,
+        status="TRIGGERED",
+        trigger_count=1,
+        last_trigger_condition='{"price":171.0}',
+        last_triggered_at=datetime.now(timezone.utc),
+    )
     assert ok is True
     still = alerts.get(a.id)
-    assert still and (still.active is False) and (still.is_armed is False)
+    assert still and still.status == "TRIGGERED" and still.trigger_count == 1
+
+    ok = alerts.update(a.id, status="INACTIVE")
+    assert ok is True
+    assert alerts.get(a.id).status == "INACTIVE"
 
     # delete
     alerts.delete(a.id)
@@ -116,12 +131,10 @@ def test_schedules_upsert_update_delete(dbsess):
     s2 = scheds.upsert({"user_id": uid, "ticker": "AAPL"})
     assert s2.scheduled_time == "09:00"
 
-    # list_for_user + list_active_global
+    # list_for_user
     mine = scheds.list_for_user(uid)
     ids = {x.id for x in mine}
     assert {s1.id, s2.id} <= ids
-    global_active = scheds.list_active_global()
-    assert any(x.id == s1.id for x in global_active)
 
     # Update and assert persisted state (don't rely on rowcount True/False)
     _ = scheds.update(s1.id, scheduled_time="09:15", active=False)

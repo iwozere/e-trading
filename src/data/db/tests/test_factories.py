@@ -4,6 +4,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
+import json
 from datetime import datetime, timezone
 from src.data.db.tests.factories import RNG, make_user, add_telegram_identity, make_position, make_alert
 
@@ -23,7 +24,8 @@ def test_make_position_and_alert(dbsess):
     a = make_alert(dbsess, rng, user_id=u.id, ticker="AAPL", condition="above", price=200.0)
     dbsess.commit()
     assert p.symbol == "AAPL"
-    assert a.ticker == "AAPL"
+    cfg = json.loads(a.config_json or "{}")
+    assert cfg.get("ticker") == "AAPL"
 
 if __name__ == "__main__":
     import pytest, sys

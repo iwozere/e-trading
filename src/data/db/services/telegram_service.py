@@ -53,24 +53,29 @@ def count_codes_last_hour(telegram_user_id: str, now_unix: int | None = None) ->
         )
 
 # --- Alerts ---
-def add_alert(telegram_user_id: str, ticker: str, price: float, condition: str, *, email: Optional[bool] = None) -> int:
+def add_json_alert(
+    telegram_user_id: str,
+    config_json: str,
+    *,
+    email: Optional[bool] = None,
+    status: str = "ARMED",
+    re_arm_config: Optional[str] = None,
+) -> int:
+    """
+    Create an alert using the new schema.
+    Example config_json:
+      {"ticker":"AAPL","rule":{"price_above":170}}
+    Example re_arm_config:
+      {"rearm_on_cross_below":170}
+    """
     with database_service.uow() as r:
         uid = r.users.ensure_user_for_telegram(telegram_user_id).id
         row = r.telegram_alerts.create(
-            uid, ticker, price=price, condition=condition,
-            alert_type="price", email=email, is_armed=True, active=True
-        )
-        return row.id
-
-def add_indicator_alert(telegram_user_id: str, ticker: str, config_json: str, *,
-                        alert_action: Optional[str] = None, timeframe: Optional[str] = None,
-                        email: Optional[bool] = None) -> int:
-    with database_service.uow() as r:
-        uid = r.users.ensure_user_for_telegram(telegram_user_id).id
-        row = r.telegram_alerts.create(
-            uid, ticker, alert_type="indicator", config_json=config_json,
-            alert_action=alert_action, timeframe=timeframe, email=email,
-            is_armed=True, active=True
+            uid,
+            config_json=config_json,
+            email=email,
+            status=status,
+            re_arm_config=re_arm_config,
         )
         return row.id
 

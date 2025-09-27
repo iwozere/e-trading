@@ -12,20 +12,20 @@ class TelegramAlert(Base):
     __tablename__ = "telegram_alerts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    ticker: Mapped[str] = mapped_column(String(50))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    price: Mapped[float | None] = mapped_column(Numeric(20, 8))
-    condition: Mapped[str | None] = mapped_column(String(50))
-    active: Mapped[bool | None] = mapped_column(Boolean)
+
+    # ARMED, TRIGGERED, INACTIVE
+    status: Mapped[str | None] = mapped_column(String(50))
+
+    # Should we notify user by email?
     email: Mapped[bool | None] = mapped_column(Boolean)
-    created: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
-    alert_type: Mapped[str | None] = mapped_column(String(20))
-    timeframe: Mapped[str | None] = mapped_column(String(10))
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
     config_json: Mapped[str | None] = mapped_column(Text)
-    alert_action: Mapped[str | None] = mapped_column(String(50))
     re_arm_config: Mapped[str | None] = mapped_column(Text)
-    is_armed: Mapped[bool | None] = mapped_column(Boolean, server_default=text("1"))
-    last_price: Mapped[float | None] = mapped_column(Float)
+    trigger_count: Mapped[int | None] = mapped_column(Integer)
+
+    # Price, indicators values etc. at the time, when it was triggered last time
+    last_trigger_condition: Mapped[str | None] = mapped_column(Text)
     last_triggered_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
@@ -40,7 +40,7 @@ class TelegramBroadcastLog(Base):
     sent_by: Mapped[str] = mapped_column(String(255))
     success_count: Mapped[int | None] = mapped_column(Integer)
     total_count: Mapped[int | None] = mapped_column(Integer)
-    created: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
 # telegram_command_audits
 class TelegramCommandAudit(Base):
@@ -55,13 +55,13 @@ class TelegramCommandAudit(Base):
     success: Mapped[bool | None] = mapped_column(Boolean)
     error_message: Mapped[str | None] = mapped_column(Text)
     response_time_ms: Mapped[int | None] = mapped_column(Integer)
-    created: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         Index("ix_telegram_command_audits_telegram_user_id", "telegram_user_id"),
         Index("ix_telegram_command_audits_success", "success"),
         Index("ix_telegram_command_audits_command", "command"),
-        Index("ix_telegram_command_audits_created", "created"),
+        Index("ix_telegram_command_audits_created", "created_at"),
     )
 
 # telegram_feedbacks

@@ -1,6 +1,7 @@
 # tests/factories.py
 from __future__ import annotations
 import random
+import json
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -127,26 +128,25 @@ def make_alert(
     active: bool = True,
 ) -> TelegramAlert:
     ticker = ticker or rng.choice(["AAPL", "NVDA", "TSLA", "MRNA", "SMCI"])
-    condition = condition or rng.choice(["above", "below", "cross"])
+    condition = condition or rng.choice(["above", "below"])
     timeframe = timeframe or rng.choice(["1h", "4h", "1d"])
     price = price if price is not None else round(rng.randfloat(10, 400), 2)
+
+    # Build new-schema JSON
+    rule = {"price_above": price} if condition == "above" else {"price_below": price}
+    cfg = {"ticker": ticker, "timeframe": timeframe, "rule": rule}
     row = TelegramAlert(
-        ticker=ticker,
         user_id=user_id,
-        price=price,
-        condition=condition,
-        active=active,
+        status="ARMED",
         email=email,
-        created=utcnow(),            # <- real datetime ✅
-        alert_type=alert_type,
-        timeframe=timeframe,
-        config_json=None,
-        alert_action=None,
+        created_at=utcnow(),
+        config_json=json.dumps(cfg, separators=(",", ":")),
         re_arm_config=None,
-        is_armed=is_armed,
-        last_price=None,
-        last_triggered_at=None,      # keep None or use utcnow() if needed
+        trigger_count=0,
+        last_trigger_condition=None,
+        last_triggered_at=None,
     )
+
     s.add(row); s.flush()
     return row
 

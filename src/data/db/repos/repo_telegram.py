@@ -28,33 +28,29 @@ class AlertsRepo:
     def create(
         self,
         user_id: int,
-        ticker: str,
         *,
-        price: Optional[float] = None,
-        condition: Optional[str] = None,
-        alert_type: str = "price",
-        timeframe: Optional[str] = None,
-        config_json: Optional[str] = None,
-        alert_action: Optional[str] = None,
+        config_json: str,
         email: Optional[bool] = None,
-        is_armed: bool = True,
-        active: bool = True,
+        status: str = "ARMED",
+        re_arm_config: Optional[str] = None,
     ) -> TelegramAlert:
+        """
+        Create an alert aligned with the new schema:
+          - rules live in config_json (e.g. {"ticker":"AAPL","rule":{"price_above":170}})
+          - rearm rules live in re_arm_config (e.g. {"rearm_on_cross_below":170})
+          - status: ARMED | TRIGGERED | INACTIVE
+        """
         row = TelegramAlert(
             user_id=user_id,
-            ticker=ticker,
-            price=price,
-            condition=condition,
-            alert_type=alert_type,
-            timeframe=timeframe or "1h",
-            config_json=config_json,
-            alert_action=alert_action,
+            status=status,
             email=bool(email) if email is not None else False,
-            is_armed=is_armed,
-            active=active,
-            created=utcnow(),
+            created_at=utcnow(),
+            config_json=config_json,
+            re_arm_config=re_arm_config,
+            trigger_count=0,
         )
-        self.s.add(row); self.s.flush()
+        self.s.add(row)
+        self.s.flush()
         return row
 
     def get(self, alert_id: int) -> Optional[TelegramAlert]:
@@ -64,8 +60,8 @@ class AlertsRepo:
         q = select(TelegramAlert).where(TelegramAlert.user_id == user_id)
         return list(self.s.execute(q).scalars())
 
-    def list_active_global(self) -> Sequence[TelegramAlert]:
-        q = select(TelegramAlert).where(TelegramAlert.active.is_(True))
+    def list_by_status(self, status: str = "ARMED") -> Sequence[TelegramAlert]:
+        q = select(TelegramAlert).where(TelegramAlert.status == status)
         return list(self.s.execute(q).scalars())
 
     def list_by_type(self, alert_type: str) -> Sequence[TelegramAlert]:
@@ -73,8 +69,15 @@ class AlertsRepo:
         return list(self.s.execute(q).scalars())
 
     def update(self, alert_id: int, **values) -> bool:
-        if not values: return False
-        res = self.s.execute(update(TelegramAlert).where(TelegramAlert.id == alert_id).values(**values))
+        if not values:
+            return False
+        # Allowed keys include: status, email, config_json, re_arm_config,
+        # trigger_count, last_trigger_condition, last_triggered_at, etc.
+        res = self.s.execute(
+            update(TelegramAlert)
+            .where(TelegramAlert.id == alert_id)
+            .values(**values)
+        )
         return (res.rowcount or 0) > 0
 
     def delete(self, alert_id: int) -> None:
@@ -111,10 +114,6 @@ class SchedulesRepo:
 
     def list_for_user(self, user_id: int) -> Sequence[TelegramSchedule]:
         q = select(TelegramSchedule).where(TelegramSchedule.user_id == user_id)
-        return list(self.s.execute(q).scalars())
-
-    def list_active_global(self) -> Sequence[TelegramSchedule]:
-        q = select(TelegramSchedule).where(TelegramSchedule.active.is_(True))
         return list(self.s.execute(q).scalars())
 
     def list_by_config(self, schedule_config: str) -> Sequence[TelegramSchedule]:
@@ -178,7 +177,7 @@ class BroadcastRepo:
         self.s = s
 
     def log(self, message: str, sent_by: str, success_count: int = 0, total_count: int = 0) -> TelegramBroadcastLog:
-        row = TelegramBroadcastLog(message=message, sent_by=sent_by, success_count=success_count, total_count=total_count, created=utcnow())
+        row = TelegramBroadcastLog(message=message, sent_by=sent_by, success_count=success_count, total_count=total_count, created_at=utcnow())
         self.s.add(row); self.s.flush(); return row
 
 
@@ -215,7 +214,7 @@ class CommandAuditRepo:
             success=bool(kwargs.get("success")),
             error_message=kwargs.get("error_message"),
             response_time_ms=int(kwargs.get("response_time_ms") or 0),
-            created=utcnow(),
+            created_at=utcnow(),
         )
         self.s.add(row); self.s.flush(); return row
 

@@ -5,6 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 import time
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
@@ -121,18 +122,26 @@ def test_alerts_crud(setup_inmemory_db):
     _, _ = setup_inmemory_db
     tg_id = "tgA"
 
-    # Create price alert
-    alert_id = tgs.add_alert(tg_id, "AAPL", price=150.0, condition="above", email=True)
+    # Create JSON-based alert
+    alert_id = tgs.add_json_alert(
+        tg_id,
+        config_json='{"ticker":"AAPL","rule":{"price_above":170}}',
+        email=True,
+        status="ARMED",
+        re_arm_config='{"rearm_on_cross_below":170}',
+    )
     assert isinstance(alert_id, int)
 
     all_alerts = tgs.list_alerts(tg_id)
-    assert len(all_alerts) == 1 and all_alerts[0].ticker == "AAPL"
+    assert len(all_alerts) == 1
+    cfg = json.loads(all_alerts[0].config_json or "{}")
+    assert cfg.get("ticker") == "AAPL"
 
     # Update alert
-    ok = tgs.update_alert(alert_id, price=160.0, condition="above")
+    ok = tgs.update_alert(alert_id, status="TRIGGERED", trigger_count=1)
     assert ok is True
     a = tgs.get_alert(alert_id)
-    assert a and float(a.price) == 160.0
+    assert a and a.status == "TRIGGERED" and a.trigger_count == 1
 
     # Delete alert
     ok = tgs.delete_alert(alert_id)
