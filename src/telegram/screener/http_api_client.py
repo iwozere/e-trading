@@ -202,7 +202,7 @@ async def send_notification_to_admins(message: str, title: str = "System Notific
         Dict with success status and counts
     """
     try:
-        from src.data.db import telegram_service as db
+        from src.data.db.services import telegram_service as db
 
         # Get all admin user IDs
         admin_ids = db.get_admin_user_ids()

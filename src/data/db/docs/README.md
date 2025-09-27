@@ -102,7 +102,7 @@ src/
 * In `telegram_service.py` you already do:
 
   ```python
-  from src.data.database_service import get_database_service
+  from src.data.db.service.database_service import get_database_service
   ```
 
 # Who calls whom (at runtime)

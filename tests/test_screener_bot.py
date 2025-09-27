@@ -13,7 +13,7 @@ import random
 import shutil
 
 # TODO: Update imports after ticker management functions are implemented
-# from src.data.db import telegram_service as db
+# from src.data.db.services import telegram_service as db
 from src.common.technicals import format_technical_analysis
 from src.common.ticker_chart import generate_chart
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority

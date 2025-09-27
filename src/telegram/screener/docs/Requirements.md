@@ -53,7 +53,7 @@
 ```python
 # Business Logic Dependencies
 from src.telegram.command_parser import ParsedCommand, parse_command
-from src.data.db import telegram_service as db  # Database operations
+from src.data.db.services import telegram_service as db  # Database operations
 from src.common import get_ohlcv  # Market data retrieval
 from src.common.fundamentals import get_fundamentals  # Fundamental data
 from src.common.technicals import calculate_technicals_from_df  # Technical indicators

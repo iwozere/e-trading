@@ -217,7 +217,7 @@ populate_cache()
 **Example Flow:**
 ```python
 # Application Layer
-from src.data.db import telegram_service as db
+from src.data.db.services import telegram_service as db
 user_status = db.get_user_status("123456")
 
 # Service Layer (automatic)

@@ -75,7 +75,7 @@ SQLite Database (single unified database)
 
 ```python
 # Telegram operations
-from src.data.db import telegram_service as db
+from src.data.db.services import telegram_service as db
 
 # User management
 db.set_user_email("123456", "user@example.com", "code123", timestamp)

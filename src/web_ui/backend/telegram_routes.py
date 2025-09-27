@@ -24,7 +24,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db import telegram_service as db
+from src.data.db.services import telegram_service as db
 from src.notification.logger import setup_logger
 from src.web_ui.backend.auth import get_current_user, require_admin
 from src.web_ui.backend.models import User
