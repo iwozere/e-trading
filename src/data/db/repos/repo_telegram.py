@@ -88,12 +88,19 @@ class SchedulesRepo:
         self.s = s
 
     def upsert(self, data: dict) -> TelegramSchedule:
-        # Accept alias 'schedule_time', map to 'scheduled_time'
+        # Copy so we don't mutate caller dict
+        data = dict(data)
+        # Accept alias 'schedule_time' -> 'scheduled_time'
         if "schedule_time" in data and "scheduled_time" not in data:
-            data = {**data, "scheduled_time": data.pop("schedule_time")}
-        # Enforce NOT NULL scheduled_time
+            data["scheduled_time"] = data.pop("schedule_time")
+        # Enforce NOT NULL scheduled_time default
         if not data.get("scheduled_time"):
-            data = {**data, "scheduled_time": "09:00"}
+            data["scheduled_time"] = "09:00"
+        # Normalize booleans and set robust defaults (don’t rely on DB defaults)
+        if "email" in data:
+            data["email"] = bool(data["email"])
+        if "active" not in data:
+            data["active"] = True
 
         row = TelegramSchedule(**data)
         self.s.add(row); self.s.flush()

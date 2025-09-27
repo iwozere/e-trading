@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 # Engine / session factory
 from src.data.db.core import database as core_db
+SessionLocal = core_db.SessionLocal
+engine = core_db.engine
 
 # Model Bases — used by init_databases()
 from src.data.db.models.model_users import Base as UsersBase

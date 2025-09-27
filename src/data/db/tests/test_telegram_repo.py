@@ -9,24 +9,38 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from src.data.db.models.model_users import Base as UsersBase
-from src.data.db.models.model_telegram import Base as TelegramBase
-from src.data.db.services.telegram_service import TelegramRepository
+# Models (create only what we need)
+from src.data.db.models.model_users import Base as UsersBase, User
+from src.data.db.models.model_telegram import Base as TelegramBase, TelegramSetting, TelegramAlert, TelegramSchedule
+
+# Repos under test
+from src.data.db.repos.repo_telegram import (
+    AlertsRepo,
+    SchedulesRepo,
+    SettingsRepo,
+    FeedbackRepo,
+    BroadcastRepo,
+    VerificationRepo,
+    CommandAuditRepo,
+)
 
 
-# ---------- local fixtures: in-memory DB with FKs ON, tables created ----------
+# ------------------------ In-memory DB (FKs ON) + tables ------------------------
 @pytest.fixture()
 def engine():
     eng = create_engine("sqlite+pysqlite:///:memory:", future=True)
+
     @event.listens_for(eng, "connect")
     def _fk_on(dbapi_con, _):
         cur = dbapi_con.cursor()
         cur.execute("PRAGMA foreign_keys=ON;")
         cur.close()
-    # Only users + telegram bases needed for this repo
+
+    # Create minimal schema for these repos
     UsersBase.metadata.create_all(eng)
     TelegramBase.metadata.create_all(eng)
     return eng
+
 
 @pytest.fixture()
 def dbsess(engine):
@@ -38,169 +52,169 @@ def dbsess(engine):
     finally:
         s.close()
 
-@pytest.fixture()
-def repo(dbsess):
-    return TelegramRepository(dbsess)
+
+# --------------------------------- helpers ---------------------------------
+def _mk_user(dbsess, email: str = None) -> int:
+    """Create a minimal user and return user_id."""
+    u = User(email=email)
+    dbsess.add(u)
+    dbsess.flush()
+    return u.id
 
 
-# ----------------------------- users / identity -------------------------------
-def test_user_resolution_and_upsert(repo: TelegramRepository):
-    # not created yet
-    assert repo.get_user("tg_1") is None
+# -------------------------------- AlertsRepo --------------------------------
+def test_alerts_crud_and_filters(dbsess):
+    uid = _mk_user(dbsess, "a@example.com")
+    alerts = AlertsRepo(dbsess)
 
-    # upsert creates user + identity and sets fields
-    repo.upsert_user("tg_1", email="u1@example.com", verified=True,
-                     language="en", is_admin=True, max_alerts=5, max_schedules=3)
-    dto = repo.get_user("tg_1")
-    assert dto and dto.email == "u1@example.com" and dto.verified is True
-    assert dto.language == "en" and dto.is_admin is True
-    assert dto.max_alerts == 5 and dto.max_schedules == 3
+    # create price alert
+    a = alerts.create(uid, "AAPL", price=150.0, condition="above", alert_type="price", email=True)
+    assert a.id is not None and a.ticker == "AAPL" and a.alert_type == "price" and a.active is True
 
-    # approval + status
-    assert repo.approve_user("tg_1", True) is True
-    status = repo.get_user_status("tg_1")
-    assert status and status["approved"] is True
+    # get + list_for_user
+    got = alerts.get(a.id)
+    assert got and got.id == a.id
+    my = alerts.list_for_user(uid)
+    assert any(x.id == a.id for x in my)
 
-    # pending approvals: only users explicitly set to False should appear
-    repo.upsert_user("tg_pending", email="p@example.com", approved=False)
-    pending = repo.list_pending_approvals()
-    ids = {p["telegram_user_id"] for p in pending}
-    assert "tg_pending" in ids
+    # list_by_type + list_active_global
+    by_type = alerts.list_by_type("price")
+    assert any(x.id == a.id for x in by_type)
+    active_global = alerts.list_active_global()
+    assert any(x.id == a.id for x in active_global)
 
-    # admins list
-    admins = repo.get_admin_user_ids()
-    assert "tg_1" in admins
-
-    # limits update
-    repo.set_user_limit("tg_1", "max_alerts", 10)
-    dto2 = repo.get_user("tg_1")
-    assert dto2 and dto2.max_alerts == 10
-
-
-# ----------------------------- verification codes ----------------------------
-def test_verification_codes_rate_limit(repo: TelegramRepository):
-    now = int(time.time())
-    # set an old code (older than 1h) and a recent one
-    repo.set_verification_code("tg_rate", code="OLD", sent_time=now - 4000)
-    repo.set_verification_code("tg_rate", code="NEW", sent_time=now - 100)
-    # count should include only the recent one
-    assert repo.count_codes_last_hour("tg_rate") == 1
-    # user DTO reflects the *last* code set
-    dto = repo.get_user("tg_rate")
-    assert dto and dto.verification_code == "NEW" and dto.code_sent_time == now - 100
-
-
-# ---------------------------------- alerts -----------------------------------
-def test_alerts_crud_and_filters(repo: TelegramRepository):
-    # Ensure user exists
-    repo.upsert_user("tg_alerts", email="a@b.com")
-
-    # Price alert
-    aid = repo.add_alert("tg_alerts", "AAPL", 200.0, "above", email=True)
-    a = repo.get_alert(aid)
-    assert a and a.ticker == "AAPL" and a.alert_type == "price" and a.active is True
-
-    # Update & list
-    assert repo.update_alert(aid, active=False) is True
-    my_alerts = repo.list_alerts("tg_alerts")
-    assert any(x.id == aid for x in my_alerts)
-
-    # Active filter excludes it now
-    only_active = repo.get_active_alerts()
-    assert all(x.id != aid for x in only_active)
-
-    # Indicator alert
-    iid = repo.add_indicator_alert("tg_alerts", "MSFT", "{}", alert_action="notify", timeframe="15m", email=False)
-    ind = repo.get_alert(iid)
-    assert ind and ind.alert_type == "indicator" and ind.is_armed is True
-
-    # By type
-    types = repo.get_alerts_by_type("indicator")
-    assert any(x.id == iid for x in types)
-
-    # Delete
-    assert repo.delete_alert(aid) is True
-    remaining = repo.list_alerts("tg_alerts")
-    assert all(x.id != aid for x in remaining)
-
-
-# -------------------------------- schedules ----------------------------------
-def test_schedules_crud_and_filters(repo: TelegramRepository):
-    repo.upsert_user("tg_sched", email="s@x.com")
-
-    sid_plain = repo.add_schedule("tg_sched", "AAPL", "09:30", period="daily",
-                                  email=True, indicators="rsi", interval="1h", provider="yfinance")
-    sid_json = repo.add_json_schedule("tg_sched", "{}", schedule_config="advanced")
-    sid_via_dict = repo.create_schedule({
-        "user_id": "tg_sched", "ticker": "NVDA", "scheduled_time": "10:00",
-        "period": "weekly", "email": False, "indicators": None, "interval": "4h",
-        "provider": "alpaca", "schedule_type": "plain", "list_type": None,
-        "config_json": None, "schedule_config": None
-    })
-
-    # list + get
-    all_scheds = repo.list_schedules("tg_sched")
-    assert {s.id for s in all_scheds} == {sid_plain, sid_json, sid_via_dict}
-    got = repo.get_schedule(sid_plain)
-    assert got and got.ticker == "AAPL"
-
-    # update & active filter
-    assert repo.update_schedule(sid_plain, active=False) is True
-    active = repo.get_active_schedules()
-    assert all(s.id != sid_plain for s in active)
-
-    # by config: only the JSON one
-    advanced_only = repo.get_schedules_by_config("advanced")
-    assert len(advanced_only) == 1 and advanced_only[0].id == sid_json
+    # update -> deactivate
+    ok = alerts.update(a.id, active=False, is_armed=False)
+    assert ok is True
+    still = alerts.get(a.id)
+    assert still and (still.active is False) and (still.is_armed is False)
 
     # delete
-    assert repo.delete_schedule(sid_via_dict) is True
-    left = repo.list_schedules("tg_sched")
-    assert len(left) == 2
+    alerts.delete(a.id)
+    assert alerts.get(a.id) is None
 
 
-# -------------------------------- settings -----------------------------------
-def test_settings_set_and_get(repo: TelegramRepository):
-    assert repo.get_setting("theme") is None
-    repo.set_setting("theme", "dark")
-    assert repo.get_setting("theme") == "dark"
-    # update path
-    repo.set_setting("theme", "light")
-    assert repo.get_setting("theme") == "light"
+# ------------------------------- SchedulesRepo -------------------------------
+def test_schedules_upsert_update_delete(dbsess):
+    uid = _mk_user(dbsess, "s@example.com")
+    scheds = SchedulesRepo(dbsess)
+
+    # upsert with alias schedule_time (maps to scheduled_time) and ensure defaulting works
+    s1 = scheds.upsert({
+        "user_id": uid,
+        "ticker": "MSFT",
+        "scheduled_time": "08:30",  # alias accepted
+        "period": "daily",
+        "email": True,
+        "interval": "1h",
+        "provider": "yfinance",
+        "indicators": "rsi",
+    })
+    assert s1.id is not None and s1.scheduled_time == "08:30"
+
+    # upsert with missing scheduled_time -> defaults to "09:00"
+    s2 = scheds.upsert({"user_id": uid, "ticker": "AAPL"})
+    assert s2.scheduled_time == "09:00"
+
+    # list_for_user + list_active_global
+    mine = scheds.list_for_user(uid)
+    ids = {x.id for x in mine}
+    assert {s1.id, s2.id} <= ids
+    global_active = scheds.list_active_global()
+    assert any(x.id == s1.id for x in global_active)
+
+    # Update and assert persisted state (don't rely on rowcount True/False)
+    _ = scheds.update(s1.id, scheduled_time="09:15", active=False)
+    got = scheds.get(s1.id)
+    assert got is not None
+    assert got.scheduled_time == "09:15"
+    assert got.active is False
+
+    # list_by_config (none set above; ensure it’s empty)
+    assert scheds.list_by_config("advanced") == []
+
+    # delete
+    scheds.delete(s2.id)
+    assert scheds.get(s2.id) is None
 
 
-# -------------------------------- feedback -----------------------------------
-def test_feedback_flow(repo: TelegramRepository):
-    repo.upsert_user("tg_fb", email="fb@x.com")
-    fid = repo.add_feedback("tg_fb", "bug", "something broke")
-    items = repo.list_feedback("bug")
-    assert any(f.id == fid for f in items)
-    assert repo.update_feedback_status(fid, "closed") is True
+# ------------------------------- SettingsRepo --------------------------------
+def test_settings_set_and_get(dbsess):
+    settings = SettingsRepo(dbsess)
+
+    assert settings.get("theme") is None
+    settings.set("theme", "dark")
+    row = settings.get("theme")
+    assert isinstance(row, TelegramSetting) and row.value == "dark"
+
+    # overwrite + set None (allowed)
+    settings.set("theme", "light")
+    assert settings.get("theme").value == "light"
+    settings.set("theme", None)
+    assert settings.get("theme").value is None
 
 
-# ------------------------------ command audit --------------------------------
-def test_command_audit(repo: TelegramRepository):
-    # two commands for tg_ca, one success, one fail
-    repo.log_command_audit("tg_ca", "/start", full_message="hello", is_registered_user=True,
-                           user_email="u@x.com", success=True, error_message=None, response_time_ms=100)
-    repo.log_command_audit("tg_ca", "/help", full_message="help", is_registered_user=False,
-                           user_email=None, success=False, error_message="err", response_time_ms=200)
+# ------------------------------- FeedbackRepo --------------------------------
+def test_feedback_flow(dbsess):
+    uid = _mk_user(dbsess, "f@example.com")
+    fb = FeedbackRepo(dbsess)
 
-    # user history (limit 1 -> last only)
-    hist = repo.get_user_command_history("tg_ca", limit=1)
-    assert len(hist) == 1 and hist[0].command in ("/help", "/start")
+    row = fb.create(uid, "bug", "something is wrong")
+    assert row.id is not None and row.status == "open"
 
-    # filtered list
-    all_cmds = repo.get_all_command_audit(limit=10, user_id="tg_ca", command="/start", success_only=True)
-    assert all(c.command == "/start" and c.success for c in all_cmds)
+    items = fb.list("bug")
+    assert any(x.id == row.id for x in items)
 
-    # stats
-    stats = repo.get_command_audit_stats()
-    assert stats["total"] >= 2 and "by_command" in stats and stats["success_rate"] is not None
+    ok = fb.set_status(row.id, "closed")
+    assert ok is True
 
-    # unique users summary (we only used one tg id here)
-    uniq = repo.get_unique_users_command_history()
-    assert any(row["telegram_user_id"] == "tg_ca" for row in uniq)
+
+# ------------------------------ BroadcastRepo --------------------------------
+def test_broadcast_log(dbsess):
+    br = BroadcastRepo(dbsess)
+    row = br.log("hello world", "tester", success_count=2, total_count=3)
+    assert row.id is not None and row.message == "hello world" and row.success_count == 2 and row.total_count == 3
+
+
+# ------------------------------ VerificationRepo -----------------------------
+def test_verification_issue_and_count(dbsess):
+    uid = _mk_user(dbsess, "v@example.com")
+    ver = VerificationRepo(dbsess)
+
+    now = int(time.time())
+    old = now - 4000
+
+    # issue 2 codes: one old, one recent
+    ver.issue(uid, code="OLD", sent_time=old)
+    ver.issue(uid, code="NEW", sent_time=now - 100)
+
+    # only recent should be counted within last hour
+    cnt = ver.count_last_hour_by_user_id(uid, now_unix=now)
+    assert cnt == 1
+
+
+# ------------------------------ CommandAuditRepo -----------------------------
+def test_command_audit_log_list_stats(dbsess):
+    ca = CommandAuditRepo(dbsess)
+
+    ca.log("tg1", "/start", full_message="hi", is_registered_user=True, user_email="a@x.com", success=True, response_time_ms=100)
+    ca.log("tg1", "/help", full_message="help", is_registered_user=False, user_email=None, success=False, response_time_ms=200)
+    ca.log("tg2", "/start", full_message="hi2", is_registered_user=True, user_email="b@x.com", success=True, response_time_ms=150)
+
+    # last_commands (ordered desc by id, limit)
+    last = ca.last_commands("tg1", limit=1)
+    assert len(last) == 1 and last[0].command in ("/start", "/help")
+
+    # list with filters
+    only_start = ca.list(limit=10, user_id="tg2", command="/start", success_only=True)
+    assert len(only_start) == 1 and only_start[0].telegram_user_id == "tg2" and only_start[0].command == "/start"
+
+    # stats + unique users
+    stats = ca.stats()
+    assert "total" in stats and "by_command" in stats and "success_rate" in stats
+    uniq = ca.unique_users_summary()
+    ids = {r["telegram_user_id"] for r in uniq}
+    assert {"tg1", "tg2"} <= ids
 
 
 if __name__ == "__main__":

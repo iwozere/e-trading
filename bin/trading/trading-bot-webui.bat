@@ -104,7 +104,7 @@ if exist "%PROJECT_ROOT%\.env" (
     REM Environment variables should be set manually or via Python script
 ) else (
     echo %YELLOW%⚠️  No .env file found%NC%
-    if exist "%PROJECT_ROOT%\.env.example" (
+    if exist "%PROJECT_ROOT%\config\donotshare\.env" (
         echo %YELLOW%📝 Copying .env.example to .env%NC%
         copy "%PROJECT_ROOT%\.env.example" "%PROJECT_ROOT%\.env"
         echo %GREEN%✅ .env file created from template%NC%

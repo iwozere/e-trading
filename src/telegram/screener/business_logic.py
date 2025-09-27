@@ -70,7 +70,6 @@ def handle_help(parsed: ParsedCommand) -> Dict[str, Any]:
         if not telegram_user_id:
             return {"status": "error", "message": "No telegram_user_id provided"}
 
-        db.init_db()
         is_admin = is_admin_user(telegram_user_id)
 
         # Import help texts here to avoid circular imports
@@ -95,13 +94,11 @@ def handle_help(parsed: ParsedCommand) -> Dict[str, Any]:
 
 def is_admin_user(telegram_user_id: str) -> bool:
     """Check if user is an admin."""
-    db.init_db()
     status = db.get_user_status(telegram_user_id)
     return status and status.get("is_admin", False)
 
 def is_approved_user(telegram_user_id: str) -> bool:
     """Check if user is approved for restricted features."""
-    db.init_db()
     status = db.get_user_status(telegram_user_id)
     return status and status.get("approved", False)
 
@@ -128,7 +125,6 @@ def handle_request_approval(parsed: ParsedCommand) -> Dict[str, Any]:
         if not telegram_user_id:
             return {"status": "error", "message": "No telegram_user_id provided"}
 
-        db.init_db()
         status = db.get_user_status(telegram_user_id)
 
         if not status:
@@ -218,7 +214,6 @@ async def handle_report(parsed: ParsedCommand) -> Dict[str, Any]:
     telegram_user_id = args.get("telegram_user_id")
     user_email = None
     if telegram_user_id:
-        db.init_db()
         status = db.get_user_status(telegram_user_id)
         if status and status.get("email"):
             user_email = status["email"]
@@ -305,7 +300,6 @@ def handle_info(parsed: ParsedCommand) -> Dict[str, Any]:
     telegram_user_id = parsed.args.get("telegram_user_id")
     if not telegram_user_id:
         return {"status": "error", "message": "No telegram_user_id provided"}
-    db.init_db()
     status = db.get_user_status(telegram_user_id)
     if status:
         email = status["email"] or "(not set)"
@@ -335,8 +329,6 @@ def handle_admin(parsed: ParsedCommand) -> Dict[str, Any]:
         telegram_user_id = parsed.args.get("telegram_user_id")
         if not telegram_user_id:
             return {"status": "error", "message": "No telegram_user_id provided"}
-
-        db.init_db()
 
         # Check if user has admin access
         access_check = check_admin_access(telegram_user_id)
@@ -429,7 +421,6 @@ def handle_admin_list_users(parsed: ParsedCommand) -> Dict[str, Any]:
         if access_check["status"] != "ok":
             return access_check
 
-        db.init_db()
         users = db.get_all_users()
 
         if not users:
@@ -461,7 +452,6 @@ def handle_admin_list_pending_approvals(parsed: ParsedCommand) -> Dict[str, Any]
         if access_check["status"] != "ok":
             return access_check
 
-        db.init_db()
         users = db.get_all_users()
 
         # Filter for verified but not approved users
@@ -498,7 +488,6 @@ def handle_admin_reset_email(parsed: ParsedCommand) -> Dict[str, Any]:
         if not user_id:
             return {"status": "error", "message": "No user_id provided"}
 
-        db.init_db()
         success = db.reset_user_email_verification(user_id)
 
         if success:
@@ -527,7 +516,6 @@ def handle_admin_verify_user(parsed: ParsedCommand) -> Dict[str, Any]:
         if not user_id:
             return {"status": "error", "message": "No user_id provided"}
 
-        db.init_db()
         success = db.verify_user_email(user_id)
 
         if success:
@@ -563,7 +551,6 @@ def handle_admin_set_limit(parsed: ParsedCommand) -> Dict[str, Any]:
         except ValueError:
             return {"status": "error", "message": "Limit must be a number"}
 
-        db.init_db()
         success = db.set_user_daily_limit(user_id, limit)
 
         if success:
@@ -594,7 +581,6 @@ def handle_admin_schedule_broadcast(parsed: ParsedCommand) -> Dict[str, Any]:
         if not message or not scheduled_time:
             return {"status": "error", "message": "Both message and scheduled_time are required"}
 
-        db.init_db()
         success = db.schedule_broadcast(message, scheduled_time, telegram_user_id)
 
         if success:
@@ -623,7 +609,6 @@ def handle_admin_approve_user(parsed: ParsedCommand) -> Dict[str, Any]:
         if not user_id:
             return {"status": "error", "message": "No user_id provided"}
 
-        db.init_db()
         success = db.approve_user(user_id)
 
         if success:
@@ -652,7 +637,6 @@ def handle_admin_reject_user(parsed: ParsedCommand) -> Dict[str, Any]:
         if not user_id:
             return {"status": "error", "message": "No user_id provided"}
 
-        db.init_db()
         success = db.reject_user(user_id)
 
         if success:
@@ -677,7 +661,6 @@ def handle_admin_list_pending_approvals(parsed: ParsedCommand) -> Dict[str, Any]
         if access_check["status"] != "ok":
             return access_check
 
-        db.init_db()
         users = db.get_all_users()
 
         # Filter for verified but not approved users
@@ -711,8 +694,6 @@ def handle_alerts(parsed: ParsedCommand) -> Dict[str, Any]:
         telegram_user_id = parsed.args.get("telegram_user_id")
         if not telegram_user_id:
             return {"status": "error", "message": "No telegram_user_id provided"}
-
-        db.init_db()
 
         # Check if user has approved access
         access_check = check_approved_access(telegram_user_id)
@@ -1117,8 +1098,6 @@ def handle_schedules(parsed: ParsedCommand) -> Dict[str, Any]:
         telegram_user_id = parsed.args.get("telegram_user_id")
         if not telegram_user_id:
             return {"status": "error", "message": "No telegram_user_id provided"}
-
-        db.init_db()
 
         # Check if user has approved access
         access_check = check_approved_access(telegram_user_id)
@@ -1783,7 +1762,6 @@ def handle_feedback(parsed: ParsedCommand) -> Dict[str, Any]:
         })
 
         # Store feedback in database for admin panel
-        db.init_db()
         feedback_id = db.add_feedback(telegram_user_id, "feedback", feedback)
 
         return {
@@ -1825,7 +1803,6 @@ def handle_feature(parsed: ParsedCommand) -> Dict[str, Any]:
         })
 
         # Store feature request in database for admin panel
-        db.init_db()
         feature_id = db.add_feedback(telegram_user_id, "feature_request", feature_request)
 
         return {
@@ -1867,7 +1844,6 @@ def handle_register(parsed: ParsedCommand) -> Dict[str, Any]:
             return {"status": "error", "message": "Please provide a valid email address."}
 
         # Check rate limiting
-        db.init_db()
         codes_sent = db.count_codes_last_hour(telegram_user_id)
         if codes_sent >= 5:
             return {"status": "error", "message": "Too many verification codes sent. Please wait an hour before requesting another."}
@@ -1918,7 +1894,6 @@ def handle_verify(parsed: ParsedCommand) -> Dict[str, Any]:
             return {"status": "error", "message": "Verification code must be a 6-digit number."}
 
         # Verify the code
-        db.init_db()
         if db.verify_code(telegram_user_id, code, expiry_seconds=3600):
             return {
                 "status": "ok",
@@ -1962,7 +1937,6 @@ def handle_language(parsed: ParsedCommand) -> Dict[str, Any]:
             return access_check
 
         # Update user language
-        db.init_db()
         user_status = db.get_user_status(telegram_user_id)
         if not user_status:
             return {"status": "error", "message": "Please register first using /register email@example.com"}
@@ -2041,7 +2015,6 @@ async def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
         # Send results
         if send_email:
             # Get user email
-            db.init_db()
             user_status = db.get_user_status(telegram_user_id)
             if not user_status or not user_status.get("email"):
                 return {"status": "error", "message": "Email not registered. Please use /register email@example.com first"}

@@ -97,7 +97,7 @@ src/
 * In `database_service.py`:
 
   ```python
-  from src.data.db.repo.repo_telegram import TelegramRepository
+  from src.data.db.repos.repo_telegram import TelegramRepository
   ```
 * In `telegram_service.py` you already do:
 
