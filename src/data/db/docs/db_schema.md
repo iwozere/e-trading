@@ -62,8 +62,7 @@ CREATE TABLE auth_identities (
 ```sql
 CREATE TABLE telegram_alerts (
   id INTEGER PRIMARY KEY,
-  ticker VARCHAR(50) NOT NULL,
-  user_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL, status TEXT, email BOOLEAN, created_at DATETIME, config_json TEXT, re_arm_config TEXT, trigger_count INTEGER, last_trigger_condition TEXT, last_triggered_at DATETIME,
   CONSTRAINT fk_telegram_alerts_user_id_users
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 )
@@ -72,8 +71,15 @@ CREATE TABLE telegram_alerts (
 | # | column | type | not null | default | pk |
 |-:|-------|------|----------:|---------|---:|
 | 0 | id | INTEGER | 0 | None | 1 |
-| 1 | ticker | VARCHAR(50) | 1 | None | 0 |
-| 2 | user_id | INTEGER | 1 | None | 0 |
+| 1 | user_id | INTEGER | 1 | None | 0 |
+| 2 | status | TEXT | 0 | None | 0 |
+| 3 | email | BOOLEAN | 0 | None | 0 |
+| 4 | created_at | DATETIME | 0 | None | 0 |
+| 5 | config_json | TEXT | 0 | None | 0 |
+| 6 | re_arm_config | TEXT | 0 | None | 0 |
+| 7 | trigger_count | INTEGER | 0 | None | 0 |
+| 8 | last_trigger_condition | TEXT | 0 | None | 0 |
+| 9 | last_triggered_at | DATETIME | 0 | None | 0 |
 
 **Foreign keys**
 
@@ -95,9 +101,7 @@ CREATE TABLE telegram_broadcast_logs (
   message TEXT NOT NULL,
   sent_by VARCHAR(255) NOT NULL,
   success_count INTEGER,
-  total_count INTEGER,
-  created VARCHAR(40)
-)
+  total_count INTEGER)
 ```
 
 | # | column | type | not null | default | pk |
@@ -107,7 +111,6 @@ CREATE TABLE telegram_broadcast_logs (
 | 2 | sent_by | VARCHAR(255) | 1 | None | 0 |
 | 3 | success_count | INTEGER | 0 | None | 0 |
 | 4 | total_count | INTEGER | 0 | None | 0 |
-| 5 | created | VARCHAR(40) | 0 | None | 0 |
 
 ## telegram_command_audits
 
@@ -122,8 +125,7 @@ CREATE TABLE telegram_command_audits (
   success BOOLEAN,
   error_message TEXT,
   response_time_ms INTEGER,
-  created VARCHAR(40)
-)
+  created_at DATETIME)
 ```
 
 | # | column | type | not null | default | pk |
@@ -137,16 +139,16 @@ CREATE TABLE telegram_command_audits (
 | 6 | success | BOOLEAN | 0 | None | 0 |
 | 7 | error_message | TEXT | 0 | None | 0 |
 | 8 | response_time_ms | INTEGER | 0 | None | 0 |
-| 9 | created | VARCHAR(40) | 0 | None | 0 |
+| 9 | created_at | DATETIME | 0 | None | 0 |
 
 **Indexes**
 
 | name | unique | origin | partial |
 |------|-------:|--------|---------|
+| ix_telegram_command_audits_created | 0 | c | 0 |
 | ix_telegram_command_audits_command | 0 | c | 0 |
 | ix_telegram_command_audits_success | 0 | c | 0 |
 | ix_telegram_command_audits_telegram_user_id | 0 | c | 0 |
-| ix_telegram_command_audits_created | 0 | c | 0 |
 
 ## telegram_feedbacks
 
