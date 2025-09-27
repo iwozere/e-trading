@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Extract a SQLite schema into a Markdown document.
+Dump ONLY reconstructed DDL (from PRAGMAs) to Markdown.
+
+- Tables: CREATE TABLE with columns, NOT NULL, DEFAULT, PRIMARY KEY (inline or composite),
+          FOREIGN KEY constraints (multi-column).
+- Indexes: CREATE [UNIQUE] INDEX with column order (ASC/DESC) when available.
+- Views/Triggers are omitted (no reliable PRAGMA-based reconstruction).
 
 Usage:
-  # simplest (uses default db/trading.db, prints to stdout)
-  python extract_schema_as_md.py
-
-  # write to a file
+  python extract_schema_as_md.py                       # uses db/trading.db, stdout
   python extract_schema_as_md.py --out schema.md
-
-  # specify another DB and include row counts
-  python extract_schema_as_md.py --db path/to/other.db --out schema.md --counts
-
-Notes:
-- Prints: database header, tables (DDL, columns, FKs, indexes, triggers, optional row counts),
-  and views (DDL). System objects 'sqlite_%' are excluded.
-- Uses PRAGMA table_info to list *all* columns reliably.
+  python extract_schema_as_md.py --db path/to/db.sqlite --out schema.md
 """
 
 from __future__ import annotations
@@ -25,266 +20,251 @@ import argparse
 import datetime as dt
 import os
 import sqlite3
-from typing import Dict, List, Tuple, Any
+from collections import defaultdict
+from typing import Dict, List, Tuple
 
+
+# ---------- SQLite helpers ----------
 
 def mk_conn(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
+    # ensure foreign_keys pragma is on (not required for schema read, but sane)
+    try:
+        conn.execute("PRAGMA foreign_keys=ON")
+    except Exception:
+        pass
     return conn
 
 
-def md_escape(text: str) -> str:
-    """Escape pipes in markdown table cells."""
-    if text is None:
-        return ""
-    return str(text).replace("|", r"\|")
+def ident(name: str) -> str:
+    """SQLite identifier quoting with double quotes."""
+    if name is None:
+        return '""'
+    return '"' + str(name).replace('"', '""') + '"'
 
 
-def get_sqlite_version(conn: sqlite3.Connection) -> str:
-    v = conn.execute("select sqlite_version() as v").fetchone()["v"]
-    return v
-
-
-def get_tables(conn: sqlite3.Connection) -> List[sqlite3.Row]:
-    # Exclude SQLite's internal tables
+def get_tables(conn: sqlite3.Connection) -> List[str]:
     sql = """
-      select type, name, tbl_name, sql
-      from sqlite_master
-      where type in ('table','view')
-        and name not like 'sqlite_%'
-      order by case type when 'table' then 0 else 1 end, name
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name NOT LIKE 'sqlite_%'
+      ORDER BY name
     """
-    return list(conn.execute(sql))
+    return [r["name"] for r in conn.execute(sql)]
 
 
-def get_table_info(conn: sqlite3.Connection, name: str) -> List[sqlite3.Row]:
-    return list(conn.execute(f"PRAGMA table_info('{name}')"))
+def pragma_table_info(conn: sqlite3.Connection, table: str) -> List[sqlite3.Row]:
+    return list(conn.execute(f"PRAGMA table_info({ident(table)})"))
 
 
-def get_foreign_keys(conn: sqlite3.Connection, name: str) -> List[sqlite3.Row]:
-    return list(conn.execute(f"PRAGMA foreign_key_list('{name}')"))
+def pragma_foreign_keys(conn: sqlite3.Connection, table: str) -> List[sqlite3.Row]:
+    return list(conn.execute(f"PRAGMA foreign_key_list({ident(table)})"))
 
 
-def get_index_list(conn: sqlite3.Connection, name: str) -> List[sqlite3.Row]:
-    return list(conn.execute(f"PRAGMA index_list('{name}')"))
+def pragma_index_list(conn: sqlite3.Connection, table: str) -> List[sqlite3.Row]:
+    return list(conn.execute(f"PRAGMA index_list({ident(table)})"))
 
 
-def get_index_info(conn: sqlite3.Connection, index_name: str) -> Tuple[List[sqlite3.Row], List[sqlite3.Row]]:
-    # index_info: columns; index_xinfo: columns + expressions + sort order
-    info = list(conn.execute(f"PRAGMA index_info('{index_name}')"))
-    xinfo = list(conn.execute(f"PRAGMA index_xinfo('{index_name}')"))
-    return info, xinfo
+def pragma_index_xinfo(conn: sqlite3.Connection, index: str) -> List[sqlite3.Row]:
+    # xinfo includes expressions and sort order (desc), key flag
+    return list(conn.execute(f"PRAGMA index_xinfo({ident(index)})"))
 
 
-def get_triggers_for_table(conn: sqlite3.Connection, table_name: str) -> List[sqlite3.Row]:
-    sql = """
-      select name, tbl_name, sql
-      from sqlite_master
-      where type = 'trigger'
-        and tbl_name = ?
-        and name not like 'sqlite_%'
-      order by name
-    """
-    return list(conn.execute(sql, (table_name,)))
+# ---------- Reconstruction ----------
+
+def reconstruct_create_table(conn: sqlite3.Connection, table: str) -> str:
+    cols = pragma_table_info(conn, table)
+    if not cols:
+        # virtual table or unexpected
+        return f"-- Could not reconstruct table {ident(table)} (no PRAGMA table_info rows)."
+
+    # Determine PK columns (order by pk sequence)
+    pk_cols = [(c["name"], c["pk"]) for c in cols if int(c["pk"] or 0) > 0]
+    pk_cols.sort(key=lambda x: x[1])
+
+    # Build column lines
+    col_lines: List[str] = []
+    inline_pk_allowed = (len(pk_cols) == 1)
+    pk_name_inline = pk_cols[0][0] if inline_pk_allowed else None
+
+    for c in sorted(cols, key=lambda r: r["cid"]):
+        parts: List[str] = [ident(c["name"])]
+        coltype = (c["type"] or "").strip()
+        if coltype:
+            parts.append(coltype)
+
+        # Inline PK only if single-column PK
+        if inline_pk_allowed and c["name"] == pk_name_inline:
+            parts.append("PRIMARY KEY")
+
+        if int(c["notnull"] or 0) == 1:
+            parts.append("NOT NULL")
+
+        dflt = c["dflt_value"]
+        if dflt is not None:
+            # PRAGMA returns textual default (already quoted if string)
+            parts.append(f"DEFAULT {dflt}")
+
+        col_lines.append("  " + " ".join(parts))
+
+    # Table-level constraints
+    constraint_lines: List[str] = []
+
+    # Composite PK
+    if not inline_pk_allowed and pk_cols:
+        pk_names = [ident(name) for name, _ in pk_cols]
+        constraint_lines.append(f"  PRIMARY KEY ({', '.join(pk_names)})")
+
+    # Foreign keys (group by id; each id can be multi-column)
+    fks = pragma_foreign_keys(conn, table)
+    if fks:
+        grouped: Dict[int, List[sqlite3.Row]] = defaultdict(list)
+        for fk in fks:
+            grouped[int(fk["id"])].append(fk)
+        for _id, rows in sorted(grouped.items(), key=lambda kv: kv[0]):
+            rows.sort(key=lambda r: r["seq"])
+            ref_table = rows[0]["table"]
+            from_cols = [ident(r["from"]) for r in rows]
+            to_cols = [ident(r["to"]) for r in rows]
+            on_upd = rows[0]["on_update"]
+            on_del = rows[0]["on_delete"]
+            match = rows[0]["match"]
+
+            clause = f"  FOREIGN KEY ({', '.join(from_cols)}) REFERENCES {ident(ref_table)} ({', '.join(to_cols)})"
+            if on_upd and on_upd.upper() != "NO ACTION":
+                clause += f" ON UPDATE {on_upd}"
+            if on_del and on_del.upper() != "NO ACTION":
+                clause += f" ON DELETE {on_del}"
+            if match and match.upper() != "NONE":
+                clause += f" MATCH {match}"
+            constraint_lines.append(clause)
+
+    all_lines = col_lines + (["  ,"] if (col_lines and constraint_lines) else [])  # pretty comma separator
+    # Actually commas must be between every definition; rebuild with commas properly:
+    defs = col_lines + constraint_lines
+    ddl = f"CREATE TABLE {ident(table)} (\n" + ",\n".join(defs) + "\n);"
+    return ddl
 
 
-def get_row_count(conn: sqlite3.Connection, table_name: str) -> int | None:
+def reconstruct_indexes(conn: sqlite3.Connection, table: str) -> List[str]:
+    idxs = pragma_index_list(conn, table)
+    ddls: List[str] = []
+    for idx in idxs:
+        name = idx["name"]
+        # Skip implicit PK index (origin='pk') and 'autoindex' generated by constraints
+        origin = idx["origin"]
+        if origin in ("pk", "u"):  # keep UNIQUE? We'll reconstruct explicit unique indexes too
+            # origin 'u' can still be a user-created unique index; keep it.
+            pass
+        # Some auto indexes come with 'sqlite_autoindex_%' names; skip them
+        if name.startswith("sqlite_autoindex_"):
+            continue
+
+        # Gather columns/expressions from xinfo
+        xinfo = pragma_index_xinfo(conn, name)
+        # retain only key columns (xinfo.key == 1)
+        key_rows = [r for r in xinfo if ("key" in r.keys() and int(r["key"]) == 1)]
+        key_rows.sort(key=lambda r: (r["seqno"] if r["seqno"] is not None else 0))
+
+        parts: List[str] = []
+        incomplete_expr = False
+        for r in key_rows:
+            cid = r["cid"]
+            nm = r["name"]
+            desc = r["desc"]
+            order = " DESC" if (desc == 1) else ""
+            if cid == -2:  # expression-based (SQLite doesn't expose the expression text via PRAGMA)
+                parts.append(f"/* <expr#{r['seqno']}> */{order}")
+                incomplete_expr = True
+            else:
+                parts.append(ident(nm) + order)
+
+        unique = "UNIQUE " if int(idx["unique"] or 0) == 1 else ""
+        cols = ", ".join(parts) if parts else "/* <no-columns> */"
+        stmt = f"CREATE {unique}INDEX {ident(name)} ON {ident(table)} ({cols});"
+        if incomplete_expr:
+            stmt += " -- expression index; exact expression not available via PRAGMA"
+        ddls.append(stmt)
+    return ddls
+
+
+def get_row_count(conn: sqlite3.Connection, table: str) -> int | None:
     try:
-        # Skip views here; only attempt for real tables
-        is_view = conn.execute(
-            "select 1 from sqlite_master where type='view' and name=?", (table_name,)
-        ).fetchone()
-        if is_view:
-            return None
-        row = conn.execute(f"select count(*) as c from '{table_name}'").fetchone()
-        return int(row["c"])
+        r = conn.execute(f"SELECT COUNT(*) AS c FROM {ident(table)}").fetchone()
+        return int(r["c"])
     except Exception:
         return None
 
 
-def render_index_columns(xinfo: List[sqlite3.Row]) -> str:
-    """
-    Render columns/expressions for an index from PRAGMA index_xinfo.
-    - xinfo columns: seqno, cid, name, desc, coll, key, etc.
-    - For expression-based indexes, cid == -2 and 'name' is None; expression text is not available via pragma.
-      SQLite doesn't expose the expression via PRAGMA, so we show <expr#N>.
-    """
-    if not xinfo:
-        return ""
-    parts: List[str] = []
-    # Filter key columns only (key=1)
-    for r in sorted(xinfo, key=lambda r: (r["seqno"] if r["seqno"] is not None else 0)):
-        if "key" in r.keys() and r["key"] != 1:
-            continue
-        cid = r["cid"]
-        nm = r["name"]
-        desc = r["desc"]
-        # order: NULL means ASC (SQLite), 1 => DESC
-        order = "DESC" if (desc == 1) else "ASC"
-        if cid == -2:  # expression
-            parts.append(f"<expr#{r['seqno']}> {order}")
-        else:
-            parts.append(f"{nm} {order}")
-    return ", ".join(parts)
-
+# ---------- Markdown emission ----------
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Dump SQLite schema to Markdown.")
+    ap = argparse.ArgumentParser(description="Dump reconstructed SQLite DDL (from PRAGMAs) to Markdown.")
     ap.add_argument("--db", default="db/trading.db", help="Path to SQLite database (default: db/trading.db)")
     ap.add_argument("--out", default="", help="Output .md path (default: stdout)")
-    ap.add_argument("--counts", action="store_true", help="Include row counts for tables")
+    ap.add_argument("--counts", action="store_true", help="Include row counts per table (optional)")
     args = ap.parse_args()
 
-    db_path = args.db
-    out_path = args.out.strip()
-    include_counts = args.counts
-
-    abs_db = os.path.abspath(db_path)
+    abs_db = os.path.abspath(args.db)
     if not os.path.exists(abs_db):
         raise SystemExit(f"Database not found: {abs_db}")
 
     conn = mk_conn(abs_db)
     try:
         now = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-        sqlite_ver = get_sqlite_version(conn)
-        objects = get_tables(conn)
+        sqlite_ver = conn.execute("SELECT sqlite_version() AS v").fetchone()["v"]
+
+        tables = get_tables(conn)
 
         lines: List[str] = []
-        lines.append(f"# SQLite schema for `{abs_db}`")
+        lines.append(f"# Reconstructed DDL (from PRAGMAs) — `{abs_db}`")
         lines.append("")
         lines.append(f"- Generated: `{now}`")
         lines.append(f"- SQLite version: `{sqlite_ver}`")
         lines.append("")
+        lines.append("> NOTE: Views and triggers are omitted (no PRAGMA-based reconstruction).")
+        lines.append("")
         lines.append("---")
         lines.append("")
 
-        # Group objects
-        tables = [o for o in objects if o["type"] == "table"]
-        views = [o for o in objects if o["type"] == "view"]
-
-        # Tables
-        if tables:
-            lines.append("# Tables")
-            lines.append("")
         for t in tables:
-            name = t["name"]
-            ddl = t["sql"]
-
-            lines.append(f"## `{name}`")
+            lines.append(f"## {ident(t)}")
             lines.append("")
-            if include_counts:
-                cnt = get_row_count(conn, name)
+            # Optional row count
+            if args.counts:
+                cnt = get_row_count(conn, t)
                 if cnt is not None:
                     lines.append(f"- **Row count:** {cnt}")
                     lines.append("")
 
-            # DDL
-            if ddl:
-                lines.append("**DDL**")
-                lines.append("")
-                lines.append("```sql")
-                lines.append(ddl)
-                lines.append("```")
-                lines.append("")
-            else:
-                lines.append("_No DDL available (virtual table or created without SQL)_")
-                lines.append("")
-
-            # Columns
-            cols = get_table_info(conn, name)
-            lines.append("**Columns**")
+            # CREATE TABLE
+            table_sql = reconstruct_create_table(conn, t)
+            lines.append("```sql")
+            lines.append(table_sql)
+            lines.append("```")
             lines.append("")
-            if cols:
-                lines.append("| cid | name | type | notnull | default | pk |")
-                lines.append("|----:|------|------|--------:|---------|---:|")
-                for c in cols:
-                    dflt = "" if c["dflt_value"] is None else str(c["dflt_value"])
-                    lines.append(
-                        f"| {c['cid']} | {md_escape(c['name'])} | {md_escape(c['type'])} | "
-                        f"{c['notnull']} | {md_escape(dflt)} | {c['pk']} |"
-                    )
-                lines.append("")
-            else:
-                lines.append("_No columns (unexpected)_")
-                lines.append("")
 
-            # Foreign keys
-            fks = get_foreign_keys(conn, name)
-            if fks:
-                lines.append("**Foreign keys**")
-                lines.append("")
-                lines.append("| id | seq | from | → table | to | on_update | on_delete | match |")
-                lines.append("|---:|----:|------|---------|----|-----------|-----------|-------|")
-                for fk in fks:
-                    lines.append(
-                        f"| {fk['id']} | {fk['seq']} | {md_escape(fk['from'])} | "
-                        f"{md_escape(fk['table'])} | {md_escape(fk['to'])} | "
-                        f"{fk['on_update']} | {fk['on_delete']} | {fk['match']} |"
-                    )
-                lines.append("")
-
-            # Indexes
-            idxs = get_index_list(conn, name)
-            if idxs:
-                lines.append("**Indexes**")
-                lines.append("")
-                lines.append("| name | unique | origin | partial | columns/expressions |")
-                lines.append("|------|-------:|--------|---------|---------------------|")
-                for i in idxs:
-                    idx_name = i["name"]
-                    unique = i["unique"]
-                    origin = i["origin"]
-                    partial = i["partial"]
-                    _, xinfo = get_index_info(conn, idx_name)
-                    cols_expr = render_index_columns(xinfo)
-                    lines.append(
-                        f"| {md_escape(idx_name)} | {unique} | {origin} | {partial} | {md_escape(cols_expr)} |"
-                    )
-                lines.append("")
-
-            # Triggers
-            trgs = get_triggers_for_table(conn, name)
-            if trgs:
-                lines.append("**Triggers**")
-                lines.append("")
-                for tr in trgs:
-                    lines.append(f"- `{tr['name']}`")
+            # CREATE INDEX statements
+            idx_sqls = reconstruct_indexes(conn, t)
+            if idx_sqls:
+                lines.append("```sql")
+                for stmt in idx_sqls:
+                    lines.append(stmt)
+                lines.append("```")
                 lines.append("")
 
             lines.append("---")
             lines.append("")
 
-        # Views
-        if views:
-            lines.append("# Views")
-            lines.append("")
-            for v in views:
-                name = v["name"]
-                ddl = v["sql"]
-                lines.append(f"## `{name}`")
-                lines.append("")
-                if ddl:
-                    lines.append("**DDL**")
-                    lines.append("")
-                    lines.append("```sql")
-                    lines.append(ddl)
-                    lines.append("```")
-                    lines.append("")
-                else:
-                    lines.append("_No DDL available for this view_")
-                    lines.append("")
-                lines.append("---")
-                lines.append("")
-
-        # Output
         content = "\n".join(lines)
-        if out_path:
-            abs_out = os.path.abspath(out_path)
-            os.makedirs(os.path.dirname(abs_out), exist_ok=True)
-            with open(abs_out, "w", encoding="utf-8") as f:
+        out = args.out.strip()
+        if out:
+            os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+            with open(out, "w", encoding="utf-8") as f:
                 f.write(content)
-            print(f"Wrote Markdown to: {abs_out}")
+            print(f"Wrote Markdown to: {os.path.abspath(out)}")
         else:
             print(content)
 
