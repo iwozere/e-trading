@@ -97,6 +97,13 @@ def delete_alert(alert_id: int) -> bool:
         r.telegram_alerts.delete(alert_id)
         return True
 
+def list_active_alerts(telegram_user_id: str | None = None, *, limit: int = 100, offset: int = 0, older_first: bool = False):
+    with database_service.uow() as r:
+        uid = None
+        if telegram_user_id:
+            uid = r.users.ensure_user_for_telegram(telegram_user_id).id
+        return list(r.telegram_alerts.list_active(uid, limit=limit, offset=offset, older_first=older_first))
+
 # --- Schedules ---
 def add_schedule(telegram_user_id: str, ticker: str, scheduled_time: str, **kwargs) -> int:
     with database_service.uow() as r:

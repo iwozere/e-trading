@@ -128,7 +128,7 @@ def handle_request_approval(parsed: ParsedCommand) -> Dict[str, Any]:
         status = db.get_user_status(telegram_user_id)
 
         if not status:
-            return {"status": "error", "message": "Please register first using /register email@example.com"}
+            return {"status": "error", "message": "Please register first using /register your@email.com"}
 
         if not status.get("verified", False):
             return {"status": "error", "message": "Please verify your email first using /verify CODE"}

@@ -64,8 +64,22 @@ class AlertsRepo:
         q = select(TelegramAlert).where(TelegramAlert.status == status)
         return list(self.s.execute(q).scalars())
 
-    def list_by_type(self, alert_type: str) -> Sequence[TelegramAlert]:
-        q = select(TelegramAlert).where(TelegramAlert.alert_type == alert_type)
+    def list_active(
+        self,
+        user_id: int | None = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        older_first: bool = False,
+    ):
+        q = select(TelegramAlert).where(TelegramAlert.status.in_(("ARMED", "TRIGGERED")))
+        if user_id is not None:
+            q = q.where(TelegramAlert.user_id == user_id)
+        q = q.order_by(TelegramAlert.id.asc() if older_first else TelegramAlert.id.desc())
+        if offset:
+            q = q.offset(offset)
+        if limit:
+            q = q.limit(limit)
         return list(self.s.execute(q).scalars())
 
     def update(self, alert_id: int, **values) -> bool:

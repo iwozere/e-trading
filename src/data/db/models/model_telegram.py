@@ -22,6 +22,7 @@ class TelegramAlert(Base):
     created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
     config_json: Mapped[str | None] = mapped_column(Text)
     re_arm_config: Mapped[str | None] = mapped_column(Text)
+    state_json: Mapped[str | None] = mapped_column(Text)
     trigger_count: Mapped[int | None] = mapped_column(Integer)
 
     # Price, indicators values etc. at the time, when it was triggered last time
