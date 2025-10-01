@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 # Import the registry directly
-from registry import INDICATOR_META
+from src.indicators.registry import INDICATOR_META
 
 def test_indicator_meta_exists_and_not_empty():
     assert isinstance(INDICATOR_META, dict), "INDICATOR_META must be a dict"

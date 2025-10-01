@@ -468,9 +468,10 @@ class RecommendationEngine:
         return rule_bbands(c, u, m, l)
 
     def _wrap_macd(self, value: float, ctx: Dict[str, Any]) -> Tuple[RecommendationType, float, str]:
-        # Accept both macd_histogram and macd_hist
-        hist = ctx.get("macd_histogram", ctx.get("macd_hist"))
-        return rule_macd(value, ctx.get("macd_signal"), hist)
+        # Standardize on 'hist' (what adapters return)
+        hist = ctx.get("hist", ctx.get("macd_hist", ctx.get("macd_histogram")))
+        signal = ctx.get("signal", ctx.get("macd_signal"))
+        return rule_macd(value, signal, hist)
 
     def _wrap_stoch(self, value: float, ctx: Dict[str, Any]) -> Tuple[RecommendationType, float, str]:
         k = value if "STOCH_K" in ctx.get("name", "STOCH_K") else ctx.get("stoch_k", value)

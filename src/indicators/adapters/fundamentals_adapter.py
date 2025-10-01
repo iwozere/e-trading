@@ -1,13 +1,12 @@
-# ---------------------------------------------------------------------------
-# adapters/fundamentals_adapter.py
-# ---------------------------------------------------------------------------
-# Pulls normalized fundamentals via your existing DataManager/common.fundamentals,
-# returns scalar values wrapped as single-row Series aligned to a synthetic index
-
+# fundamentals_adapter.py
 import pandas as pd
-from typing import Any
+from typing import Any, Optional, Dict
 
+from src.common.fundamentals import get_fundamentals_unified
 from src.indicators.adapters.base import BaseAdapter
+
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 class FundamentalsAdapter(BaseAdapter):
     FIELD_MAP = {
@@ -27,26 +26,41 @@ class FundamentalsAdapter(BaseAdapter):
         "enterprise_value": "enterprise_value",
     }
 
-    def __init__(self, fundamentals_getter=None):
-        # Injected for testing; by default resolves from your codebase at runtime
-        self._getter = fundamentals_getter
+    def __init__(self, fundamentals_data=None):
+        """
+        fundamentals_data: Pre-fetched fundamental data object.
+        Pass this in after fetching asynchronously at service level.
+        """
+        self._data = fundamentals_data
 
     def supports(self, name: str) -> bool:
         return name in self.FIELD_MAP
 
-    def _get_fundamentals(self, ticker: str, provider: str | None) -> Any:
-        if self._getter:
-            return self._getter(ticker, provider)
-        # Lazy import to avoid circulars
-        from src.common.fundamentals import get_fundamentals_unified as _gf
-        return asyncio.get_event_loop().run_until_complete(_gf(ticker, provider))
+async def compute(self, name, df, inputs, params):
+    """Async compute for fundamentals"""
+    try:
+        ticker = params.get("ticker")
+        provider = params.get("provider")
 
-    def compute(self, name, df, inputs, params):
-        # expects params: {"ticker": str, "provider": Optional[str]}
-        ticker = params.get("ticker"); provider = params.get("provider")
-        fun = self._get_fundamentals(ticker, provider)
+        if not ticker:
+            raise ValueError("FundamentalsAdapter requires 'ticker' in params")
+
+        # Fetch fundamentals asynchronously
+        fund_data = await get_fundamentals_unified(ticker, provider)
+
         field = self.FIELD_MAP[name]
-        value = getattr(fun, field, None)
-        # Represent as a Series of length 1 (so the service can merge across outputs)
-        s = pd.Series([value], index=[pd.Timestamp.utcnow()])
-        return {"value": s}
+        value = getattr(fund_data, field, None)
+
+        # Return as broadcasted series if df provided
+        if df is not None and len(df) > 0:
+            return {"value": pd.Series(value, index=df.index, name=name)}
+        else:
+            return {"value": pd.Series([value], name=name)}
+
+    except Exception as e:
+        _logger.warning(f"Error fetching fundamental {name} for {params.get('ticker')}: {e}")
+        # Return NaN series
+        if df is not None and len(df) > 0:
+            return {"value": pd.Series(index=df.index, dtype=float, name=name)}
+        else:
+            return {"value": pd.Series([None], name=name)}

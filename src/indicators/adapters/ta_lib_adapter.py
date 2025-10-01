@@ -17,39 +17,23 @@ except Exception as e:
     ) from e
 
 from src.indicators.adapters.base import BaseAdapter  # optional base
+from src.indicators.registry import INDICATOR_META
 
-
-# ---- Required inputs per indicator (strict; from inputs dict only) ----------
-_REQUIRED_INPUTS: dict[str, Iterable[str]] = {
-    # single series
-    "rsi": {"close"},
-    "ema": {"close"},
-    "sma": {"close"},
-    "obv": {"close", "volume"},
-    # hlc trio
-    "atr": {"high", "low", "close"},
-    "adx": {"high", "low", "close"},
-    "plus_di": {"high", "low", "close"},
-    "minus_di": {"high", "low", "close"},
-    "macd": {"close"},
-    "bbands": {"close"},
-    "stoch": {"high", "low", "close"},
-}
-
-
-def _ensure_series(x, index: pd.Index) -> pd.Series:
-    if isinstance(x, pd.Series):
-        return x.reindex(index)
-    return pd.Series(np.asarray(x), index=index)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 
 def _validate_and_collect_inputs(indicator: str, inputs: Dict[str, pd.Series]) -> Dict[str, pd.Series]:
-    needed = _REQUIRED_INPUTS.get(indicator, set())
+    # Use registry instead of local _REQUIRED_INPUTS
+    meta = INDICATOR_META.get(indicator)
+    if not meta:
+        raise ValueError(f"Unknown indicator: {indicator}")
+
+    needed = set(meta.inputs)  # Use from registry
     missing = [k for k in needed if k not in inputs]
     if missing:
         raise KeyError(f"{indicator}: missing required input(s): {', '.join(missing)}")
 
-    # also sanity: ensure all requested keys are Series and aligned
     out: Dict[str, pd.Series] = {}
     for k in needed:
         s = inputs[k]
@@ -57,6 +41,11 @@ def _validate_and_collect_inputs(indicator: str, inputs: Dict[str, pd.Series]) -
             raise TypeError(f"{indicator}: input '{k}' must be pandas.Series")
         out[k] = s
     return out
+
+def _ensure_series(x, index: pd.Index) -> pd.Series:
+    if isinstance(x, pd.Series):
+        return x.reindex(index)
+    return pd.Series(np.asarray(x), index=index)
 
 
 # ---- Canonical → TA-Lib argument maps ---------------------------------------
@@ -130,7 +119,24 @@ class TaLibAdapter(BaseAdapter):
     def supports(self, name: str) -> bool:
         return name in self._map
 
-    def compute(
+    async def compute(
+        self,
+        name: str,
+        df: pd.DataFrame,
+        inputs: Dict[str, pd.Series],
+        params: Optional[dict]
+    ) -> Dict[str, pd.Series]:
+        """Wrap synchronous TA-Lib calls in async context"""
+        # TA-Lib is CPU-bound, run in thread pool to not block event loop
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self._compute_sync,
+            name, df, inputs, params
+        )
+
+    def _compute_sync(
         self,
         name: str,
         df: pd.DataFrame,

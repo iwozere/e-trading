@@ -2,6 +2,8 @@
 # utils.py
 # ---------------------------------------------------------------------------
 import pandas as pd
+from src.indicators.models import IndicatorBatchConfig
+from src.indicators.registry import INDICATOR_META
 
 def coerce_ohlcv(df: pd.DataFrame, input_map=None) -> pd.DataFrame:
     out = df.copy()
@@ -25,3 +27,21 @@ def resample_df(df, timeframe: str | None):
     if not timeframe: return df
     ohlc = {"open":"first","high":"max","low":"min","close":"last","volume":"sum"}
     return df.resample(timeframe).agg(ohlc).dropna(how="all")
+
+def validate_indicator_config(config: IndicatorBatchConfig) -> None:
+    """Validate config before computation"""
+    for spec in config.indicators:
+        if spec.name not in INDICATOR_META:
+            raise ValueError(f"Unknown indicator: {spec.name}")
+
+        meta = INDICATOR_META[spec.name]
+
+        # Validate output mapping
+        expected_outputs = set(meta.outputs)
+        if isinstance(spec.output, dict):
+            provided_outputs = set(spec.output.keys())
+            if provided_outputs != expected_outputs:
+                raise ValueError(
+                    f"{spec.name}: output keys {provided_outputs} "
+                    f"don't match expected {expected_outputs}"
+                )
