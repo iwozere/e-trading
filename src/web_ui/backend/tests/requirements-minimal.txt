@@ -1,0 +1,19 @@
+# Minimal Testing Dependencies for Web UI Backend
+# ===============================================
+# Essential dependencies only - no PostgreSQL or complex integrations
+
+# Core testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.1
+pytest-mock>=3.11.1
+
+# Coverage reporting
+pytest-cov>=4.1.0
+coverage>=7.3.0
+
+# FastAPI testing
+httpx>=0.24.1
+fastapi>=0.103.0
+
+# Basic mocking
+responses>=0.23.3

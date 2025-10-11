@@ -107,7 +107,7 @@ def verify_token(token: str) -> Dict[str, Any]:
         return payload
     except jwt.ExpiredSignatureError:
         raise AuthenticationError("Token has expired")
-    except jwt.JWTError:
+    except jwt.PyJWTError:
         raise AuthenticationError("Invalid token")
 
 
