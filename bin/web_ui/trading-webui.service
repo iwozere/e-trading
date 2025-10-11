@@ -1,0 +1,42 @@
+[Unit]
+Description=Trading Web UI Service
+Documentation=https://github.com/your-repo/trading-system
+After=network.target network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=500
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/trading-system
+Environment=PYTHONPATH=/home/pi/trading-system
+Environment=PYTHONUNBUFFERED=1
+Environment=WEBUI_HOST=0.0.0.0
+Environment=WEBUI_PORT=5003
+
+# Use the production startup script
+ExecStart=/home/pi/trading-system/bin/web_ui/start_webui_prod.sh --host 0.0.0.0 --port 5003
+
+# Restart policy
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+TimeoutStopSec=30
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/pi/trading-system/logs
+ReadWritePaths=/home/pi/trading-system/db
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=trading-webui
+
+[Install]
+WantedBy=multi-user.target

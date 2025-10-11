@@ -142,7 +142,7 @@ async def login(
     except HTTPException:
         raise
     except Exception as e:
-        _logger.error("Login error: %s", e)
+        _logger.exception("Login error:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
