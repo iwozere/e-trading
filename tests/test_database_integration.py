@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 sys.path.append('src')
 
 from src.data.database import get_database_manager, Trade, BotInstance, PerformanceMetrics
-from src.data.db.trade_repository import TradeRepository
+from src.trading.services.trading_bot_service import trading_bot_service
 
 
 def test_database_connection():

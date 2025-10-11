@@ -530,8 +530,8 @@ class BaseStrategy(bt.Strategy):
             return
 
         try:
-            from src.data.db.trade_repository import TradeRepository
-            self.trade_repository = TradeRepository()
+            from src.trading.services.trading_bot_service import trading_bot_service
+            self.trade_repository = trading_bot_service
 
             # Create or get bot instance
             bot_data = {
@@ -545,7 +545,7 @@ class BaseStrategy(bt.Strategy):
             }
 
             bot_instance = self.trade_repository.create_bot_instance(bot_data)
-            self.bot_instance_id = bot_instance.id
+            self.bot_instance_id = bot_instance.get("id")
 
             _logger.info("Database initialized for bot instance: %s", self.bot_instance_id)
 
@@ -593,7 +593,7 @@ class BaseStrategy(bt.Strategy):
                 # Get the original position trade
                 original_trade = self.trade_repository.get_trade_by_id(self.current_position_id)
                 if original_trade:
-                    self.trade_repository.create_partial_exit_trade(trade_data, original_trade.id)
+                    self.trade_repository.create_partial_exit_trade(trade_data, original_trade.get("id"))
                 else:
                     _logger.warning("Original position trade not found for partial exit")
 
@@ -629,7 +629,7 @@ class BaseStrategy(bt.Strategy):
                 }
 
                 trade = self.trade_repository.create_trade(trade_data)
-                self.current_position_id = trade.id
+                self.current_position_id = trade.get("id")
 
             _logger.debug("Stored trade in database: %s", trade_data.get('id', 'unknown'))
 

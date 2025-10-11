@@ -43,6 +43,7 @@ wheels/
 htmlcov/
 .pytest_cache/ 
 
+*.db
 db/
 data/
 !src/data/

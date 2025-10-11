@@ -14,6 +14,12 @@ This directory contains scripts and documentation for starting the Trading Web U
 
 ## 🚀 Quick Start
 
+### First Time Setup
+```bash
+# Initialize database with default users (run once)
+python bin/web_ui/init_webui_database.py
+```
+
 ### Development (Windows)
 ```batch
 # From project root
@@ -37,9 +43,20 @@ python src/web_ui/run_web_ui.py --dev
 This directory contains the following files:
 
 ### Core Startup Scripts
-- **`start_webui_dev.bat`** - Windows development startup script
+- **`start_webui_dev.bat`** - **RECOMMENDED** Windows development startup script
+- **`start_webui_dev_simple.bat`** - Windows development startup script (simple, no colors)
+- **`start_backend_only.bat`** - Windows backend only (for manual two-step startup)
+- **`start_frontend_only.bat`** - Windows frontend only (for manual two-step startup)
 - **`start_webui_prod.sh`** - Linux/Raspberry Pi production startup script
 - **`trading-webui.service`** - Systemd service template file
+
+### Database & Setup Scripts
+- **`init_webui_database.py`** - Initialize database with default users (run once)
+
+### Debugging Scripts
+- **`test_environment.bat`** - Windows environment test script for troubleshooting
+- **`test_frontend.bat`** - Test frontend build and dependencies
+- **`test_imports.bat`** - Test Python imports to identify import issues
 
 ### Documentation
 - **`README.md`** - This comprehensive guide
@@ -61,17 +78,26 @@ Development mode provides:
 
 ### Windows Development
 
-**Script:** `bin/web_ui/start_webui_dev.bat`
+**Scripts:** 
 
 ```batch
-# Basic usage
+# RECOMMENDED: Main development script
 bin\web_ui\start_webui_dev.bat
 
-# Custom port
-bin\web_ui\start_webui_dev.bat --port 8000
+# Alternative: Simple version (no colors)
+bin\web_ui\start_webui_dev_simple.bat
 
-# Help
-bin\web_ui\start_webui_dev.bat --help
+# Manual two-step approach (if main runner fails):
+# Step 1: Start backend in one terminal
+bin\web_ui\start_backend_only.bat
+
+# Step 2: Start frontend in another terminal  
+bin\web_ui\start_frontend_only.bat
+
+# If having issues, run the diagnostic tests
+bin\web_ui\test_environment.bat     # General environment test
+bin\web_ui\test_frontend.bat        # Frontend build test
+bin\web_ui\test_imports.bat         # Python imports test
 ```
 
 **What it does:**
@@ -105,8 +131,16 @@ python src/web_ui/run_web_ui.py --help
 
 ### Default Login Credentials
 
-- **Username:** `admin`
-- **Password:** `admin`
+After running `init_webui_database.py`, you can log in with:
+
+**Default Users:**
+- **admin** / **admin** (Administrator)
+- **trader** / **trader** (Trader)  
+- **viewer** / **viewer** (Viewer)
+
+**Existing Users (if any):**
+- Users can log in with their username (part before @) and the same as password
+- Example: `al.sa` / `al.sa` or `akossyrev` / `akossyrev`
 
 ## 🚀 Production Mode
 
@@ -264,6 +298,40 @@ sudo journalctl -u trading-webui.service -f
 sudo systemctl daemon-reload
 sudo systemctl restart trading-webui.service
 ```
+
+## 🗄️ Database Setup
+
+### First Time Setup
+
+Before using the web UI, you need to initialize the database:
+
+```bash
+# From project root
+python bin/web_ui/init_webui_database.py
+```
+
+**What this does:**
+- Creates database tables if they don't exist
+- Creates default users (admin, trader, viewer) if no users exist
+- Sets up proper foreign key relationships for audit logging
+
+**Default Users Created:**
+- `admin@trading-system.local` (admin role)
+- `trader@trading-system.local` (trader role)  
+- `viewer@trading-system.local` (viewer role)
+
+**Login Credentials:**
+- Username: `admin`, Password: `admin`
+- Username: `trader`, Password: `trader`
+- Username: `viewer`, Password: `viewer`
+
+### Existing Users
+
+If you already have users in the database, they can log in using:
+- Username: The part before @ in their email
+- Password: Same as username (temporary simple authentication)
+
+Example: User with email `john.doe@example.com` logs in with `john.doe` / `john.doe`
 
 ## ⚙️ Configuration
 
@@ -427,6 +495,49 @@ sudo chown -R $USER:$USER /path/to/project
 chmod -R 755 /path/to/project
 ```
 
+#### 7. Windows Batch Script Issues
+```batch
+# If the batch script exits immediately, run diagnostic tests in order:
+bin\web_ui\test_environment.bat     # Check overall environment
+bin\web_ui\test_frontend.bat        # Test frontend build
+bin\web_ui\test_imports.bat         # Test Python imports
+
+# If colors don't display properly, use the simple version
+bin\web_ui\start_webui_dev_simple.bat
+
+# If you get "command not found" errors, check your PATH
+echo %PATH%
+
+# Make sure you're running from the project root directory
+cd /d "C:\path\to\your\project"
+bin\web_ui\start_webui_dev_simple.bat
+
+# Common issues and solutions:
+# - Config import fails: Check if config/donotshare/donotshare.py exists
+# - Database import fails: Check if database models are properly installed
+# - FastAPI import fails: Run "pip install fastapi uvicorn" in your venv
+# - Authentication fails: Run "python bin/web_ui/init_webui_database.py"
+```
+
+#### 8. Authentication Issues
+```bash
+# If you can't log in, initialize the database
+python bin/web_ui/init_webui_database.py
+
+# Check if users exist
+python -c "
+from src.data.db.services.database_service import get_database_service
+from src.data.db.models.model_users import User
+db = get_database_service()
+with db.uow() as r:
+    users = r.s.query(User).all()
+    for u in users: print(f'ID: {u.id}, Email: {u.email}, Role: {u.role}')
+"
+
+# Try logging in with default credentials:
+# admin/admin, trader/trader, viewer/viewer
+```
+
 ### Service Troubleshooting
 
 #### Check Service Status
@@ -477,7 +588,12 @@ sudo -u pi /home/pi/trading-system/bin/web_ui/start_webui_prod.sh --help
 
 ## 🔄 Development Workflow
 
-1. **Start development environment:**
+1. **Initialize database (first time only):**
+   ```bash
+   python bin/web_ui/init_webui_database.py
+   ```
+
+2. **Start development environment:**
    ```bash
    # Windows
    bin\web_ui\start_webui_dev.bat
@@ -486,22 +602,22 @@ sudo -u pi /home/pi/trading-system/bin/web_ui/start_webui_prod.sh --help
    python src/web_ui/run_web_ui.py --dev
    ```
 
-2. **Make changes to code** (auto-reload will handle updates)
+3. **Make changes to code** (auto-reload will handle updates)
 
-3. **Test changes** in browser at http://localhost:5002
+4. **Test changes** in browser at http://localhost:5002
 
-4. **Build for production:**
+5. **Build for production:**
    ```bash
    cd src/web_ui/frontend
    npm run build
    ```
 
-5. **Test production build:**
+6. **Test production build:**
    ```bash
    python src/web_ui/run_web_ui.py --host 0.0.0.0 --port 5003
    ```
 
-6. **Deploy to production** using systemd service
+7. **Deploy to production** using systemd service
 
 ---
 

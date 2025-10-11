@@ -1,7 +1,7 @@
 # src/data/db/repos/repo_telegram.py
 from __future__ import annotations
 from datetime import datetime, timezone
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List, Dict, Any
 from sqlalchemy import select, update, delete, func
 from sqlalchemy.orm import Session
 
@@ -190,9 +190,64 @@ class BroadcastRepo:
     def __init__(self, s: Session) -> None:
         self.s = s
 
+    def create(self, message: str, sent_by: str, success_count: int = 0, total_count: int = 0) -> TelegramBroadcastLog:
+        """Create a new broadcast log entry."""
+        row = TelegramBroadcastLog(
+            message=message,
+            sent_by=sent_by,
+            success_count=success_count,
+            total_count=total_count,
+            created_at=utcnow()
+        )
+        self.s.add(row)
+        self.s.flush()
+        return row
+
     def log(self, message: str, sent_by: str, success_count: int = 0, total_count: int = 0) -> TelegramBroadcastLog:
-        row = TelegramBroadcastLog(message=message, sent_by=sent_by, success_count=success_count, total_count=total_count, created_at=utcnow())
-        self.s.add(row); self.s.flush(); return row
+        """Legacy method - alias for create."""
+        return self.create(message, sent_by, success_count, total_count)
+
+    def list(self, limit: int = 50, offset: int = 0) -> List[TelegramBroadcastLog]:
+        """Get broadcast history with pagination."""
+        q = (
+            select(TelegramBroadcastLog)
+            .order_by(TelegramBroadcastLog.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(self.s.execute(q).scalars().all())
+
+    def stats(self) -> Dict[str, Any]:
+        """Get broadcast statistics."""
+        # Total broadcasts
+        total_q = select(func.count(TelegramBroadcastLog.id))
+        total_broadcasts = self.s.execute(total_q).scalar_one() or 0
+
+        # Total recipients and successful deliveries
+        recipients_q = select(
+            func.sum(TelegramBroadcastLog.total_count),
+            func.sum(TelegramBroadcastLog.success_count)
+        )
+        result = self.s.execute(recipients_q).first()
+        total_recipients = result[0] or 0
+        successful_deliveries = result[1] or 0
+
+        # Recent activity (last 24 hours)
+        from datetime import datetime, timedelta
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        recent_q = select(func.count(TelegramBroadcastLog.id)).where(
+            TelegramBroadcastLog.created_at >= yesterday
+        )
+        recent_broadcasts = self.s.execute(recent_q).scalar_one() or 0
+
+        return {
+            "total_broadcasts": total_broadcasts,
+            "total_recipients": total_recipients,
+            "successful_deliveries": successful_deliveries,
+            "failed_deliveries": total_recipients - successful_deliveries,
+            "recent_broadcasts_24h": recent_broadcasts,
+            "average_delivery_rate": (successful_deliveries / total_recipients * 100) if total_recipients > 0 else 0
+        }
 
 
 # -------------------- Verification --------------------

@@ -19,7 +19,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.database import get_db
+from src.web_ui.backend.services.webui_app_service import webui_app_service
 from src.data.db.models.model_users import User
 from src.data.db.models.model_webui import WebUIAuditLog
 from src.notification.logger import setup_logger
@@ -152,15 +152,13 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
     """
     Get current authenticated user from JWT token.
 
     Args:
         credentials: HTTP authorization credentials
-        db: Database session
 
     Returns:
         User: Current authenticated user
@@ -176,19 +174,44 @@ def get_current_user(
         if payload.get("type") != "access":
             raise AuthenticationError("Invalid token type")
 
-        # Get user from database
+        # Get user information from token
         user_id = payload.get("sub")
+        username = payload.get("username")
         if user_id is None:
             raise AuthenticationError("Invalid token payload")
 
-        user = db.query(User).filter(User.id == int(user_id)).first()
-        if user is None:
-            raise AuthenticationError("User not found")
+        # Get user from database to ensure it exists and has proper foreign key
+        from src.data.db.services.database_service import get_database_service
+        db_service = get_database_service()
 
-        if not user.is_active:
-            raise AuthenticationError("User account is disabled")
+        with db_service.uow() as r:
+            user = r.s.query(User).filter(User.id == int(user_id)).first()
 
-        return user
+            if not user:
+                # If user doesn't exist by ID, try to find by email/username
+                email = f"{username}@trading-system.local" if username else None
+                if email:
+                    user = r.s.query(User).filter(User.email == email).first()
+
+                if not user:
+                    raise AuthenticationError("User not found in database")
+
+            if not user.is_active:
+                raise AuthenticationError("User account is inactive")
+
+            # Create a new User object with all the data loaded
+            # This avoids session-related issues by creating a detached object
+            detached_user = User(
+                id=user.id,
+                email=user.email,
+                role=user.role,
+                is_active=user.is_active,
+                created_at=user.created_at,
+                updated_at=user.updated_at,
+                last_login=user.last_login
+            )
+
+            return detached_user
 
     except AuthenticationError as e:
         raise HTTPException(
@@ -237,7 +260,6 @@ def require_trader_or_admin(current_user: User = Depends(get_current_user)) -> U
 
 
 def log_user_action(
-    db: Session,
     user: User,
     action: str,
     resource_type: Optional[str] = None,
@@ -250,7 +272,6 @@ def log_user_action(
     Log user action for audit purposes.
 
     Args:
-        db: Database session
         user: User performing the action
         action: Action description
         resource_type: Type of resource being acted upon
@@ -260,7 +281,7 @@ def log_user_action(
         user_agent: User's browser/client info
     """
     try:
-        audit_log = WebUIAuditLog(
+        webui_app_service.log_user_action(
             user_id=user.id,
             action=action,
             resource_type=resource_type,
@@ -270,9 +291,5 @@ def log_user_action(
             user_agent=user_agent
         )
 
-        db.add(audit_log)
-        db.commit()
-
     except Exception as e:
         _logger.error("Failed to log user action: %s", e)
-        db.rollback()

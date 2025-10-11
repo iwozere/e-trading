@@ -198,7 +198,7 @@ erDiagram
 The `TradeRepository` class provides a clean interface for all database operations:
 
 ```python
-from src.data.db.trade_repository import TradeRepository
+from src.trading.services.trading_bot_service import trading_bot_service
 
 # Create repository
 repo = TradeRepository()

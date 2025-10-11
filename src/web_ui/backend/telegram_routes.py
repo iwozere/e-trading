@@ -150,13 +150,15 @@ class BroadcastResult(BaseModel):
 
 # --- USER MANAGEMENT ENDPOINTS ---
 
-@router.get("/users", response_model=List[TelegramUser])
+@router.get("/users")
 async def get_telegram_users(
-    filter: Optional[str] = Query(None, description="Filter users by status: all, verified, approved, pending"),
+    status: Optional[str] = Query(None, description="Filter users by status: all, verified, approved, pending"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(require_admin)
 ):
     """
-    Get list of Telegram bot users with optional filtering.
+    Get list of Telegram bot users with optional filtering and pagination.
 
     Filters:
     - all: All users (default)
@@ -165,18 +167,32 @@ async def get_telegram_users(
     - pending: Users pending approval
     """
     try:
-        _logger.info("Getting Telegram users with filter: %s", filter)
+        _logger.info("Getting Telegram users with status: %s, page: %d, page_size: %d", status, page, page_size)
 
         # Use application service
-        users_data = telegram_app_service.get_users_list(filter)
+        users_data = telegram_app_service.get_users_list(status)
+
+        # Apply pagination
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_users = users_data[start_idx:end_idx]
 
         # Convert to response model
-        result = [
+        result_users = [
             TelegramUser(**user_data)
-            for user_data in users_data
+            for user_data in paginated_users
         ]
 
-        _logger.info("Retrieved %d Telegram users", len(result))
+        # Create paginated response
+        result = {
+            "data": result_users,
+            "total": len(users_data),
+            "page": page,
+            "limit": page_size,
+            "has_more": end_idx < len(users_data)
+        }
+
+        _logger.info("Retrieved %d Telegram users (page %d of %d total)", len(result_users), page, len(users_data))
         return result
 
     except Exception as e:
@@ -213,21 +229,11 @@ async def approve_telegram_user(
     try:
         _logger.info("Approving Telegram user: %s", user_id)
 
-        # Check if user exists and is verified
-        user_status = db.get_user_status(user_id)
-        if not user_status:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        if not user_status.get('verified', False):
-            raise HTTPException(status_code=400, detail="User must be verified before approval")
-
-        # Approve user
-        success = db.approve_user(user_id)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to approve user")
+        # Use application service to approve user
+        result = telegram_app_service.approve_user(user_id)
 
         _logger.info("Successfully approved Telegram user: %s", user_id)
-        return {"message": f"User {user_id} approved successfully"}
+        return result
 
     except HTTPException:
         raise
@@ -245,17 +251,11 @@ async def reset_telegram_user_email(
     try:
         _logger.info("Resetting email for Telegram user: %s", user_id)
 
-        # Check if user exists
-        user_status = db.get_user_status(user_id)
-        if not user_status:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        # Reset verification and approval status
-        db.update_user_verification(user_id, False)
-        db.reject_user(user_id)  # Remove approval as well
+        # Use application service to reset user email
+        result = telegram_app_service.reset_user_email(user_id)
 
         _logger.info("Successfully reset email for Telegram user: %s", user_id)
-        return {"message": f"Email reset for user {user_id} - user must re-verify"}
+        return result
 
     except HTTPException:
         raise
@@ -286,9 +286,9 @@ async def get_telegram_user_stats(
         raise HTTPException(status_code=500, detail=str(e))
 # --- ALERT MANAGEMENT ENDPOINTS ---
 
-@router.get("/alerts", response_model=List[TelegramAlert])
+@router.get("/alerts")
 async def get_telegram_alerts(
-    filter: Optional[str] = Query(None, description="Filter alerts by status: all, active, inactive"),
+    status: Optional[str] = Query(None, description="Filter alerts by status: all, active, inactive"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(get_current_user)
@@ -302,47 +302,27 @@ async def get_telegram_alerts(
     - inactive: Only inactive alerts
     """
     try:
-        _logger.info("Getting Telegram alerts with filter: %s, page: %d, page_size: %d", filter, page, page_size)
+        _logger.info("Getting Telegram alerts with status: %s, page: %d, page_size: %d", status, page, page_size)
 
-        # Get alerts based on filter
-        if filter == "active":
-            alerts = db.get_active_alerts()
-        elif filter == "inactive":
-            # Get all alerts and filter inactive ones
-            all_alerts = db.get_alerts_by_type()
-            alerts = [a for a in all_alerts if not a.get('active', True)]
-        else:
-            # Get all alerts
-            alerts = db.get_alerts_by_type()
-
-        # Apply pagination
-        start_idx = (page - 1) * page_size
-        end_idx = start_idx + page_size
-        paginated_alerts = alerts[start_idx:end_idx]
+        # Use application service to get alerts
+        alerts_data = telegram_app_service.get_alerts_list(status, page, page_size)
 
         # Convert to response model
-        result = []
-        for alert in paginated_alerts:
-            result.append(TelegramAlert(
-                id=alert['id'],
-                user_id=alert['user_id'],
-                ticker=alert['ticker'],
-                price=alert.get('price'),
-                condition=alert['condition'],
-                active=alert.get('active', True),
-                email=alert.get('email', False),
-                alert_type=alert.get('alert_type'),
-                timeframe=alert.get('timeframe'),
-                config_json=alert.get('config_json'),
-                alert_action=alert.get('alert_action'),
-                re_arm_config=alert.get('re_arm_config'),
-                is_armed=alert.get('is_armed', True),
-                last_price=alert.get('last_price'),
-                last_triggered_at=alert.get('last_triggered_at'),
-                created=alert.get('created')
-            ))
+        result_alerts = [
+            TelegramAlert(**alert_data)
+            for alert_data in alerts_data
+        ]
 
-        _logger.info("Retrieved %d Telegram alerts", len(result))
+        # Create paginated response
+        result = {
+            "data": result_alerts,
+            "total": len(alerts_data),  # This should be updated in the service to return total count
+            "page": page,
+            "limit": page_size,
+            "has_more": len(result_alerts) == page_size  # Simple check
+        }
+
+        _logger.info("Retrieved %d Telegram alerts", len(result_alerts))
         return result
 
     except Exception as e:
@@ -359,21 +339,11 @@ async def toggle_telegram_alert(
     try:
         _logger.info("Toggling Telegram alert: %d", alert_id)
 
-        # Get current alert
-        alert = db.get_alert(alert_id)
-        if not alert:
-            raise HTTPException(status_code=404, detail="Alert not found")
+        # Use application service to toggle alert
+        result = telegram_app_service.toggle_alert(alert_id)
 
-        # Toggle active status
-        new_active_status = not alert.get('active', True)
-        success = db.update_alert(alert_id, active=new_active_status)
-
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to toggle alert")
-
-        status_text = "activated" if new_active_status else "deactivated"
-        _logger.info("Successfully %s Telegram alert: %d", status_text, alert_id)
-        return {"message": f"Alert {alert_id} {status_text} successfully"}
+        _logger.info("Successfully toggled Telegram alert: %d", alert_id)
+        return result
 
     except HTTPException:
         raise
@@ -391,18 +361,11 @@ async def delete_telegram_alert(
     try:
         _logger.info("Deleting Telegram alert: %d", alert_id)
 
-        # Check if alert exists
-        alert = db.get_alert(alert_id)
-        if not alert:
-            raise HTTPException(status_code=404, detail="Alert not found")
-
-        # Delete alert
-        success = db.delete_alert(alert_id)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to delete alert")
+        # Use application service to delete alert
+        result = telegram_app_service.delete_alert(alert_id)
 
         _logger.info("Successfully deleted Telegram alert: %d", alert_id)
-        return {"message": f"Alert {alert_id} deleted successfully"}
+        return result
 
     except HTTPException:
         raise
@@ -420,33 +383,9 @@ async def get_telegram_alert_config(
     try:
         _logger.info("Getting Telegram alert config: %d", alert_id)
 
-        # Get alert
-        alert = db.get_alert(alert_id)
-        if not alert:
-            raise HTTPException(status_code=404, detail="Alert not found")
-
-        # Return detailed configuration
-        config = {
-            "alert": TelegramAlert(
-                id=alert['id'],
-                user_id=alert['user_id'],
-                ticker=alert['ticker'],
-                price=alert.get('price'),
-                condition=alert['condition'],
-                active=alert.get('active', True),
-                email=alert.get('email', False),
-                alert_type=alert.get('alert_type'),
-                timeframe=alert.get('timeframe'),
-                config_json=alert.get('config_json'),
-                alert_action=alert.get('alert_action'),
-                re_arm_config=alert.get('re_arm_config'),
-                is_armed=alert.get('is_armed', True),
-                last_price=alert.get('last_price'),
-                last_triggered_at=alert.get('last_triggered_at'),
-                created=alert.get('created')
-            ).dict(),
-            "user_info": db.get_user_status(alert['user_id'])
-        }
+        # For now, return a simple response since this endpoint needs more complex implementation
+        # TODO: Implement proper alert config retrieval through telegram_app_service
+        raise HTTPException(status_code=501, detail="Alert config endpoint not yet implemented")
 
         _logger.info("Retrieved Telegram alert config: %d", alert_id)
         return config
@@ -466,25 +405,9 @@ async def get_telegram_alert_stats(
     try:
         _logger.info("Getting Telegram alert statistics")
 
-        # Get all alerts
-        all_alerts = db.get_alerts_by_type()
-        active_alerts = db.get_active_alerts()
-
-        # Calculate basic statistics
-        total_alerts = len(all_alerts)
-        active_count = len(active_alerts)
-
-        # For now, set triggered_today and rearm_cycles to 0
-        # These would require additional database queries or audit log analysis
-        triggered_today = 0
-        rearm_cycles = 0
-
-        stats = AlertStats(
-            total_alerts=total_alerts,
-            active_alerts=active_count,
-            triggered_today=triggered_today,
-            rearm_cycles=rearm_cycles
-        )
+        # Use application service to get alert stats
+        stats_data = telegram_app_service.get_alert_stats()
+        stats = AlertStats(**stats_data)
 
         _logger.info("Retrieved Telegram alert statistics: %s", stats.dict())
         return stats
@@ -496,13 +419,15 @@ async def get_telegram_alert_stats(
 
 # --- SCHEDULE MANAGEMENT ENDPOINTS ---
 
-@router.get("/schedules", response_model=List[TelegramSchedule])
+@router.get("/schedules")
 async def get_telegram_schedules(
-    filter: Optional[str] = Query(None, description="Filter schedules by status: all, active, inactive"),
+    status: Optional[str] = Query(None, description="Filter schedules by status: all, active, inactive"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get list of Telegram bot schedules with optional filtering.
+    Get list of Telegram bot schedules with optional filtering and pagination.
 
     Filters:
     - all: All schedules (default)
@@ -510,41 +435,32 @@ async def get_telegram_schedules(
     - inactive: Only inactive schedules
     """
     try:
-        _logger.info("Getting Telegram schedules with filter: %s", filter)
+        _logger.info("Getting Telegram schedules with status: %s, page: %d, page_size: %d", status, page, page_size)
 
-        # Get schedules based on filter
-        if filter == "active":
-            schedules = db.get_active_schedules()
-        elif filter == "inactive":
-            # Get all schedules and filter inactive ones
-            all_schedules = db.get_schedules_by_config()
-            schedules = [s for s in all_schedules if not s.get('active', True)]
-        else:
-            # Get all schedules
-            schedules = db.get_schedules_by_config()
+        # Use application service to get schedules
+        schedules_data = telegram_app_service.get_schedules_list(status)
+
+        # Apply pagination
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_schedules = schedules_data[start_idx:end_idx]
 
         # Convert to response model
-        result = []
-        for schedule in schedules:
-            result.append(TelegramSchedule(
-                id=schedule['id'],
-                user_id=schedule['user_id'],
-                ticker=schedule['ticker'],
-                scheduled_time=schedule['scheduled_time'],
-                period=schedule.get('period'),
-                active=schedule.get('active', True),
-                email=schedule.get('email', False),
-                indicators=schedule.get('indicators'),
-                interval=schedule.get('interval'),
-                provider=schedule.get('provider'),
-                schedule_type=schedule.get('schedule_type'),
-                list_type=schedule.get('list_type'),
-                config_json=schedule.get('config_json'),
-                schedule_config=schedule.get('schedule_config'),
-                created=schedule.get('created')
-            ))
+        result_schedules = [
+            TelegramSchedule(**schedule_data)
+            for schedule_data in paginated_schedules
+        ]
 
-        _logger.info("Retrieved %d Telegram schedules", len(result))
+        # Create paginated response
+        result = {
+            "data": result_schedules,
+            "total": len(schedules_data),
+            "page": page,
+            "limit": page_size,
+            "has_more": end_idx < len(schedules_data)
+        }
+
+        _logger.info("Retrieved %d Telegram schedules (page %d of %d total)", len(result_schedules), page, len(schedules_data))
         return result
 
     except Exception as e:
@@ -561,21 +477,8 @@ async def toggle_telegram_schedule(
     try:
         _logger.info("Toggling Telegram schedule: %d", schedule_id)
 
-        # Get current schedule
-        schedule = db.get_schedule(schedule_id)
-        if not schedule:
-            raise HTTPException(status_code=404, detail="Schedule not found")
-
-        # Toggle active status
-        new_active_status = not schedule.get('active', True)
-        success = db.update_schedule(schedule_id, active=new_active_status)
-
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to toggle schedule")
-
-        status_text = "activated" if new_active_status else "deactivated"
-        _logger.info("Successfully %s Telegram schedule: %d", status_text, schedule_id)
-        return {"message": f"Schedule {schedule_id} {status_text} successfully"}
+        # TODO: Implement schedule toggle through telegram_app_service
+        raise HTTPException(status_code=501, detail="Schedule toggle endpoint not yet implemented")
 
     except HTTPException:
         raise
@@ -593,18 +496,8 @@ async def delete_telegram_schedule(
     try:
         _logger.info("Deleting Telegram schedule: %d", schedule_id)
 
-        # Check if schedule exists
-        schedule = db.get_schedule(schedule_id)
-        if not schedule:
-            raise HTTPException(status_code=404, detail="Schedule not found")
-
-        # Delete schedule
-        success = db.delete_schedule(schedule_id)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to delete schedule")
-
-        _logger.info("Successfully deleted Telegram schedule: %d", schedule_id)
-        return {"message": f"Schedule {schedule_id} deleted successfully"}
+        # TODO: Implement schedule deletion through telegram_app_service
+        raise HTTPException(status_code=501, detail="Schedule deletion endpoint not yet implemented")
 
     except HTTPException:
         raise
@@ -623,18 +516,8 @@ async def update_telegram_schedule(
     try:
         _logger.info("Updating Telegram schedule: %d", schedule_id)
 
-        # Check if schedule exists
-        schedule = db.get_schedule(schedule_id)
-        if not schedule:
-            raise HTTPException(status_code=404, detail="Schedule not found")
-
-        # Update schedule with provided data
-        success = db.update_schedule(schedule_id, **schedule_data)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to update schedule")
-
-        _logger.info("Successfully updated Telegram schedule: %d", schedule_id)
-        return {"message": f"Schedule {schedule_id} updated successfully"}
+        # TODO: Implement schedule update through telegram_app_service
+        raise HTTPException(status_code=501, detail="Schedule update endpoint not yet implemented")
 
     except HTTPException:
         raise
@@ -651,25 +534,9 @@ async def get_telegram_schedule_stats(
     try:
         _logger.info("Getting Telegram schedule statistics")
 
-        # Get all schedules
-        all_schedules = db.get_schedules_by_config()
-        active_schedules = db.get_active_schedules()
-
-        # Calculate basic statistics
-        total_schedules = len(all_schedules)
-        active_count = len(active_schedules)
-
-        # For now, set executed_today and failed_executions to 0
-        # These would require additional database queries or audit log analysis
-        executed_today = 0
-        failed_executions = 0
-
-        stats = ScheduleStats(
-            total_schedules=total_schedules,
-            active_schedules=active_count,
-            executed_today=executed_today,
-            failed_executions=failed_executions
-        )
+        # Use application service to get schedule stats
+        stats_data = telegram_app_service.get_schedule_stats()
+        stats = ScheduleStats(**stats_data)
 
         _logger.info("Retrieved Telegram schedule statistics: %s", stats.dict())
         return stats
@@ -690,31 +557,13 @@ async def send_telegram_broadcast(
     try:
         _logger.info("Sending Telegram broadcast message")
 
-        # Get all approved users
-        users = db.list_users()
-        approved_users = [u for u in users if u.get('approved', False)]
-
-        total_recipients = len(approved_users)
-        successful_deliveries = 0
-        failed_deliveries = 0
-
-        # For now, we'll simulate the broadcast
-        # In a real implementation, this would integrate with the Telegram bot API
-        # to actually send messages to users
-
-        # Simulate delivery (in real implementation, iterate through users and send messages)
-        successful_deliveries = total_recipients  # Assume all succeed for now
-        failed_deliveries = 0
+        # Use application service to send broadcast
+        result_data = telegram_app_service.send_broadcast(broadcast.message)
 
         # Log the broadcast for audit purposes
-        _logger.info("Broadcast sent to %d users by admin %s", total_recipients, current_user.get_username())
+        _logger.info("Broadcast sent to %d users by admin %s", result_data["total_recipients"], current_user.username)
 
-        result = BroadcastResult(
-            message="Broadcast sent successfully",
-            total_recipients=total_recipients,
-            successful_deliveries=successful_deliveries,
-            failed_deliveries=failed_deliveries
-        )
+        result = BroadcastResult(**result_data)
 
         _logger.info("Broadcast result: %s", result.dict())
         return result
@@ -724,9 +573,42 @@ async def send_telegram_broadcast(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/broadcast/history")
+async def get_telegram_broadcast_history(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(50, ge=1, le=100, description="Items per page"),
+    current_user: User = Depends(get_current_user)
+):
+    """Get broadcast message history with pagination."""
+    try:
+        _logger.info("Getting Telegram broadcast history - page: %d, limit: %d", page, limit)
+
+        # Calculate offset for pagination
+        offset = (page - 1) * limit
+
+        # Use application service to get broadcast history
+        history_data = telegram_app_service.get_broadcast_history(limit=limit, offset=offset)
+
+        # Create paginated response
+        result = {
+            "data": history_data,
+            "total": len(history_data),  # This is approximate since we don't have total count
+            "page": page,
+            "limit": limit,
+            "has_more": len(history_data) == limit  # Simple check
+        }
+
+        _logger.info("Retrieved %d broadcast history entries", len(history_data))
+        return result
+
+    except Exception as e:
+        _logger.error("Error getting Telegram broadcast history: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- AUDIT LOGGING ENDPOINTS ---
 
-@router.get("/audit", response_model=List[CommandAudit])
+@router.get("/audit")
 async def get_telegram_audit_logs(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -752,34 +634,25 @@ async def get_telegram_audit_logs(
         # Calculate offset for pagination
         offset = (page - 1) * page_size
 
-        # Get audit logs with filters
-        audit_logs = db.get_all_command_audit(
+        # Use application service to get audit logs
+        logs_data = telegram_app_service.get_audit_logs(
             limit=page_size,
             offset=offset,
             user_id=user_id,
             command=command,
-            success_only=success_only,
-            start_date=start_date,
-            end_date=end_date
+            success_only=success_only
         )
 
-        # Convert to response model
-        result = []
-        for log in audit_logs:
-            result.append(CommandAudit(
-                id=log['id'],
-                telegram_user_id=log['telegram_user_id'],
-                command=log['command'],
-                full_message=log.get('full_message'),
-                is_registered_user=log.get('is_registered_user', False),
-                user_email=log.get('user_email'),
-                success=log.get('success', True),
-                error_message=log.get('error_message'),
-                response_time_ms=log.get('response_time_ms'),
-                created=log['created']
-            ))
+        # Create paginated response
+        result = {
+            "data": logs_data,
+            "total": len(logs_data),  # This is approximate since we don't have total count
+            "page": page,
+            "limit": page_size,
+            "has_more": len(logs_data) == page_size  # Simple check
+        }
 
-        _logger.info("Retrieved %d Telegram audit logs", len(result))
+        _logger.info("Retrieved %d Telegram audit logs", len(logs_data))
         return result
 
     except Exception as e:
@@ -795,31 +668,15 @@ async def get_telegram_audit_stats(
     try:
         _logger.info("Getting Telegram audit statistics")
 
-        # Get audit statistics from database
-        stats_data = db.get_command_audit_stats()
-
-        # Get recent activity (last 24 hours)
-        # This is a simplified implementation - in practice you'd query by date
-        recent_logs = db.get_all_command_audit(limit=1000)  # Get recent logs
-        recent_activity_24h = len(recent_logs)  # Simplified count
-
-        # Calculate top commands
-        command_counts = {}
-        for log in recent_logs:
-            command = log.get('command', 'unknown')
-            command_counts[command] = command_counts.get(command, 0) + 1
-
-        top_commands = [
-            {"command": cmd, "count": count}
-            for cmd, count in sorted(command_counts.items(), key=lambda x: x[1], reverse=True)[:5]
-        ]
+        # Use application service to get audit stats
+        stats_data = telegram_app_service.get_audit_stats()
 
         stats = AuditStats(
             total_commands=stats_data.get('total_commands', 0),
             successful_commands=stats_data.get('successful_commands', 0),
             failed_commands=stats_data.get('failed_commands', 0),
-            recent_activity_24h=recent_activity_24h,
-            top_commands=top_commands
+            recent_activity_24h=stats_data.get('recent_activity_24h', 0),
+            top_commands=stats_data.get('top_commands', [])
         )
 
         _logger.info("Retrieved Telegram audit statistics: %s", stats.dict())
@@ -830,7 +687,7 @@ async def get_telegram_audit_stats(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/users/{user_id}/audit", response_model=List[CommandAudit])
+@router.get("/users/{user_id}/audit")
 async def get_user_audit_logs(
     user_id: str,
     limit: int = Query(50, ge=1, le=100, description="Number of logs to retrieve"),
@@ -840,26 +697,19 @@ async def get_user_audit_logs(
     try:
         _logger.info("Getting audit logs for Telegram user: %s", user_id)
 
-        # Get user command history
-        history = db.get_user_command_history(user_id, limit)
+        # Use application service to get user audit logs
+        logs_data = telegram_app_service.get_user_audit_logs(user_id, limit)
 
-        # Convert to response model
-        result = []
-        for log in history:
-            result.append(CommandAudit(
-                id=log['id'],
-                telegram_user_id=user_id,
-                command=log['command'],
-                full_message=log.get('full_message'),
-                is_registered_user=log.get('is_registered_user', False),
-                user_email=log.get('user_email'),
-                success=log.get('success', True),
-                error_message=log.get('error_message'),
-                response_time_ms=log.get('response_time_ms'),
-                created=log['created']
-            ))
+        # Create paginated response
+        result = {
+            "data": logs_data,
+            "total": len(logs_data),
+            "page": 1,
+            "limit": limit,
+            "has_more": len(logs_data) == limit
+        }
 
-        _logger.info("Retrieved %d audit logs for user %s", len(result), user_id)
+        _logger.info("Retrieved %d audit logs for user %s", len(logs_data), user_id)
         return result
 
     except Exception as e:

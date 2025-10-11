@@ -41,7 +41,7 @@ except ImportError as e:
     TRADING_SYSTEM_AVAILABLE = False
 from src.notification.logger import setup_logger
 from config.donotshare.donotshare import TRADING_API_PORT, TRADING_WEBGUI_PORT
-from src.web_ui.backend.database import init_database
+from src.web_ui.backend.services.webui_app_service import webui_app_service
 from src.web_ui.backend.auth_routes import router as auth_router
 from src.web_ui.backend.telegram_routes import router as telegram_router
 from src.web_ui.backend.auth import get_current_user, require_trader_or_admin, require_admin
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
     _logger.info("Starting Trading Web UI Backend...")
 
     # Initialize database
-    init_database()
+    webui_app_service.init_database()
     _logger.info("Database initialized")
 
     # Initialize strategy manager if available

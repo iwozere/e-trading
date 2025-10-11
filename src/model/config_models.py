@@ -109,6 +109,34 @@ class OptimizerConfig(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp")
 
+class StrategyConfig(BaseModel):
+    """Configuration for trading strategies."""
+    id: str = Field(..., description="Unique strategy identifier")
+    name: str = Field(..., description="Strategy name")
+    description: Optional[str] = Field(None, description="Strategy description")
+    enabled: bool = Field(True, description="Whether strategy is enabled")
+
+    # Trading parameters
+    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
+    broker: Dict[str, Any] = Field(..., description="Broker configuration")
+    strategy: Dict[str, Any] = Field(..., description="Strategy parameters")
+
+    # Optional configurations
+    data: Dict[str, Any] = Field(default_factory=dict, description="Data configuration")
+    trading: Dict[str, Any] = Field(default_factory=dict, description="Trading settings")
+    risk_management: Dict[str, Any] = Field(default_factory=dict, description="Risk management settings")
+    notifications: Dict[str, Any] = Field(default_factory=dict, description="Notification settings")
+
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp")
+
+    @field_validator('id')
+    def validate_id(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Strategy ID cannot be empty')
+        return v.strip()
+
 class DataConfig(BaseModel):
     """Configuration for data sources."""
     data_id: str = Field(..., description="Unique data configuration identifier")

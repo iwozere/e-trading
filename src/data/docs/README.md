@@ -56,7 +56,7 @@ Service Interface (telegram_service.py)
          ↓
 Service Layer (database_service.py)
          ↓
-Repository Pattern (telegram_repository.py, trade_repository.py)
+Repository Pattern (repo_telegram.py, repo_trading.py, repo_users.py, repo_webui.py)
          ↓
 Database Models (telegram_models.py, database.py)
          ↓

@@ -15,7 +15,7 @@ from datetime import datetime
 sys.path.append('src')
 
 from src.trading.live_trading_bot import LiveTradingBot
-from src.data.db.trade_repository import TradeRepository
+from src.trading.services.trading_bot_service import trading_bot_service
 
 
 def create_test_config():

@@ -306,9 +306,9 @@ metrics = analytics.calculate_metrics()
 ### Database Integration
 ```python
 # Load trades from database
-from src.data.db.trade_repository import TradeRepository
+from src.trading.services.trading_bot_service import trading_bot_service
 
-repo = TradeRepository()
+repo = trading_bot_service
 trades = repo.get_trades_by_bot_id("bot_001")
 
 # Convert to analytics format

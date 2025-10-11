@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
-from src.data.db.trade_repository import TradeRepository
+from src.trading.services.trading_bot_service import trading_bot_service
 from src.trading.risk.controller import RiskController
 from src.notification.async_notification_manager import initialize_notification_manager
 from src.trading.broker.base_broker import PositionNotificationManager
@@ -75,7 +75,7 @@ class BaseTradingBot:
         # Database integration
         self.bot_id = bot_id or f"bot_{uuid.uuid4().hex[:8]}"
         self.trade_type = "paper" if paper_trading else "live"
-        self.trade_repository = TradeRepository()
+        self.trade_repository = trading_bot_service
 
         # Enhanced notification setup
         self.notification_manager = None

@@ -168,18 +168,89 @@ def log_command_audit(telegram_user_id: str, command: str, **kwargs) -> int:
 
 def get_user_command_history(telegram_user_id: str, limit: int = 20):
     with database_service.uow() as r:
-        return list(r.telegram_audit.last_commands(str(telegram_user_id), limit=limit))
+        logs = r.telegram_audit.last_commands(str(telegram_user_id), limit=limit)
+
+        # Convert to dictionaries while session is active
+        return [
+            {
+                "id": log.id,
+                "telegram_user_id": log.telegram_user_id,
+                "command": log.command,
+                "full_message": log.full_message,
+                "is_registered_user": log.is_registered_user,
+                "user_email": log.user_email,
+                "success": log.success,
+                "error_message": log.error_message,
+                "response_time_ms": log.response_time_ms,
+                "created": log.created_at.isoformat() if log.created_at else None
+            }
+            for log in logs
+        ]
 
 def get_all_command_audit(*, limit: int = 100, offset: int = 0,
                           user_id: Optional[str] = None, command: Optional[str] = None,
                           success_only: Optional[bool] = None,
                           start_date: Optional[str] = None, end_date: Optional[str] = None):
     with database_service.uow() as r:
-        return list(r.telegram_audit.list(
+        logs = r.telegram_audit.list(
             limit=limit, offset=offset, user_id=user_id, command=command,
             success_only=success_only, start_date=start_date, end_date=end_date
-        ))
+        )
+
+        # Convert to dictionaries while session is active
+        return [
+            {
+                "id": log.id,
+                "telegram_user_id": log.telegram_user_id,
+                "command": log.command,
+                "full_message": log.full_message,
+                "is_registered_user": log.is_registered_user,
+                "user_email": log.user_email,
+                "success": log.success,
+                "error_message": log.error_message,
+                "response_time_ms": log.response_time_ms,
+                "created": log.created_at.isoformat() if log.created_at else None
+            }
+            for log in logs
+        ]
 
 def get_command_audit_stats() -> Dict[str, Any]:
     with database_service.uow() as r:
         return r.telegram_audit.stats()
+
+# --- Broadcast logs ---
+def log_broadcast(message: str, sent_by: str, success_count: int, total_count: int) -> int:
+    """Log a broadcast message with delivery statistics."""
+    with database_service.uow() as r:
+        row = r.telegram_broadcast.create(
+            message=message,
+            sent_by=sent_by,
+            success_count=success_count,
+            total_count=total_count
+        )
+        return row.id
+
+def get_broadcast_history(limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    """Get broadcast history with pagination."""
+    with database_service.uow() as r:
+        logs = r.telegram_broadcast.list(limit=limit, offset=offset)
+
+        # Convert to dictionaries while session is active
+        return [
+            {
+                "id": log.id,
+                "message": log.message,
+                "sent_by": log.sent_by,
+                "total_recipients": log.total_count,
+                "successful_deliveries": log.success_count,
+                "failed_deliveries": (log.total_count - log.success_count) if log.total_count and log.success_count else 0,
+                "delivery_status": "completed" if log.success_count is not None else "pending",
+                "sent_at": log.created_at.isoformat() if log.created_at else None
+            }
+            for log in logs
+        ]
+
+def get_broadcast_stats() -> Dict[str, Any]:
+    """Get broadcast statistics."""
+    with database_service.uow() as r:
+        return r.telegram_broadcast.stats()
