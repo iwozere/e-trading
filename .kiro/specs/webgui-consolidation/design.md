@@ -9,9 +9,9 @@ This design outlines the migration of Telegram bot management functionality from
 ### High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────┐
 │                    Unified Web UI (React + Vite)           │
-├─────────────────────────────────────────────────────────────┤
+├────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────────────────────┐  │
 │  │ Trading System  │  │   Telegram Bot Management       │  │
 │  │   Management    │  │                                 │  │
@@ -22,30 +22,30 @@ This design outlines the migration of Telegram bot management functionality from
 │  │ • Analytics     │  │ • Broadcast Messaging           │  │
 │  │                 │  │ • Audit & Logging               │  │
 │  └─────────────────┘  └─────────────────────────────────┘  │
-├─────────────────────────────────────────────────────────────┤
+├────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────────────────────┐  │
 │  │   Shared UI     │  │      State Management           │  │
 │  │   Components    │  │                                 │  │
-│  │                 │  │ • React Query (Server State)   │  │
-│  │ • Navigation    │  │ • Zustand (Client State)       │  │
-│  │ • Auth          │  │ • Socket.io (Real-time)        │  │
+│  │                 │  │ • React Query (Server State)    │  │
+│  │ • Navigation    │  │ • Zustand (Client State)        │  │
+│  │ • Auth          │  │ • Socket.io (Real-time)         │  │
 │  │ • Layout        │  │ • Material-UI (Components)      │  │
 │  └─────────────────┘  └─────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────┘
                               │
                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Backend Services                         │
-├─────────────────────────────────────────────────────────────┤
+┌────────────────────────────────────────────────────────────┐
+│                    Backend Services                        │
+├────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────────────────────┐  │
 │  │ Trading System  │  │   Telegram Bot Services         │  │
 │  │   Backend       │  │                                 │  │
-│  │                 │  │ • telegram_service (Database)  │  │
-│  │ • FastAPI       │  │ • Bot API (HTTP Endpoints)     │  │
+│  │                 │  │ • telegram_service (Database)   │  │
+│  │ • FastAPI       │  │ • Bot API (HTTP Endpoints)      │  │
 │  │ • WebSocket     │  │ • WebSocket Events              │  │
 │  │ • Database      │  │ • Broadcast Service             │  │
 │  └─────────────────┘  └─────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Architecture

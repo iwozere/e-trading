@@ -45,7 +45,7 @@ from src.web_ui.backend.database import init_database
 from src.web_ui.backend.auth_routes import router as auth_router
 from src.web_ui.backend.telegram_routes import router as telegram_router
 from src.web_ui.backend.auth import get_current_user, require_trader_or_admin, require_admin
-from src.web_ui.backend.models import User
+from src.data.db.models.model_users import User
 from src.web_ui.backend.services import (
     StrategyManagementService, StrategyValidationError, StrategyOperationError,
     SystemMonitoringService, SystemAlert

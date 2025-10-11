@@ -17,8 +17,8 @@ from typing import Generator
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.models.consolidated_models import Base
-from src.data.models import User
+from src.data.db.services.database_service import get_database_service
+from src.data.db.models.model_users import User
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -42,14 +42,14 @@ def get_db() -> Generator[Session, None, None]:
     """
     Dependency function to get database session.
 
+    Uses the consolidated database service for consistency.
+
     Yields:
         Session: SQLAlchemy database session
     """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    db_service = get_database_service()
+    with db_service.uow() as session:
+        yield session.session
 
 
 def init_database():

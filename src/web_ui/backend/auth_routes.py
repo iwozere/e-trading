@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.web_ui.backend.database import get_db
-from src.web_ui.backend.models import User
+from src.data.db.models.model_users import User
 from src.web_ui.backend.auth import (
     authenticate_user,
     create_access_token,

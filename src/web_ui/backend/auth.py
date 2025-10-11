@@ -20,7 +20,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.web_ui.backend.database import get_db
-from src.web_ui.backend.models import User, AuditLog
+from src.data.db.models.model_users import User
+from src.data.db.models.model_webui import WebUIAuditLog
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -259,7 +260,7 @@ def log_user_action(
         user_agent: User's browser/client info
     """
     try:
-        audit_log = AuditLog(
+        audit_log = WebUIAuditLog(
             user_id=user.id,
             action=action,
             resource_type=resource_type,

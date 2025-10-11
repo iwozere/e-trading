@@ -24,15 +24,18 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.services import telegram_service as db
 from src.notification.logger import setup_logger
 from src.web_ui.backend.auth import get_current_user, require_admin
-from src.web_ui.backend.models import User
+from src.data.db.models.model_users import User
+from src.web_ui.backend.services.telegram_app_service import TelegramAppService
 
 _logger = setup_logger(__name__)
 
 # Create router
 router = APIRouter(prefix="/api/telegram", tags=["telegram"])
+
+# Initialize application service
+telegram_app_service = TelegramAppService()
 
 # Security
 security = HTTPBearer()
@@ -164,31 +167,14 @@ async def get_telegram_users(
     try:
         _logger.info("Getting Telegram users with filter: %s", filter)
 
-        # Get all users from database
-        users = db.list_users()
-
-        # Apply filtering
-        if filter == "verified":
-            users = [u for u in users if u.get('verified', False)]
-        elif filter == "approved":
-            users = [u for u in users if u.get('approved', False)]
-        elif filter == "pending":
-            users = [u for u in users if u.get('verified', False) and not u.get('approved', False)]
-        # 'all' or None returns all users
+        # Use application service
+        users_data = telegram_app_service.get_users_list(filter)
 
         # Convert to response model
-        result = []
-        for user in users:
-            result.append(TelegramUser(
-                telegram_user_id=user['telegram_user_id'],
-                email=user.get('email'),
-                verified=user.get('verified', False),
-                approved=user.get('approved', False),
-                language=user.get('language', 'en'),
-                is_admin=user.get('is_admin', False),
-                max_alerts=user.get('max_alerts', 5),
-                max_schedules=user.get('max_schedules', 5)
-            ))
+        result = [
+            TelegramUser(**user_data)
+            for user_data in users_data
+        ]
 
         _logger.info("Retrieved %d Telegram users", len(result))
         return result
@@ -207,11 +193,11 @@ async def verify_telegram_user(
     try:
         _logger.info("Manually verifying Telegram user: %s", user_id)
 
-        # Update user verification status
-        db.update_user_verification(user_id, True)
+        # Use application service
+        result = telegram_app_service.verify_user(user_id)
 
         _logger.info("Successfully verified Telegram user: %s", user_id)
-        return {"message": f"User {user_id} verified successfully"}
+        return result
 
     except Exception as e:
         _logger.error("Error verifying Telegram user %s: %s", user_id, e)
@@ -288,23 +274,9 @@ async def get_telegram_user_stats(
     try:
         _logger.info("Getting Telegram user statistics")
 
-        # Get all users
-        users = db.list_users()
-
-        # Calculate statistics
-        total_users = len(users)
-        verified_users = len([u for u in users if u.get('verified', False)])
-        approved_users = len([u for u in users if u.get('approved', False)])
-        pending_approvals = len([u for u in users if u.get('verified', False) and not u.get('approved', False)])
-        admin_users = len([u for u in users if u.get('is_admin', False)])
-
-        stats = UserStats(
-            total_users=total_users,
-            verified_users=verified_users,
-            approved_users=approved_users,
-            pending_approvals=pending_approvals,
-            admin_users=admin_users
-        )
+        # Use application service
+        stats_data = telegram_app_service.get_user_stats()
+        stats = UserStats(**stats_data)
 
         _logger.info("Retrieved Telegram user statistics: %s", stats.dict())
         return stats
