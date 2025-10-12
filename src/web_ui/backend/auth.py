@@ -22,6 +22,8 @@ sys.path.append(str(PROJECT_ROOT))
 from src.web_ui.backend.services.webui_app_service import webui_app_service
 from src.data.db.models.model_users import User
 from src.data.db.models.model_webui import WebUIAuditLog
+from src.data.db.services.database_service import get_database_service
+from src.data.db.services import users_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -111,6 +113,14 @@ def verify_token(token: str) -> Dict[str, Any]:
         raise AuthenticationError("Invalid token")
 
 
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
+    """Get user by email."""
+    return db.query(User).filter(User.email == email).first()
+
+def get_user_by_telegram_id(telegram_user_id: str) -> Optional[User]:
+    """Get user by telegram ID - wrapper for service call."""
+    return users_service.get_user_by_telegram_id(telegram_user_id)
+
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     """
     Authenticate user with email or telegram_user_id and password.
@@ -124,16 +134,16 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
         User: Authenticated user or None
     """
     # Try to find user by email first
-    user = db.query(User).filter(User.email == username).first()
+    user = get_user_by_email(db, username)
 
-    # If not found by email, try by telegram_user_id
+    # If not found by email, try by telegram_user_id using the service
     if not user:
         # Check if username looks like telegram format or is numeric
         if username.startswith("telegram_"):
             telegram_id = username.replace("telegram_", "")
-            user = db.query(User).filter(User.telegram_user_id == telegram_id).first()
+            user = get_user_by_telegram_id(telegram_id)
         elif username.isdigit():
-            user = db.query(User).filter(User.telegram_user_id == username).first()
+            user = get_user_by_telegram_id(username)
 
     if not user:
         return None
@@ -181,7 +191,6 @@ def get_current_user(
             raise AuthenticationError("Invalid token payload")
 
         # Get user from database to ensure it exists and has proper foreign key
-        from src.data.db.services.database_service import get_database_service
         db_service = get_database_service()
 
         with db_service.uow() as r:

@@ -13,10 +13,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { vi } from 'vitest';
-import { id } from 'date-fns/locale';
-import { id } from 'date-fns/locale';
-import { id } from 'date-fns/locale';
-import { id } from 'date-fns/locale';
 
 // Create test theme (simplified version of the app theme)
 const testTheme = createTheme({
@@ -40,7 +36,7 @@ const createTestQueryClient = () => new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
-      cacheTime: 0,
+      gcTime: 0, // Replaced cacheTime with gcTime (TanStack Query v5+)
     },
     mutations: {
       retry: false,
@@ -53,9 +49,9 @@ interface AllTheProvidersProps {
   queryClient?: QueryClient;
 }
 
-const AllTheProviders: React.FC<AllTheProvidersProps> = ({ 
-  children, 
-  queryClient = createTestQueryClient() 
+const AllTheProviders: React.FC<AllTheProvidersProps> = ({
+  children,
+  queryClient = createTestQueryClient()
 }) => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -78,7 +74,7 @@ const customRender = (
   options: CustomRenderOptions = {}
 ) => {
   const { queryClient, ...renderOptions } = options;
-  
+
   return render(ui, {
     wrapper: ({ children }) => (
       <AllTheProviders queryClient={queryClient}>
@@ -125,7 +121,7 @@ export const mockUnauthenticatedState = {
 };
 
 // Mock API responses
-export const mockApiResponse = <T>(data: T, status = 200) => ({
+export const mockApiResponse = <T,>(data: T, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
   json: () => Promise.resolve(data),
@@ -140,7 +136,7 @@ export const mockApiError = (message: string, status = 500) => ({
 });
 
 // Mock fetch responses
-export const mockFetchSuccess = <T>(data: T) => {
+export const mockFetchSuccess = <T,>(data: T) => {
   const mockFetch = vi.fn().mockResolvedValue(mockApiResponse(data));
   (globalThis as any).fetch = mockFetch;
   return mockFetch;

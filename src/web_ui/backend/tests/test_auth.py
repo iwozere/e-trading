@@ -159,7 +159,9 @@ class TestUserAuthentication:
         assert mock_user.last_login is not None
 
     @patch('src.web_ui.backend.auth.webui_app_service')
-    def test_authenticate_user_by_telegram_id_success(self, mock_service):
+    @patch('src.web_ui.backend.auth.get_user_by_telegram_id')
+    @patch('src.web_ui.backend.auth.get_user_by_email')
+    def test_authenticate_user_by_telegram_id_success(self, mock_get_by_email, mock_get_by_telegram, mock_service):
         """Test successful authentication by telegram ID."""
         mock_db = Mock()
         mock_user = Mock(spec=User)
@@ -168,11 +170,14 @@ class TestUserAuthentication:
         mock_user.last_login = None
 
         # First query (by email) returns None, second query (by telegram_user_id) returns user
-        mock_db.query.return_value.filter.return_value.first.side_effect = [None, mock_user]
+        mock_get_by_email.return_value = None
+        mock_get_by_telegram.return_value = mock_user
 
         result = authenticate_user(mock_db, "123456789", "password")
 
         assert result == mock_user
+        mock_get_by_email.assert_called_once_with(mock_db, "123456789")
+        mock_get_by_telegram.assert_called_once_with("123456789")
         mock_user.verify_password.assert_called_once_with("password")
 
     @patch('src.web_ui.backend.auth.webui_app_service')
@@ -242,7 +247,8 @@ class TestGetCurrentUser:
         mock_user.last_login = datetime.utcnow()
 
         mock_get_db_service.return_value = mock_db_service
-        mock_db_service.uow.return_value.__enter__.return_value = mock_uow
+        mock_db_service.uow.return_value.__enter__ = Mock(return_value=mock_uow)
+        mock_db_service.uow.return_value.__exit__ = Mock(return_value=None)
         mock_uow.s = mock_session
         mock_session.query.return_value.filter.return_value.first.return_value = mock_user
 
@@ -294,7 +300,8 @@ class TestGetCurrentUser:
         mock_session = Mock()
 
         mock_get_db_service.return_value = mock_db_service
-        mock_db_service.uow.return_value.__enter__.return_value = mock_uow
+        mock_db_service.uow.return_value.__enter__ = Mock(return_value=mock_uow)
+        mock_db_service.uow.return_value.__exit__ = Mock(return_value=None)
         mock_uow.s = mock_session
         mock_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -321,7 +328,8 @@ class TestGetCurrentUser:
         mock_user.is_active = False
 
         mock_get_db_service.return_value = mock_db_service
-        mock_db_service.uow.return_value.__enter__.return_value = mock_uow
+        mock_db_service.uow.return_value.__enter__ = Mock(return_value=mock_uow)
+        mock_db_service.uow.return_value.__exit__ = Mock(return_value=None)
         mock_uow.s = mock_session
         mock_session.query.return_value.filter.return_value.first.return_value = mock_user
 

@@ -1,211 +1,235 @@
-Nice — this is a classic orchestration problem and you’re thinking in the right direction. Below I give a practical, production-ready architecture you can adopt and adapt: trade-offs, components, data models, operational concerns (retries, idempotency, locking), and a small “starter stack” you can implement quickly. I’ll keep it pragmatic so you can start building or pick pieces to prototype.
+Nice — Postgres + Redis + Dramatiq + APScheduler is a solid stack. Short answer to your specific questions:
 
-# 1 — High-level recommendation
+* Yes — keep **alerts** and **schedules** in separate tables (they are different domain objects and often have different fields).
+* Yes — your **runs** table should record which job produced a run, and you should store **job_type** in that table as well. Do **not** rely on a single `job_id` column alone (which is ambiguous). Use either a polymorphic pair `(job_type, job_id)` or a unified parent `jobs` table — both are valid; I’ll show the polymorphic approach because it’s simple and flexible.
 
-Use a small **control plane + worker pool** architecture (i.e. one logical background *framework* split into multiple *services/processes*).
-Reason: it gives the simplicity of a single place that owns scheduling and task definitions while allowing horizontal scaling and separation-of-concerns for different workloads (alerts vs heavy strategy backtests vs lightweight reports). In practice that means:
+Below I give a pragmatic schema, design rationale, SQL `CREATE TABLE` examples (Postgres), recommended indexes, idempotency constraints, examples of how to snapshot configs for reproducibility, and a small SQLAlchemy model sketch you can drop into your FastAPI app.
 
-* **Control Plane (API / Scheduler)** — single authoritative service that stores jobs, exposes REST/WS for UI/Telegram, and enqueues tasks.
-* **Worker Services (one or more types)** — consume tasks from a queue and execute them (alerts worker, schedule-check worker, strategy-execution worker, report renderer).
-* **Telegram Bot process** — receives user commands, forwards requests to Control Plane API.
-* **Optional**: dedicated lightweight *cron* scheduler service when you want precise scheduling (or incorporate scheduling into the control plane).
+# Why `job_type` + `job_id` (polymorphic) is better
 
-This gives best balance: centralized management and distributed execution.
+* Alerts and schedules are separate tables with separate lifecycles and fields. A run must point back to *which* domain object triggered it. `job_type` tells you whether `job_id` references `alerts`, `schedules`, `strategies`, etc.
+* Easier queries: `SELECT * FROM runs WHERE job_type='alert' AND job_id=42` is explicit.
+* Keeps DB normalized without complex foreign-key tricks (you avoid cross-table FK constraints).
+* If you later add a common `jobs` table (shared metadata), migrating is straightforward.
 
-# 2 — Components & responsibilities
+# Requirements for runs table
 
-1. **Control Plane API (FastAPI)**
+Must capture:
 
-   * CRUD for users, strategies, alerts, schedules.
-   * Exposes endpoints: start/stop strategy, create alert, list schedules, run-once, etc.
-   * Accepts JSON configs for strategies/alerts (validates, stores).
-   * Schedules tasks by pushing messages to queue or by telling the scheduler to run.
-   * Maintains metadata and job state in DB.
-   * AuthN/AuthZ (API tokens / JWT).
+* canonical `run_id` (UUID) — unique per execution (idempotency)
+* `job_type` (text enum or text)
+* `job_id` (bigint/uuid depending on your PKs)
+* `user_id` or `owner_id` (for multi-user systems / permissions)
+* scheduling metadata: `scheduled_for` (when it was supposed to run), `enqueued_at`/`queued_by`
+* lifecycle timestamps: `started_at`, `finished_at`
+* `status` (enum: pending, running, success, failed, cancelled)
+* `attempt` and `max_attempts` (for retries)
+* `worker_id` / `hostname` (who processed)
+* `result` / `output` (JSONB), `error` (text) — limit size or move large artifacts to blob store
+* `trace_id` / `correlation_id` for observability
+* `job_snapshot` (JSONB) — snapshot of the alert/schedule config at enqueue time (reproducibility)
+* `priority`, `locked_until` (optional locking for manual claim)
+* `duration_ms` (computed)
 
-2. **Scheduler / Orchestrator**
+# Suggested Postgres schema (practical)
 
-   * Maintains the schedule registry (cron expressions or interval).
-   * Responsible for periodic enqueues (e.g., every 15 minutes) — could use APScheduler inside control plane or run a separate small service that pulls due jobs and enqueues tasks.
-   * Ensures tasks are enqueued exactly once (use DB + transactional enqueue or distributed lock).
+```sql
+-- ENUM for status
+CREATE TYPE run_status AS ENUM ('pending','scheduled','running','success','failed','cancelled');
 
-3. **Message Bus / Task Queue**
+-- alerts table (example)
+CREATE TABLE alerts (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  name TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  interval_minutes INT, -- or cron expression
+  rule JSONB NOT NULL,
+  actions JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
 
-   * Redis/RabbitMQ/Kafka as the transport.
-   * Enqueue serialized task messages: `task_type`, `job_id`, `params`, `run_id`, `trace_id`.
-   * Enables scaling workers independently; reliable delivery + retry.
+-- schedules table (example)
+CREATE TABLE schedules (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  name TEXT NOT NULL,
+  cron TEXT NOT NULL,
+  task JSONB NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
 
-4. **Worker Pools**
+-- runs table (polymorphic)
+CREATE TABLE runs (
+  run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_type TEXT NOT NULL,        -- 'alert' | 'schedule' | 'strategy'
+  job_id BIGINT NOT NULL,        -- references alerts.id or schedules.id (no FK)
+  user_id BIGINT,
+  status run_status NOT NULL DEFAULT 'pending',
+  attempt INT NOT NULL DEFAULT 0,
+  max_attempts INT NOT NULL DEFAULT 3,
+  scheduled_for TIMESTAMPTZ,     -- when this run was scheduled for (cron tick)
+  enqueued_at TIMESTAMPTZ DEFAULT now(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ,
+  worker_id TEXT,                -- hostname/process id or dramatiq worker id
+  locked_until TIMESTAMPTZ,      -- optional lock expiry if using manual claim
+  duration_ms INT,
+  priority INT DEFAULT 100,
+  trace_id UUID,                 -- optional for tracing
+  job_snapshot JSONB,            -- config snapshot for reproducibility
+  result JSONB,                  -- output/results summary
+  error TEXT,                    -- short error message
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
-   * **Alerts Worker** — lightweight, evaluates alert rules (indicators vs thresholds) and sends Telegram/notification if condition met.
-   * **Schedule Worker** — executes scheduled checks (e.g., run custom JSON-checks, data pull + indicators).
-   * **Strategy Worker** — runs strategy instances (could be long-running backtests or live trading loops). May require separate isolated environment (Docker) for safety.
-   * Workers must be idempotent, log outputs, update DB with results.
-
-5. **Telegram Bot**
-
-   * Handles user interactions and sends commands to Control Plane.
-   * Receives report outputs or alert messages from workers (workers call Telegram API or push back to control plane which forwards).
-   * Keep bot stateless; persist subscription state in DB.
-
-6. **Storage**
-
-   * **Primary DB**: PostgreSQL (jobs, users, job definitions, statuses, run history).
-   * **Cache / Locking**: Redis (task queue + locks + ephemeral data).
-   * **Blob / time series**: S3/minio for reports, CSV exports, or timeseries DB if needed.
-
-7. **Monitoring / Observability**
-
-   * Structured logs (JSON), Prometheus metrics, Grafana dashboards.
-   * Tracing (OpenTelemetry) and alerting for failures.
-
-# 3 — Data models / JSON schemas (example)
-
-Strategy config (example):
-
-```json
-{
-  "strategy_id": "strat-20251011-01",
-  "user_id": 123,
-  "name": "RSI-BB-ATR",
-  "instrument": "BTC/USDT",
-  "timeframe": "15m",
-  "parameters": {
-    "rsi_period": 14,
-    "bb_period": 20,
-    "bb_stddev": 2,
-    "atr_period": 14,
-    "risk_per_trade_pct": 1.0
-  },
-  "execution": {
-    "paper": true,
-    "max_positions": 1,
-    "order_type": "market"
-  },
-  "state": "stopped" 
-}
+-- useful indexes
+CREATE INDEX idx_runs_job ON runs (job_type, job_id);
+CREATE INDEX idx_runs_status ON runs (status);
+CREATE INDEX idx_runs_enqueued_at ON runs (enqueued_at);
+CREATE INDEX idx_runs_scheduled_for ON runs (scheduled_for);
+CREATE INDEX idx_runs_user ON runs (user_id);
 ```
 
-Alert config:
+Notes:
 
-```json
-{
-  "alert_id": "alert-455",
-  "user_id": 123,
-  "name": "High Volume + RSI",
-  "instrument": "AAPL",
-  "check_interval_minutes": 15,
-  "rule": {
-    "and": [
-      {"indicator": "volume", "operator": ">", "value": "avg_20_volume * 2"},
-      {"indicator": "rsi_14", "operator": "<", "value": 30}
-    ]
-  },
-  "actions": ["telegram_message"],
-  "enabled": true
-}
+* I used `gen_random_uuid()` (Postgres `pgcrypto` or `uuid-ossp`) for `run_id`. Ensure the extension is enabled: `CREATE EXTENSION IF NOT EXISTS pgcrypto;`
+* `job_snapshot` stores the JSON config of the alert/schedule/strategy as it was when enqueued — crucial for reproducibility and debugging.
+* `result` should be a short summary (JSON) only; store large artifacts separately (S3/minio or local FS) and store a link in `result`.
+
+# Idempotency and uniqueness constraints
+
+To prevent double-enqueuing/execution you can add constraints depending on business logic.
+
+Common patterns:
+
+1. **Unique per scheduled tick** — do not allow two runs for the same job at the same scheduled time:
+
+```sql
+CREATE UNIQUE INDEX ux_runs_job_scheduled_for ON runs (job_type, job_id, scheduled_for);
 ```
 
-Schedule / one-off check:
+This ensures the scheduler cannot enqueue the same job twice for the same `scheduled_for`. If you need multiple simultaneous runs, leave this out.
 
-```json
-{
-  "schedule_id": "sched-909",
-  "user_id": 123,
-  "cron": "*/15 * * * *",
-  "task": {"type": "run_report", "params": {"symbols": ["AAPL","MSFT"], "indicators": ["rsi","macd"]}},
-  "enabled": true
-}
+2. **Run-level idempotency** — workers receive `run_id`. Before executing they `UPDATE runs SET status='running', started_at=now(), worker_id=... WHERE run_id = :run_id AND status IN ('pending','scheduled') RETURNING *`. If no row changed, treat as already processed.
+
+3. **Claiming pending runs** (if queueless/DB-polling) — `UPDATE runs SET status='running', worker_id=..., started_at=now() WHERE run_id = :run_id AND status='pending' RETURNING run_id;` Use the returned row presence to know claim success.
+
+# Snapshotting job config
+
+When scheduler enqueues a run, fetch the job's config from `alerts` or `schedules` and store it into `runs.job_snapshot`. This guards against changes after enqueue: you will always know what parameters the run used.
+
+Example insert (pseudo):
+
+```sql
+INSERT INTO runs (run_id, job_type, job_id, user_id, scheduled_for, job_snapshot)
+VALUES (:run_id, 'alert', :alert_id, :user_id, :scheduled_for, :job_snapshot::jsonb);
 ```
 
-# 4 — Task flow (example)
+# Handling retries
 
-1. User creates an alert via Telegram UI → Telegram bot calls `POST /alerts` on Control Plane.
-2. Control Plane stores alert in DB and registers it with Scheduler.
-3. Scheduler wakes at each interval (or at cron times), finds due alerts, enqueues `evaluate_alert` tasks into Redis queue with `job_id` and `run_id`.
-4. Alerts Worker picks task, fetches necessary market data (cached or via market-data service), computes indicators, evaluates rule, writes run result to DB, sends Telegram message if triggered.
-5. Control plane / UI can query run history and results.
+* Use `attempt` and `max_attempts`. Worker on failure increments `attempt` and sets `status='pending'` or `status='scheduled'` with `enqueued_at=now() + delay` (requeue). Or use Dramatiq's retry mechanism and still update your `runs` row accordingly.
+* Record `error` text and stack (truncate) and include a short `result` summary.
 
-# 5 — Reliability & correctness concerns (must-haves)
+# Archiving & retention
 
-* **Idempotency:** Every task should include a `run_id` (UUID). Workers must check DB if `run_id` was already processed to avoid duplicate actions.
-* **Distributed locks / leader election:** If you have multiple schedulers, use Redis/DB advisory locks to ensure only one enqueues at a time.
-* **Retries & backoff:** Use exponential backoff with limited retries for transient failures; persistent failures mark job as `failed`.
-* **Exactly-once-ish delivery:** True exactly-once is hard — ensure idempotent handlers and transactional DB updates when possible.
-* **Rate limiting & throttling:** When calling exchanges/APIs, centralize rate limits (token bucket in Redis) to protect from bans.
-* **Security:** Authenticate API calls (bot and web UI), validate all user-provided JSON configs, sandbox untrusted code (if you allow user-supplied scripts — prefer parameterized strategies).
-* **Resource isolation:** For heavy jobs (backtests, ML training), run in separate worker pool or spawn ephemeral containers to avoid crashing other workers.
-* **Audit & traceability:** Keep job history, timestamps, inputs, outputs for reproducibility.
+* `runs` can grow large. Add a background job to archive old runs to an archive table or S3/CSV and delete old rows (e.g., keep last 90 days).
+* Use partitioning by time (`created_at`) if you expect very high volume.
 
-# 6 — Tech choices (starter stack)
+# Example SQLAlchemy models (minimal)
 
-* API / Control Plane: **FastAPI** (async, easy, docs)
-* Task queue: **Redis + RQ / Dramatiq / Celery**
+```python
+# models.py
+from sqlalchemy import Column, BigInteger, Text, JSON, Boolean, TIMESTAMP, Integer, Enum
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+import enum
+import uuid
+from sqlalchemy.ext.declarative import declarative_base
 
-  * Celery: mature, feature-rich (but heavier).
-  * Dramatiq: simpler, good performance.
-  * RQ: simplest, OK for low/medium load.
-* Scheduler: **APScheduler** (if embedded) or a small cron-poller service that queries DB for due jobs and enqueues them.
-* DB: **Postgres**
-* Cache/locks: **Redis**
-* Telegram Bot: **python-telegram-bot** or **aiogram**
-* Containerization: **Docker**, orchestration with **docker-compose** for dev, **Kubernetes** for production.
-* Observability: **Prometheus + Grafana + ELK or Loki** for logs
-* Optional: **gRPC** between internal services if you want low-latency typed RPC.
+Base = declarative_base()
 
-# 7 — Single service vs multiple services — tradeoffs
+class RunStatus(enum.Enum):
+    pending = "pending"
+    scheduled = "scheduled"
+    running = "running"
+    success = "success"
+    failed = "failed"
+    cancelled = "cancelled"
 
-Single-process (everything in one service):
+class Alert(Base):
+    __tablename__ = "alerts"
+    id = Column(BigInteger, primary_key=True)
+    user_id = Column(BigInteger, nullable=False)
+    name = Column(Text, nullable=False)
+    enabled = Column(Boolean, default=True)
+    interval_minutes = Column(Integer)
+    rule = Column(JSONB)
+    actions = Column(JSONB)
 
-* Pros: simple to implement, no message bus, faster dev iteration.
-* Cons: hard to scale, heavy jobs can block, harder isolation, restarts affect everything.
+class Schedule(Base):
+    __tablename__ = "schedules"
+    id = Column(BigInteger, primary_key=True)
+    user_id = Column(BigInteger, nullable=False)
+    name = Column(Text, nullable=False)
+    cron = Column(Text, nullable=False)
+    task = Column(JSONB)
+    enabled = Column(Boolean, default=True)
 
-Multi-process/microservices (recommended):
+class Run(Base):
+    __tablename__ = "runs"
+    run_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_type = Column(Text, nullable=False)
+    job_id = Column(BigInteger, nullable=False)
+    user_id = Column(BigInteger)
+    status = Column(Enum(RunStatus), default=RunStatus.pending, nullable=False)
+    attempt = Column(Integer, default=0, nullable=False)
+    max_attempts = Column(Integer, default=3, nullable=False)
+    scheduled_for = Column(TIMESTAMP(timezone=True))
+    enqueued_at = Column(TIMESTAMP(timezone=True))
+    started_at = Column(TIMESTAMP(timezone=True))
+    finished_at = Column(TIMESTAMP(timezone=True))
+    worker_id = Column(Text)
+    job_snapshot = Column(JSONB)
+    result = Column(JSONB)
+    error = Column(Text)
+```
 
-* Pros: scalable, isolates failure domains, can scale workers independently, easier to maintain and secure.
-* Cons: more moving parts (queues, locks), more infra, slightly higher complexity.
+# Example lifecycle pseudocode (scheduler + worker)
 
-Given trading workloads (some tasks every 15 min, some long-running strategies), go with **multi-process** from the start but keep the code modular so you can run everything locally in one compose file.
+Scheduler (APScheduler task):
 
-# 8 — Concrete implementation sketch (minimal path to working prototype)
+1. For each enabled alert/schedule due now:
 
-1. Build FastAPI control plane with endpoints for CRUD of alerts/strategies/schedules.
-2. Use Postgres for persistence; add migrations (alembic).
-3. Use APScheduler inside control plane or a small scheduler service that polls Postgres every minute for due tasks (cron expressions parsed with `croniter`).
-4. Push tasks into Redis queue and implement a small worker (Dramatiq or RQ) for `evaluate_alert`, `generate_report`, `start_strategy`.
-5. Implement Alerts Worker: read market data from a market-data adapter (abstract), compute indicators (ta-lib or ta library), evaluate rules, send Telegram via control plane or direct via Telegram API.
-6. Add idempotency checks and logging.
-7. Add UI (web) that calls control plane. Web can also open a websocket to receive task progress updates.
+   * Build `job_snapshot` from DB row (serialize)
+   * `INSERT INTO runs (run_id, job_type, job_id, user_id, scheduled_for, job_snapshot, enqueued_at) VALUES (...)`
+   * Enqueue dramatiq task with payload `{run_id, job_type, job_id}`.
 
-# 9 — DB schema ideas (short)
+Worker (dramatiq actor):
 
-* `users (id, name, tg_chat_id, role)`
-* `strategies (id, user_id, name, json_config, state, created_at, updated_at)`
-* `alerts (id, user_id, name, json_rule, interval, enabled)`
-* `schedules (id, user_id, cron, json_task, enabled)`
-* `runs (id, job_id, job_type, run_id, status, started_at, finished_at, result_blob)`
-* `telegrams_sent (id, run_id, message, delivered, timestamp)`
+1. Receive message with `run_id`.
+2. `UPDATE runs SET status='running', started_at=now(), worker_id=:id WHERE run_id=:run_id AND status IN ('pending','scheduled') RETURNING *`
+3. If no row returned → already processed or claimed — exit.
+4. Execute job using `job_snapshot` (or fetch current job if needed).
+5. On success: `UPDATE runs SET status='success', finished_at=now(), duration_ms=..., result=:json WHERE run_id=:run_id`
+6. On failure: increment attempt and either requeue or set status 'failed' depending on `attempt < max_attempts`.
 
-# 10 — Operational checklist before production
+# Extra touches & recommendations
 
-* Run hit tests: simulate N concurrent alerts and 100s of strategies.
-* Test rate limiting against real exchange APIs.
-* Test DB and queue failover (restart Redis/DB while jobs are in flight).
-* Set up metrics & alerts (e.g., failed tasks > X / minute).
-* Secure secrets (vault / env vars) and restrict Telegram bot token access.
-
-# 11 — Example design decisions for your specific needs
-
-* Alerts every 15 minutes: keep a single scheduler to enqueue alert-eval tasks every 15 minutes rather than separate crons per alert — more efficient.
-* Reports (on demand): make them synchronous tasks invoked by the user but executed by workers returning a job id; UI polls for completion.
-* Strategy creation/stopping: Control plane updates DB and enqueues `start_strategy` / `stop_strategy`. Strategy worker forks a strategy process (or spawns container) to ensure isolation.
-* For users providing JSON configs only (no arbitrary code), you avoid sandbox risk. If allowing custom code, use containers + strict runtime limits.
-
-# 12 — Where to start (practical next steps)
-
-1. Implement minimal Control Plane with PostgreSQL: user + alert endpoints.
-2. Add Redis + Dramatiq and a single Alert Worker that can evaluate a simple rule using market-data mock.
-3. Add Telegram bot to create alerts and receive notifications.
-4. Iterate: add scheduler, idempotency, UI.
+* Use a `job_type` enum in Postgres (for clarity) or keep it as TEXT for extensibility.
+* Keep a small `jobs` view that unifies alerts/schedules for admin UI (SELECT across both).
+* Store user-facing reasons and short codes in `result` so UI can show concise run history.
+* Add `correlation_id / trace_id` to link logs, dramatiq message id, and run row for observability.
+* Consider a `job_def` table if you later want strict foreign keys or shared metadata (name, owner, visibility).
 
 ---
+
+If you want, I can:
+
+* generate the exact SQL `CREATE TABLE` statements (with extensions, types, and indexes) ready for Alembic migration; **or**
+* produce the SQLAlchemy models + Alembic revision file skeleton; **or**
+* provide the full scheduler → enqueuer → dramatiq worker code snippet that demonstrates the lifecycle with `job_snapshot` writes and idempotent claim logic.
+
+Which would you like next?

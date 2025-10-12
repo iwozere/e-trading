@@ -6,6 +6,11 @@ from src.data.db.services.database_service import database_service
 
 # ---- Telegram-focused user facades (thin wrappers over UsersRepo) ----
 
+def get_user_by_telegram_id(telegram_user_id: str | int):
+    """Get User object by telegram user ID."""
+    with database_service.uow() as r:
+        return r.users.get_user_by_telegram_id(telegram_user_id)
+
 def get_telegram_profile(telegram_user_id: str | int) -> Optional[Dict[str, Any]]:
     with database_service.uow() as r:
         return r.users.get_telegram_profile(telegram_user_id)

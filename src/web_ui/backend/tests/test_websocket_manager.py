@@ -148,22 +148,24 @@ class TestConnectionManager:
         assert len(self.manager.active_connections) == 2
         assert len(self.manager.user_connections["user_123"]) == 2
 
-    def test_disconnect_user(self):
+    @pytest.mark.asyncio
+    async def test_disconnect_user(self):
         """Test disconnecting a user."""
         # First connect
-        asyncio.run(self.manager.connect(self.mock_websocket1, "user_123"))
+        await self.manager.connect(self.mock_websocket1, "user_123")
         connection_id = list(self.manager.active_connections.keys())[0]
 
         # Then disconnect
-        self.manager.disconnect(connection_id)
+        await self.manager.disconnect(connection_id)
 
         assert len(self.manager.active_connections) == 0
         assert "user_123" not in self.manager.user_connections
 
-    def test_disconnect_nonexistent_connection(self):
+    @pytest.mark.asyncio
+    async def test_disconnect_nonexistent_connection(self):
         """Test disconnecting non-existent connection."""
         # Should not raise exception
-        self.manager.disconnect("nonexistent_id")
+        await self.manager.disconnect("nonexistent_id")
 
         assert len(self.manager.active_connections) == 0
 
@@ -216,8 +218,14 @@ class TestConnectionManager:
 
         await self.manager.broadcast_to_all(message)
 
-        self.mock_websocket1.send_text.assert_called_once()
-        self.mock_websocket2.send_text.assert_called_once()
+        # Each websocket should be called twice: once for welcome, once for broadcast
+        assert self.mock_websocket1.send_text.call_count == 2
+        assert self.mock_websocket2.send_text.call_count == 2
+
+        # Check that the broadcast message was sent
+        broadcast_call = json.dumps(message)
+        assert any(call[0][0] == broadcast_call for call in self.mock_websocket1.send_text.call_args_list)
+        assert any(call[0][0] == broadcast_call for call in self.mock_websocket2.send_text.call_args_list)
 
     @pytest.mark.asyncio
     async def test_broadcast_to_user(self):
@@ -229,8 +237,14 @@ class TestConnectionManager:
 
         await self.manager.broadcast_to_user("user_123", message)
 
-        self.mock_websocket1.send_text.assert_called_once()
-        self.mock_websocket2.send_text.assert_not_called()
+        # websocket1 should be called twice: welcome + user message
+        assert self.mock_websocket1.send_text.call_count == 2
+        # websocket2 should be called once: only welcome message
+        assert self.mock_websocket2.send_text.call_count == 1
+
+        # Check that the user message was sent to websocket1
+        user_message_call = json.dumps(message)
+        assert any(call[0][0] == user_message_call for call in self.mock_websocket1.send_text.call_args_list)
 
     @pytest.mark.asyncio
     async def test_broadcast_to_channel(self):
@@ -246,8 +260,14 @@ class TestConnectionManager:
 
         await self.manager.broadcast_to_channel("strategy_updates", message)
 
-        self.mock_websocket1.send_text.assert_called_once()
-        self.mock_websocket2.send_text.assert_not_called()
+        # websocket1 should be called twice: welcome + channel message
+        assert self.mock_websocket1.send_text.call_count == 2
+        # websocket2 should be called once: only welcome message
+        assert self.mock_websocket2.send_text.call_count == 1
+
+        # Check that the channel message was sent to websocket1
+        channel_message_call = json.dumps(message)
+        assert any(call[0][0] == channel_message_call for call in self.mock_websocket1.send_text.call_args_list)
 
 
 class TestWebSocketManager:
@@ -305,7 +325,7 @@ class TestWebSocketManager:
 
         message = {"type": "ping", "timestamp": "2024-01-01T00:00:00Z"}
 
-        await self.manager._handle_message(mock_connection, message)
+        await self.manager.handle_message(mock_connection, message)
 
         mock_connection.update_last_ping.assert_called_once()
         mock_connection.send_message.assert_called_once()
@@ -319,7 +339,7 @@ class TestWebSocketManager:
 
         message = {"type": "subscribe", "channel": "strategy_updates"}
 
-        await self.manager._handle_message(mock_connection, message)
+        await self.manager.handle_message(mock_connection, message)
 
         mock_connection.add_subscription.assert_called_once_with("strategy_updates")
         mock_connection.send_message.assert_called_once()
@@ -333,7 +353,7 @@ class TestWebSocketManager:
 
         message = {"type": "unsubscribe", "channel": "strategy_updates"}
 
-        await self.manager._handle_message(mock_connection, message)
+        await self.manager.handle_message(mock_connection, message)
 
         mock_connection.remove_subscription.assert_called_once_with("strategy_updates")
         mock_connection.send_message.assert_called_once()
@@ -346,7 +366,7 @@ class TestWebSocketManager:
 
         message = {"type": "unknown_type", "data": {}}
 
-        await self.manager._handle_message(mock_connection, message)
+        await self.manager.handle_message(mock_connection, message)
 
         # Should send error response
         mock_connection.send_message.assert_called_once()
