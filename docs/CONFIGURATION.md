@@ -297,14 +297,14 @@ Data configurations define data feed settings.
 ### Example Validation
 
 ```python
-@validator('take_profit_pct')
+@field_validator('take_profit_pct')
 def validate_take_profit(cls, v, values):
     """Ensure take profit is greater than stop loss"""
     if 'stop_loss_pct' in values and v <= values['stop_loss_pct']:
         raise ValueError("Take profit must be greater than stop loss")
     return v
 
-@validator('position_size')
+@field_validator('position_size')
 def validate_position_size(cls, v):
     """Ensure position size is between 0 and 1"""
     if not 0 < v <= 1:

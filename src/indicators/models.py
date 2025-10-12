@@ -28,7 +28,7 @@ class IndicatorBatchConfig(BaseModel):
     dropna_after: bool = False
     indicators: List[IndicatorSpec]
 
-    @validator("indicators")
+    @field_validator("indicators")
     def unique_outputs(cls, v):
         seen = set()
         for spec in v:

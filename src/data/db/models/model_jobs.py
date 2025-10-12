@@ -111,7 +111,7 @@ class ScheduleCreate(BaseModel):
     cron: str = Field(..., min_length=1, max_length=100)
     enabled: bool = Field(default=True)
 
-    @validator('cron')
+    @field_validator('cron')
     def validate_cron(cls, v):
         """Basic cron validation - should be 5 fields separated by spaces."""
         parts = v.strip().split()
@@ -195,12 +195,12 @@ class ReportRequest(BaseModel):
 class ScreenerRequest(BaseModel):
     """Pydantic model for screener execution requests."""
     screener_set: Optional[str] = Field(None, min_length=1, max_length=100)
-    tickers: Optional[list[str]] = Field(None, min_items=1)
+    tickers: Optional[list[str]] = Field(None, min_length=1)
     filter_criteria: Dict[str, Any] = Field(default_factory=dict)
     top_n: Optional[int] = Field(None, ge=1, le=1000)
     scheduled_for: Optional[datetime] = None
 
-    @validator('tickers')
+    @field_validator('tickers')
     def validate_tickers_or_set(cls, v, values):
         """Ensure either screener_set or tickers is provided."""
         if not v and not values.get('screener_set'):
