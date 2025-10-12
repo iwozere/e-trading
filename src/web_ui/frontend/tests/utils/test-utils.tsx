@@ -9,7 +9,7 @@
 import React, { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { vi } from 'vitest';
@@ -55,12 +55,12 @@ const AllTheProviders: React.FC<AllTheProvidersProps> = ({
 }) => {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <MemoryRouter>
         <ThemeProvider theme={testTheme}>
           <CssBaseline />
           {children}
         </ThemeProvider>
-      </BrowserRouter>
+      </MemoryRouter>
     </QueryClientProvider>
   );
 };

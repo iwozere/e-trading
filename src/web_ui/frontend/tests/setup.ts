@@ -8,8 +8,8 @@
  * - Global test utilities and configurations
  */
 
-// Import jest-dom matchers (commented out to avoid type issues)
-// import '@testing-library/jest-dom';
+// Import jest-dom matchers
+import '@testing-library/jest-dom';
 
 // Note: vi is available globally when vitest globals are enabled
 // No need to import { vi } from 'vitest'

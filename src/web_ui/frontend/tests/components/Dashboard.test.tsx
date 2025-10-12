@@ -21,12 +21,16 @@ vi.mock('../../src/stores/authStore', () => ({
 }));
 
 // Mock React Query hooks
-vi.mock('@tanstack/react-query', () => ({
-  useQuery: vi.fn(),
-  useQueryClient: vi.fn(() => ({
-    invalidateQueries: vi.fn(),
-  })),
-}));
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useQuery: vi.fn(),
+    useQueryClient: vi.fn(() => ({
+      invalidateQueries: vi.fn(),
+    })),
+  };
+});
 
 // Mock API client (not directly used in tests, but may be imported by components)
 vi.mock('../../src/services/api', () => ({
@@ -90,12 +94,30 @@ describe('Dashboard Component', () => {
     vi.clearAllMocks();
     mockUseAuthStore.mockReturnValue(mockAuthenticatedState);
     
-    // Default mock for useQuery - will be overridden in specific tests
-    mockUseQuery.mockReturnValue({
-      data: null,
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
+    // Default mock for useQuery - provide default data to prevent null errors
+    mockUseQuery.mockImplementation((queryKey: any) => {
+      if (queryKey[0] === 'system-status') {
+        return {
+          data: mockSystemStatus,
+          isLoading: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+      if (queryKey[0] === 'strategies') {
+        return {
+          data: mockStrategies,
+          isLoading: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+      return {
+        data: null,
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      };
     });
   });
 

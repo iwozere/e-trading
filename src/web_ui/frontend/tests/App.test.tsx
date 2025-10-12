@@ -11,7 +11,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import { render, mockAuthenticatedState, mockUnauthenticatedState } from './utils/test-utils';
+import { mockAuthenticatedState, mockUnauthenticatedState } from './utils/test-utils';
+import { render } from '@testing-library/react';
 import App from '../src/App';
 
 // Mock the auth store
@@ -83,6 +84,18 @@ describe('App Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    
+    // Mock window.location for router tests
+    Object.defineProperty(window, 'location', {
+      value: {
+        origin: 'http://localhost:3000',
+        href: 'http://localhost:3000',
+        pathname: '/',
+        search: '',
+        hash: '',
+      },
+      writable: true,
+    });
   });
 
   describe('Unauthenticated State', () => {
