@@ -6,7 +6,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 import json
 from datetime import datetime, timezone
-from src.data.db.tests.factories import RNG, make_user, add_telegram_identity, make_position, make_alert
+from src.data.db.tests.factories import RNG, make_user, add_telegram_identity, make_position
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -17,15 +17,12 @@ def test_make_user_and_identity(dbsess):
     dbsess.commit()
     assert u.id is not None
 
-def test_make_position_and_alert(dbsess):
+def test_make_position(dbsess):
     rng = RNG(1)
     u = make_user(dbsess, email="x@y.com")
     p = make_position(dbsess, rng, bot_id="bot-1", symbol="AAPL", direction="long")
-    a = make_alert(dbsess, rng, user_id=u.id, ticker="AAPL", condition="above", price=200.0)
     dbsess.commit()
     assert p.symbol == "AAPL"
-    cfg = json.loads(a.config_json or "{}")
-    assert cfg.get("ticker") == "AAPL"
 
 if __name__ == "__main__":
     import pytest, sys

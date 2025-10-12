@@ -18,8 +18,7 @@ from datetime import datetime, timezone
 # import your real models
 from src.data.db.models.model_users import User, AuthIdentity  # your files
 from src.data.db.models.model_telegram import (
-    TelegramAlert, TelegramSchedule, TelegramFeedback,
-    TelegramCommandAudit, TelegramSetting, TelegramVerificationCode
+    TelegramFeedback, TelegramCommandAudit, TelegramBroadcastLog, TelegramSetting
 )
 from src.data.db.models.model_trading import Position  # (above) or your own path
 from src.data.db.models.model_trading import BotInstance
@@ -114,65 +113,6 @@ def make_position(s: Session, rng: RNG, *,
 
 # -------------------------------- TELEGRAM -----------------------------------
 
-def make_alert(
-    s: Session,
-    rng: RNG,
-    *,
-    user_id: int,
-    ticker: str | None = None,
-    condition: str | None = None,
-    price: float | None = None,
-    timeframe: str | None = None,
-    email: bool = False,
-    alert_type: str = "price",
-    is_armed: bool = True,
-    active: bool = True,
-) -> TelegramAlert:
-    ticker = ticker or rng.choice(["AAPL", "NVDA", "TSLA", "MRNA", "SMCI"])
-    condition = condition or rng.choice(["above", "below"])
-    timeframe = timeframe or rng.choice(["1h", "4h", "1d"])
-    price = price if price is not None else round(rng.randfloat(10, 400), 2)
-
-    # Build new-schema JSON
-    rule = {"price_above": price} if condition == "above" else {"price_below": price}
-    cfg = {"ticker": ticker, "timeframe": timeframe, "rule": rule}
-    row = TelegramAlert(
-        user_id=user_id,
-        status="ARMED",
-        email=email,
-        created_at=utcnow(),
-        config_json=json.dumps(cfg, separators=(",", ":")),
-        re_arm_config=None,
-        trigger_count=0,
-        last_trigger_condition=None,
-        last_triggered_at=None,
-    )
-
-    s.add(row); s.flush()
-    return row
-
-def make_schedule(s: Session, rng: RNG, *, user_id: int,
-                  scheduled_time: str | None = None, interval: str | None = None,
-                  active: bool = True) -> TelegramSchedule:
-    row = TelegramSchedule(
-        ticker=rng.choice(["AAPL", "NVDA", "TSLA"]),
-        user_id=user_id,
-        #scheduled_time=scheduled_time or "09:00",
-        period="daily",
-        active=active,
-        email=False,
-        indicators="rsi,bb,atr",
-        interval=interval or "1h",
-        provider="alpaca",
-        created=utcnow(),
-        schedule_type="screener",
-        list_type="watchlist",
-        config_json=None,
-        schedule_config="utc"
-    )
-    s.add(row); s.flush()
-    return row
-
 def make_feedback(s: Session, *, user_id: int, type_: str = "bug",
                   message: str = "it broke", status: str | None = None) -> TelegramFeedback:
     row = TelegramFeedback(user_id=user_id, type=type_, message=message, created=utcnow(), status=status)
@@ -196,20 +136,17 @@ def set_setting(s: Session, *, key: str, value: str | None) -> TelegramSetting:
     s.add(row); s.flush()
     return row
 
-def issue_code(s: Session, *, user_id: int, code: str, sent_time: int) -> TelegramVerificationCode:
-    row = TelegramVerificationCode(user_id=user_id, code=code, sent_time=sent_time)
-    s.add(row); s.flush()
-    return row
+# Removed issue_code function as TelegramVerificationCode doesn't exist
 
 # -------------------------------- JOBS ------------------------------------
 
-def make_schedule(s: Session, rng: RNG, *,
-                  user_id: int,
-                  name: str | None = None,
-                  job_type: str | None = None,
-                  target: str | None = None,
-                  cron: str | None = None,
-                  enabled: bool = True) -> Schedule:
+def make_job_schedule(s: Session, rng: RNG, *,
+                      user_id: int,
+                      name: str | None = None,
+                      job_type: str | None = None,
+                      target: str | None = None,
+                      cron: str | None = None,
+                      enabled: bool = True) -> Schedule:
     name = name or f"Schedule-{rng.randint(100, 999)}"
     job_type = job_type or rng.choice(["report", "screener", "alert"])
     target = target or rng.choice(["portfolio", "tech_stocks", "price_alert"])
@@ -231,11 +168,11 @@ def make_schedule(s: Session, rng: RNG, *,
 def make_run(s: Session, rng: RNG, *,
              user_id: int,
              job_type: str | None = None,
-             job_id: str | None = None,
+             job_id: int | None = None,
              status: str | None = None,
              scheduled_for: datetime | None = None) -> Run:
     job_type = job_type or rng.choice(["report", "screener", "alert"])
-    job_id = job_id or f"job-{rng.randint(1000, 9999)}"
+    job_id = job_id if job_id is not None else rng.randint(1000, 9999)
     status = status or "pending"
     scheduled_for = scheduled_for or datetime.now(UTC)
 

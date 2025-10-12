@@ -11,12 +11,11 @@ from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text,
+    Column, Integer, String, Boolean, DateTime, Text, BigInteger,
     CheckConstraint, UniqueConstraint, Index, func
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PostgresUUID
-from sqlalchemy import JSON
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from src.data.db.core.base import Base
 
@@ -49,7 +48,7 @@ class Schedule(Base):
     name = Column(String(255), nullable=False)
     job_type = Column(String(50), nullable=False)
     target = Column(String(255), nullable=False)
-    task_params = Column(JSON, nullable=False, default={})
+    task_params = Column(JSONB, nullable=False, default={})
     cron = Column(String(100), nullable=False)
     enabled = Column(Boolean, nullable=False, default=True, index=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
@@ -74,27 +73,22 @@ class Run(Base):
     __tablename__ = "job_runs"
 
     run_id = Column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
-    job_type = Column(String(50), nullable=False)
-    job_id = Column(String(255), nullable=False)
-    user_id = Column(Integer, nullable=False, index=True)
-    status = Column(String(20), nullable=False, default=RunStatus.PENDING, index=True)
-    scheduled_for = Column(DateTime(timezone=True), nullable=False, index=True)
-    enqueued_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    job_type = Column(Text, nullable=False)
+    job_id = Column(BigInteger, nullable=True)
+    user_id = Column(BigInteger, nullable=True, index=True)
+    status = Column(Text, nullable=True, index=True)
+    scheduled_for = Column(DateTime(timezone=True), nullable=True, index=True)
+    enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
-    job_snapshot = Column(JSONB, nullable=False, default={})
+    job_snapshot = Column(JSONB, nullable=True)
     result = Column(JSONB, nullable=True)
     error = Column(Text, nullable=True)
     worker_id = Column(String(255), nullable=True)
 
     # Constraints
     __table_args__ = (
-        CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup')", name="check_job_type"),
-        CheckConstraint("status IN ('pending', 'running', 'completed', 'failed', 'cancelled')", name="check_status"),
-        UniqueConstraint("job_type", "job_id", "scheduled_for", name="unique_job_scheduled"),
-        Index("idx_runs_status", "status"),
-        Index("idx_runs_scheduled_for", "scheduled_for"),
-        Index("idx_runs_job_type_job_id", "job_type", "job_id"),
+        UniqueConstraint("job_type", "job_id", "scheduled_for", name="ux_runs_job_scheduled_for"),
     )
 
     def __repr__(self):
@@ -150,7 +144,7 @@ class ScheduleResponse(BaseModel):
 class RunCreate(BaseModel):
     """Pydantic model for creating a run."""
     job_type: JobType
-    job_id: str = Field(..., min_length=1, max_length=255)
+    job_id: Optional[int] = None
     scheduled_for: datetime
     job_snapshot: Dict[str, Any] = Field(default_factory=dict)
 
@@ -169,14 +163,14 @@ class RunResponse(BaseModel):
     """Pydantic model for run API responses."""
     run_id: UUID
     job_type: JobType
-    job_id: str
-    user_id: int
-    status: RunStatus
-    scheduled_for: datetime
-    enqueued_at: datetime
+    job_id: Optional[int]
+    user_id: Optional[int]
+    status: Optional[RunStatus]
+    scheduled_for: Optional[datetime]
+    enqueued_at: Optional[datetime]
     started_at: Optional[datetime]
     finished_at: Optional[datetime]
-    job_snapshot: Dict[str, Any]
+    job_snapshot: Optional[Dict[str, Any]]
     result: Optional[Dict[str, Any]]
     error: Optional[str]
     worker_id: Optional[str]

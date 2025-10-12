@@ -12,16 +12,13 @@ from sqlalchemy.orm import sessionmaker
 
 # Models (create only what we need)
 from src.data.db.models.model_users import Base as UsersBase, User
-from src.data.db.models.model_telegram import Base as TelegramBase, TelegramSetting, TelegramAlert, TelegramSchedule
+from src.data.db.models.model_telegram import TelegramSetting
 
-# Repos under test
+# Repos under test (only import ones that work with existing models)
 from src.data.db.repos.repo_telegram import (
-    AlertsRepo,
-    SchedulesRepo,
     SettingsRepo,
     FeedbackRepo,
     BroadcastRepo,
-    VerificationRepo,
     CommandAuditRepo,
 )
 
