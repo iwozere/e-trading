@@ -8,7 +8,7 @@ from src.data.db.core.base import Base
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "usr_users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str | None] = mapped_column(String(100), unique=True)
     role: Mapped[str] = mapped_column(String(20), server_default="trader")
@@ -71,10 +71,10 @@ class User(Base):
         }
 
 class AuthIdentity(Base):
-    __tablename__ = "auth_identities"
+    __tablename__ = "usr_auth_identities"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"), index=True)
     provider: Mapped[str] = mapped_column(String(32))
     external_id: Mapped[str] = mapped_column(String(255))
     # IMPORTANT: attribute renamed; keep DB column name as "metadata"
@@ -95,3 +95,11 @@ class AuthIdentity(Base):
         md = dict(self.metadata or {})
         md[key] = value
         self.metadata = md
+
+# telegram_verification_codes
+class VerificationCode(Base):
+    __tablename__ = "usr_verification_codes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"))
+    code: Mapped[str] = mapped_column(String(32))
+    sent_time: Mapped[int] = mapped_column(Integer)

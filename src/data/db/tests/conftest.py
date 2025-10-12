@@ -1,6 +1,7 @@
 # src/data/db/tests/conftest.py
 from __future__ import annotations
 import pytest
+import os
 from sqlalchemy import create_engine, event, MetaData
 from sqlalchemy.orm import sessionmaker
 
@@ -10,40 +11,45 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.models.model_users import Base as UsersBase
-from src.data.db.models.model_telegram import Base as TelegramBase
-from src.data.db.models.model_trading import Base as TradingBase
-from src.data.db.models.model_webui import Base as WebUIBase
+from src.data.db.core.base import Base
+# Import models to register them with the Base metadata
+import src.data.db.models.model_users
+import src.data.db.models.model_telegram
+import src.data.db.models.model_trading
+import src.data.db.models.model_webui
+import src.data.db.models.model_jobs
 
 def _ddl_create_all(engine):
-    """Create ALL tables once using a merged MetaData (for correct DDL order)."""
-    merged = MetaData()
-    for md in (UsersBase.metadata, TelegramBase.metadata, TradingBase.metadata, WebUIBase.metadata):
-        for t in md.tables.values():
-            # SA 2.x spelling:
-            t.to_metadata(merged)
-    merged.create_all(engine)
+    """Create ALL tables once using the shared Base metadata."""
+    Base.metadata.create_all(engine)
 
 def _make_users_visible_in_other_metadatas():
     """
-    ORM resolution of ForeignKey('users.id') looks up within the *parent table's* metadata.
-    Copy users Table into WebUI/Telegram metadatas so ORM can resolve dependencies.
+    Since we're using a shared Base, all tables are already in the same metadata.
+    This function is no longer needed but kept for compatibility.
     """
-    users_tbl = UsersBase.metadata.tables["users"]
-    for md in (WebUIBase.metadata, TelegramBase.metadata):
-        if "users" not in md.tables:
-            users_tbl.to_metadata(md)
+    pass
 
 @pytest.fixture(scope="session")
 def engine():
-    eng = create_engine("sqlite+pysqlite:///:memory:", future=True)
-    @event.listens_for(eng, "connect")
-    def _fk_on(dbapi_con, _):
-        dbapi_con.execute("PRAGMA foreign_keys=ON")
+    """Create PostgreSQL test database engine."""
+    # Use test database URL or default to a test database
+    test_db_url = os.getenv(
+        "TEST_DATABASE_URL",
+        "postgresql://postgres:password@localhost:5432/etrading_test"
+    )
+
+    eng = create_engine(test_db_url, future=True)
+
+    # Drop all tables and recreate for clean test environment
+    Base.metadata.drop_all(eng)
     _ddl_create_all(eng)
-    # IMPORTANT: do this after imports and before any ORM flush
-    _make_users_visible_in_other_metadatas()
-    return eng
+
+    yield eng
+
+    # Cleanup after tests
+    Base.metadata.drop_all(eng)
+    eng.dispose()
 
 @pytest.fixture()
 def dbsess(engine):

@@ -1,235 +1,293 @@
-Nice — Postgres + Redis + Dramatiq + APScheduler is a solid stack. Short answer to your specific questions:
+Postgres + Redis + Dramatiq + APScheduler is a solid stack. Short answer to your specific questions:
 
-* Yes — keep **alerts** and **schedules** in separate tables (they are different domain objects and often have different fields).
-* Yes — your **runs** table should record which job produced a run, and you should store **job_type** in that table as well. Do **not** rely on a single `job_id` column alone (which is ambiguous). Use either a polymorphic pair `(job_type, job_id)` or a unified parent `jobs` table — both are valid; I’ll show the polymorphic approach because it’s simple and flexible.
+Good — totally reasonable. If reports and screeners are truly *one-off* commands in your model, you don’t have to create dedicated `reports` / `screeners` tables. Keep the persistent DB surface minimal (only what you actually need for scheduling, auditing and recovery) and treat reports/screener *definitions* as ephemeral inputs that are snapshotted into `runs` when the job is enqueued.
 
-Below I give a pragmatic schema, design rationale, SQL `CREATE TABLE` examples (Postgres), recommended indexes, idempotency constraints, examples of how to snapshot configs for reproducibility, and a small SQLAlchemy model sketch you can drop into your FastAPI app.
+Below I give a clear, small set of patterns you can choose from (with pros/cons), a recommended pattern, and concrete implementation snippets (DB, FastAPI + dramatiq flow, scheduler behaviour, config for screener sets). Pick the one you like — the recommended approach is bolded.
 
-# Why `job_type` + `job_id` (polymorphic) is better
+---
 
-* Alerts and schedules are separate tables with separate lifecycles and fields. A run must point back to *which* domain object triggered it. `job_type` tells you whether `job_id` references `alerts`, `schedules`, `strategies`, etc.
-* Easier queries: `SELECT * FROM runs WHERE job_type='alert' AND job_id=42` is explicit.
-* Keeps DB normalized without complex foreign-key tricks (you avoid cross-table FK constraints).
-* If you later add a common `jobs` table (shared metadata), migrating is straightforward.
+# Option summary (high-level choices)
 
-# Requirements for runs table
+1. Snapshot-only (recommended)
 
-Must capture:
+   * Don’t store reports/screeners in DB. When a user requests a one-off report/screener, create a `runs` row and store the full request JSON in `runs.job_snapshot`. Enqueue the dramatiq task. For scheduled screeners, keep `schedules` in DB (or scheduler file) but store only schedule metadata (cron, target set name, or inline filter); each tick creates a `runs` row with snapshot.
+   * Pros: minimal DB schema, full reproducibility via `job_snapshot`, easy to audit.
+   * Cons: you still keep schedules somewhere (DB or scheduler store) if scheduling is required.
 
-* canonical `run_id` (UUID) — unique per execution (idempotency)
-* `job_type` (text enum or text)
-* `job_id` (bigint/uuid depending on your PKs)
-* `user_id` or `owner_id` (for multi-user systems / permissions)
-* scheduling metadata: `scheduled_for` (when it was supposed to run), `enqueued_at`/`queued_by`
-* lifecycle timestamps: `started_at`, `finished_at`
-* `status` (enum: pending, running, success, failed, cancelled)
-* `attempt` and `max_attempts` (for retries)
-* `worker_id` / `hostname` (who processed)
-* `result` / `output` (JSONB), `error` (text) — limit size or move large artifacts to blob store
-* `trace_id` / `correlation_id` for observability
-* `job_snapshot` (JSONB) — snapshot of the alert/schedule config at enqueue time (reproducibility)
-* `priority`, `locked_until` (optional locking for manual claim)
-* `duration_ms` (computed)
+2. File-config for static sets + snapshot-only
 
-# Suggested Postgres schema (practical)
+   * Keep your 10 screener sets as a YAML/JSON file in your repo or a config dir on the Pi (`/etc/myapp/screener_sets.yml`). Scheduler and API load sets from that file. Schedules reference set name (string) only.
+   * Pros: versionable (git), easy to edit, no DB table for sets.
+   * Cons: editing via UI needs file-authoring logic or a separate admin UI that edits file/pushes commit.
+
+3. Redis-only transient definitions
+
+   * For truly ephemeral runs and ephemeral schedules, keep definitions in Redis (with TTL). Scheduler reads Redis and enqueues runs. `runs` still stores snapshot.
+   * Pros: no DB writes for definitions, fast.
+   * Cons: less durable (unless you persist Redis), complex to administer for long-term schedules.
+
+4. APScheduler jobstore (SQL or Redis) but no job tables
+
+   * Use APScheduler’s persistent jobstore (e.g., SQLAlchemyJobStore) for schedules; still do **not** store reports/screeners themselves. Each scheduled job when triggered writes a `runs` row with snapshot and enqueues.
+   * Pros: APScheduler does schedule persistence for you.
+   * Cons: introduces APScheduler DB tables (but not your own report/screener tables).
+
+---
+
+# My recommendation (concrete)
+
+Use **Option 1 + Option 2**:
+
+* Keep `runs` table (Postgres) as the single source-of-truth for *executions* and snapshots.
+* Keep `schedules` table in Postgres (so you can manage schedules via API / UI robustly). A `schedules` row references either:
+
+  * a `screener_set_name` (string), or
+  * an inline `task_params` JSON (so UI can schedule ad-hoc screener with arbitrary filters).
+* Keep the 10 screener sets in a versioned YAML file (Git), loaded by the API & scheduler at startup (and reloadable). This avoids adding a DB table for sets while allowing UI-admin via config commits or a separate admin endpoint that writes the YAML (if you want).
+* For one-off reports/screeners: API receives JSON, inserts a `runs` row with `job_type='report'|'screener'` and `job_snapshot` containing everything needed, then enqueues a dramatiq task with `run_id`. No other table needed for reports/screeners.
+
+This gives:
+
+* No tables for reports/screeners.
+* Full reproducibility through `runs.job_snapshot`.
+* Robust scheduling via `schedules` table (you probably want schedules persisted).
+
+---
+
+# Concrete details & examples
+
+## Minimal DB objects you keep
+
+* `schedules` — (only schedule metadata and target pointer)
+* `runs` — (all run lifecycle + job_snapshot)
+
+Suggested `schedules` columns (Postgres):
 
 ```sql
--- ENUM for status
-CREATE TYPE run_status AS ENUM ('pending','scheduled','running','success','failed','cancelled');
-
--- alerts table (example)
-CREATE TABLE alerts (
-  id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT NOT NULL,
-  name TEXT NOT NULL,
-  enabled BOOLEAN NOT NULL DEFAULT true,
-  interval_minutes INT, -- or cron expression
-  rule JSONB NOT NULL,
-  actions JSONB,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- schedules table (example)
 CREATE TABLE schedules (
   id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT NOT NULL,
-  name TEXT NOT NULL,
-  cron TEXT NOT NULL,
-  task JSONB NOT NULL,
-  enabled BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- runs table (polymorphic)
-CREATE TABLE runs (
-  run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_type TEXT NOT NULL,        -- 'alert' | 'schedule' | 'strategy'
-  job_id BIGINT NOT NULL,        -- references alerts.id or schedules.id (no FK)
   user_id BIGINT,
-  status run_status NOT NULL DEFAULT 'pending',
-  attempt INT NOT NULL DEFAULT 0,
-  max_attempts INT NOT NULL DEFAULT 3,
-  scheduled_for TIMESTAMPTZ,     -- when this run was scheduled for (cron tick)
-  enqueued_at TIMESTAMPTZ DEFAULT now(),
-  started_at TIMESTAMPTZ,
-  finished_at TIMESTAMPTZ,
-  worker_id TEXT,                -- hostname/process id or dramatiq worker id
-  locked_until TIMESTAMPTZ,      -- optional lock expiry if using manual claim
-  duration_ms INT,
-  priority INT DEFAULT 100,
-  trace_id UUID,                 -- optional for tracing
-  job_snapshot JSONB,            -- config snapshot for reproducibility
-  result JSONB,                  -- output/results summary
-  error TEXT,                    -- short error message
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  name TEXT,
+  job_type TEXT NOT NULL,    -- 'screener' | 'report' | 'alert' ...
+  target TEXT,               -- for screener: screener_set_name OR blank
+  task_params JSONB,         -- optional inline params (filters, top_n, deliver)
+  cron TEXT,                 -- cron expression
+  enabled BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
-
--- useful indexes
-CREATE INDEX idx_runs_job ON runs (job_type, job_id);
-CREATE INDEX idx_runs_status ON runs (status);
-CREATE INDEX idx_runs_enqueued_at ON runs (enqueued_at);
-CREATE INDEX idx_runs_scheduled_for ON runs (scheduled_for);
-CREATE INDEX idx_runs_user ON runs (user_id);
 ```
 
 Notes:
 
-* I used `gen_random_uuid()` (Postgres `pgcrypto` or `uuid-ossp`) for `run_id`. Ensure the extension is enabled: `CREATE EXTENSION IF NOT EXISTS pgcrypto;`
-* `job_snapshot` stores the JSON config of the alert/schedule/strategy as it was when enqueued — crucial for reproducibility and debugging.
-* `result` should be a short summary (JSON) only; store large artifacts separately (S3/minio or local FS) and store a link in `result`.
+* `target` lets you reference the screener set by name (string). Scheduler will expand name → tickers using the YAML sets file.
+* If user prefers scheduling ad-hoc payloads, store full params in `task_params`. The scheduler should snapshot that into `runs` at enqueue time.
 
-# Idempotency and uniqueness constraints
-
-To prevent double-enqueuing/execution you can add constraints depending on business logic.
-
-Common patterns:
-
-1. **Unique per scheduled tick** — do not allow two runs for the same job at the same scheduled time:
+`runs` (as we discussed before) keeps `job_snapshot` JSONB:
 
 ```sql
-CREATE UNIQUE INDEX ux_runs_job_scheduled_for ON runs (job_type, job_id, scheduled_for);
+CREATE TABLE runs (
+  run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_type TEXT NOT NULL,
+  job_id BIGINT,                 -- optional: schedule id or NULL for ad-hoc
+  user_id BIGINT,
+  status TEXT,
+  scheduled_for TIMESTAMPTZ,
+  enqueued_at TIMESTAMPTZ DEFAULT now(),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ,
+  job_snapshot JSONB,            -- snapshot of the ad-hoc request or expanded params
+  result JSONB,
+  error TEXT
+);
+CREATE UNIQUE INDEX ux_runs_job_scheduled_for ON runs(job_type, job_id, scheduled_for);
 ```
 
-This ensures the scheduler cannot enqueue the same job twice for the same `scheduled_for`. If you need multiple simultaneous runs, leave this out.
+* For ad-hoc report/screener: `job_id` = `NULL`, `job_snapshot` holds full payload.
+* For scheduled run: `job_id` = schedule.id, `job_snapshot` contains expanded params (e.g., full ticker list, filter, top_n, deliver info).
 
-2. **Run-level idempotency** — workers receive `run_id`. Before executing they `UPDATE runs SET status='running', started_at=now(), worker_id=... WHERE run_id = :run_id AND status IN ('pending','scheduled') RETURNING *`. If no row changed, treat as already processed.
+## Screener sets file (YAML)
 
-3. **Claiming pending runs** (if queueless/DB-polling) — `UPDATE runs SET status='running', worker_id=..., started_at=now() WHERE run_id = :run_id AND status='pending' RETURNING run_id;` Use the returned row presence to know claim success.
+Place `screener_sets.yml` under `/etc/myapp/` or `config/` in your repo:
 
-# Snapshotting job config
-
-When scheduler enqueues a run, fetch the job's config from `alerts` or `schedules` and store it into `runs.job_snapshot`. This guards against changes after enqueue: you will always know what parameters the run used.
-
-Example insert (pseudo):
-
-```sql
-INSERT INTO runs (run_id, job_type, job_id, user_id, scheduled_for, job_snapshot)
-VALUES (:run_id, 'alert', :alert_id, :user_id, :scheduled_for, :job_snapshot::jsonb);
+```yaml
+# screener_sets.yml
+sets:
+  - name: "US_large_caps"
+    tickers: ["AAPL","MSFT","GOOGL","AMZN","NVDA"]
+  - name: "tech_midcap"
+    tickers: ["OKTA","CRWD","ZS",...]
+  ...
 ```
 
-# Handling retries
-
-* Use `attempt` and `max_attempts`. Worker on failure increments `attempt` and sets `status='pending'` or `status='scheduled'` with `enqueued_at=now() + delay` (requeue). Or use Dramatiq's retry mechanism and still update your `runs` row accordingly.
-* Record `error` text and stack (truncate) and include a short `result` summary.
-
-# Archiving & retention
-
-* `runs` can grow large. Add a background job to archive old runs to an archive table or S3/CSV and delete old rows (e.g., keep last 90 days).
-* Use partitioning by time (`created_at`) if you expect very high volume.
-
-# Example SQLAlchemy models (minimal)
+Load in your FastAPI app and scheduler:
 
 ```python
-# models.py
-from sqlalchemy import Column, BigInteger, Text, JSON, Boolean, TIMESTAMP, Integer, Enum
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-import enum
-import uuid
-from sqlalchemy.ext.declarative import declarative_base
+import yaml, pathlib
+SETS_PATH = pathlib.Path("/etc/myapp/screener_sets.yml")
+def load_sets():
+    return yaml.safe_load(SETS_PATH.read_text())["sets"]
 
-Base = declarative_base()
-
-class RunStatus(enum.Enum):
-    pending = "pending"
-    scheduled = "scheduled"
-    running = "running"
-    success = "success"
-    failed = "failed"
-    cancelled = "cancelled"
-
-class Alert(Base):
-    __tablename__ = "alerts"
-    id = Column(BigInteger, primary_key=True)
-    user_id = Column(BigInteger, nullable=False)
-    name = Column(Text, nullable=False)
-    enabled = Column(Boolean, default=True)
-    interval_minutes = Column(Integer)
-    rule = Column(JSONB)
-    actions = Column(JSONB)
-
-class Schedule(Base):
-    __tablename__ = "schedules"
-    id = Column(BigInteger, primary_key=True)
-    user_id = Column(BigInteger, nullable=False)
-    name = Column(Text, nullable=False)
-    cron = Column(Text, nullable=False)
-    task = Column(JSONB)
-    enabled = Column(Boolean, default=True)
-
-class Run(Base):
-    __tablename__ = "runs"
-    run_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_type = Column(Text, nullable=False)
-    job_id = Column(BigInteger, nullable=False)
-    user_id = Column(BigInteger)
-    status = Column(Enum(RunStatus), default=RunStatus.pending, nullable=False)
-    attempt = Column(Integer, default=0, nullable=False)
-    max_attempts = Column(Integer, default=3, nullable=False)
-    scheduled_for = Column(TIMESTAMP(timezone=True))
-    enqueued_at = Column(TIMESTAMP(timezone=True))
-    started_at = Column(TIMESTAMP(timezone=True))
-    finished_at = Column(TIMESTAMP(timezone=True))
-    worker_id = Column(Text)
-    job_snapshot = Column(JSONB)
-    result = Column(JSONB)
-    error = Column(Text)
+# helper: get_tickers(set_name)
 ```
 
-# Example lifecycle pseudocode (scheduler + worker)
+If you want UI editability, expose endpoints that write the YAML (validate input first) and reload config; or store the YAML in a Git repo and have an admin UI that commits changes.
 
-Scheduler (APScheduler task):
+## API flow for one-off report (no DB report table)
 
-1. For each enabled alert/schedule due now:
+FastAPI endpoint:
 
-   * Build `job_snapshot` from DB row (serialize)
-   * `INSERT INTO runs (run_id, job_type, job_id, user_id, scheduled_for, job_snapshot, enqueued_at) VALUES (...)`
-   * Enqueue dramatiq task with payload `{run_id, job_type, job_id}`.
+```python
+@router.post("/reports/run")
+async def run_report(payload: ReportRequest):
+    run_id = insert_run(
+        job_type="report",
+        job_id=None,
+        user_id=current_user.id,
+        job_snapshot=payload.dict()
+    )
+    dramatiq_actor_run_report.send(run_id)   # dramatiq message
+    return {"run_id": run_id, "status": "enqueued"}
+```
 
-Worker (dramatiq actor):
+`insert_run` writes a `runs` row; `job_snapshot` contains ticker/timeframe/indicators/delivery info.
 
-1. Receive message with `run_id`.
-2. `UPDATE runs SET status='running', started_at=now(), worker_id=:id WHERE run_id=:run_id AND status IN ('pending','scheduled') RETURNING *`
-3. If no row returned → already processed or claimed — exit.
-4. Execute job using `job_snapshot` (or fetch current job if needed).
-5. On success: `UPDATE runs SET status='success', finished_at=now(), duration_ms=..., result=:json WHERE run_id=:run_id`
-6. On failure: increment attempt and either requeue or set status 'failed' depending on `attempt < max_attempts`.
+Dramatiq actor receives `run_id`, reads `runs.job_snapshot` and executes. No separate `reports` table needed.
 
-# Extra touches & recommendations
+## API flow for one-off screener
 
-* Use a `job_type` enum in Postgres (for clarity) or keep it as TEXT for extensibility.
-* Keep a small `jobs` view that unifies alerts/schedules for admin UI (SELECT across both).
-* Store user-facing reasons and short codes in `result` so UI can show concise run history.
-* Add `correlation_id / trace_id` to link logs, dramatiq message id, and run row for observability.
-* Consider a `job_def` table if you later want strict foreign keys or shared metadata (name, owner, visibility).
+FastAPI endpoint:
+
+```python
+@router.post("/screeners/run")
+async def run_screener(payload: ScreenerAdhocRequest):
+    # payload contains either "screener_set_name" OR "tickers" array + "filter"
+    expanded_tickers = payload.tickers or get_tickers_from_config(payload.screener_set_name)
+    snapshot = {"type":"screener","tickers": expanded_tickers, "filter": payload.filter, "top_n": payload.top_n, "deliver": payload.deliver}
+    run_id = insert_run(job_type="screener", job_id=None, user_id=current_user.id, job_snapshot=snapshot)
+    dramatiq_actor_run_screener.send(run_id)
+    return {"run_id": run_id}
+```
+
+## Scheduling a screener (persist schedule but not screener def)
+
+If user wants to run a screener every day at 7:00:POST `/schedules`:
+
+* store schedule row: `job_type='screener'`, `target='US_large_caps'` (or `task_params` for inline filter), `cron='0 7 * * *'`.
+* Scheduler on tick:
+
+  * load schedule and `target` (if target is a set name, expand tickers from YAML)
+  * build `job_snapshot` (full tickers + filter + deliver)
+  * `INSERT` into `runs`, then enqueue dramatiq task with `run_id`.
+
+This keeps `screener` definitions out of DB; only schedules (cron) are persisted.
 
 ---
 
-If you want, I can:
+# Worker & scheduler behaviour (concrete)
 
-* generate the exact SQL `CREATE TABLE` statements (with extensions, types, and indexes) ready for Alembic migration; **or**
-* produce the SQLAlchemy models + Alembic revision file skeleton; **or**
-* provide the full scheduler → enqueuer → dramatiq worker code snippet that demonstrates the lifecycle with `job_snapshot` writes and idempotent claim logic.
+### Scheduler
 
-Which would you like next?
+* Runs as separate small process (recommended).
+* Every minute:
+
+  * find enabled `schedules` whose `next_run_at <= now` (you can compute next run with `croniter` or store `next_run_at` in the schedules table and update after enqueue).
+  * For each such schedule:
+
+    * compute `scheduled_for` timestamp (cron tick).
+    * build `job_snapshot`: if `target` is a set name → use YAML to expand tickers; else if `task_params` present → use it.
+    * `INSERT INTO runs (run_id, job_type, job_id, user_id, scheduled_for, job_snapshot) VALUES (...)`
+
+      * use unique index on `(job_type, job_id, scheduled_for)` to avoid double-inserts from scheduler restarts.
+    * enqueue dramatiq with `run_id`.
+    * update schedule’s `next_run_at`.
+* This scheduler doesn’t persist screener definitions — only schedule metadata.
+
+### Workers
+
+* Workers read `runs` job_snapshot and operate purely from that snapshot (no need to query `reports` or `screeners` tables — since they do not exist).
+* This guarantees reproducibility — the worker runs what was requested at enqueue time.
+
+---
+
+# Idempotency & auditing
+
+* Because `job_snapshot` captures the exact inputs, re-running a run is straightforward and auditable.
+* Use `UX` unique index to prevent duplicate schedule enqueues.
+* Workers `claim` run by `UPDATE runs SET status='running', started_at=now() WHERE run_id=:run_id AND status='pending' RETURNING 1` to avoid duplicate execution.
+* Keep run history for N days (archival job) — you might want to keep runs for auditing even if you didn't persist the definition.
+
+---
+
+# Artifact handling & delivery (unchanged)
+
+* Save images/CSV to artifact directory keyed by `run_id`.
+* Store artifact paths in `runs.result`.
+* Telegram/email delivery using snapshot `deliver` info.
+
+---
+
+# Pros/Cons recap of recommended approach
+
+Pros
+
+* Minimal DB schema — no tables for one-off commands.
+* Full reproducibility (snapshot in `runs`).
+* Easy UI + API for one-offs and schedules.
+* Screener sets are versioned and editable via YAML (or kept as code).
+
+Cons
+
+* If you want users to *list/save* reusable report templates via UI, you’d need to add a small `report_templates` table later.
+* Editing screener sets via UI requires writing YAML or implementing an admin endpoint to persist the YAML.
+
+---
+
+# Example code snippets (quick)
+
+**Insert-run helper (psuedocode)**
+
+```python
+def insert_run(conn, job_type, job_id, user_id, job_snapshot, scheduled_for=None):
+    run_id = uuid4()
+    conn.execute(
+        "INSERT INTO runs (run_id, job_type, job_id, user_id, scheduled_for, job_snapshot) VALUES (%s,%s,%s,%s,%s,%s)",
+        (run_id, job_type, job_id, user_id, scheduled_for, json.dumps(job_snapshot))
+    )
+    return str(run_id)
+```
+
+**FastAPI ad-hoc screener endpoint example**
+
+```python
+@router.post("/screener/run")
+async def run_screener(payload: ScreenerAdhoc, db=Depends(get_db)):
+    tickers = payload.tickers or get_tickers_from_config(payload.screener_set_name)
+    snapshot = {"tickers": tickers, "filter": payload.filter, "top_n": payload.top_n, "deliver": payload.deliver}
+    run_id = insert_run(db, "screener", None, current_user.id, snapshot)
+    run_screener_actor.send(run_id)
+    return {"run_id": run_id}
+```
+
+**Worker claim skeleton**
+
+```python
+def claim_run(conn, run_id, worker_id):
+    row = conn.execute(
+      "UPDATE runs SET status='running', worker_id=%s, started_at=now() WHERE run_id=%s AND status='pending' RETURNING *",
+      (worker_id, run_id)
+    ).fetchone()
+    return row  # None if already claimed
+```
+
+---
+
+# Final notes & next steps
+
+* If you want I can generate:
+
+  1. a concrete Alembic migration for `schedules` + `runs` (with job_snapshot JSONB),
+  2. the FastAPI endpoints for one-off report and screener (ad-hoc + schedule creation),
+  3. small scheduler process that expands YAML sets and inserts `runs` + enqueues dramatiq.
+
+Pick which of these you want me to produce now and I’ll give ready-to-drop code.

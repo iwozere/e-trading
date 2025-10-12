@@ -23,6 +23,7 @@ from src.data.db.models.model_telegram import (
 )
 from src.data.db.models.model_trading import Position  # (above) or your own path
 from src.data.db.models.model_trading import BotInstance
+from src.data.db.models.model_jobs import Schedule, Run, JobType, RunStatus
 
 UTC = timezone.utc
 
@@ -68,7 +69,7 @@ def add_telegram_identity(s, user_id: int, telegram_user_id: str, **meta):
         user_id=user_id,
         provider="telegram",
         external_id=str(telegram_user_id),
-        identity_metadata=meta or None,  # <-- renamed
+        identity_metadata=meta or None,  # <-- renamed attribute
     )
     s.add(ai); s.flush()
     return ai
@@ -199,6 +200,55 @@ def issue_code(s: Session, *, user_id: int, code: str, sent_time: int) -> Telegr
     row = TelegramVerificationCode(user_id=user_id, code=code, sent_time=sent_time)
     s.add(row); s.flush()
     return row
+
+# -------------------------------- JOBS ------------------------------------
+
+def make_schedule(s: Session, rng: RNG, *,
+                  user_id: int,
+                  name: str | None = None,
+                  job_type: str | None = None,
+                  target: str | None = None,
+                  cron: str | None = None,
+                  enabled: bool = True) -> Schedule:
+    name = name or f"Schedule-{rng.randint(100, 999)}"
+    job_type = job_type or rng.choice(["report", "screener", "alert"])
+    target = target or rng.choice(["portfolio", "tech_stocks", "price_alert"])
+    cron = cron or rng.choice(["0 9 * * *", "*/5 * * * *", "0 0 1 * *"])
+
+    schedule = Schedule(
+        user_id=user_id,
+        name=name,
+        job_type=job_type,
+        target=target,
+        task_params={"created_by": "factory"},
+        cron=cron,
+        enabled=enabled,
+        next_run_at=datetime.now(UTC) + timedelta(hours=1)
+    )
+    s.add(schedule); s.flush()
+    return schedule
+
+def make_run(s: Session, rng: RNG, *,
+             user_id: int,
+             job_type: str | None = None,
+             job_id: str | None = None,
+             status: str | None = None,
+             scheduled_for: datetime | None = None) -> Run:
+    job_type = job_type or rng.choice(["report", "screener", "alert"])
+    job_id = job_id or f"job-{rng.randint(1000, 9999)}"
+    status = status or "pending"
+    scheduled_for = scheduled_for or datetime.now(UTC)
+
+    run = Run(
+        job_type=job_type,
+        job_id=job_id,
+        user_id=user_id,
+        status=status,
+        scheduled_for=scheduled_for,
+        job_snapshot={"created_by": "factory", "test": True}
+    )
+    s.add(run); s.flush()
+    return run
 
 
 if __name__ == "__main__":

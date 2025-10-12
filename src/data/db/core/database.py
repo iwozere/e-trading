@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy import MetaData
 from src.data.db.core.base import Base
 
-from config.donotshare.donotshare import DB_PATH, SQL_ECHO
+from config.donotshare.donotshare import DB_PATH, SQL_ECHO, DB_URL as CONFIG_DB_URL
 
 # ---- ONE shared metadata + Base for the whole app ----
 _convention = {
@@ -26,9 +26,9 @@ _shared_metadata = MetaData(naming_convention=_convention)
 
 # --- Config ------------------------------------------------------------------
 
-# Prefer an env var so you can switch to Postgres later without code changes:
-#   set DB_URL=postgresql+psycopg://user:pass@host:5432/dbname
-DB_URL = os.getenv("DB_URL", f"sqlite:///{DB_PATH}")
+# Use PostgreSQL by default, fallback to SQLite if needed
+# Environment variable DB_URL can override this
+DB_URL = os.getenv("DB_URL", CONFIG_DB_URL)
 
 # Flip this on to see SQL in logs (or set SQL_ECHO=1 in env)
 SQL_ECHO = bool(int(os.getenv("SQL_ECHO", SQL_ECHO)))

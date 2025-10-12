@@ -7,13 +7,10 @@ from sqlalchemy.orm import Session
 
 from src.data.db.models.model_users import User, AuthIdentity
 from src.data.db.models.model_telegram import (
-    TelegramAlert,
-    TelegramSchedule,
     TelegramSetting,
     TelegramFeedback,
     TelegramCommandAudit,
     TelegramBroadcastLog,
-    TelegramVerificationCode,
 )
 
 UTC = timezone.utc

@@ -8,7 +8,7 @@ class WebUIAuditLog(Base):
     __tablename__ = "webui_audit_logs"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     # Drop ondelete to match DB
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id"))
     action: Mapped[str] = mapped_column(String(100))
     resource_type: Mapped[str | None] = mapped_column(String(50))
     resource_id: Mapped[str | None] = mapped_column(String(100))
@@ -45,7 +45,7 @@ class WebUIStrategyTemplate(Base):
     description: Mapped[str | None]
     template_data: Mapped[dict] = mapped_column(JSON)
     is_public: Mapped[bool | None] = mapped_column(Boolean, server_default=text("FALSE"))
-    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("usr_users.id"))
     created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 

@@ -17,9 +17,19 @@ sys.path.append(str(PROJECT_ROOT))
 # Re-export models from the main data layer
 from src.data.db.models.model_users import User
 from src.data.db.models.model_webui import WebUIAuditLog
+from src.data.db.models.model_jobs import (
+    Schedule, Run, JobType, RunStatus,
+    ScheduleCreate, ScheduleUpdate, ScheduleResponse,
+    RunCreate, RunUpdate, RunResponse,
+    ReportRequest, ScreenerRequest, ScreenerSetInfo
+)
 
 # Export all models
 __all__ = [
     'User',
     'WebUIAuditLog',
+    'Schedule', 'Run', 'JobType', 'RunStatus',
+    'ScheduleCreate', 'ScheduleUpdate', 'ScheduleResponse',
+    'RunCreate', 'RunUpdate', 'RunResponse',
+    'ReportRequest', 'ScreenerRequest', 'ScreenerSetInfo',
 ]

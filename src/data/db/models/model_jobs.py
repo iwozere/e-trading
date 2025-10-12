@@ -1,0 +1,218 @@
+"""
+Job Scheduler Models
+
+SQLAlchemy models for the job scheduling and execution system.
+Includes Schedule and Run models with proper relationships and validation.
+"""
+
+from datetime import datetime
+from enum import Enum
+from typing import Optional, Dict, Any
+from uuid import UUID, uuid4
+
+from sqlalchemy import (
+    Column, Integer, String, Boolean, DateTime, Text,
+    CheckConstraint, UniqueConstraint, Index, func
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PostgresUUID
+from sqlalchemy import JSON
+from pydantic import BaseModel, Field, validator
+
+from src.data.db.core.base import Base
+
+class JobType(str, Enum):
+    """Job type enumeration."""
+    REPORT = "report"
+    SCREENER = "screener"
+    ALERT = "alert"
+    NOTIFICATION = "notification"
+    DATA_PROCESSING = "data_processing"
+    BACKUP = "backup"
+
+
+class RunStatus(str, Enum):
+    """Run status enumeration."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class Schedule(Base):
+    """Schedule model for persistent schedule definitions."""
+
+    __tablename__ = "job_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    job_type = Column(String(50), nullable=False)
+    target = Column(String(255), nullable=False)
+    task_params = Column(JSON, nullable=False, default={})
+    cron = Column(String(100), nullable=False)
+    enabled = Column(Boolean, nullable=False, default=True, index=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+
+    # Constraints
+    __table_args__ = (
+        CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup')", name="check_job_type"),
+        UniqueConstraint("user_id", "name", name="unique_user_schedule_name"),
+        Index("idx_schedules_enabled", "enabled"),
+        Index("idx_schedules_next_run_at", "next_run_at", postgresql_where="enabled = true"),
+    )
+
+    def __repr__(self):
+        return f"<Schedule(id={self.id}, name='{self.name}', job_type='{self.job_type}', enabled={self.enabled})>"
+
+
+class Run(Base):
+    """Run model for job execution history with snapshots."""
+
+    __tablename__ = "job_runs"
+
+    run_id = Column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    job_type = Column(String(50), nullable=False)
+    job_id = Column(String(255), nullable=False)
+    user_id = Column(Integer, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default=RunStatus.PENDING, index=True)
+    scheduled_for = Column(DateTime(timezone=True), nullable=False, index=True)
+    enqueued_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    job_snapshot = Column(JSONB, nullable=False, default={})
+    result = Column(JSONB, nullable=True)
+    error = Column(Text, nullable=True)
+    worker_id = Column(String(255), nullable=True)
+
+    # Constraints
+    __table_args__ = (
+        CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup')", name="check_job_type"),
+        CheckConstraint("status IN ('pending', 'running', 'completed', 'failed', 'cancelled')", name="check_status"),
+        UniqueConstraint("job_type", "job_id", "scheduled_for", name="unique_job_scheduled"),
+        Index("idx_runs_status", "status"),
+        Index("idx_runs_scheduled_for", "scheduled_for"),
+        Index("idx_runs_job_type_job_id", "job_type", "job_id"),
+    )
+
+    def __repr__(self):
+        return f"<Run(run_id={self.run_id}, job_type='{self.job_type}', status='{self.status}')>"
+
+
+# Pydantic models for API validation
+class ScheduleCreate(BaseModel):
+    """Pydantic model for creating a schedule."""
+    name: str = Field(..., min_length=1, max_length=255)
+    job_type: JobType
+    target: str = Field(..., min_length=1, max_length=255)
+    task_params: Dict[str, Any] = Field(default_factory=dict)
+    cron: str = Field(..., min_length=1, max_length=100)
+    enabled: bool = Field(default=True)
+
+    @validator('cron')
+    def validate_cron(cls, v):
+        """Basic cron validation - should be 5 fields separated by spaces."""
+        parts = v.strip().split()
+        if len(parts) != 5:
+            raise ValueError('Cron expression must have exactly 5 fields')
+        return v
+
+
+class ScheduleUpdate(BaseModel):
+    """Pydantic model for updating a schedule."""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    target: Optional[str] = Field(None, min_length=1, max_length=255)
+    task_params: Optional[Dict[str, Any]] = None
+    cron: Optional[str] = Field(None, min_length=1, max_length=100)
+    enabled: Optional[bool] = None
+
+
+class ScheduleResponse(BaseModel):
+    """Pydantic model for schedule API responses."""
+    id: int
+    user_id: int
+    name: str
+    job_type: JobType
+    target: str
+    task_params: Dict[str, Any]
+    cron: str
+    enabled: bool
+    next_run_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RunCreate(BaseModel):
+    """Pydantic model for creating a run."""
+    job_type: JobType
+    job_id: str = Field(..., min_length=1, max_length=255)
+    scheduled_for: datetime
+    job_snapshot: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RunUpdate(BaseModel):
+    """Pydantic model for updating a run."""
+    status: Optional[RunStatus] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    worker_id: Optional[str] = None
+
+
+class RunResponse(BaseModel):
+    """Pydantic model for run API responses."""
+    run_id: UUID
+    job_type: JobType
+    job_id: str
+    user_id: int
+    status: RunStatus
+    scheduled_for: datetime
+    enqueued_at: datetime
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+    job_snapshot: Dict[str, Any]
+    result: Optional[Dict[str, Any]]
+    error: Optional[str]
+    worker_id: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class ReportRequest(BaseModel):
+    """Pydantic model for report execution requests."""
+    report_type: str = Field(..., min_length=1, max_length=100)
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    scheduled_for: Optional[datetime] = None
+
+
+class ScreenerRequest(BaseModel):
+    """Pydantic model for screener execution requests."""
+    screener_set: Optional[str] = Field(None, min_length=1, max_length=100)
+    tickers: Optional[list[str]] = Field(None, min_items=1)
+    filter_criteria: Dict[str, Any] = Field(default_factory=dict)
+    top_n: Optional[int] = Field(None, ge=1, le=1000)
+    scheduled_for: Optional[datetime] = None
+
+    @validator('tickers')
+    def validate_tickers_or_set(cls, v, values):
+        """Ensure either screener_set or tickers is provided."""
+        if not v and not values.get('screener_set'):
+            raise ValueError('Either screener_set or tickers must be provided')
+        return v
+
+
+class ScreenerSetInfo(BaseModel):
+    """Pydantic model for screener set information."""
+    name: str
+    description: str
+    ticker_count: int
+    tickers: list[str]
+    categories: list[str]
+
