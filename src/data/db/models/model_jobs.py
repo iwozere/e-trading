@@ -75,7 +75,7 @@ class ScheduleRun(Base):
 
     __tablename__ = "job_schedule_runs"
 
-    run_id = Column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    id = Column(Integer, primary_key=True, index=True)
     job_type = Column(Text, nullable=False)
     job_id = Column(BigInteger, nullable=True)
     user_id = Column(BigInteger, nullable=True, index=True)

@@ -84,6 +84,7 @@ class AuthIdentity(Base):
     __table_args__ = (
         UniqueConstraint("provider", "external_id", name="uq_auth_identities_provider_external"),
         Index("ix_auth_identities_provider_external", "provider", "external_id"),
+        Index("ix_auth_identities_provider", "provider"),  # ADD THIS
         Index("idx_auth_identities_user", "user_id"),
     )
 
@@ -99,7 +100,10 @@ class AuthIdentity(Base):
 # telegram_verification_codes
 class VerificationCode(Base):
     __tablename__ = "usr_verification_codes"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"))
     code: Mapped[str] = mapped_column(String(32))
     sent_time: Mapped[int] = mapped_column(Integer)
+    provider: Mapped[Optional[str]] = mapped_column(String(20), server_default="telegram")
+    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))

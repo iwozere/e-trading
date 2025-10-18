@@ -46,7 +46,7 @@ class TelegramFeedback(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"))
     type: Mapped[str] = mapped_column(String(50))
     message: Mapped[str] = mapped_column(Text)
-    created: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str | None] = mapped_column(String(20))
 
 # telegram_settings

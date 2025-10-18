@@ -1,143 +1,212 @@
-# model_trading.py  (aligned to DB)
+"""
+Job Scheduler Models
 
-from __future__ import annotations
-from decimal import Decimal
-from typing import Optional
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+SQLAlchemy models for the job scheduling and execution system.
+Includes Schedule and Run models with proper relationships and validation.
+"""
+
+from datetime import datetime
+from enum import Enum
+from typing import Optional, Dict, Any
+from uuid import UUID
+
 from sqlalchemy import (
-    String, Integer, DateTime, JSON, ForeignKey, CheckConstraint,
-    Index, text, Numeric
+    Column, Integer, String, Boolean, DateTime, Text, BigInteger, JSON,
+    CheckConstraint, UniqueConstraint, Index, func, ForeignKey
 )
+from sqlalchemy.dialects.postgresql import JSONB
+from pydantic import BaseModel, Field, field_validator
 
 from src.data.db.core.base import Base
 
-# --- trading_bot_instances
-class BotInstance(Base):
-    __tablename__ = "trading_bots"
 
-    id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"), index=True)
-    type: Mapped[str] = mapped_column(String(20))
-    config: Mapped[Optional[str]] = mapped_column(JSON)
-    status: Mapped[str] = mapped_column(String(20))
-    started_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    last_heartbeat: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    error_count: Mapped[Optional[int]] = mapped_column(Integer)
-    current_balance: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    total_pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    extra_metadata: Mapped[Optional[dict]] = mapped_column(JSON)
-    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
-    updated_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
+class JobType(str, Enum):
+    """Job type enumeration."""
+    REPORT = "report"
+    SCREENER = "screener"
+    ALERT = "alert"
+    NOTIFICATION = "notification"
+    DATA_PROCESSING = "data_processing"
+    BACKUP = "backup"
 
-    trades: Mapped[list["Trade"]] = relationship(back_populates="bot", cascade="all, delete-orphan")
-    positions: Mapped[list["Position"]] = relationship(back_populates="bot", cascade="all, delete-orphan")
-    metrics: Mapped[list["PerformanceMetric"]] = relationship(back_populates="bot", cascade="all, delete-orphan")
 
+class RunStatus(str, Enum):
+    """Run status enumeration."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class Schedule(Base):
+    """Schedule model for persistent schedule definitions."""
+
+    __tablename__ = "job_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    job_type = Column(String(50), nullable=False)
+    target = Column(String(255), nullable=False)
+    task_params = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=False, default={})
+    cron = Column(String(100), nullable=False)
+    enabled = Column(Boolean, nullable=False, default=True, index=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+
+    # Constraints
     __table_args__ = (
-        CheckConstraint("type IN ('live','paper','optimization')", name="ck_trading_bots_valid_bot_type"),
-        CheckConstraint("status IN ('running','stopped','error','completed')", name="ck_trading_bots_valid_bot_status"),
-        Index("ix_trading_bots_type", "type"),
-        Index("ix_trading_bots_status", "status"),
-        Index("ix_trading_bots_last_heartbeat", "last_heartbeat"),
+        CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup')", name="check_job_type"),
+        UniqueConstraint("user_id", "name", name="unique_user_schedule_name"),
+        Index("idx_schedules_enabled", "enabled"),
+        Index("idx_schedules_next_run_at", "next_run_at", postgresql_where="enabled = true"),
     )
 
-# --- trading_performance_metrics
-class PerformanceMetric(Base):
-    __tablename__ = "trading_performance_metrics"
+    def __repr__(self):
+        return f"<Schedule(id={self.id}, name='{self.name}', job_type='{self.job_type}', enabled={self.enabled})>"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    bot_id: Mapped[str] = mapped_column(ForeignKey("trading_bot_instances.id", ondelete="CASCADE"))
-    trade_type: Mapped[str] = mapped_column(String(10))
-    symbol: Mapped[Optional[str]] = mapped_column(String(20))
-    interval: Mapped[Optional[str]] = mapped_column(String(10))
-    entry_logic_name: Mapped[Optional[str]] = mapped_column(String(100))
-    exit_logic_name: Mapped[Optional[str]] = mapped_column(String(100))
-    metrics: Mapped[dict] = mapped_column(JSON)
-    calculated_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
 
-    bot: Mapped["BotInstance"] = relationship(back_populates="metrics")
+class ScheduleRun(Base):
+    """Run model for job execution history with snapshots."""
 
+    __tablename__ = "job_schedule_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_type = Column(Text, nullable=False)
+    job_id = Column(Integer, ForeignKey("job_schedules.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(BigInteger, nullable=True, index=True)
+    status = Column(Text, nullable=True, index=True)
+    scheduled_for = Column(DateTime(timezone=True), nullable=True, index=True)
+    enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    job_snapshot = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
+    result = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
+    error = Column(Text, nullable=True)
+    worker_id = Column(String(255), nullable=True)
+
+    # Constraints
     __table_args__ = (
-        CheckConstraint("trade_type IN ('paper','live','optimization')", name="ck_trading_performance_metrics_trade_type"),
-        Index("ix_trading_performance_metrics_bot_id", "bot_id"),
-        Index("ix_trading_performance_metrics_calculated_at", "calculated_at"),
-        Index("ix_trading_performance_metrics_symbol", "symbol"),
+        UniqueConstraint("job_type", "job_id", "scheduled_for", name="ux_runs_job_scheduled_for"),
     )
 
-# --- trading_trades
-class Trade(Base):
-    __tablename__ = "trading_trades"
+    def __repr__(self):
+        return f"<Run(id={self.id}, job_type='{self.job_type}', status='{self.status}')>"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    bot_id: Mapped[str] = mapped_column(ForeignKey("trading_bot_instances.id", ondelete="CASCADE"))
-    position_id: Mapped[Optional[str]] = mapped_column(ForeignKey("trading_positions.id", ondelete="SET NULL"), nullable=True)
-    trade_type: Mapped[str] = mapped_column(String(10))
-    strategy_name: Mapped[Optional[str]] = mapped_column(String(100))
-    entry_logic_name: Mapped[str] = mapped_column(String(100))
-    exit_logic_name: Mapped[str] = mapped_column(String(100))
-    symbol: Mapped[str] = mapped_column(String(20))
-    interval: Mapped[str] = mapped_column(String(10))
-    entry_time: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    exit_time: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    buy_order_created: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    buy_order_closed: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    sell_order_created: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    sell_order_closed: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    entry_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    exit_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    entry_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    exit_value: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    size: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    direction: Mapped[str] = mapped_column(String(10))
-    commission: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    gross_pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    net_pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    pnl_percentage: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4))
-    exit_reason: Mapped[Optional[str]] = mapped_column(String(100))
-    status: Mapped[str] = mapped_column(String(20))
-    extra_metadata: Mapped[Optional[dict]] = mapped_column(JSON)
-    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
-    updated_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
 
-    bot: Mapped["BotInstance"] = relationship(back_populates="trades")
-    position: Mapped[Optional["Position"]] = relationship(back_populates="trades")
+# Pydantic models for API validation
+class ScheduleCreate(BaseModel):
+    """Pydantic model for creating a schedule."""
+    name: str = Field(..., min_length=1, max_length=255)
+    job_type: JobType
+    target: str = Field(..., min_length=1, max_length=255)
+    task_params: Dict[str, Any] = Field(default_factory=dict)
+    cron: str = Field(..., min_length=1, max_length=100)
+    enabled: bool = Field(default=True)
 
-    __table_args__ = (
-        CheckConstraint("trade_type IN ('paper','live','optimization')", name="ck_trading_trades_trade_type"),
-        CheckConstraint("direction IN ('long','short')", name="ck_trading_trades_direction"),
-        CheckConstraint("status IN ('open','closed','cancelled')", name="ck_trading_trades_status"),
-        Index("ix_trading_trades_entry_time", "entry_time"),
-        Index("ix_trading_trades_bot_id", "bot_id"),
-        Index("ix_trading_trades_trade_type", "trade_type"),
-        Index("ix_trading_trades_symbol", "symbol"),
-        Index("ix_trading_trades_status", "status"),
-        Index("ix_trading_trades_strategy_name", "strategy_name"),
-    )
+    @field_validator('cron')
+    def validate_cron(cls, v):
+        """Basic cron validation - should be 5 fields separated by spaces."""
+        parts = v.strip().split()
+        if len(parts) != 5:
+            raise ValueError('Cron expression must have exactly 5 fields')
+        return v
 
-# --- trading_positions
-class Position(Base):
-    __tablename__ = "trading_positions"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    bot_id: Mapped[str] = mapped_column(ForeignKey("trading_bot_instances.id", ondelete="CASCADE"))
-    trade_type: Mapped[str] = mapped_column(String(10))
-    symbol: Mapped[str] = mapped_column(String(20))
-    direction: Mapped[str] = mapped_column(String(10))
-    opened_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    closed_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
-    qty_open: Mapped[Decimal] = mapped_column(Numeric(20, 8), server_default=text("0"), nullable=False)
-    avg_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8))
-    realized_pnl: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 8), server_default=text("0"))
-    status: Mapped[str] = mapped_column(String(12))
-    extra_metadata: Mapped[Optional[dict]] = mapped_column(JSON)
+class ScheduleUpdate(BaseModel):
+    """Pydantic model for updating a schedule."""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    target: Optional[str] = Field(None, min_length=1, max_length=255)
+    task_params: Optional[Dict[str, Any]] = None
+    cron: Optional[str] = Field(None, min_length=1, max_length=100)
+    enabled: Optional[bool] = None
 
-    bot: Mapped["BotInstance"] = relationship(back_populates="positions")
-    trades: Mapped[list["Trade"]] = relationship(back_populates="position")
 
-    __table_args__ = (
-        CheckConstraint("direction IN ('long','short')", name="ck_trading_positions_direction"),
-        CheckConstraint("status IN ('open','closed')", name="ck_trading_positions_status"),
-        Index("ix_trading_positions_bot_id", "bot_id"),
-        Index("ix_trading_positions_symbol", "symbol"),
-    )
+class ScheduleResponse(BaseModel):
+    """Pydantic model for schedule API responses."""
+    id: int
+    user_id: int
+    name: str
+    job_type: JobType
+    target: str
+    task_params: Dict[str, Any]
+    cron: str
+    enabled: bool
+    next_run_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScheduleRunCreate(BaseModel):
+    """Pydantic model for creating a run."""
+    job_type: JobType
+    job_id: Optional[int] = None
+    scheduled_for: datetime
+    job_snapshot: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ScheduleRunUpdate(BaseModel):
+    """Pydantic model for updating a run."""
+    status: Optional[RunStatus] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    worker_id: Optional[str] = None
+
+
+class ScheduleRunResponse(BaseModel):
+    """Pydantic model for run API responses."""
+    id: int
+    job_type: JobType
+    job_id: Optional[int]
+    user_id: Optional[int]
+    status: Optional[RunStatus]
+    scheduled_for: Optional[datetime]
+    enqueued_at: Optional[datetime]
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+    job_snapshot: Optional[Dict[str, Any]]
+    result: Optional[Dict[str, Any]]
+    error: Optional[str]
+    worker_id: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+class ReportRequest(BaseModel):
+    """Pydantic model for report execution requests."""
+    report_type: str = Field(..., min_length=1, max_length=100)
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    scheduled_for: Optional[datetime] = None
+
+
+class ScreenerRequest(BaseModel):
+    """Pydantic model for screener execution requests."""
+    screener_set: Optional[str] = Field(None, min_length=1, max_length=100)
+    tickers: Optional[list[str]] = Field(None, min_length=1)
+    filter_criteria: Dict[str, Any] = Field(default_factory=dict)
+    top_n: Optional[int] = Field(None, ge=1, le=1000)
+    scheduled_for: Optional[datetime] = None
+
+    @field_validator('tickers')
+    def validate_tickers_or_set(cls, v, values):
+        """Ensure either screener_set or tickers is provided."""
+        if not v and not values.get('screener_set'):
+            raise ValueError('Either screener_set or tickers must be provided')
+        return v
+
+
+class ScreenerSetInfo(BaseModel):
+    """Pydantic model for screener set information."""
+    name: str
+    description: str
+    ticker_count: int
+    tickers: list[str]
+    categories: list[str]
