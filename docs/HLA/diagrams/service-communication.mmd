@@ -1,0 +1,109 @@
+graph TB
+    %% Service Communication Patterns
+    %% This diagram shows how services communicate with each other
+
+    subgraph "Web UI Layer"
+        WebUI[Web UI Frontend]
+        WebAPI[FastAPI Backend]
+        WebSocket[WebSocket Manager]
+    end
+
+    subgraph "Communication Services"
+        TelegramBot[Telegram Bot Service]
+        EmailService[Email Notification Service]
+        NotificationMgr[Async Notification Manager]
+    end
+
+    subgraph "Core Trading Services"
+        StrategyMgr[Enhanced Strategy Manager]
+        TradingBot[Trading Bot Instances]
+        BrokerMgr[Broker Manager]
+    end
+
+    subgraph "Data Services"
+        DataMgr[Data Manager]
+        DataProviders[Data Providers<br/>Binance, Yahoo, IBKR]
+        CacheService[Cache Service]
+    end
+
+    subgraph "Infrastructure Services"
+        Database[(PostgreSQL Database)]
+        JobScheduler[APScheduler Service]
+        ErrorHandler[Error Handling Service]
+    end
+
+    subgraph "Analytics Services"
+        MLService[ML Analytics Service]
+        IndicatorService[Indicator Service]
+        BacktestService[Backtesting Service]
+    end
+
+    %% Web UI Communications
+    WebUI -->|HTTP/REST API| WebAPI
+    WebUI <-->|WebSocket| WebSocket
+    WebAPI -->|Database Queries| Database
+    WebAPI -->|Strategy Control| StrategyMgr
+    WebAPI -->|System Monitoring| JobScheduler
+
+    %% Strategy Manager Communications
+    StrategyMgr -->|Create/Manage| TradingBot
+    StrategyMgr -->|Configuration| Database
+    StrategyMgr -->|Notifications| NotificationMgr
+    StrategyMgr -->|Real-time Updates| WebSocket
+
+    %% Trading Bot Communications
+    TradingBot -->|Market Data| DataMgr
+    TradingBot -->|Order Execution| BrokerMgr
+    TradingBot -->|Trade Logging| Database
+    TradingBot -->|Notifications| NotificationMgr
+    TradingBot -->|Technical Analysis| IndicatorService
+
+    %% Data Manager Communications
+    DataMgr -->|Data Requests| DataProviders
+    DataMgr -->|Caching| CacheService
+    DataMgr -->|Data Storage| Database
+
+    %% Notification Manager Communications
+    NotificationMgr -->|Telegram Messages| TelegramBot
+    NotificationMgr -->|Email Alerts| EmailService
+    NotificationMgr -->|Real-time Updates| WebSocket
+
+    %% Telegram Bot Communications
+    TelegramBot -->|User Management| Database
+    TelegramBot -->|Command Processing| IndicatorService
+    TelegramBot -->|Report Generation| MLService
+    TelegramBot -->|Alert Management| JobScheduler
+
+    %% Job Scheduler Communications
+    JobScheduler -->|Scheduled Tasks| TradingBot
+    JobScheduler -->|Report Generation| MLService
+    JobScheduler -->|Alert Processing| NotificationMgr
+    JobScheduler -->|Job Persistence| Database
+
+    %% Error Handling Communications
+    ErrorHandler -->|Error Logging| Database
+    ErrorHandler -->|Error Notifications| NotificationMgr
+    ErrorHandler -->|System Recovery| StrategyMgr
+
+    %% Analytics Communications
+    MLService -->|Market Data| DataMgr
+    MLService -->|Model Storage| Database
+    MLService -->|Results| NotificationMgr
+    IndicatorService -->|Market Data| DataMgr
+    BacktestService -->|Historical Data| DataMgr
+    BacktestService -->|Results Storage| Database
+
+    %% Styling
+    classDef webLayer fill:#e1f5fe
+    classDef commLayer fill:#f3e5f5
+    classDef coreLayer fill:#e8f5e8
+    classDef dataLayer fill:#fff3e0
+    classDef infraLayer fill:#fce4ec
+    classDef analyticsLayer fill:#f1f8e9
+
+    class WebUI,WebAPI,WebSocket webLayer
+    class TelegramBot,EmailService,NotificationMgr commLayer
+    class StrategyMgr,TradingBot,BrokerMgr coreLayer
+    class DataMgr,DataProviders,CacheService dataLayer
+    class Database,JobScheduler,ErrorHandler infraLayer
+    class MLService,IndicatorService,BacktestService analyticsLayer

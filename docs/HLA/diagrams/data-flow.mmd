@@ -1,0 +1,74 @@
+graph LR
+    subgraph "Data Sources"
+        EXT_API[External APIs]
+        USER_INPUT[User Input]
+        MARKET[Market Data]
+    end
+    
+    subgraph "Data Processing"
+        INGEST[Data Ingestion]
+        VALIDATE[Data Validation]
+        TRANSFORM[Data Transformation]
+        CACHE[Data Caching]
+    end
+    
+    subgraph "Business Logic"
+        STRATEGY[Strategy Engine]
+        RISK[Risk Management]
+        ANALYTICS[Analytics Engine]
+        ML_PROC[ML Processing]
+    end
+    
+    subgraph "Data Storage"
+        DB_WRITE[Database Write]
+        DB_READ[Database Read]
+        CACHE_STORE[Cache Storage]
+    end
+    
+    subgraph "Output Channels"
+        NOTIFICATIONS[Notifications]
+        REPORTS[Reports]
+        TRADES[Trade Execution]
+        UI_DISPLAY[UI Display]
+    end
+    
+    EXT_API --> INGEST
+    USER_INPUT --> INGEST
+    MARKET --> INGEST
+    
+    INGEST --> VALIDATE
+    VALIDATE --> TRANSFORM
+    TRANSFORM --> CACHE
+    CACHE --> CACHE_STORE
+    
+    CACHE --> STRATEGY
+    CACHE --> ANALYTICS
+    CACHE --> ML_PROC
+    
+    STRATEGY --> RISK
+    RISK --> TRADES
+    ANALYTICS --> REPORTS
+    ML_PROC --> ANALYTICS
+    
+    STRATEGY --> DB_WRITE
+    ANALYTICS --> DB_WRITE
+    TRADES --> DB_WRITE
+    
+    DB_READ --> UI_DISPLAY
+    DB_READ --> REPORTS
+    
+    TRADES --> NOTIFICATIONS
+    REPORTS --> NOTIFICATIONS
+    ANALYTICS --> UI_DISPLAY
+    
+    classDef source fill:#e3f2fd
+    classDef processing fill:#f1f8e9
+    classDef logic fill:#fce4ec
+    classDef storage fill:#fff8e1
+    classDef output fill:#e8eaf6
+    
+    class EXT_API,USER_INPUT,MARKET source
+    class INGEST,VALIDATE,TRANSFORM,CACHE processing
+    class STRATEGY,RISK,ANALYTICS,ML_PROC logic
+    class DB_WRITE,DB_READ,CACHE_STORE storage
+    class NOTIFICATIONS,REPORTS,TRADES,UI_DISPLAY output

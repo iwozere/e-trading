@@ -1,0 +1,156 @@
+graph TB
+    %% API Endpoints and Service Interfaces
+    %% This diagram shows the API structure and endpoints
+
+    subgraph "Client Applications"
+        WebClient[Web UI Client]
+        TelegramClient[Telegram Bot Client]
+        APIClient[External API Client]
+    end
+
+    subgraph "FastAPI Backend"
+        MainAPI[Main FastAPI App<br/>Port 8000]
+        
+        subgraph "Authentication Routes"
+            AuthAPI["/auth/*<br/>Authentication Endpoints"]
+            LoginEP["/auth/login<br/>POST - User Login"]
+            RefreshEP["/auth/refresh<br/>POST - Token Refresh"]
+            LogoutEP["/auth/logout<br/>POST - User Logout"]
+            MeEP["/auth/me<br/>GET - Current User Info"]
+        end
+
+        subgraph "Strategy Management Routes"
+            StrategyAPI["/api/strategies/*<br/>Strategy Management"]
+            ListStrategiesEP["/api/strategies<br/>GET - List Strategies"]
+            CreateStrategyEP["/api/strategies<br/>POST - Create Strategy"]
+            GetStrategyEP["/api/strategies/{id}<br/>GET - Get Strategy"]
+            UpdateStrategyEP["/api/strategies/{id}<br/>PUT - Update Strategy"]
+            DeleteStrategyEP["/api/strategies/{id}<br/>DELETE - Delete Strategy"]
+            StartStrategyEP["/api/strategies/{id}/start<br/>POST - Start Strategy"]
+            StopStrategyEP["/api/strategies/{id}/stop<br/>POST - Stop Strategy"]
+            RestartStrategyEP["/api/strategies/{id}/restart<br/>POST - Restart Strategy"]
+        end
+
+        subgraph "System Monitoring Routes"
+            SystemAPI["/api/system/*<br/>System Monitoring"]
+            SystemStatusEP["/api/system/status<br/>GET - System Status"]
+            MetricsEP["/api/monitoring/metrics<br/>GET - System Metrics"]
+            AlertsEP["/api/monitoring/alerts<br/>GET - System Alerts"]
+            HistoryEP["/api/monitoring/history<br/>GET - Performance History"]
+        end
+
+        subgraph "Job Management Routes"
+            JobsAPI["/api/*<br/>Jobs & Scheduling"]
+            RunReportEP["/api/reports/run<br/>POST - Run Report"]
+            RunScreenerEP["/api/screeners/run<br/>POST - Run Screener"]
+            GetRunEP["/api/runs/{id}<br/>GET - Get Run Status"]
+            ListRunsEP["/api/runs<br/>GET - List Runs"]
+            SchedulesEP["/api/schedules<br/>GET/POST - Manage Schedules"]
+            ScreenerSetsEP["/api/screener-sets<br/>GET - List Screener Sets"]
+        end
+
+        subgraph "Telegram Management Routes"
+            TelegramAPI["/api/telegram/*<br/>Telegram Bot Management"]
+            TelegramUsersEP["/api/telegram/users<br/>GET - List Telegram Users"]
+            TelegramAlertsEP["/api/telegram/alerts<br/>GET - List Alerts"]
+            TelegramSchedulesEP["/api/telegram/schedules<br/>GET - List Schedules"]
+            BroadcastEP["/api/telegram/broadcast<br/>POST - Send Broadcast"]
+            AuditEP["/api/telegram/audit<br/>GET - Audit Logs"]
+        end
+
+        subgraph "WebSocket Endpoints"
+            WSEndpoint["/ws<br/>WebSocket Connection"]
+            WSAuth[WebSocket Authentication]
+            WSSubscriptions[Channel Subscriptions]
+        end
+    end
+
+    subgraph "Telegram Bot API"
+        TelegramBotAPI[Telegram Bot Service<br/>Port 8001]
+        
+        subgraph "Bot Commands"
+            StartCmd["/start - Welcome Message"]
+            HelpCmd["/help - Show Help"]
+            RegisterCmd["/register - User Registration"]
+            ReportCmd["/report - Generate Reports"]
+            AlertsCmd["/alerts - Manage Alerts"]
+            SchedulesCmd["/schedules - Manage Schedules"]
+            AdminCmd["/admin - Admin Commands"]
+        end
+
+        subgraph "HTTP API Endpoints"
+            BotSendEP["/api/send_message<br/>POST - Send Message"]
+            BotBroadcastEP["/api/broadcast<br/>POST - Broadcast Message"]
+            BotStatusEP["/api/status<br/>GET - Bot Status"]
+        end
+    end
+
+    %% Client to API Communications
+    WebClient -->|HTTP/REST| MainAPI
+    WebClient -->|WebSocket| WSEndpoint
+    TelegramClient -->|Telegram API| TelegramBotAPI
+    APIClient -->|HTTP/REST| MainAPI
+    APIClient -->|HTTP/REST| TelegramBotAPI
+
+    %% Authentication Flow
+    WebClient -->|POST /auth/login| LoginEP
+    WebClient -->|POST /auth/refresh| RefreshEP
+    WebClient -->|POST /auth/logout| LogoutEP
+    WebClient -->|GET /auth/me| MeEP
+
+    %% Strategy Management Flow
+    WebClient -->|GET /api/strategies| ListStrategiesEP
+    WebClient -->|POST /api/strategies| CreateStrategyEP
+    WebClient -->|PUT /api/strategies/{id}| UpdateStrategyEP
+    WebClient -->|POST /api/strategies/{id}/start| StartStrategyEP
+
+    %% System Monitoring Flow
+    WebClient -->|GET /api/system/status| SystemStatusEP
+    WebClient -->|GET /api/monitoring/metrics| MetricsEP
+    WebClient -->|GET /api/monitoring/alerts| AlertsEP
+
+    %% Job Management Flow
+    WebClient -->|POST /api/reports/run| RunReportEP
+    WebClient -->|GET /api/runs| ListRunsEP
+    WebClient -->|POST /api/schedules| SchedulesEP
+
+    %% Telegram Management Flow
+    WebClient -->|GET /api/telegram/users| TelegramUsersEP
+    WebClient -->|POST /api/telegram/broadcast| BroadcastEP
+    WebClient -->|GET /api/telegram/audit| AuditEP
+
+    %% WebSocket Flow
+    WebClient -->|WebSocket Connect| WSAuth
+    WebClient -->|Subscribe/Unsubscribe| WSSubscriptions
+
+    %% Telegram Bot Commands
+    TelegramClient -->|/start| StartCmd
+    TelegramClient -->|/report TICKER| ReportCmd
+    TelegramClient -->|/alerts add| AlertsCmd
+    TelegramClient -->|/schedules add| SchedulesCmd
+
+    %% Bot HTTP API
+    APIClient -->|POST /api/send_message| BotSendEP
+    APIClient -->|POST /api/broadcast| BotBroadcastEP
+    APIClient -->|GET /api/status| BotStatusEP
+
+    %% Styling
+    classDef clientLayer fill:#e3f2fd
+    classDef apiLayer fill:#f1f8e9
+    classDef authLayer fill:#fff3e0
+    classDef strategyLayer fill:#e8f5e8
+    classDef systemLayer fill:#fce4ec
+    classDef jobLayer fill:#f3e5f5
+    classDef telegramLayer fill:#e1f5fe
+    classDef wsLayer fill:#fff8e1
+    classDef botLayer fill:#f9fbe7
+
+    class WebClient,TelegramClient,APIClient clientLayer
+    class MainAPI apiLayer
+    class AuthAPI,LoginEP,RefreshEP,LogoutEP,MeEP authLayer
+    class StrategyAPI,ListStrategiesEP,CreateStrategyEP,GetStrategyEP,UpdateStrategyEP,DeleteStrategyEP,StartStrategyEP,StopStrategyEP,RestartStrategyEP strategyLayer
+    class SystemAPI,SystemStatusEP,MetricsEP,AlertsEP,HistoryEP systemLayer
+    class JobsAPI,RunReportEP,RunScreenerEP,GetRunEP,ListRunsEP,SchedulesEP,ScreenerSetsEP jobLayer
+    class TelegramAPI,TelegramUsersEP,TelegramAlertsEP,TelegramSchedulesEP,BroadcastEP,AuditEP telegramLayer
+    class WSEndpoint,WSAuth,WSSubscriptions wsLayer
+    class TelegramBotAPI,StartCmd,HelpCmd,RegisterCmd,ReportCmd,AlertsCmd,SchedulesCmd,AdminCmd,BotSendEP,BotBroadcastEP,BotStatusEP botLayer

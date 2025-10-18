@@ -46,11 +46,11 @@ This specification defines the requirements for creating comprehensive high-leve
 
 #### Acceptance Criteria
 
-1. THE HLA_Documentation SHALL document the database schema and data access patterns
-2. THE HLA_Documentation SHALL describe data models and their relationships
+1. THE HLA_Documentation SHALL document the PostgreSQL database schema and data access patterns
+2. THE HLA_Documentation SHALL describe data models including trading, user management, telegram, and web UI entities
 3. THE HLA_Documentation SHALL include information about data providers and sources
 4. THE HLA_Documentation SHALL document caching strategies and data flow
-5. THE HLA_Documentation SHALL describe both current SQLite and planned PostgreSQL implementations
+5. THE HLA_Documentation SHALL describe the repository pattern and service layer architecture
 
 ### Requirement 4
 
