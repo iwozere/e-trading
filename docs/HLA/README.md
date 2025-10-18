@@ -113,11 +113,11 @@ graph TB
 |--------|--------|---------|----------------|
 | **[Data Management](modules/data-management.md)** | ✅ | Market data, providers, caching | Data feeds, downloaders, OHLCV processing |
 | **[Trading Engine](modules/trading-engine.md)** | ✅ | Strategy execution, bot management | Trading bots, strategy framework, execution |
-| **[ML & Analytics](modules/ml-analytics.md)** | 🔄 | Machine learning, performance analytics | MLflow, feature engineering, backtesting |
+| **[ML & Analytics](modules/ml-analytics.md)** | ✅ | Machine learning, performance analytics | MLflow, feature engineering, backtesting |
 | **[Communication](modules/communication.md)** | ✅ | User interfaces, notifications | Telegram bot, Web UI, email notifications |
 | **[Infrastructure](modules/infrastructure.md)** | ✅ | Database, scheduling, error handling | PostgreSQL, APScheduler, logging |
 | **[Configuration](modules/configuration.md)** | ✅ | System configuration, templates | Config management, environment handling |
-| **[Security & Auth](modules/security-auth.md)** | 🔄 | Authentication, authorization | User management, API security, access control |
+| **[Security & Auth](modules/security-auth.md)** | 📋 | Authentication, authorization | User management, API security, access control |
 
 **Legend**: ✅ Implemented | 🔄 In Progress | 📋 Planned
 

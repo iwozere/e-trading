@@ -146,14 +146,3 @@ graph TB
     class WEB_UI,TELEGRAM,NOTIFICATION interfaceLayer
     class COMMON,UTIL,DATABASE infraLayer
     class DATABASE database
-
-    %% Legend
-    subgraph "Legend"
-        L1[External Systems] :::external
-        L2[Data Management] :::dataLayer
-        L3[Processing & Analytics] :::processLayer
-        L4[Trading Execution] :::execLayer
-        L5[User Interfaces] :::interfaceLayer
-        L6[Infrastructure] :::infraLayer
-        L7[(Database)] :::database
-    end

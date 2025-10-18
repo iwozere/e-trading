@@ -9,7 +9,7 @@ graph TB
     end
 
     subgraph "FastAPI Backend"
-        MainAPI[Main FastAPI App<br/>Port 8000]
+        MainAPI["Main FastAPI App<br/>Port 8000"]
         
         subgraph "Authentication Routes"
             AuthAPI["/auth/*<br/>Authentication Endpoints"]
@@ -66,7 +66,7 @@ graph TB
     end
 
     subgraph "Telegram Bot API"
-        TelegramBotAPI[Telegram Bot Service<br/>Port 8001]
+        TelegramBotAPI["Telegram Bot Service<br/>Port 8001"]
         
         subgraph "Bot Commands"
             StartCmd["/start - Welcome Message"]

@@ -341,16 +341,33 @@ class BaseRepository:
         self.session = session
     
     def get_by_id(self, id: int) -> Optional[Model]:
-        # Generic get by ID implementation
+        """Generic get by ID implementation"""
+        return self.session.query(self.model).filter(self.model.id == id).first()
     
     def create(self, **kwargs) -> Model:
-        # Generic create implementation
+        """Generic create implementation"""
+        instance = self.model(**kwargs)
+        self.session.add(instance)
+        self.session.commit()
+        return instance
     
     def update(self, id: int, **kwargs) -> Optional[Model]:
-        # Generic update implementation
+        """Generic update implementation"""
+        instance = self.get_by_id(id)
+        if instance:
+            for key, value in kwargs.items():
+                setattr(instance, key, value)
+            self.session.commit()
+        return instance
     
     def delete(self, id: int) -> bool:
-        # Generic delete implementation
+        """Generic delete implementation"""
+        instance = self.get_by_id(id)
+        if instance:
+            self.session.delete(instance)
+            self.session.commit()
+            return True
+        return False
 ```
 
 **Repository Classes:**
@@ -371,10 +388,26 @@ class UserService:
         self.uow = uow
     
     def authenticate_user(self, provider: str, external_id: str) -> User:
-        # Business logic for user authentication
+        """Business logic for user authentication"""
+        with self.uow:
+            user = self.uow.users.get_by_provider(provider, external_id)
+            if not user:
+                user = self.uow.users.create(
+                    provider=provider,
+                    external_id=external_id,
+                    is_active=True
+                )
+            return user
     
     def create_telegram_user(self, telegram_id: str, **profile) -> User:
-        # Telegram-specific user creation logic
+        """Telegram-specific user creation logic"""
+        with self.uow:
+            return self.uow.users.create(
+                provider="telegram",
+                external_id=telegram_id,
+                is_active=True,
+                **profile
+            )
 ```
 
 **Service Classes:**

@@ -24,13 +24,13 @@ This index provides a comprehensive guide to all documentation, organized by top
 |--------|---------|--------------|--------|
 | **[Data Management](modules/data-management.md)** | Market data acquisition and caching | Data feeds, providers, OHLCV processing | ✅ Complete |
 | **[Trading Engine](modules/trading-engine.md)** | Strategy execution and bot management | Trading bots, strategy framework, execution | ✅ Complete |
-| **[ML & Analytics](modules/ml-analytics.md)** | Machine learning and performance analytics | MLflow, feature engineering, backtesting | 🔄 In Progress |
+| **[ML & Analytics](modules/ml-analytics.md)** | Machine learning and performance analytics | MLflow, feature engineering, backtesting | ✅ In Progress |
 
 ### User Interfaces & Communication
 | Module | Purpose | Key Features | Status |
 |--------|---------|--------------|--------|
 | **[Communication](modules/communication.md)** | User interfaces and notifications | Telegram bot, Web UI, email notifications | ✅ Complete |
-| **[Security & Auth](modules/security-auth.md)** | Authentication and authorization | User management, API security, access control | 🔄 In Progress |
+| **[Security & Auth](modules/security-auth.md)** | Authentication and authorization | User management, API security, access control | 📋 In Progress |
 
 ### Infrastructure & Support
 | Module | Purpose | Key Features | Status |
@@ -149,7 +149,7 @@ graph LR
 | **Data Feeds** | Data Management | [Live Feeds](modules/data-management.md#live-feeds) | ✅ |
 | **Telegram Bot** | Communication | [Telegram Interface](modules/communication.md#telegram-interface) | ✅ |
 | **Web Dashboard** | Communication | [Web Interface](modules/communication.md#web-interface) | 🔄 |
-| **ML Pipeline** | ML & Analytics | [MLflow Integration](modules/ml-analytics.md#mlflow-integration) | 🔄 |
+| **ML Pipeline** | ML & Analytics | [MLflow Integration](modules/ml-analytics.md#mlflow-integration) | ✅ |
 | **Job Scheduler** | Infrastructure | [Background Services](background-services.md) | ✅ |
 | **Database Schema** | Infrastructure | [Database Architecture](database-architecture.md) | ✅ |
 | **Configuration System** | Configuration | [Config Management](modules/configuration.md) | ✅ |
