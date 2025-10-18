@@ -23,3 +23,4 @@ python -m src.backend.scheduler.scheduler_process
 
 echo Job scheduler process started successfully
 
+

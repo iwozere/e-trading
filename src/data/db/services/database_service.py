@@ -16,19 +16,17 @@ from src.data.db.models.model_users import Base as UsersBase
 from src.data.db.models.model_telegram import Base as TelegramBase
 from src.data.db.models.model_trading import Base as TradingBase
 from src.data.db.models.model_webui import Base as WebUIBase
+from src.data.db.models.model_jobs import Base as JobsBase
 
 # Repositories
 # NOTE: every repo must accept a sqlalchemy.orm.Session in __init__
-from src.data.db.repos.repo_users import UsersRepo
+from src.data.db.repos.repo_users import UsersRepo, VerificationRepo
 
 from src.data.db.repos.repo_telegram import (
-    AlertsRepo as TelegramAlertsRepo,
-    SchedulesRepo as TelegramSchedulesRepo,
     FeedbackRepo as TelegramFeedbackRepo,
     CommandAuditRepo as TelegramCommandAuditRepo,
     BroadcastRepo as TelegramBroadcastRepo,
     SettingsRepo as TelegramSettingsRepo,
-    VerificationRepo as TelegramVerificationRepo,
 )
 
 from src.data.db.repos.repo_webui import (
@@ -45,6 +43,8 @@ from src.data.db.repos.repo_trading import (
     MetricsRepo as TradingMetricsRepo,
 )
 
+from src.data.db.repos.repo_jobs import JobsRepository
+
 
 # ------------------------------- UoW bundle ----------------------------------
 
@@ -55,15 +55,16 @@ class ReposBundle:
 
     # Users
     users: UsersRepo
+    telegram_verification: VerificationRepo
+
+    # Jobs (replaces telegram alerts/schedules)
+    jobs: JobsRepository
 
     # Telegram
-    telegram_alerts: TelegramAlertsRepo
-    telegram_schedules: TelegramSchedulesRepo
     telegram_feedback: TelegramFeedbackRepo
     telegram_audit: TelegramCommandAuditRepo
     telegram_broadcast: TelegramBroadcastRepo
     telegram_settings: TelegramSettingsRepo
-    telegram_verification: TelegramVerificationRepo
 
     # WebUI
     webui_audit: WebUIAuditRepo
@@ -90,7 +91,7 @@ class DatabaseService:
     def init_databases(self) -> None:
         """Create all tables for every model base (idempotent)."""
         eng = getattr(self, "engine", None) or engine
-        for base in (UsersBase, TelegramBase, TradingBase, WebUIBase):
+        for base in (UsersBase, TelegramBase, TradingBase, WebUIBase, JobsBase):
             base.metadata.create_all(bind=eng)
 
     # for tests that call ds.get_database_service()
@@ -111,15 +112,16 @@ class DatabaseService:
 
                 # Users
                 users=UsersRepo(s),
+                telegram_verification=VerificationRepo(s),
+
+                # Jobs (replaces telegram alerts/schedules)
+                jobs=JobsRepository(s),
 
                 # Telegram
-                telegram_alerts=TelegramAlertsRepo(s),
-                telegram_schedules=TelegramSchedulesRepo(s),
                 telegram_feedback=TelegramFeedbackRepo(s),
                 telegram_audit=TelegramCommandAuditRepo(s),
                 telegram_broadcast=TelegramBroadcastRepo(s),
                 telegram_settings=TelegramSettingsRepo(s),
-                telegram_verification=TelegramVerificationRepo(s),
 
                 # WebUI
                 webui_audit=WebUIAuditRepo(s),

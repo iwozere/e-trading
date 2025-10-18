@@ -5,9 +5,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.telegram.screener.business_logic import handle_command
+from src.telegram.screener.business_logic import handle_command, get_service_instances
 from src.telegram.command_parser import ParsedCommand, parse_command
-from src.data.db.services import telegram_service as db
 from src.notification.logger import setup_logger
 from src.common.recommendation_engine import RecommendationEngine
 _logger = setup_logger(__name__)
@@ -474,6 +473,15 @@ def _get_unified_recommendation(indicator: str, value: float, context: dict = No
 
 
 async def process_report_command(message, telegram_user_id, args, notification_manager):
+    """
+    Process /report command using service layer for all operations.
+
+    This handler delegates to business logic which uses:
+    - telegram_service for user data and audit logging
+    - indicator_service for technical and fundamental analysis
+
+    Service instances are managed globally in business_logic module.
+    """
     try:
         # Use the proper command parser instead of manually creating ParsedCommand
         parsed = parse_command(message.text)
@@ -505,6 +513,13 @@ async def process_report_command(message, telegram_user_id, args, notification_m
         }
 
 async def process_help_command(message, telegram_user_id, message_text=None, notification_manager=None):
+    """
+    Process /help command using service layer for user data access.
+
+    Service instances are accessed through business_logic.get_service_instances()
+    which provides the telegram_service and indicator_service instances
+    initialized in bot.py.
+    """
     try:
         # Parse command to check for -email flag
         if message_text:
@@ -513,14 +528,18 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
         else:
             email_flag = False
 
-        # Get user info for email
+        # Get user info for email using service layer
         user_email = None
         if email_flag:
-            user_status = db.get_user_status(telegram_user_id)
-            if user_status and user_status.get("verified"):
-                user_email = user_status.get("email")
+            telegram_svc, _ = get_service_instances()
+            if telegram_svc:
+                user_status = telegram_svc.get_user_status(telegram_user_id)
+                if user_status and user_status.get("verified"):
+                    user_email = user_status.get("email")
+                else:
+                    email_flag = False  # Don't send email if user not verified
             else:
-                email_flag = False  # Don't send email if user not verified
+                email_flag = False  # Service not available
 
         # Get help content
         help_content = get_comprehensive_help_content()
@@ -701,19 +720,29 @@ For more detailed help, visit the admin panel help page!
 """
 
 async def process_info_command(message, telegram_user_id, notification_manager):
+    """
+    Process /info command using service layer through business logic.
+
+    All database operations are handled through the business logic layer
+    which uses the service instances initialized in bot.py.
+    """
     try:
         # Parse command to check for -email flag
         parsed = parse_command(message.text)
         email_flag = parsed.args.get("email", False)
 
-        # Get user info for email
+        # Get user info for email using service layer
         user_email = None
         if email_flag:
-            user_status = db.get_user_status(telegram_user_id)
-            if user_status and user_status.get("verified"):
-                user_email = user_status.get("email")
+            telegram_svc, _ = get_service_instances()
+            if telegram_svc:
+                user_status = telegram_svc.get_user_status(telegram_user_id)
+                if user_status and user_status.get("verified"):
+                    user_email = user_status.get("email")
+                else:
+                    email_flag = False  # Don't send email if user not verified
             else:
-                email_flag = False  # Don't send email if user not verified
+                email_flag = False  # Service not available
 
         # Add telegram_user_id to parsed command arguments
         parsed.args["telegram_user_id"] = telegram_user_id

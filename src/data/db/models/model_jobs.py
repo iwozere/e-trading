@@ -11,13 +11,16 @@ from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, BigInteger,
+    Column, Integer, String, Boolean, DateTime, Text, BigInteger, JSON,
     CheckConstraint, UniqueConstraint, Index, func
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PostgresUUID
 from pydantic import BaseModel, Field, field_validator
 
 from src.data.db.core.base import Base
+
+
+
 
 class JobType(str, Enum):
     """Job type enumeration."""
@@ -48,7 +51,7 @@ class Schedule(Base):
     name = Column(String(255), nullable=False)
     job_type = Column(String(50), nullable=False)
     target = Column(String(255), nullable=False)
-    task_params = Column(JSONB, nullable=False, default={})
+    task_params = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=False, default={})
     cron = Column(String(100), nullable=False)
     enabled = Column(Boolean, nullable=False, default=True, index=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
@@ -67,10 +70,10 @@ class Schedule(Base):
         return f"<Schedule(id={self.id}, name='{self.name}', job_type='{self.job_type}', enabled={self.enabled})>"
 
 
-class Run(Base):
+class ScheduleRun(Base):
     """Run model for job execution history with snapshots."""
 
-    __tablename__ = "job_runs"
+    __tablename__ = "job_schedule_runs"
 
     run_id = Column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
     job_type = Column(Text, nullable=False)
@@ -81,8 +84,8 @@ class Run(Base):
     enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
-    job_snapshot = Column(JSONB, nullable=True)
-    result = Column(JSONB, nullable=True)
+    job_snapshot = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
+    result = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
     error = Column(Text, nullable=True)
     worker_id = Column(String(255), nullable=True)
 
@@ -141,7 +144,7 @@ class ScheduleResponse(BaseModel):
         from_attributes = True
 
 
-class RunCreate(BaseModel):
+class ScheduleRunCreate(BaseModel):
     """Pydantic model for creating a run."""
     job_type: JobType
     job_id: Optional[int] = None
@@ -149,7 +152,7 @@ class RunCreate(BaseModel):
     job_snapshot: Dict[str, Any] = Field(default_factory=dict)
 
 
-class RunUpdate(BaseModel):
+class ScheduleRunUpdate(BaseModel):
     """Pydantic model for updating a run."""
     status: Optional[RunStatus] = None
     started_at: Optional[datetime] = None
@@ -159,7 +162,7 @@ class RunUpdate(BaseModel):
     worker_id: Optional[str] = None
 
 
-class RunResponse(BaseModel):
+class ScheduleRunResponse(BaseModel):
     """Pydantic model for run API responses."""
     run_id: UUID
     job_type: JobType

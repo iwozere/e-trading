@@ -24,11 +24,13 @@ class AlertMonitor:
     Uses HTTP API to communicate with the bot microservice.
     """
 
-    def __init__(self, api_client: BotHttpApiClient = None):
+    def __init__(self, api_client: BotHttpApiClient = None, telegram_service=None):
         self.api_client = api_client
         self.running = False
         self.evaluator = AlertLogicEvaluator()
-        self.rearm_evaluator = ReArmAlertEvaluator()
+        # Inject telegram_service into ReArmAlertEvaluator for service layer usage
+        self.telegram_service = telegram_service or db
+        self.rearm_evaluator = ReArmAlertEvaluator(telegram_service=self.telegram_service)
 
     async def start(self):
         """Start the alert monitoring loop."""
@@ -54,15 +56,23 @@ class AlertMonitor:
     async def check_alerts(self):
         """Check all active alerts and trigger notifications if conditions are met."""
         try:
-            db.init_db()
-
-            # Get all active alerts using the new function
-            alerts = db.get_active_alerts()
+            # Get all active alerts using the service layer with error handling
+            start_time = time.time()
+            try:
+                _logger.debug("Retrieving active alerts from telegram service")
+                alerts = self.telegram_service.list_active_alerts()
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                _logger.debug("Retrieved %d active alerts from service (took %dms)", len(alerts) if alerts else 0, elapsed_ms)
+            except Exception as e:
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                _logger.error("Failed to retrieve active alerts from service (took %dms): %s", elapsed_ms, e)
+                return  # Skip this check cycle if we can't get alerts
 
             if not alerts:
+                _logger.debug("No active alerts to check")
                 return
 
-            _logger.debug("Checking %d active alerts", len(alerts))
+            _logger.info("Checking %d active alerts", len(alerts))
 
             for alert in alerts:
                 await self.check_single_alert(alert)
@@ -92,10 +102,10 @@ class AlertMonitor:
                 # Use re-arm evaluator
                 triggered, evaluation_details = self.rearm_evaluator.evaluate_alert(alert, current_price)
 
-                # Update alert state based on evaluation
-                updates = self.rearm_evaluator.update_alert_state(alert_id, evaluation_details, current_price)
-                if updates:
-                    db.update_alert(alert_id, **updates)
+                # Update alert state using service layer (ReArmAlertEvaluator now handles this internally)
+                success = self.rearm_evaluator.update_alert_state(alert_id, evaluation_details, current_price)
+                if not success:
+                    self._logger.warning("Failed to update alert state for alert %d", alert_id)
 
                 if triggered:
                     await self.trigger_rearm_alert(alert, evaluation_details)
@@ -130,9 +140,12 @@ class AlertMonitor:
             alert_type = alert.get("alert_type", "price")
             alert_action = alert.get("alert_action", "notify")
 
-            # Get user info for email notification
-            user_status = db.get_user_status(user_id)
+            # Get user info for email notification using service layer
+            _logger.debug("Retrieving user status for alert notification: user_id=%s, alert_id=%s", user_id, alert_id)
+            user_status = self.telegram_service.get_user_status(str(user_id))
             user_email = user_status.get("email") if user_status and user_status.get("verified") else None
+            _logger.debug("User status retrieved for alert: user_id=%s, verified=%s, has_email=%s",
+                         user_id, user_status.get("verified") if user_status else False, bool(user_email))
 
             # Prepare notification message based on alert type
             if alert_type == "price":
@@ -158,8 +171,11 @@ class AlertMonitor:
             if user_email:
                 await self._send_email_alert(user_email, alert, evaluation_details, title)
 
-            # Deactivate the alert (one-time trigger)
-            db.update_alert(alert_id, active=False)
+            # Deactivate the alert (one-time trigger) using service layer with error handling
+            try:
+                self.telegram_service.update_alert(alert_id, active=False)
+            except Exception as e:
+                _logger.error("Failed to deactivate alert %d: %s", alert_id, e)
 
         except Exception as e:
             _logger.exception("Error triggering alert %s: ", alert.get("id"))
@@ -295,9 +311,9 @@ class AlertMonitor:
     async def _notify_admin_of_error(self, alert: Dict[str, Any], error_message: str):
         """Send error notification to admin(s)."""
         try:
-            # Get all admin users
+            # Get all admin users using service layer
             admin_users = []
-            all_users = db.list_users()
+            all_users = self.telegram_service.list_users()
             for user in all_users:
                 if user.get("is_admin"):
                     admin_users.append(user["telegram_user_id"])
@@ -405,9 +421,12 @@ class AlertMonitor:
             message = self.rearm_evaluator.format_notification_message(config, evaluation_details)
             title = f"🚨 Price Alert: {ticker}"
 
-            # Get user info for email notification
-            user_status = db.get_user_status(user_id)
+            # Get user info for email notification using service layer
+            _logger.debug("Retrieving user status for rearm alert notification: user_id=%s, alert_id=%s", user_id, alert_id)
+            user_status = self.telegram_service.get_user_status(str(user_id))
             user_email = user_status.get("email") if user_status and user_status.get("verified") else None
+            _logger.debug("User status retrieved for rearm alert: user_id=%s, verified=%s, has_email=%s",
+                         user_id, user_status.get("verified") if user_status else False, bool(user_email))
 
             # Send Telegram notification
             success = await send_notification_via_api(
@@ -435,8 +454,8 @@ async def main():
         # Create HTTP API client
         api_client = BotHttpApiClient()
 
-        # Create and start alert monitor
-        monitor = AlertMonitor(api_client)
+        # Create and start alert monitor with service layer dependency
+        monitor = AlertMonitor(api_client, telegram_service=db)
         await monitor.start()
 
     except KeyboardInterrupt:

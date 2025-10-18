@@ -13,6 +13,7 @@ from src.data.db.services import telegram_service as db
 from src.telegram.screener.business_logic import analyze_ticker_business
 from src.common.ticker_analyzer import format_ticker_report
 from src.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
+from src.indicators.service import IndicatorService
 
 from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger(__name__)
@@ -27,6 +28,7 @@ class ScheduleProcessor:
     def __init__(self, api_client: BotHttpApiClient = None):
         self.api_client = api_client
         self.running = False
+        self.indicator_service = IndicatorService()
 
     async def start(self):
         """Start the schedule processing loop."""
@@ -60,12 +62,16 @@ class ScheduleProcessor:
             current_date = current_time.date()
 
             # Get all active schedules using the new database service
+            start_time = time.time()
+            _logger.debug("Retrieving active schedules from telegram service")
             schedules = db.get_active_schedules()
+            elapsed_ms = int((time.time() - start_time) * 1000)
 
             if not schedules:
+                _logger.debug("No active schedules to process (took %dms)", elapsed_ms)
                 return
 
-            _logger.debug("Checking %d active schedules at %s", len(schedules), current_time_str)
+            _logger.info("Retrieved %d active schedules at %s (took %dms)", len(schedules), current_time_str, elapsed_ms)
 
             for schedule in schedules:
                 await self.check_single_schedule(schedule, current_time_str, current_date)
@@ -191,7 +197,7 @@ class ScheduleProcessor:
 
             # Run enhanced screener
             from src.telegram.screener.enhanced_screener import EnhancedScreener
-            screener = EnhancedScreener()
+            screener = EnhancedScreener(indicator_service=self.indicator_service)
             report = await screener.run_enhanced_screener(screener_config)
 
             if report.error:
@@ -223,8 +229,7 @@ class ScheduleProcessor:
                     _logger.exception("Error sending enhanced screener email for schedule %s", schedule_id)
 
             # Format report for Telegram
-            from src.telegram.screener.enhanced_screener import format_enhanced_telegram_message
-            message = format_enhanced_telegram_message(report, screener_config)
+            message = screener.format_enhanced_telegram_message(report, screener_config)
 
             # Send via HTTP API
             if self.api_client:
@@ -386,8 +391,8 @@ async def execute_screener_schedule(self, schedule: Dict[str, Any]):
             # Import screener based on type
             if screener_type == "fundamental":
                 from src.telegram.screener.fundamental_screener import FundamentalScreener
-                screener = FundamentalScreener()
-                report = screener.run_screener(list_type)
+                screener = FundamentalScreener(indicator_service=self.indicator_service)
+                report = await screener.run_screener(list_type)
             else:
                 _logger.error("Unsupported screener type %s for schedule %s", screener_type, schedule_id)
                 return
@@ -421,8 +426,7 @@ async def execute_screener_schedule(self, schedule: Dict[str, Any]):
                     _logger.exception("Error sending screener email for schedule %s", schedule_id)
 
             # Format screener report for Telegram
-            from src.telegram.screener.enhanced_screener import format_enhanced_telegram_message
-            message = format_enhanced_telegram_message(report)
+            message = screener.format_telegram_message(report)
 
             # Send via HTTP API
             if self.api_client:

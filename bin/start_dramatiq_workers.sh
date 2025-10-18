@@ -31,3 +31,4 @@ dramatiq src.backend.workers.report_worker src.backend.workers.screener_worker \
 
 echo "Dramatiq workers started successfully"
 
+

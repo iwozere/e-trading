@@ -17,21 +17,209 @@ from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PAS
 from src.telegram.screener.notifications import (
     process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_screener_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
 )
-from src.data.db.services import telegram_service as db
+from src.telegram.screener import business_logic
+
+# Service layer imports
+from src.data.db.services import telegram_service
+from src.indicators.service import IndicatorService
 
 # Configure logging
 from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger("telegram_screener_bot")
+
+# Global variables
+notification_manager = None
 
 # HTTP API support
 from aiohttp import web
 import json
 from typing import Dict, Any, Optional
 
+# Service initialization and health check functions
+async def initialize_services() -> bool:
+    """
+    Initialize telegram_service and indicator_service instances.
+
+    Returns:
+        bool: True if all services initialized successfully, False otherwise
+    """
+    global telegram_service_instance, indicator_service_instance
+
+    try:
+        _logger.info("Initializing service layer...")
+
+        # Initialize telegram service (it's a module with functions, not a class)
+        try:
+            telegram_service_instance = telegram_service
+
+            # Validate telegram service has required methods
+            required_methods = ['get_user_status', 'set_user_limit', 'add_alert', 'list_alerts']
+            for method in required_methods:
+                if not hasattr(telegram_service_instance, method):
+                    raise RuntimeError(f"Telegram service missing required method: {method}")
+
+            _logger.info("Telegram service initialized and validated successfully")
+        except Exception as e:
+            _logger.error("Failed to initialize telegram service: %s", e)
+            return False
+
+        # Initialize indicator service with default configuration and enhanced error handling
+        try:
+            indicator_service_instance = IndicatorService()
+
+            # Validate indicator service initialization
+            if not hasattr(indicator_service_instance, 'compute_for_ticker'):
+                raise RuntimeError("IndicatorService missing required method: compute_for_ticker")
+
+            # Test that adapters are available
+            if hasattr(indicator_service_instance, 'adapters') and not indicator_service_instance.adapters:
+                _logger.warning("IndicatorService has no adapters available - some functionality may be limited")
+
+            _logger.info("Indicator service initialized and validated successfully")
+        except Exception as e:
+            _logger.error("Failed to initialize indicator service: %s", e)
+            # For now, continue without indicator service as some commands don't require it
+            indicator_service_instance = None
+            _logger.warning("Continuing without IndicatorService - indicator-based commands will be limited")
+
+        # Set service instances in business logic layer with enhanced error handling
+        try:
+            business_logic.set_service_instances(telegram_service_instance, indicator_service_instance)
+            _logger.info("Service instances set in business logic layer successfully")
+        except Exception as e:
+            _logger.error("Failed to set service instances in business logic layer: %s", e)
+            return False
+
+        # Perform health checks with enhanced error reporting
+        try:
+            if await perform_service_health_checks():
+                _logger.info("All services initialized and health checks passed")
+                return True
+            else:
+                _logger.error("Service health checks failed - some functionality may be limited")
+                # Return True anyway if telegram service is working, as basic functionality can still work
+                if telegram_service_instance:
+                    _logger.info("Continuing with limited functionality - telegram service is available")
+                    return True
+                else:
+                    _logger.error("Critical services failed - cannot start bot")
+                    return False
+        except Exception as health_error:
+            _logger.error("Error during health checks: %s", health_error)
+            # If health checks fail but services are initialized, continue with limited functionality
+            if telegram_service_instance:
+                _logger.warning("Health checks failed but telegram service available - continuing with limited functionality")
+                return True
+            else:
+                return False
+
+    except Exception as e:
+        _logger.exception("Unexpected error during service initialization: %s", e)
+        return False
+
+async def perform_service_health_checks() -> bool:
+    """
+    Perform health checks on all initialized services.
+
+    Returns:
+        bool: True if all health checks pass, False otherwise
+    """
+    try:
+        _logger.info("Performing service health checks...")
+
+        # Health check for telegram service
+        if not await check_telegram_service_health():
+            _logger.error("Telegram service health check failed")
+            return False
+
+        # Health check for indicator service
+        if not await check_indicator_service_health():
+            _logger.error("Indicator service health check failed")
+            return False
+
+        _logger.info("All service health checks passed")
+        return True
+
+    except Exception as e:
+        _logger.exception("Error during service health checks: %s", e)
+        return False
+
+async def check_telegram_service_health() -> bool:
+    """
+    Check telegram service health by testing basic operations.
+
+    Returns:
+        bool: True if service is healthy, False otherwise
+    """
+    try:
+        # Test basic service functionality
+        # Try to get a setting (this tests database connectivity)
+        test_setting = telegram_service_instance.get_setting("health_check_test")
+        _logger.debug("Telegram service health check: setting retrieval successful")
+
+        # Test user operations (this tests core functionality)
+        # This should not fail even if user doesn't exist
+        test_user_status = telegram_service_instance.get_user_status("health_check_test_user")
+        _logger.debug("Telegram service health check: user status check successful")
+
+        return True
+
+    except Exception as e:
+        _logger.error("Telegram service health check failed: %s", e)
+        return False
+
+async def check_indicator_service_health() -> bool:
+    """
+    Check indicator service health by testing basic operations.
+
+    Returns:
+        bool: True if service is healthy, False otherwise
+    """
+    try:
+        # Test that the service can be instantiated and has required adapters
+        if not hasattr(indicator_service_instance, 'adapters'):
+            _logger.error("Indicator service missing adapters attribute")
+            return False
+
+        # Check that required adapters are available
+        required_adapters = ["ta-lib", "pandas-ta", "fundamentals"]
+        for adapter_name in required_adapters:
+            if adapter_name not in indicator_service_instance.adapters:
+                _logger.error("Indicator service missing required adapter: %s", adapter_name)
+                return False
+
+        _logger.debug("Indicator service health check: all required adapters available")
+
+        # Test basic functionality - check if service can handle indicator metadata
+        from src.indicators.registry import INDICATOR_META
+        if not INDICATOR_META:
+            _logger.error("Indicator service health check: no indicator metadata available")
+            return False
+
+        _logger.debug("Indicator service health check: indicator metadata available")
+        return True
+
+    except Exception as e:
+        _logger.error("Indicator service health check failed: %s", e)
+        return False
+
+def get_service_instances() -> tuple:
+    """
+    Get the initialized service instances.
+
+    Returns:
+        tuple: (telegram_service_instance, indicator_service_instance)
+    """
+    return telegram_service_instance, indicator_service_instance
+
 
 # Initialize bot and dispatcher
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
+
+# Global service instances
+telegram_service_instance = None
+indicator_service_instance = None
 
 # HTTP API routes
 async def api_send_message(request: web.Request) -> web.Response:
@@ -83,8 +271,15 @@ async def api_broadcast(request: web.Request) -> web.Response:
                 'error': 'Missing message'
             }, status=400)
 
-        # Get all registered users
-        users = db.list_users()
+        # Get all registered users using service layer
+        telegram_svc, _ = get_service_instances()
+        if not telegram_svc:
+            return web.json_response({
+                'success': False,
+                'error': 'Service not available'
+            }, status=503)
+
+        users = telegram_svc.list_users()
         if not users:
             return web.json_response({
                 'success': False,
@@ -129,13 +324,38 @@ async def api_status(request: web.Request) -> web.Response:
         # Get notification manager stats
         stats = notification_manager.stats if notification_manager else {}
 
-        # Get user count
-        users = db.list_users()
-        user_count = len(users)
+        # Get user count using service layer
+        telegram_svc, _ = get_service_instances()
+        if telegram_svc:
+            users = telegram_svc.list_users()
+            user_count = len(users)
+        else:
+            user_count = 0
+
+        # Check service health
+        service_health = await perform_service_health_checks()
+
+        # Get service instances status
+        telegram_svc, indicator_svc = get_service_instances()
+
+        service_status = {
+            'telegram_service': {
+                'initialized': telegram_svc is not None,
+                'healthy': service_health
+            },
+            'indicator_service': {
+                'initialized': indicator_svc is not None,
+                'healthy': service_health,
+                'adapters': list(indicator_svc.adapters.keys()) if indicator_svc else []
+            }
+        }
+
+        overall_status = 'healthy' if service_health else 'degraded'
 
         return web.json_response({
             'success': True,
-            'status': 'healthy',
+            'status': overall_status,
+            'services': service_status,
             'notification_stats': stats,
             'user_count': user_count,
             'queue_size': notification_manager.notification_queue.qsize() if notification_manager else 0
@@ -145,6 +365,7 @@ async def api_status(request: web.Request) -> web.Response:
         _logger.exception("Error in api_status: ")
         return web.json_response({
             'success': False,
+            'status': 'error',
             'error': str(e)
         }, status=500)
 
@@ -251,34 +472,86 @@ def generate_code():
     return f"{random.randint(100000, 999999):06d}"
 
 async def audit_command_wrapper(message: Message, command_func, *args, **kwargs):
-    """Wrapper function to audit all commands."""
+    """
+    Wrapper function to audit all commands with service layer error handling.
+
+    This wrapper implements the dependency injection pattern by:
+    1. Ensuring service instances are available before processing commands
+    2. Auditing all commands using the telegram_service layer
+    3. Handling service layer errors gracefully
+    4. Providing consistent service access to command handlers through business logic
+
+    Command handlers access services through:
+    - business_logic.handle_command() which uses global service instances
+    - business_logic.get_service_instances() for direct service access
+
+    Service instances are set during bot initialization via:
+    - business_logic.set_service_instances(telegram_service, indicator_service)
+    """
     start_time = time.time()
     telegram_user_id = str(message.from_user.id)
     command = message.text.split()[0] if message.text else ""
     full_message = message.text
 
-    # Check if user is registered
-    user_status = db.get_user_status(telegram_user_id)
-    is_registered_user = user_status is not None
-    user_email = user_status.get('email') if user_status else None
+    # Check service health before processing command with enhanced error handling
+    try:
+        telegram_svc, indicator_svc = get_service_instances()
+        if not telegram_svc:
+            _logger.error("Telegram service not initialized for command %s from user %s", command, telegram_user_id)
+            try:
+                await message.answer("Service temporarily unavailable. Please try again later.")
+            except Exception as msg_error:
+                _logger.error("Failed to send error message to user %s: %s", telegram_user_id, msg_error)
+            return
+    except Exception as service_error:
+        _logger.error("Error getting service instances for command %s from user %s: %s",
+                     command, telegram_user_id, service_error)
+        try:
+            await message.answer("Service temporarily unavailable. Please try again later.")
+        except Exception as msg_error:
+            _logger.error("Failed to send error message to user %s: %s", telegram_user_id, msg_error)
+        return
 
     try:
-        # Execute the command
+        # Check if user is registered using service layer with enhanced error handling
+        try:
+            user_status = telegram_svc.get_user_status(telegram_user_id)
+            is_registered_user = user_status is not None
+            user_email = user_status.get('email') if user_status else None
+        except Exception as user_status_error:
+            _logger.warning("Failed to get user status for %s during command %s: %s",
+                          telegram_user_id, command, user_status_error)
+            # Continue with unknown user status
+            user_status = None
+            is_registered_user = False
+            user_email = None
+
+        # Execute the command - command handlers will use service instances through business logic
         result = await command_func(message, *args, **kwargs)
 
         # Calculate response time
         response_time_ms = int((time.time() - start_time) * 1000)
 
-        # Log successful command
-        db.log_command_audit(
-            telegram_user_id=telegram_user_id,
-            command=command,
-            full_message=full_message,
-            is_registered_user=is_registered_user,
-            user_email=user_email,
-            success=True,
-            response_time_ms=response_time_ms
-        )
+        # Log successful command using service layer with enhanced context
+        try:
+            _logger.info("Command executed successfully: user=%s, command=%s, response_time=%dms, registered=%s",
+                        telegram_user_id, command, response_time_ms, is_registered_user)
+
+            telegram_svc.log_command_audit(
+                telegram_user_id=telegram_user_id,
+                command=command,
+                full_message=full_message,
+                is_registered_user=is_registered_user,
+                user_email=user_email,
+                success=True,
+                response_time_ms=response_time_ms
+            )
+
+            _logger.debug("Command audit logged successfully for user %s, command %s", telegram_user_id, command)
+
+        except Exception as audit_error:
+            _logger.warning("Failed to log successful command audit for user %s, command %s: %s",
+                          telegram_user_id, command, audit_error)
 
         return result
 
@@ -286,17 +559,38 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
         # Calculate response time
         response_time_ms = int((time.time() - start_time) * 1000)
 
-        # Log failed command
-        db.log_command_audit(
-            telegram_user_id=telegram_user_id,
-            command=command,
-            full_message=full_message,
-            is_registered_user=is_registered_user,
-            user_email=user_email,
-            success=False,
-            error_message=str(e),
-            response_time_ms=response_time_ms
-        )
+        # Try to get user status for error logging with enhanced error handling
+        try:
+            user_status = telegram_svc.get_user_status(telegram_user_id)
+            is_registered_user = user_status is not None
+            user_email = user_status.get('email') if user_status else None
+        except Exception as user_error:
+            _logger.warning("Failed to get user status for error logging (user %s, command %s): %s",
+                          telegram_user_id, command, user_error)
+            is_registered_user = False
+            user_email = None
+
+        # Log failed command using service layer with enhanced context
+        try:
+            _logger.error("Command failed: user=%s, command=%s, response_time=%dms, registered=%s, error=%s",
+                         telegram_user_id, command, response_time_ms, is_registered_user, str(e))
+
+            telegram_svc.log_command_audit(
+                telegram_user_id=telegram_user_id,
+                command=command,
+                full_message=full_message,
+                is_registered_user=is_registered_user,
+                user_email=user_email,
+                success=False,
+                error_message=str(e),
+                response_time_ms=response_time_ms
+            )
+
+            _logger.debug("Command failure audit logged successfully for user %s, command %s", telegram_user_id, command)
+
+        except Exception as audit_error:
+            _logger.warning("Failed to log failed command audit for user %s, command %s: %s",
+                          telegram_user_id, command, audit_error)
 
         # Re-raise the exception
         raise
@@ -439,46 +733,63 @@ async def main():
         _logger.info("Bot token: %s...", TELEGRAM_BOT_TOKEN[:10])
     else:
         _logger.error("Bot token is None!")
+        return
 
     # Set logging context so that notification manager logs go to telegram bot log file
     set_logging_context("telegram_screener_bot")
 
+    # Initialize service layer first
+    _logger.info("Initializing service layer...")
+    if not await initialize_services():
+        _logger.error("Failed to initialize services. Bot cannot start.")
+        return
+
     # Initialize notification manager with a dummy chat ID for Telegram channel creation
     # The actual chat ID will be provided dynamically in each message
     _logger.info("Initializing notification manager...")
-    notification_manager = await initialize_notification_manager(
-        telegram_token=TELEGRAM_BOT_TOKEN,
-        telegram_chat_id="0",  # Dummy chat ID - actual chat ID provided dynamically
-        email_api_key=SMTP_PASSWORD,
-        email_sender=SMTP_USER,
-        email_receiver=SMTP_USER  # or dummy
-    )
+    try:
+        notification_manager = await initialize_notification_manager(
+            telegram_token=TELEGRAM_BOT_TOKEN,
+            telegram_chat_id="0",  # Dummy chat ID - actual chat ID provided dynamically
+            email_api_key=SMTP_PASSWORD,
+            email_sender=SMTP_USER,
+            email_receiver=SMTP_USER  # or dummy
+        )
 
-    # Disable batching for immediate processing in bot context
-    notification_manager.batch_size = 1
-    notification_manager.batch_timeout = 0.1
-    _logger.info("Notification manager initialized successfully")
+        # Disable batching for immediate processing in bot context
+        notification_manager.batch_size = 1
+        notification_manager.batch_timeout = 0.1
+        _logger.info("Notification manager initialized successfully")
+
+    except Exception as e:
+        _logger.exception("Failed to initialize notification manager: %s", e)
+        return
 
     _logger.info("Starting Telegram Screener Bot with HTTP API...")
 
     # Start both bot polling and HTTP API server
-    bot_runner = web.AppRunner(api_app)
-    await bot_runner.setup()
+    try:
+        bot_runner = web.AppRunner(api_app)
+        await bot_runner.setup()
 
-    # Start HTTP API server on port 8080
-    api_site = web.TCPSite(bot_runner, 'localhost', 8080)
-    await api_site.start()
+        # Start HTTP API server on port 8080
+        api_site = web.TCPSite(bot_runner, 'localhost', 8080)
+        await api_site.start()
 
-    _logger.info("HTTP API server started on http://localhost:8080")
-    _logger.info("Available endpoints:")
-    _logger.info("  POST /api/send_message - Send message to specific user")
-    _logger.info("  POST /api/broadcast - Broadcast message to all users")
-    _logger.info("  GET  /api/status - Health check and status")
+        _logger.info("HTTP API server started on http://localhost:8080")
+        _logger.info("Available endpoints:")
+        _logger.info("  POST /api/send_message - Send message to specific user")
+        _logger.info("  POST /api/broadcast - Broadcast message to all users")
+        _logger.info("  GET  /api/status - Health check and status")
 
-    # Start bot polling
-    _logger.info("Starting bot polling...")
-    await dp.start_polling(bot)
-    _logger.info("Bot polling started successfully")
+        # Start bot polling
+        _logger.info("Starting bot polling...")
+        await dp.start_polling(bot)
+        _logger.info("Bot polling started successfully")
+
+    except Exception as e:
+        _logger.exception("Failed to start bot or HTTP API server: %s", e)
+        return
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -20,6 +20,8 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from src.model.telegram_bot import Fundamentals, ScreenerResult, DCFResult, ScreenerReport
+from src.indicators.service import IndicatorService
+from src.indicators.models import TickerIndicatorsRequest
 from src.util.tickers_list import (
     get_us_small_cap_tickers,
     get_us_medium_cap_tickers,
@@ -34,8 +36,9 @@ _logger = setup_logger(__name__)
 class FundamentalScreener:
     """Core fundamental screener for undervalued stocks."""
 
-    def __init__(self):
+    def __init__(self, indicator_service: IndicatorService = None):
         """Initialize the fundamental screener."""
+        self.indicator_service = indicator_service or IndicatorService()
         self.screening_thresholds = {
             # Valuation ratios
             'pe_ratio': {'max': 15, 'weight': 0.2},
@@ -91,19 +94,43 @@ class FundamentalScreener:
             _logger.error("Error loading ticker list %s: %s", list_type, e)
             return []
 
-    def collect_fundamentals(self, tickers: List[str]) -> Dict[str, Fundamentals]:
-        """Collect fundamental data for a list of tickers sequentially."""
+    async def collect_fundamentals(self, tickers: List[str]) -> Dict[str, Fundamentals]:
+        """Collect fundamental data for a list of tickers using IndicatorService."""
         fundamentals_data = {}
         total_tickers = len(tickers)
 
-        _logger.info("Starting fundamental data collection for %d tickers", total_tickers)
+        _logger.info("Starting fundamental data collection for %d tickers using IndicatorService", total_tickers)
+
+        # Define fundamental indicators we need (using registry names)
+        fundamental_indicators = ["pe", "pb", "ps", "roe", "roa", "de_ratio", "current_ratio", "quick_ratio",
+                                "dividend_yield", "market_cap", "revenue_growth", "net_income_growth",
+                                "free_cash_flow", "operating_margin", "profit_margin"]
 
         for i, ticker in enumerate(tickers, 1):
             try:
                 _logger.info("Processing %s (%d/%d)", ticker, i, total_tickers)
 
-                # Get fundamental data using yfinance
-                fundamentals = self._get_ticker_fundamentals(ticker)
+                # Try to get fundamental data using IndicatorService first
+                fundamentals = None
+                try:
+                    request = TickerIndicatorsRequest(
+                        ticker=ticker,
+                        timeframe="1d",
+                        period="1y",
+                        indicators=fundamental_indicators
+                    )
+
+                    result_set = await self.indicator_service.compute_for_ticker(request)
+                    fundamentals = self._convert_indicator_result_to_fundamentals(ticker, result_set)
+
+                except Exception as service_error:
+                    _logger.warning("IndicatorService failed for %s: %s, falling back to yfinance", ticker, service_error)
+                    fundamentals = None
+
+                # Fallback to yfinance if IndicatorService fails or returns insufficient data
+                if not fundamentals or not self._validate_fundamental_data(fundamentals):
+                    _logger.info("Falling back to yfinance for %s", ticker)
+                    fundamentals = self._get_ticker_fundamentals(ticker)
 
                 if fundamentals and self._validate_fundamental_data(fundamentals):
                     fundamentals_data[ticker] = fundamentals
@@ -120,6 +147,111 @@ class FundamentalScreener:
 
         _logger.info("Fundamental data collection completed. %d/%d tickers processed successfully", len(fundamentals_data), total_tickers)
         return fundamentals_data
+
+    async def _get_fundamentals_from_service(self, ticker: str, indicators: List[str]) -> Optional[Fundamentals]:
+        """Get fundamental data using IndicatorService."""
+        try:
+            request = TickerIndicatorsRequest(
+                ticker=ticker,
+                timeframe="1d",
+                period="1y",
+                indicators=indicators
+            )
+
+            result_set = await self.indicator_service.compute_for_ticker(request)
+            return self._convert_indicator_result_to_fundamentals(ticker, result_set)
+
+        except Exception as e:
+            _logger.error("Error getting fundamentals from service for %s: %s", ticker, e)
+            return None
+
+    def _convert_indicator_result_to_fundamentals(self, ticker: str, result_set) -> Optional[Fundamentals]:
+        """Convert IndicatorResultSet to Fundamentals object."""
+        try:
+            # Extract fundamental values from result set
+            fundamental_values = {}
+
+            for name, indicator_value in result_set.fundamental.items():
+                value = indicator_value.value
+
+                # Map indicator names to Fundamentals fields
+                if name == "pe":
+                    fundamental_values['pe_ratio'] = value
+                elif name == "pb":
+                    fundamental_values['price_to_book'] = value
+                elif name == "ps":
+                    fundamental_values['price_to_sales'] = value
+                elif name == "roe":
+                    fundamental_values['return_on_equity'] = value
+                elif name == "roa":
+                    fundamental_values['return_on_assets'] = value
+                elif name == "de_ratio":
+                    fundamental_values['debt_to_equity'] = value
+                elif name == "current_ratio":
+                    fundamental_values['current_ratio'] = value
+                elif name == "quick_ratio":
+                    fundamental_values['quick_ratio'] = value
+                elif name == "dividend_yield":
+                    fundamental_values['dividend_yield'] = value
+                elif name == "market_cap":
+                    fundamental_values['market_cap'] = value
+                elif name == "revenue_growth":
+                    fundamental_values['revenue_growth'] = value
+                elif name == "net_income_growth":
+                    fundamental_values['net_income_growth'] = value
+                elif name == "free_cash_flow":
+                    fundamental_values['free_cash_flow'] = value
+                elif name == "operating_margin":
+                    fundamental_values['operating_margin'] = value
+                elif name == "profit_margin":
+                    fundamental_values['profit_margin'] = value
+
+            # Create Fundamentals object with available data
+            fundamentals = Fundamentals(
+                ticker=ticker,
+                company_name=ticker,  # Will be filled by yfinance fallback if needed
+                current_price=None,
+                market_cap=fundamental_values.get('market_cap'),
+                pe_ratio=fundamental_values.get('pe_ratio'),
+                forward_pe=None,
+                dividend_yield=fundamental_values.get('dividend_yield'),
+                earnings_per_share=None,
+                price_to_book=fundamental_values.get('price_to_book'),
+                return_on_equity=fundamental_values.get('return_on_equity'),
+                return_on_assets=fundamental_values.get('return_on_assets'),
+                debt_to_equity=fundamental_values.get('debt_to_equity'),
+                current_ratio=fundamental_values.get('current_ratio'),
+                quick_ratio=fundamental_values.get('quick_ratio'),
+                revenue=None,
+                revenue_growth=fundamental_values.get('revenue_growth'),
+                net_income=None,
+                net_income_growth=fundamental_values.get('net_income_growth'),
+                free_cash_flow=fundamental_values.get('free_cash_flow'),
+                operating_margin=fundamental_values.get('operating_margin'),
+                profit_margin=fundamental_values.get('profit_margin'),
+                beta=None,
+                sector=None,
+                industry=None,
+                country=None,
+                exchange=None,
+                currency=None,
+                shares_outstanding=None,
+                float_shares=None,
+                short_ratio=None,
+                payout_ratio=None,
+                peg_ratio=None,
+                price_to_sales=fundamental_values.get('price_to_sales'),
+                enterprise_value=None,
+                enterprise_value_to_ebitda=None,
+                data_source='IndicatorService',
+                last_updated=datetime.now().isoformat()
+            )
+
+            return fundamentals
+
+        except Exception as e:
+            _logger.error("Error converting indicator result to fundamentals for %s: %s", ticker, e)
+            return None
 
     def _get_ticker_fundamentals(self, ticker: str) -> Optional[Fundamentals]:
         """Get fundamental data for a single ticker using yfinance."""
@@ -576,7 +708,7 @@ class FundamentalScreener:
 
         return message
 
-    def run_screener(self, list_type: str, max_results: int = 10, min_score: float = 7.0) -> ScreenerReport:
+    async def run_screener(self, list_type: str, max_results: int = 10, min_score: float = 7.0) -> ScreenerReport:
         """Run the fundamental screener for the specified list type."""
         _logger.info("Starting fundamental screener for %s", list_type)
 
@@ -593,7 +725,7 @@ class FundamentalScreener:
                 )
 
             # Collect fundamental data
-            fundamentals_data = self.collect_fundamentals(tickers)
+            fundamentals_data = await self.collect_fundamentals(tickers)
 
             # Apply screening criteria
             results = self.apply_screening_criteria(fundamentals_data)
@@ -616,4 +748,4 @@ class FundamentalScreener:
 
 
 # Global screener instance
-screener = FundamentalScreener()
+screener = FundamentalScreener(indicator_service=IndicatorService())

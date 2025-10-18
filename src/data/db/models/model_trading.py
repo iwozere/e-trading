@@ -13,11 +13,12 @@ from src.data.db.core.base import Base
 
 # --- trading_bot_instances
 class BotInstance(Base):
-    __tablename__ = "trading_bot_instances"
+    __tablename__ = "trading_bots"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"), index=True)
     type: Mapped[str] = mapped_column(String(20))
-    config_file: Mapped[Optional[str]] = mapped_column(String(255))
+    config: Mapped[Optional[str]] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(20))
     started_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
     last_heartbeat: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
@@ -33,11 +34,11 @@ class BotInstance(Base):
     metrics: Mapped[list["PerformanceMetric"]] = relationship(back_populates="bot", cascade="all, delete-orphan")
 
     __table_args__ = (
-        CheckConstraint("type IN ('live','paper','optimization')", name="ck_trading_bot_instances_valid_bot_type"),
-        CheckConstraint("status IN ('running','stopped','error','completed')", name="ck_trading_bot_instances_valid_bot_status"),
-        Index("ix_trading_bot_instances_type", "type"),
-        Index("ix_trading_bot_instances_status", "status"),
-        Index("ix_trading_bot_instances_last_heartbeat", "last_heartbeat"),
+        CheckConstraint("type IN ('live','paper','optimization')", name="ck_trading_bots_valid_bot_type"),
+        CheckConstraint("status IN ('running','stopped','error','completed')", name="ck_trading_bots_valid_bot_status"),
+        Index("ix_trading_bots_type", "type"),
+        Index("ix_trading_bots_status", "status"),
+        Index("ix_trading_bots_last_heartbeat", "last_heartbeat"),
     )
 
 # --- trading_performance_metrics

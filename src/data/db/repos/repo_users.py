@@ -1,9 +1,9 @@
 # src/data/db/repo/repo_users.py
 from __future__ import annotations
 from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
-from src.data.db.models.model_users import User, AuthIdentity
+from src.data.db.models.model_users import User, AuthIdentity, VerificationCode
 
 PROVIDER_TG = "telegram"
 
@@ -126,3 +126,22 @@ class UsersRepo:
             .where(AuthIdentity.provider == PROVIDER_TG)
         ).all()
         return [ext for ext, meta in rows if ext and (meta or {}).get("is_admin") is True]
+
+# -------------------- Verification --------------------
+class VerificationRepo:
+    def __init__(self, s: Session) -> None:
+        self.s = s
+
+    def issue(self, user_id: int, *, code: str, sent_time: int) -> VerificationCode:
+        row = VerificationCode(user_id=user_id, code=code, sent_time=sent_time)
+        self.s.add(row); self.s.flush(); return row
+
+    def count_last_hour_by_user_id(self, user_id: int, now_unix: int) -> int:
+        cutoff = now_unix - 3600
+        q = select(func.count(VerificationCode.id)).where(
+            VerificationCode.user_id == user_id,
+            VerificationCode.sent_time >= cutoff,
+        )
+        return int(self.s.execute(q).scalar_one() or 0)
+
+

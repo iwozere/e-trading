@@ -33,8 +33,34 @@
   - Test foreign key relationships
   - _Requirements: 3.1, 3.2_
 
-- [ ] 2. Update telegram models to match database schema
-- [ ] 2.1 Fix TelegramFeedback model with missing columns
+- [ ] 1.4 Fix JSONB type issues in job models
+  - Change JSON type to JSONB in Schedule and Run models to match PostgreSQL
+  - Update test expectations to check for JSONB instead of JSON
+  - Ensure JSONB functionality works correctly with PostgreSQL
+  - _Requirements: 3.1, 3.3_
+
+- [ ] 2. Fix telegram service integration issues
+- [ ] 2.1 Add missing telegram_verification repository
+  - Create TelegramVerificationRepo class in repos bundle
+  - Implement required methods for verification operations
+  - Update database service to include telegram_verification repo
+  - Fix telegram service to use the new repository
+  - _Requirements: 6.1, 6.2_
+
+- [ ] 2.2 Fix telegram service jobs migration format issues
+  - Fix alert format conversion from jobs system to expected format
+  - Update schedule format conversion to handle missing attributes
+  - Ensure backward compatibility with existing API expectations
+  - Test all telegram service functions work correctly
+  - _Requirements: 6.1, 6.4_
+
+- [ ] 2.3 Fix TelegramBase import issues in tests
+  - Add missing TelegramBase import to telegram repo tests
+  - Update test setup to use correct base classes
+  - Ensure all telegram tests can run without import errors
+  - _Requirements: 7.1, 7.3_
+
+- [ ] 2.4 Fix TelegramFeedback model with missing columns
   - Add type column as String(50)
   - Add message column as Text  
   - Add created column as DateTime(timezone=True)
@@ -42,14 +68,14 @@
   - Ensure foreign key relationship is correct
   - _Requirements: 1.1, 1.4, 4.2_
 
-- [ ] 2.2 Verify and fix other telegram models
+- [ ] 2.5 Verify and fix other telegram models
   - Check TelegramBroadcastLog matches database schema
   - Verify TelegramCommandAudit has all required indexes
   - Ensure TelegramSetting uses correct primary key definition
   - Update any missing constraints or indexes
   - _Requirements: 1.1, 1.3, 4.1, 4.4_
 
-- [ ] 2.3 Write unit tests for updated telegram models
+- [ ] 2.6 Write unit tests for updated telegram models
   - Test TelegramFeedback with all columns
   - Validate constraint enforcement
   - Test model relationships

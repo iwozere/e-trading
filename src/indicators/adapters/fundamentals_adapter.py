@@ -36,31 +36,31 @@ class FundamentalsAdapter(BaseAdapter):
     def supports(self, name: str) -> bool:
         return name in self.FIELD_MAP
 
-async def compute(self, name, df, inputs, params):
-    """Async compute for fundamentals"""
-    try:
-        ticker = params.get("ticker")
-        provider = params.get("provider")
+    async def compute(self, name, df, inputs, params):
+        """Async compute for fundamentals"""
+        try:
+            ticker = params.get("ticker")
+            provider = params.get("provider")
 
-        if not ticker:
-            raise ValueError("FundamentalsAdapter requires 'ticker' in params")
+            if not ticker:
+                raise ValueError("FundamentalsAdapter requires 'ticker' in params")
 
-        # Fetch fundamentals asynchronously
-        fund_data = await get_fundamentals_unified(ticker, provider)
+            # Fetch fundamentals asynchronously
+            fund_data = await get_fundamentals_unified(ticker, provider)
 
-        field = self.FIELD_MAP[name]
-        value = getattr(fund_data, field, None)
+            field = self.FIELD_MAP[name]
+            value = getattr(fund_data, field, None)
 
-        # Return as broadcasted series if df provided
-        if df is not None and len(df) > 0:
-            return {"value": pd.Series(value, index=df.index, name=name)}
-        else:
-            return {"value": pd.Series([value], name=name)}
+            # Return as broadcasted series if df provided
+            if df is not None and len(df) > 0:
+                return {"value": pd.Series(value, index=df.index, name=name)}
+            else:
+                return {"value": pd.Series([value], name=name)}
 
-    except Exception as e:
-        _logger.warning(f"Error fetching fundamental {name} for {params.get('ticker')}: {e}")
-        # Return NaN series
-        if df is not None and len(df) > 0:
-            return {"value": pd.Series(index=df.index, dtype=float, name=name)}
-        else:
-            return {"value": pd.Series([None], name=name)}
+        except Exception as e:
+            _logger.warning(f"Error fetching fundamental {name} for {params.get('ticker')}: {e}")
+            # Return NaN series
+            if df is not None and len(df) > 0:
+                return {"value": pd.Series(index=df.index, dtype=float, name=name)}
+            else:
+                return {"value": pd.Series([None], name=name)}

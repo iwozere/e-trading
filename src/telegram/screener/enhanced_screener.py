@@ -29,7 +29,8 @@ from src.util.tickers_list import (
 # Use optimized batch fundamentals download for maximum performance
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.common import get_ohlcv
-from src.common.technicals import calculate_technicals_unified
+from src.indicators.service import IndicatorService
+from src.indicators.models import TickerIndicatorsRequest
 from src.telegram.screener.screener_config_parser import (ScreenerConfig, FundamentalCriteria, TechnicalCriteria)
 from src.notification.logger import setup_logger
 
@@ -42,9 +43,10 @@ class EnhancedScreener:
     based on JSON configuration.
     """
 
-    def __init__(self):
+    def __init__(self, indicator_service: IndicatorService = None):
         """Initialize the enhanced screener."""
         self.risk_free_rate = 0.04  # 4% risk-free rate (can be made configurable)
+        self.indicator_service = indicator_service or IndicatorService()
 
     def load_ticker_list(self, list_type: str) -> List[str]:
         """Load ticker list based on the specified type."""
@@ -263,74 +265,121 @@ class EnhancedScreener:
             return {}
 
     async def collect_technical_data(self, tickers: List[str], period: str, interval: str, provider: str) -> Dict[str, Dict[str, Any]]:
-        """Collect technical data for a list of tickers using batch operations."""
+        """Collect technical data for a list of tickers using IndicatorService."""
         if not tickers:
             return {}
 
-        _logger.info("Starting technical data collection for %d tickers", len(tickers))
+        _logger.info("Starting technical data collection for %d tickers using IndicatorService", len(tickers))
 
-        try:
-            downloader = YahooDataDownloader()
+        # Define the technical indicators we need for screening (using registry names)
+        indicators = ["rsi", "macd", "sma", "bbands", "stoch", "adx", "obv"]
 
-            # Calculate date range
-            from src.common import analyze_period_interval
-            start_date, end_date = analyze_period_interval(period, interval)
+        technical_data = {}
+        for ticker in tickers:
+            try:
+                _logger.debug("Processing technical indicators for %s", ticker)
 
-            # Download batch OHLCV data
-            ohlcv_data = downloader.get_ohlcv_batch(tickers, interval, start_date, end_date)
+                # Create request for IndicatorService
+                request = TickerIndicatorsRequest(
+                    ticker=ticker,
+                    timeframe=interval,
+                    period=period,
+                    provider=provider,
+                    indicators=indicators
+                )
 
-            # Calculate technical indicators for each ticker
-            technical_data = {}
-            for ticker, df in ohlcv_data.items():
+                # Get indicators from service with error handling
                 try:
-                    if not df.empty:
-                        # Calculate technical indicators using unified service
-                        technicals = await calculate_technicals_unified(ticker, period, interval, provider)
-                        technical_data[ticker] = technicals
-                        _logger.debug("Calculated technical indicators for %s", ticker)
-                    else:
-                        _logger.warning("No OHLCV data for %s, skipping technical analysis", ticker)
+                    result_set = await self.indicator_service.compute_for_ticker(request)
+                except ValueError as e:
+                    _logger.warning("Validation error calculating indicators for %s: %s", ticker, e)
+                    continue
+                except (RuntimeError, ConnectionError, TimeoutError) as e:
+                    _logger.error("Service error calculating indicators for %s: %s", ticker, e)
+                    continue
                 except Exception as e:
-                    _logger.exception("Error calculating technical indicators for %s: %s", ticker, e)
+                    _logger.exception("Unexpected error calculating indicators for %s: %s", ticker, e)
                     continue
 
-            _logger.info("Technical data collection completed. %d/%d tickers processed successfully",
-                        len(technical_data), len(tickers))
-            return technical_data
+                # Convert IndicatorResultSet to the expected format for backward compatibility
+                technical_indicators = self._convert_indicator_result_to_technicals(result_set)
+                technical_data[ticker] = technical_indicators
 
-        except Exception as e:
-            _logger.error("Error in batch technical collection: %s", str(e))
-            _logger.info("Falling back to individual technical collection")
-            return await self._collect_technical_data_individual(tickers, period, interval, provider)
-
-    async def _collect_technical_data_individual(self, tickers: List[str], period: str, interval: str, provider: str) -> Dict[str, Dict[str, Any]]:
-        """Fallback method for individual technical data collection."""
-        technical_data = {}
-        total_tickers = len(tickers)
-
-        for i, ticker in enumerate(tickers, 1):
-            try:
-                _logger.info("Processing %s (%d/%d)", ticker, i, total_tickers)
-
-                # Get OHLCV data
-                df = get_ohlcv(ticker, interval, period, provider)
-
-                if not df.empty:
-                    # Calculate technical indicators using unified service
-                    technicals = await calculate_technicals_unified(ticker, period, interval, provider)
-                    technical_data[ticker] = technicals
-                    _logger.debug("Calculated technical indicators for %s", ticker)
-                else:
-                    _logger.warning("No OHLCV data for %s, skipping technical analysis", ticker)
-
-                # Rate limiting - sleep between requests
-                time.sleep(0.1)  # 100ms delay between requests
+                _logger.debug("Successfully calculated technical indicators for %s", ticker)
 
             except Exception as e:
-                _logger.error("Error collecting technical data for %s: %s", ticker, e)
+                _logger.error("Error calculating technical indicators for %s: %s", ticker, e)
                 continue
 
+        _logger.info("Technical data collection completed. %d/%d tickers processed successfully",
+                    len(technical_data), len(tickers))
         return technical_data
+
+    def _convert_indicator_result_to_technicals(self, result_set) -> Dict[str, Any]:
+        """Convert IndicatorResultSet to the format expected by screener logic."""
+        from src.model.telegram_bot import Technicals
+
+        # Extract technical indicator values
+        technical_values = {}
+
+        # Map IndicatorService results to expected field names
+        for name, indicator_value in result_set.technical.items():
+            value = indicator_value.value
+
+            # Map indicator names to expected format
+            if name == "rsi":
+                technical_values['rsi'] = value
+            elif name == "macd":
+                technical_values['macd'] = value
+            elif name == "sma":
+                technical_values['sma'] = value
+            elif name == "bbands_upper":
+                technical_values['bb_upper'] = value
+            elif name == "bbands_middle":
+                technical_values['bb_middle'] = value
+            elif name == "bbands_lower":
+                technical_values['bb_lower'] = value
+            elif name == "stoch_k":
+                technical_values['stoch_k'] = value
+            elif name == "stoch_d":
+                technical_values['stoch_d'] = value
+            elif name == "adx":
+                technical_values['adx'] = value
+            elif name == "obv":
+                technical_values['obv'] = value
+
+        # Create Technicals object with default values
+        technicals = Technicals(
+            rsi=technical_values.get('rsi'),
+            sma_fast=technical_values.get('sma'),
+            sma_slow=technical_values.get('sma'),
+            macd=technical_values.get('macd'),
+            macd_signal=None,
+            macd_histogram=None,
+            stoch_k=technical_values.get('stoch_k'),
+            stoch_d=technical_values.get('stoch_d'),
+            adx=technical_values.get('adx'),
+            plus_di=None,
+            minus_di=None,
+            obv=technical_values.get('obv'),
+            adr=None,
+            avg_adr=None,
+            trend='NEUTRAL',
+            bb_upper=technical_values.get('bb_upper'),
+            bb_middle=technical_values.get('bb_middle'),
+            bb_lower=technical_values.get('bb_lower'),
+            bb_width=None,
+            ema_fast=None,
+            ema_slow=None,
+            cci=None,
+            roc=None,
+            mfi=None,
+            williams_r=None,
+            atr=None,
+            recommendations={}
+        )
+
+        return technicals
 
     def _get_ticker_fundamentals(self, ticker: str) -> Optional[Fundamentals]:
         """Get fundamental data for a single ticker using yfinance."""
@@ -1014,4 +1063,4 @@ class EnhancedScreener:
 
 
 # Global enhanced screener instance
-enhanced_screener = EnhancedScreener()
+enhanced_screener = EnhancedScreener(indicator_service=IndicatorService())

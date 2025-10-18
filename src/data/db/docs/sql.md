@@ -1,111 +1,3 @@
--- DROP SCHEMA public;
-
-CREATE SCHEMA public AUTHORIZATION pg_database_owner;
-
--- DROP SEQUENCE public.auth_identities_id_seq;
-
-CREATE SEQUENCE public.auth_identities_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.schedules_id_seq;
-
-CREATE SEQUENCE public.schedules_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.telegram_broadcast_logs_id_seq;
-
-CREATE SEQUENCE public.telegram_broadcast_logs_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.telegram_command_audits_id_seq;
-
-CREATE SEQUENCE public.telegram_command_audits_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.telegram_feedbacks_id_seq;
-
-CREATE SEQUENCE public.telegram_feedbacks_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.users_id_seq;
-
-CREATE SEQUENCE public.users_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.verification_codes_id_seq;
-
-CREATE SEQUENCE public.verification_codes_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.webui_audit_logs_id_seq;
-
-CREATE SEQUENCE public.webui_audit_logs_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.webui_performance_snapshots_id_seq;
-
-CREATE SEQUENCE public.webui_performance_snapshots_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.webui_strategy_templates_id_seq;
-
-CREATE SEQUENCE public.webui_strategy_templates_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
--- DROP SEQUENCE public.webui_system_config_id_seq;
-
-CREATE SEQUENCE public.webui_system_config_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;-- public.job_runs definition
-
--- Drop table
-
--- DROP TABLE public.job_runs;
-
 CREATE TABLE public.job_runs (
 	run_id uuid DEFAULT gen_random_uuid() NOT NULL,
 	job_type text NOT NULL,
@@ -124,14 +16,8 @@ CREATE TABLE public.job_runs (
 CREATE UNIQUE INDEX ux_runs_job_scheduled_for ON public.job_runs USING btree (job_type, job_id, scheduled_for);
 
 
--- public.job_schedules definition
-
--- Drop table
-
--- DROP TABLE public.job_schedules;
-
 CREATE TABLE public.job_schedules (
-	id serial4 NOT NULL,
+	id int8 GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 	user_id int4 NOT NULL,
 	"name" varchar(255) NOT NULL,
 	job_type varchar(50) NOT NULL,
@@ -141,16 +27,8 @@ CREATE TABLE public.job_schedules (
 	enabled bool DEFAULT true NOT NULL,
 	next_run_at timestamptz NULL,
 	created_at timestamptz DEFAULT now() NOT NULL,
-	updated_at timestamptz DEFAULT now() NOT NULL,
-	CONSTRAINT schedules_pkey PRIMARY KEY (id)
+	updated_at timestamptz DEFAULT now() NOT NULL
 );
-
-
--- public.telegram_broadcast_logs definition
-
--- Drop table
-
--- DROP TABLE public.telegram_broadcast_logs;
 
 CREATE TABLE public.telegram_broadcast_logs (
 	id serial4 NOT NULL,
@@ -162,12 +40,6 @@ CREATE TABLE public.telegram_broadcast_logs (
 	CONSTRAINT telegram_broadcast_logs_pkey PRIMARY KEY (id)
 );
 
-
--- public.telegram_command_audits definition
-
--- Drop table
-
--- DROP TABLE public.telegram_command_audits;
 
 CREATE TABLE public.telegram_command_audits (
 	id serial4 NOT NULL,
@@ -188,50 +60,12 @@ CREATE INDEX ix_telegram_command_audits_success ON public.telegram_command_audit
 CREATE INDEX ix_telegram_command_audits_telegram_user_id ON public.telegram_command_audits USING btree (telegram_user_id);
 
 
--- public.telegram_settings definition
-
--- Drop table
-
--- DROP TABLE public.telegram_settings;
-
 CREATE TABLE public.telegram_settings (
 	"key" varchar(100) NOT NULL,
 	value text NULL,
 	CONSTRAINT telegram_settings_pkey PRIMARY KEY (key)
 );
 
-
--- public.trading_bot_instances definition
-
--- Drop table
-
--- DROP TABLE public.trading_bot_instances;
-
-CREATE TABLE public.trading_bot_instances (
-	id varchar(255) NOT NULL,
-	"type" varchar(20) NOT NULL,
-	config_file varchar(255) NULL,
-	status varchar(20) NOT NULL,
-	started_at timestamp NULL,
-	last_heartbeat timestamp NULL,
-	error_count int4 NULL,
-	current_balance numeric(20, 8) NULL,
-	total_pnl numeric(20, 8) NULL,
-	extra_metadata jsonb NULL,
-	created_at timestamptz DEFAULT now() NULL,
-	updated_at timestamp NULL,
-	CONSTRAINT trading_bot_instances_pkey PRIMARY KEY (id)
-);
-CREATE INDEX ix_trading_bot_instances_last_heartbeat ON public.trading_bot_instances USING btree (last_heartbeat);
-CREATE INDEX ix_trading_bot_instances_status ON public.trading_bot_instances USING btree (status);
-CREATE INDEX ix_trading_bot_instances_type ON public.trading_bot_instances USING btree (type);
-
-
--- public.usr_users definition
-
--- Drop table
-
--- DROP TABLE public.usr_users;
 
 CREATE TABLE public.usr_users (
 	id int4 DEFAULT nextval('users_id_seq'::regclass) NOT NULL,
@@ -241,16 +75,12 @@ CREATE TABLE public.usr_users (
 	created_at timestamptz DEFAULT now() NULL,
 	updated_at timestamp NULL,
 	last_login timestamp NULL,
+	telegram_user_id varchar(100) NULL,
 	CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 CREATE INDEX ix_users_email ON public.usr_users USING btree (email);
+COMMENT ON TABLE public.usr_users IS 'User accounts and authentication';
 
-
--- public.webui_performance_snapshots definition
-
--- Drop table
-
--- DROP TABLE public.webui_performance_snapshots;
 
 CREATE TABLE public.webui_performance_snapshots (
 	id serial4 NOT NULL,
@@ -267,12 +97,6 @@ CREATE TABLE public.webui_performance_snapshots (
 CREATE INDEX ix_webui_performance_snapshots_strategy_id ON public.webui_performance_snapshots USING btree (strategy_id);
 
 
--- public.webui_system_config definition
-
--- Drop table
-
--- DROP TABLE public.webui_system_config;
-
 CREATE TABLE public.webui_system_config (
 	id serial4 NOT NULL,
 	"key" varchar(100) NOT NULL,
@@ -284,32 +108,6 @@ CREATE TABLE public.webui_system_config (
 );
 
 
--- public.usr_auth_identities definition
-
--- Drop table
-
--- DROP TABLE public.usr_auth_identities;
-
-CREATE TABLE public.usr_auth_identities (
-	id serial4 NOT NULL,
-	user_id int4 NOT NULL,
-	provider varchar(32) NOT NULL,
-	external_id varchar(255) NOT NULL,
-	metadata jsonb NULL,
-	created_at timestamptz DEFAULT now() NULL,
-	CONSTRAINT auth_identities_pkey PRIMARY KEY (id),
-	CONSTRAINT auth_identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usr_users(id) ON DELETE CASCADE
-);
-CREATE INDEX ix_auth_identities_provider ON public.usr_auth_identities USING btree (provider);
-CREATE INDEX ix_auth_identities_user_id ON public.usr_auth_identities USING btree (user_id);
-
-
--- public.telegram_feedbacks definition
-
--- Drop table
-
--- DROP TABLE public.telegram_feedbacks;
-
 CREATE TABLE public.telegram_feedbacks (
 	id serial4 NOT NULL,
 	user_id int4 NOT NULL,
@@ -318,11 +116,28 @@ CREATE TABLE public.telegram_feedbacks (
 );
 
 
--- public.trading_performance_metrics definition
+CREATE TABLE public.trading_bot_instances (
+	id varchar(255) NOT NULL,
+	"type" varchar(20) NOT NULL,
+	status varchar(20) NOT NULL,
+	started_at timestamp NULL,
+	last_heartbeat timestamp NULL,
+	error_count int4 NULL,
+	current_balance numeric(20, 8) NULL,
+	total_pnl numeric(20, 8) NULL,
+	extra_metadata jsonb NULL,
+	created_at timestamptz DEFAULT now() NULL,
+	updated_at timestamp NULL,
+	config jsonb NOT NULL,
+	user_id int4 NOT NULL,
+	CONSTRAINT trading_bot_instances_pkey PRIMARY KEY (id),
+	CONSTRAINT trading_bot_instances_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usr_users(id) ON DELETE CASCADE
+);
+CREATE INDEX ix_trading_bot_instances_last_heartbeat ON public.trading_bot_instances USING btree (last_heartbeat);
+CREATE INDEX ix_trading_bot_instances_status ON public.trading_bot_instances USING btree (status);
+CREATE INDEX ix_trading_bot_instances_type ON public.trading_bot_instances USING btree (type);
+COMMENT ON TABLE public.trading_bot_instances IS 'Trading bot configuration and status';
 
--- Drop table
-
--- DROP TABLE public.trading_performance_metrics;
 
 CREATE TABLE public.trading_performance_metrics (
 	id varchar(36) NOT NULL,
@@ -342,13 +157,8 @@ CREATE INDEX ix_trading_performance_metrics_bot_id ON public.trading_performance
 CREATE INDEX ix_trading_performance_metrics_bot_id_calculated_at ON public.trading_performance_metrics USING btree (bot_id, calculated_at);
 CREATE INDEX ix_trading_performance_metrics_calculated_at ON public.trading_performance_metrics USING btree (calculated_at);
 CREATE INDEX ix_trading_performance_metrics_symbol ON public.trading_performance_metrics USING btree (symbol);
+COMMENT ON TABLE public.trading_performance_metrics IS 'Performance metrics for trading strategies';
 
-
--- public.trading_positions definition
-
--- Drop table
-
--- DROP TABLE public.trading_positions;
 
 CREATE TABLE public.trading_positions (
 	id varchar(36) NOT NULL,
@@ -369,13 +179,8 @@ CREATE TABLE public.trading_positions (
 CREATE INDEX ix_trading_positions_bot_id ON public.trading_positions USING btree (bot_id);
 CREATE INDEX ix_trading_positions_bot_id_status ON public.trading_positions USING btree (bot_id, status);
 CREATE INDEX ix_trading_positions_symbol ON public.trading_positions USING btree (symbol);
+COMMENT ON TABLE public.trading_positions IS 'Open and closed trading positions';
 
-
--- public.trading_trades definition
-
--- Drop table
-
--- DROP TABLE public.trading_trades;
 
 CREATE TABLE public.trading_trades (
 	id varchar(36) NOT NULL,
@@ -421,16 +226,25 @@ CREATE INDEX ix_trading_trades_status ON public.trading_trades USING btree (stat
 CREATE INDEX ix_trading_trades_strategy_name ON public.trading_trades USING btree (strategy_name);
 CREATE INDEX ix_trading_trades_symbol ON public.trading_trades USING btree (symbol);
 CREATE INDEX ix_trading_trades_trade_type ON public.trading_trades USING btree (trade_type);
+COMMENT ON TABLE public.trading_trades IS 'Individual trade records';
 
 
--- public.usr_verification_codes definition
+CREATE TABLE public.usr_auth_identities (
+	id int4 DEFAULT nextval('auth_identities_id_seq'::regclass) NOT NULL,
+	user_id int4 NOT NULL,
+	provider varchar(32) NOT NULL,
+	external_id varchar(255) NOT NULL,
+	metadata jsonb NULL,
+	created_at timestamptz DEFAULT now() NULL,
+	CONSTRAINT auth_identities_pkey PRIMARY KEY (id),
+	CONSTRAINT auth_identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usr_users(id) ON DELETE CASCADE
+);
+CREATE INDEX ix_auth_identities_provider ON public.usr_auth_identities USING btree (provider);
+CREATE INDEX ix_auth_identities_user_id ON public.usr_auth_identities USING btree (user_id);
 
--- Drop table
-
--- DROP TABLE public.usr_verification_codes;
 
 CREATE TABLE public.usr_verification_codes (
-	id serial4 NOT NULL,
+	id int4 DEFAULT nextval('verification_codes_id_seq'::regclass) NOT NULL,
 	user_id int4 NOT NULL,
 	code varchar(32) NOT NULL,
 	sent_time int4 NOT NULL,
@@ -441,12 +255,6 @@ CREATE TABLE public.usr_verification_codes (
 );
 CREATE INDEX ix_verification_codes_user_id ON public.usr_verification_codes USING btree (user_id);
 
-
--- public.webui_audit_logs definition
-
--- Drop table
-
--- DROP TABLE public.webui_audit_logs;
 
 CREATE TABLE public.webui_audit_logs (
 	id serial4 NOT NULL,
@@ -465,12 +273,6 @@ CREATE INDEX ix_webui_audit_logs_action ON public.webui_audit_logs USING btree (
 CREATE INDEX ix_webui_audit_logs_user_id ON public.webui_audit_logs USING btree (user_id);
 
 
--- public.webui_strategy_templates definition
-
--- Drop table
-
--- DROP TABLE public.webui_strategy_templates;
-
 CREATE TABLE public.webui_strategy_templates (
 	id serial4 NOT NULL,
 	"name" varchar(100) NOT NULL,
@@ -485,94 +287,3 @@ CREATE TABLE public.webui_strategy_templates (
 );
 CREATE INDEX ix_webui_strategy_templates_created_by ON public.webui_strategy_templates USING btree (created_by);
 
-
-
--- DROP FUNCTION public.uuid_generate_v1();
-
-CREATE OR REPLACE FUNCTION public.uuid_generate_v1()
- RETURNS uuid
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v1$function$
-;
-
--- DROP FUNCTION public.uuid_generate_v1mc();
-
-CREATE OR REPLACE FUNCTION public.uuid_generate_v1mc()
- RETURNS uuid
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v1mc$function$
-;
-
--- DROP FUNCTION public.uuid_generate_v3(uuid, text);
-
-CREATE OR REPLACE FUNCTION public.uuid_generate_v3(namespace uuid, name text)
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v3$function$
-;
-
--- DROP FUNCTION public.uuid_generate_v4();
-
-CREATE OR REPLACE FUNCTION public.uuid_generate_v4()
- RETURNS uuid
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v4$function$
-;
-
--- DROP FUNCTION public.uuid_generate_v5(uuid, text);
-
-CREATE OR REPLACE FUNCTION public.uuid_generate_v5(namespace uuid, name text)
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v5$function$
-;
-
--- DROP FUNCTION public.uuid_nil();
-
-CREATE OR REPLACE FUNCTION public.uuid_nil()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_nil$function$
-;
-
--- DROP FUNCTION public.uuid_ns_dns();
-
-CREATE OR REPLACE FUNCTION public.uuid_ns_dns()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_ns_dns$function$
-;
-
--- DROP FUNCTION public.uuid_ns_oid();
-
-CREATE OR REPLACE FUNCTION public.uuid_ns_oid()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_ns_oid$function$
-;
-
--- DROP FUNCTION public.uuid_ns_url();
-
-CREATE OR REPLACE FUNCTION public.uuid_ns_url()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_ns_url$function$
-;
-
--- DROP FUNCTION public.uuid_ns_x500();
-
-CREATE OR REPLACE FUNCTION public.uuid_ns_x500()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_ns_x500$function$
-;

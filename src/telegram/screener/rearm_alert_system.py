@@ -6,6 +6,7 @@ to prevent notification spam while maintaining useful alert behavior.
 """
 
 import json
+import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
@@ -119,8 +120,9 @@ class EnhancedAlertConfig:
 class ReArmAlertEvaluator:
     """Evaluates re-arm alerts with crossing detection and state management."""
 
-    def __init__(self):
+    def __init__(self, telegram_service=None):
         self._logger = _logger
+        self.telegram_service = telegram_service
 
     def evaluate_alert(self, alert_data: Dict[str, Any], current_price: float) -> Tuple[bool, Dict[str, Any]]:
         """
@@ -321,9 +323,59 @@ class ReArmAlertEvaluator:
                    f"{config.threshold} at {evaluation_details.get('current_price', 0):.2f}")
 
     def update_alert_state(self, alert_id: int, evaluation_details: Dict[str, Any],
-                          current_price: float) -> Dict[str, Any]:
+                          current_price: float) -> bool:
+        """
+        Update alert state in database based on evaluation results.
+
+        Args:
+            alert_id: ID of the alert to update
+            evaluation_details: Results from alert evaluation
+            current_price: Current market price
+
+        Returns:
+            True if update was successful, False otherwise
+        """
+        updates = {
+            "last_price": current_price
+        }
+
+        action_required = evaluation_details.get("action_required")
+
+        if action_required == "trigger_and_disarm":
+            updates.update({
+                "is_armed": False,
+                "last_triggered_at": datetime.now().isoformat()
+            })
+        elif action_required == "update_armed_state":
+            updates["is_armed"] = True
+
+        # Use service layer for database operations
+        if self.telegram_service:
+            try:
+                self._logger.debug("Updating alert %d via service layer with updates: %s", alert_id, updates)
+                start_time = time.time()
+                result = self.telegram_service.update_alert(alert_id, **updates)
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                self._logger.debug("Alert %d updated successfully via service layer (took %dms): %s",
+                                 alert_id, elapsed_ms, result)
+                return result
+            except Exception as e:
+                elapsed_ms = int((time.time() - start_time) * 1000) if 'start_time' in locals() else 0
+                self._logger.error("Failed to update alert %d via service layer (took %dms): %s",
+                                 alert_id, elapsed_ms, e)
+                return False
+        else:
+            # Fallback for backward compatibility - return the updates dict
+            # This allows existing code to continue working while migration is in progress
+            self._logger.warning("No telegram_service provided, returning update parameters for manual application")
+            return updates
+
+    def get_alert_updates(self, alert_id: int, evaluation_details: Dict[str, Any],
+                         current_price: float) -> Dict[str, Any]:
         """
         Generate database update parameters based on evaluation results.
+
+        This method is provided for backward compatibility during migration.
 
         Returns:
             Dictionary of fields to update in database

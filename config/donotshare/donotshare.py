@@ -19,9 +19,11 @@ DB_PATH = "db/trading.db"  # Keep for backward compatibility
 # PostgreSQL configuration
 POSTGRES_HOST = "localhost"  # Add host configuration
 POSTGRES_PORT = 5432
-POSTGRES_USER = "trading_admin"
+POSTGRES_USER = os.getenv("POSTGRES_USER", "trading_admin")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-POSTGRES_DATABASE = "trading"  # Add database name
+POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE", "trading") # Add database name
+
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Database URL - PostgreSQL connection string
 DB_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}"

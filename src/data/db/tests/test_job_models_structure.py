@@ -36,7 +36,12 @@ class TestJobModelStructure:
         assert columns['name'].type.__class__.__name__ == 'String'
         assert columns['job_type'].type.__class__.__name__ == 'String'
         assert columns['target'].type.__class__.__name__ == 'String'
-        assert columns['task_params'].type.__class__.__name__ == 'JSONB'
+        # Check JSONB type - could be direct JSONB or JSON with JSONB variant for PostgreSQL
+        task_params_type = columns['task_params'].type
+        assert (task_params_type.__class__.__name__ == 'JSONB' or
+                (hasattr(task_params_type, '_variant_mapping') and
+                 'postgresql' in task_params_type._variant_mapping and
+                 task_params_type._variant_mapping['postgresql'].__class__.__name__ == 'JSONB'))
         assert columns['cron'].type.__class__.__name__ == 'String'
         assert columns['enabled'].type.__class__.__name__ == 'Boolean'
 
@@ -56,8 +61,19 @@ class TestJobModelStructure:
 
         # Check other important columns
         assert columns['run_id'].type.__class__.__name__ == 'UUID'
-        assert columns['job_snapshot'].type.__class__.__name__ == 'JSONB'
-        assert columns['result'].type.__class__.__name__ == 'JSONB'
+        # Check JSONB types - could be direct JSONB or JSON with JSONB variant for PostgreSQL
+        job_snapshot_type = columns['job_snapshot'].type
+        result_type = columns['result'].type
+
+        assert (job_snapshot_type.__class__.__name__ == 'JSONB' or
+                (hasattr(job_snapshot_type, '_variant_mapping') and
+                 'postgresql' in job_snapshot_type._variant_mapping and
+                 job_snapshot_type._variant_mapping['postgresql'].__class__.__name__ == 'JSONB'))
+
+        assert (result_type.__class__.__name__ == 'JSONB' or
+                (hasattr(result_type, '_variant_mapping') and
+                 'postgresql' in result_type._variant_mapping and
+                 result_type._variant_mapping['postgresql'].__class__.__name__ == 'JSONB'))
         assert columns['error'].type.__class__.__name__ == 'Text'
         assert columns['worker_id'].type.__class__.__name__ == 'String'
 

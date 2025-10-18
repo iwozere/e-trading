@@ -1570,9 +1570,26 @@ Secure multi-tier access control system:
 
 ## Architecture & API Integration
 
-### Components
+### Service Layer Architecture
+
+The Telegram bot follows clean architecture principles with proper service layer separation:
+
+#### Service Components
+- **Telegram Service (`src/data/db/services/telegram_service.py`):** Handles all database operations for users, alerts, schedules, and settings
+- **Indicator Service (`src/indicators/service.py`):** Handles all technical and fundamental indicator calculations
+- **Business Logic Layer (`business_logic.py`):** Uses dependency injection to access service layers
+- **Background Services:** Alert monitoring and schedule processing with service integration
+
+#### Integration Benefits
+- **Clean Separation:** Business logic separated from data access and calculations
+- **Testability:** Easy to mock service dependencies for unit testing
+- **Maintainability:** Changes to database or calculations don't affect business logic
+- **Consistency:** All modules use the same service interfaces
+- **Error Handling:** Centralized error handling and logging
+
+### System Components
 - **Telegram Bot API:** Receives commands, sends messages, manages user interaction.
-- **Backend Server:** Handles business logic, command parsing, user state, and orchestrates API/data provider requests.
+- **Backend Server:** Handles business logic, command parsing, user state, and orchestrates service requests.
 - **Data Provider APIs:** Fetches real-time/historical data for stocks and cryptos (Yahoo, Binance, etc.).
 - **Email Service:** Sends reports and alerts to verified user emails.
 - **Database:** Stores users, alerts, schedules, logs, and cache data.
@@ -1957,6 +1974,7 @@ For detailed technical information about the Telegram screener module:
 - **[Requirements.md](Requirements.md)** - Dependencies, API keys, database setup, and deployment requirements
 - **[Design.md](Design.md)** - Architecture, design decisions, data flow, and technical specifications
 - **[Tasks.md](Tasks.md)** - Development roadmap, known issues, technical debt, and implementation timeline
+- **[SERVICE_LAYER_INTEGRATION.md](SERVICE_LAYER_INTEGRATION.md)** - Service layer integration patterns, best practices, and migration guide
 
 ## Contributing
 

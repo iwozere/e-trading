@@ -45,8 +45,7 @@ Security Note:
 
 Dependencies:
 - Flask
-- SQLite3 (for database operations)
-- Custom database module (src.telegram.db)
+- Telegram service layer (src.data.db.services.telegram_service)
 - Custom logger (src.notification.logger)
 """
 
@@ -63,7 +62,6 @@ import asyncio
 import aiohttp
 import json
 from src.data.db.services import telegram_service as db
-from src.data.db.services.database_service import get_database_service
 from config.donotshare.donotshare import WEBGUI_LOGIN, WEBGUI_PASSWORD, TELEGRAM_WEBGUI_PORT, TELEGRAM_BOT_TOKEN
 
 from src.notification.logger import setup_logger

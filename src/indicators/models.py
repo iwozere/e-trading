@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, List, Optional, Union, Literal, Any
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 # --- Shared ---
 OutputName = Union[str, Dict[str, str]]

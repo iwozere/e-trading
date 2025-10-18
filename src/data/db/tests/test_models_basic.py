@@ -41,10 +41,7 @@ def test_base_metadata_has_tables():
         'usr_verification_codes',
         'job_schedules',
         'job_runs',
-        'telegram_alerts',
         'telegram_feedbacks',
-        'telegram_schedules',
-        'telegram_verification_codes',
         'telegram_settings',
         'telegram_command_audits',
         'telegram_broadcast_logs'
@@ -95,16 +92,16 @@ def test_foreign_key_references():
     assert user_id_fk is not None
     assert user_id_fk.column.table.name == 'usr_users'
 
-    # Check telegram_alerts foreign key
-    alerts_table = tables['telegram_alerts']
-    alert_user_fk = None
-    for fk in alerts_table.foreign_keys:
+    # Check telegram_feedbacks foreign key
+    feedback_table = tables['telegram_feedbacks']
+    feedback_user_fk = None
+    for fk in feedback_table.foreign_keys:
         if fk.parent.name == 'user_id':
-            alert_user_fk = fk
+            feedback_user_fk = fk
             break
 
-    assert alert_user_fk is not None
-    assert alert_user_fk.column.table.name == 'usr_users'
+    assert feedback_user_fk is not None
+    assert feedback_user_fk.column.table.name == 'usr_users'
 
 
 def test_table_ddl_generation():
@@ -126,7 +123,7 @@ def test_model_relationships():
     """Test that model classes have expected attributes."""
     from src.data.db.models.model_users import User, AuthIdentity, VerificationCode
     from src.data.db.models.model_jobs import Schedule, Run
-    from src.data.db.models.model_telegram import TelegramAlert, TelegramFeedback
+    from src.data.db.models.model_telegram import TelegramFeedback
 
     # Test User model
     assert hasattr(User, '__tablename__')
@@ -148,8 +145,8 @@ def test_model_relationships():
     assert Run.__tablename__ == 'job_runs'
 
     # Test Telegram models
-    assert hasattr(TelegramAlert, '__tablename__')
-    assert TelegramAlert.__tablename__ == 'telegram_alerts'
+    assert hasattr(TelegramFeedback, '__tablename__')
+    assert TelegramFeedback.__tablename__ == 'telegram_feedbacks'
 
 
 if __name__ == "__main__":
