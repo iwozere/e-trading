@@ -31,7 +31,7 @@ def get_json_type():
 
 class JobType(str, Enum):
     """Job type enumeration."""
-    REPORT = "report"
+    SCHEDULE = "schedule"
     SCREENER = "screener"
     ALERT = "alert"
     NOTIFICATION = "notification"
