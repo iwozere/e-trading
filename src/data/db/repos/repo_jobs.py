@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc, asc, func
 from sqlalchemy.exc import IntegrityError
 
-from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType
+from src.data.db.models.model_jobs import Schedule, Run, RunStatus, JobType
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -49,11 +49,11 @@ class JobsRepository:
             schedule = Schedule(**schedule_data)
             self.session.add(schedule)
             self.session.flush()  # Get the ID without committing
-            _logger.info(f"Created schedule: {schedule.name} (ID: {schedule.id})")
+            _logger.info("Created schedule: %s (ID: %s)", schedule.name, schedule.id)
             return schedule
         except IntegrityError as e:
             self.session.rollback()
-            _logger.error(f"Failed to create schedule: {e}")
+            _logger.error("Failed to create schedule: %s", e)
             raise
 
     def get_schedule(self, schedule_id: int) -> Optional[Schedule]:
@@ -138,11 +138,11 @@ class JobsRepository:
                     setattr(schedule, key, value)
 
             self.session.flush()
-            _logger.info(f"Updated schedule: {schedule.name} (ID: {schedule.id})")
+            _logger.info("Updated schedule: %s (ID: %s)", schedule.name, schedule.id)
             return schedule
         except Exception as e:
             self.session.rollback()
-            _logger.error(f"Failed to update schedule {schedule_id}: {e}")
+            _logger.error("Failed to update schedule %s: %s", schedule_id, e)
             raise
 
     def delete_schedule(self, schedule_id: int) -> bool:
@@ -161,11 +161,11 @@ class JobsRepository:
 
         try:
             self.session.delete(schedule)
-            _logger.info(f"Deleted schedule: {schedule.name} (ID: {schedule.id})")
+            _logger.info("Deleted schedule: %s (ID: %s)", schedule.name, schedule.id)
             return True
         except Exception as e:
             self.session.rollback()
-            _logger.error(f"Failed to delete schedule {schedule_id}: {e}")
+            _logger.error("Failed to delete schedule %s: %s", schedule_id, e)
             raise
 
     def get_pending_schedules(self, current_time: datetime) -> List[Schedule]:
@@ -206,7 +206,7 @@ class JobsRepository:
 
     # ---------- Run Operations ----------
 
-    def create_run(self, run_data: Dict[str, Any]) -> ScheduleRun:
+    def create_run(self, run_data: Dict[str, Any]) -> Run:
         """
         Create a new run.
 
@@ -214,33 +214,33 @@ class JobsRepository:
             run_data: Dictionary with run data
 
         Returns:
-            Created ScheduleRun object
+            Created Run object
 
         Raises:
             IntegrityError: If run with same job_type, job_id, scheduled_for already exists
         """
         try:
-            run = ScheduleRun(**run_data)
+            run = Run(**run_data)
             self.session.add(run)
             self.session.flush()  # Get the run_id without committing
-            _logger.info(f"Created run: {run.id} ({run.job_type}:{run.job_id})")
+            _logger.info("Created run: %s (%s:%s)", run.run_id, run.job_type, run.job_id)
             return run
         except IntegrityError as e:
             self.session.rollback()
-            _logger.error(f"Failed to create run: {e}")
+            _logger.error("Failed to create run: %s", e)
             raise
 
-    def get_run(self, run_id: int) -> Optional[ScheduleRun]:
+    def get_run(self, run_id) -> Optional[Run]:
         """
         Get a run by ID.
 
         Args:
-            run_id: Run ID (integer)
+            run_id: Run ID (UUID)
 
         Returns:
-            ScheduleRun object or None if not found
+            Run object or None if not found
         """
-        return self.session.query(ScheduleRun).filter(ScheduleRun.id == run_id).first()
+        return self.session.query(Run).filter(Run.run_id == run_id).first()
 
     def list_runs(
         self,
@@ -308,11 +308,11 @@ class JobsRepository:
                     setattr(run, key, value)
 
             self.session.flush()
-            _logger.info(f"Updated run: {run.id} (status: {run.status})")
+            _logger.info("Updated run: %s (status: %s)", run.id, run.status)
             return run
         except Exception as e:
             self.session.rollback()
-            _logger.error(f"Failed to update run {run_id}: {e}")
+            _logger.error("Failed to update run %s: %s", run_id, e)
             raise
 
     def claim_run(self, run_id: int, worker_id: str) -> Optional[ScheduleRun]:
@@ -346,12 +346,12 @@ class JobsRepository:
             run.worker_id = worker_id
 
             self.session.flush()
-            _logger.info(f"Claimed run: {run.id} by worker: {worker_id}")
+            _logger.info("Claimed run: %s by worker: %s", run.id, worker_id)
             return run
 
         except Exception as e:
             self.session.rollback()
-            _logger.error(f"Failed to claim run {run_id}: {e}")
+            _logger.error("Failed to claim run %s: %s", run_id, e)
             raise
 
     def get_pending_runs(
@@ -376,13 +376,13 @@ class JobsRepository:
 
         return query.order_by(asc(ScheduleRun.scheduled_for)).limit(limit).all()
 
-    def get_runs_by_job(self, job_type: JobType, job_id: str) -> List[ScheduleRun]:
+    def get_runs_by_job(self, job_type: JobType, job_id: int) -> List[ScheduleRun]:
         """
         Get all runs for a specific job.
 
         Args:
             job_type: Job type
-            job_id: Job identifier
+            job_id: Job identifier (integer)
 
         Returns:
             List of ScheduleRun objects
@@ -474,6 +474,6 @@ class JobsRepository:
             )
         ).delete()
 
-        _logger.info(f"Cleaned up {deleted_count} old runs")
+        _logger.info("Cleaned up %s old runs", deleted_count)
         return deleted_count
 

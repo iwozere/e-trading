@@ -42,7 +42,7 @@ class FeedbackRepo:
         self.s = s
 
     def create(self, user_id: int, type_: str, message: str) -> TelegramFeedback:
-        row = TelegramFeedback(user_id=user_id, type=type_, message=message, status="open", created=utcnow())
+        row = TelegramFeedback(user_id=user_id, type=type_, message=message, status="open", created_at=utcnow())
         self.s.add(row); self.s.flush(); return row
 
     def list(self, type_: Optional[str] = None) -> Sequence[TelegramFeedback]:

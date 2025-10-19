@@ -254,7 +254,7 @@ def test_create_run(repo, dbsess):
     """Test creating a new run."""
     run_data = {
         "job_type": JobType.REPORT.value,
-        "job_id": "test_job_123",
+        "job_id": 123,  # Changed from string to integer
         "user_id": 1,
         "scheduled_for": datetime.utcnow(),
         "job_snapshot": {"param1": "value1"}
@@ -262,9 +262,9 @@ def test_create_run(repo, dbsess):
 
     run = repo.create_run(run_data)
 
-    assert run.run_id is not None
+    assert run.id is not None  # ScheduleRun uses 'id', not 'run_id'
     assert run.job_type == JobType.REPORT.value
-    assert run.job_id == "test_job_123"
+    assert run.job_id == 123
     assert run.status == RunStatus.PENDING.value
 
 
@@ -273,7 +273,7 @@ def test_create_run_duplicate_fails(repo, dbsess):
     scheduled_time = datetime.utcnow()
     run_data = {
         "job_type": JobType.REPORT.value,
-        "job_id": "duplicate_job",
+        "job_id": 456,  # Changed from string to integer
         "user_id": 1,
         "scheduled_for": scheduled_time,
         "job_snapshot": {}
@@ -292,18 +292,18 @@ def test_get_run(repo, dbsess):
     """Test getting a run by ID."""
     run_data = {
         "job_type": JobType.SCREENER.value,
-        "job_id": "test_screener",
+        "job_id": 789,  # Changed from string to integer
         "user_id": 1,
         "scheduled_for": datetime.utcnow(),
         "job_snapshot": {"tickers": ["AAPL", "GOOGL"]}
     }
 
     created = repo.create_run(run_data)
-    retrieved = repo.get_run(created.run_id)
+    retrieved = repo.get_run(created.id)  # ScheduleRun uses 'id', not 'run_id'
 
     assert retrieved is not None
-    assert retrieved.run_id == created.run_id
-    assert retrieved.job_id == "test_screener"
+    assert retrieved.id == created.id
+    assert retrieved.job_id == 789
 
 
 def test_list_runs_with_filters(repo, dbsess):
@@ -311,9 +311,9 @@ def test_list_runs_with_filters(repo, dbsess):
     now = datetime.utcnow()
 
     runs_data = [
-        {"job_type": JobType.REPORT.value, "job_id": "r1", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
-        {"job_type": JobType.SCREENER.value, "job_id": "s1", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
-        {"job_type": JobType.REPORT.value, "job_id": "r2", "user_id": 2, "scheduled_for": now, "job_snapshot": {}},
+        {"job_type": JobType.REPORT.value, "job_id": 101, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
+        {"job_type": JobType.SCREENER.value, "job_id": 102, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
+        {"job_type": JobType.REPORT.value, "job_id": 103, "user_id": 2, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
     ]
 
     created_runs = []
@@ -322,7 +322,7 @@ def test_list_runs_with_filters(repo, dbsess):
         created_runs.append(run)
 
     # Update one run to completed status
-    repo.update_run(created_runs[0].run_id, {"status": RunStatus.COMPLETED.value})
+    repo.update_run(created_runs[0].id, {"status": RunStatus.COMPLETED.value})  # Use 'id' instead of 'run_id'
 
     # Test filter by user_id
     user1_runs = repo.list_runs(user_id=1)
@@ -341,7 +341,7 @@ def test_update_run(repo, dbsess):
     """Test updating a run."""
     run_data = {
         "job_type": JobType.REPORT.value,
-        "job_id": "update_test",
+        "job_id": 201,  # Changed from string to integer
         "user_id": 1,
         "scheduled_for": datetime.utcnow(),
         "job_snapshot": {}
@@ -357,7 +357,7 @@ def test_update_run(repo, dbsess):
         "worker_id": "worker_123"
     }
 
-    updated = repo.update_run(created.run_id, update_data)
+    updated = repo.update_run(created.id, update_data)  # Use 'id' instead of 'run_id'
 
     assert updated is not None
     assert updated.status == RunStatus.RUNNING.value
@@ -369,7 +369,7 @@ def test_claim_run(repo, dbsess):
     """Test atomically claiming a run for execution."""
     run_data = {
         "job_type": JobType.SCREENER.value,
-        "job_id": "claim_test",
+        "job_id": 301,  # Changed from string to integer
         "user_id": 1,
         "scheduled_for": datetime.utcnow(),
         "job_snapshot": {}
@@ -378,7 +378,7 @@ def test_claim_run(repo, dbsess):
     created = repo.create_run(run_data)
 
     # Claim the run
-    claimed = repo.claim_run(created.run_id, "worker_456")
+    claimed = repo.claim_run(created.id, "worker_456")  # Use 'id' instead of 'run_id'
 
     assert claimed is not None
     assert claimed.status == RunStatus.RUNNING.value
@@ -390,7 +390,7 @@ def test_claim_run_already_claimed(repo, dbsess):
     """Test that claiming already claimed run returns None."""
     run_data = {
         "job_type": JobType.REPORT.value,
-        "job_id": "already_claimed",
+        "job_id": 401,  # Changed from string to integer
         "user_id": 1,
         "scheduled_for": datetime.utcnow(),
         "job_snapshot": {}
@@ -399,11 +399,11 @@ def test_claim_run_already_claimed(repo, dbsess):
     created = repo.create_run(run_data)
 
     # First claim should succeed
-    first_claim = repo.claim_run(created.run_id, "worker_1")
+    first_claim = repo.claim_run(created.id, "worker_1")  # Use 'id' instead of 'run_id'
     assert first_claim is not None
 
     # Second claim should fail
-    second_claim = repo.claim_run(created.run_id, "worker_2")
+    second_claim = repo.claim_run(created.id, "worker_2")  # Use 'id' instead of 'run_id'
     assert second_claim is None
 
 
@@ -412,9 +412,9 @@ def test_get_pending_runs(repo, dbsess):
     now = datetime.utcnow()
 
     runs_data = [
-        {"job_type": JobType.REPORT.value, "job_id": "pending1", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
-        {"job_type": JobType.SCREENER.value, "job_id": "pending2", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
-        {"job_type": JobType.REPORT.value, "job_id": "running", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
+        {"job_type": JobType.REPORT.value, "job_id": 501, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
+        {"job_type": JobType.SCREENER.value, "job_id": 502, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
+        {"job_type": JobType.REPORT.value, "job_id": 503, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
     ]
 
     created_runs = []
@@ -423,7 +423,7 @@ def test_get_pending_runs(repo, dbsess):
         created_runs.append(run)
 
     # Update one to running status
-    repo.update_run(created_runs[2].run_id, {"status": RunStatus.RUNNING.value})
+    repo.update_run(created_runs[2].id, {"status": RunStatus.RUNNING.value})  # Use 'id' instead of 'run_id'
 
     # Get pending runs
     pending = repo.get_pending_runs()
@@ -436,13 +436,13 @@ def test_get_pending_runs(repo, dbsess):
 
 def test_get_runs_by_job(repo, dbsess):
     """Test getting all runs for a specific job."""
-    job_id = "specific_job"
+    job_id = 601  # Changed from string to integer
     now = datetime.utcnow()
 
     runs_data = [
         {"job_type": JobType.REPORT.value, "job_id": job_id, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
         {"job_type": JobType.REPORT.value, "job_id": job_id, "user_id": 1, "scheduled_for": now + timedelta(hours=1), "job_snapshot": {}},
-        {"job_type": JobType.REPORT.value, "job_id": "other_job", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
+        {"job_type": JobType.REPORT.value, "job_id": 602, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
     ]
 
     for data in runs_data:
@@ -462,9 +462,9 @@ def test_get_run_statistics(repo, dbsess):
 
     # Create runs with different statuses
     runs_data = [
-        {"job_type": JobType.REPORT.value, "job_id": "stats1", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
-        {"job_type": JobType.REPORT.value, "job_id": "stats2", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
-        {"job_type": JobType.SCREENER.value, "job_id": "stats3", "user_id": 2, "scheduled_for": now, "job_snapshot": {}},
+        {"job_type": JobType.REPORT.value, "job_id": 701, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
+        {"job_type": JobType.REPORT.value, "job_id": 702, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
+        {"job_type": JobType.SCREENER.value, "job_id": 703, "user_id": 2, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
     ]
 
     created_runs = []
@@ -473,8 +473,8 @@ def test_get_run_statistics(repo, dbsess):
         created_runs.append(run)
 
     # Update statuses
-    repo.update_run(created_runs[0].run_id, {"status": RunStatus.COMPLETED.value})
-    repo.update_run(created_runs[1].run_id, {"status": RunStatus.FAILED.value})
+    repo.update_run(created_runs[0].id, {"status": RunStatus.COMPLETED.value})  # Use 'id' instead of 'run_id'
+    repo.update_run(created_runs[1].id, {"status": RunStatus.FAILED.value})  # Use 'id' instead of 'run_id'
 
     # Get statistics
     stats = repo.get_run_statistics()
@@ -495,9 +495,9 @@ def test_cleanup_old_runs(repo, dbsess):
 
     # Create old runs
     old_runs_data = [
-        {"job_type": JobType.REPORT.value, "job_id": "old1", "user_id": 1, "scheduled_for": old_time, "job_snapshot": {}},
-        {"job_type": JobType.REPORT.value, "job_id": "old2", "user_id": 1, "scheduled_for": old_time, "job_snapshot": {}},
-        {"job_type": JobType.REPORT.value, "job_id": "recent", "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
+        {"job_type": JobType.REPORT.value, "job_id": 801, "user_id": 1, "scheduled_for": old_time, "job_snapshot": {}},  # Changed to integer
+        {"job_type": JobType.REPORT.value, "job_id": 802, "user_id": 1, "scheduled_for": old_time, "job_snapshot": {}},  # Changed to integer
+        {"job_type": JobType.REPORT.value, "job_id": 803, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
     ]
 
     created_runs = []
@@ -506,8 +506,8 @@ def test_cleanup_old_runs(repo, dbsess):
         created_runs.append(run)
 
     # Update old runs to completed/failed
-    repo.update_run(created_runs[0].run_id, {"status": RunStatus.COMPLETED.value})
-    repo.update_run(created_runs[1].run_id, {"status": RunStatus.FAILED.value})
+    repo.update_run(created_runs[0].id, {"status": RunStatus.COMPLETED.value})  # Use 'id' instead of 'run_id'
+    repo.update_run(created_runs[1].id, {"status": RunStatus.FAILED.value})  # Use 'id' instead of 'run_id'
     # Leave recent run as pending
 
     # Cleanup old runs (keep 30 days)
@@ -519,7 +519,7 @@ def test_cleanup_old_runs(repo, dbsess):
     # Recent pending run should still exist
     remaining = repo.list_runs()
     assert len(remaining) == 1
-    assert remaining[0].job_id == "recent"
+    assert remaining[0].job_id == 803
 
 
 if __name__ == "__main__":

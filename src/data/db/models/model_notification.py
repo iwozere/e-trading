@@ -14,7 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import relationship
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from src.data.db.core.base import Base
 # Logger will be set up by importing modules as needed
@@ -287,9 +287,7 @@ class MessageResponse(BaseModel):
     max_retries: int
     last_error: Optional[str]
     processed_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DeliveryStatusCreate(BaseModel):
@@ -320,9 +318,7 @@ class DeliveryStatusResponse(BaseModel):
     error_message: Optional[str]
     external_id: Optional[str]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ChannelHealthResponse(BaseModel):
@@ -336,9 +332,7 @@ class ChannelHealthResponse(BaseModel):
     avg_response_time_ms: Optional[int]
     error_message: Optional[str]
     checked_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RateLimitResponse(BaseModel):
@@ -351,9 +345,7 @@ class RateLimitResponse(BaseModel):
     refill_rate: int
     last_refill: datetime
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ChannelConfigCreate(BaseModel):
@@ -386,6 +378,4 @@ class ChannelConfigResponse(BaseModel):
     timeout_seconds: int
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

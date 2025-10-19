@@ -68,7 +68,7 @@ class TelegramAppService:
             # Transform to web UI format
             return [
                 {
-                    "telegram_user_id": str(user['telegram_user_id']),
+                    "telegram_user_id": str(user.get('telegram_user_id', '')),
                     "email": user.get('email'),
                     "verified": user.get('verified', False),
                     "approved": user.get('approved', False),
@@ -194,13 +194,15 @@ class TelegramAppService:
             if not alert:
                 raise ValueError("Alert not found")
 
-            new_status = not alert.get('active', True)
-            success = telegram_service.update_alert(alert_id, active=new_status)
+            # Alert objects from telegram_service have 'enabled' field, not 'active'
+            current_enabled = getattr(alert, 'enabled', True)
+            new_enabled = not current_enabled
+            success = telegram_service.update_alert(alert_id, enabled=new_enabled)
 
             if not success:
                 raise RuntimeError("Failed to toggle alert")
 
-            status_text = "activated" if new_status else "deactivated"
+            status_text = "activated" if new_enabled else "deactivated"
             return {"message": f"Alert {alert_id} {status_text} successfully"}
         except Exception as e:
             _logger.error("Error toggling alert %d: %s", alert_id, e)
@@ -364,19 +366,19 @@ class TelegramAppService:
         try:
             logs = telegram_service.get_user_command_history(user_id, limit)
 
-            # Transform to web UI format (logs are SQLAlchemy objects, not dicts)
+            # Transform to web UI format (logs are already dictionaries from telegram_service)
             return [
                 {
-                    "id": getattr(log, 'id', None),
-                    "telegram_user_id": getattr(log, 'telegram_user_id', None),
-                    "command": getattr(log, 'command', None),
-                    "full_message": getattr(log, 'full_message', None),
-                    "is_registered_user": getattr(log, 'is_registered_user', False),
-                    "user_email": getattr(log, 'user_email', None),
-                    "success": getattr(log, 'success', True),
-                    "error_message": getattr(log, 'error_message', None),
-                    "response_time_ms": getattr(log, 'response_time_ms', None),
-                    "created": getattr(log, 'created', None).isoformat() if getattr(log, 'created', None) else None
+                    "id": log.get('id'),
+                    "telegram_user_id": log.get('telegram_user_id'),
+                    "command": log.get('command'),
+                    "full_message": log.get('full_message'),
+                    "is_registered_user": log.get('is_registered_user', False),
+                    "user_email": log.get('user_email'),
+                    "success": log.get('success', True),
+                    "error_message": log.get('error_message'),
+                    "response_time_ms": log.get('response_time_ms'),
+                    "created": log.get('created')  # Already in ISO format from telegram_service
                 }
                 for log in logs
             ]

@@ -16,13 +16,13 @@ sys.path.append(str(PROJECT_ROOT))
 from datetime import datetime, timezone
 
 # import your real models
-from src.data.db.models.model_users import User, AuthIdentity  # your files
+from src.data.db.models.model_users import User, AuthIdentity, VerificationCode  # your files
 from src.data.db.models.model_telegram import (
     TelegramFeedback, TelegramCommandAudit, TelegramBroadcastLog, TelegramSetting
 )
 from src.data.db.models.model_trading import Position  # (above) or your own path
 from src.data.db.models.model_trading import BotInstance
-from src.data.db.models.model_jobs import Schedule, ScheduleRun, JobType, RunStatus
+from src.data.db.models.model_jobs import Schedule, ScheduleRun, Run, JobType, RunStatus
 
 UTC = timezone.utc
 
@@ -68,10 +68,29 @@ def add_telegram_identity(s, user_id: int, telegram_user_id: str, **meta):
         user_id=user_id,
         provider="telegram",
         external_id=str(telegram_user_id),
-        identity_metadata=meta or None,  # <-- renamed attribute
+        identity_metadata=meta or None,  # <-- correct attribute name for metadata column
+        created_at=utcnow()  # Ensure created_at is set
     )
     s.add(ai); s.flush()
     return ai
+
+def make_verification_code(s: Session, *, user_id: int, code: str | None = None,
+                          provider: str = "telegram", sent_time: int | None = None) -> VerificationCode:
+    """Create a verification code with all required columns."""
+    import time
+
+    code = code or f"CODE{random.randint(100000, 999999)}"
+    sent_time = sent_time or int(time.time())
+
+    vc = VerificationCode(
+        user_id=user_id,
+        code=code,
+        sent_time=sent_time,
+        provider=provider,  # New column with default 'telegram'
+        created_at=utcnow()  # New column with default now()
+    )
+    s.add(vc); s.flush()
+    return vc
 
 # -------------------------------- POSITIONS ----------------------------------
 
@@ -114,8 +133,19 @@ def make_position(s: Session, rng: RNG, *,
 # -------------------------------- TELEGRAM -----------------------------------
 
 def make_feedback(s: Session, *, user_id: int, type_: str = "bug",
-                  message: str = "it broke", status: str | None = None) -> TelegramFeedback:
-    row = TelegramFeedback(user_id=user_id, type=type_, message=message, created=utcnow(), status=status)
+                  message: str = "it broke", status: str | None = None,
+                  created_at: datetime | None = None) -> TelegramFeedback:
+    # Use all the corrected TelegramFeedback columns
+    created_at = created_at or utcnow()
+    status = status or "open"
+
+    row = TelegramFeedback(
+        user_id=user_id,
+        type=type_,  # Now included in model
+        message=message,  # Now included in model
+        created_at=created_at,  # Now included in model (renamed from 'created')
+        status=status  # Now included in model
+    )
     s.add(row); s.flush()
     return row
 
@@ -170,18 +200,25 @@ def make_run(s: Session, rng: RNG, *,
              job_type: str | None = None,
              job_id: int | None = None,
              status: str | None = None,
-             scheduled_for: datetime | None = None) -> Run:
+             scheduled_for: datetime | None = None,
+             worker_id: str | None = None) -> Run:
     job_type = job_type or rng.choice(["report", "screener", "alert"])
-    job_id = job_id if job_id is not None else rng.randint(1000, 9999)
+    # Changed to BigInteger - use larger range for PostgreSQL int8
+    job_id = job_id if job_id is not None else rng.randint(100000, 999999999)
     status = status or "pending"
     scheduled_for = scheduled_for or datetime.now(UTC)
+    worker_id = worker_id or f"worker-{rng.randint(1, 100)}"
 
-    run = ScheduleRun(
+    # Import the correct Run model (not ScheduleRun)
+    from src.data.db.models.model_jobs import Run
+
+    run = Run(
         job_type=job_type,
-        job_id=job_id,
-        user_id=user_id,
+        job_id=job_id,  # Now BigInteger
+        user_id=user_id,  # Already BigInteger in model
         status=status,
         scheduled_for=scheduled_for,
+        worker_id=worker_id,  # Add missing worker_id field
         job_snapshot={"created_by": "factory", "test": True}
     )
     s.add(run); s.flush()

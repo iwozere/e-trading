@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Literal, Dict, Any, List
 
 TF = Literal["1m","5m","15m","1h","4h","1d"]
@@ -31,7 +31,8 @@ class Node(BaseModel):
     and_: Optional[List["Node"]] = Field(default=None, alias="and")
     or_: Optional[List["Node"]] = Field(default=None, alias="or")
     not_: Optional["Node"] = Field(default=None, alias="not")
-    class Config: allow_population_by_field_name = True
+    model_config = ConfigDict(allow_population_by_field_name=True)
+
 Node.update_forward_refs()
 
 class NotifyCfg(BaseModel):

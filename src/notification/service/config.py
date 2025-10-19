@@ -8,7 +8,7 @@ Handles environment variables, database settings, and service configuration.
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, ConfigDict
 import os
 
 from src.notification.logger import setup_logger
@@ -38,9 +38,8 @@ class DatabaseConfig(BaseSettings):
         env="DATABASE_ECHO",
         description="Enable SQLAlchemy query logging"
     )
+    model_config = ConfigDict(env_prefix = "DB_")
 
-    class Config:
-        env_prefix = "DB_"
 
 
 class ServerConfig(BaseSettings):
@@ -71,9 +70,7 @@ class ServerConfig(BaseSettings):
         env="NOTIFICATION_LOG_LEVEL",
         description="Logging level"
     )
-
-    class Config:
-        env_prefix = "SERVER_"
+    model_config = ConfigDict(env_prefix = "SERVER_")
 
 
 class ProcessingConfig(BaseSettings):
@@ -109,9 +106,7 @@ class ProcessingConfig(BaseSettings):
         env="PROCESSING_MAX_RETRIES",
         description="Maximum retry attempts per message"
     )
-
-    class Config:
-        env_prefix = "PROCESSING_"
+    model_config = ConfigDict(env_prefix = "PROCESSING_")
 
 
 class RateLimitConfig(BaseSettings):
@@ -135,9 +130,7 @@ class RateLimitConfig(BaseSettings):
         env="RATE_LIMIT_BYPASS_HIGH_PRIORITY",
         description="Allow high priority messages to bypass rate limits"
     )
-
-    class Config:
-        env_prefix = "RATE_LIMIT_"
+    model_config = ConfigDict(env_prefix = "RATE_LIMIT_")
 
 
 class ChannelConfig(BaseSettings):
@@ -173,9 +166,7 @@ class ChannelConfig(BaseSettings):
         },
         description="SMS channel configuration"
     )
-
-    class Config:
-        env_prefix = "CHANNEL_"
+    model_config = ConfigDict(env_prefix = "CHANNEL_")
 
 
 class NotificationServiceConfig(BaseSettings):
@@ -262,10 +253,11 @@ class NotificationServiceConfig(BaseSettings):
             return ChannelConfig(**v)
         return v
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = ConfigDict(
+        env_file = ".env",
+        env_file_encoding = "utf-8",
         case_sensitive = False
+    )
 
     def get_channel_config(self, channel_name: str) -> Optional[Dict[str, Any]]:
         """

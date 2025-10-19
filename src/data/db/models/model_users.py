@@ -1,6 +1,7 @@
 # model_users.py  (patched)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import Integer, String, DateTime, ForeignKey, JSON, text, UniqueConstraint, Index, CheckConstraint
+from sqlalchemy import Integer, String, DateTime, ForeignKey, text, UniqueConstraint, Index, CheckConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -74,36 +75,40 @@ class AuthIdentity(Base):
     __tablename__ = "usr_auth_identities"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"), index=True)
-    provider: Mapped[str] = mapped_column(String(32))
-    external_id: Mapped[str] = mapped_column(String(255))
+    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"))
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
     # IMPORTANT: attribute renamed; keep DB column name as "metadata"
-    identity_metadata: Mapped[dict | None] = mapped_column("metadata", JSON)
+    identity_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
 
     __table_args__ = (
         UniqueConstraint("provider", "external_id", name="uq_auth_identities_provider_external"),
         Index("ix_auth_identities_provider_external", "provider", "external_id"),
-        Index("ix_auth_identities_provider", "provider"),  # ADD THIS
-        Index("idx_auth_identities_user", "user_id"),
+        Index("ix_auth_identities_provider", "provider"),
+        Index("ix_auth_identities_user_id", "user_id"),
     )
 
     # Convenience getters/setters
     def meta_get(self, key: str, default=None):
-        return (self.metadata or {}).get(key, default)
+        return (self.identity_metadata or {}).get(key, default)
 
     def meta_set(self, key: str, value):
-        md = dict(self.metadata or {})
+        md = dict(self.identity_metadata or {})
         md[key] = value
-        self.metadata = md
+        self.identity_metadata = md
 
 # telegram_verification_codes
 class VerificationCode(Base):
     __tablename__ = "usr_verification_codes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"))
-    code: Mapped[str] = mapped_column(String(32))
-    sent_time: Mapped[int] = mapped_column(Integer)
-    provider: Mapped[Optional[str]] = mapped_column(String(20), server_default="telegram")
-    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"), nullable=False)
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    sent_time: Mapped[int] = mapped_column(Integer, nullable=False)
+    provider: Mapped[Optional[str]] = mapped_column(String(20), server_default="'telegram'", nullable=True)
+    created_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=True)
+
+    __table_args__ = (
+        Index("ix_verification_codes_user_id", "user_id"),
+    )

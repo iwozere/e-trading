@@ -2,7 +2,7 @@
 from __future__ import annotations
 import pytest
 import os
-from sqlalchemy import create_engine, event, MetaData
+from sqlalchemy import create_engine, event, MetaData, text
 from sqlalchemy.orm import sessionmaker
 
 from pathlib import Path
@@ -32,23 +32,51 @@ def _make_users_visible_in_other_metadatas():
 
 @pytest.fixture(scope="session")
 def engine():
-    """Create PostgreSQL test database engine."""
-    # Use test database URL or default to a test database
-    test_db_url = os.getenv(
-        "TEST_DATABASE_URL",
-        "postgresql://postgres:password@localhost:5432/etrading_test"
-    )
+    """Create test database engine."""
+    # Import the actual database configuration
+    try:
+        from config.donotshare.donotshare import (
+            POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER,
+            POSTGRES_PASSWORD, POSTGRES_DATABASE
+        )
+        # Use actual database configuration but with a test database name
+        test_db_name = f"{POSTGRES_DATABASE}_test"
+        test_db_url = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{test_db_name}"
+    except ImportError:
+        # Fallback to environment variable or default
+        test_db_url = os.getenv(
+            "TEST_DATABASE_URL",
+            "postgresql://postgres:password@localhost:5432/etrading_test"
+        )
 
     eng = create_engine(test_db_url, future=True)
 
-    # Drop all tables and recreate for clean test environment
-    Base.metadata.drop_all(eng)
-    _ddl_create_all(eng)
+    # Create only the tables we need for testing (safer approach)
+    from src.data.db.models.model_users import User
+    from src.data.db.models.model_trading import BotInstance, Trade, Position, PerformanceMetric
+
+    # Create tables in dependency order to avoid foreign key errors
+    tables_to_create = [
+        User.__table__,
+        BotInstance.__table__,
+        Position.__table__,  # Create Position before Trade since Trade references Position
+        PerformanceMetric.__table__,
+        Trade.__table__
+    ]
+
+    for table in tables_to_create:
+        try:
+            table.create(eng, checkfirst=True)
+        except Exception as e:
+            if "already exists" in str(e):
+                pass  # Table already exists, continue
+            else:
+                print(f"Error creating table {table.name}: {e}")
+                # Continue with other tables
 
     yield eng
 
-    # Cleanup after tests
-    Base.metadata.drop_all(eng)
+    # No cleanup - leave test database intact for reuse
     eng.dispose()
 
 @pytest.fixture()

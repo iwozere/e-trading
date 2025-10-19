@@ -77,34 +77,6 @@ class Schedule(Base):
         return f"<Schedule(id={self.id}, name='{self.name}', job_type='{self.job_type}', enabled={self.enabled})>"
 
 
-class Run(Base):
-    """Run model for job execution history with snapshots."""
-    __tablename__ = "job_runs"
-
-    run_id = Column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid4)
-    job_type = Column(Text, nullable=False)  # Changed from String(50)
-    job_id = Column(BigInteger, nullable=True)  # Changed from String(255) to int8
-    user_id = Column(BigInteger, nullable=True)  # Changed to int8
-    status = Column(Text, nullable=True)  # Changed from String(20)
-    scheduled_for = Column(DateTime(timezone=True), nullable=True)
-    enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    finished_at = Column(DateTime(timezone=True), nullable=True)
-    job_snapshot = Column(get_json_type(), nullable=True)
-    result = Column(get_json_type(), nullable=True)
-    error = Column(Text, nullable=True)
-    # Missing field that exists in database:
-    worker_id = Column(String(255), nullable=True)  # Add missing field
-
-    __table_args__ = (
-        # Correct constraint name from database
-        UniqueConstraint("job_type", "job_id", "scheduled_for", name="ux_runs_job_scheduled_for"),
-    )
-
-    def __repr__(self):
-        return f"<Run(run_id={self.run_id}, job_type='{self.job_type}', status='{self.status}')>"
-
-
 class ScheduleRun(Base):
     """Run model for job execution history with snapshots."""
 
@@ -131,6 +103,7 @@ class ScheduleRun(Base):
 
     def __repr__(self):
         return f"<ScheduleRun(id={self.id}, job_type='{self.job_type}', status='{self.status}')>"
+
 
 
 # Pydantic models for API validation
@@ -174,9 +147,7 @@ class ScheduleResponse(BaseModel):
     next_run_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScheduleRunCreate(BaseModel):
@@ -212,10 +183,7 @@ class ScheduleRunResponse(BaseModel):
     result: Optional[Dict[str, Any]]
     error: Optional[str]
     worker_id: Optional[str]
-
-    class Config:
-        from_attributes = True
-
+    model_config = ConfigDict(from_attributes=True)
 
 class ReportRequest(BaseModel):
     """Pydantic model for report execution requests."""
