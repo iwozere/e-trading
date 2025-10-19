@@ -36,5 +36,5 @@ mkdir -p "$PROJECT_ROOT/logs/log"
 # exec "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/frontend/telegram/bot.py"
 
 # Journal + file (optional):
-exec "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/frontend/telegram/bot.py" \
+exec "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/src/frontend/telegram/telegram_bot.py" \
   >>"$PROJECT_ROOT/logs/log/telegram_bot.out" 2>&1

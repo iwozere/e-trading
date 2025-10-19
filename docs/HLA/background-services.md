@@ -77,11 +77,12 @@ class TelegramBot:
 #### 2.1 Job Scheduling System
 
 #### APScheduler Integration
-- **Framework**: Advanced Python Scheduler (APScheduler) - *Planned Implementation*
+- **Framework**: Advanced Python Scheduler (APScheduler) - *Implementation Planned*
 - **Storage**: PostgreSQL-based job store for persistence
-- **Executors**: Thread pool and process pool executors
-- **Triggers**: Cron-based scheduling with timezone support
-- **Background Service**: `src/scheduler/background_bot.py` - *To be implemented*
+- **Executors**: ThreadPoolExecutor for I/O-bound alert evaluations
+- **Triggers**: Cron-based scheduling with 5/6 field support and timezone awareness
+- **Background Service**: `src/scheduler/scheduler_service.py` - *Implementation Planned*
+- **Alert Services**: Centralized in `src/common/alerts/` with schema validation
 
 #### Job Types
 The system supports multiple job types:
@@ -332,11 +333,12 @@ stateDiagram-v2
 
 #### 6.2 Scheduled Service Deployment (Planned Implementation)
 
-**Background Scheduler Service** (`systemd` service - *To be implemented*):
-- New independent systemd service for alert/schedule processing
-- Reads `job_schedules` table on startup and polls for changes
-- Calculates `next_run_at` for all enabled schedules
-- Spawns worker processes for job execution
+**Background Scheduler Service** (`systemd` service - *Implementation Planned*):
+- New independent systemd service for alert/schedule processing using APScheduler
+- Centralized alert evaluation with rearm logic in `src/common/alerts/`
+- Reads `job_schedules` table on startup and registers with APScheduler
+- Uses ThreadPoolExecutor for I/O-bound alert evaluations
+- Integrates with existing DataManager and IndicatorService
 - Workers communicate back to TelegramBot via FastAPI calls
 
 **Service Architecture**:
@@ -779,7 +781,10 @@ TELEGRAM_BOT_CONFIG = {
 #### Implementation Status
 - ✅ **TradingBot**: Implemented as systemd service
 - ✅ **TelegramBot**: Implemented as systemd service with FastAPI
-- 🔄 **SchedulerService**: Planned implementation for alert/schedule processing
+- 📋 **SchedulerService**: Specification complete, ready for implementation
+  - APScheduler-based job scheduling and execution
+  - Centralized alert evaluation with rearm logic
+  - Integration with existing data and notification services
 - 🔄 **Notification Service**: Background service integration within TelegramBot
 
 This architecture provides robust separation of concerns while enabling efficient communication between services through well-defined interfaces and persistent storage.

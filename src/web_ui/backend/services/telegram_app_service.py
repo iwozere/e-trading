@@ -161,7 +161,7 @@ class TelegramAppService:
             end_idx = start_idx + page_size
             paginated_alerts = alerts[start_idx:end_idx]
 
-            # Transform to web UI format
+            # Transform to web UI format - alerts are now dictionaries from telegram_service
             return [
                 {
                     "id": alert.get('id'),
@@ -225,10 +225,12 @@ class TelegramAppService:
     def get_schedule_stats(self) -> Dict[str, Any]:
         """Get Telegram schedule statistics."""
         try:
-            # For now, return basic stats since telegram_service methods are user-specific
+            # Get all active schedules to calculate stats
+            active_schedules = telegram_service.get_active_schedules()
+
             return {
-                "total_schedules": 0,    # Would need to aggregate across all users
-                "active_schedules": 0,   # Would need to aggregate across all users
+                "total_schedules": len(active_schedules),  # Only active schedules for now
+                "active_schedules": len(active_schedules),
                 "executed_today": 0,     # Would need additional domain method
                 "failed_executions": 0   # Would need additional domain method
             }
@@ -239,9 +241,38 @@ class TelegramAppService:
     def get_schedules_list(self, filter_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get filtered list of schedules."""
         try:
-            # For now, return empty list since telegram_service methods are user-specific
-            # and we don't have a way to get all schedules across all users
-            return []
+            # Get all active schedules from telegram_service
+            schedules = telegram_service.get_active_schedules()
+
+            # Filter if needed
+            if filter_type == "inactive":
+                # For now, return empty list since we only have active schedules
+                schedules = []
+            elif filter_type == "active":
+                # Already filtered to active schedules
+                pass
+
+            # Transform to web UI format - schedules are now dictionaries from telegram_service
+            return [
+                {
+                    "id": schedule.get('id'),
+                    "user_id": str(schedule.get('user_id', '')),
+                    "ticker": schedule.get('ticker', ''),
+                    "scheduled_time": schedule.get('scheduled_time', ''),
+                    "period": schedule.get('period'),
+                    "active": schedule.get('active', True),
+                    "email": schedule.get('email', False),
+                    "indicators": schedule.get('indicators'),
+                    "interval": schedule.get('interval'),
+                    "provider": schedule.get('provider'),
+                    "schedule_type": schedule.get('schedule_type'),
+                    "list_type": schedule.get('list_type'),
+                    "config_json": schedule.get('config_json'),
+                    "schedule_config": schedule.get('schedule_config'),
+                    "created": schedule.get('created')
+                }
+                for schedule in schedules
+            ]
         except Exception as e:
             _logger.error("Error getting schedules list: %s", e)
             raise

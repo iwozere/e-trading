@@ -318,6 +318,53 @@ async def api_broadcast(request: web.Request) -> web.Response:
             'error': str(e)
         }, status=500)
 
+async def api_notify(request: web.Request) -> web.Response:
+    """API endpoint for sending notifications from scheduler service"""
+    try:
+        data = await request.json()
+
+        # Extract required fields
+        notification_type = data.get('notification_type', 'INFO')
+        title = data.get('title', 'Alert Notification')
+        message = data.get('message')
+        priority = data.get('priority', 'NORMAL')
+        telegram_chat_id = data.get('telegram_chat_id')
+
+        if not message:
+            return web.json_response({
+                'success': False,
+                'error': 'Missing message field'
+            }, status=400)
+
+        if not telegram_chat_id:
+            return web.json_response({
+                'success': False,
+                'error': 'Missing telegram_chat_id field'
+            }, status=400)
+
+        # Use notification manager to send notification
+        success = await notification_manager.send_notification(
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            priority=priority,
+            channels=["telegram"],
+            telegram_chat_id=int(telegram_chat_id),
+            data=data.get('data', {})
+        )
+
+        return web.json_response({
+            'success': success,
+            'message': 'Notification queued for delivery' if success else 'Failed to queue notification'
+        })
+
+    except Exception as e:
+        _logger.exception("Error in api_notify: ")
+        return web.json_response({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
 async def api_status(request: web.Request) -> web.Response:
     """API endpoint for health check and status"""
     try:
@@ -373,6 +420,7 @@ async def api_status(request: web.Request) -> web.Response:
 api_app = web.Application()
 api_app.router.add_post('/api/send_message', api_send_message)
 api_app.router.add_post('/api/broadcast', api_broadcast)
+api_app.router.add_post('/api/notify', api_notify)
 api_app.router.add_get('/api/status', api_status)
 api_app.router.add_get('/api/test', lambda r: web.json_response({'status': 'ok', 'message': 'Bot API is working!'}))
 

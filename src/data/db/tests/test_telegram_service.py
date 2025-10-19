@@ -157,12 +157,12 @@ def test_schedules_crud(setup_inmemory_db):
     assert isinstance(sched_id, int)
 
     rows = tgs.list_schedules(tg_id)
-    assert len(rows) == 1 and rows[0].ticker == "MSFT"
+    assert len(rows) == 1 and rows[0]['ticker'] == "MSFT"
 
     # Update
     assert tgs.update_schedule(sched_id, scheduled_time="09:00") is True
     row = tgs.get_schedule(sched_id)
-    assert row and row.scheduled_time == "09:00"
+    assert row and row['scheduled_time'] == "09:00"
 
     # Delete
     assert tgs.delete_schedule(sched_id) is True

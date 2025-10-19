@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from sqlalchemy import inspect, BigInteger, Text, String
 from sqlalchemy.dialects.postgresql import JSONB
 
-from src.data.db.models.model_jobs import Schedule, Run
+from src.data.db.models.model_jobs import Schedule, Run, ScheduleRun
 
 
 class TestJobModelStructure:
@@ -36,9 +36,8 @@ class TestJobModelStructure:
         assert columns['name'].type.__class__.__name__ == 'String'
         assert columns['job_type'].type.__class__.__name__ == 'String'
         assert columns['target'].type.__class__.__name__ == 'String'
-        # task_params should be JSON or JSONB (depending on database dialect)
-        task_params_type = columns['task_params'].type.__class__.__name__
-        assert task_params_type in ['JSON', 'JSONB'], f"Expected JSON or JSONB, got {task_params_type}"
+        # task_params should be JSONB for PostgreSQL
+        assert columns['task_params'].type.__class__.__name__ == 'JSONB'
         assert columns['cron'].type.__class__.__name__ == 'String'
         assert columns['enabled'].type.__class__.__name__ == 'Boolean'
 
@@ -59,11 +58,9 @@ class TestJobModelStructure:
         # Check other important columns
         assert columns['run_id'].type.__class__.__name__ == 'UUID'
 
-        # job_snapshot and result should be JSON or JSONB (depending on database dialect)
-        job_snapshot_type = columns['job_snapshot'].type.__class__.__name__
-        result_type = columns['result'].type.__class__.__name__
-        assert job_snapshot_type in ['JSON', 'JSONB'], f"Expected JSON or JSONB, got {job_snapshot_type}"
-        assert result_type in ['JSON', 'JSONB'], f"Expected JSON or JSONB, got {result_type}"
+        # job_snapshot and result should be JSONB for PostgreSQL
+        assert columns['job_snapshot'].type.__class__.__name__ == 'JSONB'
+        assert columns['result'].type.__class__.__name__ == 'JSONB'
         assert columns['error'].type.__class__.__name__ == 'Text'
         assert columns['worker_id'].type.__class__.__name__ == 'String'
 

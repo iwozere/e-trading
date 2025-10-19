@@ -11,13 +11,20 @@ from typing import Optional, Dict, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, BigInteger, JSON,
-    CheckConstraint, UniqueConstraint, Index, func
+    Column, Integer, String, Boolean, DateTime, Text, BigInteger,
+    CheckConstraint, UniqueConstraint, Index, func, JSON
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PostgresUUID
+from sqlalchemy.dialects import postgresql, sqlite
 from pydantic import BaseModel, Field, field_validator
 
 from src.data.db.core.base import Base
+
+
+# Database-agnostic JSON type
+def get_json_type():
+    """Get appropriate JSON type based on database dialect."""
+    return JSON().with_variant(postgresql.JSONB(), 'postgresql').with_variant(sqlite.JSON(), 'sqlite')
 
 
 
@@ -51,7 +58,7 @@ class Schedule(Base):
     name = Column(String(255), nullable=False)
     job_type = Column(String(50), nullable=False)
     target = Column(String(255), nullable=False)
-    task_params = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=False, default={})
+    task_params = Column(get_json_type(), nullable=False, default={})
     cron = Column(String(100), nullable=False)
     enabled = Column(Boolean, nullable=False, default=True, index=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
@@ -70,6 +77,34 @@ class Schedule(Base):
         return f"<Schedule(id={self.id}, name='{self.name}', job_type='{self.job_type}', enabled={self.enabled})>"
 
 
+class Run(Base):
+    """Run model for job execution history with snapshots."""
+    __tablename__ = "job_runs"
+
+    run_id = Column(PostgresUUID(as_uuid=True), primary_key=True, default=uuid4)
+    job_type = Column(Text, nullable=False)  # Changed from String(50)
+    job_id = Column(BigInteger, nullable=True)  # Changed from String(255) to int8
+    user_id = Column(BigInteger, nullable=True)  # Changed to int8
+    status = Column(Text, nullable=True)  # Changed from String(20)
+    scheduled_for = Column(DateTime(timezone=True), nullable=True)
+    enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    job_snapshot = Column(get_json_type(), nullable=True)
+    result = Column(get_json_type(), nullable=True)
+    error = Column(Text, nullable=True)
+    # Missing field that exists in database:
+    worker_id = Column(String(255), nullable=True)  # Add missing field
+
+    __table_args__ = (
+        # Correct constraint name from database
+        UniqueConstraint("job_type", "job_id", "scheduled_for", name="ux_runs_job_scheduled_for"),
+    )
+
+    def __repr__(self):
+        return f"<Run(run_id={self.run_id}, job_type='{self.job_type}', status='{self.status}')>"
+
+
 class ScheduleRun(Base):
     """Run model for job execution history with snapshots."""
 
@@ -84,8 +119,8 @@ class ScheduleRun(Base):
     enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
-    job_snapshot = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
-    result = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
+    job_snapshot = Column(get_json_type(), nullable=True)
+    result = Column(get_json_type(), nullable=True)
     error = Column(Text, nullable=True)
     worker_id = Column(String(255), nullable=True)
 
@@ -95,7 +130,7 @@ class ScheduleRun(Base):
     )
 
     def __repr__(self):
-        return f"<Run(id={self.id}, job_type='{self.job_type}', status='{self.status}')>"
+        return f"<ScheduleRun(id={self.id}, job_type='{self.job_type}', status='{self.status}')>"
 
 
 # Pydantic models for API validation

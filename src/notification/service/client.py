@@ -1,0 +1,455 @@
+"""
+Notification Service Client
+
+Client library for interacting with the notification service API.
+Provides a simple interface for sending notifications and checking delivery status.
+"""
+
+import asyncio
+import aiohttp
+from typing import List, Dict, Any, Optional, Union
+from datetime import datetime
+from enum import Enum
+import json
+from pathlib import Path
+import sys
+
+# Add project root to path
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.append(str(PROJECT_ROOT))
+
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
+
+class MessagePriority(str, Enum):
+    """Message priority levels."""
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class MessageType(str, Enum):
+    """Message types for categorization."""
+    TRADE_ENTRY = "trade_entry"
+    TRADE_EXIT = "trade_exit"
+    ERROR = "error"
+    ALERT = "alert"
+    REPORT = "report"
+    SYSTEM = "system"
+    INFO = "info"
+
+
+class NotificationServiceClient:
+    """
+    Client for interacting with the notification service API.
+
+    Provides a simple interface for sending notifications and checking delivery status.
+    Compatible with AsyncNotificationManager interface for easy migration.
+    """
+
+    def __init__(self,
+                 service_url: str = "http://localhost:8000",
+                 timeout: int = 30,
+                 max_retries: int = 3):
+        """
+        Initialize the notification service client.
+
+        Args:
+            service_url: Base URL of the notification service
+            timeout: Request timeout in seconds
+            max_retries: Maximum number of retry attempts
+        """
+        self.service_url = service_url.rstrip('/')
+        self.timeout = aiohttp.ClientTimeout(total=timeout)
+        self.max_retries = max_retries
+        self._session: Optional[aiohttp.ClientSession] = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create HTTP session."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(timeout=self.timeout)
+        return self._session
+
+    async def close(self):
+        """Close the HTTP session."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+
+    async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+        """
+        Make HTTP request with retry logic.
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            **kwargs: Additional request parameters
+
+        Returns:
+            Response data
+
+        Raises:
+            Exception: If request fails after all retries
+        """
+        session = await self._get_session()
+        url = f"{self.service_url}{endpoint}"
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                async with session.request(method, url, **kwargs) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    elif response.status == 404:
+                        raise ValueError(f"Resource not found: {endpoint}")
+                    elif response.status >= 400:
+                        error_text = await response.text()
+                        raise Exception(f"HTTP {response.status}: {error_text}")
+
+            except aiohttp.ClientError as e:
+                if attempt == self.max_retries:
+                    raise Exception(f"Request failed after {self.max_retries + 1} attempts: {e}")
+
+                # Wait before retry (exponential backoff)
+                wait_time = 2 ** attempt
+                _logger.warning("Request failed (attempt %d/%d), retrying in %ds: %s",
+                              attempt + 1, self.max_retries + 1, wait_time, e)
+                await asyncio.sleep(wait_time)
+
+    async def send_notification(self,
+                              notification_type: Union[str, MessageType],
+                              title: str,
+                              message: str,
+                              priority: Union[str, MessagePriority] = MessagePriority.NORMAL,
+                              data: Optional[Dict[str, Any]] = None,
+                              source: str = "trading_bot",
+                              channels: Optional[List[str]] = None,
+                              attachments: Optional[dict] = None,
+                              email_receiver: Optional[str] = None,
+                              reply_to_message_id: Optional[int] = None,
+                              telegram_chat_id: Optional[int] = None,
+                              recipient_id: Optional[str] = None) -> bool:
+        """
+        Send a notification through the service.
+
+        Compatible with AsyncNotificationManager.send_notification interface.
+
+        Args:
+            notification_type: Type of notification
+            title: Notification title
+            message: Notification message
+            priority: Notification priority
+            data: Additional data for the notification
+            source: Source of the notification
+            channels: Specific channels to use (None for all enabled channels)
+            attachments: List of attachments to include with the notification
+            email_receiver: Receiver email address for email notifications
+            reply_to_message_id: Reply to message ID for Telegram messages
+            telegram_chat_id: Telegram chat ID for Telegram messages
+            recipient_id: Recipient user ID
+
+        Returns:
+            True if notification was queued successfully
+        """
+        try:
+            # Convert enums to strings
+            if isinstance(notification_type, MessageType):
+                notification_type = notification_type.value
+            if isinstance(priority, MessagePriority):
+                priority = priority.value
+
+            # Build message data
+            message_data = {
+                "message_type": str(notification_type),
+                "priority": str(priority),
+                "channels": channels or ["telegram", "email"],
+                "recipient_id": recipient_id or email_receiver or "default",
+                "template_name": None,
+                "content": {
+                    "title": title,
+                    "message": message,
+                    "source": source
+                },
+                "message_metadata": data or {}
+            }
+
+            # Add compatibility data for legacy parameters
+            if attachments:
+                message_data["message_metadata"]["attachments"] = attachments
+
+            if reply_to_message_id is not None:
+                message_data["message_metadata"]["reply_to_message_id"] = reply_to_message_id
+
+            if telegram_chat_id is not None:
+                message_data["message_metadata"]["telegram_chat_id"] = telegram_chat_id
+
+            if email_receiver:
+                message_data["message_metadata"]["email_receiver"] = email_receiver
+
+            # Send request
+            response = await self._make_request(
+                "POST",
+                "/api/v1/messages",
+                json=message_data,
+                headers={"Content-Type": "application/json"}
+            )
+
+            _logger.info("Notification sent successfully: %s", response.get("message_id"))
+            return True
+
+        except Exception as e:
+            _logger.error("Failed to send notification: %s", e)
+            return False
+
+    async def send_trade_notification(self,
+                                    symbol: str,
+                                    side: str,
+                                    price: float,
+                                    quantity: float,
+                                    entry_price: Optional[float] = None,
+                                    pnl: Optional[float] = None,
+                                    exit_type: Optional[str] = None,
+                                    recipient_id: Optional[str] = None) -> bool:
+        """
+        Send a trade notification.
+
+        Compatible with AsyncNotificationManager.send_trade_notification interface.
+
+        Args:
+            symbol: Trading symbol
+            side: 'BUY' or 'SELL'
+            price: Trade price
+            quantity: Trade quantity
+            entry_price: Entry price (for exits)
+            pnl: Profit/loss percentage
+            exit_type: Exit type (TP/SL)
+            recipient_id: Recipient user ID
+
+        Returns:
+            True if notification was queued successfully
+        """
+        if side.upper() == "BUY":
+            notification_type = MessageType.TRADE_ENTRY
+            title = f"Buy Order: {symbol}"
+            message = f"Buy {quantity} {symbol} at {price}"
+        else:
+            notification_type = MessageType.TRADE_EXIT
+            title = f"Sell Order: {symbol}"
+            message = f"Sell {quantity} {symbol} at {price}"
+            if pnl is not None:
+                message += f" (PnL: {pnl:.2f}%)"
+            if exit_type:
+                message += f" ({exit_type})"
+
+        data = {
+            "symbol": symbol,
+            "side": side.upper(),
+            "price": price,
+            "quantity": quantity,
+            "entry_price": entry_price,
+            "pnl": pnl,
+            "exit_type": exit_type,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        return await self.send_notification(
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            priority=MessagePriority.HIGH,
+            data=data,
+            source="trading_bot",
+            recipient_id=recipient_id
+        )
+
+    async def send_error_notification(self,
+                                    error_message: str,
+                                    source: str = "trading_bot",
+                                    recipient_id: Optional[str] = None) -> bool:
+        """
+        Send an error notification.
+
+        Compatible with AsyncNotificationManager.send_error_notification interface.
+
+        Args:
+            error_message: Error message
+            source: Source of the error
+            recipient_id: Recipient user ID
+
+        Returns:
+            True if notification was queued successfully
+        """
+        return await self.send_notification(
+            notification_type=MessageType.ERROR,
+            title="Error Alert",
+            message=error_message,
+            priority=MessagePriority.CRITICAL,
+            source=source,
+            recipient_id=recipient_id
+        )
+
+    async def get_message_status(self, message_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get message status and details.
+
+        Args:
+            message_id: Message ID
+
+        Returns:
+            Message details and status, or None if not found
+        """
+        try:
+            response = await self._make_request("GET", f"/api/v1/messages/{message_id}/status")
+            return response
+        except ValueError:
+            return None
+        except Exception as e:
+            _logger.error("Failed to get message status: %s", e)
+            return None
+
+    async def get_delivery_status(self, message_id: int) -> List[Dict[str, Any]]:
+        """
+        Get delivery status for all channels of a message.
+
+        Args:
+            message_id: Message ID
+
+        Returns:
+            List of delivery statuses
+        """
+        try:
+            response = await self._make_request("GET", f"/api/v1/messages/{message_id}/delivery")
+            return response
+        except Exception as e:
+            _logger.error("Failed to get delivery status: %s", e)
+            return []
+
+    async def list_messages(self,
+                          status: Optional[str] = None,
+                          priority: Optional[str] = None,
+                          recipient_id: Optional[str] = None,
+                          message_type: Optional[str] = None,
+                          limit: int = 100,
+                          offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        List messages with optional filtering.
+
+        Args:
+            status: Filter by message status
+            priority: Filter by message priority
+            recipient_id: Filter by recipient ID
+            message_type: Filter by message type
+            limit: Maximum number of results
+            offset: Number of results to skip
+
+        Returns:
+            List of messages
+        """
+        try:
+            params = {}
+            if status:
+                params["status"] = status
+            if priority:
+                params["priority"] = priority
+            if recipient_id:
+                params["recipient_id"] = recipient_id
+            if message_type:
+                params["message_type"] = message_type
+            if limit:
+                params["limit"] = limit
+            if offset:
+                params["offset"] = offset
+
+            response = await self._make_request("GET", "/api/v1/messages", params=params)
+            return response
+        except Exception as e:
+            _logger.error("Failed to list messages: %s", e)
+            return []
+
+    async def get_health_status(self) -> Dict[str, Any]:
+        """
+        Get service health status.
+
+        Returns:
+            Health status information
+        """
+        try:
+            response = await self._make_request("GET", "/api/v1/health")
+            return response
+        except Exception as e:
+            _logger.error("Failed to get health status: %s", e)
+            return {"status": "unhealthy", "error": str(e)}
+
+    async def get_channels_health(self) -> List[Dict[str, Any]]:
+        """
+        Get health status for all channels.
+
+        Returns:
+            List of channel health statuses
+        """
+        try:
+            response = await self._make_request("GET", "/api/v1/channels/health")
+            return response
+        except Exception as e:
+            _logger.error("Failed to get channels health: %s", e)
+            return []
+
+    # Context manager support
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.close()
+
+    # Compatibility methods for AsyncNotificationManager interface
+    async def start(self):
+        """Start the client (compatibility method)."""
+        # No-op for client, service handles processing
+        pass
+
+    async def stop(self):
+        """Stop the client (compatibility method)."""
+        await self.close()
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get client statistics (compatibility method)."""
+        return {
+            "service_url": self.service_url,
+            "timeout": self.timeout.total,
+            "max_retries": self.max_retries,
+            "session_active": self._session is not None and not self._session.closed
+        }
+
+
+# Global client instance for easy access
+_notification_client: Optional[NotificationServiceClient] = None
+
+
+def get_notification_client() -> Optional[NotificationServiceClient]:
+    """Get the global notification client instance."""
+    return _notification_client
+
+
+async def initialize_notification_client(service_url: str = "http://localhost:8000", **kwargs) -> NotificationServiceClient:
+    """
+    Initialize the global notification client.
+
+    Args:
+        service_url: Base URL of the notification service
+        **kwargs: Additional client configuration
+
+    Returns:
+        Initialized notification client
+    """
+    global _notification_client
+
+    if _notification_client is not None:
+        await _notification_client.close()
+
+    _notification_client = NotificationServiceClient(service_url=service_url, **kwargs)
+    _logger.info("Notification service client initialized with URL: %s", service_url)
+
+    return _notification_client

@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy import MetaData
 from src.data.db.core.base import Base
 
-from config.donotshare.donotshare import DB_PATH, SQL_ECHO, DB_URL as CONFIG_DB_URL
+from config.donotshare.donotshare import SQL_ECHO, DB_URL as CONFIG_DB_URL
 
 # ---- ONE shared metadata + Base for the whole app ----
 _convention = {

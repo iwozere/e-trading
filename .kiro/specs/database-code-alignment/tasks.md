@@ -33,21 +33,32 @@
   - Test foreign key relationships
   - _Requirements: 3.1, 3.2_
 
-- [ ] 1.4 Fix JSONB type issues in job models
+- [x] 1.4 Fix JSONB type issues in job models
+
+
+
+
+
   - Change JSON type to JSONB in Schedule and Run models to match PostgreSQL
   - Update test expectations to check for JSONB instead of JSON
   - Ensure JSONB functionality works correctly with PostgreSQL
   - _Requirements: 3.1, 3.3_
 
-- [ ] 2. Fix telegram service integration issues
-- [ ] 2.1 Add missing telegram_verification repository
+- [-] 2. Fix telegram service integration issues
+
+
+
+- [x] 2.1 Add missing telegram_verification repository
+
+
   - Create TelegramVerificationRepo class in repos bundle
   - Implement required methods for verification operations
   - Update database service to include telegram_verification repo
   - Fix telegram service to use the new repository
   - _Requirements: 6.1, 6.2_
 
-- [ ] 2.2 Fix telegram service jobs migration format issues
+- [-] 2.2 Fix telegram service jobs migration format issues
+
   - Fix alert format conversion from jobs system to expected format
   - Update schedule format conversion to handle missing attributes
   - Ensure backward compatibility with existing API expectations

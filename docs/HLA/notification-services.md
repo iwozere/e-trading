@@ -2,406 +2,713 @@
 
 ## Overview
 
-The Advanced Trading Framework implements a sophisticated multi-channel notification system that provides real-time communication across various channels including Telegram, Email, and WebSocket connections. The system is designed for high availability, rate limiting, batching, and intelligent routing of notifications.
+The Advanced Trading Framework implements a dedicated Notification Service that handles all outbound communications across multiple channels including Telegram, Email, SMS, and WebSocket connections. The service is designed as an autonomous process with advanced features like database-backed queuing, per-user rate limiting, delivery tracking, channel health monitoring, and plugin-based extensibility.
+
+## Architecture Evolution
+
+### Current Architecture (Legacy)
+The system previously used an embedded `AsyncNotificationManager` within individual services, leading to tight coupling and limited scalability.
+
+### New Architecture (Target)
+A dedicated Notification Service provides centralized, scalable, and maintainable notification delivery with comprehensive monitoring and analytics.
 
 ## Architecture Components
 
-### 1. Notification System Architecture
+### 1. Notification Service Architecture
 
 ```mermaid
 graph TB
-    subgraph "Notification Sources"
+    subgraph "Service Consumers"
         TradingBot[Trading Bot]
         StrategyMgr[Strategy Manager]
         AlertSystem[Alert System]
         JobScheduler[Job Scheduler]
         WebAPI[Web API]
+        TelegramBot[Telegram Bot]
     end
 
-    subgraph "Notification Manager"
-        NotificationMgr[Async Notification Manager]
-        NotificationQueue[Notification Queue]
-        BatchQueue[Batch Queue]
+    subgraph "Notification Service"
+        API[REST API]
+        MessageQueue[Message Queue]
+        Processor[Message Processor]
         RateLimiter[Rate Limiter]
+        ChannelManager[Channel Manager]
+        HealthMonitor[Health Monitor]
     end
 
-    subgraph "Notification Channels"
-        TelegramChannel[Telegram Channel]
-        EmailChannel[Email Channel]
-        WebSocketChannel[WebSocket Channel]
+    subgraph "Channel Plugins"
+        TelegramChannel[Telegram Plugin]
+        EmailChannel[Email Plugin]
+        SMSChannel[SMS Plugin]
+        SlackChannel[Slack Plugin]
+        WebSocketChannel[WebSocket Plugin]
     end
 
-    subgraph "Delivery Endpoints"
+    subgraph "External APIs"
         TelegramAPI[Telegram Bot API]
         SMTPServer[SMTP Server]
+        SMSProvider[SMS Provider]
+        SlackAPI[Slack API]
         WebSocketMgr[WebSocket Manager]
     end
 
-    %% Notification Flow
-    TradingBot --> NotificationMgr
-    StrategyMgr --> NotificationMgr
-    AlertSystem --> NotificationMgr
-    JobScheduler --> NotificationMgr
-    WebAPI --> NotificationMgr
+    subgraph "Database"
+        Messages[(msg_messages)]
+        DeliveryStatus[(msg_delivery_status)]
+        ChannelHealth[(msg_channel_health)]
+        RateLimits[(msg_rate_limits)]
+    end
 
-    NotificationMgr --> NotificationQueue
-    NotificationMgr --> BatchQueue
-    NotificationMgr --> RateLimiter
+    TradingBot --> API
+    StrategyMgr --> API
+    AlertSystem --> API
+    JobScheduler --> API
+    WebAPI --> API
+    TelegramBot --> API
 
-    NotificationQueue --> TelegramChannel
-    NotificationQueue --> EmailChannel
-    NotificationQueue --> WebSocketChannel
-
-    BatchQueue --> TelegramChannel
-    BatchQueue --> EmailChannel
+    API --> MessageQueue
+    MessageQueue --> Processor
+    Processor --> RateLimiter
+    RateLimiter --> ChannelManager
+    ChannelManager --> TelegramChannel
+    ChannelManager --> EmailChannel
+    ChannelManager --> SMSChannel
+    ChannelManager --> SlackChannel
+    ChannelManager --> WebSocketChannel
 
     TelegramChannel --> TelegramAPI
     EmailChannel --> SMTPServer
+    SMSChannel --> SMSProvider
+    SlackChannel --> SlackAPI
     WebSocketChannel --> WebSocketMgr
+
+    Processor --> Messages
+    Processor --> DeliveryStatus
+    HealthMonitor --> ChannelHealth
+    RateLimiter --> RateLimits
 
     %% Styling
     classDef sourceLayer fill:#e3f2fd
-    classDef managerLayer fill:#f1f8e9
-    classDef channelLayer fill:#fff3e0
+    classDef serviceLayer fill:#f1f8e9
+    classDef pluginLayer fill:#fff3e0
     classDef endpointLayer fill:#fce4ec
+    classDef dataLayer fill:#f3e5f5
 
-    class TradingBot,StrategyMgr,AlertSystem,JobScheduler,WebAPI sourceLayer
-    class NotificationMgr,NotificationQueue,BatchQueue,RateLimiter managerLayer
-    class TelegramChannel,EmailChannel,WebSocketChannel channelLayer
-    class TelegramAPI,SMTPServer,WebSocketMgr endpointLayer
+    class TradingBot,StrategyMgr,AlertSystem,JobScheduler,WebAPI,TelegramBot sourceLayer
+    class API,MessageQueue,Processor,RateLimiter,ChannelManager,HealthMonitor serviceLayer
+    class TelegramChannel,EmailChannel,SMSChannel,SlackChannel,WebSocketChannel pluginLayer
+    class TelegramAPI,SMTPServer,SMSProvider,SlackAPI,WebSocketMgr endpointLayer
+    class Messages,DeliveryStatus,ChannelHealth,RateLimits dataLayer
 ```
 
-### 2. Core Notification Components
+### 2. Core Service Components
 
-#### 2.1 Async Notification Manager
-Central orchestrator for all notification operations:
+#### 2.1 Notification Service
+Autonomous service that handles all outbound communications:
+
+**Key Features:**
+- **Autonomous Process**: Runs independently as a separate service
+- **Database-Backed Queue**: Persistent message storage with priority handling
+- **Plugin Architecture**: Extensible channel system for easy integration
+- **Per-User Rate Limiting**: Prevents spam and respects API limits
+- **Delivery Tracking**: Comprehensive analytics and monitoring
+- **Health Monitoring**: Automatic channel health detection and fallback
+
+#### 2.2 REST API Layer
+HTTP interface for service consumers:
 
 ```python
-class AsyncNotificationManager:
-    def __init__(self,
-                 telegram_token: Optional[str] = None,
-                 telegram_chat_id: Optional[str] = None,
-                 email_api_key: Optional[str] = None,
-                 email_sender: Optional[str] = None,
-                 email_receiver: Optional[str] = None,
-                 batch_size: int = 10,
-                 batch_timeout: float = 30.0,
-                 max_queue_size: int = 1000):
-        
-        # Channel management
-        self.channels: Dict[str, NotificationChannel] = {}
-        
-        # Queue management
-        self.notification_queue = asyncio.Queue(maxsize=max_queue_size)
-        self.batch_queue = asyncio.Queue(maxsize=max_queue_size)
-        
-        # Rate limiting
-        self.rate_limits = {
-            "telegram": {"last_sent": 0, "min_interval": 1.0},
-            "email": {"last_sent": 0, "min_interval": 5.0}
-        }
-        
-        # Statistics tracking
-        self.stats = {"sent": 0, "failed": 0, "queued": 0, "batched": 0}
+# Message enqueueing endpoint
+POST /api/v1/messages
+{
+    "message_type": "trade_alert",
+    "priority": "HIGH",
+    "channels": ["telegram", "email"],
+    "recipient_id": "user123",
+    "template_name": "trade_alert",
+    "content": {
+        "symbol": "BTCUSDT",
+        "action": "BUY",
+        "price": 65000
+    },
+    "metadata": {
+        "telegram_chat_id": 123456789
+    }
+}
 ```
 
-#### 2.2 Notification Channels
-Abstract base class for all notification channels:
+#### 2.3 Message Processing Engine
+Core processing system with advanced features:
+
+- **Priority Queues**: CRITICAL, HIGH, NORMAL, LOW priority levels
+- **Immediate Processing**: High-priority messages bypass batching
+- **Batch Processing**: Efficient handling of normal priority messages
+- **Retry Mechanisms**: Exponential backoff for failed deliveries
+- **Dead Letter Queue**: Permanent failure handling
+
+#### 2.4 Channel Plugin System
+Extensible architecture for notification channels:
 
 ```python
-class NotificationChannel:
-    def __init__(self, name: str):
-        self.name = name
-        self.enabled = True
-
-    async def send(self, notification: Notification) -> bool:
-        raise NotImplementedError
-
-    def is_enabled(self) -> bool:
-        return self.enabled
+class NotificationChannel(ABC):
+    @abstractmethod
+    async def send(self, message: Message) -> DeliveryResult:
+        """Send message through this channel"""
+        pass
+    
+    @abstractmethod
+    async def get_health(self) -> ChannelHealth:
+        """Get current channel health status"""
+        pass
+    
+    def format_message(self, template: str, data: Dict[str, Any]) -> str:
+        """Format message using channel-specific formatting"""
+        pass
 ```
 
-### 3. Channel Implementations
+### 3. Database Schema
 
-#### 3.1 Telegram Channel
-Handles Telegram message delivery with advanced features:
+#### 3.1 Message Storage
+Persistent storage for reliable message delivery:
+
+```sql
+-- Core message table
+CREATE TABLE msg_messages (
+    id BIGSERIAL PRIMARY KEY,
+    message_type VARCHAR(50) NOT NULL,
+    priority VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+    channels TEXT[] NOT NULL,
+    recipient_id VARCHAR(100),
+    template_name VARCHAR(100),
+    content JSONB NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    status VARCHAR(20) DEFAULT 'PENDING',
+    retry_count INTEGER DEFAULT 0
+);
+
+-- Delivery tracking table
+CREATE TABLE msg_delivery_status (
+    id BIGSERIAL PRIMARY KEY,
+    message_id BIGINT REFERENCES msg_messages(id),
+    channel VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    delivered_at TIMESTAMP WITH TIME ZONE,
+    response_time_ms INTEGER,
+    error_message TEXT
+);
+
+-- Channel health monitoring
+CREATE TABLE msg_channel_health (
+    id BIGSERIAL PRIMARY KEY,
+    channel VARCHAR(50) NOT NULL UNIQUE,
+    status VARCHAR(20) NOT NULL,
+    last_success TIMESTAMP WITH TIME ZONE,
+    failure_count INTEGER DEFAULT 0,
+    avg_response_time_ms INTEGER
+);
+
+-- Per-user rate limiting
+CREATE TABLE msg_rate_limits (
+    id BIGSERIAL PRIMARY KEY,
+    user_id VARCHAR(100) NOT NULL,
+    channel VARCHAR(50) NOT NULL,
+    tokens INTEGER NOT NULL,
+    last_refill TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### 4. Channel Plugin Implementations
+
+#### 4.1 Telegram Plugin
+Enhanced Telegram message delivery:
 
 ```python
-class TelegramChannel(NotificationChannel):
-    def __init__(self, token: str, chat_id: str):
-        super().__init__("telegram")
-        self.bot = Bot(token=token)
-        self.chat_id = chat_id
+class TelegramPlugin(NotificationChannel):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.bot = Bot(token=config["bot_token"])
+        self.timeout = config.get("timeout", 30)
 
-    async def send(self, notification: Notification) -> bool:
-        # Dynamic chat ID support
-        target_chat_id = notification.data.get('telegram_chat_id', self.chat_id)
-        
-        # Attachment handling
-        if notification.data and "attachments" in notification.data:
-            return await self._send_with_attachments(notification, target_chat_id)
-        
-        # Message splitting for long messages
-        return await self._send_telegram_message_with_splitting(
-            chat_id=target_chat_id,
-            text=notification.message,
-            reply_to_message_id=notification.data.get('reply_to_message_id')
-        )
+    async def send(self, message: Message) -> DeliveryResult:
+        try:
+            # Extract chat ID from message metadata
+            chat_id = message.metadata.get('telegram_chat_id')
+            
+            # Format message using template
+            formatted_text = self.format_message(
+                message.template_name, 
+                message.content
+            )
+            
+            # Handle attachments if present
+            if message.metadata.get("attachments"):
+                return await self._send_with_attachments(
+                    chat_id, formatted_text, message.metadata["attachments"]
+                )
+            
+            # Send text message with splitting for long messages
+            result = await self._send_with_splitting(chat_id, formatted_text)
+            
+            return DeliveryResult(
+                success=True,
+                external_id=str(result.message_id),
+                response_time_ms=self._calculate_response_time()
+            )
+            
+        except Exception as e:
+            return DeliveryResult(
+                success=False,
+                error_message=str(e)
+            )
+
+    async def get_health(self) -> ChannelHealth:
+        try:
+            # Test API connectivity
+            await self.bot.get_me()
+            return ChannelHealth(status="healthy")
+        except Exception as e:
+            return ChannelHealth(
+                status="down",
+                error_message=str(e)
+            )
 ```
 
-**Key Features**:
+**Enhanced Features**:
 - **Message Splitting**: Automatically splits messages longer than 4096 characters
 - **Attachment Support**: Handles both file paths and byte data
 - **Reply Support**: Supports replying to specific messages
-- **Dynamic Chat IDs**: Can send to different chat IDs per notification
-- **Error Recovery**: Graceful fallback when reply fails
+- **Dynamic Chat IDs**: Per-message chat ID specification
+- **Health Monitoring**: Automatic API connectivity testing
+- **Error Recovery**: Graceful fallback and retry mechanisms
 
-#### 3.2 Email Channel
-SMTP-based email delivery with attachment support:
+#### 4.2 Email Plugin
+Enhanced SMTP-based email delivery:
 
 ```python
-class EmailChannel(NotificationChannel):
-    def __init__(self, api_key: str, sender_email: str, receiver_email: str):
-        super().__init__("email")
-        self.notifier = EmailNotifier()
-        self.sender_email = sender_email
-        self.receiver_email = receiver_email
+class EmailPlugin(NotificationChannel):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.smtp_server = config["smtp_server"]
+        self.smtp_port = config["smtp_port"]
+        self.username = config["username"]
+        self.password = config["password"]
 
-    async def send(self, notification: Notification) -> bool:
-        # Channel filtering
-        channels = notification.data.get("channels") if notification.data else None
-        if channels and "email" not in channels:
-            return False
-        
-        # Attachment processing
-        attachments = self._prepare_attachments(notification.data.get("attachments", {}))
-        
-        # HTML formatting
-        html_message = notification.message.replace('\n', '<br>')
-        
-        # Async email sending
-        await loop.run_in_executor(
-            None,
-            self.notifier.send_email_with_mime,
-            self.receiver_email,
-            notification.title,
-            html_message,
-            None,
-            attachments
-        )
+    async def send(self, message: Message) -> DeliveryResult:
+        try:
+            # Extract recipient from message metadata
+            recipient = message.metadata.get('email_recipient')
+            
+            # Format message as HTML
+            html_content = self.format_message_html(
+                message.template_name,
+                message.content
+            )
+            
+            # Prepare attachments
+            attachments = self._prepare_attachments(
+                message.metadata.get("attachments", {})
+            )
+            
+            # Send email asynchronously
+            result = await self._send_smtp_email(
+                recipient=recipient,
+                subject=message.content.get("subject", "Notification"),
+                html_content=html_content,
+                attachments=attachments
+            )
+            
+            return DeliveryResult(
+                success=True,
+                external_id=result.message_id,
+                response_time_ms=self._calculate_response_time()
+            )
+            
+        except Exception as e:
+            return DeliveryResult(
+                success=False,
+                error_message=str(e)
+            )
+
+    async def get_health(self) -> ChannelHealth:
+        try:
+            # Test SMTP connectivity
+            await self._test_smtp_connection()
+            return ChannelHealth(status="healthy")
+        except Exception as e:
+            return ChannelHealth(
+                status="down",
+                error_message=str(e)
+            )
+```
+
+**Enhanced Features**:
+- **MIME Attachment Support**: Handles various file types with proper encoding
+- **HTML Template System**: Rich email formatting with templates
+- **Async SMTP**: Non-blocking email sending with connection pooling
+- **Dynamic Recipients**: Per-message recipient specification
+- **Health Monitoring**: SMTP server connectivity testing
+- **Delivery Confirmation**: Email delivery status tracking
+
+#### 4.3 SMS Plugin
+Mobile notification delivery:
+
+```python
+class SMSPlugin(NotificationChannel):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.provider = config["provider"]  # twilio, aws_sns, etc.
+        self.credentials = config["credentials"]
+        self.from_number = config["from_number"]
+
+    async def send(self, message: Message) -> DeliveryResult:
+        try:
+            # Extract phone number from message metadata
+            phone_number = message.metadata.get('phone_number')
+            
+            # Format message for SMS (160 char limit)
+            sms_content = self.format_message_sms(
+                message.template_name,
+                message.content
+            )
+            
+            # Send SMS via provider
+            result = await self._send_sms(
+                to_number=phone_number,
+                from_number=self.from_number,
+                content=sms_content
+            )
+            
+            return DeliveryResult(
+                success=True,
+                external_id=result.sid,
+                response_time_ms=self._calculate_response_time()
+            )
+            
+        except Exception as e:
+            return DeliveryResult(
+                success=False,
+                error_message=str(e)
+            )
+
+    async def get_health(self) -> ChannelHealth:
+        try:
+            # Test provider API connectivity
+            await self._test_provider_connection()
+            return ChannelHealth(status="healthy")
+        except Exception as e:
+            return ChannelHealth(
+                status="down",
+                error_message=str(e)
+            )
 ```
 
 **Key Features**:
-- **MIME Attachment Support**: Handles various file types
-- **HTML Formatting**: Converts plain text to HTML
-- **Async Execution**: Non-blocking email sending
-- **Dynamic Recipients**: Per-notification email addresses
+- **Multiple Providers**: Support for Twilio, AWS SNS, and other SMS providers
+- **Message Optimization**: Automatic truncation and formatting for SMS limits
+- **Delivery Confirmation**: SMS delivery status tracking
+- **Health Monitoring**: Provider API connectivity testing
+- **Cost Optimization**: Intelligent message batching and routing
 
-#### 3.3 WebSocket Channel
-Real-time web interface notifications:
+### 5. Service Integration Patterns
+
+#### 5.1 Service Consumer Integration
+Service consumers interact with the Notification Service via REST API:
 
 ```python
-class WebSocketManager:
-    def __init__(self):
-        self.connections: Dict[str, WebSocketConnection] = {}
-        self.user_connections: Dict[str, Set[str]] = {}
-        self.strategy_subscribers: Dict[str, Set[str]] = {}
-        self.system_subscribers: Set[str] = set()
-
-    async def broadcast_notification(self, notification: Dict[str, Any]):
-        message = {
-            "type": "notification",
-            "data": notification,
-            "timestamp": datetime.now().isoformat()
+# Example: Alert Evaluator sending notification
+async def send_alert_notification(alert_data):
+    message = {
+        "message_type": "trade_alert",
+        "priority": "HIGH",
+        "channels": ["telegram", "email"],
+        "recipient_id": alert_data["user_id"],
+        "template_name": "trade_alert",
+        "content": {
+            "symbol": alert_data["symbol"],
+            "action": alert_data["action"],
+            "price": alert_data["price"]
+        },
+        "metadata": {
+            "alert_id": alert_data["id"],
+            "telegram_chat_id": alert_data["telegram_chat_id"],
+            "email_recipient": alert_data["email"]
         }
-        await self.broadcast_to_all(message)
+    }
+    
+    response = await http_client.post(
+        "http://notification-service:8080/api/v1/messages",
+        json=message
+    )
+    return response.json()["message_id"]
 ```
 
-### 4. Notification Types and Routing
+#### 5.2 Priority-Based Processing
+Messages are processed based on priority levels:
 
-#### 4.1 Notification Types
+- **CRITICAL**: Immediate delivery, bypass all limits (< 5 seconds)
+- **HIGH**: Fast delivery, bypass batching (< 30 seconds)
+- **NORMAL**: Standard processing with batching (< 5 minutes)
+- **LOW**: Batch processing during low-traffic periods
+
+#### 5.3 Per-User Rate Limiting
+Advanced rate limiting prevents spam and respects API limits:
+
 ```python
-class NotificationType(str, Enum):
-    TRADE_ENTRY = "trade_entry"
-    TRADE_EXIT = "trade_exit"
-    ALERT = "alert"
-    ERROR = "error"
-    INFO = "info"
-    SYSTEM = "system"
-    REPORT = "report"
+# Rate limiting configuration per channel
+RATE_LIMITS = {
+    "telegram": {"tokens": 30, "refill_rate": 30, "per": "minute"},
+    "email": {"tokens": 10, "refill_rate": 10, "per": "minute"},
+    "sms": {"tokens": 5, "refill_rate": 5, "per": "minute"}
+}
 ```
 
-#### 4.2 Priority Levels
-```python
-class NotificationPriority(str, Enum):
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
-    CRITICAL = "critical"
-```
+#### 5.4 Channel Health and Fallback
+Automatic health monitoring with intelligent fallback:
 
-#### 4.3 Routing Logic
-Notifications are routed based on:
-- **Channel Preferences**: User-specified channel preferences
-- **Priority Level**: Critical notifications bypass batching
-- **Notification Type**: Trade notifications have different routing than reports
-- **User Permissions**: Admin notifications vs user notifications
+- **Health Checks**: Periodic connectivity tests for all channels
+- **Automatic Fallback**: Route to secondary channels when primary fails
+- **Recovery Detection**: Automatic re-enabling when channels recover
+- **Admin Alerts**: Notify administrators of channel failures
 
-### 5. Advanced Features
+### 6. Advanced Features
 
-#### 5.1 Batching System
-Groups similar notifications to reduce noise:
+#### 6.1 Message Archiving and Cleanup
+Automated data lifecycle management:
 
 ```python
-async def _batch_worker(self):
-    batch: List[Notification] = []
-    last_batch_time = time.time()
+# Archival configuration
+ARCHIVAL_POLICIES = {
+    "delivered_messages": {
+        "archive_after_days": 30,
+        "delete_after_days": 365
+    },
+    "failed_messages": {
+        "archive_after_days": 7,
+        "delete_after_days": 90
+    },
+    "delivery_status": {
+        "archive_after_days": 90,
+        "delete_after_days": 730
+    }
+}
 
-    while self.running:
-        # Collect notifications for batching
-        try:
-            notification = await asyncio.wait_for(
-                self.batch_queue.get(),
-                timeout=0.1
-            )
-            batch.append(notification)
-        except asyncio.TimeoutError:
-            pass
-
-        # Process batch when size or timeout reached
-        current_time = time.time()
-        should_process = (
-            len(batch) >= self.batch_size or
-            (batch and current_time - last_batch_time >= self.batch_timeout)
+async def archive_old_messages():
+    """Archive messages based on configured policies"""
+    for table, policy in ARCHIVAL_POLICIES.items():
+        # Archive old records
+        await archive_records(
+            table=table,
+            older_than_days=policy["archive_after_days"]
         )
-
-        if should_process and batch:
-            await self._process_batch(batch)
-            batch = []
-            last_batch_time = current_time
+        
+        # Delete very old archived records
+        await delete_archived_records(
+            table=f"{table}_archive",
+            older_than_days=policy["delete_after_days"]
+        )
 ```
 
-**Batching Rules**:
-- Email notifications are batched by default
-- Critical notifications bypass batching
-- Trade notifications are sent immediately
-- Batch size: 10 notifications or 30-second timeout
+**Archival Features**:
+- **Automated Archival**: Messages archived after 30 days
+- **Compressed Storage**: Archived data stored in compressed format
+- **Configurable Policies**: Different retention rules per message type
+- **Performance Optimization**: Cleanup during low-traffic periods
 
-#### 5.2 Rate Limiting
-Prevents overwhelming external services:
+#### 6.2 Delivery Analytics and Monitoring
+Comprehensive tracking and analytics system:
 
 ```python
-def _check_rate_limit(self, channel_name: str) -> bool:
-    if channel_name not in self.rate_limits:
-        return True
-
-    limit = self.rate_limits[channel_name]
-    current_time = time.time()
-
-    if current_time - limit["last_sent"] < limit["min_interval"]:
-        return False
-
-    limit["last_sent"] = current_time
-    return True
+# Delivery statistics API
+GET /api/v1/stats/delivery
+{
+    "period": "24h",
+    "channels": {
+        "telegram": {
+            "sent": 1250,
+            "delivered": 1240,
+            "failed": 10,
+            "avg_response_time_ms": 850,
+            "success_rate": 99.2
+        },
+        "email": {
+            "sent": 450,
+            "delivered": 445,
+            "failed": 5,
+            "avg_response_time_ms": 2100,
+            "success_rate": 98.9
+        }
+    },
+    "by_priority": {
+        "critical": {"sent": 15, "avg_delivery_time_ms": 1200},
+        "high": {"sent": 180, "avg_delivery_time_ms": 3500},
+        "normal": {"sent": 1400, "avg_delivery_time_ms": 45000}
+    }
+}
 ```
 
-**Rate Limits**:
-- Telegram: 1 message per second
-- Email: 1 email per 5 seconds
-- WebSocket: No rate limiting (internal)
+**Analytics Features**:
+- **Real-time Metrics**: Live delivery statistics and success rates
+- **Performance Tracking**: Response times and throughput monitoring
+- **Channel Comparison**: Comparative analysis across channels
+- **User Analytics**: Per-user delivery patterns and preferences
 
-#### 5.3 Retry Mechanism
-Handles failed deliveries with exponential backoff:
+#### 6.3 Plugin Architecture and Extensibility
+Modular system for easy channel integration:
 
 ```python
-async def _handle_failed_notification(self, notification: Notification):
-    if notification.retry_count < notification.max_retries:
-        notification.retry_count += 1
-        # Exponential backoff
-        delay = 2 ** notification.retry_count
-        await asyncio.sleep(delay)
+# Plugin registration system
+class ChannelPluginManager:
+    def __init__(self):
+        self.plugins: Dict[str, NotificationChannel] = {}
+    
+    def register_plugin(self, name: str, plugin_class: Type[NotificationChannel]):
+        """Register a new channel plugin"""
+        self.plugins[name] = plugin_class
+    
+    def load_plugins(self, config: Dict[str, Any]):
+        """Load and initialize plugins from configuration"""
+        for channel_name, channel_config in config["channels"].items():
+            if channel_config["enabled"]:
+                plugin_class = self.plugins[channel_config["plugin"]]
+                self.channels[channel_name] = plugin_class(channel_config)
 
-        # Re-queue for retry
-        try:
-            await self.notification_queue.put(notification)
-        except asyncio.QueueFull:
-            _logger.error("Queue full, cannot retry notification")
-    else:
-        _logger.error("Notification failed after %s retries", notification.max_retries)
+# Example: Adding a new Slack plugin
+@register_plugin("slack")
+class SlackPlugin(NotificationChannel):
+    async def send(self, message: Message) -> DeliveryResult:
+        # Slack-specific implementation
+        pass
+    
+    async def get_health(self) -> ChannelHealth:
+        # Slack health check
+        pass
 ```
 
-### 6. Integration Points
+**Extensibility Features**:
+- **Plugin Discovery**: Automatic plugin detection and loading
+- **Configuration Driven**: Channel plugins configured via YAML/JSON
+- **Hot Reload**: Add new channels without service restart
+- **Standardized Interface**: Consistent API across all channel types
 
-#### 6.1 Trading Bot Integration
-Trading bots send notifications for:
-- **Trade Entries**: Buy/sell order executions
-- **Trade Exits**: Position closures with P&L
-- **Strategy Events**: Strategy start/stop/error events
-- **Performance Alerts**: Drawdown, profit targets, etc.
+### 7. Migration Strategy
+
+#### 7.1 Backward Compatibility
+Smooth transition from existing AsyncNotificationManager:
 
 ```python
-# Example trading bot notification
-await notification_manager.send_trade_notification(
-    symbol="BTCUSDT",
-    side="BUY",
-    price=65000.0,
-    quantity=0.1,
-    pnl=2.5,
-    exit_type="TP"
+# Compatibility wrapper for existing code
+class AsyncNotificationManagerCompat:
+    def __init__(self, notification_service_url: str):
+        self.service_url = notification_service_url
+        self.http_client = httpx.AsyncClient()
+    
+    async def send_notification(self, **kwargs):
+        """Proxy method that forwards to notification service"""
+        # Convert old format to new API format
+        message = self._convert_legacy_format(kwargs)
+        
+        # Send to notification service
+        response = await self.http_client.post(
+            f"{self.service_url}/api/v1/messages",
+            json=message
+        )
+        return response.json()["message_id"]
+    
+    def _convert_legacy_format(self, kwargs):
+        """Convert legacy notification format to new API format"""
+        return {
+            "message_type": kwargs.get("notification_type", "info"),
+            "priority": kwargs.get("priority", "NORMAL").upper(),
+            "channels": kwargs.get("channels", ["telegram"]),
+            "recipient_id": kwargs.get("recipient_id"),
+            "content": {
+                "title": kwargs.get("title"),
+                "message": kwargs.get("message")
+            },
+            "metadata": kwargs.get("data", {})
+        }
+```
+
+#### 7.2 Gradual Migration Plan
+Phased approach to minimize disruption:
+
+**Phase 1: Service Deployment**
+- Deploy notification service alongside existing system
+- Implement database schema and core APIs
+- Create channel plugins for existing channels (Telegram, Email)
+
+**Phase 2: Service Consumer Migration**
+- Migrate AlertEvaluator to use notification service APIs
+- Update SchedulerService for report notifications
+- Modify TelegramBot for non-interactive notifications
+
+**Phase 3: Full Migration and Cleanup**
+- Migrate all remaining service consumers
+- Remove AsyncNotificationManager dependencies
+- Clean up legacy notification code
+
+### 8. Operational Considerations
+
+#### 8.1 Service Deployment
+Autonomous service deployment configuration:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  notification-service:
+    build: ./src/notification
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@db:5432/trading_db
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+    depends_on:
+      - db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+#### 8.2 Monitoring and Alerting
+Comprehensive observability setup:
+
+```python
+# Prometheus metrics
+notification_messages_total = Counter(
+    'notification_messages_total',
+    'Total number of notification messages',
+    ['channel', 'status', 'priority']
+)
+
+notification_delivery_duration = Histogram(
+    'notification_delivery_duration_seconds',
+    'Time spent delivering notifications',
+    ['channel']
+)
+
+channel_health_status = Gauge(
+    'notification_channel_health',
+    'Channel health status (1=healthy, 0=down)',
+    ['channel']
 )
 ```
 
-#### 6.2 Web API Integration
-Web interface sends notifications for:
-- **User Actions**: Strategy creation, updates, deletions
-- **System Events**: System status changes
-- **Admin Actions**: User management, system configuration
+#### 8.3 Security and Compliance
+Security measures for production deployment:
 
-```python
-# Example web API notification
-await notification_manager.send_notification(
-    notification_type=NotificationType.INFO,
-    title="Strategy Created",
-    message=f"Strategy '{strategy_name}' created successfully",
-    channels=["telegram", "websocket"],
-    telegram_chat_id=user_telegram_id
-)
-```
-
-#### 6.3 Job Scheduler Integration
-Scheduled jobs send notifications for:
-- **Report Generation**: Completed reports with attachments
-- **Screener Results**: Stock screening results
-- **System Maintenance**: Backup completion, cleanup results
-
-```python
-# Example scheduled job notification
-await notification_manager.send_notification(
-    notification_type=NotificationType.REPORT,
-    title="Daily Report Generated",
-    message="Your daily trading report is ready",
-    attachments={"report.pdf": report_bytes},
-    channels=["email", "telegram"],
-    email_receiver=user_email
-)
-```
-
-#### 6.4 Alert System Integration
-Smart alert system integration:
-
-```python
-class SmartAlertSystem:
-    async def _send_alert_notifications(self, alert: Alert, rule: AlertRule):
-        for channel in rule.channels:
-            if channel == AlertChannel.TELEGRAM:
-                await self.notification_manager.send_notification(
-                    notification_type=NotificationType.ALERT,
-                    title=f"Trading Alert: {alert.rule_name}",
-                    message=alert.message,
-                    priority=NotificationPriority.HIGH,
-                    channels=["telegram"]
-                )
-```
+- **API Authentication**: Service-to-service authentication with JWT tokens
+- **Rate Limiting**: Prevent abuse and DoS attacks
+- **Input Validation**: Comprehensive message content sanitization
+- **Audit Logging**: Complete audit trail for compliance
+- **Credential Management**: Secure storage of channel credentials
+- **Data Encryption**: Encrypt sensitive message content at rest
 
 ### 7. Template System
 
@@ -542,4 +849,40 @@ USER_NOTIFICATION_PREFERENCES = {
 - **Circuit Breaker**: Temporarily disable failing channels
 - **Dead Letter Queue**: Store permanently failed notifications for analysis
 
-This comprehensive notification system provides reliable, scalable, and feature-rich communication capabilities across multiple channels, ensuring that users stay informed about their trading activities and system events in real-time.
+### 9. Benefits and Improvements
+
+#### 9.1 Architectural Benefits
+The new Notification Service architecture provides significant improvements:
+
+- **Decoupling**: Services no longer need direct notification dependencies
+- **Scalability**: Horizontal scaling and load balancing support
+- **Reliability**: Database-backed queues ensure message persistence
+- **Observability**: Comprehensive monitoring and analytics
+- **Extensibility**: Plugin architecture for easy channel addition
+- **Maintainability**: Centralized notification logic and configuration
+
+#### 9.2 Performance Improvements
+Enhanced performance characteristics:
+
+- **Async Processing**: Non-blocking message delivery
+- **Priority Handling**: Critical messages delivered within 5 seconds
+- **Batch Optimization**: Efficient handling of bulk notifications
+- **Connection Pooling**: Optimized external API connections
+- **Caching**: Template and configuration caching
+
+#### 9.3 Operational Excellence
+Improved operational capabilities:
+
+- **Health Monitoring**: Automatic channel health detection
+- **Fallback Routing**: Intelligent failover mechanisms
+- **Delivery Tracking**: Complete message lifecycle visibility
+- **Analytics Dashboard**: Real-time performance metrics
+- **Automated Cleanup**: Data lifecycle management
+
+## Conclusion
+
+The Notification Service represents a significant architectural evolution from the embedded AsyncNotificationManager to a dedicated, autonomous service. This transformation addresses key challenges around coupling, scalability, and maintainability while providing enhanced features like comprehensive delivery tracking, channel health monitoring, and plugin-based extensibility.
+
+The service's database-backed architecture ensures reliability and persistence, while the priority-based processing system guarantees that critical notifications are delivered promptly. The plugin architecture enables easy integration of new communication channels, and the comprehensive monitoring system provides visibility into notification system performance.
+
+This design provides a robust foundation for all outbound communications in the Advanced Trading Framework, supporting current needs while enabling future growth and feature expansion.

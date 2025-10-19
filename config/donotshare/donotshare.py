@@ -14,7 +14,7 @@ load_dotenv(dotenv_path="config/donotshare/.env")
 DATA_CACHE_DIR = "c:/data-cache"
 
 # Database configuration
-DB_PATH = "db/trading.db"  # Keep for backward compatibility
+#DB_PATH = "db/trading.db"  # Keep for backward compatibility
 
 # PostgreSQL configuration
 POSTGRES_HOST = "localhost"  # Add host configuration

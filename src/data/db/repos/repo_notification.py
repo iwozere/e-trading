@@ -1,0 +1,955 @@
+"""
+Notification Service Repository
+
+Repository layer for notification service operations.
+Provides data access methods for messages, delivery status, channel health, rate limits, and channel configs.
+"""
+
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, desc, asc, func, text
+from sqlalchemy.exc import IntegrityError
+
+from src.data.db.models.model_notification import (
+    Message, MessageDeliveryStatus, ChannelHealth, RateLimit, ChannelConfig,
+    MessagePriority, MessageStatus, DeliveryStatus, ChannelHealthStatus
+)
+from src.notification.logger import setup_logger
+from src.notification.service.database_optimization import (
+    OptimizedMessageRepository,
+    OptimizedDeliveryStatusRepository,
+    OptimizedRateLimitRepository
+)
+
+_logger = setup_logger(__name__)
+
+
+class MessageRepository:
+    """Repository for message operations."""
+
+    def __init__(self, session: Session):
+        """
+        Initialize the repository with a database session.
+
+        Args:
+            session: SQLAlchemy database session
+        """
+        self.session = session
+
+    def create_message(self, message_data: Dict[str, Any]) -> Message:
+        """
+        Create a new message.
+
+        Args:
+            message_data: Dictionary with message data
+
+        Returns:
+            Created Message object
+
+        Raises:
+            IntegrityError: If message creation fails
+        """
+        try:
+            message = Message(**message_data)
+            self.session.add(message)
+            self.session.flush()  # Get the ID without committing
+            _logger.info("Created message %s with type %s", message.id, message.message_type)
+            return message
+        except IntegrityError as e:
+            self.session.rollback()
+            _logger.error("Failed to create message: %s", e)
+            raise
+
+    def get_message(self, message_id: int) -> Optional[Message]:
+        """
+        Get a message by ID.
+
+        Args:
+            message_id: Message ID
+
+        Returns:
+            Message object or None if not found
+        """
+        return self.session.query(Message).filter(Message.id == message_id).first()
+
+    def list_messages(
+        self,
+        status: Optional[MessageStatus] = None,
+        priority: Optional[MessagePriority] = None,
+        recipient_id: Optional[str] = None,
+        message_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+        order_by: str = "created_at",
+        order_desc: bool = True
+    ) -> List[Message]:
+        """
+        List messages with optional filtering.
+
+        Args:
+            status: Filter by status
+            priority: Filter by priority
+            recipient_id: Filter by recipient ID
+            message_type: Filter by message type
+            limit: Maximum number of results
+            offset: Number of results to skip
+            order_by: Field to order by
+            order_desc: Order in descending order
+
+        Returns:
+            List of Message objects
+        """
+        query = self.session.query(Message)
+
+        if status is not None:
+            query = query.filter(Message.status == status.value)
+
+        if priority is not None:
+            query = query.filter(Message.priority == priority.value)
+
+        if recipient_id is not None:
+            query = query.filter(Message.recipient_id == recipient_id)
+
+        if message_type is not None:
+            query = query.filter(Message.message_type == message_type)
+
+        # Apply ordering
+        order_field = getattr(Message, order_by, Message.created_at)
+        if order_desc:
+            query = query.order_by(desc(order_field))
+        else:
+            query = query.order_by(asc(order_field))
+
+        return query.offset(offset).limit(limit).all()
+
+    def update_message(self, message_id: int, update_data: Dict[str, Any]) -> Optional[Message]:
+        """
+        Update a message.
+
+        Args:
+            message_id: Message ID
+            update_data: Dictionary with fields to update
+
+        Returns:
+            Updated Message object or None if not found
+        """
+        message = self.get_message(message_id)
+        if not message:
+            return None
+
+        try:
+            for key, value in update_data.items():
+                if hasattr(message, key):
+                    setattr(message, key, value)
+
+            self.session.flush()
+            _logger.info("Updated message %s", message.id)
+            return message
+        except Exception as e:
+            self.session.rollback()
+            _logger.error("Failed to update message %s: %s", message_id, e)
+            raise
+
+    def get_pending_messages(
+        self,
+        current_time: datetime,
+        priority: Optional[MessagePriority] = None,
+        limit: int = 100
+    ) -> List[Message]:
+        """
+        Get pending messages that are ready for processing.
+
+        Args:
+            current_time: Current timestamp
+            priority: Filter by priority
+            limit: Maximum number of results
+
+        Returns:
+            List of pending Message objects
+        """
+        query = self.session.query(Message).filter(
+            and_(
+                Message.status == MessageStatus.PENDING.value,
+                Message.scheduled_for <= current_time
+            )
+        )
+
+        if priority is not None:
+            query = query.filter(Message.priority == priority.value)
+
+        # Order by priority (CRITICAL first) then by scheduled_for
+        priority_order = text(
+            "CASE priority "
+            "WHEN 'CRITICAL' THEN 1 "
+            "WHEN 'HIGH' THEN 2 "
+            "WHEN 'NORMAL' THEN 3 "
+            "WHEN 'LOW' THEN 4 "
+            "END"
+        )
+
+        return query.order_by(priority_order, asc(Message.scheduled_for)).limit(limit).all()
+
+    def get_failed_messages_for_retry(
+        self,
+        current_time: datetime,
+        retry_delay_minutes: int = 5,
+        limit: int = 50
+    ) -> List[Message]:
+        """
+        Get failed messages that can be retried.
+
+        Args:
+            current_time: Current timestamp
+            retry_delay_minutes: Minimum delay before retry
+            limit: Maximum number of results
+
+        Returns:
+            List of failed Message objects ready for retry
+        """
+        retry_cutoff = current_time - timedelta(minutes=retry_delay_minutes)
+
+        return self.session.query(Message).filter(
+            and_(
+                Message.status == MessageStatus.FAILED.value,
+                Message.retry_count < Message.max_retries,
+                or_(
+                    Message.processed_at.is_(None),
+                    Message.processed_at <= retry_cutoff
+                )
+            )
+        ).order_by(asc(Message.processed_at)).limit(limit).all()
+
+    def cleanup_old_messages(self, days_to_keep: int = 30) -> int:
+        """
+        Clean up old delivered messages.
+
+        Args:
+            days_to_keep: Number of days of messages to keep
+
+        Returns:
+            Number of messages deleted
+        """
+        cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+
+        deleted_count = self.session.query(Message).filter(
+            and_(
+                Message.created_at < cutoff_date,
+                Message.status == MessageStatus.DELIVERED.value
+            )
+        ).delete()
+
+        _logger.info("Cleaned up %s old messages", deleted_count)
+        return deleted_count
+
+
+class DeliveryStatusRepository:
+    """Repository for delivery status operations."""
+
+    def __init__(self, session: Session):
+        """
+        Initialize the repository with a database session.
+
+        Args:
+            session: SQLAlchemy database session
+        """
+        self.session = session
+
+    def create_delivery_status(self, status_data: Dict[str, Any]) -> MessageDeliveryStatus:
+        """
+        Create a new delivery status.
+
+        Args:
+            status_data: Dictionary with delivery status data
+
+        Returns:
+            Created MessageDeliveryStatus object
+        """
+        try:
+            delivery_status = MessageDeliveryStatus(**status_data)
+            self.session.add(delivery_status)
+            self.session.flush()
+            _logger.info("Created delivery status %s for message %s", delivery_status.id, delivery_status.message_id)
+            return delivery_status
+        except IntegrityError as e:
+            self.session.rollback()
+            _logger.error("Failed to create delivery status: %s", e)
+            raise
+
+    def get_delivery_status(self, status_id: int) -> Optional[MessageDeliveryStatus]:
+        """
+        Get a delivery status by ID.
+
+        Args:
+            status_id: Delivery status ID
+
+        Returns:
+            MessageDeliveryStatus object or None if not found
+        """
+        return self.session.query(MessageDeliveryStatus).filter(MessageDeliveryStatus.id == status_id).first()
+
+    def get_delivery_statuses_by_message(self, message_id: int) -> List[MessageDeliveryStatus]:
+        """
+        Get all delivery statuses for a message.
+
+        Args:
+            message_id: Message ID
+
+        Returns:
+            List of MessageDeliveryStatus objects
+        """
+        return self.session.query(MessageDeliveryStatus).filter(
+            MessageDeliveryStatus.message_id == message_id
+        ).order_by(desc(MessageDeliveryStatus.created_at)).all()
+
+    def update_delivery_status(self, status_id: int, update_data: Dict[str, Any]) -> Optional[MessageDeliveryStatus]:
+        """
+        Update a delivery status.
+
+        Args:
+            status_id: Delivery status ID
+            update_data: Dictionary with fields to update
+
+        Returns:
+            Updated MessageDeliveryStatus object or None if not found
+        """
+        delivery_status = self.get_delivery_status(status_id)
+        if not delivery_status:
+            return None
+
+        try:
+            for key, value in update_data.items():
+                if hasattr(delivery_status, key):
+                    setattr(delivery_status, key, value)
+
+            self.session.flush()
+            _logger.info("Updated delivery status %s", delivery_status.id)
+            return delivery_status
+        except Exception as e:
+            self.session.rollback()
+            _logger.error("Failed to update delivery status %s: %s", status_id, e)
+            raise
+
+    def get_delivery_statistics(
+        self,
+        channel: Optional[str] = None,
+        days: int = 30
+    ) -> Dict[str, Any]:
+        """
+        Get delivery statistics for a time period.
+
+        Args:
+            channel: Filter by channel
+            days: Number of days to look back
+
+        Returns:
+            Dictionary with statistics
+        """
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+        query = self.session.query(MessageDeliveryStatus).filter(
+            MessageDeliveryStatus.created_at >= cutoff_date
+        )
+
+        if channel is not None:
+            query = query.filter(MessageDeliveryStatus.channel == channel)
+
+        # Get counts by status
+        status_counts = {}
+        for status in DeliveryStatus:
+            count = query.filter(MessageDeliveryStatus.status == status.value).count()
+            status_counts[status.value] = count
+
+        # Get total count
+        total_count = query.count()
+
+        # Get average response time for delivered messages
+        delivered_statuses = query.filter(
+            and_(
+                MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                MessageDeliveryStatus.response_time_ms.isnot(None)
+            )
+        ).all()
+
+        avg_response_time = None
+        if delivered_statuses:
+            response_times = [ds.response_time_ms for ds in delivered_statuses if ds.response_time_ms is not None]
+            if response_times:
+                avg_response_time = sum(response_times) / len(response_times)
+
+        return {
+            "total_deliveries": total_count,
+            "status_counts": status_counts,
+            "average_response_time_ms": avg_response_time,
+            "period_days": days,
+            "channel": channel
+        }
+
+    def get_channel_delivery_rates(
+        self,
+        cutoff_date: datetime,
+        channel: Optional[str] = None
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Get delivery rates grouped by channel.
+
+        Args:
+            cutoff_date: Only include deliveries after this date
+            channel: Filter by specific channel
+
+        Returns:
+            Dictionary with channel delivery rates
+        """
+        query = self.session.query(MessageDeliveryStatus).filter(
+            MessageDeliveryStatus.created_at >= cutoff_date
+        )
+
+        if channel:
+            query = query.filter(MessageDeliveryStatus.channel == channel)
+
+        # Group by channel and calculate rates
+        from sqlalchemy import func
+
+        channel_stats = self.session.query(
+            MessageDeliveryStatus.channel,
+            func.count(MessageDeliveryStatus.id).label('total_attempts'),
+            func.sum(
+                func.case(
+                    [(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1)],
+                    else_=0
+                )
+            ).label('successful_attempts'),
+            func.avg(
+                func.case(
+                    [(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                      MessageDeliveryStatus.response_time_ms)],
+                    else_=None
+                )
+            ).label('avg_response_time')
+        ).filter(
+            MessageDeliveryStatus.created_at >= cutoff_date
+        ).group_by(MessageDeliveryStatus.channel)
+
+        if channel:
+            channel_stats = channel_stats.filter(MessageDeliveryStatus.channel == channel)
+
+        results = {}
+        for row in channel_stats.all():
+            success_rate = (row.successful_attempts / row.total_attempts
+                          if row.total_attempts > 0 else 0.0)
+
+            results[row.channel] = {
+                "total_attempts": row.total_attempts,
+                "successful_attempts": row.successful_attempts,
+                "failed_attempts": row.total_attempts - row.successful_attempts,
+                "success_rate": success_rate,
+                "avg_response_time_ms": float(row.avg_response_time) if row.avg_response_time else None
+            }
+
+        return results
+
+    def get_user_delivery_rates(
+        self,
+        user_id: str,
+        cutoff_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Get delivery rates for a specific user.
+
+        Args:
+            user_id: User ID to analyze
+            cutoff_date: Only include deliveries after this date
+
+        Returns:
+            Dictionary with user delivery statistics
+        """
+        # This would require joining with messages table to get user_id
+        # For now, return placeholder implementation
+        return {
+            "user_id": user_id,
+            "total_messages": 0,
+            "successful_deliveries": 0,
+            "failed_deliveries": 0,
+            "success_rate": 0.0,
+            "avg_response_time_ms": None
+        }
+
+    def get_response_time_data(
+        self,
+        cutoff_date: datetime,
+        channel: Optional[str] = None
+    ) -> List[int]:
+        """
+        Get response time data for analysis.
+
+        Args:
+            cutoff_date: Only include deliveries after this date
+            channel: Filter by specific channel
+
+        Returns:
+            List of response times in milliseconds
+        """
+        query = self.session.query(MessageDeliveryStatus.response_time_ms).filter(
+            and_(
+                MessageDeliveryStatus.created_at >= cutoff_date,
+                MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                MessageDeliveryStatus.response_time_ms.isnot(None)
+            )
+        )
+
+        if channel:
+            query = query.filter(MessageDeliveryStatus.channel == channel)
+
+        response_times = [row.response_time_ms for row in query.all()]
+        return response_times
+
+    def get_time_series_data(
+        self,
+        cutoff_date: datetime,
+        granularity: str = "daily",
+        channel: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get time series data for trend analysis.
+
+        Args:
+            cutoff_date: Only include deliveries after this date
+            granularity: Time granularity (hourly, daily, weekly, monthly)
+            channel: Filter by specific channel
+
+        Returns:
+            List of time series data points
+        """
+        from sqlalchemy import func, extract
+
+        # Determine date truncation based on granularity
+        if granularity == "hourly":
+            date_trunc = func.date_trunc('hour', MessageDeliveryStatus.created_at)
+        elif granularity == "daily":
+            date_trunc = func.date_trunc('day', MessageDeliveryStatus.created_at)
+        elif granularity == "weekly":
+            date_trunc = func.date_trunc('week', MessageDeliveryStatus.created_at)
+        else:  # monthly
+            date_trunc = func.date_trunc('month', MessageDeliveryStatus.created_at)
+
+        query = self.session.query(
+            date_trunc.label('time_period'),
+            func.count(MessageDeliveryStatus.id).label('total_attempts'),
+            func.sum(
+                func.case(
+                    [(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1)],
+                    else_=0
+                )
+            ).label('successful_attempts'),
+            func.avg(
+                func.case(
+                    [(MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value,
+                      MessageDeliveryStatus.response_time_ms)],
+                    else_=None
+                )
+            ).label('avg_response_time')
+        ).filter(
+            MessageDeliveryStatus.created_at >= cutoff_date
+        ).group_by(date_trunc).order_by(date_trunc)
+
+        if channel:
+            query = query.filter(MessageDeliveryStatus.channel == channel)
+
+        results = []
+        for row in query.all():
+            success_rate = (row.successful_attempts / row.total_attempts
+                          if row.total_attempts > 0 else 0.0)
+
+            results.append({
+                "timestamp": row.time_period.isoformat(),
+                "total_attempts": row.total_attempts,
+                "successful_attempts": row.successful_attempts,
+                "success_rate": success_rate,
+                "avg_response_time_ms": float(row.avg_response_time) if row.avg_response_time else None
+            })
+
+        return results
+
+    def get_active_channels(self, cutoff_date: datetime) -> List[str]:
+        """
+        Get list of active channels.
+
+        Args:
+            cutoff_date: Only include channels active after this date
+
+        Returns:
+            List of channel names
+        """
+        channels = self.session.query(MessageDeliveryStatus.channel).filter(
+            MessageDeliveryStatus.created_at >= cutoff_date
+        ).distinct().all()
+
+        return [row.channel for row in channels]
+
+
+class ChannelHealthRepository:
+    """Repository for channel health operations."""
+
+    def __init__(self, session: Session):
+        """
+        Initialize the repository with a database session.
+
+        Args:
+            session: SQLAlchemy database session
+        """
+        self.session = session
+
+    def create_or_update_channel_health(self, health_data: Dict[str, Any]) -> ChannelHealth:
+        """
+        Create or update channel health.
+
+        Args:
+            health_data: Dictionary with channel health data
+
+        Returns:
+            ChannelHealth object
+        """
+        channel_name = health_data.get('channel')
+        if not channel_name:
+            raise ValueError("Channel name is required")
+
+        # Try to get existing health record
+        health = self.session.query(ChannelHealth).filter(
+            ChannelHealth.channel == channel_name
+        ).first()
+
+        try:
+            if health:
+                # Update existing record
+                for key, value in health_data.items():
+                    if hasattr(health, key):
+                        setattr(health, key, value)
+                health.checked_at = datetime.utcnow()
+            else:
+                # Create new record
+                health_data['checked_at'] = datetime.utcnow()
+                health = ChannelHealth(**health_data)
+                self.session.add(health)
+
+            self.session.flush()
+            _logger.info("Updated channel health for %s: %s", channel_name, health.status)
+            return health
+        except Exception as e:
+            self.session.rollback()
+            _logger.error("Failed to update channel health for %s: %s", channel_name, e)
+            raise
+
+    def get_channel_health(self, channel: str) -> Optional[ChannelHealth]:
+        """
+        Get channel health by channel name.
+
+        Args:
+            channel: Channel name
+
+        Returns:
+            ChannelHealth object or None if not found
+        """
+        return self.session.query(ChannelHealth).filter(ChannelHealth.channel == channel).first()
+
+    def list_channel_health(self, status: Optional[ChannelHealthStatus] = None) -> List[ChannelHealth]:
+        """
+        List channel health records.
+
+        Args:
+            status: Filter by status
+
+        Returns:
+            List of ChannelHealth objects
+        """
+        query = self.session.query(ChannelHealth)
+
+        if status is not None:
+            query = query.filter(ChannelHealth.status == status.value)
+
+        return query.order_by(desc(ChannelHealth.checked_at)).all()
+
+    def get_healthy_channels(self) -> List[str]:
+        """
+        Get list of healthy channel names.
+
+        Returns:
+            List of healthy channel names
+        """
+        channels = self.session.query(ChannelHealth.channel).filter(
+            ChannelHealth.status.in_([ChannelHealthStatus.HEALTHY.value, ChannelHealthStatus.DEGRADED.value])
+        ).all()
+
+        return [channel[0] for channel in channels]
+
+
+class RateLimitRepository:
+    """Repository for rate limit operations."""
+
+    def __init__(self, session: Session):
+        """
+        Initialize the repository with a database session.
+
+        Args:
+            session: SQLAlchemy database session
+        """
+        self.session = session
+
+    def create_or_update_rate_limit(self, rate_limit_data: Dict[str, Any]) -> RateLimit:
+        """
+        Create or update rate limit.
+
+        Args:
+            rate_limit_data: Dictionary with rate limit data
+
+        Returns:
+            RateLimit object
+        """
+        user_id = rate_limit_data.get('user_id')
+        channel = rate_limit_data.get('channel')
+
+        if not user_id or not channel:
+            raise ValueError("User ID and channel are required")
+
+        # Try to get existing rate limit
+        rate_limit = self.session.query(RateLimit).filter(
+            and_(RateLimit.user_id == user_id, RateLimit.channel == channel)
+        ).first()
+
+        try:
+            if rate_limit:
+                # Update existing record
+                for key, value in rate_limit_data.items():
+                    if hasattr(rate_limit, key):
+                        setattr(rate_limit, key, value)
+            else:
+                # Create new record
+                rate_limit = RateLimit(**rate_limit_data)
+                self.session.add(rate_limit)
+
+            self.session.flush()
+            _logger.info("Updated rate limit for user %s, channel %s", user_id, channel)
+            return rate_limit
+        except Exception as e:
+            self.session.rollback()
+            _logger.error("Failed to update rate limit for user %s, channel %s: %s", user_id, channel, e)
+            raise
+
+    def get_rate_limit(self, user_id: str, channel: str) -> Optional[RateLimit]:
+        """
+        Get rate limit for user and channel.
+
+        Args:
+            user_id: User ID
+            channel: Channel name
+
+        Returns:
+            RateLimit object or None if not found
+        """
+        return self.session.query(RateLimit).filter(
+            and_(RateLimit.user_id == user_id, RateLimit.channel == channel)
+        ).first()
+
+    def check_and_consume_token(self, user_id: str, channel: str, default_config: Dict[str, Any]) -> bool:
+        """
+        Check if user has tokens available and consume one if available.
+
+        Args:
+            user_id: User ID
+            channel: Channel name
+            default_config: Default rate limit configuration
+
+        Returns:
+            True if token was consumed, False if rate limited
+        """
+        current_time = datetime.utcnow()
+
+        # Get or create rate limit
+        rate_limit = self.get_rate_limit(user_id, channel)
+        if not rate_limit:
+            rate_limit = self.create_or_update_rate_limit({
+                'user_id': user_id,
+                'channel': channel,
+                'tokens': default_config.get('max_tokens', 60),
+                'max_tokens': default_config.get('max_tokens', 60),
+                'refill_rate': default_config.get('refill_rate', 60),
+                'last_refill': current_time
+            })
+
+        # Refill tokens based on time elapsed
+        rate_limit.refill_tokens(current_time)
+
+        # Try to consume a token
+        if rate_limit.consume_token():
+            self.session.flush()
+            return True
+
+        return False
+
+
+class ChannelConfigRepository:
+    """Repository for channel configuration operations."""
+
+    def __init__(self, session: Session):
+        """
+        Initialize the repository with a database session.
+
+        Args:
+            session: SQLAlchemy database session
+        """
+        self.session = session
+
+    def create_channel_config(self, config_data: Dict[str, Any]) -> ChannelConfig:
+        """
+        Create a new channel configuration.
+
+        Args:
+            config_data: Dictionary with channel config data
+
+        Returns:
+            Created ChannelConfig object
+        """
+        try:
+            config = ChannelConfig(**config_data)
+            self.session.add(config)
+            self.session.flush()
+            _logger.info("Created channel config for %s", config.channel)
+            return config
+        except IntegrityError as e:
+            self.session.rollback()
+            _logger.error("Failed to create channel config: %s", e)
+            raise
+
+    def get_channel_config(self, channel: str) -> Optional[ChannelConfig]:
+        """
+        Get channel configuration by channel name.
+
+        Args:
+            channel: Channel name
+
+        Returns:
+            ChannelConfig object or None if not found
+        """
+        return self.session.query(ChannelConfig).filter(ChannelConfig.channel == channel).first()
+
+    def list_channel_configs(self, enabled_only: bool = False) -> List[ChannelConfig]:
+        """
+        List channel configurations.
+
+        Args:
+            enabled_only: Only return enabled channels
+
+        Returns:
+            List of ChannelConfig objects
+        """
+        query = self.session.query(ChannelConfig)
+
+        if enabled_only:
+            query = query.filter(ChannelConfig.enabled == True)
+
+        return query.order_by(asc(ChannelConfig.channel)).all()
+
+    def update_channel_config(self, channel: str, update_data: Dict[str, Any]) -> Optional[ChannelConfig]:
+        """
+        Update channel configuration.
+
+        Args:
+            channel: Channel name
+            update_data: Dictionary with fields to update
+
+        Returns:
+            Updated ChannelConfig object or None if not found
+        """
+        config = self.get_channel_config(channel)
+        if not config:
+            return None
+
+        try:
+            for key, value in update_data.items():
+                if hasattr(config, key):
+                    setattr(config, key, value)
+
+            self.session.flush()
+            _logger.info("Updated channel config for %s", channel)
+            return config
+        except Exception as e:
+            self.session.rollback()
+            _logger.error("Failed to update channel config for %s: %s", channel, e)
+            raise
+
+    def delete_channel_config(self, channel: str) -> bool:
+        """
+        Delete channel configuration.
+
+        Args:
+            channel: Channel name
+
+        Returns:
+            True if deleted, False if not found
+        """
+        config = self.get_channel_config(channel)
+        if not config:
+            return False
+
+        try:
+            self.session.delete(config)
+            _logger.info("Deleted channel config for %s", channel)
+            return True
+        except Exception as e:
+            self.session.rollback()
+            _logger.error("Failed to delete channel config for %s: %s", channel, e)
+            raise
+
+    def get_enabled_channels(self) -> List[str]:
+        """
+        Get list of enabled channel names.
+
+        Returns:
+            List of enabled channel names
+        """
+        channels = self.session.query(ChannelConfig.channel).filter(
+            ChannelConfig.enabled == True
+        ).all()
+
+        return [channel[0] for channel in channels]
+
+
+class NotificationRepository:
+    """Unified repository for all notification service operations."""
+
+    def __init__(self, session: Session, use_optimized: bool = True):
+        """
+        Initialize the unified repository with a database session.
+
+        Args:
+            session: SQLAlchemy database session
+            use_optimized: Whether to use optimized repository implementations
+        """
+        self.session = session
+
+        if use_optimized:
+            # Use optimized implementations for better performance
+            self.messages = OptimizedMessageRepository(session)
+            self.delivery_status = OptimizedDeliveryStatusRepository(session)
+            self.rate_limits = OptimizedRateLimitRepository(session)
+            # Keep standard implementations for these
+            self.channel_health = ChannelHealthRepository(session)
+            self.channel_configs = ChannelConfigRepository(session)
+        else:
+            # Use standard implementations
+            self.messages = MessageRepository(session)
+            self.delivery_status = DeliveryStatusRepository(session)
+            self.channel_health = ChannelHealthRepository(session)
+            self.rate_limits = RateLimitRepository(session)
+            self.channel_configs = ChannelConfigRepository(session)
+
+    def commit(self):
+        """Commit the current transaction."""
+        self.session.commit()
+
+    def rollback(self):
+        """Rollback the current transaction."""
+        self.session.rollback()
+
+    def close(self):
+        """Close the session."""
+        self.session.close()

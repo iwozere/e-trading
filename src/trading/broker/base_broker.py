@@ -540,13 +540,14 @@ class PositionNotificationManager:
     Supports email and Telegram notifications with configurable settings.
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], notification_client=None):
         self.notifications_config = config.get('notifications', {})
         self.position_opened_enabled = self.notifications_config.get('position_opened', True)
         self.position_closed_enabled = self.notifications_config.get('position_closed', True)
         self.email_enabled = self.notifications_config.get('email_enabled', True)
         self.telegram_enabled = self.notifications_config.get('telegram_enabled', True)
         self.error_notifications = self.notifications_config.get('error_notifications', True)
+        self.notification_client = notification_client
 
         _logger.info(f"Position notifications initialized - "
                     f"Opened: {self.position_opened_enabled}, "
@@ -637,30 +638,59 @@ class PositionNotificationManager:
     async def _send_notifications(self, message: str, title: str):
         """Send notifications via enabled channels."""
         try:
-            if self.email_enabled:
-                await self._send_email_notification(message, title)
+            if self.notification_client:
+                # Use the new notification service client
+                channels = []
+                if self.email_enabled:
+                    channels.append("email")
+                if self.telegram_enabled:
+                    channels.append("telegram")
 
-            if self.telegram_enabled:
-                await self._send_telegram_notification(message, title)
+                if channels:
+                    from src.notification.service.client import MessageType, MessagePriority
+
+                    success = await self.notification_client.send_notification(
+                        notification_type=MessageType.SYSTEM,
+                        title=title,
+                        message=message,
+                        priority=MessagePriority.NORMAL,
+                        source="trading_broker",
+                        channels=channels,
+                        recipient_id="trading_system"
+                    )
+
+                    if success:
+                        _logger.info("Trading notification sent successfully: %s", title)
+                    else:
+                        _logger.warning("Failed to send trading notification: %s", title)
+                else:
+                    _logger.debug("No notification channels enabled")
+            else:
+                # Fallback to legacy methods if no client provided
+                if self.email_enabled:
+                    await self._send_email_notification_legacy(message, title)
+
+                if self.telegram_enabled:
+                    await self._send_telegram_notification_legacy(message, title)
 
         except Exception as e:
             _logger.exception(f"Error sending notifications: {e}")
 
-    async def _send_email_notification(self, message: str, title: str):
-        """Send email notification."""
+    async def _send_email_notification_legacy(self, message: str, title: str):
+        """Send email notification using legacy method."""
         try:
             # Import here to avoid circular imports
             from src.notification.async_notification_manager import AsyncNotificationManager
 
             # Use existing notification system
             # This would integrate with your existing email notification setup
-            _logger.info(f"Email notification sent: {title}")
+            _logger.info(f"Email notification sent (legacy): {title}")
 
         except Exception as e:
             _logger.exception(f"Error sending email notification: {e}")
 
-    async def _send_telegram_notification(self, message: str, title: str):
-        """Send Telegram notification."""
+    async def _send_telegram_notification_legacy(self, message: str, title: str):
+        """Send Telegram notification using legacy method."""
         try:
             # Import here to avoid circular imports
             from src.telegram.screener.http_api_client import send_notification_to_admins
@@ -694,7 +724,7 @@ class BaseBroker(BaseBrokerClass):
     - Optional backtrader framework integration
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], notification_client=None):
         # Initialize based on base class type
         if BACKTRADER_AVAILABLE and isinstance(self, bt.broker.BrokerBase):
             # We're inheriting from bt.broker.BrokerBack
@@ -733,7 +763,7 @@ class BaseBroker(BaseBrokerClass):
         )
 
         # Notification manager
-        self.notification_manager = PositionNotificationManager(config)
+        self.notification_manager = PositionNotificationManager(config, notification_client)
 
         # Backtrader-specific configuration
         backtrader_config = config.get('backtrader_config', {})

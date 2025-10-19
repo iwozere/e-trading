@@ -285,8 +285,6 @@ def get_alert(alert_id: int):
 
         # Convert schedule back to alert format for compatibility
         task_params = schedule.task_params or {}
-        print(f"DEBUG get_alert: task_params = {task_params}")
-        print(f"DEBUG get_alert: status = {task_params.get('status', 'ARMED')}")
         return AlertCompat(
             id=schedule.id,
             user_id=schedule.user_id,
@@ -307,7 +305,8 @@ def update_alert(alert_id: int, **values) -> bool:
             return False
 
         # Update task_params with new values
-        task_params = schedule.task_params or {}
+        # Create a new dict to ensure SQLAlchemy detects the change
+        task_params = dict(schedule.task_params or {})
         for key, value in values.items():
             if key in ['config_json', 'email', 'status', 're_arm_config', 'trigger_count']:
                 task_params[key] = value
@@ -319,12 +318,7 @@ def update_alert(alert_id: int, **values) -> bool:
         if 'enabled' in values:
             update_data['enabled'] = values['enabled']
 
-        print(f"DEBUG: Updating alert {alert_id} with task_params: {task_params}")
         updated = r.jobs.update_schedule(alert_id, update_data)
-
-        # Debug: Check what was actually saved
-        updated_schedule = r.jobs.get_schedule(alert_id)
-        print(f"DEBUG: After update, task_params: {updated_schedule.task_params}")
 
         return updated is not None
 
@@ -335,6 +329,7 @@ def delete_alert(alert_id: int) -> bool:
 
 def list_active_alerts(telegram_user_id: str | None = None, *, limit: int = 100, offset: int = 0, older_first: bool = False):
     """List active alerts (now stored as enabled job schedules with job_type='alert')."""
+    import json
     from src.data.db.models.model_jobs import JobType
 
     with database_service.uow() as r:
@@ -354,15 +349,35 @@ def list_active_alerts(telegram_user_id: str | None = None, *, limit: int = 100,
         alerts = []
         for schedule in schedules:
             task_params = schedule.task_params or {}
+            config_json = task_params.get('config_json', '{}')
+
+            # Parse config to extract alert details for web UI compatibility
+            try:
+                config = json.loads(config_json) if isinstance(config_json, str) else config_json
+            except (json.JSONDecodeError, TypeError):
+                config = {}
+
             alert = {
                 'id': schedule.id,
                 'user_id': schedule.user_id,
-                'config_json': task_params.get('config_json', '{}'),
+                'config_json': config_json,
                 'email': task_params.get('email', False),
                 'status': task_params.get('status', 'ARMED'),
                 're_arm_config': task_params.get('re_arm_config'),
                 'created_at': schedule.created_at,
-                'enabled': schedule.enabled
+                'enabled': schedule.enabled,
+                'active': schedule.enabled,  # Add for web UI compatibility
+                # Extract fields from config for web UI compatibility
+                'ticker': config.get('ticker', schedule.target or ''),
+                'price': config.get('price'),
+                'condition': config.get('condition', ''),
+                'alert_type': config.get('alert_type', 'price'),
+                'timeframe': config.get('timeframe', '15m'),
+                'alert_action': config.get('alert_action', 'telegram'),
+                'is_armed': task_params.get('status', 'ARMED') == 'ARMED',
+                'last_price': config.get('last_price'),
+                'last_triggered_at': task_params.get('last_triggered_at'),
+                'created': schedule.created_at.isoformat() if schedule.created_at else None
             }
             alerts.append(alert)
 
@@ -429,6 +444,7 @@ def add_json_schedule(telegram_user_id: str, config_json: str, *, schedule_confi
 
 def list_schedules(telegram_user_id: str):
     """List schedules for a user (now stored as job schedules with job_type='screener')."""
+    import json
     from src.data.db.models.model_jobs import JobType
 
     with database_service.uow() as r:
@@ -439,16 +455,34 @@ def list_schedules(telegram_user_id: str):
         telegram_schedules = []
         for schedule in schedules:
             task_params = schedule.task_params or {}
+            config_json = task_params.get('config_json', '{}')
+
+            # Parse config to extract schedule details for web UI compatibility
+            try:
+                config = json.loads(config_json) if isinstance(config_json, str) else config_json
+            except (json.JSONDecodeError, TypeError):
+                config = {}
+
             telegram_schedule = {
                 'id': schedule.id,
                 'user_id': schedule.user_id,
-                'ticker': task_params.get('ticker', schedule.target),
-                'config_json': task_params.get('config_json'),
+                'ticker': task_params.get('ticker', schedule.target or config.get('ticker', '')),
+                'config_json': config_json,
                 'schedule_config': task_params.get('schedule_config'),
-                'scheduled_time': task_params.get('scheduled_time'),
+                'scheduled_time': task_params.get('scheduled_time', config.get('scheduled_time', '')),
                 'created_at': schedule.created_at,
                 'enabled': schedule.enabled,
-                'cron': schedule.cron
+                'active': schedule.enabled,  # Add for web UI compatibility
+                'cron': schedule.cron,
+                'created': schedule.created_at.isoformat() if schedule.created_at else None,
+                # Add additional fields for web UI compatibility
+                'period': config.get('period'),
+                'email': config.get('email', False),
+                'indicators': config.get('indicators'),
+                'interval': config.get('interval', config.get('timeframe')),
+                'provider': config.get('provider'),
+                'schedule_type': config.get('schedule_type', 'screener'),
+                'list_type': config.get('list_type')
             }
             telegram_schedules.append(telegram_schedule)
 
@@ -460,6 +494,8 @@ def get_schedule_by_id(schedule_id: int):
 
 def get_schedule(schedule_id: int):
     """Get a schedule by ID (now stored as job schedule)."""
+    import json
+
     with database_service.uow() as r:
         schedule = r.jobs.get_schedule(schedule_id)
         if not schedule or schedule.job_type not in ['screener', 'report']:
@@ -467,16 +503,34 @@ def get_schedule(schedule_id: int):
 
         # Convert schedule back to telegram schedule format for compatibility
         task_params = schedule.task_params or {}
+        config_json = task_params.get('config_json', '{}')
+
+        # Parse config to extract schedule details for web UI compatibility
+        try:
+            config = json.loads(config_json) if isinstance(config_json, str) else config_json
+        except (json.JSONDecodeError, TypeError):
+            config = {}
+
         return {
             'id': schedule.id,
             'user_id': schedule.user_id,
-            'ticker': task_params.get('ticker', schedule.target),
-            'config_json': task_params.get('config_json'),
+            'ticker': task_params.get('ticker', schedule.target or config.get('ticker', '')),
+            'config_json': config_json,
             'schedule_config': task_params.get('schedule_config'),
-            'scheduled_time': task_params.get('scheduled_time'),
+            'scheduled_time': task_params.get('scheduled_time', config.get('scheduled_time', '')),
             'created_at': schedule.created_at,
             'enabled': schedule.enabled,
-            'cron': schedule.cron
+            'active': schedule.enabled,  # Add for web UI compatibility
+            'cron': schedule.cron,
+            'created': schedule.created_at.isoformat() if schedule.created_at else None,
+            # Add additional fields for web UI compatibility
+            'period': config.get('period'),
+            'email': config.get('email', False),
+            'indicators': config.get('indicators'),
+            'interval': config.get('interval', config.get('timeframe')),
+            'provider': config.get('provider'),
+            'schedule_type': config.get('schedule_type', 'screener'),
+            'list_type': config.get('list_type')
         }
 
 def update_schedule(schedule_id: int, **values) -> bool:
@@ -487,7 +541,8 @@ def update_schedule(schedule_id: int, **values) -> bool:
             return False
 
         # Update task_params with new values
-        task_params = schedule.task_params or {}
+        # Create a new dict to ensure SQLAlchemy detects the change
+        task_params = dict(schedule.task_params or {})
         update_data = {}
 
         for key, value in values.items():
@@ -637,6 +692,7 @@ def get_active_alerts():
 
 def get_active_schedules():
     """Get all active schedules for admin panel."""
+    import json
     from src.data.db.models.model_jobs import JobType
 
     with database_service.uow() as r:
@@ -649,16 +705,34 @@ def get_active_schedules():
         telegram_schedules = []
         for schedule in schedules:
             task_params = schedule.task_params or {}
+            config_json = task_params.get('config_json', '{}')
+
+            # Parse config to extract schedule details for web UI compatibility
+            try:
+                config = json.loads(config_json) if isinstance(config_json, str) else config_json
+            except (json.JSONDecodeError, TypeError):
+                config = {}
+
             telegram_schedule = {
                 'id': schedule.id,
                 'user_id': schedule.user_id,
-                'ticker': task_params.get('ticker', schedule.target),
-                'config_json': task_params.get('config_json'),
+                'ticker': task_params.get('ticker', schedule.target or config.get('ticker', '')),
+                'config_json': config_json,
                 'schedule_config': task_params.get('schedule_config'),
-                'scheduled_time': task_params.get('scheduled_time'),
+                'scheduled_time': task_params.get('scheduled_time', config.get('scheduled_time', '')),
                 'created_at': schedule.created_at,
                 'enabled': schedule.enabled,
-                'cron': schedule.cron
+                'active': schedule.enabled,  # Add for web UI compatibility
+                'cron': schedule.cron,
+                'created': schedule.created_at.isoformat() if schedule.created_at else None,
+                # Add additional fields for web UI compatibility
+                'period': config.get('period'),
+                'email': config.get('email', False),
+                'indicators': config.get('indicators'),
+                'interval': config.get('interval', config.get('timeframe')),
+                'provider': config.get('provider'),
+                'schedule_type': config.get('schedule_type', 'screener'),
+                'list_type': config.get('list_type')
             }
             telegram_schedules.append(telegram_schedule)
 

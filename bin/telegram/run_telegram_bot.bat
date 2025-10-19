@@ -8,6 +8,6 @@ set PROJECT_ROOT=%SCRIPT_DIR%..
 REM Activate virtual environment
 call %PROJECT_ROOT%\.venv\Scripts\activate.bat
 
-python %PROJECT_ROOT%\src\frontend\telegram\bot.py
+python %PROJECT_ROOT%\src\frontend\telegram\telegram_bot.py
 
  
