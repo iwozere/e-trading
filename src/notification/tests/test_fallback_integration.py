@@ -13,7 +13,7 @@ from unittest.mock import Mock, AsyncMock, patch
 from src.notification.service.fallback_manager import FallbackManager, FallbackRule, FallbackStrategy
 from src.notification.service.health_monitor import HealthMonitor, HealthStatus, HealthCheckConfig
 from src.notification.channels.base import MessageContent
-from src.notification.service.test_fallback_manager import MockChannel
+from src.notification.tests.test_fallback_manager import MockChannel
 
 
 @pytest.fixture

@@ -49,7 +49,7 @@ class E2ETestRunner:
 
         try:
             # Import and run standalone tests
-            from src.notification.service.test_e2e_standalone import main as standalone_main
+            from src.notification.tests.test_e2e_standalone import main as standalone_main
 
             exit_code = await standalone_main()
 

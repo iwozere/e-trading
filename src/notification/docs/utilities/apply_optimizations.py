@@ -16,8 +16,8 @@ sys.path.append(str(PROJECT_ROOT))
 
 from sqlalchemy import create_engine
 from src.data.db.core.database import get_database_url
-from src.notification.service.database_migrations import run_optimization_migration
-from src.notification.service.query_analyzer import QueryPerformanceMonitor, get_query_monitor
+from src.notification.docs.utilities.database_migrations import run_optimization_migration
+from src.notification.docs.utilities.query_analyzer import QueryPerformanceMonitor, get_query_monitor
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

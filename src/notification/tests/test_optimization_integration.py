@@ -18,7 +18,7 @@ from src.notification.service.database_optimization import (
     OptimizedMessageRepository,
     OptimizedDeliveryStatusRepository
 )
-from src.notification.service.query_analyzer import QueryPerformanceMonitor
+from src.notification.docs.utilities.query_analyzer import QueryPerformanceMonitor
 
 
 @pytest.fixture(scope="session")

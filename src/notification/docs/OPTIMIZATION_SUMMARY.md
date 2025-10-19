@@ -189,7 +189,7 @@ class NotificationRepository:
 Query performance monitoring can be enabled globally:
 
 ```python
-from src.notification.service.query_analyzer import get_query_monitor
+from src.notification.docs.utilities.query_analyzer import get_query_monitor
 
 # Enable monitoring
 monitor = get_query_monitor()

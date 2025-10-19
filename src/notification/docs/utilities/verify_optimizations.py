@@ -18,12 +18,12 @@ from src.notification.service.database_optimization import (
     OptimizedDeliveryStatusRepository,
     OptimizedRateLimitRepository
 )
-from src.notification.service.query_analyzer import (
+from src.notification.docs.utilities.query_analyzer import (
     QueryPerformanceMonitor,
     QueryMetrics,
     query_timer
 )
-from src.notification.service.database_migrations import NotificationServiceMigrations
+from src.notification.docs.utilities.database_migrations import NotificationServiceMigrations
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

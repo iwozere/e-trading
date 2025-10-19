@@ -19,7 +19,7 @@ sys.path.append(str(PROJECT_ROOT))
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from src.data.db.core.database import get_database_url
-from src.notification.service.query_analyzer import (
+from src.notification.docs.utilities.query_analyzer import (
     QueryPerformanceMonitor,
     DatabaseHealthChecker,
     get_query_monitor

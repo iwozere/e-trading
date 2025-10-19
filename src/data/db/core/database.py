@@ -6,21 +6,10 @@ from typing import Iterable
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
-from sqlalchemy import MetaData
+from sqlalchemy.orm import sessionmaker, Session
+
 from src.data.db.core.base import Base
-
 from config.donotshare.donotshare import SQL_ECHO, DB_URL as CONFIG_DB_URL
-
-# ---- ONE shared metadata + Base for the whole app ----
-_convention = {
-    "ix": "ix_%(column_0_label)s",
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s",
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s",
-}
-_shared_metadata = MetaData(naming_convention=_convention)
 
 
 
@@ -32,6 +21,11 @@ DB_URL = os.getenv("DB_URL", CONFIG_DB_URL)
 
 # Flip this on to see SQL in logs (or set SQL_ECHO=1 in env)
 SQL_ECHO = bool(int(os.getenv("SQL_ECHO", SQL_ECHO)))
+
+
+def get_database_url() -> str:
+    """Get the current database URL."""
+    return DB_URL
 
 
 # --- Engine / Session --------------------------------------------------------
@@ -118,12 +112,23 @@ def create_all_tables(*bases: Iterable) -> None:
         from src.data.db.models.model_telegram import Base as TgBase
         from src.data.db.models.model_trading import Base as TradingBase
         create_all_tables(UsersBase, TgBase, TradingBase)
+
+    Note: Since we now use a single Base, you can simply call:
+        Base.metadata.create_all(engine)
     """
-    for base in bases:
-        base.metadata.create_all(engine)
+    if not bases:
+        # If no bases provided, use the shared Base
+        Base.metadata.create_all(engine)
+    else:
+        for base in bases:
+            base.metadata.create_all(engine)
 
 
 def drop_all_tables(*bases: Iterable) -> None:
     """Handy in tests."""
-    for base in bases:
-        base.metadata.drop_all(engine)
+    if not bases:
+        # If no bases provided, use the shared Base
+        Base.metadata.drop_all(engine)
+    else:
+        for base in bases:
+            base.metadata.drop_all(engine)

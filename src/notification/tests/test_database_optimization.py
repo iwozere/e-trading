@@ -18,13 +18,13 @@ from src.notification.service.database_optimization import (
     create_optimized_indexes,
     analyze_query_performance
 )
-from src.notification.service.query_analyzer import (
+from src.notification.docs.utilities.query_analyzer import (
     QueryPerformanceMonitor,
     QueryMetrics,
     DatabaseHealthChecker,
     query_timer
 )
-from src.notification.service.database_migrations import (
+from src.notification.docs.utilities.database_migrations import (
     NotificationServiceMigrations,
     run_optimization_migration
 )
