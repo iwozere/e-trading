@@ -31,6 +31,10 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+# Setup logger first
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
+
 # Make trading system import optional for testing
 try:
     from src.trading.enhanced_strategy_manager import EnhancedStrategyManager
@@ -39,7 +43,6 @@ except ImportError as e:
     _logger.warning("Trading system not available: %s", e)
     EnhancedStrategyManager = None
     TRADING_SYSTEM_AVAILABLE = False
-from src.notification.logger import setup_logger
 from config.donotshare.donotshare import TRADING_API_PORT, TRADING_WEBGUI_PORT
 from src.web_ui.backend.services.webui_app_service import webui_app_service
 from src.web_ui.backend.auth_routes import router as auth_router
@@ -51,8 +54,6 @@ from src.web_ui.backend.services import (
     StrategyManagementService, StrategyValidationError, StrategyOperationError,
     SystemMonitoringService, SystemAlert
 )
-
-_logger = setup_logger(__name__)
 
 # Global strategy manager and service instances
 strategy_manager: Optional[EnhancedStrategyManager] = None

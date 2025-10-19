@@ -1,212 +1,104 @@
 """
-Job Scheduler Models
+Trading Models
 
-SQLAlchemy models for the job scheduling and execution system.
-Includes Schedule and Run models with proper relationships and validation.
+SQLAlchemy models for the trading system.
+Includes BotInstance, Trade, Position, and PerformanceMetric models.
 """
 
 from datetime import datetime
-from enum import Enum
-from typing import Optional, Dict, Any
-from uuid import UUID
+from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, BigInteger, JSON,
-    CheckConstraint, UniqueConstraint, Index, func, ForeignKey
+    Column, Integer, String, DateTime, Text, Numeric, Boolean, ForeignKey, func
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.orm import relationship
 
 from src.data.db.core.base import Base
 
 
-class JobType(str, Enum):
-    """Job type enumeration."""
-    REPORT = "report"
-    SCREENER = "screener"
-    ALERT = "alert"
-    NOTIFICATION = "notification"
-    DATA_PROCESSING = "data_processing"
-    BACKUP = "backup"
+class BotInstance(Base):
+    """Trading bot instance model."""
 
+    __tablename__ = "trading_bots"
 
-class RunStatus(str, Enum):
-    """Run status enumeration."""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class Schedule(Base):
-    """Schedule model for persistent schedule definitions."""
-
-    __tablename__ = "job_schedules"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    job_type = Column(String(50), nullable=False)
-    target = Column(String(255), nullable=False)
-    task_params = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=False, default={})
-    cron = Column(String(100), nullable=False)
-    enabled = Column(Boolean, nullable=False, default=True, index=True)
-    next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    id = Column(String(50), primary_key=True)
+    type = Column(String(20), nullable=False)  # 'paper' or 'live'
+    status = Column(String(20), nullable=False)  # 'running', 'stopped', etc.
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
 
-    # Constraints
-    __table_args__ = (
-        CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup')", name="check_job_type"),
-        UniqueConstraint("user_id", "name", name="unique_user_schedule_name"),
-        Index("idx_schedules_enabled", "enabled"),
-        Index("idx_schedules_next_run_at", "next_run_at", postgresql_where="enabled = true"),
-    )
-
     def __repr__(self):
-        return f"<Schedule(id={self.id}, name='{self.name}', job_type='{self.job_type}', enabled={self.enabled})>"
+        return f"<BotInstance(id='{self.id}', type='{self.type}', status='{self.status}')>"
 
 
-class ScheduleRun(Base):
-    """Run model for job execution history with snapshots."""
+class Trade(Base):
+    """Trade execution model."""
 
-    __tablename__ = "job_schedule_runs"
+    __tablename__ = "trading_trades"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_type = Column(Text, nullable=False)
-    job_id = Column(Integer, ForeignKey("job_schedules.id", ondelete="CASCADE"), nullable=True)
-    user_id = Column(BigInteger, nullable=True, index=True)
-    status = Column(Text, nullable=True, index=True)
-    scheduled_for = Column(DateTime(timezone=True), nullable=True, index=True)
-    enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    finished_at = Column(DateTime(timezone=True), nullable=True)
-    job_snapshot = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
-    result = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
-    error = Column(Text, nullable=True)
-    worker_id = Column(String(255), nullable=True)
+    bot_id = Column(String(50), ForeignKey("trading_bots.id"), nullable=False)
+    trade_type = Column(String(10), nullable=False)  # 'paper' or 'live'
+    symbol = Column(String(20), nullable=False)
+    side = Column(String(10), nullable=False)  # 'buy' or 'sell'
+    quantity = Column(Numeric(20, 8), nullable=False)
+    price = Column(Numeric(20, 8), nullable=False)
+    executed_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    strategy_name = Column(String(100), nullable=True)
+    order_id = Column(String(100), nullable=True)
+    commission = Column(Numeric(20, 8), nullable=True, default=0)
 
-    # Constraints
-    __table_args__ = (
-        UniqueConstraint("job_type", "job_id", "scheduled_for", name="ux_runs_job_scheduled_for"),
-    )
+    # Relationship
+    bot = relationship("BotInstance", backref="trades")
 
     def __repr__(self):
-        return f"<Run(id={self.id}, job_type='{self.job_type}', status='{self.status}')>"
+        return f"<Trade(id={self.id}, symbol='{self.symbol}', side='{self.side}', quantity={self.quantity})>"
 
 
-# Pydantic models for API validation
-class ScheduleCreate(BaseModel):
-    """Pydantic model for creating a schedule."""
-    name: str = Field(..., min_length=1, max_length=255)
-    job_type: JobType
-    target: str = Field(..., min_length=1, max_length=255)
-    task_params: Dict[str, Any] = Field(default_factory=dict)
-    cron: str = Field(..., min_length=1, max_length=100)
-    enabled: bool = Field(default=True)
+class Position(Base):
+    """Trading position model."""
 
-    @field_validator('cron')
-    def validate_cron(cls, v):
-        """Basic cron validation - should be 5 fields separated by spaces."""
-        parts = v.strip().split()
-        if len(parts) != 5:
-            raise ValueError('Cron expression must have exactly 5 fields')
-        return v
+    __tablename__ = "trading_positions"
 
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(String(50), ForeignKey("trading_bots.id"), nullable=False)
+    trade_type = Column(String(10), nullable=False)  # 'paper' or 'live'
+    symbol = Column(String(20), nullable=False)
+    quantity = Column(Numeric(20, 8), nullable=False)
+    avg_price = Column(Numeric(20, 8), nullable=False)
+    current_price = Column(Numeric(20, 8), nullable=True)
+    unrealized_pnl = Column(Numeric(20, 8), nullable=True, default=0)
+    realized_pnl = Column(Numeric(20, 8), nullable=True, default=0)
+    opened_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    is_open = Column(Boolean, nullable=False, default=True)
 
-class ScheduleUpdate(BaseModel):
-    """Pydantic model for updating a schedule."""
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    target: Optional[str] = Field(None, min_length=1, max_length=255)
-    task_params: Optional[Dict[str, Any]] = None
-    cron: Optional[str] = Field(None, min_length=1, max_length=100)
-    enabled: Optional[bool] = None
+    # Relationship
+    bot = relationship("BotInstance", backref="positions")
+
+    def __repr__(self):
+        return f"<Position(id={self.id}, symbol='{self.symbol}', quantity={self.quantity}, is_open={self.is_open})>"
 
 
-class ScheduleResponse(BaseModel):
-    """Pydantic model for schedule API responses."""
-    id: int
-    user_id: int
-    name: str
-    job_type: JobType
-    target: str
-    task_params: Dict[str, Any]
-    cron: str
-    enabled: bool
-    next_run_at: Optional[datetime]
-    created_at: datetime
-    updated_at: datetime
+class PerformanceMetric(Base):
+    """Performance metrics model."""
 
-    class Config:
-        from_attributes = True
+    __tablename__ = "trading_performance_metrics"
 
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(String(50), ForeignKey("trading_bots.id"), nullable=False)
+    trade_type = Column(String(10), nullable=False)  # 'paper' or 'live'
+    metric_name = Column(String(100), nullable=False)
+    metric_value = Column(Numeric(20, 8), nullable=False)
+    calculated_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    period_start = Column(DateTime(timezone=True), nullable=True)
+    period_end = Column(DateTime(timezone=True), nullable=True)
 
-class ScheduleRunCreate(BaseModel):
-    """Pydantic model for creating a run."""
-    job_type: JobType
-    job_id: Optional[int] = None
-    scheduled_for: datetime
-    job_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    # Relationship
+    bot = relationship("BotInstance", backref="performance_metrics")
 
-
-class ScheduleRunUpdate(BaseModel):
-    """Pydantic model for updating a run."""
-    status: Optional[RunStatus] = None
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    worker_id: Optional[str] = None
-
-
-class ScheduleRunResponse(BaseModel):
-    """Pydantic model for run API responses."""
-    id: int
-    job_type: JobType
-    job_id: Optional[int]
-    user_id: Optional[int]
-    status: Optional[RunStatus]
-    scheduled_for: Optional[datetime]
-    enqueued_at: Optional[datetime]
-    started_at: Optional[datetime]
-    finished_at: Optional[datetime]
-    job_snapshot: Optional[Dict[str, Any]]
-    result: Optional[Dict[str, Any]]
-    error: Optional[str]
-    worker_id: Optional[str]
-
-    class Config:
-        from_attributes = True
-
-
-class ReportRequest(BaseModel):
-    """Pydantic model for report execution requests."""
-    report_type: str = Field(..., min_length=1, max_length=100)
-    parameters: Dict[str, Any] = Field(default_factory=dict)
-    scheduled_for: Optional[datetime] = None
-
-
-class ScreenerRequest(BaseModel):
-    """Pydantic model for screener execution requests."""
-    screener_set: Optional[str] = Field(None, min_length=1, max_length=100)
-    tickers: Optional[list[str]] = Field(None, min_length=1)
-    filter_criteria: Dict[str, Any] = Field(default_factory=dict)
-    top_n: Optional[int] = Field(None, ge=1, le=1000)
-    scheduled_for: Optional[datetime] = None
-
-    @field_validator('tickers')
-    def validate_tickers_or_set(cls, v, values):
-        """Ensure either screener_set or tickers is provided."""
-        if not v and not values.get('screener_set'):
-            raise ValueError('Either screener_set or tickers must be provided')
-        return v
-
-
-class ScreenerSetInfo(BaseModel):
-    """Pydantic model for screener set information."""
-    name: str
-    description: str
-    ticker_count: int
-    tickers: list[str]
-    categories: list[str]
+    def __repr__(self):
+        return f"<PerformanceMetric(id={self.id}, bot_id='{self.bot_id}', metric='{self.metric_name}', value={self.metric_value})>"

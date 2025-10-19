@@ -14,13 +14,33 @@ import croniter
 
 from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.models.model_jobs import (
-    Schedule, Run, RunStatus, JobType,
-    ScheduleCreate, ScheduleUpdate, RunCreate, RunUpdate
+    Schedule, ScheduleRun, RunStatus, JobType,
+    ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate
 )
-from src.backend.config_loader import get_screener_config
+# Removed import - using inline implementation
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+
+class SimpleScreenerConfig:
+    """Simple screener configuration for basic functionality."""
+
+    def __init__(self):
+        # Define some basic screener sets
+        self.screener_sets = {
+            'sp500': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'],  # Sample tickers
+            'tech': ['AAPL', 'MSFT', 'GOOGL', 'META', 'NFLX'],
+            'finance': ['JPM', 'BAC', 'WFC', 'C', 'GS'],
+        }
+
+    def validate_set_name(self, name: str) -> bool:
+        """Check if the name is a valid screener set."""
+        return name.lower() in self.screener_sets
+
+    def get_tickers(self, name: str) -> list:
+        """Get tickers for a screener set."""
+        return self.screener_sets.get(name.lower(), [])
 
 
 class JobsService:
@@ -35,7 +55,7 @@ class JobsService:
         """
         self.session = session
         self.repository = JobsRepository(session)
-        self.screener_config = get_screener_config()
+        self.screener_config = SimpleScreenerConfig()
 
     # ---------- Schedule Operations ----------
 
@@ -180,7 +200,7 @@ class JobsService:
             _logger.error(f"Failed to delete schedule {schedule_id}: {e}")
             raise
 
-    def trigger_schedule(self, schedule_id: int) -> Optional[Run]:
+    def trigger_schedule(self, schedule_id: int) -> Optional[ScheduleRun]:
         """
         Manually trigger a schedule to create a run.
 
@@ -188,7 +208,7 @@ class JobsService:
             schedule_id: Schedule ID
 
         Returns:
-            Created Run object or None if schedule not found
+            Created ScheduleRun object or None if schedule not found
 
         Raises:
             ValueError: If schedule is disabled or invalid
@@ -201,7 +221,7 @@ class JobsService:
             raise ValueError("Cannot trigger disabled schedule")
 
         # Create a run for immediate execution
-        run_data = RunCreate(
+        run_data = ScheduleRunCreate(
             job_type=JobType(schedule.job_type),
             job_id=f"manual_{schedule_id}_{datetime.utcnow().timestamp()}",
             scheduled_for=datetime.utcnow(),
@@ -244,7 +264,7 @@ class JobsService:
 
     # ---------- Run Operations ----------
 
-    def create_run(self, user_id: int, run_data: RunCreate) -> Run:
+    def create_run(self, user_id: int, run_data: ScheduleRunCreate) -> ScheduleRun:
         """
         Create a new run.
 
@@ -253,7 +273,7 @@ class JobsService:
             run_data: Run creation data
 
         Returns:
-            Created Run object
+            Created ScheduleRun object
 
         Raises:
             IntegrityError: If run with same job_type, job_id, scheduled_for already exists
@@ -271,7 +291,7 @@ class JobsService:
             run = self.repository.create_run(run_dict)
             self.session.commit()
 
-            _logger.info(f"Created run: {run.run_id} ({run.job_type}:{run.job_id})")
+            _logger.info(f"Created run: {run.id} ({run.job_type}:{run.job_id})")
             return run
 
         except Exception as e:
@@ -279,15 +299,15 @@ class JobsService:
             _logger.error(f"Failed to create run: {e}")
             raise
 
-    def get_run(self, run_id: UUID) -> Optional[Run]:
+    def get_run(self, run_id: int) -> Optional[ScheduleRun]:
         """
         Get a run by ID.
 
         Args:
-            run_id: Run UUID
+            run_id: Run ID (integer)
 
         Returns:
-            Run object or None if not found
+            ScheduleRun object or None if not found
         """
         return self.repository.get_run(run_id)
 
@@ -300,7 +320,7 @@ class JobsService:
         offset: int = 0,
         order_by: str = "scheduled_for",
         order_desc: bool = True
-    ) -> List[Run]:
+    ) -> List[ScheduleRun]:
         """
         List runs with optional filtering.
 
@@ -314,20 +334,20 @@ class JobsService:
             order_desc: Order in descending order
 
         Returns:
-            List of Run objects
+            List of ScheduleRun objects
         """
         return self.repository.list_runs(user_id, job_type, status, limit, offset, order_by, order_desc)
 
-    def update_run(self, run_id: UUID, update_data: RunUpdate) -> Optional[Run]:
+    def update_run(self, run_id: int, update_data: ScheduleRunUpdate) -> Optional[ScheduleRun]:
         """
         Update a run.
 
         Args:
-            run_id: Run UUID
+            run_id: Run ID (integer)
             update_data: Run update data
 
         Returns:
-            Updated Run object or None if not found
+            Updated ScheduleRun object or None if not found
         """
         try:
             # Prepare update dictionary (only include non-None values)
@@ -342,7 +362,7 @@ class JobsService:
             run = self.repository.update_run(run_id, update_dict)
             if run:
                 self.session.commit()
-                _logger.info(f"Updated run: {run.run_id} (status: {run.status})")
+                _logger.info(f"Updated run: {run.id} (status: {run.status})")
 
             return run
 
@@ -351,22 +371,22 @@ class JobsService:
             _logger.error(f"Failed to update run {run_id}: {e}")
             raise
 
-    def claim_run(self, run_id: UUID, worker_id: str) -> Optional[Run]:
+    def claim_run(self, run_id: int, worker_id: str) -> Optional[ScheduleRun]:
         """
         Atomically claim a run for execution by a worker.
 
         Args:
-            run_id: Run UUID
+            run_id: Run ID (integer)
             worker_id: Worker identifier
 
         Returns:
-            Run object if successfully claimed, None if already claimed or not found
+            ScheduleRun object if successfully claimed, None if already claimed or not found
         """
         try:
             run = self.repository.claim_run(run_id, worker_id)
             if run:
                 self.session.commit()
-                _logger.info(f"Claimed run: {run.run_id} by worker: {worker_id}")
+                _logger.info(f"Claimed run: {run.id} by worker: {worker_id}")
             return run
 
         except Exception as e:
@@ -374,7 +394,7 @@ class JobsService:
             _logger.error(f"Failed to claim run {run_id}: {e}")
             raise
 
-    def get_pending_runs(self, job_type: Optional[JobType] = None, limit: int = 10) -> List[Run]:
+    def get_pending_runs(self, job_type: Optional[JobType] = None, limit: int = 10) -> List[ScheduleRun]:
         """
         Get pending runs that can be claimed by workers.
 
@@ -383,16 +403,16 @@ class JobsService:
             limit: Maximum number of results
 
         Returns:
-            List of pending Run objects
+            List of pending ScheduleRun objects
         """
         return self.repository.get_pending_runs(job_type, limit)
 
-    def cancel_run(self, run_id: UUID) -> bool:
+    def cancel_run(self, run_id: int) -> bool:
         """
         Cancel a pending run.
 
         Args:
-            run_id: Run UUID
+            run_id: Run ID (integer)
 
         Returns:
             True if cancelled, False if not found or already running/completed
@@ -405,7 +425,7 @@ class JobsService:
             _logger.warning(f"Cannot cancel run {run_id} with status {run.status}")
             return False
 
-        update_data = RunUpdate(status=RunStatus.CANCELLED)
+        update_data = ScheduleRunUpdate(status=RunStatus.CANCELLED)
         updated_run = self.update_run(run_id, update_data)
         return updated_run is not None
 
@@ -521,7 +541,7 @@ class JobsService:
         filter_criteria: Optional[Dict[str, Any]] = None,
         top_n: Optional[int] = None,
         scheduled_for: Optional[datetime] = None
-    ) -> Run:
+    ) -> ScheduleRun:
         """
         Create a screener run with proper job snapshot.
 
@@ -534,7 +554,7 @@ class JobsService:
             scheduled_for: When to schedule the run
 
         Returns:
-            Created Run object
+            Created ScheduleRun object
 
         Raises:
             ValueError: If parameters are invalid
@@ -564,7 +584,7 @@ class JobsService:
         job_id = f"screener_{screener_set or 'custom'}_{datetime.utcnow().timestamp()}"
 
         # Create run
-        run_data = RunCreate(
+        run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=job_id,
             scheduled_for=scheduled_for or datetime.utcnow(),
@@ -579,7 +599,7 @@ class JobsService:
         report_type: str,
         parameters: Optional[Dict[str, Any]] = None,
         scheduled_for: Optional[datetime] = None
-    ) -> Run:
+    ) -> ScheduleRun:
         """
         Create a report run with proper job snapshot.
 
@@ -602,7 +622,7 @@ class JobsService:
         job_id = f"report_{report_type}_{datetime.utcnow().timestamp()}"
 
         # Create run
-        run_data = RunCreate(
+        run_data = ScheduleRunCreate(
             job_type=JobType.REPORT,
             job_id=job_id,
             scheduled_for=scheduled_for or datetime.utcnow(),

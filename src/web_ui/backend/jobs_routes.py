@@ -7,7 +7,7 @@ Provides endpoints for managing schedules and runs.
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from uuid import UUID
+# UUID import removed - using integer IDs
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
@@ -15,11 +15,10 @@ from src.web_ui.backend.auth import get_current_user, require_trader_or_admin
 from src.web_ui.backend.services.webui_app_service import webui_app_service
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.models.model_jobs import (
-    Schedule, Run, JobType, RunStatus,
+    Schedule, ScheduleRun, JobType, RunStatus,
     ScheduleCreate, ScheduleUpdate, ScheduleResponse,
-    RunResponse, ReportRequest, ScreenerRequest, ScreenerSetInfo
+    ScheduleRunResponse, ReportRequest, ScreenerRequest, ScreenerSetInfo
 )
-from src.backend.config_loader import get_screener_config
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -35,7 +34,7 @@ def get_jobs_service(session: Session = Depends(webui_app_service.get_db_session
 
 # ---------- Ad-hoc Execution Endpoints ----------
 
-@router.post("/reports/run", response_model=RunResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/reports/run", response_model=ScheduleRunResponse, status_code=status.HTTP_201_CREATED)
 async def run_report(
     request: ReportRequest,
     current_user = Depends(get_current_user),
@@ -54,8 +53,8 @@ async def run_report(
             scheduled_for=request.scheduled_for
         )
 
-        logger.info(f"Created report run: {run.run_id} for user {current_user.id}")
-        return RunResponse.from_orm(run)
+        logger.info(f"Created report run: {run.id} for user {current_user.id}")
+        return ScheduleRunResponse.from_orm(run)
 
     except Exception as e:
         logger.error(f"Failed to create report run: {e}")
@@ -65,7 +64,7 @@ async def run_report(
         )
 
 
-@router.post("/screeners/run", response_model=RunResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/screeners/run", response_model=ScheduleRunResponse, status_code=status.HTTP_201_CREATED)
 async def run_screener(
     request: ScreenerRequest,
     current_user = Depends(get_current_user),
@@ -86,8 +85,8 @@ async def run_screener(
             scheduled_for=request.scheduled_for
         )
 
-        logger.info(f"Created screener run: {run.run_id} for user {current_user.id}")
-        return RunResponse.from_orm(run)
+        logger.info(f"Created screener run: {run.id} for user {current_user.id}")
+        return ScheduleRunResponse.from_orm(run)
 
     except ValueError as e:
         logger.error(f"Invalid screener request: {e}")
@@ -103,9 +102,9 @@ async def run_screener(
         )
 
 
-@router.get("/runs/{run_id}", response_model=RunResponse)
+@router.get("/runs/{run_id}", response_model=ScheduleRunResponse)
 async def get_run(
-    run_id: UUID,
+    run_id: int,
     current_user = Depends(get_current_user),
     jobs_service: JobsService = Depends(get_jobs_service)
 ):
@@ -128,10 +127,10 @@ async def get_run(
             detail="Access denied"
         )
 
-    return RunResponse.from_orm(run)
+    return ScheduleRunResponse.from_orm(run)
 
 
-@router.get("/runs", response_model=List[RunResponse])
+@router.get("/runs", response_model=List[ScheduleRunResponse])
 async def list_runs(
     job_type: Optional[JobType] = Query(None, description="Filter by job type"),
     status: Optional[RunStatus] = Query(None, description="Filter by status"),
@@ -160,12 +159,12 @@ async def list_runs(
         order_desc=order_desc
     )
 
-    return [RunResponse.from_orm(run) for run in runs]
+    return [ScheduleRunResponse.from_orm(run) for run in runs]
 
 
 @router.delete("/runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_run(
-    run_id: UUID,
+    run_id: int,
     current_user = Depends(get_current_user),
     jobs_service: JobsService = Depends(get_jobs_service)
 ):
@@ -368,7 +367,7 @@ async def delete_schedule(
         )
 
 
-@router.post("/schedules/{schedule_id}/trigger", response_model=RunResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/schedules/{schedule_id}/trigger", response_model=ScheduleRunResponse, status_code=status.HTTP_201_CREATED)
 async def trigger_schedule(
     schedule_id: int,
     current_user = Depends(require_trader_or_admin),
@@ -402,7 +401,7 @@ async def trigger_schedule(
             )
 
         logger.info(f"Triggered schedule: {schedule.name} (ID: {schedule_id})")
-        return RunResponse.from_orm(run)
+        return ScheduleRunResponse.from_orm(run)
 
     except ValueError as e:
         logger.error(f"Cannot trigger schedule: {e}")

@@ -18,7 +18,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 # Models
-from src.data.db.models.model_jobs import Base as JobsBase, JobType, RunStatus, ScheduleCreate, ScheduleUpdate, RunCreate, RunUpdate
+from src.data.db.models.model_jobs import Base as JobsBase, JobType, RunStatus, ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate
 
 # Service under test
 from src.data.db.services.jobs_service import JobsService
@@ -201,7 +201,7 @@ def test_trigger_disabled_schedule_fails(jobs_service, dbsess):
 
 def test_create_run(jobs_service, dbsess):
     """Test creating a new run."""
-    run_data = RunCreate(
+    run_data = ScheduleRunCreate(
         job_type=JobType.REPORT,
         job_id="test_job_123",
         scheduled_for=datetime.utcnow(),
@@ -210,7 +210,7 @@ def test_create_run(jobs_service, dbsess):
 
     run = jobs_service.create_run(user_id=1, run_data=run_data)
 
-    assert run.run_id is not None
+    assert run.id is not None
     assert run.job_type == JobType.REPORT.value
     assert run.job_id == "test_job_123"
     assert run.user_id == 1
@@ -222,15 +222,15 @@ def test_list_runs_with_filters(jobs_service, dbsess):
     now = datetime.utcnow()
 
     # Create multiple runs
-    run1_data = RunCreate(job_type=JobType.REPORT, job_id="r1", scheduled_for=now, job_snapshot={})
-    run2_data = RunCreate(job_type=JobType.SCREENER, job_id="s1", scheduled_for=now, job_snapshot={})
+    run1_data = ScheduleRunCreate(job_type=JobType.REPORT, job_id="r1", scheduled_for=now, job_snapshot={})
+    run2_data = ScheduleRunCreate(job_type=JobType.SCREENER, job_id="s1", scheduled_for=now, job_snapshot={})
 
     run1 = jobs_service.create_run(user_id=1, run_data=run1_data)
     run2 = jobs_service.create_run(user_id=1, run_data=run2_data)
-    jobs_service.create_run(user_id=2, run_data=RunCreate(job_type=JobType.REPORT, job_id="r2", scheduled_for=now, job_snapshot={}))
+    jobs_service.create_run(user_id=2, run_data=ScheduleRunCreate(job_type=JobType.REPORT, job_id="r2", scheduled_for=now, job_snapshot={}))
 
     # Update one run status
-    jobs_service.update_run(run1.run_id, RunUpdate(status=RunStatus.COMPLETED))
+    jobs_service.update_run(run1.id, ScheduleRunUpdate(status=RunStatus.COMPLETED))
 
     # Test filtering
     user1_runs = jobs_service.list_runs(user_id=1)
@@ -245,7 +245,7 @@ def test_list_runs_with_filters(jobs_service, dbsess):
 
 def test_update_run(jobs_service, dbsess):
     """Test updating a run."""
-    run_data = RunCreate(
+    run_data = ScheduleRunCreate(
         job_type=JobType.REPORT,
         job_id="update_test",
         scheduled_for=datetime.utcnow(),
@@ -256,13 +256,13 @@ def test_update_run(jobs_service, dbsess):
 
     # Update run
     now = datetime.utcnow()
-    update_data = RunUpdate(
+    update_data = ScheduleRunUpdate(
         status=RunStatus.RUNNING,
         started_at=now,
         worker_id="worker_123"
     )
 
-    updated = jobs_service.update_run(created.run_id, update_data)
+    updated = jobs_service.update_run(created.id, update_data)
 
     assert updated is not None
     assert updated.status == RunStatus.RUNNING.value
@@ -272,7 +272,7 @@ def test_update_run(jobs_service, dbsess):
 
 def test_claim_run(jobs_service, dbsess):
     """Test claiming a run for execution."""
-    run_data = RunCreate(
+    run_data = ScheduleRunCreate(
         job_type=JobType.SCREENER,
         job_id="claim_test",
         scheduled_for=datetime.utcnow(),
@@ -282,7 +282,7 @@ def test_claim_run(jobs_service, dbsess):
     created = jobs_service.create_run(user_id=1, run_data=run_data)
 
     # Claim the run
-    claimed = jobs_service.claim_run(created.run_id, "worker_456")
+    claimed = jobs_service.claim_run(created.id, "worker_456")
 
     assert claimed is not None
     assert claimed.status == RunStatus.RUNNING.value
@@ -292,7 +292,7 @@ def test_claim_run(jobs_service, dbsess):
 
 def test_cancel_run(jobs_service, dbsess):
     """Test cancelling a pending run."""
-    run_data = RunCreate(
+    run_data = ScheduleRunCreate(
         job_type=JobType.REPORT,
         job_id="cancel_test",
         scheduled_for=datetime.utcnow(),
@@ -302,17 +302,17 @@ def test_cancel_run(jobs_service, dbsess):
     created = jobs_service.create_run(user_id=1, run_data=run_data)
 
     # Cancel the run
-    success = jobs_service.cancel_run(created.run_id)
+    success = jobs_service.cancel_run(created.id)
     assert success is True
 
     # Verify status
-    updated = jobs_service.get_run(created.run_id)
+    updated = jobs_service.get_run(created.id)
     assert updated.status == RunStatus.CANCELLED.value
 
 
 def test_cancel_running_run_fails(jobs_service, dbsess):
     """Test that cancelling running run fails."""
-    run_data = RunCreate(
+    run_data = ScheduleRunCreate(
         job_type=JobType.REPORT,
         job_id="running_test",
         scheduled_for=datetime.utcnow(),
@@ -322,10 +322,10 @@ def test_cancel_running_run_fails(jobs_service, dbsess):
     created = jobs_service.create_run(user_id=1, run_data=run_data)
 
     # Start the run
-    jobs_service.claim_run(created.run_id, "worker_1")
+    jobs_service.claim_run(created.id, "worker_1")
 
     # Try to cancel - should fail
-    success = jobs_service.cancel_run(created.run_id)
+    success = jobs_service.cancel_run(created.id)
     assert success is False
 
 
@@ -334,15 +334,15 @@ def test_get_run_statistics(jobs_service, dbsess):
     now = datetime.utcnow()
 
     # Create runs with different statuses
-    run1_data = RunCreate(job_type=JobType.REPORT, job_id="stats1", scheduled_for=now, job_snapshot={})
-    run2_data = RunCreate(job_type=JobType.REPORT, job_id="stats2", scheduled_for=now, job_snapshot={})
+    run1_data = ScheduleRunCreate(job_type=JobType.REPORT, job_id="stats1", scheduled_for=now, job_snapshot={})
+    run2_data = ScheduleRunCreate(job_type=JobType.REPORT, job_id="stats2", scheduled_for=now, job_snapshot={})
 
     run1 = jobs_service.create_run(user_id=1, run_data=run1_data)
     run2 = jobs_service.create_run(user_id=1, run_data=run2_data)
 
     # Update statuses
-    jobs_service.update_run(run1.run_id, RunUpdate(status=RunStatus.COMPLETED))
-    jobs_service.update_run(run2.run_id, RunUpdate(status=RunStatus.FAILED))
+    jobs_service.update_run(run1.id, ScheduleRunUpdate(status=RunStatus.COMPLETED))
+    jobs_service.update_run(run2.id, ScheduleRunUpdate(status=RunStatus.FAILED))
 
     # Get statistics
     stats = jobs_service.get_run_statistics(user_id=1)

@@ -95,7 +95,7 @@ class ScheduleRun(Base):
     )
 
     def __repr__(self):
-        return f"<Run(run_id={self.run_id}, job_type='{self.job_type}', status='{self.status}')>"
+        return f"<Run(id={self.id}, job_type='{self.job_type}', status='{self.status}')>"
 
 
 # Pydantic models for API validation
@@ -212,4 +212,3 @@ class ScreenerSetInfo(BaseModel):
     ticker_count: int
     tickers: list[str]
     categories: list[str]
-

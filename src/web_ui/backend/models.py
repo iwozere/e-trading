@@ -18,9 +18,9 @@ sys.path.append(str(PROJECT_ROOT))
 from src.data.db.models.model_users import User
 from src.data.db.models.model_webui import WebUIAuditLog
 from src.data.db.models.model_jobs import (
-    Schedule, Run, JobType, RunStatus,
+    Schedule, ScheduleRun, JobType, RunStatus,
     ScheduleCreate, ScheduleUpdate, ScheduleResponse,
-    RunCreate, RunUpdate, RunResponse,
+    ScheduleRunCreate, ScheduleRunUpdate, ScheduleRunResponse,
     ReportRequest, ScreenerRequest, ScreenerSetInfo
 )
 
@@ -28,8 +28,8 @@ from src.data.db.models.model_jobs import (
 __all__ = [
     'User',
     'WebUIAuditLog',
-    'Schedule', 'Run', 'JobType', 'RunStatus',
+    'Schedule', 'ScheduleRun', 'JobType', 'RunStatus',
     'ScheduleCreate', 'ScheduleUpdate', 'ScheduleResponse',
-    'RunCreate', 'RunUpdate', 'RunResponse',
+    'ScheduleRunCreate', 'ScheduleRunUpdate', 'ScheduleRunResponse',
     'ReportRequest', 'ScreenerRequest', 'ScreenerSetInfo',
 ]

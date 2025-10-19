@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc, asc, func
 from sqlalchemy.exc import IntegrityError
 
-from src.data.db.models.model_jobs import Schedule, Run, RunStatus, JobType
+from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -206,7 +206,7 @@ class JobsRepository:
 
     # ---------- Run Operations ----------
 
-    def create_run(self, run_data: Dict[str, Any]) -> Run:
+    def create_run(self, run_data: Dict[str, Any]) -> ScheduleRun:
         """
         Create a new run.
 
@@ -214,33 +214,33 @@ class JobsRepository:
             run_data: Dictionary with run data
 
         Returns:
-            Created Run object
+            Created ScheduleRun object
 
         Raises:
             IntegrityError: If run with same job_type, job_id, scheduled_for already exists
         """
         try:
-            run = Run(**run_data)
+            run = ScheduleRun(**run_data)
             self.session.add(run)
             self.session.flush()  # Get the run_id without committing
-            _logger.info(f"Created run: {run.run_id} ({run.job_type}:{run.job_id})")
+            _logger.info(f"Created run: {run.id} ({run.job_type}:{run.job_id})")
             return run
         except IntegrityError as e:
             self.session.rollback()
             _logger.error(f"Failed to create run: {e}")
             raise
 
-    def get_run(self, run_id: UUID) -> Optional[Run]:
+    def get_run(self, run_id: int) -> Optional[ScheduleRun]:
         """
         Get a run by ID.
 
         Args:
-            run_id: Run UUID
+            run_id: Run ID (integer)
 
         Returns:
-            Run object or None if not found
+            ScheduleRun object or None if not found
         """
-        return self.session.query(Run).filter(Run.run_id == run_id).first()
+        return self.session.query(ScheduleRun).filter(ScheduleRun.id == run_id).first()
 
     def list_runs(
         self,
@@ -251,7 +251,7 @@ class JobsRepository:
         offset: int = 0,
         order_by: str = "scheduled_for",
         order_desc: bool = True
-    ) -> List[Run]:
+    ) -> List[ScheduleRun]:
         """
         List runs with optional filtering.
 
@@ -265,21 +265,21 @@ class JobsRepository:
             order_desc: Order in descending order
 
         Returns:
-            List of Run objects
+            List of ScheduleRun objects
         """
-        query = self.session.query(Run)
+        query = self.session.query(ScheduleRun)
 
         if user_id is not None:
-            query = query.filter(Run.user_id == user_id)
+            query = query.filter(ScheduleRun.user_id == user_id)
 
         if job_type is not None:
-            query = query.filter(Run.job_type == job_type.value)
+            query = query.filter(ScheduleRun.job_type == job_type.value)
 
         if status is not None:
-            query = query.filter(Run.status == status.value)
+            query = query.filter(ScheduleRun.status == status.value)
 
         # Apply ordering
-        order_field = getattr(Run, order_by, Run.scheduled_for)
+        order_field = getattr(ScheduleRun, order_by, ScheduleRun.scheduled_for)
         if order_desc:
             query = query.order_by(desc(order_field))
         else:
@@ -287,16 +287,16 @@ class JobsRepository:
 
         return query.offset(offset).limit(limit).all()
 
-    def update_run(self, run_id: UUID, update_data: Dict[str, Any]) -> Optional[Run]:
+    def update_run(self, run_id: int, update_data: Dict[str, Any]) -> Optional[ScheduleRun]:
         """
         Update a run.
 
         Args:
-            run_id: Run UUID
+            run_id: Run ID (integer)
             update_data: Dictionary with fields to update
 
         Returns:
-            Updated Run object or None if not found
+            Updated ScheduleRun object or None if not found
         """
         run = self.get_run(run_id)
         if not run:
@@ -308,32 +308,32 @@ class JobsRepository:
                     setattr(run, key, value)
 
             self.session.flush()
-            _logger.info(f"Updated run: {run.run_id} (status: {run.status})")
+            _logger.info(f"Updated run: {run.id} (status: {run.status})")
             return run
         except Exception as e:
             self.session.rollback()
             _logger.error(f"Failed to update run {run_id}: {e}")
             raise
 
-    def claim_run(self, run_id: UUID, worker_id: str) -> Optional[Run]:
+    def claim_run(self, run_id: int, worker_id: str) -> Optional[ScheduleRun]:
         """
         Atomically claim a run for execution by a worker.
 
         This prevents multiple workers from executing the same run.
 
         Args:
-            run_id: Run UUID
+            run_id: Run ID (integer)
             worker_id: Worker identifier
 
         Returns:
-            Run object if successfully claimed, None if already claimed or not found
+            ScheduleRun object if successfully claimed, None if already claimed or not found
         """
         try:
             # Use a subquery to atomically update and return the run
-            run = self.session.query(Run).filter(
+            run = self.session.query(ScheduleRun).filter(
                 and_(
-                    Run.run_id == run_id,
-                    Run.status == RunStatus.PENDING.value
+                    ScheduleRun.id == run_id,
+                    ScheduleRun.status == RunStatus.PENDING.value
                 )
             ).with_for_update().first()
 
@@ -346,7 +346,7 @@ class JobsRepository:
             run.worker_id = worker_id
 
             self.session.flush()
-            _logger.info(f"Claimed run: {run.run_id} by worker: {worker_id}")
+            _logger.info(f"Claimed run: {run.id} by worker: {worker_id}")
             return run
 
         except Exception as e:
@@ -358,7 +358,7 @@ class JobsRepository:
         self,
         job_type: Optional[JobType] = None,
         limit: int = 10
-    ) -> List[Run]:
+    ) -> List[ScheduleRun]:
         """
         Get pending runs that can be claimed by workers.
 
@@ -367,16 +367,16 @@ class JobsRepository:
             limit: Maximum number of results
 
         Returns:
-            List of pending Run objects
+            List of pending ScheduleRun objects
         """
-        query = self.session.query(Run).filter(Run.status == RunStatus.PENDING.value)
+        query = self.session.query(ScheduleRun).filter(ScheduleRun.status == RunStatus.PENDING.value)
 
         if job_type is not None:
-            query = query.filter(Run.job_type == job_type.value)
+            query = query.filter(ScheduleRun.job_type == job_type.value)
 
-        return query.order_by(asc(Run.scheduled_for)).limit(limit).all()
+        return query.order_by(asc(ScheduleRun.scheduled_for)).limit(limit).all()
 
-    def get_runs_by_job(self, job_type: JobType, job_id: str) -> List[Run]:
+    def get_runs_by_job(self, job_type: JobType, job_id: str) -> List[ScheduleRun]:
         """
         Get all runs for a specific job.
 
@@ -385,11 +385,11 @@ class JobsRepository:
             job_id: Job identifier
 
         Returns:
-            List of Run objects
+            List of ScheduleRun objects
         """
-        return self.session.query(Run).filter(
-            and_(Run.job_type == job_type.value, Run.job_id == job_id)
-        ).order_by(desc(Run.scheduled_for)).all()
+        return self.session.query(ScheduleRun).filter(
+            and_(ScheduleRun.job_type == job_type.value, ScheduleRun.job_id == job_id)
+        ).order_by(desc(ScheduleRun.scheduled_for)).all()
 
     def get_run_statistics(
         self,
@@ -412,25 +412,25 @@ class JobsRepository:
 
         cutoff_date = datetime.utcnow() - timedelta(days=days)
 
-        query = self.session.query(Run).filter(Run.scheduled_for >= cutoff_date)
+        query = self.session.query(ScheduleRun).filter(ScheduleRun.scheduled_for >= cutoff_date)
 
         if user_id is not None:
-            query = query.filter(Run.user_id == user_id)
+            query = query.filter(ScheduleRun.user_id == user_id)
 
         if job_type is not None:
-            query = query.filter(Run.job_type == job_type.value)
+            query = query.filter(ScheduleRun.job_type == job_type.value)
 
         # Get counts by status
         status_counts = {}
         for status in RunStatus:
-            count = query.filter(Run.status == status.value).count()
+            count = query.filter(ScheduleRun.status == status.value).count()
             status_counts[status.value] = count
 
         # Get total count
         total_count = query.count()
 
         # Get average execution time for completed runs
-        completed_runs = query.filter(Run.status == RunStatus.COMPLETED.value).all()
+        completed_runs = query.filter(ScheduleRun.status == RunStatus.COMPLETED.value).all()
         avg_execution_time = None
         if completed_runs:
             execution_times = []
@@ -464,12 +464,12 @@ class JobsRepository:
         cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
 
         # Delete old completed and failed runs
-        deleted_count = self.session.query(Run).filter(
+        deleted_count = self.session.query(ScheduleRun).filter(
             and_(
-                Run.scheduled_for < cutoff_date,
+                ScheduleRun.scheduled_for < cutoff_date,
                 or_(
-                    Run.status == RunStatus.COMPLETED.value,
-                    Run.status == RunStatus.FAILED.value
+                    ScheduleRun.status == RunStatus.COMPLETED.value,
+                    ScheduleRun.status == RunStatus.FAILED.value
                 )
             )
         ).delete()

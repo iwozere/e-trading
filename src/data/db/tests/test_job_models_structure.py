@@ -149,8 +149,8 @@ class TestJobModelStructure:
         assert schedule.job_type == "report"
         assert schedule.task_params == {"format": "pdf"}
 
-        # Test Run instantiation with corrected types
-        run = Run(
+        # Test ScheduleRun instantiation with corrected types
+        run = ScheduleRun(
             job_type="screener",
             job_id=12345,  # BigInteger
             user_id=67890,  # BigInteger
@@ -167,8 +167,8 @@ class TestJobModelStructure:
         assert run.worker_id == "worker-123"
 
     def test_run_nullable_instantiation(self):
-        """Test that Run can be instantiated with nullable fields as None."""
-        run = Run(
+        """Test that ScheduleRun can be instantiated with nullable fields as None."""
+        run = ScheduleRun(
             job_type="alert",
             job_id=None,
             user_id=None,
@@ -222,7 +222,7 @@ class TestDataTypeCompatibility:
 
     def test_bigint_compatibility(self):
         """Test that BigInteger fields can handle large values."""
-        run = Run(
+        run = ScheduleRun(
             job_type="test",
             job_id=9223372036854775807,  # Max int64 value
             user_id=9223372036854775806,
@@ -235,7 +235,7 @@ class TestDataTypeCompatibility:
         """Test that Text fields can handle long strings."""
         long_text = "x" * 10000
 
-        run = Run(
+        run = ScheduleRun(
             job_type=long_text,
             status=long_text,
             error=long_text
@@ -267,7 +267,7 @@ class TestDataTypeCompatibility:
             cron="0 * * * *"
         )
 
-        run = Run(
+        run = ScheduleRun(
             job_type="test",
             job_snapshot=complex_data,
             result=complex_data

@@ -22,7 +22,7 @@ from src.data.db.models.model_telegram import (
 )
 from src.data.db.models.model_trading import Position  # (above) or your own path
 from src.data.db.models.model_trading import BotInstance
-from src.data.db.models.model_jobs import Schedule, Run, JobType, RunStatus
+from src.data.db.models.model_jobs import Schedule, ScheduleRun, JobType, RunStatus
 
 UTC = timezone.utc
 
@@ -176,7 +176,7 @@ def make_run(s: Session, rng: RNG, *,
     status = status or "pending"
     scheduled_for = scheduled_for or datetime.now(UTC)
 
-    run = Run(
+    run = ScheduleRun(
         job_type=job_type,
         job_id=job_id,
         user_id=user_id,

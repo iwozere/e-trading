@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError
 
 # Models
-from src.data.db.models.model_jobs import Base as JobsBase, Schedule, Run, JobType, RunStatus
+from src.data.db.models.model_jobs import Base as JobsBase, Schedule, ScheduleRun, JobType, RunStatus
 
 # Repository under test
 from src.data.db.repos.repo_jobs import JobsRepository
