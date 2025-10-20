@@ -8,6 +8,7 @@ sys.path.append(str(PROJECT_ROOT))
 from src.telegram.screener.business_logic import handle_command, get_service_instances
 from src.telegram.command_parser import ParsedCommand, parse_command
 from src.notification.logger import setup_logger
+from src.notification.service.client import MessageType, MessagePriority
 from src.common.recommendation_engine import RecommendationEngine
 _logger = setup_logger(__name__)
 
@@ -15,7 +16,7 @@ _logger = setup_logger(__name__)
 recommendation_engine = RecommendationEngine()
 
 
-async def process_report_notifications(result, notification_manager, message, user_email):
+async def process_report_notifications(result, notification_client, message, user_email):
     channels = ["telegram"]
     if result.get("email", False):
         channels.append("email")
@@ -24,28 +25,31 @@ async def process_report_notifications(result, notification_manager, message, us
 
     # Email notifications
     if "email" in channels:
+        from src.notification.service.client import MessageType, MessagePriority
+
         for report in result["reports"]:
             attachments = None
             if report.get("chart_bytes"):
                 attachments = {f"{report['ticker']}_chart.png": report["chart_bytes"]}
             if report.get("error"):
-                await notification_manager.send_notification(
-                    notification_type="ERROR",
+                await notification_client.send_notification(
+                    notification_type=MessageType.ERROR,
                     title=f"Report Error for {report['ticker']}",
                     message=f"No data for {report['ticker']}: {report['error']}",
-                    priority="NORMAL",
+                    priority=MessagePriority.NORMAL,
                     channels=["email"],
-                    email_receiver=user_email
+                    recipient_id=user_email,
+                    attachments=attachments
                 )
             else:
-                await notification_manager.send_notification(
-                    notification_type="INFO",
+                await notification_client.send_notification(
+                    notification_type=MessageType.INFO,
                     title=f"Report for {report['ticker']}",
                     message=report["message"],
                     attachments=attachments,
-                    priority="NORMAL",
+                    priority=MessagePriority.NORMAL,
                     channels=["email"],
-                    email_receiver=user_email
+                    recipient_id=user_email
                 )
 
     # Telegram notifications - Send directly to avoid queue issues
@@ -60,17 +64,15 @@ async def process_report_notifications(result, notification_manager, message, us
             try:
                 if report.get("error"):
                     # Send error notification directly
-                    await notification_manager.channels["telegram"].send(
-                        notification_manager._create_notification(
-                            notification_type="ERROR",
-                            title=f"Report Error for {report['ticker']}",
-                            message=f"No data for {report['ticker']}: {report['error']}",
-                            data={
-                                "channels": ["telegram"],
-                                "telegram_chat_id": message.chat.id,
-                                "reply_to_message_id": message.message_id
-                            }
-                        )
+                    await notification_client.send_notification(
+                        notification_type=MessageType.ERROR,
+                        title=f"Report Error for {report['ticker']}",
+                        message=f"No data for {report['ticker']}: {report['error']}",
+                        priority=MessagePriority.NORMAL,
+                        channels=["telegram"],
+                        recipient_id=str(message.chat.id),
+                        reply_to_message_id=message.message_id,
+                        telegram_chat_id=message.chat.id
                     )
                     _logger.info("Successfully sent error notification for %s", report['ticker'])
                 else:
@@ -78,18 +80,16 @@ async def process_report_notifications(result, notification_manager, message, us
                     telegram_message = _create_telegram_friendly_message(report["message"], report.get("ticker", "Unknown"))
 
                     # Send success notification directly
-                    await notification_manager.channels["telegram"].send(
-                        notification_manager._create_notification(
-                            notification_type="INFO",
-                            title=f"Report for {report['ticker']}",
-                            message=telegram_message,
-                            data={
-                                "channels": ["telegram"],
-                                "telegram_chat_id": message.chat.id,
-                                "reply_to_message_id": message.message_id,
-                                "attachments": attachments
-                            }
-                        )
+                    await notification_client.send_notification(
+                        notification_type=MessageType.INFO,
+                        title=f"Report for {report['ticker']}",
+                        message=telegram_message,
+                        priority=MessagePriority.NORMAL,
+                        channels=["telegram"],
+                        recipient_id=str(message.chat.id),
+                        reply_to_message_id=message.message_id,
+                        telegram_chat_id=message.chat.id,
+                        attachments=attachments
                     )
                     _logger.info("Successfully sent Telegram notification for %s", report['ticker'])
             except Exception as e:
@@ -97,17 +97,15 @@ async def process_report_notifications(result, notification_manager, message, us
                 # Try fallback without attachment
                 try:
                     telegram_message = _create_telegram_friendly_message(report["message"], report.get("ticker", "Unknown"))
-                    await notification_manager.channels["telegram"].send(
-                        notification_manager._create_notification(
-                            notification_type="INFO",
-                            title=f"Report for {report['ticker']}",
-                            message=telegram_message + "\n\n[Chart could not be sent due to an error.]",
-                            data={
-                                "channels": ["telegram"],
-                                "telegram_chat_id": message.chat.id,
-                                "reply_to_message_id": message.message_id
-                            }
-                        )
+                    await notification_client.send_notification(
+                        notification_type=MessageType.INFO,
+                        title=f"Report for {report['ticker']}",
+                        message=telegram_message + "\n\n[Chart could not be sent due to an error.]",
+                        priority=MessagePriority.NORMAL,
+                        channels=["telegram"],
+                        recipient_id=str(message.chat.id),
+                        reply_to_message_id=message.message_id,
+                        telegram_chat_id=message.chat.id
                     )
                     _logger.info("Successfully sent fallback Telegram notification for %s", report['ticker'])
                 except Exception as e2:
@@ -472,7 +470,7 @@ def _get_unified_recommendation(indicator: str, value: float, context: dict = No
 
 
 
-async def process_report_command(message, telegram_user_id, args, notification_manager):
+async def process_report_command(message, telegram_user_id, args, notification_client):
     """
     Process /report command using service layer for all operations.
 
@@ -490,20 +488,21 @@ async def process_report_command(message, telegram_user_id, args, notification_m
         result = await handle_command(parsed)
         user_email = result.get("user_email")
         if result.get("status") == "ok" and "reports" in result:
-            await process_report_notifications(result, notification_manager, message, user_email)
+            await process_report_notifications(result, notification_client, message, user_email)
         else:
             channels = ["telegram"]
             if result.get("email", False):
                 channels.append("email")
-            await notification_manager.send_notification(
-                notification_type="ERROR",
+            from src.notification.service.client import MessageType, MessagePriority
+            await notification_client.send_notification(
+                notification_type=MessageType.ERROR,
                 title=result.get("title", "Report"),
                 message=result.get("message", "No message"),
-                priority="NORMAL",
+                priority=MessagePriority.NORMAL,
                 channels=channels,
-                telegram_chat_id=message.chat.id,
+                recipient_id=user_email if "email" in channels else str(telegram_user_id),
                 reply_to_message_id=message.message_id,
-                email_receiver=user_email if "email" in channels else None
+                telegram_chat_id=message.chat.id
             )
     except Exception as e:
         _logger.exception("Error in report command")
@@ -512,7 +511,7 @@ async def process_report_command(message, telegram_user_id, args, notification_m
             "message": f"Error processing report command: {str(e)}"
         }
 
-async def process_help_command(message, telegram_user_id, message_text=None, notification_manager=None):
+async def process_help_command(message, telegram_user_id, message_text=None, notification_client=None):
     """
     Process /help command using service layer for user data access.
 
@@ -552,11 +551,11 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
         telegram_help = _create_telegram_friendly_help(help_content)
 
         # Send Telegram notification
-        await notification_manager.send_notification(
-            notification_type="INFO",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO,
             title="Alkotrader Bot - Complete Help Guide",
             message=telegram_help,
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
@@ -564,13 +563,13 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
 
         # Send email if requested and user is verified
         if email_flag and user_email:
-            await notification_manager.send_notification(
-                notification_type="INFO",
+            await notification_client.send_notification(
+                notification_type=MessageType.INFO,
                 title="Alkotrader Bot - Complete Help Guide",
                 message=help_content,
-                priority="NORMAL",
+                priority=MessagePriority.NORMAL,
                 channels=["email"],
-                email_receiver=user_email
+                recipient_id=user_email
             )
 
     except Exception as e:
@@ -719,7 +718,7 @@ Email notifications for all features
 For more detailed help, visit the admin panel help page!
 """
 
-async def process_info_command(message, telegram_user_id, notification_manager):
+async def process_info_command(message, telegram_user_id, notification_client):
     """
     Process /info command using service layer through business logic.
 
@@ -755,25 +754,26 @@ async def process_info_command(message, telegram_user_id, notification_manager):
             channels.append("email")
 
         # Send Telegram notification
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Info"),
             message=result.get("message", "No message"),
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=["telegram"],
-            telegram_chat_id=message.chat.id,
-            reply_to_message_id=message.message_id
+            recipient_id=str(telegram_user_id),
+            reply_to_message_id=message.message_id,
+            telegram_chat_id=message.chat.id
         )
 
         # Send email if requested and user is verified
         if email_flag and user_email:
-            await notification_manager.send_notification(
-                notification_type="INFO" if result["status"] == "ok" else "ERROR",
+            await notification_client.send_notification(
+                notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
                 title=result.get("title", "Info"),
                 message=result.get("message", "No message"),
-                priority="NORMAL",
+                priority=MessagePriority.NORMAL,
                 channels=["email"],
-                email_receiver=user_email
+                recipient_id=user_email
             )
 
     except Exception as e:
@@ -783,7 +783,7 @@ async def process_info_command(message, telegram_user_id, notification_manager):
             "message": f"Error processing info command: {str(e)}"
         }
 
-async def process_register_command(message, telegram_user_id, args, notification_manager):
+async def process_register_command(message, telegram_user_id, args, notification_client):
     try:
         email = args[1].strip() if len(args) > 1 else None
         language = args[2].strip().lower() if len(args) > 2 else None
@@ -792,11 +792,11 @@ async def process_register_command(message, telegram_user_id, args, notification
         channels = ["telegram"]
 
         # Send Telegram notification
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Register"),
             message=result.get("message", "No message"),
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
@@ -805,13 +805,13 @@ async def process_register_command(message, telegram_user_id, args, notification
         # Send verification email if registration was successful
         if result["status"] == "ok" and "email_verification" in result:
             verification_info = result["email_verification"]
-            await notification_manager.send_notification(
-                notification_type="INFO",
+            await notification_client.send_notification(
+                notification_type=MessageType.INFO,
                 title="Your Alkotrader Email Verification Code",
                 message=f"Hello,\n\nThank you for registering your email with the Alkotrader Telegram bot.\n\nYour verification code is: {verification_info['code']}\n\nThis code is valid for 1 hour. If you did not request this, please ignore this email.\n\nBest regards,\nAlkotrader Team",
-                priority="NORMAL",
+                priority=MessagePriority.NORMAL,
                 channels=["email"],
-                email_receiver=verification_info["email"]
+                recipient_id=verification_info["email"]
             )
 
     except Exception as e:
@@ -821,7 +821,7 @@ async def process_register_command(message, telegram_user_id, args, notification
             "message": f"Error processing register command: {str(e)}"
         }
 
-async def process_verify_command(message, telegram_user_id, args, notification_manager):
+async def process_verify_command(message, telegram_user_id, args, notification_client):
     try:
         code = args[1] if len(args) > 1 else None
         parsed = ParsedCommand(command="verify", args={"telegram_user_id": telegram_user_id, "code": code})
@@ -829,28 +829,28 @@ async def process_verify_command(message, telegram_user_id, args, notification_m
         channels = ["telegram"]
         if result.get("email", False):
             channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Verify"),
             message=result.get("message", "No message"),
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=channels,
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
     except Exception as e:
         _logger.exception("Error in verify command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Verify Command Error",
             message="An error occurred while processing your request.",
-            priority="CRITICAL",
+            priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
 
-async def process_request_approval_command(message, telegram_user_id, args, notification_manager):
+async def process_request_approval_command(message, telegram_user_id, args, notification_client):
     """Process /request_approval command"""
     try:
         # Parse command
@@ -863,11 +863,11 @@ async def process_request_approval_command(message, telegram_user_id, args, noti
 
         # Send response to user
         if result["status"] == "ok":
-            await notification_manager.send_notification(
-                notification_type="INFO",
+            await notification_client.send_notification(
+                notification_type=MessageType.INFO,
                 title=result.get("title", "Approval Request"),
                 message=result["message"],
-                priority="NORMAL",
+                priority=MessagePriority.NORMAL,
                 channels=["telegram"],
                 telegram_chat_id=message.chat.id,
                 reply_to_message_id=message.message_id
@@ -875,20 +875,20 @@ async def process_request_approval_command(message, telegram_user_id, args, noti
 
             # Notify admins about the approval request
             if result.get("notify_admins"):
-                await notification_manager.send_notification(
-                    notification_type="INFO",
+                await notification_client.send_notification(
+                    notification_type=MessageType.INFO,
                     title="New Approval Request",
                     message=f"User {result['user_id']} ({result['email']}) has requested approval for restricted features.",
-                    priority="HIGH",
+                    priority=MessagePriority.HIGH,
                     channels=["telegram"],
                     telegram_chat_id=message.chat.id  # Send to admin chat
                 )
         else:
-            await notification_manager.send_notification(
-                notification_type="ERROR",
+            await notification_client.send_notification(
+                notification_type=MessageType.ERROR,
                 title="Approval Request Error",
                 message=result["message"],
-                priority="NORMAL",
+                priority=MessagePriority.NORMAL,
                 channels=["telegram"],
                 telegram_chat_id=message.chat.id,
                 reply_to_message_id=message.message_id
@@ -896,17 +896,17 @@ async def process_request_approval_command(message, telegram_user_id, args, noti
 
     except Exception as e:
         _logger.exception("Error processing approval request: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Error",
             message="An error occurred while processing your approval request.",
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
 
-async def process_language_command(message, telegram_user_id, args, notification_manager):
+async def process_language_command(message, telegram_user_id, args, notification_client):
     try:
         lang = args[1].strip().lower() if len(args) > 1 else None
         parsed = ParsedCommand(command="language", args={"telegram_user_id": telegram_user_id, "language": lang})
@@ -914,28 +914,28 @@ async def process_language_command(message, telegram_user_id, args, notification
         channels = ["telegram"]
         if result.get("email", False):
             channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Language"),
             message=result.get("message", "No message"),
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=channels,
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
     except Exception as e:
         _logger.exception("Error in language command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Language Command Error",
             message="An error occurred while processing your request.",
-            priority="CRITICAL",
+            priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
 
-async def process_admin_command(message, telegram_user_id, args, notification_manager):
+async def process_admin_command(message, telegram_user_id, args, notification_client):
     try:
         # Use the proper command parser instead of manually creating ParsedCommand
         parsed = parse_command(message.text)
@@ -947,11 +947,11 @@ async def process_admin_command(message, telegram_user_id, args, notification_ma
             channels.append("email")
 
         # Send response to admin
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Admin"),
             message=result.get("message", "No message"),
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
@@ -966,11 +966,11 @@ async def process_admin_command(message, telegram_user_id, args, notification_ma
             # Send broadcast to all users
             for user_id in user_ids:
                 try:
-                    await notification_manager.send_notification(
-                        notification_type="INFO",
+                    await notification_client.send_notification(
+                        notification_type=MessageType.INFO,
                         title="Alkotrader Announcement",
                         message=broadcast_message,
-                        priority="NORMAL",
+                        priority=MessagePriority.NORMAL,
                         channels=["telegram"],
                         telegram_chat_id=int(user_id)
                     )
@@ -979,17 +979,17 @@ async def process_admin_command(message, telegram_user_id, args, notification_ma
 
     except Exception as e:
         _logger.exception("Error in admin command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Admin Command Error",
             message="An error occurred while processing your request.",
-            priority="CRITICAL",
+            priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
 
-async def process_alerts_command(message, telegram_user_id, args, notification_manager):
+async def process_alerts_command(message, telegram_user_id, args, notification_client):
     try:
         # Use the proper command parser instead of manually creating ParsedCommand
         parsed = parse_command(message.text)
@@ -999,28 +999,28 @@ async def process_alerts_command(message, telegram_user_id, args, notification_m
         channels = ["telegram"]
         if result.get("email", False):
             channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Alerts"),
             message=result.get("message", "No message"),
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=channels,
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
     except Exception as e:
         _logger.exception("Error in alerts command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Alerts Command Error",
             message="An error occurred while processing your request.",
-            priority="CRITICAL",
+            priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
 
-async def process_schedules_command(message, telegram_user_id, args, notification_manager):
+async def process_schedules_command(message, telegram_user_id, args, notification_client):
     try:
         # Use the proper command parser instead of manually creating ParsedCommand
         parsed = parse_command(message.text)
@@ -1030,28 +1030,28 @@ async def process_schedules_command(message, telegram_user_id, args, notificatio
         channels = ["telegram"]
         if result.get("email", False):
             channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Schedules"),
             message=result.get("message", "No message"),
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=channels,
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
     except Exception as e:
         _logger.exception("Error in schedules command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Schedules Command Error",
             message="An error occurred while processing your request.",
-            priority="CRITICAL",
+            priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
 
-async def process_feedback_command(message, telegram_user_id, args, notification_manager):
+async def process_feedback_command(message, telegram_user_id, args, notification_client):
     try:
         feedback_text = args[1] if len(args) > 1 else None
         parsed = ParsedCommand(command="feedback", args={"telegram_user_id": telegram_user_id, "feedback": feedback_text})
@@ -1059,28 +1059,28 @@ async def process_feedback_command(message, telegram_user_id, args, notification
         channels = ["telegram"]
         if result.get("email", False):
             channels.append("email")
-        await notification_manager.send_notification(
-            notification_type="INFO" if result["status"] == "ok" else "ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.INFO if result["status"] == "ok" else MessageType.ERROR,
             title=result.get("title", "Feedback"),
             message=result.get("message", "No message"),
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=channels,
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
     except Exception as e:
         _logger.exception("Error in feedback command: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Feedback Command Error",
             message="An error occurred while processing your request.",
-            priority="CRITICAL",
+            priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
 
-async def process_feature_command(message, telegram_user_id, args, notification_manager):
+async def process_feature_command(message, telegram_user_id, args, notification_client):
     """Process /feature command"""
     try:
         # Parse command
@@ -1101,7 +1101,7 @@ async def process_feature_command(message, telegram_user_id, args, notification_
         await message.answer("❌ Error processing feature request. Please try again.")
 
 
-async def process_screener_command(message, telegram_user_id, args, notification_manager):
+async def process_screener_command(message, telegram_user_id, args, notification_client):
     """Process /screener command"""
     try:
         # Parse command
@@ -1130,7 +1130,7 @@ async def process_screener_command(message, telegram_user_id, args, notification
         await message.answer("❌ Error processing screener request. Please try again.")
 
 
-async def process_unknown_command(message, telegram_user_id, notification_manager, help_text):
+async def process_unknown_command(message, telegram_user_id, notification_client, help_text):
     try:
         parsed = ParsedCommand(command="unknown", args={"telegram_user_id": telegram_user_id, "text": message.text})
 
@@ -1138,22 +1138,22 @@ async def process_unknown_command(message, telegram_user_id, notification_manage
         unknown_command = message.text.split()[0] if message.text else "unknown"
         unknown_message = f"❓ Unknown command: {unknown_command}\n\nI don't recognize this command. Please use /help to see all available commands and their usage."
 
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Unknown Command",
             message=unknown_message,
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
     except Exception as e:
         _logger.exception("Error in unknown command handler: ")
-        await notification_manager.send_notification(
-            notification_type="ERROR",
+        await notification_client.send_notification(
+            notification_type=MessageType.ERROR,
             title="Unknown Command Error",
             message="An error occurred while processing your request.",
-            priority="CRITICAL",
+            priority=MessagePriority.CRITICAL,
             channels=["telegram"],
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id

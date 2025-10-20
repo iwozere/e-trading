@@ -12,8 +12,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 import asyncio
 import random
-from src.notification.client import NotificationServiceClient, NotificationServiceError
-from src.model.notification import NotificationType, NotificationPriority
+from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PASSWORD
 from src.telegram.screener.notifications import (
     process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_screener_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
@@ -237,14 +236,14 @@ async def api_send_message(request: web.Request) -> web.Response:
                 'error': 'Missing user_id or message'
             }, status=400)
 
-        # Use notification manager to send message
-        success = await notification_manager.send_notification(
-            notification_type="INFO",
+        # Use notification service client to send message
+        success = await notification_client.send_notification(
+            notification_type=MessageType.INFO,
             title=title,
             message=message,
-            priority="NORMAL",
+            priority=MessagePriority.NORMAL,
             channels=["telegram"],
-            telegram_chat_id=int(user_id)
+            recipient_id=str(user_id)
         )
 
         return web.json_response({
@@ -294,13 +293,13 @@ async def api_broadcast(request: web.Request) -> web.Response:
         for user in users:
             user_id = user["telegram_user_id"]
             if user_id and user_id.isdigit():
-                success = await notification_manager.send_notification(
-                    notification_type="INFO",
+                success = await notification_client.send_notification(
+                    notification_type=MessageType.INFO,
                     title=title,
                     message=message,
-                    priority="NORMAL",
+                    priority=MessagePriority.NORMAL,
                     channels=["telegram"],
-                    telegram_chat_id=int(user_id)
+                    recipient_id=str(user_id)
                 )
                 if success:
                     success_count += 1
@@ -343,14 +342,14 @@ async def api_notify(request: web.Request) -> web.Response:
                 'error': 'Missing telegram_chat_id field'
             }, status=400)
 
-        # Use notification manager to send notification
-        success = await notification_manager.send_notification(
+        # Use notification service client to send notification
+        success = await notification_client.send_notification(
             notification_type=notification_type,
             title=title,
             message=message,
             priority=priority,
             channels=["telegram"],
-            telegram_chat_id=int(telegram_chat_id),
+            recipient_id=str(telegram_chat_id),
             data=data.get('data', {})
         )
 
@@ -369,8 +368,8 @@ async def api_notify(request: web.Request) -> web.Response:
 async def api_status(request: web.Request) -> web.Response:
     """API endpoint for health check and status"""
     try:
-        # Get notification manager stats
-        stats = notification_manager.stats if notification_manager else {}
+        # Get notification client stats
+        stats = notification_client.get_stats() if notification_client else {}
 
         # Get user count using service layer
         telegram_svc, _ = get_service_instances()
@@ -406,7 +405,7 @@ async def api_status(request: web.Request) -> web.Response:
             'services': service_status,
             'notification_stats': stats,
             'user_count': user_count,
-            'queue_size': notification_manager.notification_queue.qsize() if notification_manager else 0
+            'queue_size': 0  # Queue is managed by notification service
         })
 
     except Exception as e:
@@ -648,7 +647,7 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
 async def cmd_start(message: Message):
     _logger.info("Received /start command from user %s", message.from_user.id)
     try:
-        await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_manager)
+        await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_client)
         _logger.info("Successfully processed /start command for user %s", message.from_user.id)
     except Exception as e:
         _logger.exception("Error processing /start command for user %s", message.from_user.id)
@@ -658,7 +657,7 @@ async def cmd_start(message: Message):
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
     try:
-        await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_manager)
+        await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_client)
     except Exception as e:
         _logger.exception("Error processing /help command for user %s", message.from_user.id)
         # Fallback: send built-in help text directly
@@ -669,62 +668,62 @@ async def cmd_help(message: Message):
 
 @dp.message(Command("info"))
 async def cmd_info(message: Message):
-    await audit_command_wrapper(message, process_info_command, str(message.from_user.id), notification_manager)
+    await audit_command_wrapper(message, process_info_command, str(message.from_user.id), notification_client)
 
 @dp.message(Command("register"))
 async def cmd_register(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_register_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_register_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("verify"))
 async def cmd_verify(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_verify_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_verify_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("request_approval"))
 async def cmd_request_approval(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_request_approval_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_request_approval_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("language"))
 async def cmd_language(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_language_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_language_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("admin"))
 async def cmd_admin(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_admin_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_admin_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("report"))
 async def cmd_report(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_report_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_report_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("alerts"))
 async def cmd_alerts(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_alerts_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_alerts_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("schedules"))
 async def cmd_schedules(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_schedules_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_schedules_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("screener"))
 async def cmd_screener(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_screener_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_screener_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("feedback"))
 async def cmd_feedback(message: Message):
     args = message.text.split(maxsplit=1)
-    await audit_command_wrapper(message, process_feedback_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_feedback_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("feature"))
 async def cmd_feature(message: Message):
     args = message.text.split(maxsplit=1)
-    await audit_command_wrapper(message, process_feature_command, str(message.from_user.id), args, notification_manager)
+    await audit_command_wrapper(message, process_feature_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(lambda message: message.text and message.text.startswith("/"))
 async def unknown_command(message: Message):
@@ -764,7 +763,7 @@ async def unknown_command(message: Message):
 
     # If not a case variation, process as unknown command
     try:
-        await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_manager, HELP_TEXT)
+        await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_client, HELP_TEXT)
     except Exception as e:
         _logger.exception("Error processing unknown command for user %s", message.from_user.id)
         await message.answer("Sorry, there was an error processing your command. Please try again.")
@@ -775,7 +774,7 @@ async def all_messages(message: Message):
     _logger.info("Received message: %s from user %s", message.text, message.from_user.id)
 
 async def main():
-    global notification_manager
+    global notification_client
 
     _logger.info("Starting bot initialization...")
     if TELEGRAM_BOT_TOKEN:
@@ -784,7 +783,7 @@ async def main():
         _logger.error("Bot token is None!")
         return
 
-    # Set logging context so that notification manager logs go to telegram bot log file
+    # Set logging context so that notification service client logs go to telegram bot log file
     set_logging_context("telegram_screener_bot")
 
     # Initialize service layer first
@@ -796,15 +795,16 @@ async def main():
     # Initialize notification service client
     _logger.info("Initializing notification service client...")
     try:
-        notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8080")
+        import os
+        notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
         notification_client = NotificationServiceClient(
-            base_url=notification_service_url,
+            service_url=notification_service_url,
             timeout=30,
             max_retries=3
         )
 
         # Test connectivity
-        health = await notification_client.health_check_async()
+        health = await notification_client.get_health_status()
         _logger.info("Notification service health: %s", health.get('status', 'unknown'))
 
     except Exception as e:

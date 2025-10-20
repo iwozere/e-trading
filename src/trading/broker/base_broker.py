@@ -666,43 +666,11 @@ class PositionNotificationManager:
                 else:
                     _logger.debug("No notification channels enabled")
             else:
-                # Fallback to legacy methods if no client provided
-                if self.email_enabled:
-                    await self._send_email_notification_legacy(message, title)
-
-                if self.telegram_enabled:
-                    await self._send_telegram_notification_legacy(message, title)
+                # No notification client provided - log warning
+                _logger.warning("No notification client provided for trading notifications")
 
         except Exception as e:
             _logger.exception(f"Error sending notifications: {e}")
-
-    async def _send_email_notification_legacy(self, message: str, title: str):
-        """Send email notification using legacy method."""
-        try:
-            # Import here to avoid circular imports
-            from src.notification.async_notification_manager import AsyncNotificationManager
-
-            # Use existing notification system
-            # This would integrate with your existing email notification setup
-            _logger.info(f"Email notification sent (legacy): {title}")
-
-        except Exception as e:
-            _logger.exception(f"Error sending email notification: {e}")
-
-    async def _send_telegram_notification_legacy(self, message: str, title: str):
-        """Send Telegram notification using legacy method."""
-        try:
-            # Import here to avoid circular imports
-            from src.telegram.screener.http_api_client import send_notification_to_admins
-
-            # Send to admin users via existing system
-            await send_notification_to_admins(
-                message=message,
-                title=title
-            )
-
-        except Exception as e:
-            _logger.exception(f"Error sending Telegram notification: {e}")
 
 
 class BaseBroker(BaseBrokerClass):
