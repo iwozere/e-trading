@@ -57,6 +57,12 @@ _CANONICAL_TO_TALIB: dict[str, dict[str, str]] = {
     "adx": {"length": "timeperiod"},
     "plus_di": {"length": "timeperiod"},
     "minus_di": {"length": "timeperiod"},
+    "cci": {"length": "timeperiod"},
+    "roc": {"length": "timeperiod"},
+    "mfi": {"length": "timeperiod"},
+    "williams_r": {"length": "timeperiod"},
+    "aroon": {"length": "timeperiod"},
+    "adr": {"length": "timeperiod"},
 
     "macd": {"fast": "fastperiod", "slow": "slowperiod", "signal": "signalperiod"},
 
@@ -68,6 +74,14 @@ _CANONICAL_TO_TALIB: dict[str, dict[str, str]] = {
     },
 
     "bbands": {"length": "timeperiod", "std_up": "nbdevup", "std_down": "nbdevdn"},
+
+    "sar": {"acceleration": "acceleration", "maximum": "maximum"},
+
+    "adosc": {"fast": "fastperiod", "slow": "slowperiod"},
+
+    # Custom indicators
+    "ichimoku": {"tenkan": "tenkan", "kijun": "kijun", "senkou": "senkou"},
+    "super_trend": {"length": "length", "multiplier": "multiplier"},
 }
 
 _MATYPE: dict[str, int] = {
@@ -103,6 +117,7 @@ def _xlate(indicator: str, params: Optional[dict]) -> dict:
 class TaLibAdapter(BaseAdapter):
     """Adapter using TA-Lib backend with strict input validation."""
     _map = {
+        # Basic indicators
         "rsi": talib.RSI,
         "ema": talib.EMA,
         "sma": talib.SMA,
@@ -114,6 +129,20 @@ class TaLibAdapter(BaseAdapter):
         "bbands": talib.BBANDS,
         "macd": talib.MACD,
         "stoch": talib.STOCH,
+        # Additional technical indicators
+        "cci": talib.CCI,
+        "roc": talib.ROC,
+        "mfi": talib.MFI,
+        "williams_r": talib.WILLR,
+        "aroon": talib.AROON,
+        "sar": talib.SAR,
+        "ad": talib.AD,
+        "adosc": talib.ADOSC,
+        "bop": talib.BOP,
+        # Custom implementations for indicators not directly in TA-Lib
+        "adr": "_calculate_adr",
+        "ichimoku": "_calculate_ichimoku",
+        "super_trend": "_calculate_super_trend",
     }
 
     def supports(self, name: str) -> bool:
@@ -186,6 +215,181 @@ class TaLibAdapter(BaseAdapter):
             )
             return {"value": _ensure_series(v, df.index)}
 
+        if name == "aroon":
+            aroon_down, aroon_up = fn(
+                src["high"].values.astype(float),
+                src["low"].values.astype(float),
+                **p,
+            )
+            return {"aroon_up": _ensure_series(aroon_up, df.index),
+                    "aroon_down": _ensure_series(aroon_down, df.index)}
+
+        if name == "sar":
+            v = fn(
+                src["high"].values.astype(float),
+                src["low"].values.astype(float),
+                **p,
+            )
+            return {"value": _ensure_series(v, df.index)}
+
+        if name in ("cci", "williams_r"):
+            v = fn(
+                src["high"].values.astype(float),
+                src["low"].values.astype(float),
+                src["close"].values.astype(float),
+                **p,
+            )
+            return {"value": _ensure_series(v, df.index)}
+
+        if name == "mfi":
+            v = fn(
+                src["high"].values.astype(float),
+                src["low"].values.astype(float),
+                src["close"].values.astype(float),
+                src["volume"].values.astype(float),
+                **p,
+            )
+            return {"value": _ensure_series(v, df.index)}
+
+        if name in ("ad", "bop"):
+            if name == "ad":
+                v = fn(
+                    src["high"].values.astype(float),
+                    src["low"].values.astype(float),
+                    src["close"].values.astype(float),
+                    src["volume"].values.astype(float),
+                    **(p or {}),
+                )
+            else:  # bop
+                v = fn(
+                    src["open"].values.astype(float),
+                    src["high"].values.astype(float),
+                    src["low"].values.astype(float),
+                    src["close"].values.astype(float),
+                    **(p or {}),
+                )
+            return {"value": _ensure_series(v, df.index)}
+
+        if name == "adosc":
+            v = fn(
+                src["high"].values.astype(float),
+                src["low"].values.astype(float),
+                src["close"].values.astype(float),
+                src["volume"].values.astype(float),
+                **p,
+            )
+            return {"value": _ensure_series(v, df.index)}
+
+        # Handle custom implementations
+        if isinstance(fn, str) and fn.startswith("_calculate_"):
+            return getattr(self, fn)(src, df.index, p)
+
         # default single-series (close)
         v = fn(src["close"].values.astype(float), **p)
         return {"value": _ensure_series(v, df.index)}
+
+    def _calculate_adr(self, src: Dict[str, pd.Series], index: pd.Index, params: dict) -> Dict[str, pd.Series]:
+        """Calculate Average Daily Range."""
+        timeperiod = params.get("timeperiod", 14)
+        daily_range = src["high"] - src["low"]
+        adr = daily_range.rolling(window=timeperiod).mean()
+        return {"value": _ensure_series(adr, index)}
+
+    def _calculate_ichimoku(self, src: Dict[str, pd.Series], index: pd.Index, params: dict) -> Dict[str, pd.Series]:
+        """Calculate Ichimoku Cloud components."""
+        tenkan_period = params.get("tenkan", 9)
+        kijun_period = params.get("kijun", 26)
+        senkou_period = params.get("senkou", 52)
+
+        high = src["high"]
+        low = src["low"]
+        close = src["close"]
+
+        # Tenkan-sen (Conversion Line)
+        tenkan_high = high.rolling(window=tenkan_period).max()
+        tenkan_low = low.rolling(window=tenkan_period).min()
+        tenkan = (tenkan_high + tenkan_low) / 2
+
+        # Kijun-sen (Base Line)
+        kijun_high = high.rolling(window=kijun_period).max()
+        kijun_low = low.rolling(window=kijun_period).min()
+        kijun = (kijun_high + kijun_low) / 2
+
+        # Senkou Span A (Leading Span A)
+        senkou_a = ((tenkan + kijun) / 2).shift(kijun_period)
+
+        # Senkou Span B (Leading Span B)
+        senkou_high = high.rolling(window=senkou_period).max()
+        senkou_low = low.rolling(window=senkou_period).min()
+        senkou_b = ((senkou_high + senkou_low) / 2).shift(kijun_period)
+
+        # Chikou Span (Lagging Span)
+        chikou = close.shift(-kijun_period)
+
+        return {
+            "tenkan": _ensure_series(tenkan, index),
+            "kijun": _ensure_series(kijun, index),
+            "senkou_a": _ensure_series(senkou_a, index),
+            "senkou_b": _ensure_series(senkou_b, index),
+            "chikou": _ensure_series(chikou, index)
+        }
+
+    def _calculate_super_trend(self, src: Dict[str, pd.Series], index: pd.Index, params: dict) -> Dict[str, pd.Series]:
+        """Calculate Super Trend indicator."""
+        length = params.get("length", 10)
+        multiplier = params.get("multiplier", 3.0)
+
+        high = src["high"]
+        low = src["low"]
+        close = src["close"]
+
+        # Calculate ATR
+        atr = talib.ATR(high.values.astype(float), low.values.astype(float), close.values.astype(float), timeperiod=length)
+        atr_series = pd.Series(atr, index=index)
+
+        # Calculate HL2 (median price)
+        hl2 = (high + low) / 2
+
+        # Calculate upper and lower bands
+        upper_band = hl2 + (multiplier * atr_series)
+        lower_band = hl2 - (multiplier * atr_series)
+
+        # Initialize super trend
+        super_trend = pd.Series(index=index, dtype=float)
+        trend = pd.Series(index=index, dtype=int)
+
+        for i in range(1, len(close)):
+            # Upper band calculation
+            if upper_band.iloc[i] < upper_band.iloc[i-1] or close.iloc[i-1] > upper_band.iloc[i-1]:
+                upper_band.iloc[i] = upper_band.iloc[i]
+            else:
+                upper_band.iloc[i] = upper_band.iloc[i-1]
+
+            # Lower band calculation
+            if lower_band.iloc[i] > lower_band.iloc[i-1] or close.iloc[i-1] < lower_band.iloc[i-1]:
+                lower_band.iloc[i] = lower_band.iloc[i]
+            else:
+                lower_band.iloc[i] = lower_band.iloc[i-1]
+
+            # Super trend calculation
+            if i == 1:
+                super_trend.iloc[i] = upper_band.iloc[i]
+                trend.iloc[i] = 1
+            else:
+                if super_trend.iloc[i-1] == upper_band.iloc[i-1] and close.iloc[i] <= upper_band.iloc[i]:
+                    super_trend.iloc[i] = upper_band.iloc[i]
+                    trend.iloc[i] = 1
+                elif super_trend.iloc[i-1] == upper_band.iloc[i-1] and close.iloc[i] > upper_band.iloc[i]:
+                    super_trend.iloc[i] = lower_band.iloc[i]
+                    trend.iloc[i] = -1
+                elif super_trend.iloc[i-1] == lower_band.iloc[i-1] and close.iloc[i] >= lower_band.iloc[i]:
+                    super_trend.iloc[i] = lower_band.iloc[i]
+                    trend.iloc[i] = -1
+                elif super_trend.iloc[i-1] == lower_band.iloc[i-1] and close.iloc[i] < lower_band.iloc[i]:
+                    super_trend.iloc[i] = upper_band.iloc[i]
+                    trend.iloc[i] = 1
+
+        return {
+            "value": _ensure_series(super_trend, index),
+            "trend": _ensure_series(trend, index)
+        }

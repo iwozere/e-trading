@@ -12,7 +12,8 @@ from aiogram.filters import Command, CommandObject
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 import asyncio
 import random
-from src.notification.async_notification_manager import initialize_notification_manager
+from src.notification.client import NotificationServiceClient, NotificationServiceError
+from src.model.notification import NotificationType, NotificationPriority
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PASSWORD
 from src.telegram.screener.notifications import (
     process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_screener_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
@@ -28,7 +29,7 @@ from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger("telegram_screener_bot")
 
 # Global variables
-notification_manager = None
+notification_client = None
 
 # HTTP API support
 from aiohttp import web
@@ -792,26 +793,23 @@ async def main():
         _logger.error("Failed to initialize services. Bot cannot start.")
         return
 
-    # Initialize notification manager with a dummy chat ID for Telegram channel creation
-    # The actual chat ID will be provided dynamically in each message
-    _logger.info("Initializing notification manager...")
+    # Initialize notification service client
+    _logger.info("Initializing notification service client...")
     try:
-        notification_manager = await initialize_notification_manager(
-            telegram_token=TELEGRAM_BOT_TOKEN,
-            telegram_chat_id="0",  # Dummy chat ID - actual chat ID provided dynamically
-            email_api_key=SMTP_PASSWORD,
-            email_sender=SMTP_USER,
-            email_receiver=SMTP_USER  # or dummy
+        notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8080")
+        notification_client = NotificationServiceClient(
+            base_url=notification_service_url,
+            timeout=30,
+            max_retries=3
         )
 
-        # Disable batching for immediate processing in bot context
-        notification_manager.batch_size = 1
-        notification_manager.batch_timeout = 0.1
-        _logger.info("Notification manager initialized successfully")
+        # Test connectivity
+        health = await notification_client.health_check_async()
+        _logger.info("Notification service health: %s", health.get('status', 'unknown'))
 
     except Exception as e:
-        _logger.exception("Failed to initialize notification manager: %s", e)
-        return
+        _logger.exception("Failed to initialize notification service client: %s", e)
+        notification_client = None
 
     _logger.info("Starting Telegram Screener Bot with HTTP API...")
 

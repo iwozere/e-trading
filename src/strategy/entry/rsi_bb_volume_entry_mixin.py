@@ -27,7 +27,7 @@ from typing import Any, Dict, Optional
 
 import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
-from src.strategy.indicator.wrappers import create_indicator_wrapper
+from src.indicators.adapters.backtrader_wrappers import UnifiedRSIIndicator, UnifiedBollingerBandsIndicator
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -80,28 +80,26 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             bb_dev_factor = self.get_param("e_bb_dev")
             sma_period = self.get_param("e_vol_ma_period")
 
+            # Create unified indicators directly
+            backend = "bt-talib" if self.strategy.use_talib else "bt"
+
+            self.rsi = UnifiedRSIIndicator(
+                self.strategy.data,
+                period=rsi_period,
+                backend=backend
+            )
+
+            self.bb = UnifiedBollingerBandsIndicator(
+                self.strategy.data,
+                period=bb_period,
+                devfactor=bb_dev_factor,
+                backend=backend
+            )
+
+            # Create volume SMA using standard Backtrader
             if self.strategy.use_talib:
-                self.rsi = bt.talib.RSI(self.strategy.data.close, timeperiod=rsi_period)
-                self.bb = bt.talib.BBANDS(
-                    self.strategy.data.close,
-                    timeperiod=bb_period,
-                    nbdevup=bb_dev_factor,
-                    nbdevdn=bb_dev_factor,
-                )
-                self.bb_top = self.bb.upperband
-                self.bb_mid = self.bb.middleband
-                self.bb_bot = self.bb.lowerband
                 self.sma = bt.talib.SMA(self.strategy.data.volume, sma_period)
             else:
-                self.rsi = bt.indicators.RSI(
-                    self.strategy.data.close, period=rsi_period
-                )
-                self.bb = bt.indicators.BollingerBands(
-                    self.strategy.data.close, period=bb_period, devfactor=bb_dev_factor
-                )
-                self.bb_top = self.bb.top
-                self.bb_mid = self.bb.mid
-                self.bb_bot = self.bb.bot
                 self.sma = bt.indicators.SMA(
                     self.strategy.data.volume, period=sma_period
                 )
@@ -144,8 +142,8 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             vol_ma = self.indicators[self.vol_ma_name]
 
             # Try to access the first value of each indicator using unified access
-            _ = rsi[0]
-            _ = bb.bot[0]  # Use unified access
+            _ = rsi.rsi[0]
+            _ = bb.lower[0]  # Use unified access
             _ = vol_ma[0]
 
             return True
@@ -170,21 +168,13 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             current_volume = self.strategy.data.volume[0]
 
             # Check RSI
-            rsi_condition = rsi[0] <= self.get_param("e_rsi_oversold")
+            rsi_condition = rsi.rsi[0] <= self.get_param("e_rsi_oversold")
 
             # Check Bollinger Bands
-            if self.strategy.use_talib:
-                # For TA-Lib BB, use bb_lower
-                if self.get_param("e_use_bb_touch"):
-                    bb_condition = current_price <= bb.bb_lower[0]
-                else:
-                    bb_condition = current_price < bb.bb_lower[0]
+            if self.get_param("e_use_bb_touch"):
+                bb_condition = current_price <= bb.lower[0]
             else:
-                # For Backtrader's native BB, use lines.bot
-                if self.get_param("e_use_bb_touch"):
-                    bb_condition = current_price <= bb.bot[0]  # Use unified access
-                else:
-                    bb_condition = current_price < bb.bot[0]   # Use unified access
+                bb_condition = current_price < bb.lower[0]
 
             # Check Volume
             volume_condition = current_volume > vol_ma[0] * self.get_param(
@@ -194,7 +184,7 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             return_value = rsi_condition and bb_condition and volume_condition
             if return_value:
                 logger.debug(
-                    f"ENTRY: Price: {current_price}, RSI: {rsi[0]}, BB Lower: {bb.bot[0]}, Volume: {current_volume}, Volume MA: {vol_ma[0]}"
+                    f"ENTRY: Price: {current_price}, RSI: {rsi.rsi[0]}, BB Lower: {bb.lower[0]}, Volume: {current_volume}, Volume MA: {vol_ma[0]}"
                 )
             return return_value
         except Exception as e:

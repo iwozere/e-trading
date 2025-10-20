@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional
 
 import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
-from src.strategy.indicator.wrappers import create_indicator_wrapper
+from src.indicators.adapters.backtrader_wrappers import UnifiedRSIIndicator, UnifiedBollingerBandsIndicator
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -92,24 +92,21 @@ class RSIBBEntryMixin(BaseEntryMixin):
                 logger.warning("Invalid BB deviation factor: %s, using default value 2.0", bb_dev_factor)
                 bb_dev_factor = 2.0
 
-            # Create raw indicators
-            if self.strategy.use_talib:
-                rsi_raw = bt.talib.RSI(self.strategy.data.close, timeperiod=rsi_period)
-                bb_raw = bt.talib.BBANDS(
-                    self.strategy.data.close,
-                    timeperiod=bb_period,
-                    nbdevup=bb_dev_factor,
-                    nbdevdn=bb_dev_factor,
-                )
-            else:
-                rsi_raw = bt.indicators.RSI(self.strategy.data.close, period=rsi_period)
-                bb_raw = bt.indicators.BollingerBands(
-                    self.strategy.data.close, period=bb_period, devfactor=bb_dev_factor
-                )
+            # Create unified indicators directly
+            backend = "bt-talib" if self.strategy.use_talib else "bt"
 
-            # Create wrapped indicators for unified access
-            self.rsi = create_indicator_wrapper(rsi_raw, 'rsi', self.strategy.use_talib)
-            self.bb = create_indicator_wrapper(bb_raw, 'bb', self.strategy.use_talib)
+            self.rsi = UnifiedRSIIndicator(
+                self.strategy.data,
+                period=rsi_period,
+                backend=backend
+            )
+
+            self.bb = UnifiedBollingerBandsIndicator(
+                self.strategy.data,
+                period=bb_period,
+                devfactor=bb_dev_factor,
+                backend=backend
+            )
 
             # Register wrapped indicators
             self.register_indicator(self.rsi_name, self.rsi)
@@ -144,10 +141,10 @@ class RSIBBEntryMixin(BaseEntryMixin):
             bb = self.indicators[self.bb_name]
 
             # Try to access the first value of each indicator using unified access
-            _ = rsi[0]
-            _ = bb.bot[0]  # Use unified access - works for both TALib and standard
-            _ = bb.mid[0]
-            _ = bb.top[0]
+            _ = rsi.rsi[0]
+            _ = bb.lower[0]  # Use unified access - works for both TALib and standard
+            _ = bb.middle[0]
+            _ = bb.upper[0]
 
             return True
         except (IndexError, AttributeError):
@@ -172,15 +169,15 @@ class RSIBBEntryMixin(BaseEntryMixin):
             current_price = self.strategy.data.close[0]
 
             # Defensive check: Ensure RSI value is valid
-            rsi_value = rsi[0]
-            rsi_prev = rsi[-1] if len(rsi) > 1 else rsi_value
+            rsi_value = rsi.rsi[0]
+            rsi_prev = rsi.rsi[-1] if len(rsi.rsi) > 1 else rsi_value
             if rsi_value is None or rsi_prev is None:
                 logger.warning("RSI value is None, skipping entry check")
                 return False
 
             # Defensive check: Ensure Bollinger Bands values are valid
-            bb_bot_value = bb.bot[0]  # Use unified access
-            bb_mid_value = bb.mid[0]
+            bb_bot_value = bb.lower[0]  # Use unified access
+            bb_mid_value = bb.middle[0]
             if bb_bot_value is None or bb_mid_value is None:
                 logger.warning("Bollinger Bands values are None, skipping entry check")
                 return False

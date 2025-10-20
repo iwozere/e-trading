@@ -1,8 +1,8 @@
 """
 Indicator Factory
 
-Centralized factory for creating and managing technical indicators.
-Supports both TA-Lib and Backtrader indicators with consistent interface.
+Centralized factory for creating and managing technical indicators using
+the unified indicator service.
 """
 
 import pandas as pd
@@ -10,16 +10,23 @@ import numpy as np
 from typing import Dict, Any, Optional, Union
 from src.notification.logger import setup_logger
 
+# Unified service integration
+from src.indicators.adapters.backtrader_adapter import BacktraderAdapter, BacktraderIndicatorFactory
+
 logger = setup_logger(__name__)
 
 
 class IndicatorFactory:
-    """Factory class for creating and managing technical indicators."""
+    """Factory class for creating and managing technical indicators using unified service."""
 
-    def __init__(self, data: Union[pd.DataFrame, Any] = None, use_talib: bool = False):
+    def __init__(self, data: Union[pd.DataFrame, Any] = None):
         self.data = data
-        self.use_talib = use_talib
         self.indicators = {}
+
+        # Initialize unified service components
+        self._backtrader_adapter = BacktraderAdapter()
+        self._backtrader_factory = BacktraderIndicatorFactory(self._backtrader_adapter)
+        logger.info("IndicatorFactory initialized with unified service")
 
     def create_rsi(self, name: str, period: int = 14) -> pd.Series:
         """Create RSI indicator."""
@@ -164,3 +171,22 @@ class IndicatorFactory:
     def list_indicators(self) -> list:
         """List all available indicators."""
         return list(self.indicators.keys())
+
+    def create_backtrader_rsi(self, data, period: int = 14, backend: str = "bt"):
+        """Create Backtrader RSI indicator using unified service"""
+        return self._backtrader_factory.create_rsi(
+            data, period=period, backend=backend
+        )
+
+    def create_backtrader_bollinger_bands(self, data, period: int = 20, devfactor: float = 2.0, backend: str = "bt"):
+        """Create Backtrader Bollinger Bands indicator using unified service"""
+        return self._backtrader_factory.create_bollinger_bands(
+            data, period=period, devfactor=devfactor, backend=backend
+        )
+
+    def create_backtrader_macd(self, data, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9, backend: str = "bt"):
+        """Create Backtrader MACD indicator using unified service"""
+        return self._backtrader_factory.create_macd(
+            data, fast_period=fast_period, slow_period=slow_period,
+            signal_period=signal_period, backend=backend
+        )

@@ -1,65 +1,86 @@
-from __future__ import annotations
-from typing import Dict, List, Optional, Union, Literal, Any
-from pydantic import BaseModel, Field, field_validator
+"""
+Unified indicator models - imports from consolidated model module.
 
-# --- Shared ---
-OutputName = Union[str, Dict[str, str]]
+This module now imports all models from the unified src.model.indicators module
+to maintain backward compatibility while consolidating all data structures.
+"""
 
-class FillNASpec(BaseModel):
-    method: Optional[Literal["ffill","bfill","zero"]] = None
-    limit: Optional[int] = None
+# Import all models from the unified module
+from src.model.indicators import (
+    # Core models
+    RecommendationType,
+    IndicatorCategory,
+    Recommendation,
+    IndicatorValue,
+    IndicatorResult,
+    CompositeRecommendation,
+    IndicatorSet,
 
-class WarmupSpec(BaseModel):
-    min_bars: int = 0
-    mask_to_nan: bool = True
+    # Request models
+    FillNASpec,
+    WarmupSpec,
+    IndicatorSpec,
+    IndicatorBatchConfig,
+    IndicatorCalculationRequest,
+    BatchIndicatorRequest,
+    TickerIndicatorsRequest,
 
-class IndicatorSpec(BaseModel):
-    name: str                     # canonical name, e.g. "rsi", "pe" (see registry)
-    params: Dict[str, Any] = Field(default_factory=dict)
-    input_map: Dict[str, str] = Field(default_factory=dict)  # map std inputs→df cols
-    output: OutputName            # final column name or mapping for multi-output
-    depends_on: List[str] = Field(default_factory=list)      # names of prior outputs required
-    timeframe: Optional[str] = None                          # optional per-indicator TF (tech only)
+    # Result models
+    IndicatorResultSet,
+    CacheEntry,
+    PerformanceMetrics,
 
-class IndicatorBatchConfig(BaseModel):
-    timeframe: Optional[str] = None   # batch TF (applies to tech indicators without own TF)
-    fillna: Optional[FillNASpec] = None
-    warmup: Optional[WarmupSpec] = None
-    dropna_after: bool = False
-    indicators: List[IndicatorSpec]
+    # Type aliases
+    OutputName,
 
-    @field_validator("indicators")
-    def unique_outputs(cls, v):
-        seen = set()
-        for spec in v:
-            outs = spec.output if isinstance(spec.output, dict) else {"value": spec.output}
-            for name in outs.values():
-                if name in seen:
-                    raise ValueError(f"Duplicate output column: {name}")
-                seen.add(name)
-        return v
+    # Constants and utilities
+    TECHNICAL_INDICATORS,
+    FUNDAMENTAL_INDICATORS,
+    ALL_INDICATORS,
+    LEGACY_INDICATOR_NAMES,
+    INDICATOR_DESCRIPTIONS,
+    FUNDAMENTAL_INDICATORS_LEGACY,
+    ALL_INDICATORS_LEGACY,
+    get_canonical_name,
+    get_indicator_description
+)
 
-# Request model for ticker-based computation (tech + fundamentals)
-class TickerIndicatorsRequest(BaseModel):
-    ticker: str
-    timeframe: str = "1d"            # for OHLCV
-    period: str = "1y"
-    provider: Optional[str] = None
-    indicators: List[str]            # list of names from registry (both tech + fund)
-    fillna: Optional[FillNASpec] = None
-    warmup: Optional[WarmupSpec] = None
-    include_recommendations: bool = True
-    force_refresh: bool = False
+# Re-export everything for backward compatibility
+__all__ = [
+    # Core models
+    "RecommendationType",
+    "IndicatorCategory",
+    "Recommendation",
+    "IndicatorValue",
+    "IndicatorResult",
+    "CompositeRecommendation",
+    "IndicatorSet",
 
-# Result container (minimalist)
-class IndicatorValue(BaseModel):
-    name: str
-    value: Any
-    source: Optional[str] = None
-    meta: Dict[str, Any] = Field(default_factory=dict)
+    # Request models
+    "FillNASpec",
+    "WarmupSpec",
+    "IndicatorSpec",
+    "IndicatorBatchConfig",
+    "IndicatorCalculationRequest",
+    "BatchIndicatorRequest",
+    "TickerIndicatorsRequest",
 
-class IndicatorResultSet(BaseModel):
-    ticker: Optional[str] = None
-    technical: Dict[str, IndicatorValue] = Field(default_factory=dict)
-    fundamental: Dict[str, IndicatorValue] = Field(default_factory=dict)
-    overall: Optional[Dict[str, Any]] = None
+    # Result models
+    "IndicatorResultSet",
+    "CacheEntry",
+    "PerformanceMetrics",
+
+    # Type aliases
+    "OutputName",
+
+    # Constants and utilities
+    "TECHNICAL_INDICATORS",
+    "FUNDAMENTAL_INDICATORS",
+    "ALL_INDICATORS",
+    "LEGACY_INDICATOR_NAMES",
+    "INDICATOR_DESCRIPTIONS",
+    "FUNDAMENTAL_INDICATORS_LEGACY",
+    "ALL_INDICATORS_LEGACY",
+    "get_canonical_name",
+    "get_indicator_description"
+]

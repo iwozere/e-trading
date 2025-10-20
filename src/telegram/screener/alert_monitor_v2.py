@@ -1,3 +1,10 @@
+"""
+Alert Monitor V2 - Updated to use Notification Service
+
+Background service to monitor price alerts and send notifications when triggered.
+Uses the new notification service client instead of direct AsyncNotificationManager.
+"""
+
 import os
 import sys
 from pathlib import Path
@@ -10,7 +17,6 @@ import time
 from typing import List, Dict, Any, Optional, Tuple
 from src.data.db.services import telegram_service as db
 from src.common import get_ohlcv
-from src.telegram.screener.http_api_client import BotHttpApiClient, send_notification_via_api
 from src.telegram.screener.alert_logic_evaluator import AlertLogicEvaluator, evaluate_alert
 from src.telegram.screener.rearm_alert_system import ReArmAlertEvaluator
 
@@ -22,14 +28,20 @@ from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger(__name__)
 
 
-class AlertMonitor:
+class AlertMonitorV2:
     """
     Background service to monitor price alerts and send notifications when triggered.
-    Uses HTTP API to communicate with the bot microservice.
+    Updated to use the new notification service client.
     """
 
-    def __init__(self, api_client: BotHttpApiClient = None, telegram_service=None, notification_service_url: str = "http://localhost:8080"):
-        self.api_client = api_client
+    def __init__(self, notification_service_url: str = "http://localhost:8080", telegram_service=None):
+        """
+        Initialize the alert monitor.
+
+        Args:
+            notification_service_url: URL of the notification service
+            telegram_service: Telegram service instance for database operations
+        """
         self.notification_client = NotificationServiceClient(
             base_url=notification_service_url,
             timeout=30,
@@ -37,7 +49,6 @@ class AlertMonitor:
         )
         self.running = False
         self.evaluator = AlertLogicEvaluator()
-        # Inject telegram_service into ReArmAlertEvaluator for service layer usage
         self.telegram_service = telegram_service or db
         self.rearm_evaluator = ReArmAlertEvaluator(telegram_service=self.telegram_service)
 
@@ -46,9 +57,9 @@ class AlertMonitor:
         self.running = True
 
         # Set logging context
-        set_logging_context("telegram_alert_monitor")
+        set_logging_context("telegram_alert_monitor_v2")
 
-        _logger.info("Alert monitor started (using notification service)")
+        _logger.info("Alert monitor V2 started (using notification service)")
 
         # Test notification service connectivity
         try:
@@ -69,7 +80,7 @@ class AlertMonitor:
         """Stop the alert monitoring loop."""
         self.running = False
         await self.notification_client.close_async()
-        _logger.info("Alert monitor stopped")
+        _logger.info("Alert monitor V2 stopped")
 
     async def check_alerts(self):
         """Check all active alerts and trigger notifications if conditions are met."""
@@ -110,9 +121,6 @@ class AlertMonitor:
             current_price = await self._get_current_price(ticker)
             if current_price is None:
                 _logger.warning("Could not get current price for %s, skipping alert %d", ticker, alert_id)
-
-                # If this alert has failed multiple times, consider notifying admin
-                # For now, just skip and continue
                 return
 
             # Check if this is a re-arm alert (has re_arm_config)
@@ -123,7 +131,7 @@ class AlertMonitor:
                 # Update alert state using service layer (ReArmAlertEvaluator now handles this internally)
                 success = self.rearm_evaluator.update_alert_state(alert_id, evaluation_details, current_price)
                 if not success:
-                    self._logger.warning("Failed to update alert state for alert %d", alert_id)
+                    _logger.warning("Failed to update alert state for alert %d", alert_id)
 
                 if triggered:
                     await self.trigger_rearm_alert(alert, evaluation_details)
@@ -131,7 +139,7 @@ class AlertMonitor:
             else:
                 # Use legacy evaluator for indicator alerts or old price alerts
                 if alert_type == "indicator":
-                    triggered, evaluation_details = self.evaluator.evaluate_alert(alert)
+                    triggered, evaluation_details = await self.evaluator.evaluate_alert(alert)
                 else:
                     # Legacy price alert logic
                     triggered, evaluation_details = self._evaluate_legacy_price_alert(alert, current_price)
@@ -158,7 +166,7 @@ class AlertMonitor:
             alert_type = alert.get("alert_type", "price")
             alert_action = alert.get("alert_action", "notify")
 
-            # Get user info for email notification using service layer
+            # Get user info for notifications
             _logger.debug("Retrieving user status for alert notification: user_id=%s, alert_id=%s", user_id, alert_id)
             user_status = self.telegram_service.get_user_status(str(user_id))
             user_email = user_status.get("email") if user_status and user_status.get("verified") else None
@@ -169,14 +177,10 @@ class AlertMonitor:
             if alert_type == "price":
                 message = self._format_price_alert_message(alert, evaluation_details)
                 title = f"Price Alert: {ticker}"
+                notification_type = NotificationType.WARNING
             else:
                 message = self._format_indicator_alert_message(alert, evaluation_details)
                 title = f"Indicator Alert: {ticker} - {alert_action}"
-
-            # Determine notification type and channels
-            if alert_type == "price":
-                notification_type = NotificationType.WARNING
-            else:
                 notification_type = NotificationType.INFO
 
             # Determine channels and recipient
@@ -222,257 +226,17 @@ class AlertMonitor:
                             user_id, alert_id, e)
 
                 # Fallback: try to send via legacy method if service is down
-                success = await send_notification_via_api(
-                    user_id=user_id,
-                    message=message,
-                    title=title
-                )
-
-                if success:
-                    _logger.info("Alert #%d sent via fallback method for user %s: %s", alert_id, user_id, ticker)
-                else:
-                    _logger.error("Both notification service and fallback failed for user %s, alert #%d", user_id, alert_id)
-
-            # Send email notification if user has verified email
-            if user_email:
-                await self._send_email_alert_via_service(user_email, alert, evaluation_details, title)
+                await self._send_fallback_notification(user_id, message, title)
 
             # Deactivate the alert (one-time trigger) using service layer with error handling
             try:
                 self.telegram_service.update_alert(alert_id, active=False)
+                _logger.debug("Alert %d deactivated after triggering", alert_id)
             except Exception as e:
                 _logger.error("Failed to deactivate alert %d: %s", alert_id, e)
 
         except Exception as e:
             _logger.exception("Error triggering alert %s: ", alert.get("id"))
-
-    def _format_price_alert_message(self, alert: Dict[str, Any], details: Dict[str, Any]) -> str:
-        """Format price alert message."""
-        ticker = alert["ticker"]
-        target_price = alert["price"]
-        condition = alert["condition"]
-        alert_id = alert["id"]
-        current_price = details.get("current_price", 0)
-
-        return (
-            f"🚨 Price Alert Triggered!\n\n"
-            f"Ticker: {ticker}\n"
-            f"Current Price: ${current_price:.2f}\n"
-            f"Alert: {condition} ${target_price:.2f}\n"
-            f"Alert ID: #{alert_id}"
-        )
-
-    def _format_indicator_alert_message(self, alert: Dict[str, Any], details: Dict[str, Any]) -> str:
-        """Format indicator alert message."""
-        ticker = alert["ticker"]
-        alert_id = alert["id"]
-        alert_action = alert.get("alert_action", "notify")
-        current_price = details.get("current_price", 0)
-        timeframe = alert.get("timeframe", "15m")
-
-        # Get alert summary
-        summary = self.evaluator.get_alert_summary(alert)
-
-        message = (
-            f"🚨 Indicator Alert Triggered!\n\n"
-            f"Ticker: {ticker}\n"
-            f"Current Price: ${current_price:.2f}\n"
-            f"Timeframe: {timeframe}\n"
-            f"Action: {alert_action}\n"
-            f"Alert ID: #{alert_id}\n\n"
-        )
-
-        if "indicators" in summary:
-            message += f"Indicators: {', '.join(summary['indicators'])}\n"
-            if "logic" in summary and summary["logic"] != "single":
-                message += f"Logic: {summary['logic']}\n"
-
-        # Add condition results if available
-        condition_results = details.get("condition_results", [])
-        if condition_results:
-            message += "\nCondition Results:\n"
-            for result in condition_results:
-                indicator = result.get("indicator", "Unknown")
-                result_status = "✅" if result.get("result") else "❌"
-                value = result.get("value", "N/A")
-                message += f"  {result_status} {indicator}: {value}\n"
-
-        return message
-
-    async def _send_email_alert_via_service(self, user_email: str, alert: Dict[str, Any], details: Dict[str, Any], title: str):
-        """Send email alert notification via notification service."""
-        try:
-            alert_type = alert.get("alert_type", "price")
-
-            if alert_type == "price":
-                email_message = self._format_price_email_message(alert, details)
-                notification_type = NotificationType.WARNING
-            else:
-                email_message = self._format_indicator_email_message(alert, details)
-                notification_type = NotificationType.INFO
-
-            # Send via notification service
-            response = await self.notification_client.send_notification_async(
-                notification_type=notification_type,
-                title=title,
-                message=email_message,
-                priority=NotificationPriority.HIGH,
-                channels=["email"],
-                recipient_id=user_email,
-                metadata={
-                    "alert_id": alert["id"],
-                    "ticker": alert["ticker"],
-                    "alert_type": alert_type
-                }
-            )
-
-            _logger.info("Email alert sent via service (ID: %d) to %s for alert #%d",
-                        response.message_id, user_email, alert["id"])
-
-        except NotificationServiceError as e:
-            _logger.error("Failed to send email alert via service to %s: %s", user_email, e)
-        except Exception as e:
-            _logger.error("Unexpected error sending email alert to %s: %s", user_email, e)
-
-    def _format_price_email_message(self, alert: Dict[str, Any], details: Dict[str, Any]) -> str:
-        """Format price alert email message."""
-        ticker = alert["ticker"]
-        target_price = alert["price"]
-        condition = alert["condition"]
-        current_price = details.get("current_price", 0)
-
-        return (
-            f"Hello,\n\n"
-            f"Your price alert for {ticker} has been triggered:\n"
-            f"Current price is ${current_price:.2f}, which is {condition} your threshold of ${target_price:.2f}.\n\n"
-            f"Set via Alkotrader Telegram bot.\n\n"
-            f"Best regards,\n"
-            f"Alkotrader Team"
-        )
-
-    def _format_indicator_email_message(self, alert: Dict[str, Any], details: Dict[str, Any]) -> str:
-        """Format indicator alert email message."""
-        ticker = alert["ticker"]
-        alert_action = alert.get("alert_action", "notify")
-        current_price = details.get("current_price", 0)
-        timeframe = alert.get("timeframe", "15m")
-        summary = self.evaluator.get_alert_summary(alert)
-
-        message = (
-            f"Hello,\n\n"
-            f"Your indicator alert for {ticker} has been triggered:\n"
-            f"Current price: ${current_price:.2f}\n"
-            f"Timeframe: {timeframe}\n"
-            f"Action: {alert_action}\n\n"
-        )
-
-        if "indicators" in summary:
-            message += f"Indicators: {', '.join(summary['indicators'])}\n"
-            if "logic" in summary and summary["logic"] != "single":
-                message += f"Logic: {summary['logic']}\n"
-
-        message += "\nSet via Alkotrader Telegram bot.\n\nBest regards,\nAlkotrader Team"
-        return message
-
-    async def _notify_admin_of_error(self, alert: Dict[str, Any], error_message: str):
-        """Send error notification to admin(s)."""
-        try:
-            # Get all admin users using service layer
-            admin_users = []
-            all_users = self.telegram_service.list_users()
-            for user in all_users:
-                if user.get("is_admin"):
-                    admin_users.append(user["telegram_user_id"])
-
-            if not admin_users:
-                _logger.warning("No admin users found for error notification")
-                return
-
-            error_message_text = (
-                f"⚠️ Alert Evaluation Error\n\n"
-                f"Alert ID: #{alert.get('id')}\n"
-                f"Ticker: {alert.get('ticker')}\n"
-                f"User: {alert.get('user_id')}\n"
-                f"Error: {error_message}\n\n"
-                f"Please check the alert configuration and system logs."
-            )
-
-            # Send to all admins via notification service
-            for admin_id in admin_users:
-                try:
-                    await self.notification_client.send_error_notification_async(
-                        error_message=error_message_text,
-                        source="alert_monitor",
-                        channels=["telegram"],
-                        metadata={"telegram_chat_id": str(admin_id)}
-                    )
-                except NotificationServiceError as e:
-                    _logger.error("Failed to send error notification to admin %s via service: %s", admin_id, e)
-                    # Fallback to legacy method
-                    try:
-                        await send_notification_via_api(
-                            user_id=admin_id,
-                            message=error_message_text,
-                            title="Alert System Error"
-                        )
-                    except Exception as fallback_e:
-                        _logger.error("Fallback error notification also failed for admin %s: %s", admin_id, fallback_e)
-
-            _logger.info("Error notification sent to %d admin(s) via notification service", len(admin_users))
-
-        except Exception as e:
-            _logger.error("Failed to send admin error notification: %s", e)
-
-    async def _get_current_price(self, ticker: str) -> Optional[float]:
-        """Get current price for ticker with fallback providers."""
-        providers_to_try = ["yf", "alpha_vantage", "polygon"]
-
-        for provider in providers_to_try:
-            try:
-                # Try different intervals and periods for better success rate
-                # Start with 5m interval as requested, fallback to others if needed
-                intervals_to_try = ["5m", "1m", "1d"]
-                periods_to_try = ["1d", "5d"]
-
-                for interval in intervals_to_try:
-                    for period in periods_to_try:
-                        try:
-                            data = get_ohlcv(ticker, period=period, interval=interval, provider=provider)
-                            if data is not None and not data.empty and 'Close' in data.columns:
-                                current_price = float(data['Close'].iloc[-1])
-                                _logger.debug("Got current price for %s from %s: $%.2f", ticker, provider, current_price)
-                                return current_price
-                        except Exception as e:
-                            _logger.debug("Failed to get price for %s with %s/%s/%s: %s", ticker, provider, period, interval, e)
-                            continue
-
-            except Exception as e:
-                _logger.debug("Provider %s failed for %s: %s", provider, ticker, e)
-                continue
-
-        _logger.warning("Could not get current price for %s from any provider", ticker)
-        return None
-
-    def _evaluate_legacy_price_alert(self, alert: Dict[str, Any], current_price: float) -> Tuple[bool, Dict[str, Any]]:
-        """Evaluate legacy price alert (simple threshold check)."""
-        try:
-            threshold = float(alert["price"])
-            condition = alert["condition"]
-
-            if condition == "above":
-                triggered = current_price > threshold
-            else:  # "below"
-                triggered = current_price < threshold
-
-            return triggered, {
-                "current_price": current_price,
-                "threshold": threshold,
-                "condition": condition,
-                "alert_type": "legacy_price"
-            }
-
-        except Exception as e:
-            return False, {"error": f"Error evaluating legacy price alert: {str(e)}"}
 
     async def trigger_rearm_alert(self, alert: Dict[str, Any], evaluation_details: Dict[str, Any]):
         """Trigger a re-arm alert notification."""
@@ -497,7 +261,7 @@ class AlertMonitor:
             message = self.rearm_evaluator.format_notification_message(config, evaluation_details)
             title = f"🚨 Price Alert: {ticker}"
 
-            # Get user info for email notification using service layer
+            # Get user info for notifications
             _logger.debug("Retrieving user status for rearm alert notification: user_id=%s, alert_id=%s", user_id, alert_id)
             user_status = self.telegram_service.get_user_status(str(user_id))
             user_email = user_status.get("email") if user_status and user_status.get("verified") else None
@@ -552,39 +316,190 @@ class AlertMonitor:
                             user_id, alert_id, e)
 
                 # Fallback: try to send via legacy method if service is down
-                success = await send_notification_via_api(
-                    user_id=user_id,
-                    message=message,
-                    title=title
-                )
-
-                if success:
-                    _logger.info("Re-arm alert #%d sent via fallback method for user %s: %s", alert_id, user_id, ticker)
-                else:
-                    _logger.error("Both notification service and fallback failed for re-arm alert user %s, alert #%d", user_id, alert_id)
+                await self._send_fallback_notification(user_id, message, title)
 
         except Exception as e:
             _logger.exception("Error triggering re-arm alert %s: ", alert.get("id"))
+
+    async def _notify_admin_of_error(self, alert: Dict[str, Any], error_message: str):
+        """Send error notification to admin(s) via notification service."""
+        try:
+            # Get all admin users using service layer
+            admin_users = []
+            all_users = self.telegram_service.list_users()
+            for user in all_users:
+                if user.get("is_admin"):
+                    admin_users.append(user["telegram_user_id"])
+
+            if not admin_users:
+                _logger.warning("No admin users found for error notification")
+                return
+
+            error_message_text = (
+                f"⚠️ Alert Evaluation Error\n\n"
+                f"Alert ID: #{alert.get('id')}\n"
+                f"Ticker: {alert.get('ticker')}\n"
+                f"User: {alert.get('user_id')}\n"
+                f"Error: {error_message}\n\n"
+                f"Please check the alert configuration and system logs."
+            )
+
+            # Send to all admins via notification service
+            for admin_id in admin_users:
+                try:
+                    await self.notification_client.send_error_notification_async(
+                        error_message=error_message_text,
+                        source="alert_monitor",
+                        channels=["telegram"],
+                        metadata={"telegram_chat_id": str(admin_id)}
+                    )
+                except NotificationServiceError as e:
+                    _logger.error("Failed to send error notification to admin %s via service: %s", admin_id, e)
+                    # Fallback to legacy method
+                    await self._send_fallback_notification(admin_id, error_message_text, "Alert System Error")
+
+            _logger.info("Error notification sent to %d admin(s) via notification service", len(admin_users))
+
+        except Exception as e:
+            _logger.error("Failed to send admin error notification: %s", e)
+
+    async def _send_fallback_notification(self, user_id: int, message: str, title: str):
+        """Fallback notification method when notification service is unavailable."""
+        try:
+            from src.telegram.screener.http_api_client import send_notification_via_api
+
+            success = await send_notification_via_api(
+                user_id=user_id,
+                message=message,
+                title=title
+            )
+
+            if success:
+                _logger.info("Fallback notification sent to user %s", user_id)
+            else:
+                _logger.error("Fallback notification failed for user %s", user_id)
+
+        except Exception as e:
+            _logger.error("Fallback notification error for user %s: %s", user_id, e)
+
+    def _format_price_alert_message(self, alert: Dict[str, Any], details: Dict[str, Any]) -> str:
+        """Format price alert message."""
+        ticker = alert["ticker"]
+        target_price = alert["price"]
+        condition = alert["condition"]
+        alert_id = alert["id"]
+        current_price = details.get("current_price", 0)
+
+        return (
+            f"🚨 Price Alert Triggered!\n\n"
+            f"Ticker: {ticker}\n"
+            f"Current Price: ${current_price:.2f}\n"
+            f"Alert: {condition} ${target_price:.2f}\n"
+            f"Alert ID: #{alert_id}"
+        )
+
+    def _format_indicator_alert_message(self, alert: Dict[str, Any], details: Dict[str, Any]) -> str:
+        """Format indicator alert message."""
+        ticker = alert["ticker"]
+        alert_id = alert["id"]
+        alert_action = alert.get("alert_action", "notify")
+        current_price = details.get("current_price", 0)
+        timeframe = alert.get("timeframe", "15m")
+
+        # Get alert summary
+        summary = self.evaluator.get_alert_summary(alert)
+
+        message = (
+            f"🚨 Indicator Alert Triggered!\n\n"
+            f"Ticker: {ticker}\n"
+            f"Current Price: ${current_price:.2f}\n"
+            f"Timeframe: {timeframe}\n"
+            f"Action: {alert_action}\n"
+            f"Alert ID: #{alert_id}\n\n"
+        )
+
+        if "indicators" in summary:
+            message += f"Indicators: {', '.join(summary['indicators'])}\n"
+            if "logic" in summary and summary["logic"] != "single":
+                message += f"Logic: {summary['logic']}\n"
+
+        # Add condition results if available
+        condition_results = details.get("condition_results", [])
+        if condition_results:
+            message += "\nCondition Results:\n"
+            for result in condition_results:
+                indicator = result.get("indicator", "Unknown")
+                result_status = "✅" if result.get("result") else "❌"
+                value = result.get("value", "N/A")
+                message += f"  {result_status} {indicator}: {value}\n"
+
+        return message
+
+    async def _get_current_price(self, ticker: str) -> Optional[float]:
+        """Get current price for ticker with fallback providers."""
+        providers_to_try = ["yf", "alpha_vantage", "polygon"]
+
+        for provider in providers_to_try:
+            try:
+                # Try different intervals and periods for better success rate
+                intervals_to_try = ["5m", "1m", "1d"]
+                periods_to_try = ["1d", "5d"]
+
+                for interval in intervals_to_try:
+                    for period in periods_to_try:
+                        try:
+                            data = get_ohlcv(ticker, period=period, interval=interval, provider=provider)
+                            if data is not None and not data.empty and 'Close' in data.columns:
+                                current_price = float(data['Close'].iloc[-1])
+                                _logger.debug("Got current price for %s from %s: $%.2f", ticker, provider, current_price)
+                                return current_price
+                        except Exception as e:
+                            _logger.debug("Failed to get price for %s with %s/%s/%s: %s", ticker, provider, period, interval, e)
+                            continue
+
+            except Exception as e:
+                _logger.debug("Provider %s failed for %s: %s", provider, ticker, e)
+                continue
+
+        _logger.warning("Could not get current price for %s from any provider", ticker)
+        return None
+
+    def _evaluate_legacy_price_alert(self, alert: Dict[str, Any], current_price: float) -> Tuple[bool, Dict[str, Any]]:
+        """Evaluate legacy price alert (simple threshold check)."""
+        try:
+            threshold = float(alert["price"])
+            condition = alert["condition"]
+
+            if condition == "above":
+                triggered = current_price > threshold
+            else:  # "below"
+                triggered = current_price < threshold
+
+            return triggered, {
+                "current_price": current_price,
+                "threshold": threshold,
+                "condition": condition,
+                "alert_type": "legacy_price"
+            }
+
+        except Exception as e:
+            return False, {"error": f"Error evaluating legacy price alert: {str(e)}"}
 
 
 async def main():
     """Main function to run the alert monitor as a standalone service."""
     try:
-        # Create HTTP API client
-        api_client = BotHttpApiClient()
-
-        # Create and start alert monitor with service layer dependency and notification service
-        monitor = AlertMonitor(
-            api_client=api_client,
-            telegram_service=db,
-            notification_service_url=os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8080")
+        # Create alert monitor with notification service
+        monitor = AlertMonitorV2(
+            notification_service_url="http://localhost:8080",
+            telegram_service=db
         )
         await monitor.start()
 
     except KeyboardInterrupt:
-        _logger.info("Alert monitor stopped by user")
+        _logger.info("Alert monitor V2 stopped by user")
     except Exception as e:
-        _logger.exception("Error in alert monitor main: ")
+        _logger.exception("Error in alert monitor V2 main: ")
 
 
 if __name__ == "__main__":

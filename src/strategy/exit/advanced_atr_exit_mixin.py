@@ -20,7 +20,7 @@ from collections import deque
 import numpy as np
 
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
-from src.strategy.indicator.wrappers import create_indicator_wrapper
+from src.indicators.adapters.backtrader_wrappers import UnifiedATRIndicator
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)

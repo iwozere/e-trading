@@ -1,244 +1,515 @@
 """
-Tests for NotificationServiceClient
-
-Tests the client functionality for interacting with the notification service.
+Unit tests for the notification service client.
 """
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from pathlib import Path
-import sys
+from unittest.mock import Mock, patch, AsyncMock
+import json
+from datetime import datetime
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
-
-from src.notification.service.client import (
-    NotificationServiceClient, MessageType, MessagePriority,
-    get_notification_client, initialize_notification_client
+from src.notification.client import (
+    NotificationServiceClient,
+    NotificationRequest,
+    NotificationResponse,
+    NotificationServiceError,
+    NotificationServiceUnavailableError,
+    CircuitBreaker,
+    CircuitBreakerState
 )
+from src.model.notification import NotificationType, NotificationPriority
+
+
+class TestCircuitBreaker:
+    """Test circuit breaker functionality."""
+
+    def test_initial_state(self):
+        """Test circuit breaker initial state."""
+        cb = CircuitBreaker()
+        assert cb.state == CircuitBreakerState.CLOSED
+        assert cb.failure_count == 0
+        assert cb.can_execute() is True
+
+    def test_failure_threshold(self):
+        """Test circuit breaker opens after failure threshold."""
+        cb = CircuitBreaker(failure_threshold=3)
+
+        # Record failures
+        for i in range(2):
+            cb.record_failure()
+            assert cb.state == CircuitBreakerState.CLOSED
+            assert cb.can_execute() is True
+
+        # Third failure should open circuit
+        cb.record_failure()
+        assert cb.state == CircuitBreakerState.OPEN
+        assert cb.can_execute() is False
+
+    def test_recovery_timeout(self):
+        """Test circuit breaker recovery after timeout."""
+        cb = CircuitBreaker(failure_threshold=2, recovery_timeout=1)
+
+        # Open circuit
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.state == CircuitBreakerState.OPEN
+
+        # Should still be open immediately
+        assert cb.can_execute() is False
+
+        # Mock time passage
+        import time
+        original_time = time.time
+        time.time = Mock(return_value=original_time() + 2)
+
+        try:
+            # Should transition to half-open
+            assert cb.can_execute() is True
+            assert cb.state == CircuitBreakerState.HALF_OPEN
+        finally:
+            time.time = original_time
+
+    def test_half_open_success(self):
+        """Test circuit breaker closes after successful half-open calls."""
+        cb = CircuitBreaker(failure_threshold=2, half_open_max_calls=2)
+
+        # Open circuit
+        cb.record_failure()
+        cb.record_failure()
+        cb.state = CircuitBreakerState.HALF_OPEN
+        cb.half_open_calls = 0
+
+        # First success
+        cb.record_success()
+        assert cb.state == CircuitBreakerState.HALF_OPEN
+
+        # Second success should close circuit
+        cb.record_success()
+        assert cb.state == CircuitBreakerState.CLOSED
+        assert cb.failure_count == 0
+
+
+class TestNotificationRequest:
+    """Test notification request data structure."""
+
+    def test_basic_request(self):
+        """Test basic notification request."""
+        request = NotificationRequest(
+            message_type="test",
+            priority="HIGH",
+            channels=["telegram"],
+            content={"text": "Hello"}
+        )
+
+        data = request.to_dict()
+        assert data["message_type"] == "test"
+        assert data["priority"] == "HIGH"
+        assert data["channels"] == ["telegram"]
+        assert data["content"] == {"text": "Hello"}
+
+    def test_optional_fields(self):
+        """Test notification request with optional fields."""
+        scheduled_for = datetime.now()
+        request = NotificationRequest(
+            message_type="test",
+            recipient_id="user123",
+            template_name="alert_template",
+            scheduled_for=scheduled_for
+        )
+
+        data = request.to_dict()
+        assert data["recipient_id"] == "user123"
+        assert data["template_name"] == "alert_template"
+        assert data["scheduled_for"] == scheduled_for.isoformat()
 
 
 class TestNotificationServiceClient:
-    """Test cases for NotificationServiceClient."""
+    """Test notification service client."""
 
-    @pytest.fixture
-    def client(self):
-        """Create a test client instance."""
-        return NotificationServiceClient(
-            service_url="http://localhost:8000",
+    def setup_method(self):
+        """Setup test client."""
+        self.client = NotificationServiceClient(
+            base_url="http://test-service:8080",
             timeout=10,
-            max_retries=2
+            circuit_breaker_enabled=False  # Disable for testing
         )
 
-    @pytest.mark.asyncio
-    async def test_client_initialization(self, client):
-        """Test client initialization."""
-        assert client.service_url == "http://localhost:8000"
-        assert client.timeout.total == 10
-        assert client.max_retries == 2
-        assert client._session is None
+    def teardown_method(self):
+        """Cleanup test client."""
+        self.client.close()
 
-    @pytest.mark.asyncio
-    async def test_send_notification_success(self, client):
+    @patch('requests.Session.post')
+    def test_send_notification_success(self, mock_post):
         """Test successful notification sending."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
             "message_id": 123,
             "status": "enqueued",
             "channels": ["telegram"],
-            "priority": "normal"
-        })
+            "priority": "NORMAL"
+        }
+        mock_post.return_value = mock_response
 
-        with patch('aiohttp.ClientSession.request') as mock_request:
-            mock_request.return_value.__aenter__.return_value = mock_response
+        # Send notification
+        response = self.client.send_notification(
+            notification_type=NotificationType.INFO,
+            title="Test Alert",
+            message="This is a test message",
+            channels=["telegram"]
+        )
 
-            success = await client.send_notification(
-                notification_type=MessageType.ALERT,
-                title="Test Alert",
-                message="This is a test alert",
-                priority=MessagePriority.HIGH,
-                channels=["telegram"],
-                recipient_id="test_user"
-            )
+        # Verify response
+        assert isinstance(response, NotificationResponse)
+        assert response.message_id == 123
+        assert response.status == "enqueued"
+        assert response.channels == ["telegram"]
+        assert response.priority == "NORMAL"
 
-            assert success is True
-            mock_request.assert_called_once()
+        # Verify request
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["message_type"] == "info"
+        assert call_args[1]["json"]["content"]["text"] == "This is a test message"
+        assert call_args[1]["json"]["content"]["subject"] == "Test Alert"
 
-    @pytest.mark.asyncio
-    async def test_send_notification_failure(self, client):
-        """Test notification sending failure."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.text = AsyncMock(return_value="Internal Server Error")
-
-        with patch('aiohttp.ClientSession.request') as mock_request:
-            mock_request.return_value.__aenter__.return_value = mock_response
-
-            success = await client.send_notification(
-                notification_type=MessageType.ERROR,
-                title="Test Error",
-                message="This is a test error",
-                priority=MessagePriority.CRITICAL
-            )
-
-            assert success is False
-
-    @pytest.mark.asyncio
-    async def test_send_trade_notification(self, client):
-        """Test trade notification sending."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={
+    @patch('requests.Session.post')
+    def test_send_notification_with_attachments(self, mock_post):
+        """Test notification with attachments."""
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
             "message_id": 124,
-            "status": "enqueued"
-        })
+            "status": "enqueued",
+            "channels": ["email"],
+            "priority": "HIGH"
+        }
+        mock_post.return_value = mock_response
 
-        with patch('aiohttp.ClientSession.request') as mock_request:
-            mock_request.return_value.__aenter__.return_value = mock_response
+        # Send notification with attachments
+        attachments = {"chart.png": b"fake_image_data"}
+        response = self.client.send_notification(
+            notification_type=NotificationType.TRADE_ENTRY,
+            title="Trade Alert",
+            message="New trade executed",
+            priority=NotificationPriority.HIGH,
+            channels=["email"],
+            attachments=attachments
+        )
 
-            success = await client.send_trade_notification(
-                symbol="BTCUSDT",
-                side="BUY",
-                price=50000.0,
-                quantity=0.1,
-                recipient_id="trader_1"
-            )
+        # Verify response
+        assert response.message_id == 124
+        assert response.priority == "HIGH"
 
-            assert success is True
+        # Verify request includes attachments
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["content"]["attachments"] == attachments
 
-    @pytest.mark.asyncio
-    async def test_send_error_notification(self, client):
-        """Test error notification sending."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={
+    @patch('requests.Session.post')
+    def test_send_notification_backward_compatibility(self, mock_post):
+        """Test backward compatibility with old parameters."""
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
             "message_id": 125,
-            "status": "enqueued"
-        })
+            "status": "enqueued",
+            "channels": ["telegram"],
+            "priority": "NORMAL"
+        }
+        mock_post.return_value = mock_response
 
-        with patch('aiohttp.ClientSession.request') as mock_request:
-            mock_request.return_value.__aenter__.return_value = mock_response
+        # Send notification with old-style parameters
+        response = self.client.send_notification(
+            notification_type="info",
+            title="Test",
+            message="Test message",
+            telegram_chat_id=12345,
+            reply_to_message_id=67890,
+            email_receiver="test@example.com"
+        )
 
-            success = await client.send_error_notification(
-                error_message="Database connection failed",
-                source="trading_service",
-                recipient_id="admin"
-            )
+        # Verify response
+        assert response.message_id == 125
 
-            assert success is True
+        # Verify backward compatibility parameters are handled
+        call_args = mock_post.call_args
+        metadata = call_args[1]["json"]["metadata"]
+        assert metadata["telegram_chat_id"] == 12345
+        assert metadata["reply_to_message_id"] == 67890
+        assert call_args[1]["json"]["recipient_id"] == "test@example.com"
 
-    @pytest.mark.asyncio
-    async def test_get_message_status(self, client):
-        """Test getting message status."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={
-            "id": 123,
-            "status": "delivered",
-            "created_at": "2024-01-01T00:00:00Z"
-        })
+    @patch('requests.Session.post')
+    def test_send_trade_notification(self, mock_post):
+        """Test trade notification sending."""
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "message_id": 126,
+            "status": "enqueued",
+            "channels": ["telegram"],
+            "priority": "HIGH"
+        }
+        mock_post.return_value = mock_response
 
-        with patch('aiohttp.ClientSession.request') as mock_request:
-            mock_request.return_value.__aenter__.return_value = mock_response
+        # Send trade notification
+        response = self.client.send_trade_notification(
+            symbol="BTCUSDT",
+            side="BUY",
+            price=50000.0,
+            quantity=0.1,
+            pnl=5.5
+        )
 
-            status = await client.get_message_status(123)
+        # Verify response
+        assert response.message_id == 126
+        assert response.priority == "HIGH"
 
-            assert status is not None
-            assert status["id"] == 123
-            assert status["status"] == "delivered"
+        # Verify request content
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["message_type"] == "trade_entry"
+        assert "Buy 0.1 BTCUSDT at 50000.0" in call_args[1]["json"]["content"]["text"]
 
-    @pytest.mark.asyncio
-    async def test_get_message_status_not_found(self, client):
-        """Test getting status for non-existent message."""
-        mock_response = MagicMock()
-        mock_response.status = 404
+        metadata = call_args[1]["json"]["metadata"]
+        assert metadata["symbol"] == "BTCUSDT"
+        assert metadata["side"] == "BUY"
+        assert metadata["pnl"] == 5.5
 
-        with patch('aiohttp.ClientSession.request') as mock_request:
-            mock_request.return_value.__aenter__.return_value = mock_response
+    @patch('requests.Session.post')
+    def test_send_error_notification(self, mock_post):
+        """Test error notification sending."""
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "message_id": 127,
+            "status": "enqueued",
+            "channels": ["telegram", "email"],
+            "priority": "CRITICAL"
+        }
+        mock_post.return_value = mock_response
 
-            status = await client.get_message_status(999)
+        # Send error notification
+        response = self.client.send_error_notification(
+            error_message="Database connection failed",
+            source="trading_engine"
+        )
 
-            assert status is None
+        # Verify response
+        assert response.message_id == 127
+        assert response.priority == "CRITICAL"
 
-    @pytest.mark.asyncio
-    async def test_get_health_status(self, client):
-        """Test getting service health status."""
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={
-            "status": "healthy",
-            "service": "notification-service",
-            "version": "1.0.0"
-        })
+        # Verify request content
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["message_type"] == "error"
+        assert call_args[1]["json"]["content"]["text"] == "Database connection failed"
+        assert call_args[1]["json"]["content"]["subject"] == "Error Alert"
 
-        with patch('aiohttp.ClientSession.request') as mock_request:
-            mock_request.return_value.__aenter__.return_value = mock_response
+        metadata = call_args[1]["json"]["metadata"]
+        assert metadata["source"] == "trading_engine"
 
-            health = await client.get_health_status()
+    @patch('requests.Session.post')
+    def test_send_notification_http_error(self, mock_post):
+        """Test notification sending with HTTP error."""
+        # Mock HTTP error
+        import requests
+        mock_post.side_effect = requests.exceptions.RequestException("Connection failed")
 
-            assert health["status"] == "healthy"
-            assert health["service"] == "notification-service"
-
-    @pytest.mark.asyncio
-    async def test_context_manager(self):
-        """Test client as context manager."""
-        async with NotificationServiceClient() as client:
-            assert client is not None
-            # Session should be created when needed
-            session = await client._get_session()
-            assert session is not None
-
-        # Session should be closed after context exit
-        assert client._session.closed
-
-    @pytest.mark.asyncio
-    async def test_retry_mechanism(self, client):
-        """Test retry mechanism on failures."""
-        # First two calls fail, third succeeds
-        mock_responses = [
-            Exception("Connection error"),
-            Exception("Timeout error"),
-            MagicMock(status=200, json=AsyncMock(return_value={"message_id": 123}))
-        ]
-
-        with patch('aiohttp.ClientSession.request') as mock_request:
-            mock_request.side_effect = mock_responses
-
-            success = await client.send_notification(
-                notification_type=MessageType.INFO,
+        # Send notification should raise error
+        with pytest.raises(NotificationServiceError) as exc_info:
+            self.client.send_notification(
+                notification_type=NotificationType.INFO,
                 title="Test",
                 message="Test message"
             )
 
-            assert success is True
-            assert mock_request.call_count == 3
+        assert "Failed to send notification" in str(exc_info.value)
+
+    @patch('requests.Session.get')
+    def test_get_message_status(self, mock_get):
+        """Test getting message status."""
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "id": 123,
+            "status": "DELIVERED",
+            "created_at": "2023-01-01T00:00:00Z"
+        }
+        mock_get.return_value = mock_response
+
+        # Get message status
+        status = self.client.get_message_status(123)
+
+        # Verify response
+        assert status["id"] == 123
+        assert status["status"] == "DELIVERED"
+
+        # Verify request
+        mock_get.assert_called_once_with(
+            "http://test-service:8080/api/v1/messages/123/status",
+            timeout=10
+        )
+
+    @patch('requests.Session.get')
+    def test_health_check(self, mock_get):
+        """Test health check."""
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "status": "healthy",
+            "service": "notification-service",
+            "version": "1.0.0"
+        }
+        mock_get.return_value = mock_response
+
+        # Perform health check
+        health = self.client.health_check()
+
+        # Verify response
+        assert health["status"] == "healthy"
+        assert health["service"] == "notification-service"
+
+        # Verify request
+        mock_get.assert_called_once_with(
+            "http://test-service:8080/api/v1/health",
+            timeout=10
+        )
+
+    def test_circuit_breaker_integration(self):
+        """Test circuit breaker integration."""
+        # Create client with circuit breaker enabled
+        client = NotificationServiceClient(
+            base_url="http://test-service:8080",
+            circuit_breaker_enabled=True
+        )
+
+        try:
+            # Open circuit breaker manually
+            client.circuit_breaker.state = CircuitBreakerState.OPEN
+
+            # Should raise unavailable error
+            with pytest.raises(NotificationServiceUnavailableError):
+                client.send_notification(
+                    notification_type=NotificationType.INFO,
+                    title="Test",
+                    message="Test message"
+                )
+        finally:
+            client.close()
+
+
+class TestAsyncNotificationServiceClient:
+    """Test async notification service client methods."""
+
+    def setup_method(self):
+        """Setup test client."""
+        self.client = NotificationServiceClient(
+            base_url="http://test-service:8080",
+            timeout=10,
+            circuit_breaker_enabled=False
+        )
+
+    async def teardown_method(self):
+        """Cleanup test client."""
+        await self.client.close_async()
 
     @pytest.mark.asyncio
-    async def test_global_client_management(self):
-        """Test global client initialization and access."""
-        # Initially no client
-        assert get_notification_client() is None
+    @patch('aiohttp.ClientSession.post')
+    async def test_send_notification_async_success(self, mock_post):
+        """Test successful async notification sending."""
+        # Mock successful response
+        mock_response = AsyncMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "message_id": 128,
+            "status": "enqueued",
+            "channels": ["telegram"],
+            "priority": "NORMAL"
+        }
 
-        # Initialize global client
-        client = await initialize_notification_client("http://test:8000")
-        assert client is not None
-        assert get_notification_client() is client
+        # Mock context manager
+        mock_post.return_value.__aenter__.return_value = mock_response
+        mock_post.return_value.__aexit__.return_value = None
 
-        # Reinitialize should close previous client
-        new_client = await initialize_notification_client("http://test2:8000")
-        assert new_client is not client
-        assert get_notification_client() is new_client
+        # Send notification
+        response = await self.client.send_notification_async(
+            notification_type=NotificationType.INFO,
+            title="Test Alert",
+            message="This is a test message",
+            channels=["telegram"]
+        )
 
-    def test_compatibility_methods(self, client):
-        """Test AsyncNotificationManager compatibility methods."""
-        # These should not raise exceptions
-        asyncio.run(client.start())
-        asyncio.run(client.stop())
+        # Verify response
+        assert isinstance(response, NotificationResponse)
+        assert response.message_id == 128
+        assert response.status == "enqueued"
 
-        stats = client.get_stats()
-        assert "service_url" in stats
-        assert "timeout" in stats
-        assert "max_retries" in stats
+    @pytest.mark.asyncio
+    @patch('aiohttp.ClientSession.post')
+    async def test_send_trade_notification_async(self, mock_post):
+        """Test async trade notification sending."""
+        # Mock successful response
+        mock_response = AsyncMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "message_id": 129,
+            "status": "enqueued",
+            "channels": ["telegram"],
+            "priority": "HIGH"
+        }
+
+        mock_post.return_value.__aenter__.return_value = mock_response
+        mock_post.return_value.__aexit__.return_value = None
+
+        # Send trade notification
+        response = await self.client.send_trade_notification_async(
+            symbol="ETHUSDT",
+            side="SELL",
+            price=3000.0,
+            quantity=1.0,
+            pnl=-2.1,
+            exit_type="SL"
+        )
+
+        # Verify response
+        assert response.message_id == 129
+        assert response.priority == "HIGH"
+
+    @pytest.mark.asyncio
+    @patch('aiohttp.ClientSession.get')
+    async def test_get_message_status_async(self, mock_get):
+        """Test async message status retrieval."""
+        # Mock successful response
+        mock_response = AsyncMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "id": 130,
+            "status": "DELIVERED"
+        }
+
+        mock_get.return_value.__aenter__.return_value = mock_response
+        mock_get.return_value.__aexit__.return_value = None
+
+        # Get message status
+        status = await self.client.get_message_status_async(130)
+
+        # Verify response
+        assert status["id"] == 130
+        assert status["status"] == "DELIVERED"
+
+    @pytest.mark.asyncio
+    async def test_context_manager_async(self):
+        """Test async context manager."""
+        async with NotificationServiceClient() as client:
+            assert client is not None
+            # Client should be properly initialized
+            assert client.base_url == "http://localhost:8080"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

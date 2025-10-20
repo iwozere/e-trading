@@ -20,7 +20,7 @@ Parameters:
 from typing import Any, Dict, Optional
 import backtrader as bt
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
-from src.strategy.indicator.wrappers import create_indicator_wrapper
+from src.indicators.adapters.backtrader_wrappers import UnifiedATRIndicator
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -62,19 +62,14 @@ class SimpleATRExitMixin(BaseExitMixin):
         try:
             atr_period = self.get_param("x_atr_period")
 
-            if self.strategy.use_talib:
-                atr_raw = bt.talib.ATR(
-                    self.strategy.data.high,
-                    self.strategy.data.low,
-                    self.strategy.data.close,
-                    timeperiod=atr_period
-                )
-            else:
-                atr_raw = bt.indicators.ATR(
-                    self.strategy.data, period=atr_period
-                )
+            # Create unified ATR indicator directly
+            backend = "bt-talib" if self.strategy.use_talib else "bt"
 
-            self.atr = create_indicator_wrapper(atr_raw, 'atr', self.strategy.use_talib)
+            self.atr = UnifiedATRIndicator(
+                self.strategy.data,
+                period=atr_period,
+                backend=backend
+            )
             self.register_indicator(self.atr_name, self.atr)
 
         except Exception as e:
@@ -95,7 +90,7 @@ class SimpleATRExitMixin(BaseExitMixin):
 
         # Calculate initial stop based on ATR
         if self.atr_name in self.indicators:
-            atr_value = self.atr[0]
+            atr_value = self.atr.atr[0]
             if atr_value is not None and atr_value > 0:
                 atr_multiplier = self.get_param("x_atr_multiplier")
 
@@ -122,7 +117,7 @@ class SimpleATRExitMixin(BaseExitMixin):
 
         try:
             current_price = self.strategy.data.close[0]
-            atr_value = self.atr[0]
+            atr_value = self.atr.atr[0]
 
             if current_price is None or atr_value is None or atr_value <= 0:
                 return False

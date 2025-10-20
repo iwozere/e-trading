@@ -1,950 +1,640 @@
-# PostgreSQL Schema — `public` (converted to Markdown)
+# Database Schema Documentation
 
-This document is a Markdown conversion of the provided SQL DDL. It includes schema creation, sequences, tables, indexes, constraints, comments and functions. SQL blocks are preserved for easy copy/paste.
+## Schema Information
 
----
-
-## Schema
-
-```sql
--- DROP SCHEMA public;
-
-CREATE SCHEMA public AUTHORIZATION pg_database_owner;
-
-COMMENT ON SCHEMA public IS 'standard public schema';
-```
-
----
-
-## Sequences
-
-```sql
--- DROP SEQUENCE public.job_schedules_id_seq;
-
-CREATE SEQUENCE public.job_schedules_id_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.telegram_broadcast_logs_id_seq1;
-
-CREATE SEQUENCE public.telegram_broadcast_logs_id_seq1
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.telegram_command_audits_id_seq1;
-
-CREATE SEQUENCE public.telegram_command_audits_id_seq1
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.telegram_feedbacks_id_seq1;
-
-CREATE SEQUENCE public.telegram_feedbacks_id_seq1
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.trading_bots_id_seq;
-
-CREATE SEQUENCE public.trading_bots_id_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.trading_performance_metrics_id_seq;
-
-CREATE SEQUENCE public.trading_performance_metrics_id_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.trading_positions_id_seq;
-
-CREATE SEQUENCE public.trading_positions_id_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.trading_trades_id_seq;
-
-CREATE SEQUENCE public.trading_trades_id_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.usr_auth_identities_id_seq;
-
-CREATE SEQUENCE public.usr_auth_identities_id_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.usr_users_id_seq;
-
-CREATE SEQUENCE public.usr_users_id_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.usr_verification_codes_id_seq;
-
-CREATE SEQUENCE public.usr_verification_codes_id_seq
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.webui_audit_logs_id_seq1;
-
-CREATE SEQUENCE public.webui_audit_logs_id_seq1
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.webui_performance_snapshots_id_seq1;
-
-CREATE SEQUENCE public.webui_performance_snapshots_id_seq1
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.webui_strategy_templates_id_seq1;
-
-CREATE SEQUENCE public.webui_strategy_templates_id_seq1
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-
--- DROP SEQUENCE public.webui_system_config_id_seq1;
-
-CREATE SEQUENCE public.webui_system_config_id_seq1
-    INCREMENT BY 1
-    MINVALUE 1
-    MAXVALUE 2147483647
-    START 1
-    CACHE 1
-    NO CYCLE;
-```
+**Schema:** `public`  
+**Owner:** `pg_database_owner`  
+**Description:** standard public schema
 
 ---
 
 ## Tables
 
-### `job_schedules`
+### User Management
 
-```sql
--- public.job_schedules definition
+#### `usr_users`
+User accounts and authentication
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | User ID |
+| email | varchar(100) | | User email address |
+| role | varchar(20) | NOT NULL, DEFAULT 'trader' | User role |
+| is_active | bool | DEFAULT true | Account active status |
+| created_at | timestamptz | DEFAULT now() | Account creation timestamp |
+| updated_at | timestamp | | Last update timestamp |
+| last_login | timestamp | | Last login timestamp |
 
--- DROP TABLE public.job_schedules;
+**Indexes:**
+- `ix_users_email` on (email)
 
-CREATE TABLE public.job_schedules (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  user_id int4 NOT NULL,
-  "name" varchar(255) NOT NULL,
-  job_type varchar(50) NOT NULL,
-  "target" varchar(255) NOT NULL,
-  task_params jsonb DEFAULT '{}'::jsonb NOT NULL,
-  cron varchar(100) NOT NULL,
-  enabled bool DEFAULT true NOT NULL,
-  next_run_at timestamptz NULL,
-  created_at timestamptz DEFAULT now() NOT NULL,
-  updated_at timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT job_schedules_pkey PRIMARY KEY (id)
-);
-```
+#### `usr_auth_identities`
+OAuth and external authentication identities
 
----
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Identity ID |
+| user_id | int4 | NOT NULL, FK → usr_users(id) ON DELETE CASCADE | Associated user |
+| provider | varchar(32) | NOT NULL | Auth provider name |
+| external_id | varchar(255) | NOT NULL | External provider user ID |
+| metadata | jsonb | | Additional provider data |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
 
-### `telegram_broadcast_logs`
+**Indexes:**
+- `ix_auth_identities_provider` on (provider)
+- `ix_auth_identities_user_id` on (user_id)
 
-```sql
--- public.telegram_broadcast_logs definition
+#### `usr_verification_codes`
+User verification codes for authentication
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Code ID |
+| user_id | int4 | NOT NULL, FK → usr_users(id) ON DELETE CASCADE | Associated user |
+| code | varchar(32) | NOT NULL | Verification code |
+| sent_time | int4 | NOT NULL | Unix timestamp when sent |
+| provider | varchar(20) | DEFAULT 'telegram' | Delivery provider |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
 
--- DROP TABLE public.telegram_broadcast_logs;
-
-CREATE TABLE public.telegram_broadcast_logs (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  message text NOT NULL,
-  sent_by varchar(255) NOT NULL,
-  success_count int4 NULL,
-  total_count int4 NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  CONSTRAINT telegram_broadcast_logs_pkey PRIMARY KEY (id)
-);
-```
+**Indexes:**
+- `ix_verification_codes_user_id` on (user_id)
 
 ---
 
-### `telegram_command_audits`
+### Trading System
 
-```sql
--- public.telegram_command_audits definition
+#### `trading_bots`
+Trading bot configurations and status
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Bot ID |
+| user_id | int4 | NOT NULL, FK → usr_users(id) ON DELETE CASCADE | Bot owner |
+| type | varchar(20) | NOT NULL | Bot type |
+| status | varchar(20) | NOT NULL | Current status |
+| config | jsonb | NOT NULL | Bot configuration |
+| description | text | | Bot description (defined by trader) |
+| started_at | timestamp | | Start time |
+| last_heartbeat | timestamp | | Last heartbeat timestamp |
+| error_count | int4 | | Number of errors encountered |
+| current_balance | numeric(20,8) | | Current balance |
+| total_pnl | numeric(20,8) | | Total profit/loss |
+| extra_metadata | jsonb | | Additional metadata |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
+| updated_at | timestamp | | Last update timestamp |
 
--- DROP TABLE public.telegram_command_audits;
+**Triggers:**
+- `update_bots_updated_at` - Updates updated_at on row modification
 
-CREATE TABLE public.telegram_command_audits (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  telegram_user_id varchar(255) NOT NULL,
-  command varchar(255) NOT NULL,
-  full_message text NULL,
-  is_registered_user bool NULL,
-  user_email varchar(255) NULL,
-  success bool NULL,
-  error_message text NULL,
-  response_time_ms int4 NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  CONSTRAINT telegram_command_audits_pkey PRIMARY KEY (id)
-);
-CREATE INDEX ix_telegram_command_audits_command ON public.telegram_command_audits USING btree (command);
-CREATE INDEX ix_telegram_command_audits_created ON public.telegram_command_audits USING btree (created_at);
-CREATE INDEX ix_telegram_command_audits_success ON public.telegram_command_audits USING btree (success);
-CREATE INDEX ix_telegram_command_audits_telegram_user_id ON public.telegram_command_audits USING btree (telegram_user_id);
-```
+#### `trading_positions`
+Open and closed trading positions
 
----
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Position ID |
+| bot_id | int4 | NOT NULL, FK → trading_bots(id) ON DELETE CASCADE | Associated bot |
+| trade_type | varchar(10) | NOT NULL | Trade type |
+| symbol | varchar(20) | NOT NULL | Trading symbol |
+| direction | varchar(10) | NOT NULL | Position direction (LONG/SHORT) |
+| opened_at | timestamp | | Position open time |
+| closed_at | timestamp | | Position close time |
+| qty_open | numeric(20,8) | NOT NULL, DEFAULT 0 | Open quantity |
+| avg_price | numeric(20,8) | | Average entry price |
+| realized_pnl | numeric(20,8) | DEFAULT 0 | Realized profit/loss |
+| status | varchar(12) | NOT NULL | Position status |
+| extra_metadata | jsonb | | Additional metadata |
 
-### `telegram_settings`
+**Indexes:**
+- `ix_trading_positions_bot_id` on (bot_id)
+- `ix_trading_positions_symbol` on (symbol)
 
-```sql
--- public.telegram_settings definition
+#### `trading_trades`
+Individual trade records
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Trade ID |
+| bot_id | int4 | NOT NULL, FK → trading_bots(id) ON DELETE CASCADE | Associated bot |
+| position_id | int4 | FK → trading_positions(id) ON DELETE SET NULL | Associated position |
+| trade_type | varchar(10) | NOT NULL | Trade type |
+| strategy_name | varchar(100) | | Strategy name |
+| entry_logic_name | varchar(100) | NOT NULL | Entry logic identifier |
+| exit_logic_name | varchar(100) | NOT NULL | Exit logic identifier |
+| symbol | varchar(20) | NOT NULL | Trading symbol |
+| interval | varchar(10) | NOT NULL | Time interval |
+| direction | varchar(10) | NOT NULL | Trade direction |
+| entry_time | timestamp | | Entry timestamp |
+| exit_time | timestamp | | Exit timestamp |
+| buy_order_created | timestamp | | Buy order creation time |
+| buy_order_closed | timestamp | | Buy order close time |
+| sell_order_created | timestamp | | Sell order creation time |
+| sell_order_closed | timestamp | | Sell order close time |
+| entry_price | numeric(20,8) | | Entry price |
+| exit_price | numeric(20,8) | | Exit price |
+| entry_value | numeric(20,8) | | Entry value |
+| exit_value | numeric(20,8) | | Exit value |
+| size | numeric(20,8) | | Trade size |
+| commission | numeric(20,8) | | Trading commission |
+| gross_pnl | numeric(20,8) | | Gross profit/loss |
+| net_pnl | numeric(20,8) | | Net profit/loss |
+| pnl_percentage | numeric(10,4) | | PnL percentage |
+| exit_reason | varchar(100) | | Reason for exit |
+| status | varchar(20) | NOT NULL | Trade status |
+| extra_metadata | jsonb | | Additional metadata |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
+| updated_at | timestamp | | Last update timestamp |
 
--- DROP TABLE public.telegram_settings;
+**Indexes:**
+- `ix_trading_trades_bot_id` on (bot_id)
+- `ix_trading_trades_entry_time` on (entry_time)
+- `ix_trading_trades_status` on (status)
+- `ix_trading_trades_strategy_name` on (strategy_name)
+- `ix_trading_trades_symbol` on (symbol)
+- `ix_trading_trades_trade_type` on (trade_type)
 
-CREATE TABLE public.telegram_settings (
-  "key" varchar(100) NOT NULL,
-  value text NULL,
-  CONSTRAINT telegram_settings_pkey PRIMARY KEY ("key")
-);
-```
+#### `trading_performance_metrics`
+Performance metrics for trading strategies
 
----
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Metric ID |
+| bot_id | int4 | NOT NULL, FK → trading_bots(id) ON DELETE CASCADE | Associated bot |
+| trade_type | varchar(10) | NOT NULL | Trade type |
+| symbol | varchar(20) | | Trading symbol |
+| interval | varchar(10) | | Time interval |
+| entry_logic_name | varchar(100) | | Entry logic identifier |
+| exit_logic_name | varchar(100) | | Exit logic identifier |
+| metrics | jsonb | NOT NULL | Performance metrics data |
+| calculated_at | timestamp | | Calculation timestamp |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
 
-### `usr_users`
-
-```sql
--- public.usr_users definition
-
--- Drop table
-
--- DROP TABLE public.usr_users;
-
-CREATE TABLE public.usr_users (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  email varchar(100) NULL,
-  "role" varchar(20) DEFAULT 'trader'::character varying NOT NULL,
-  is_active bool DEFAULT true NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  updated_at timestamp NULL,
-  last_login timestamp NULL,
-  CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-CREATE INDEX ix_users_email ON public.usr_users USING btree (email);
-COMMENT ON TABLE public.usr_users IS 'User accounts and authentication';
-```
-
----
-
-### `webui_performance_snapshots`
-
-```sql
--- public.webui_performance_snapshots definition
-
--- Drop table
-
--- DROP TABLE public.webui_performance_snapshots;
-
-CREATE TABLE public.webui_performance_snapshots (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  strategy_id varchar(100) NOT NULL,
-  "timestamp" timestamptz DEFAULT now() NULL,
-  pnl jsonb NOT NULL,
-  positions jsonb NULL,
-  trades_count int4 DEFAULT 0 NULL,
-  win_rate jsonb NULL,
-  drawdown jsonb NULL,
-  metrics jsonb NULL,
-  CONSTRAINT webui_performance_snapshots_pkey PRIMARY KEY (id)
-);
-CREATE INDEX ix_webui_performance_snapshots_strategy_id ON public.webui_performance_snapshots USING btree (strategy_id);
-```
-
----
-
-### `webui_system_config`
-
-```sql
--- public.webui_system_config definition
-
--- Drop table
-
--- DROP TABLE public.webui_system_config;
-
-CREATE TABLE public.webui_system_config (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  "key" varchar(100) NOT NULL,
-  value jsonb NOT NULL,
-  description text NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  updated_at timestamp NULL,
-  CONSTRAINT webui_system_config_pkey PRIMARY KEY (id)
-);
-```
+**Indexes:**
+- `ix_trading_performance_metrics_bot_id` on (bot_id)
+- `ix_trading_performance_metrics_calculated_at` on (calculated_at)
+- `ix_trading_performance_metrics_symbol` on (symbol)
 
 ---
 
-### `job_schedule_runs`
+### Messaging System
 
-```sql
--- public.job_schedule_runs definition
+#### `msg_messages`
+Notification messages queue with priority and retry support
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | bigserial | PRIMARY KEY | Message ID |
+| message_type | varchar(50) | NOT NULL | Type of message |
+| priority | varchar(20) | NOT NULL, DEFAULT 'NORMAL', CHECK (LOW/NORMAL/HIGH/CRITICAL) | Message priority |
+| channels | _text | NOT NULL | Delivery channels array |
+| recipient_id | varchar(100) | | Recipient identifier |
+| template_name | varchar(100) | | Template name |
+| content | jsonb | NOT NULL | Message content |
+| metadata | jsonb | | Additional metadata |
+| status | varchar(20) | NOT NULL, DEFAULT 'PENDING', CHECK (PENDING/PROCESSING/DELIVERED/FAILED/CANCELLED) | Message status |
+| scheduled_for | timestamptz | DEFAULT now() | Scheduled delivery time |
+| retry_count | int4 | NOT NULL, DEFAULT 0, CHECK (≥ 0) | Current retry count |
+| max_retries | int4 | NOT NULL, DEFAULT 3, CHECK (≥ 0) | Maximum retry attempts |
+| last_error | text | | Last error message |
+| processed_at | timestamptz | | Processing timestamp |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
 
--- DROP TABLE public.job_schedule_runs;
+**Indexes:**
+- `idx_msg_messages_created` on (created_at)
+- `idx_msg_messages_pending_priority` on (status, scheduled_for, priority) WHERE status = 'PENDING'
+- `idx_msg_messages_priority` on (priority)
+- `idx_msg_messages_recipient` on (recipient_id)
+- `idx_msg_messages_retry_eligible` on (status, retry_count, max_retries, processed_at) WHERE status = 'FAILED'
+- `idx_msg_messages_scheduled` on (scheduled_for)
+- `idx_msg_messages_status` on (status)
+- `idx_msg_messages_type` on (message_type)
 
-CREATE TABLE public.job_schedule_runs (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  job_type text NOT NULL,
-  job_id int4 NULL,
-  user_id int8 NULL,
-  status text NULL,
-  scheduled_for timestamptz NULL,
-  enqueued_at timestamptz DEFAULT now() NULL,
-  started_at timestamptz NULL,
-  finished_at timestamptz NULL,
-  job_snapshot jsonb NULL,
-  "result" jsonb NULL,
-  "error" text NULL,
-  CONSTRAINT job_schedule_runs_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.job_schedules(id) ON DELETE CASCADE
-);
-CREATE UNIQUE INDEX ux_runs_job_scheduled_for ON public.job_schedule_runs USING btree (job_type, job_id, scheduled_for);
-```
+#### `msg_delivery_status`
+Per-channel delivery status tracking for each message
 
----
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | bigserial | PRIMARY KEY | Status ID |
+| message_id | int8 | NOT NULL, FK → msg_messages(id) ON DELETE CASCADE | Associated message |
+| channel | varchar(50) | NOT NULL | Delivery channel |
+| status | varchar(20) | NOT NULL, CHECK (PENDING/SENT/DELIVERED/FAILED/BOUNCED) | Delivery status |
+| delivered_at | timestamptz | | Delivery timestamp |
+| response_time_ms | int4 | CHECK (≥ 0) | Response time in milliseconds |
+| error_message | text | | Error message if failed |
+| external_id | varchar(255) | | External provider message ID |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
 
-### `telegram_feedbacks`
+**Indexes:**
+- `idx_delivery_status_channel` on (channel)
+- `idx_delivery_status_composite` on (message_id, channel, status)
+- `idx_delivery_status_delivered` on (delivered_at)
+- `idx_delivery_status_message` on (message_id)
+- `idx_delivery_status_status` on (status)
 
-```sql
--- public.telegram_feedbacks definition
+#### `msg_channel_configs`
+Channel plugin configuration and settings
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | bigserial | PRIMARY KEY | Config ID |
+| channel | varchar(50) | NOT NULL, UNIQUE | Channel name |
+| enabled | bool | NOT NULL, DEFAULT true | Channel enabled status |
+| config | jsonb | NOT NULL | Channel configuration |
+| rate_limit_per_minute | int4 | NOT NULL, DEFAULT 60, CHECK (> 0) | Rate limit per minute |
+| max_retries | int4 | NOT NULL, DEFAULT 3, CHECK (≥ 0) | Maximum retry attempts |
+| timeout_seconds | int4 | NOT NULL, DEFAULT 30, CHECK (> 0) | Request timeout in seconds |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
+| updated_at | timestamptz | DEFAULT now() | Last update timestamp |
 
--- DROP TABLE public.telegram_feedbacks;
+**Indexes:**
+- `idx_channel_configs_enabled` on (enabled)
+- `idx_channel_configs_updated` on (updated_at)
 
-CREATE TABLE public.telegram_feedbacks (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  user_id int4 NOT NULL,
-  "type" varchar(50) NULL,
-  message text NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  status varchar(20) NULL,
-  CONSTRAINT telegram_feedbacks_pkey PRIMARY KEY (id),
-  CONSTRAINT telegram_feedbacks_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usr_users(id) ON DELETE CASCADE
-);
-```
+**Triggers:**
+- `update_msg_channel_configs_updated_at` - Updates updated_at on row modification
 
----
+#### `msg_channel_health`
+Health monitoring for notification channels
 
-### `trading_bots`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | bigserial | PRIMARY KEY | Health record ID |
+| channel | varchar(50) | NOT NULL, UNIQUE | Channel name |
+| status | varchar(20) | NOT NULL, CHECK (HEALTHY/DEGRADED/DOWN) | Health status |
+| last_success | timestamptz | | Last successful delivery |
+| last_failure | timestamptz | | Last failed delivery |
+| failure_count | int4 | NOT NULL, DEFAULT 0, CHECK (≥ 0) | Consecutive failure count |
+| avg_response_time_ms | int4 | CHECK (≥ 0) | Average response time |
+| error_message | text | | Latest error message |
+| checked_at | timestamptz | DEFAULT now() | Last health check time |
 
-```sql
--- public.trading_bots definition
+**Indexes:**
+- `idx_channel_health_checked` on (checked_at)
+- `idx_channel_health_status` on (status)
 
--- Drop table
+#### `msg_rate_limits`
+Per-user rate limiting configuration and state
 
--- DROP TABLE public.trading_bots;
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | bigserial | PRIMARY KEY | Rate limit ID |
+| user_id | varchar(100) | NOT NULL | User identifier |
+| channel | varchar(50) | NOT NULL | Channel name |
+| tokens | int4 | NOT NULL, CHECK (≥ 0) | Current token count |
+| last_refill | timestamptz | DEFAULT now() | Last token refill time |
+| max_tokens | int4 | NOT NULL, CHECK (> 0) | Maximum token capacity |
+| refill_rate | int4 | NOT NULL, CHECK (> 0) | Token refill rate |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
 
-CREATE TABLE public.trading_bots (
-  "type" varchar(20) NOT NULL,
-  status varchar(20) NOT NULL,
-  started_at timestamp NULL,
-  last_heartbeat timestamp NULL,
-  error_count int4 NULL,
-  current_balance numeric(20, 8) NULL,
-  total_pnl numeric(20, 8) NULL,
-  extra_metadata jsonb NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  updated_at timestamp NULL,
-  config jsonb NOT NULL,
-  user_id int4 NOT NULL,
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  description text NULL,
-  CONSTRAINT trading_bots_pk PRIMARY KEY (id),
-  CONSTRAINT trading_bots_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usr_users(id) ON DELETE CASCADE
-);
+**Constraints:**
+- `unique_user_channel_rate_limit` UNIQUE (user_id, channel)
 
--- Column comments
-COMMENT ON COLUMN public.trading_bots.description IS 'Trading bot description. Defined by the trader, who creates the bot.';
-
--- Table Triggers
-create trigger update_bots_updated_at before
-update
-    on
-    public.trading_bots for each row execute function update_updated_at_column();
-```
-
----
-
-### `trading_performance_metrics`
-
-```sql
--- public.trading_performance_metrics definition
-
--- Drop table
-
--- DROP TABLE public.trading_performance_metrics;
-
-CREATE TABLE public.trading_performance_metrics (
-  bot_id int4 NOT NULL,
-  trade_type varchar(10) NOT NULL,
-  symbol varchar(20) NULL,
-  "interval" varchar(10) NULL,
-  entry_logic_name varchar(100) NULL,
-  exit_logic_name varchar(100) NULL,
-  metrics jsonb NOT NULL,
-  calculated_at timestamp NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  CONSTRAINT trading_performance_metrics_pkey PRIMARY KEY (id),
-  CONSTRAINT trading_perf_metrics_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.trading_bots(id) ON DELETE CASCADE
-);
-CREATE INDEX ix_trading_performance_metrics_bot_id ON public.trading_performance_metrics USING btree (bot_id);
-CREATE INDEX ix_trading_performance_metrics_calculated_at ON public.trading_performance_metrics USING btree (calculated_at);
-CREATE INDEX ix_trading_performance_metrics_symbol ON public.trading_performance_metrics USING btree (symbol);
-COMMENT ON TABLE public.trading_performance_metrics IS 'Performance metrics for trading strategies';
-```
+**Indexes:**
+- `idx_rate_limits_channel` on (channel)
+- `idx_rate_limits_last_refill` on (last_refill)
+- `idx_rate_limits_user` on (user_id)
 
 ---
 
-### `trading_positions`
+### Job Scheduling
 
-```sql
--- public.trading_positions definition
+#### `job_schedules`
+Scheduled job configurations
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Schedule ID |
+| user_id | int4 | NOT NULL | Job owner |
+| name | varchar(255) | NOT NULL | Schedule name |
+| job_type | varchar(50) | NOT NULL | Type of job |
+| target | varchar(255) | NOT NULL | Job target |
+| task_params | jsonb | NOT NULL, DEFAULT '{}' | Job parameters |
+| cron | varchar(100) | NOT NULL | Cron expression |
+| enabled | bool | NOT NULL, DEFAULT true | Schedule enabled status |
+| next_run_at | timestamptz | | Next scheduled run time |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
+| updated_at | timestamptz | DEFAULT now() | Last update timestamp |
 
--- DROP TABLE public.trading_positions;
+#### `job_schedule_runs`
+Job execution history and results
 
-CREATE TABLE public.trading_positions (
-  bot_id int4 NOT NULL,
-  trade_type varchar(10) NOT NULL,
-  symbol varchar(20) NOT NULL,
-  direction varchar(10) NOT NULL,
-  opened_at timestamp NULL,
-  closed_at timestamp NULL,
-  qty_open numeric(20, 8) DEFAULT 0 NOT NULL,
-  avg_price numeric(20, 8) NULL,
-  realized_pnl numeric(20, 8) DEFAULT 0 NULL,
-  status varchar(12) NOT NULL,
-  extra_metadata jsonb NULL,
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  CONSTRAINT trading_positions_pkey PRIMARY KEY (id),
-  CONSTRAINT trading_positions_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.trading_bots(id) ON DELETE CASCADE
-);
-CREATE INDEX ix_trading_positions_bot_id ON public.trading_positions USING btree (bot_id);
-CREATE INDEX ix_trading_positions_symbol ON public.trading_positions USING btree (symbol);
-COMMENT ON TABLE public.trading_positions IS 'Open and closed trading positions';
-```
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Run ID |
+| job_type | text | NOT NULL | Type of job |
+| job_id | int4 | FK → job_schedules(id) ON DELETE CASCADE | Associated schedule |
+| user_id | int8 | | Job executor |
+| status | text | | Execution status |
+| scheduled_for | timestamptz | | Scheduled execution time |
+| enqueued_at | timestamptz | DEFAULT now() | Queue entry time |
+| started_at | timestamptz | | Execution start time |
+| finished_at | timestamptz | | Execution finish time |
+| job_snapshot | jsonb | | Job state snapshot |
+| result | jsonb | | Execution result |
+| error | text | | Error message if failed |
 
----
-
-### `trading_trades`
-
-```sql
--- public.trading_trades definition
-
--- Drop table
-
--- DROP TABLE public.trading_trades;
-
-CREATE TABLE public.trading_trades (
-  bot_id int4 NOT NULL,
-  trade_type varchar(10) NOT NULL,
-  strategy_name varchar(100) NULL,
-  entry_logic_name varchar(100) NOT NULL,
-  exit_logic_name varchar(100) NOT NULL,
-  symbol varchar(20) NOT NULL,
-  "interval" varchar(10) NOT NULL,
-  entry_time timestamp NULL,
-  exit_time timestamp NULL,
-  buy_order_created timestamp NULL,
-  buy_order_closed timestamp NULL,
-  sell_order_created timestamp NULL,
-  sell_order_closed timestamp NULL,
-  entry_price numeric(20, 8) NULL,
-  exit_price numeric(20, 8) NULL,
-  entry_value numeric(20, 8) NULL,
-  exit_value numeric(20, 8) NULL,
-  "size" numeric(20, 8) NULL,
-  direction varchar(10) NOT NULL,
-  commission numeric(20, 8) NULL,
-  gross_pnl numeric(20, 8) NULL,
-  net_pnl numeric(20, 8) NULL,
-  pnl_percentage numeric(10, 4) NULL,
-  exit_reason varchar(100) NULL,
-  status varchar(20) NOT NULL,
-  extra_metadata jsonb NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  updated_at timestamp NULL,
-  position_id int4 NULL,
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  CONSTRAINT trading_trades_pkey PRIMARY KEY (id),
-  CONSTRAINT trading_trades_bot_id_fkey FOREIGN KEY (bot_id) REFERENCES public.trading_bots(id) ON DELETE CASCADE,
-  CONSTRAINT trading_trades_position_id_fkey FOREIGN KEY (position_id) REFERENCES public.trading_positions(id) ON DELETE SET NULL
-);
-CREATE INDEX ix_trading_trades_bot_id ON public.trading_trades USING btree (bot_id);
-CREATE INDEX ix_trading_trades_entry_time ON public.trading_trades USING btree (entry_time);
-CREATE INDEX ix_trading_trades_status ON public.trading_trades USING btree (status);
-CREATE INDEX ix_trading_trades_strategy_name ON public.trading_trades USING btree (strategy_name);
-CREATE INDEX ix_trading_trades_symbol ON public.trading_trades USING btree (symbol);
-CREATE INDEX ix_trading_trades_trade_type ON public.trading_trades USING btree (trade_type);
-COMMENT ON TABLE public.trading_trades IS 'Individual trade records';
-```
+**Constraints:**
+- `ux_runs_job_scheduled_for` UNIQUE (job_type, job_id, scheduled_for)
 
 ---
 
-### `usr_auth_identities`
+### Telegram Integration
 
-```sql
--- public.usr_auth_identities definition
+#### `telegram_broadcast_logs`
+Telegram broadcast message logs
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Log ID |
+| message | text | NOT NULL | Broadcast message content |
+| sent_by | varchar(255) | NOT NULL | Sender identifier |
+| success_count | int4 | | Successful deliveries |
+| total_count | int4 | | Total recipients |
+| created_at | timestamptz | DEFAULT now() | Broadcast timestamp |
 
--- DROP TABLE public.usr_auth_identities;
+#### `telegram_command_audits`
+Telegram command execution audit log
 
-CREATE TABLE public.usr_auth_identities (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  user_id int4 NOT NULL,
-  provider varchar(32) NOT NULL,
-  external_id varchar(255) NOT NULL,
-  metadata jsonb NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  CONSTRAINT auth_identities_pkey PRIMARY KEY (id),
-  CONSTRAINT auth_identities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usr_users(id) ON DELETE CASCADE
-);
-CREATE INDEX ix_auth_identities_provider ON public.usr_auth_identities USING btree (provider);
-CREATE INDEX ix_auth_identities_user_id ON public.usr_auth_identities USING btree (user_id);
-```
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Audit ID |
+| telegram_user_id | varchar(255) | NOT NULL | Telegram user ID |
+| command | varchar(255) | NOT NULL | Executed command |
+| full_message | text | | Complete message text |
+| is_registered_user | bool | | User registration status |
+| user_email | varchar(255) | | Associated email |
+| success | bool | | Command success status |
+| error_message | text | | Error message if failed |
+| response_time_ms | int4 | | Response time in milliseconds |
+| created_at | timestamptz | DEFAULT now() | Execution timestamp |
 
----
+**Indexes:**
+- `ix_telegram_command_audits_command` on (command)
+- `ix_telegram_command_audits_created` on (created_at)
+- `ix_telegram_command_audits_success` on (success)
+- `ix_telegram_command_audits_telegram_user_id` on (telegram_user_id)
 
-### `usr_verification_codes`
+#### `telegram_feedbacks`
+User feedback submitted via Telegram
 
-```sql
--- public.usr_verification_codes definition
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Feedback ID |
+| user_id | int4 | NOT NULL, FK → usr_users(id) ON DELETE CASCADE | User who submitted feedback |
+| type | varchar(50) | | Feedback type/category |
+| message | text | | Feedback message |
+| status | varchar(20) | | Processing status |
+| created_at | timestamptz | DEFAULT now() | Submission timestamp |
 
--- Drop table
+#### `telegram_settings`
+Telegram bot configuration settings
 
--- DROP TABLE public.usr_verification_codes;
-
-CREATE TABLE public.usr_verification_codes (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  user_id int4 NOT NULL,
-  code varchar(32) NOT NULL,
-  sent_time int4 NOT NULL,
-  provider varchar(20) DEFAULT 'telegram'::character varying NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  CONSTRAINT verification_codes_pkey PRIMARY KEY (id),
-  CONSTRAINT verification_codes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usr_users(id) ON DELETE CASCADE
-);
-CREATE INDEX ix_verification_codes_user_id ON public.usr_verification_codes USING btree (user_id);
-```
-
----
-
-### `webui_audit_logs`
-
-```sql
--- public.webui_audit_logs definition
-
--- Drop table
-
--- DROP TABLE public.webui_audit_logs;
-
-CREATE TABLE public.webui_audit_logs (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  user_id int4 NOT NULL,
-  "action" varchar(100) NOT NULL,
-  resource_type varchar(50) NULL,
-  resource_id varchar(100) NULL,
-  details jsonb NULL,
-  ip_address varchar(45) NULL,
-  user_agent varchar(500) NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  CONSTRAINT webui_audit_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT webui_audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usr_users(id)
-);
-CREATE INDEX ix_webui_audit_logs_action ON public.webui_audit_logs USING btree (action);
-CREATE INDEX ix_webui_audit_logs_user_id ON public.webui_audit_logs USING btree (user_id);
-```
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| key | varchar(100) | PRIMARY KEY | Setting key |
+| value | text | | Setting value |
 
 ---
 
-### `webui_strategy_templates`
+### Web UI
 
-```sql
--- public.webui_strategy_templates definition
+#### `webui_audit_logs`
+User action audit logs
 
--- Drop table
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Log ID |
+| user_id | int4 | NOT NULL, FK → usr_users(id) | User who performed action |
+| action | varchar(100) | NOT NULL | Action performed |
+| resource_type | varchar(50) | | Type of resource affected |
+| resource_id | varchar(100) | | ID of resource affected |
+| details | jsonb | | Additional details |
+| ip_address | varchar(45) | | User IP address |
+| user_agent | varchar(500) | | User agent string |
+| created_at | timestamptz | DEFAULT now() | Action timestamp |
 
--- DROP TABLE public.webui_strategy_templates;
+**Indexes:**
+- `ix_webui_audit_logs_action` on (action)
+- `ix_webui_audit_logs_user_id` on (user_id)
 
-CREATE TABLE public.webui_strategy_templates (
-  id int4 GENERATED ALWAYS AS IDENTITY(
-    INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE
-  ) NOT NULL,
-  "name" varchar(100) NOT NULL,
-  description text NULL,
-  template_data jsonb NOT NULL,
-  is_public bool DEFAULT false NULL,
-  created_by int4 NOT NULL,
-  created_at timestamptz DEFAULT now() NULL,
-  updated_at timestamp NULL,
-  CONSTRAINT webui_strategy_templates_pkey PRIMARY KEY (id),
-  CONSTRAINT webui_strategy_templates_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.usr_users(id)
-);
-CREATE INDEX ix_webui_strategy_templates_created_by ON public.webui_strategy_templates USING btree (created_by);
-```
+#### `webui_performance_snapshots`
+Strategy performance snapshots
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Snapshot ID |
+| strategy_id | varchar(100) | NOT NULL | Strategy identifier |
+| timestamp | timestamptz | DEFAULT now() | Snapshot timestamp |
+| pnl | jsonb | NOT NULL | Profit/loss data |
+| positions | jsonb | | Position data |
+| trades_count | int4 | DEFAULT 0 | Number of trades |
+| win_rate | jsonb | | Win rate statistics |
+| drawdown | jsonb | | Drawdown data |
+| metrics | jsonb | | Additional metrics |
+
+**Indexes:**
+- `ix_webui_performance_snapshots_strategy_id` on (strategy_id)
+
+#### `webui_strategy_templates`
+Reusable strategy templates
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Template ID |
+| name | varchar(100) | NOT NULL | Template name |
+| description | text | | Template description |
+| template_data | jsonb | NOT NULL | Template configuration |
+| is_public | bool | DEFAULT false | Public visibility |
+| created_by | int4 | NOT NULL, FK → usr_users(id) | Template creator |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
+| updated_at | timestamp | | Last update timestamp |
+
+**Indexes:**
+- `ix_webui_strategy_templates_created_by` on (created_by)
+
+#### `webui_system_config`
+System-wide configuration settings
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | int4 | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY | Config ID |
+| key | varchar(100) | NOT NULL | Configuration key |
+| value | jsonb | NOT NULL | Configuration value |
+| description | text | | Configuration description |
+| created_at | timestamptz | DEFAULT now() | Creation timestamp |
+| updated_at | timestamp | | Last update timestamp |
+
+---
+
+## Views
+
+### `v_pending_messages`
+Messages ready for processing, ordered by priority
+
+Returns messages with status 'PENDING' and scheduled_for <= now(), ordered by priority (CRITICAL → HIGH → NORMAL → LOW) and scheduled time.
+
+**Columns:** id, message_type, priority, channels, recipient_id, content, metadata, scheduled_for, retry_count, max_retries, created_at, priority_order
+
+### `v_retry_eligible_messages`
+Failed messages eligible for retry
+
+Returns messages with status 'FAILED', retry_count < max_retries, and processed_at more than 5 minutes ago (or NULL).
+
+**Columns:** id, message_type, priority, channels, recipient_id, content, retry_count, max_retries, last_error, processed_at, created_at
+
+### `v_channel_health_summary`
+Combined channel health and configuration view
+
+Joins msg_channel_health with msg_channel_configs to provide comprehensive channel status.
+
+**Columns:** channel, status, failure_count, avg_response_time_ms, last_success, last_failure, checked_at, config_enabled, rate_limit_per_minute, config_max_retries, timeout_seconds
+
+### `v_delivery_stats`
+Daily delivery statistics by channel
+
+Aggregates delivery statistics by channel and day for the last 30 days.
+
+**Columns:** channel, total_deliveries, successful_deliveries, failed_deliveries, bounced_deliveries, avg_response_time_ms, delivery_date
 
 ---
 
 ## Functions
 
-### `update_updated_at_column()`
+### Message Queue Management
 
-```sql
--- DROP FUNCTION public.update_updated_at_column();
+#### `enqueue_message()`
+Enqueues a new message for delivery
 
-CREATE OR REPLACE FUNCTION public.update_updated_at_column()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$function$
-;
-```
+**Parameters:**
+- `p_message_type` varchar - Type of message
+- `p_channels` text[] - Delivery channels
+- `p_content` jsonb - Message content
+- `p_priority` varchar - Priority level (default: 'NORMAL')
+- `p_recipient_id` varchar - Recipient identifier (optional)
+- `p_template_name` varchar - Template name (optional)
+- `p_metadata` jsonb - Additional metadata (optional)
+- `p_scheduled_for` timestamptz - Scheduled delivery time (default: now)
+- `p_max_retries` integer - Maximum retry attempts (default: 3)
 
-### `uuid-ossp` wrapper functions
+**Returns:** bigint (message_id)
 
-```sql
--- DROP FUNCTION public.uuid_generate_v1();
+#### `update_message_status()`
+Updates the status of a message
 
-CREATE OR REPLACE FUNCTION public.uuid_generate_v1()
- RETURNS uuid
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v1$function$
-;
+**Parameters:**
+- `p_message_id` bigint - Message ID
+- `p_status` varchar - New status
+- `p_error_message` text - Error message (optional)
 
--- DROP FUNCTION public.uuid_generate_v1mc();
+**Returns:** boolean (success)
 
-CREATE OR REPLACE FUNCTION public.uuid_generate_v1mc()
- RETURNS uuid
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v1mc$function$
-;
+#### `record_delivery_status()`
+Records delivery status for a specific channel
 
--- DROP FUNCTION public.uuid_generate_v3(uuid, text);
+**Parameters:**
+- `p_message_id` bigint - Message ID
+- `p_channel` varchar - Delivery channel
+- `p_status` varchar - Delivery status
+- `p_response_time_ms` integer - Response time (optional)
+- `p_error_message` text - Error message (optional)
+- `p_external_id` varchar - External provider ID (optional)
 
-CREATE OR REPLACE FUNCTION public.uuid_generate_v3(namespace uuid, name text)
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v3$function$
-;
+**Returns:** bigint (delivery_id)
 
--- DROP FUNCTION public.uuid_generate_v4();
+#### `cleanup_old_messages()`
+Removes delivered messages older than specified days
 
-CREATE OR REPLACE FUNCTION public.uuid_generate_v4()
- RETURNS uuid
- LANGUAGE c
- PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v4$function$
-;
+**Parameters:**
+- `p_days_to_keep` integer - Number of days to retain (default: 30)
 
--- DROP FUNCTION public.uuid_generate_v5(uuid, text);
+**Returns:** integer (deleted_count)
 
-CREATE OR REPLACE FUNCTION public.uuid_generate_v5(namespace uuid, name text)
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_generate_v5$function$
-;
+#### `get_queue_statistics()`
+Returns message queue statistics grouped by status and priority
 
--- DROP FUNCTION public.uuid_nil();
+**Returns:** TABLE(status varchar, priority varchar, count bigint)
 
-CREATE OR REPLACE FUNCTION public.uuid_nil()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_nil$function$
-;
+### Channel Health Management
 
--- DROP FUNCTION public.uuid_ns_dns();
+#### `update_channel_health()`
+Updates or creates channel health record
 
-CREATE OR REPLACE FUNCTION public.uuid_ns_dns()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_ns_dns$function$
-;
+**Parameters:**
+- `p_channel` varchar - Channel name
+- `p_status` varchar - Health status (HEALTHY/DEGRADED/DOWN)
+- `p_response_time_ms` integer - Response time (optional)
+- `p_error_message` text - Error message (optional)
 
--- DROP FUNCTION public.uuid_ns_oid();
+**Returns:** void
 
-CREATE OR REPLACE FUNCTION public.uuid_ns_oid()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_ns_oid$function$
-;
+### Utility Functions
 
--- DROP FUNCTION public.uuid_ns_url();
+#### `update_updated_at_column()`
+Trigger function to automatically update updated_at timestamp
 
-CREATE OR REPLACE FUNCTION public.uuid_ns_url()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_ns_url$function$
-;
+**Returns:** trigger
 
--- DROP FUNCTION public.uuid_ns_x500();
+### UUID Functions
 
-CREATE OR REPLACE FUNCTION public.uuid_ns_x500()
- RETURNS uuid
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/uuid-ossp', $function$uuid_ns_x500$function$
-;
-```
+The schema includes standard UUID generation functions from the uuid-ossp extension:
+- `uuid_generate_v1()` - Time-based UUID
+- `uuid_generate_v1mc()` - Time-based UUID with MAC address
+- `uuid_generate_v3(namespace, name)` - MD5-based UUID
+- `uuid_generate_v4()` - Random UUID
+- `uuid_generate_v5(namespace, name)` - SHA1-based UUID
+- `uuid_nil()` - Nil UUID
+- `uuid_ns_dns()` - DNS namespace UUID
+- `uuid_ns_oid()` - OID namespace UUID
+- `uuid_ns_url()` - URL namespace UUID
+- `uuid_ns_x500()` - X.500 namespace UUID
 
 ---
 
-## Notes & Observations
+## Sequences
 
-* All `id` columns in this version are defined as `int4 GENERATED ALWAYS AS IDENTITY` (uniform), except:
+The schema uses the following sequences for auto-incrementing IDs:
 
-  * `job_schedule_runs.run_id` — `uuid DEFAULT gen_random_uuid()`.
-  * Some temporary sequence objects with `..._seq1` names (you may want to consolidate/remove duplicates).
-* Foreign key relationships have been wired to the integer `id` columns (e.g., `trading_trades.bot_id → trading_bots(id)`).
-* `gen_random_uuid()` requires `pgcrypto` (or use `uuid-ossp` alternatives).
-* If you want to remove legacy sequences, run diagnostics first — sequences backing identity columns cannot be dropped while the identity depends on them.
-* Review indexes and constraints (I preserved those present in the DDL).
+- `job_schedule_runs_id_seq` (1 to 2,147,483,647)
+- `job_schedules_id_seq` (1 to 2,147,483,647)
+- `msg_channel_configs_id_seq` (1 to 9,223,372,036,854,775,807)
+- `msg_channel_health_id_seq` (1 to 9,223,372,036,854,775,807)
+- `msg_delivery_status_id_seq` (1 to 9,223,372,036,854,775,807)
+- `msg_messages_id_seq` (1 to 9,223,372,036,854,775,807)
+- `msg_rate_limits_id_seq` (1 to 9,223,372,036,854,775,807)
+- `telegram_broadcast_logs_id_seq1` (1 to 2,147,483,647)
+- `telegram_command_audits_id_seq1` (1 to 2,147,483,647)
+- `telegram_feedbacks_id_seq1` (1 to 2,147,483,647)
+- `trading_bots_id_seq` (1 to 2,147,483,647)
+- `trading_performance_metrics_id_seq` (1 to 2,147,483,647)
+- `trading_positions_id_seq` (1 to 2,147,483,647)
+- `trading_trades_id_seq` (1 to 2,147,483,647)
+- `usr_auth_identities_id_seq` (1 to 2,147,483,647)
+- `usr_users_id_seq` (1 to 2,147,483,647)
+- `usr_verification_codes_id_seq` (1 to 2,147,483,647)
+- `webui_audit_logs_id_seq1` (1 to 2,147,483,647)
+- `webui_performance_snapshots_id_seq1` (1 to 2,147,483,647)
+- `webui_strategy_templates_id_seq1` (1 to 2,147,483,647)
+- `webui_system_config_id_seq1` (1 to 2,147,483,647)
 
 ---
-Great — here’s a **Mermaid ERD** for your current schema. Paste this into any Mermaid-enabled renderer (GitHub README, Mermaid Live Editor, Obsidian, etc.) to visualize the model.
 
-```mermaid
-erDiagram
-    USR_USERS {
-        int id PK
-        varchar email
-        varchar role
-    }
+## Key Relationships
 
-    USR_AUTH_IDENTITIES {
-        int id PK
-        int user_id FK
-        varchar provider
-        varchar external_id
-    }
+### User System
+- `usr_users` ← `usr_auth_identities` (one-to-many)
+- `usr_users` ← `usr_verification_codes` (one-to-many)
+- `usr_users` ← `telegram_feedbacks` (one-to-many)
+- `usr_users` ← `webui_audit_logs` (one-to-many)
+- `usr_users` ← `webui_strategy_templates` (one-to-many)
+- `usr_users` ← `trading_bots` (one-to-many)
 
-    USR_VERIFICATION_CODES {
-        int id PK
-        int user_id FK
-        varchar code
-    }
+### Trading System
+- `trading_bots` ← `trading_positions` (one-to-many)
+- `trading_bots` ← `trading_trades` (one-to-many)
+- `trading_bots` ← `trading_performance_metrics` (one-to-many)
+- `trading_positions` ← `trading_trades` (one-to-many, optional)
 
-    WEBUI_AUDIT_LOGS {
-        int id PK
-        int user_id FK
-        varchar action
-    }
+### Messaging System
+- `msg_messages` ← `msg_delivery_status` (one-to-many)
 
-    WEBUI_STRATEGY_TEMPLATES {
-        int id PK
-        int created_by FK
-        varchar name
-    }
-
-    JOB_SCHEDULES {
-        int id PK
-        int user_id
-        varchar name
-        varchar job_type
-        varchar target
-    }
-
-    JOB_SCHEDULE_RUNS {
-        uuid run_id PK
-        varchar job_type
-        int job_id FK
-        timestamptz scheduled_for
-    }
-
-    TELEGRAM_BROADCAST_LOGS {
-        int id PK
-        text message
-        varchar sent_by
-    }
-
-    TELEGRAM_COMMAND_AUDITS {
-        int id PK
-        varchar telegram_user_id
-        varchar command
-    }
-
-    TELEGRAM_FEEDBACKS {
-        int id PK
-        int user_id FK
-        text message
-    }
-
-    TRADING_BOTS {
-        int id PK
-        int user_id FK
-        varchar type
-        varchar status
-    }
-
-    TRADING_PERFORMANCE_METRICS {
-        int id PK
-        int bot_id FK
-        varchar trade_type
-        jsonb metrics
-    }
-
-    TRADING_POSITIONS {
-        int id PK
-        int bot_id FK
-        varchar symbol
-        varchar status
-    }
-
-    TRADING_TRADES {
-        int id PK
-        int bot_id FK
-        int position_id FK
-        varchar symbol
-        varchar status
-    }
-
-    WEBUI_PERFORMANCE_SNAPSHOTS {
-        int id PK
-        varchar strategy_id
-    }
-
-    WEBUI_SYSTEM_CONFIG {
-        int id PK
-        varchar key
-    }
-
-    %% Relationships
-    USR_USERS ||--o{ USR_AUTH_IDENTITIES : "has"
-    USR_USERS ||--o{ USR_VERIFICATION_CODES : "has"
-    USR_USERS ||--o{ WEBUI_AUDIT_LOGS : "performed"
-    USR_USERS ||--o{ WEBUI_STRATEGY_TEMPLATES : "created"
-    USR_USERS ||--o{ TELEGRAM_FEEDBACKS : "sent"
-    USR_USERS ||--o{ TRADING_BOTS : "owns"
-
-    TRADING_BOTS ||--o{ TRADING_PERFORMANCE_METRICS : "produces"
-    TRADING_BOTS ||--o{ TRADING_POSITIONS : "holds"
-    TRADING_BOTS ||--o{ TRADING_TRADES : "executes"
-
-    TRADING_POSITIONS ||--o{ TRADING_TRADES : "may_have"
-
-    JOB_SCHEDULES ||--o{ JOB_SCHEDULE_RUNS : "runs"
-    JOB_SCHEDULE_RUNS }o--|| JOB_SCHEDULES : "for"
-
-    TRADING_TRADES }o--|| TRADING_POSITIONS : "references"
-```
-
-Notes / tips
-
-* The diagram includes only explicitly declared foreign keys from the DDL. I intentionally left out inferred relationships (e.g., `job_schedules.user_id -> usr_users.id`) unless a FK appeared in the SQL.
-* If you want a version showing **every inferred relationship** (even those without FK constraints), tell me and I’ll add them.
-* Want this exported as an SVG/PNG? I can generate an **SVG** via Mermaid if you want a downloadable image. Which format do you prefer?
+### Job Scheduling
+- `job_schedules` ← `job_schedule_runs` (one-to-many)

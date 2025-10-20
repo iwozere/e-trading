@@ -464,6 +464,10 @@ Module Level:
 - **Avoid circular dependencies** between modules
 - **Create clear interfaces** for cross-module communication
 
+## 15 Database schema
+
+Full database schema is in src/data/db/docs/db_schema.md
+
 ---
 
 *Last updated: 2025-01-27*
