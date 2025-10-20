@@ -8,7 +8,7 @@ The crypto trading platform implements a comprehensive **Centralized Configurati
 
 The original configuration system had three major issues:
 
-1. **Configuration scattered across multiple files** - Configs were spread across `config/trading/`, `config/optimizer/`, `config/plotter/`, etc.
+1. **Configuration scattered across multiple files** - Configs were spread across `config/trading/`, `config/optimizer/`, etc.
 2. **No schema validation** - Only basic JSON validation existed, no comprehensive schema validation
 3. **Hard to manage environment-specific configs** - No clear separation between dev/staging/prod environments
 

@@ -105,7 +105,7 @@ class Config:
 ## IMPROVEMENT ##: Using pathlib for cleaner path management
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
-from src.common.indicator_service import get_indicator_service
+from src.indicators.service import get_unified_indicator_service
 from src.model.indicators import IndicatorCalculationRequest
 from src.notification.logger import setup_logger
 

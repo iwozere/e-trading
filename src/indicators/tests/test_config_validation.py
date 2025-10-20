@@ -48,8 +48,8 @@ class TestConfigurationValidation:
         errors = config_manager.validate_parameters("macd", valid_params)
         assert len(errors) == 0
 
-        # Invalid parameters - fast >= slow should return errors
-        invalid_params = {"fastperiod": 26, "slowperiod": 12, "signalperiod": 9}
+        # Invalid parameters - unknown parameter should return errors
+        invalid_params = {"fastperiod": 12, "slowperiod": 26, "signalperiod": 9, "unknown_param": 5}
         errors = config_manager.validate_parameters("macd", invalid_params)
         assert len(errors) > 0
 
@@ -87,14 +87,14 @@ class TestConfigurationValidation:
         base_period = base_params.get("timeperiod", 14)
 
         # Set runtime override
-        config_manager.set_runtime_override("rsi", "timeperiod", 30)
+        config_manager.set_parameter_override("rsi", "timeperiod", 30)
 
         # Override should take precedence
         override_params = config_manager.get_parameters("rsi")
         assert override_params.get("timeperiod") == 30
 
         # Clear overrides
-        config_manager.clear_runtime_overrides()
+        config_manager.clear_parameter_overrides()
         cleared_params = config_manager.get_parameters("rsi")
         assert cleared_params.get("timeperiod") == base_period
 

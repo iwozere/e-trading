@@ -31,7 +31,7 @@ This document describes the architecture, design patterns, and technical impleme
 ```
 src/common/
 ├── __init__.py              # Public interface
-├── indicator_service.py     # Unified indicator service
+├── (indicator_service.py removed - moved to src/indicators/)
 ├── recommendation_engine.py # Recommendation system
 ├── (ticker_classifier.py removed - functionality moved to ProviderSelector)
 ├── fundamentals.py          # Fundamental analysis
@@ -72,7 +72,7 @@ class ProviderSelector:
 ```
 
 ### 3. Singleton Pattern
-**Location**: `src/common/indicator_service.py`
+**Location**: `src/indicators/service.py` (moved from src/common/)
 **Purpose**: Ensure single instance of indicator service with shared cache
 
 ```python
@@ -100,7 +100,7 @@ class RecommendationEngine:
 ```
 
 ### 5. Decorator Pattern
-**Location**: `src/common/indicator_service.py`
+**Location**: `src/indicators/service.py` (moved from src/common/)
 **Purpose**: Add caching functionality to indicator calculations
 
 ```python

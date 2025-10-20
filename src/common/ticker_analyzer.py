@@ -3,7 +3,7 @@ from src.common.fundamentals import get_fundamentals_unified, format_fundamental
 from src.common import get_ohlcv, determine_provider, get_ticker_info
 from src.model.telegram_bot import TickerAnalysis
 from src.common.technicals import format_technical_analysis
-from src.common.indicator_service import get_indicator_service
+from src.indicators.service import get_unified_indicator_service
 from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
 from src.notification.logger import setup_logger
 #from src.backtester.plotter.base_plotter import
@@ -36,7 +36,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                 fundamentals = None
 
         # Get unified indicator service
-        indicator_service = get_indicator_service()
+        indicator_service = get_unified_indicator_service()
 
         # Create indicator calculation request
         request = IndicatorCalculationRequest(

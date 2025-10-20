@@ -6,7 +6,7 @@ This module provides unified access to data providers, fundamentals, technical a
 
 The common module is organized into specialized submodules with a unified indicator system:
 
-- **`indicator_service.py`** - Unified indicator service with TA-Lib direct calculation
+- **Indicator services** - Moved to `src/indicators/` unified service
 - **`recommendation_engine.py`** - Unified recommendation engine for all indicators
 - **`fundamentals.py`** - Fundamental data retrieval and normalization
 - **`technicals.py`** - Technical indicator calculations (unified)
@@ -21,11 +21,11 @@ The new unified indicator system provides a single, consistent interface for cal
 ### Quick Start
 
 ```python
-from src.common.indicator_service import get_indicator_service
+from src.indicators.service import UnifiedIndicatorService
 from src.model.indicators import IndicatorCalculationRequest
 
 # Get the unified indicator service
-service = get_indicator_service()
+service = UnifiedIndicatorService()
 
 # Calculate indicators for a single ticker
 request = IndicatorCalculationRequest(
@@ -305,7 +305,7 @@ print(f"From {start_date} to {end_date}")
 ```
 src/common/
 ├── __init__.py              # Core utilities (get_ohlcv, analyze_period_interval)
-├── indicator_service.py     # Unified indicator service with TA-Lib
+├── (indicator_service.py removed - moved to src/indicators/)
 ├── recommendation_engine.py # Unified recommendation engine
 ├── fundamentals.py          # Fundamentals logic (get_fundamentals, normalize_fundamentals)
 ├── technicals.py            # Technicals logic (legacy system)
@@ -334,7 +334,7 @@ src/common/
 
 ```python
 # Unified Indicator System (Recommended)
-from src.common.indicator_service import get_indicator_service
+from src.indicators.service import UnifiedIndicatorService
 from src.model.indicators import IndicatorCalculationRequest, BatchIndicatorRequest
 
 # Recommendation Engine
@@ -395,7 +395,7 @@ Run the test suite:
 
 ```bash
 # Test unified indicator system
-python -c "from src.common.indicator_service import get_indicator_service; print('Indicator Service OK')"
+python -c "from src.indicators.service import UnifiedIndicatorService; print('Indicator Service OK')"
 
 # Test recommendation engine
 python -c "from src.common.recommendation_engine import RecommendationEngine; print('Recommendation Engine OK')"
@@ -411,11 +411,11 @@ python -c "from src.common.ticker_analyzer import analyze_ticker; print('Analyze
 ### Complete Analysis Workflow (Unified System)
 
 ```python
-from src.common.indicator_service import get_indicator_service
+from src.indicators.service import UnifiedIndicatorService
 from src.model.indicators import IndicatorCalculationRequest
 
 # Get unified service
-service = get_indicator_service()
+service = UnifiedIndicatorService()
 
 # Analyze ticker with comprehensive indicators
 request = IndicatorCalculationRequest(
@@ -673,10 +673,10 @@ else:
 
 **After (Unified):**
 ```python
-from src.common.indicator_service import get_indicator_service
+from src.indicators.service import UnifiedIndicatorService
 from src.model.indicators import IndicatorCalculationRequest
 
-service = get_indicator_service()
+service = UnifiedIndicatorService()
 
 request = IndicatorCalculationRequest(
     ticker="AAPL",

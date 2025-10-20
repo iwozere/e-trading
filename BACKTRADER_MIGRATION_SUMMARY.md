@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Backtrader indicators have been successfully migrated to use the unified indicator service without backward compatibility. All existing indicator classes now directly use the unified service, providing enhanced functionality while maintaining the same Backtrader interface.
+The Backtrader indicators have been successfully migrated to use the unified indicator service. All existing indicator classes now directly use the unified service through simplified adapters, providing enhanced functionality while maintaining the same Backtrader interface. The migration is complete with all legacy modules removed and configuration consolidated.
 
 ## Changes Made
 
@@ -43,17 +43,25 @@ RsiIndicator = UnifiedRSIIndicator
 ### 2. Updated Files
 
 #### Core Indicator Files
-- `src/strategy/indicator/rsi.py` - Simplified to direct alias
-- `src/strategy/indicator/bollinger_band.py` - Simplified to direct alias  
-- `src/strategy/indicator/macd.py` - Simplified to direct alias
-- `src/strategy/indicator/indicator_factory.py` - Removed fallback logic
+- `src/strategy/indicator/rsi.py` - Simplified to direct unified service alias
+- `src/strategy/indicator/bollinger_band.py` - Simplified to direct unified service alias  
+- `src/strategy/indicator/macd.py` - Simplified to direct unified service alias
+- `src/strategy/indicator/indicator_factory.py` - Simplified to use unified service directly
+- `src/strategy/indicator/super_trend.py` - Simplified to direct unified service alias
 
 #### Adapter Files
 - `src/indicators/adapters/backtrader_wrappers.py` - Simplified wrappers without fallbacks
 - `src/indicators/adapters/backtrader_adapter.py` - Updated to use simplified wrappers
 
+#### Configuration Consolidation
+- `config/indicators.json` - Updated to unified format with canonical names and consolidated plotter config
+- `config/plotter/mixin_indicators.json` - **REMOVED** - Integrated into main indicators config
+- `config/INDICATORS_CONFIG_GUIDE.md` - **NEW** - Comprehensive configuration guide
+
 #### Removed Files
 - `src/indicators/adapters/migration_utils.py` - No longer needed
+- `src/common/indicator_service.py` - **REMOVED** - Functionality moved to unified service
+- `src/common/indicator_config.py` - **REMOVED** - Functionality moved to unified config manager
 - Complex wrapper implementations with fallback logic
 
 ### 3. Interface Changes

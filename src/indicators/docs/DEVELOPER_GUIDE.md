@@ -157,7 +157,7 @@ INDICATOR_META = {
 ```python
 class IndicatorCalculationRequest(BaseModel):
     ticker: str = Field(min_length=1)
-    indicators: List[str] = Field(min_items=1)
+    indicators: List[str] = Field(min_length=1)
     timeframe: str = Field(default="1d")
     
     @field_validator('ticker')

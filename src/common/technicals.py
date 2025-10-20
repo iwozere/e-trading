@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Optional
 from src.notification.logger import setup_logger
 from src.model.telegram_bot import Technicals
-from src.common.indicator_service import get_indicator_service
+from src.indicators.service import get_unified_indicator_service
 from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
 
 _logger = setup_logger(__name__)
@@ -13,7 +13,7 @@ async def calculate_technicals_unified(ticker: str, period: str = "2y", interval
     Calculate technical indicators using the unified indicator service.
     This is the new recommended approach.
     """
-    indicator_service = get_indicator_service()
+    indicator_service = get_unified_indicator_service()
 
     request = IndicatorCalculationRequest(
         ticker=ticker,

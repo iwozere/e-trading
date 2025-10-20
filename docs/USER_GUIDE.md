@@ -104,7 +104,7 @@ This will:
   - Performance metrics
 
 ### b. Plot Configuration
-The plotter automatically detects which indicators to show based on the strategy mixins used in optimization. Configuration is handled in `config/plotter/mixin_indicators.json`.
+The plotter automatically detects which indicators to show based on the strategy mixins used in optimization. Configuration is handled in the `plotter_config` section of `config/indicators.json`.
 
 ### c. Output
 Plots are saved as PNG files in the `results/` directory with the same naming convention as the JSON files.
@@ -253,9 +253,11 @@ Typical workflow for strategy development:
 - Update `src/entry/entry_mixin_factory.py` and `src/exit/exit_mixin_factory.py`
 
 ### Adding New Indicators
-- Create indicator classes in `src/indicator/`
-- Add plotting support in `src/plotter/indicators/`
-- Update `config/plotter/mixin_indicators.json`
+- Register indicator in `src/indicators/registry.py`
+- Implement calculation in appropriate adapter (`src/indicators/adapters/`)
+- Add default parameters to `config/indicators.json`
+- Update the `plotter_config` section in `config/indicators.json`
+- Add comprehensive tests in `src/indicators/tests/`
 
 ### Adding New Brokers
 - Subclass `AbstractBroker` in `src/broker/`

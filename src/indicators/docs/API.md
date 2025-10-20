@@ -491,8 +491,8 @@ The unified service uses simplified parameter names:
 
 ```python
 # Old imports
-from src.common.indicator_service import IndicatorService
-from src.common.indicator_config import get_config
+from src.common.indicator_service import IndicatorService  # Legacy - removed
+from src.common.indicator_config import get_config  # Legacy - removed
 
 # New imports
 from src.indicators.service import get_unified_indicator_service

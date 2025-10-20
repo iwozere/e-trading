@@ -7,7 +7,7 @@ Usage:
 """
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
-from src.common.indicator_service import get_indicator_service
+# Removed circular import - fundamentals should not depend on indicators service
 from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
 from src.data.data_manager import get_data_manager
 
@@ -110,7 +110,7 @@ async def get_fundamentals_unified(ticker: str, provider: str = None, **kwargs) 
                 fundamental_data[dest_key] = combined[src_key]
     else:
         # Fall back to indicator service if DataManager had no data
-        indicator_service = get_indicator_service()
+        indicator_service = get_unified_indicator_service()
 
         request = IndicatorCalculationRequest(
             ticker=ticker,

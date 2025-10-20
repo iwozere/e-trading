@@ -173,7 +173,7 @@ class IndicatorBatchConfig(BaseModel):
 class IndicatorCalculationRequest(BaseModel):
     """Request for indicator calculation."""
     ticker: TickerSymbol = Field(min_length=1, description="Stock ticker symbol")
-    indicators: List[IndicatorName] = Field(min_items=1, description="List of indicator names")
+    indicators: List[IndicatorName] = Field(min_length=1, description="List of indicator names")
     timeframe: TimeFrame = Field(default="1d", description="Data timeframe")
     period: Period = Field(default="2y", description="Data period")
     provider: Optional[ProviderName] = Field(default=None, description="Data provider")
@@ -203,8 +203,8 @@ class IndicatorCalculationRequest(BaseModel):
 
 class BatchIndicatorRequest(BaseModel):
     """Request for batch indicator calculation."""
-    tickers: List[TickerSymbol] = Field(min_items=1, description="List of ticker symbols")
-    indicators: List[IndicatorName] = Field(min_items=1, description="List of indicator names")
+    tickers: List[TickerSymbol] = Field(min_length=1, description="List of ticker symbols")
+    indicators: List[IndicatorName] = Field(min_length=1, description="List of indicator names")
     timeframe: TimeFrame = Field(default="1d", description="Data timeframe")
     period: Period = Field(default="2y", description="Data period")
     provider: Optional[ProviderName] = Field(default=None, description="Data provider")
@@ -242,7 +242,7 @@ class TickerIndicatorsRequest(BaseModel):
     timeframe: TimeFrame = Field(default="1d", description="OHLCV timeframe")
     period: Period = Field(default="1y", description="Data period")
     provider: Optional[ProviderName] = Field(default=None, description="Data provider")
-    indicators: List[IndicatorName] = Field(min_items=1, description="Indicator names from registry")
+    indicators: List[IndicatorName] = Field(min_length=1, description="Indicator names from registry")
     fillna: Optional[FillNASpec] = Field(default=None)
     warmup: Optional[WarmupSpec] = Field(default=None)
     include_recommendations: bool = Field(default=True)

@@ -1,7 +1,7 @@
 """
 Unified configuration management system for indicators.
 
-This module consolidates configuration functionality from src/common/indicator_config.py
+This module consolidates configuration functionality from the removed src/common/indicator_config.py
 and provides a unified interface for managing indicator parameters, presets, and mappings.
 """
 

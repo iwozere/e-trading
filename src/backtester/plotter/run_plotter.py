@@ -58,12 +58,14 @@ class ResultPlotter:
             return {}
 
     def _load_mixin_config(self) -> Dict:
-        """Load mixin indicators configuration"""
+        """Load mixin indicators configuration from unified config"""
         try:
-            with open("config/plotter/mixin_indicators.json", "r") as f:
-                return json.load(f)
+            with open("config/indicators.json", "r") as f:
+                config = json.load(f)
+                plotter_config = config.get("plotter_config", {})
+                return plotter_config
         except Exception as e:
-            _logger.exception("Error loading mixin config: %s")
+            _logger.exception("Error loading mixin config from unified indicators config: %s", e)
             return {"entry_mixins": {}, "exit_mixins": {}}
 
     def get_json_files(self, results_dir: str = "results") -> List[str]:

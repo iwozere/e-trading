@@ -29,7 +29,7 @@ The unified indicator service consolidates multiple fragmented indicator impleme
 
 #### Before (Old Wrapper Approach)
 ```python
-from src.strategy.indicator.wrappers import create_indicator_wrapper
+from src.strategy.indicator.wrappers import create_indicator_wrapper  # Legacy - removed
 
 # In _init_indicators method
 if self.strategy.use_talib:
@@ -108,8 +108,8 @@ rsi_indicator = factory.create_backtrader_rsi(
 #### Before
 ```python
 # Multiple different import paths
-from src.common.indicator_service import IndicatorService
-from src.strategy.indicator.rsi import RSIIndicator  # Old implementation
+from src.common.indicator_service import IndicatorService  # Legacy - no longer exists
+from src.strategy.indicator.rsi import RSIIndicator  # Legacy individual files - removed
 ```
 
 #### After

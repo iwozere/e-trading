@@ -372,76 +372,83 @@ The framework provides comprehensive performance analysis:
 
 ## 🔧 Architecture
 
-### **Indicator Management**
+### **Unified Indicator Service**
 
-The system uses a centralized indicator management architecture to handle both Backtrader native indicators and TA-Lib indicators consistently.
+The system uses a unified indicator service architecture that consolidates all indicator functionality into a single, comprehensive service supporting multiple calculation backends (TA-Lib, pandas-ta, Backtrader).
 
-#### **Indicator Factory**
+#### **Unified Service Architecture**
 
-The `IndicatorFactory` class (`src/indicator/indicator_factory.py`) is the central component for indicator management:
+The `UnifiedIndicatorService` (`src/indicators/service.py`) is the central component for all indicator operations:
 
 ```python
-class IndicatorFactory:
-    def __init__(self, data: bt.DataBase, use_talib: bool = False):
-        self.data = data
-        self.use_talib = use_talib
-        self.indicators = {}
+from src.indicators.service import UnifiedIndicatorService
+
+# Create service instance
+service = UnifiedIndicatorService()
+
+# Calculate indicators for a ticker
+request = IndicatorRequest(
+    ticker="BTCUSDT",
+    indicators=["rsi", "macd", "bbands"],
+    timeframe="1d",
+    period="1y"
+)
+
+result = await service.calculate(request)
 ```
 
 **Key features:**
-- Creates and manages both TA-Lib and Backtrader indicators
-- Handles indicator lifecycle
-- Provides consistent interface for all indicators
-- Caches indicators to prevent duplicate creation
+- **Unified API**: Single interface for all technical and fundamental indicators
+- **Multiple Backends**: Support for TA-Lib, pandas-ta, and Backtrader calculation engines
+- **Batch Processing**: Efficient calculation for multiple tickers simultaneously
+- **Configuration Management**: Centralized parameter management with presets
+- **Recommendation Engine**: Intelligent trading recommendations based on indicator values
+- **Error Handling**: Comprehensive error handling with graceful fallbacks
 
 **Available indicators:**
-- RSI (Relative Strength Index)
-- Bollinger Bands
-- ATR (Average True Range)
-- SMA (Simple Moving Average)
-- MACD, Stochastic, Williams %R, CCI, ROC
-- 50+ additional technical indicators
+- **Technical**: RSI, MACD, Bollinger Bands, Stochastic, ADX, ATR, Williams %R, CCI, ROC, MFI, OBV, SuperTrend, Ichimoku, and more
+- **Fundamental**: P/E Ratio, Forward P/E, PEG Ratio, Price-to-Book, ROE, ROA, Debt-to-Equity, and more
+- **50+ total indicators** across both categories
 
-#### **Mixin Architecture**
+#### **Backtrader Integration**
 
-Mixins use the IndicatorFactory to create and manage indicators:
+The unified service provides seamless Backtrader integration through specialized adapters:
 
 ```python
-class BaseEntryMixin:
-    def __init__(self, params: Optional[Dict[str, Any]] = None):
-        self.strategy = None
-        self.params = params or {}
-        self.indicators = {}
-        self.indicator_factory = None
+from src.indicators.adapters.backtrader_wrappers import UnifiedRSI, UnifiedMACD
 
-    def init_entry(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        self.strategy = strategy
-        self.indicator_factory = IndicatorFactory(
-            data=self.strategy.data,
-            use_talib=self.strategy.use_talib
-        )
+class MyStrategy(bt.Strategy):
+    def __init__(self):
+        # Use unified service indicators in Backtrader
+        self.rsi = UnifiedRSI(self.data, timeperiod=14)
+        self.macd = UnifiedMACD(self.data, fastperiod=12, slowperiod=26)
+    
+    def next(self):
+        # Access indicator values as usual
+        if self.rsi[0] < 30:
+            self.buy()
 ```
 
 **Benefits:**
-1. **Clean separation of concerns**
-   - Indicator creation is handled by the factory
-   - Mixins focus on strategy logic
-   - Strategy manages overall flow
+1. **Unified Interface**
+   - Single API for all indicator types
+   - Consistent parameter naming and validation
+   - Simplified configuration management
 
-2. **Consistent indicator handling**
-   - Same interface for all indicators
-   - Unified error handling
-   - Proper data readiness checks
+2. **Enhanced Performance**
+   - Optimized batch processing
+   - Intelligent caching strategies
+   - Concurrent calculation support
 
-3. **Better maintainability**
-   - Centralized indicator management
-   - Easy to add new indicators
-   - Clear responsibility boundaries
+3. **Better Maintainability**
+   - Consolidated codebase
+   - Standardized error handling
+   - Comprehensive testing coverage
 
-4. **Improved error handling**
-   - Factory handles indicator creation errors
-   - Mixins handle strategy logic errors
-   - Clear error boundaries
+4. **Advanced Features**
+   - Intelligent recommendations
+   - Multi-backend fallbacks
+   - Configuration presets for different trading styles
 
 ## 🤝 Contributing
 

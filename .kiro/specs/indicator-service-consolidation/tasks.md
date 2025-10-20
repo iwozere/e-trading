@@ -266,30 +266,50 @@
   - Document testing and contribution procedures
   - _Requirements: 10.3, 10.4_
 
-- [ ] 8. Migrate existing consumers and cleanup legacy code
+- [x] 8. Migrate existing consumers and cleanup legacy code
+
+
+
+
+
+
+
   - Update all existing code to use the unified service
   - Remove redundant modules and clean up the codebase
+
   - _Requirements: 7.5, 10.4_
 
-- [ ] 8.1 Update existing service consumers
+- [x] 8.1 Update existing service consumers
+
   - Update all imports to use unified service
   - Test all existing functionality continues to work
   - Remove direct dependencies on legacy services
   - _Requirements: 7.5_
 
-- [ ] 8.2 Remove legacy indicator modules
+
+- [x] 8.2 Remove legacy indicator modules
+
+
+
+
+
+
   - Remove `src/common/indicator_service.py` and `src/common/indicator_config.py`
   - Remove individual files from `src/strategy/indicator/`
   - Update all import statements across the codebase
   - _Requirements: 10.4_
 
-- [ ] 8.3 Clean up configuration files
+- [x] 8.3 Clean up configuration files
+
+
   - Consolidate configuration into unified format
   - Remove redundant configuration files
   - Update documentation to reflect new configuration structure
   - _Requirements: 2.1, 10.4_
 
-- [ ] 8.4 Update project documentation
+- [x] 8.4 Update project documentation
+
+
   - Update README files and architectural documentation
   - Remove references to legacy indicator modules
   - Document the new unified indicator service architecture

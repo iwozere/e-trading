@@ -6,7 +6,7 @@ This is a quick reference guide for the most common migration patterns when upda
 
 ### Before
 ```python
-from src.strategy.indicator.wrappers import create_indicator_wrapper
+from src.strategy.indicator.wrappers import create_indicator_wrapper  # Legacy - removed
 ```
 
 ### After
