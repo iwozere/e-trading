@@ -15,7 +15,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 import asyncio
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Service layer imports
 from src.data.db.services import telegram_service

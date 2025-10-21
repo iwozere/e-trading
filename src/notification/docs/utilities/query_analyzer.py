@@ -7,7 +7,7 @@ identify slow queries, and suggest optimizations.
 
 import time
 from typing import Dict, List, Any, Optional, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from collections import defaultdict

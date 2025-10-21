@@ -7,7 +7,7 @@ work correctly without requiring a full database setup.
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]

@@ -9,7 +9,7 @@ This script tests the basic functionality without requiring a full setup.
 import sys
 import os
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 
 # Add project root to path

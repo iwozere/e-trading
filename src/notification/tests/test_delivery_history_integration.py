@@ -5,7 +5,7 @@ Integration tests that use the actual PostgreSQL database.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 import sys
 from pathlib import Path

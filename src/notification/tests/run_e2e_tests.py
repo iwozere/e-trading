@@ -12,7 +12,7 @@ import asyncio
 import sys
 import subprocess
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]

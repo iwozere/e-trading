@@ -8,7 +8,7 @@ Provides the interface that all channel implementations must follow.
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from src.notification.logger import setup_logger

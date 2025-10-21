@@ -4,7 +4,7 @@ import queue
 import requests
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import websockets
 import backtrader as bt

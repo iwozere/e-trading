@@ -68,6 +68,12 @@ sys.path.append(str(PROJECT_ROOT))
 
 Try to keep all __init__.py files empty for all packages unless it is absolutely necessary to import functions from the subpackages.
 
+### 2.3 Date operations are UTC-aware.
+Instead of:
+datetime.utcnow()
+Use:
+datetime.now(timezone.utc)
+
 ---
 
 ## 3. Logging

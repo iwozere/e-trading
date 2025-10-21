@@ -6,7 +6,7 @@ work correctly with real database operations.
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 

@@ -6,7 +6,7 @@ Provides reliable message storage and retrieval for the notification service.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import json
 import logging

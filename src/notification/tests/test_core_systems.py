@@ -16,7 +16,7 @@ from src.notification.service.priority_handler import priority_handler
 from src.notification.service.batch_processor import batch_processor, BatchConfig
 from src.notification.service.message_queue import QueuedMessage
 from src.data.db.models.model_notification import MessagePriority
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def create_test_message(msg_id: int, priority: MessagePriority = MessagePriority.NORMAL) -> QueuedMessage:

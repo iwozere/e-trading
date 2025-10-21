@@ -10,7 +10,7 @@ through the notification service.
 from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 import httpx

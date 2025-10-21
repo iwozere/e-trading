@@ -6,7 +6,7 @@ Provides data access methods for messages, delivery status, channel health, rate
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc, asc, func, text
 from sqlalchemy.exc import IntegrityError

@@ -9,7 +9,7 @@ import asyncio
 import sys
 from pathlib import Path
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]

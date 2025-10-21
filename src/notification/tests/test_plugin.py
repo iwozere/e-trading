@@ -6,7 +6,7 @@ Used for testing and as an example for plugin development.
 """
 
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 
 from src.notification.channels.base import (

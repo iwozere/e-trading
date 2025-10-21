@@ -6,7 +6,7 @@ JWT token management, password hashing, and role-based
 access control utilities.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import jwt
 from fastapi import HTTPException, status, Depends

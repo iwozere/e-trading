@@ -7,7 +7,7 @@ of the notification service.
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 

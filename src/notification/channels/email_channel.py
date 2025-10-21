@@ -14,7 +14,7 @@ from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
 from email import encoders
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import aiosmtplib
 from pathlib import Path

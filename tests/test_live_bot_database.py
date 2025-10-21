@@ -9,7 +9,7 @@ and that it properly handles bot_id and trade_type.
 import os
 import sys
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add src to path
 sys.path.append('src')

@@ -8,7 +8,7 @@ through appropriate channels.
 
 import asyncio
 from typing import List, Dict, Any, Optional, Set
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 import signal

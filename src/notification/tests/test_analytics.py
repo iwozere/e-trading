@@ -9,7 +9,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 
 # Add project root to path

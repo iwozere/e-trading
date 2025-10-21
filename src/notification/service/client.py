@@ -8,7 +8,7 @@ Provides a simple interface for sending notifications and checking delivery stat
 import asyncio
 import aiohttp
 from typing import List, Dict, Any, Optional, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import json
 from pathlib import Path

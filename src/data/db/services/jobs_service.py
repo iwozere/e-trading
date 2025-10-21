@@ -6,7 +6,7 @@ Provides business logic for managing schedules and runs.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError

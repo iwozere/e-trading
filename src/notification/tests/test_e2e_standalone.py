@@ -11,7 +11,7 @@ import sys
 import json
 import time
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 

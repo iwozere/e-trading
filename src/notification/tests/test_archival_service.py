@@ -8,7 +8,7 @@ import json
 import gzip
 import tempfile
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 import pytest

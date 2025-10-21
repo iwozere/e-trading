@@ -6,7 +6,7 @@ Provides data access methods for schedules and runs tables.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc, asc, func

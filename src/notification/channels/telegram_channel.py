@@ -6,7 +6,7 @@ Supports message splitting, attachments, health monitoring, and dynamic chat IDs
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import aiohttp
 

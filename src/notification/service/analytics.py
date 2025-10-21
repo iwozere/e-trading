@@ -7,7 +7,7 @@ response times, and trends across channels, users, and time periods.
 
 import asyncio
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from enum import Enum
 import threading

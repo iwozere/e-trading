@@ -12,7 +12,7 @@ Tests for the application service layer including:
 
 import pytest
 from unittest.mock import patch, Mock, MagicMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 

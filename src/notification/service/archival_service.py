@@ -15,7 +15,7 @@ Requirements addressed:
 import json
 import gzip
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass

@@ -12,7 +12,7 @@ This script tests the database integration by:
 import os
 import sys
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add src to path
 sys.path.append('src')
