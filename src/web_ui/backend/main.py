@@ -48,6 +48,7 @@ from src.web_ui.backend.services.webui_app_service import webui_app_service
 from src.web_ui.backend.auth_routes import router as auth_router
 from src.web_ui.backend.telegram_routes import router as telegram_router
 from src.web_ui.backend.jobs_routes import router as jobs_router
+from src.web_ui.backend.notification_routes import router as notification_router
 from src.web_ui.backend.auth import get_current_user, require_trader_or_admin, require_admin
 from src.data.db.models.model_users import User
 from src.web_ui.backend.services import (
@@ -125,6 +126,9 @@ app.include_router(telegram_router)
 
 # Include jobs and scheduling routes
 app.include_router(jobs_router)
+
+# Include notification management routes
+app.include_router(notification_router)
 
 # Security
 security = HTTPBearer()

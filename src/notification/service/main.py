@@ -160,7 +160,7 @@ async def health_check():
 
         return {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "service": config.service_name,
             "version": config.version,
             "database": "connected"
@@ -171,7 +171,7 @@ async def health_check():
             status_code=503,
             content={
                 "status": "unhealthy",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "service": config.service_name,
                 "version": config.version,
                 "error": str(e)
@@ -215,7 +215,7 @@ async def enqueue_message(
 
         # Set default scheduled_for if not provided
         if not message_data.get('scheduled_for'):
-            message_data['scheduled_for'] = datetime.utcnow()
+            message_data['scheduled_for'] = datetime.now(timezone.utc)
 
         # Create message in database
         db_message = repo.messages.create_message(message_data)
@@ -875,7 +875,7 @@ async def export_history(
 
         else:
             # For large exports, process in background
-            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
             user_part = user_id or 'all'
             export_id = f"export_{timestamp}_{user_part}"
 
@@ -924,7 +924,7 @@ async def get_history_summary(
         if days < 1 or days > 365:
             raise ValueError("Days must be between 1 and 365")
 
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Message statistics
         message_query = repo.session.query(Message).filter(
@@ -1015,7 +1015,7 @@ async def get_history_summary(
             "period": {
                 "days": days,
                 "start_date": cutoff_date.isoformat(),
-                "end_date": datetime.utcnow().isoformat()
+                "end_date": datetime.now(timezone.utc).isoformat()
             },
             "filters": {
                 "user_id": user_id,
@@ -1277,7 +1277,7 @@ async def get_processor_statistics():
 
         return {
             "processor_stats": stats,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     except HTTPException:

@@ -64,7 +64,7 @@ class PerformanceDashboard:
     def get_real_time_metrics(self) -> Dict[str, Any]:
         """Get real-time performance metrics."""
         metrics = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "query_performance": {},
             "database_health": {},
             "system_stats": {}
@@ -293,7 +293,7 @@ class PerformanceDashboard:
     def export_metrics(self, filename: str = None) -> str:
         """Export current metrics to JSON file."""
         if not filename:
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             filename = f"performance_metrics_{timestamp}.json"
 
         try:
@@ -313,7 +313,7 @@ class PerformanceDashboard:
         """Generate performance report for the specified time period."""
         report = {
             "period_hours": hours,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "summary": {},
             "recommendations": []
         }
@@ -459,7 +459,7 @@ def main():
             report = dashboard.generate_report(args.report)
 
             # Save report
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             report_file = f"performance_report_{timestamp}.json"
 
             with open(report_file, "w") as f:

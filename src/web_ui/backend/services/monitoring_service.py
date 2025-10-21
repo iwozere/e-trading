@@ -31,7 +31,7 @@ class SystemAlert:
         self.severity = severity  # info, warning, error, critical
         self.message = message
         self.details = details or {}
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
         self.acknowledged = False
 
     def to_dict(self) -> Dict[str, Any]:
@@ -59,7 +59,7 @@ class SystemMonitoringService:
 
     def __init__(self):
         """Initialize the monitoring service."""
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
         self.alerts: List[SystemAlert] = []
         self.performance_history: List[Dict[str, Any]] = []
         self.max_history_size = 1000
@@ -333,7 +333,7 @@ class SystemMonitoringService:
         Returns:
             Dict: All system metrics combined
         """
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
 
         metrics = {
             'timestamp': timestamp.isoformat(),
@@ -410,7 +410,7 @@ class SystemMonitoringService:
             details: Additional alert details
         """
         # Check if similar alert already exists (within last 5 minutes)
-        cutoff_time = datetime.utcnow() - timedelta(minutes=5)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=5)
 
         for existing_alert in self.alerts:
             if (existing_alert.alert_type == alert_type and
@@ -482,7 +482,7 @@ class SystemMonitoringService:
         Returns:
             List: Performance history data
         """
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         return [
             metrics for metrics in self.performance_history
@@ -499,7 +499,7 @@ class SystemMonitoringService:
         return {
             'service_name': 'System Monitoring Service',
             'status': 'running',
-            'uptime_seconds': (datetime.utcnow() - self.start_time).total_seconds(),
+            'uptime_seconds': (datetime.now(timezone.utc) - self.start_time).total_seconds(),
             'total_alerts': len(self.alerts),
             'unacknowledged_alerts': len([a for a in self.alerts if not a.acknowledged]),
             'performance_history_size': len(self.performance_history),

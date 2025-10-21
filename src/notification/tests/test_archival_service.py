@@ -68,13 +68,13 @@ class TestArchivalService:
             'recipient_id': 'user_1',
             'content': {'text': 'Test message', 'data': {'value': 1}},
             'message_metadata': {'test': True, 'index': 1},
-            'created_at': datetime.utcnow() - timedelta(days=35),
-            'scheduled_for': datetime.utcnow() - timedelta(days=35),
+            'created_at': datetime.now(timezone.utc) - timedelta(days=35),
+            'scheduled_for': datetime.now(timezone.utc) - timedelta(days=35),
             'status': 'DELIVERED',
             'retry_count': 0,
             'max_retries': 3,
             'last_error': None,
-            'processed_at': datetime.utcnow() - timedelta(days=35)
+            'processed_at': datetime.now(timezone.utc) - timedelta(days=35)
         }
 
     def test_archival_policy_creation(self, temp_archive_dir):

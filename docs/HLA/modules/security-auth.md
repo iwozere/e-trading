@@ -332,7 +332,7 @@ def approve_telegram_user(telegram_user_id: str, approver_id: int) -> bool:
         telegram_user_id=telegram_user_id,
         approved=True,
         approved_by=approver_id,
-        approved_at=datetime.utcnow()
+        approved_at=datetime.now(timezone.utc)
     )
     
     # Log approval action
@@ -369,8 +369,8 @@ class SessionManager:
         
         session_data = {
             "user_id": user_id,
-            "created_at": datetime.utcnow(),
-            "last_activity": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "last_activity": datetime.now(timezone.utc),
             "ip_address": ip_address,
             "user_agent": user_agent,
             "is_active": True
@@ -405,7 +405,7 @@ class SessionManager:
             return None
         
         # Update last activity
-        session["last_activity"] = datetime.utcnow()
+        session["last_activity"] = datetime.now(timezone.utc)
         
         return session
     
@@ -452,7 +452,7 @@ class SecurityAuditLogger:
             user_agent=user_agent,
             success=success,
             details=details or {},
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         
         # Store in database
@@ -504,7 +504,7 @@ class SecurityAuditLogger:
                 "violation_type": violation_type,
                 **details
             },
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         
         with get_database_session() as db:

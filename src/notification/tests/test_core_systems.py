@@ -30,10 +30,10 @@ def create_test_message(msg_id: int, priority: MessagePriority = MessagePriority
         template_name=None,
         content={"text": f"Test message {msg_id}"},
         metadata=None,
-        scheduled_for=datetime.utcnow(),
+        scheduled_for=datetime.now(timezone.utc),
         retry_count=0,
         max_retries=3,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
 
 

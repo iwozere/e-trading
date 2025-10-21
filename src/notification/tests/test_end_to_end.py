@@ -66,8 +66,8 @@ class MockChannel:
         """Mock health check."""
         return {
             "status": self.health_status,
-            "last_success": datetime.utcnow() if self.health_status == "healthy" else None,
-            "last_failure": datetime.utcnow() if self.health_status != "healthy" else None,
+            "last_success": datetime.now(timezone.utc) if self.health_status == "healthy" else None,
+            "last_failure": datetime.now(timezone.utc) if self.health_status != "healthy" else None,
             "avg_response_time_ms": int(self.delay * 1000)
         }
 

@@ -50,7 +50,7 @@ class TradingException(Exception):
         self.severity = severity.upper()
         self.recoverable = recoverable
         self.retry_after = retry_after
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
         self.stack_trace = traceback.format_exc()
 
         # Add default context

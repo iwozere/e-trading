@@ -42,7 +42,7 @@ class QueryMetrics:
         self.min_time = min(self.min_time, execution_time)
         self.max_time = max(self.max_time, execution_time)
         self.avg_time = self.total_time / self.execution_count
-        self.last_executed = datetime.utcnow()
+        self.last_executed = datetime.now(timezone.utc)
 
         # Keep only last 100 execution times for percentile calculations
         self.execution_times.append(execution_time)
@@ -291,7 +291,7 @@ class QueryPerformanceMonitor:
             "slow_queries": self.get_slow_queries(50),
             "frequent_queries": self.get_most_frequent_queries(50),
             "total_time_queries": self.get_total_time_queries(50),
-            "export_timestamp": datetime.utcnow().isoformat()
+            "export_timestamp": datetime.now(timezone.utc).isoformat()
         }
 
 

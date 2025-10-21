@@ -89,7 +89,7 @@ class MyChannel(NotificationChannel):
         # Implement health check logic
         return ChannelHealth(
             status=ChannelHealthStatus.HEALTHY,
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
     
     def get_rate_limit(self):

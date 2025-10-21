@@ -168,7 +168,7 @@ def test_optimization_components():
         print("   ✓ OptimizedRateLimitRepository instantiated")
 
         # Test that methods exist and can be called (with mock data)
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
 
         # These should not fail even with mock session
         pending = message_repo.get_pending_messages_optimized(current_time, limit=10)

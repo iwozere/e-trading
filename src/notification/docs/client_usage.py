@@ -94,7 +94,7 @@ async def main():
         # Example 8: Scheduled notification
         print("\nSending scheduled notification...")
         from datetime import timedelta
-        scheduled_time = datetime.utcnow() + timedelta(minutes=5)
+        scheduled_time = datetime.now(timezone.utc) + timedelta(minutes=5)
 
         request = {
             "message_type": "system",

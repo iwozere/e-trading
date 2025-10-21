@@ -45,10 +45,10 @@ def create_test_message(
         template_name=None,
         content={"text": f"Test message {message_id}"},
         metadata=None,
-        scheduled_for=datetime.utcnow(),
+        scheduled_for=datetime.now(timezone.utc),
         retry_count=0,
         max_retries=3,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
 
 

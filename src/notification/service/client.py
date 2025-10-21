@@ -250,7 +250,7 @@ class NotificationServiceClient:
             "entry_price": entry_price,
             "pnl": pnl,
             "exit_type": exit_type,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         return await self.send_notification(

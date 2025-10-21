@@ -83,7 +83,7 @@ class BinanceEnhancedFeed(bt.feed.DataBase):
 
     @retry_on_exception(max_attempts=3, base_delay=1.0, max_delay=10.0)
     def _backfill_historical_data(self):
-        end_time = int(datetime.utcnow().timestamp() * 1000)
+        end_time = int(datetime.now(timezone.utc).timestamp() * 1000)
         step = self._INTERVAL_MS.get(self.p.interval, 60_000)
         start_time = end_time - (self.p.lookback * step)
 

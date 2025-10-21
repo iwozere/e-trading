@@ -223,8 +223,8 @@ class JobsService:
         # Create a run for immediate execution
         run_data = ScheduleRunCreate(
             job_type=JobType(schedule.job_type),
-            job_id=f"manual_{schedule_id}_{datetime.utcnow().timestamp()}",
-            scheduled_for=datetime.utcnow(),
+            job_id=f"manual_{schedule_id}_{datetime.now(timezone.utc).timestamp()}",
+            scheduled_for=datetime.now(timezone.utc),
             job_snapshot={
                 "schedule_id": schedule_id,
                 "schedule_name": schedule.name,
@@ -243,7 +243,7 @@ class JobsService:
         Returns:
             List of schedules that should be triggered
         """
-        return self.repository.get_pending_schedules(datetime.utcnow())
+        return self.repository.get_pending_schedules(datetime.now(timezone.utc))
 
     def update_schedule_next_run(self, schedule_id: int) -> bool:
         """
@@ -497,12 +497,12 @@ class JobsService:
             Next run datetime
         """
         try:
-            cron = croniter.croniter(cron_expression, datetime.utcnow())
+            cron = croniter.croniter(cron_expression, datetime.now(timezone.utc))
             return cron.get_next(datetime)
         except Exception as e:
             _logger.error(f"Failed to calculate next run time for cron '{cron_expression}': {e}")
             # Return a default time (1 hour from now) if calculation fails
-            return datetime.utcnow() + timedelta(hours=1)
+            return datetime.now(timezone.utc) + timedelta(hours=1)
 
     def expand_screener_target(self, target: str) -> List[str]:
         """
@@ -581,13 +581,13 @@ class JobsService:
         }
 
         # Create job ID
-        job_id = f"screener_{screener_set or 'custom'}_{datetime.utcnow().timestamp()}"
+        job_id = f"screener_{screener_set or 'custom'}_{datetime.now(timezone.utc).timestamp()}"
 
         # Create run
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id=job_id,
-            scheduled_for=scheduled_for or datetime.utcnow(),
+            scheduled_for=scheduled_for or datetime.now(timezone.utc),
             job_snapshot=job_snapshot
         )
 
@@ -619,13 +619,13 @@ class JobsService:
         }
 
         # Create job ID
-        job_id = f"report_{report_type}_{datetime.utcnow().timestamp()}"
+        job_id = f"report_{report_type}_{datetime.now(timezone.utc).timestamp()}"
 
         # Create run
         run_data = ScheduleRunCreate(
             job_type=JobType.REPORT,
             job_id=job_id,
-            scheduled_for=scheduled_for or datetime.utcnow(),
+            scheduled_for=scheduled_for or datetime.now(timezone.utc),
             job_snapshot=job_snapshot
         )
 

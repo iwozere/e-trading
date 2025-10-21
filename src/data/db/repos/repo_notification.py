@@ -230,7 +230,7 @@ class MessageRepository:
         Returns:
             Number of messages deleted
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
 
         deleted_count = self.session.query(Message).filter(
             and_(
@@ -345,7 +345,7 @@ class DeliveryStatusRepository:
         Returns:
             Dictionary with statistics
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         query = self.session.query(MessageDeliveryStatus).filter(
             MessageDeliveryStatus.created_at >= cutoff_date
@@ -624,10 +624,10 @@ class ChannelHealthRepository:
                 for key, value in health_data.items():
                     if hasattr(health, key):
                         setattr(health, key, value)
-                health.checked_at = datetime.utcnow()
+                health.checked_at = datetime.now(timezone.utc)
             else:
                 # Create new record
-                health_data['checked_at'] = datetime.utcnow()
+                health_data['checked_at'] = datetime.now(timezone.utc)
                 health = ChannelHealth(**health_data)
                 self.session.add(health)
 
@@ -761,7 +761,7 @@ class RateLimitRepository:
         Returns:
             True if token was consumed, False if rate limited
         """
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
 
         # Get or create rate limit
         rate_limit = self.get_rate_limit(user_id, channel)

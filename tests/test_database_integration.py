@@ -52,7 +52,7 @@ def test_trade_operations():
         # Test data
         bot_id = "test_bot_001"
         symbol = "BTCUSDT"
-        entry_time = datetime.utcnow()
+        entry_time = datetime.now(timezone.utc)
 
         # Create trade
         trade_data = {
@@ -86,7 +86,7 @@ def test_trade_operations():
         print(f"✅ Retrieved trade: {retrieved_trade.symbol} @ {retrieved_trade.entry_price}")
 
         # Update trade
-        exit_time = datetime.utcnow() + timedelta(hours=1)
+        exit_time = datetime.now(timezone.utc) + timedelta(hours=1)
         update_data = {
             'exit_time': exit_time,
             'sell_order_created': exit_time,
@@ -162,7 +162,7 @@ def test_bot_instance_operations():
             'status': 'stopped',
             'current_balance': 1050.0,
             'total_pnl': 60.0,
-            'last_heartbeat': datetime.utcnow()
+            'last_heartbeat': datetime.now(timezone.utc)
         }
 
         updated_bot = repo.update_bot_instance(bot_id, update_data)
@@ -248,8 +248,8 @@ def test_restart_recovery():
             'exit_logic_name': 'ATRExit',
             'symbol': symbol,
             'interval': '1h',
-            'entry_time': datetime.utcnow(),
-            'buy_order_created': datetime.utcnow(),
+            'entry_time': datetime.now(timezone.utc),
+            'buy_order_created': datetime.now(timezone.utc),
             'entry_price': 3000.0,
             'entry_value': 600.0,
             'size': 0.2,

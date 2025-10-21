@@ -37,7 +37,7 @@ class E2ETestRunner:
             "test": test_name,
             "success": success,
             "message": message,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         })
 
         status = "✓ PASS" if success else "✗ FAIL"
@@ -211,7 +211,7 @@ class E2ETestRunner:
 
     async def run_all_tests(self):
         """Run all end-to-end tests."""
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
 
         print("🚀 Starting Notification Service End-to-End Tests")
         print(f"Start time: {self.start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -240,7 +240,7 @@ class E2ETestRunner:
         # 4. Pytest-based tests (if available)
         test_results.append(self.run_pytest_tests())
 
-        self.end_time = datetime.utcnow()
+        self.end_time = datetime.now(timezone.utc)
         duration = self.end_time - self.start_time
 
         # Print final summary

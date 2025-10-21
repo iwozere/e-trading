@@ -59,7 +59,7 @@ class TestTokenManagement:
 
         # Verify expiry is approximately correct (within 1 minute)
         exp_time = datetime.utcfromtimestamp(payload["exp"])
-        expected_exp = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expected_exp = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 60  # Within 1 minute
 
@@ -71,7 +71,7 @@ class TestTokenManagement:
 
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         exp_time = datetime.utcfromtimestamp(payload["exp"])
-        expected_exp = datetime.utcnow() + custom_expiry
+        expected_exp = datetime.now(timezone.utc) + custom_expiry
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 60  # Within 1 minute
 
@@ -93,7 +93,7 @@ class TestTokenManagement:
 
         # Verify expiry is approximately correct
         exp_time = datetime.utcfromtimestamp(payload["exp"])
-        expected_exp = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expected_exp = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 3600  # Within 1 hour
 
@@ -242,9 +242,9 @@ class TestGetCurrentUser:
         mock_user.email = "testuser@trading-system.local"
         mock_user.role = "trader"
         mock_user.is_active = True
-        mock_user.created_at = datetime.utcnow()
-        mock_user.updated_at = datetime.utcnow()
-        mock_user.last_login = datetime.utcnow()
+        mock_user.created_at = datetime.now(timezone.utc)
+        mock_user.updated_at = datetime.now(timezone.utc)
+        mock_user.last_login = datetime.now(timezone.utc)
 
         mock_get_db_service.return_value = mock_db_service
         mock_db_service.uow.return_value.__enter__ = Mock(return_value=mock_uow)

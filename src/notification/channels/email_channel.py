@@ -188,7 +188,7 @@ class EmailChannel(NotificationChannel):
         Returns:
             DeliveryResult with delivery status and metadata
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Use recipient or fall back to default
@@ -217,7 +217,7 @@ class EmailChannel(NotificationChannel):
             # Send email
             await self._send_email_async(msg, recipients + cc_emails + bcc_emails)
 
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             return DeliveryResult(
                 success=True,
@@ -242,7 +242,7 @@ class EmailChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
         except smtplib.SMTPRecipientsRefused as e:
@@ -253,7 +253,7 @@ class EmailChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.BOUNCED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
         except (smtplib.SMTPException, aiosmtplib.SMTPException) as e:
@@ -264,7 +264,7 @@ class EmailChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
         except Exception as e:
@@ -275,7 +275,7 @@ class EmailChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
     async def _create_email_message(
@@ -458,7 +458,7 @@ class EmailChannel(NotificationChannel):
         Returns:
             ChannelHealth with current status and metrics
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Test SMTP connection
@@ -486,11 +486,11 @@ class EmailChannel(NotificationChannel):
             async with aiosmtplib.SMTP(**smtp_kwargs) as smtp:
                 await smtp.login(self.config["smtp_username"], self.config["smtp_password"])
 
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             return ChannelHealth(
                 status=ChannelHealthStatus.HEALTHY,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time,
                 metadata={
                     "smtp_host": self.config["smtp_host"],
@@ -502,18 +502,18 @@ class EmailChannel(NotificationChannel):
             )
 
         except (smtplib.SMTPAuthenticationError, aiosmtplib.SMTPAuthenticationError) as e:
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             error_msg = f"SMTP authentication failed: {str(e)}"
 
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time,
                 error_message=error_msg
             )
 
         except (smtplib.SMTPException, aiosmtplib.SMTPException) as e:
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             error_msg = f"SMTP error: {str(e)}"
 
             # Determine if this is temporary or permanent
@@ -524,18 +524,18 @@ class EmailChannel(NotificationChannel):
 
             return ChannelHealth(
                 status=status,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time,
                 error_message=error_msg
             )
 
         except Exception as e:
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             error_msg = f"Unexpected error: {str(e)}"
 
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time,
                 error_message=error_msg
             )

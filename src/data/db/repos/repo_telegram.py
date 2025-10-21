@@ -105,7 +105,7 @@ class BroadcastRepo:
 
         # Recent activity (last 24 hours)
         from datetime import datetime, timedelta
-        yesterday = datetime.utcnow() - timedelta(days=1)
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
         recent_q = select(func.count(TelegramBroadcastLog.id)).where(
             TelegramBroadcastLog.created_at >= yesterday
         )

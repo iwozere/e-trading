@@ -50,13 +50,13 @@ def sample_message():
         template_name="alert_template",
         content={"title": "Test Alert", "message": "This is a test"},
         message_metadata={"source": "test"},
-        created_at=datetime.utcnow(),
-        scheduled_for=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        scheduled_for=datetime.now(timezone.utc),
         status=MessageStatus.DELIVERED.value,
         retry_count=0,
         max_retries=3,
         last_error=None,
-        processed_at=datetime.utcnow()
+        processed_at=datetime.now(timezone.utc)
     )
 
 
@@ -68,11 +68,11 @@ def sample_delivery():
         message_id=1,
         channel="telegram",
         status=DeliveryStatus.DELIVERED.value,
-        delivered_at=datetime.utcnow(),
+        delivered_at=datetime.now(timezone.utc),
         response_time_ms=150,
         error_message=None,
         external_id="tg_msg_123",
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
 
 

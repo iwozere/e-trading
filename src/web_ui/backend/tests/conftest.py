@@ -14,7 +14,7 @@ from pathlib import Path
 import sys
 import tempfile
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -39,9 +39,9 @@ def mock_admin_user():
         email="admin@test.com",
         role="admin",
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-        last_login=datetime.utcnow()
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        last_login=datetime.now(timezone.utc)
     )
 
 
@@ -53,9 +53,9 @@ def mock_trader_user():
         email="trader@test.com",
         role="trader",
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-        last_login=datetime.utcnow()
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        last_login=datetime.now(timezone.utc)
     )
 
 
@@ -67,9 +67,9 @@ def mock_viewer_user():
         email="viewer@test.com",
         role="viewer",
         is_active=True,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-        last_login=datetime.utcnow()
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        last_login=datetime.now(timezone.utc)
     )
 
 
@@ -81,9 +81,9 @@ def mock_inactive_user():
         email="inactive@test.com",
         role="trader",
         is_active=False,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-        last_login=datetime.utcnow()
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        last_login=datetime.now(timezone.utc)
     )
 
 
@@ -195,8 +195,8 @@ def mock_telegram_service():
             'is_admin': False,
             'max_alerts': 5,
             'max_schedules': 5,
-            'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow()
+            'created_at': datetime.now(timezone.utc),
+            'updated_at': datetime.now(timezone.utc)
         }
     ]
 
@@ -210,7 +210,7 @@ def mock_telegram_service():
             'condition': 'above',
             'active': True,
             'email': False,
-            'created': datetime.utcnow()
+            'created': datetime.now(timezone.utc)
         }
     ]
 
@@ -226,7 +226,7 @@ def mock_telegram_service():
             'success': True,
             'error_message': None,
             'response_time_ms': 150,
-            'created': datetime.utcnow()
+            'created': datetime.now(timezone.utc)
         }
     ]
 
@@ -311,9 +311,9 @@ class MockUser:
         self.email = email
         self.role = role
         self.is_active = is_active
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
-        self.last_login = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
+        self.last_login = datetime.now(timezone.utc)
 
     def to_dict(self):
         return {
@@ -440,7 +440,7 @@ MOCK_TELEGRAM_ALERTS = [
         'email': False,
         'alert_type': 'price',
         'timeframe': '15m',
-        'created': datetime.utcnow()
+        'created': datetime.now(timezone.utc)
     },
     {
         'id': 2,
@@ -452,7 +452,7 @@ MOCK_TELEGRAM_ALERTS = [
         'email': True,
         'alert_type': 'price',
         'timeframe': '1h',
-        'created': datetime.utcnow()
+        'created': datetime.now(timezone.utc)
     }
 ]
 
@@ -467,7 +467,7 @@ MOCK_AUDIT_LOGS = [
         'success': True,
         'error_message': None,
         'response_time_ms': 150,
-        'created': datetime.utcnow()
+        'created': datetime.now(timezone.utc)
     },
     {
         'id': 2,
@@ -479,6 +479,6 @@ MOCK_AUDIT_LOGS = [
         'success': True,
         'error_message': None,
         'response_time_ms': 2500,
-        'created': datetime.utcnow()
+        'created': datetime.now(timezone.utc)
     }
 ]

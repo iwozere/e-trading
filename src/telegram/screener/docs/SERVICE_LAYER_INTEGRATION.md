@@ -246,7 +246,7 @@ class AlertMonitor:
                     self.telegram_service.update_alert(
                         alert["id"], 
                         status="TRIGGERED",
-                        last_trigger_time=datetime.utcnow()
+                        last_trigger_time=datetime.now(timezone.utc)
                     )
                     
                     # Send notification

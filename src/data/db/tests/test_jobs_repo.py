@@ -44,7 +44,7 @@ def test_create_schedule(repo, dbsess):
         "task_params": {"format": "pdf"},
         "cron": "0 9 * * *",
         "enabled": True,
-        "next_run_at": datetime.utcnow() + timedelta(hours=1)
+        "next_run_at": datetime.now(timezone.utc) + timedelta(hours=1)
     }
 
     schedule = repo.create_schedule(schedule_data)
@@ -209,7 +209,7 @@ def test_delete_schedule_nonexistent(repo):
 
 def test_get_pending_schedules(repo, dbsess):
     """Test getting schedules due for execution."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     past = now - timedelta(minutes=5)
     future = now + timedelta(minutes=5)
 
@@ -240,7 +240,7 @@ def test_update_schedule_next_run(repo, dbsess):
     }
 
     created = repo.create_schedule(schedule_data)
-    new_time = datetime.utcnow() + timedelta(hours=2)
+    new_time = datetime.now(timezone.utc) + timedelta(hours=2)
 
     success = repo.update_schedule_next_run(created.id, new_time)
     assert success is True
@@ -256,7 +256,7 @@ def test_create_run(repo, dbsess):
         "job_type": JobType.REPORT.value,
         "job_id": 123,  # Changed from string to integer
         "user_id": 1,
-        "scheduled_for": datetime.utcnow(),
+        "scheduled_for": datetime.now(timezone.utc),
         "job_snapshot": {"param1": "value1"}
     }
 
@@ -270,7 +270,7 @@ def test_create_run(repo, dbsess):
 
 def test_create_run_duplicate_fails(repo, dbsess):
     """Test that creating duplicate run fails."""
-    scheduled_time = datetime.utcnow()
+    scheduled_time = datetime.now(timezone.utc)
     run_data = {
         "job_type": JobType.REPORT.value,
         "job_id": 456,  # Changed from string to integer
@@ -294,7 +294,7 @@ def test_get_run(repo, dbsess):
         "job_type": JobType.SCREENER.value,
         "job_id": 789,  # Changed from string to integer
         "user_id": 1,
-        "scheduled_for": datetime.utcnow(),
+        "scheduled_for": datetime.now(timezone.utc),
         "job_snapshot": {"tickers": ["AAPL", "GOOGL"]}
     }
 
@@ -308,7 +308,7 @@ def test_get_run(repo, dbsess):
 
 def test_list_runs_with_filters(repo, dbsess):
     """Test listing runs with various filters."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     runs_data = [
         {"job_type": JobType.REPORT.value, "job_id": 101, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
@@ -343,14 +343,14 @@ def test_update_run(repo, dbsess):
         "job_type": JobType.REPORT.value,
         "job_id": 201,  # Changed from string to integer
         "user_id": 1,
-        "scheduled_for": datetime.utcnow(),
+        "scheduled_for": datetime.now(timezone.utc),
         "job_snapshot": {}
     }
 
     created = repo.create_run(run_data)
 
     # Update run
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     update_data = {
         "status": RunStatus.RUNNING.value,
         "started_at": now,
@@ -371,7 +371,7 @@ def test_claim_run(repo, dbsess):
         "job_type": JobType.SCREENER.value,
         "job_id": 301,  # Changed from string to integer
         "user_id": 1,
-        "scheduled_for": datetime.utcnow(),
+        "scheduled_for": datetime.now(timezone.utc),
         "job_snapshot": {}
     }
 
@@ -392,7 +392,7 @@ def test_claim_run_already_claimed(repo, dbsess):
         "job_type": JobType.REPORT.value,
         "job_id": 401,  # Changed from string to integer
         "user_id": 1,
-        "scheduled_for": datetime.utcnow(),
+        "scheduled_for": datetime.now(timezone.utc),
         "job_snapshot": {}
     }
 
@@ -409,7 +409,7 @@ def test_claim_run_already_claimed(repo, dbsess):
 
 def test_get_pending_runs(repo, dbsess):
     """Test getting pending runs."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     runs_data = [
         {"job_type": JobType.REPORT.value, "job_id": 501, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},  # Changed to integer
@@ -437,7 +437,7 @@ def test_get_pending_runs(repo, dbsess):
 def test_get_runs_by_job(repo, dbsess):
     """Test getting all runs for a specific job."""
     job_id = 601  # Changed from string to integer
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     runs_data = [
         {"job_type": JobType.REPORT.value, "job_id": job_id, "user_id": 1, "scheduled_for": now, "job_snapshot": {}},
@@ -458,7 +458,7 @@ def test_get_runs_by_job(repo, dbsess):
 
 def test_get_run_statistics(repo, dbsess):
     """Test getting run statistics."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Create runs with different statuses
     runs_data = [
@@ -490,7 +490,7 @@ def test_get_run_statistics(repo, dbsess):
 
 def test_cleanup_old_runs(repo, dbsess):
     """Test cleaning up old completed and failed runs."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     old_time = now - timedelta(days=100)
 
     # Create old runs

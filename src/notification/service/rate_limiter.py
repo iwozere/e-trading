@@ -286,7 +286,7 @@ class RateLimiter:
             violation = RateLimitViolation(
                 user_id=user_id,
                 channel=channel,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 requested_tokens=tokens,
                 available_tokens=0,  # Would have been rate limited
                 priority=priority.value,
@@ -320,7 +320,7 @@ class RateLimiter:
             violation = RateLimitViolation(
                 user_id=user_id,
                 channel=channel,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 requested_tokens=tokens,
                 available_tokens=bucket.tokens,
                 priority=priority.value,
@@ -473,7 +473,7 @@ class RateLimiter:
         Returns:
             Dictionary with statistics
         """
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
         violations = self.get_violations(user_id, channel, since)
 
         # Calculate statistics
@@ -531,7 +531,7 @@ class RateLimiter:
         Returns:
             Number of violations removed
         """
-        cutoff_time = datetime.utcnow() - timedelta(days=days_to_keep)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
 
         with self._lock:
             original_count = len(self._violations)
@@ -585,7 +585,7 @@ class RateLimiter:
                             "tokens": rate_limit.max_tokens,
                             "max_tokens": rate_limit.max_tokens,
                             "refill_rate": rate_limit.refill_rate,
-                            "last_refill": datetime.utcnow()
+                            "last_refill": datetime.now(timezone.utc)
                         })
                 else:
                     # Reset all channels for user - would need custom query

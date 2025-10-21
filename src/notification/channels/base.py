@@ -463,7 +463,7 @@ class ChannelRegistry:
                 self._logger.error("Health check failed for channel %s: %s", channel_name, e)
                 health_results[channel_name] = ChannelHealth(
                     status=ChannelHealthStatus.DOWN,
-                    last_check=datetime.utcnow(),
+                    last_check=datetime.now(timezone.utc),
                     error_message=str(e)
                 )
 

@@ -611,7 +611,7 @@ async def execute_report_job(run: Run) -> dict:
         # Update status to running
         jobs_service.update_run(run.run_id, RunUpdate(
             status=RunStatus.RUNNING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             worker_id=worker_id
         ))
         
@@ -625,7 +625,7 @@ async def execute_report_job(run: Run) -> dict:
         # Update with results
         jobs_service.update_run(run.run_id, RunUpdate(
             status=RunStatus.COMPLETED,
-            finished_at=datetime.utcnow(),
+            finished_at=datetime.now(timezone.utc),
             result=report_data
         ))
         
@@ -635,7 +635,7 @@ async def execute_report_job(run: Run) -> dict:
         # Update with error
         jobs_service.update_run(run.run_id, RunUpdate(
             status=RunStatus.FAILED,
-            finished_at=datetime.utcnow(),
+            finished_at=datetime.now(timezone.utc),
             error=str(e)
         ))
         raise
@@ -864,7 +864,7 @@ class BackgroundNotificationService:
         await self.message_queue.put({
             'user_id': user_id,
             'message': message,
-            'timestamp': datetime.utcnow()
+            'timestamp': datetime.now(timezone.utc)
         })
         
     async def process_notifications(self):

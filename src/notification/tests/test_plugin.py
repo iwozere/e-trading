@@ -88,7 +88,7 @@ class TestChannel(NotificationChannel):
         Returns:
             DeliveryResult with simulated delivery status
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Simulate processing delay
         delay_ms = self.config.get("simulate_delay_ms", 100)
@@ -108,12 +108,12 @@ class TestChannel(NotificationChannel):
             )
 
         # Simulate successful delivery
-        response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
         return DeliveryResult(
             success=True,
             status=DeliveryStatus.DELIVERED,
-            external_id=f"test_{message_id or 'unknown'}_{int(datetime.utcnow().timestamp())}",
+            external_id=f"test_{message_id or 'unknown'}_{int(datetime.now(timezone.utc).timestamp())}",
             response_time_ms=response_time,
             metadata={
                 "recipient": recipient,
@@ -132,7 +132,7 @@ class TestChannel(NotificationChannel):
         """
         return ChannelHealth(
             status=ChannelHealthStatus.HEALTHY,
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             response_time_ms=self.config.get("simulate_delay_ms", 100),
             metadata={
                 "simulated": True,

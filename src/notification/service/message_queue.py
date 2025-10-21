@@ -148,7 +148,7 @@ class MessageQueue:
 
             # Set default scheduled time
             if scheduled_for is None:
-                scheduled_for = datetime.utcnow()
+                scheduled_for = datetime.now(timezone.utc)
 
             # Prepare message for database
             db_message_data = message_data.copy()
@@ -190,7 +190,7 @@ class MessageQueue:
             List of QueuedMessage objects
         """
         try:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
             with get_repository_context() as repo:
                 # Get pending messages
@@ -236,7 +236,7 @@ class MessageQueue:
             List of high priority QueuedMessage objects
         """
         try:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
             with get_repository_context() as repo:
                 # Get high priority messages first
@@ -299,7 +299,7 @@ class MessageQueue:
             List of QueuedMessage objects ready for retry
         """
         try:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
             with get_repository_context() as repo:
                 # Get failed messages ready for retry
@@ -350,7 +350,7 @@ class MessageQueue:
             with get_repository_context() as repo:
                 message = repo.messages.update_message(message_id, {
                     'status': MessageStatus.DELIVERED.value,
-                    'processed_at': datetime.utcnow()
+                    'processed_at': datetime.now(timezone.utc)
                 })
 
                 if message:
@@ -380,7 +380,7 @@ class MessageQueue:
                 message = repo.messages.update_message(message_id, {
                     'status': MessageStatus.FAILED.value,
                     'last_error': error_message,
-                    'processed_at': datetime.utcnow()
+                    'processed_at': datetime.now(timezone.utc)
                 })
 
                 if message:
@@ -423,7 +423,7 @@ class MessageQueue:
                     stats[f"{priority.value.lower()}_priority_count"] = count
 
                 # Count overdue messages
-                current_time = datetime.utcnow()
+                current_time = datetime.now(timezone.utc)
                 overdue_count = repo.session.query(Message).filter(
                     Message.status == MessageStatus.PENDING.value,
                     Message.scheduled_for < current_time - timedelta(minutes=5)

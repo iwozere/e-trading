@@ -56,7 +56,7 @@ class MockNotificationChannel:
             "id": message.id,
             "content": message.content,
             "recipient_id": message.recipient_id,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         })
 
         return {
@@ -69,8 +69,8 @@ class MockNotificationChannel:
         """Mock health check."""
         return {
             "status": self.health_status,
-            "last_success": datetime.utcnow() if self.health_status == "healthy" else None,
-            "last_failure": datetime.utcnow() if self.health_status != "healthy" else None,
+            "last_success": datetime.now(timezone.utc) if self.health_status == "healthy" else None,
+            "last_failure": datetime.now(timezone.utc) if self.health_status != "healthy" else None,
             "avg_response_time_ms": int(self.delay * 1000)
         }
 
@@ -151,7 +151,7 @@ class EndToEndTestSuite:
             "test": test_name,
             "success": success,
             "message": message,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         })
 
         status = "PASS" if success else "FAIL"

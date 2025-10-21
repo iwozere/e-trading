@@ -281,7 +281,7 @@ class TelegramServiceExample:
             # Generate report (simplified)
             report_data = {
                 "ticker": ticker,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "technical_indicators": indicator_result["technical"],
                 "fundamental_indicators": indicator_result["fundamental"],
                 "user_id": telegram_user_id

@@ -213,7 +213,7 @@ def main() -> None:
 
     conn = mk_conn(abs_db)
     try:
-        now = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        now = dt.datetime.now(timezone.utc).replace(microsecond=0).isoformat() + "Z"
         sqlite_ver = conn.execute("SELECT sqlite_version() AS v").fetchone()["v"]
 
         tables = get_tables(conn)

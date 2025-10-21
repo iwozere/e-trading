@@ -121,7 +121,7 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             interval_minutes = self._get_interval_minutes()
 
             # Use UTC time
-            end_dt = datetime.utcnow().replace(tzinfo=timezone.utc)
+            end_dt = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
             start_dt = end_dt - timedelta(minutes=remaining * interval_minutes)
 
             all_rows = []

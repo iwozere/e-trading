@@ -161,7 +161,7 @@ def test_db_user_registration():
     id = get_or_create_user(TEST_USER_ID)
     email = "testuser@example.com"
     code = f"{random.randint(100000, 999999)}"
-    sent_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    sent_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     set_user_email(TEST_USER_ID, email, code, sent_time)
     # Check email
     stored_email = get_user_email(TEST_USER_ID)
@@ -178,7 +178,7 @@ def test_db_user_registration():
     print(f"Verification code: {db_code}, sent: {db_sent}")
     assert db_code == code
     # Set verified
-    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     set_user_verified(TEST_USER_ID, now)
     status2 = get_user_verification_status(TEST_USER_ID)
     print(f"After verify: {status2}")
@@ -212,17 +212,17 @@ def test_my_register_and_verify():
     print("\n=== /my-register and /my-verify ===")
     email = "testuser@example.com"
     code = f"{random.randint(100000, 999999)}"
-    sent_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    sent_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     set_user_email(TEST_USER_ID, email, code, sent_time)
     # Simulate /my-verify
     db_code, db_sent = get_user_verification_code(TEST_USER_ID)
     assert db_code == code
     # Not expired
     sent_dt = datetime.strptime(db_sent, "%Y-%m-%d %H:%M:%S")
-    if datetime.utcnow() > sent_dt + timedelta(hours=1):
+    if datetime.now(timezone.utc) > sent_dt + timedelta(hours=1):
         print("Verification code expired!")
     else:
-        set_user_verified(TEST_USER_ID, datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+        set_user_verified(TEST_USER_ID, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
         print("Email verified!")
     status = get_user_verification_status(TEST_USER_ID)
     print(f"/my-info: {status}")
@@ -256,7 +256,7 @@ def test_my_status_and_analyze():
     # Simulate verified email
     email = "testuser@example.com"
     code = f"{random.randint(100000, 999999)}"
-    sent_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    sent_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     # /my-status with -email
     pairs = []
     email_body = []

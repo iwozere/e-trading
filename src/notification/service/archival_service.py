@@ -121,7 +121,7 @@ class MessageArchivalService:
             True if within low traffic period
         """
         if current_time is None:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
         current_hour = current_time.hour
         start_hour = self.policy.low_traffic_start_hour
@@ -247,7 +247,7 @@ class MessageArchivalService:
                 'max_retries': message.max_retries,
                 'last_error': message.last_error,
                 'processed_at': message.processed_at.isoformat() if message.processed_at else None,
-                'archived_at': datetime.utcnow().isoformat()
+                'archived_at': datetime.now(timezone.utc).isoformat()
             }
 
             # Include delivery status information
@@ -287,13 +287,13 @@ class MessageArchivalService:
 
         try:
             # Create filename with timestamp
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             filename = f"messages_{timestamp}.json.gz"
             file_path = self.archive_path / filename
 
             # Prepare data for archival
             archive_batch = {
-                'archived_at': datetime.utcnow().isoformat(),
+                'archived_at': datetime.now(timezone.utc).isoformat(),
                 'message_count': len(archived_messages),
                 'messages': archived_messages
             }
@@ -358,7 +358,7 @@ class MessageArchivalService:
             Statistics from the archival operation
         """
         if current_time is None:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
         stats = ArchivalStats()
         start_time = current_time
@@ -427,7 +427,7 @@ class MessageArchivalService:
             self.session.rollback()
 
         finally:
-            stats.duration_seconds = (datetime.utcnow() - start_time).total_seconds()
+            stats.duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         _logger.info("Archival batch completed: %d messages archived, %d bytes, %.2f seconds",
                     stats.messages_archived, stats.bytes_archived, stats.duration_seconds)
@@ -445,7 +445,7 @@ class MessageArchivalService:
             Statistics from the cleanup operation
         """
         if current_time is None:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
         stats = ArchivalStats()
         start_time = current_time
@@ -485,7 +485,7 @@ class MessageArchivalService:
             stats.errors.append(error_msg)
 
         finally:
-            stats.duration_seconds = (datetime.utcnow() - start_time).total_seconds()
+            stats.duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         _logger.info("Archived cleanup completed: %d files deleted, %d bytes freed, %.2f seconds",
                     stats.messages_deleted, stats.bytes_freed, stats.duration_seconds)
@@ -503,7 +503,7 @@ class MessageArchivalService:
             Statistics from the cleanup operation
         """
         if current_time is None:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
         stats = ArchivalStats()
         start_time = current_time
@@ -540,7 +540,7 @@ class MessageArchivalService:
             self.session.rollback()
 
         finally:
-            stats.duration_seconds = (datetime.utcnow() - start_time).total_seconds()
+            stats.duration_seconds = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         _logger.info("Failed message cleanup completed: %d messages deleted, %.2f seconds",
                     stats.failed_messages_cleaned, stats.duration_seconds)
@@ -591,7 +591,7 @@ class MessageArchivalService:
             Dictionary with statistics from each operation
         """
         if current_time is None:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
         results = {}
 
@@ -637,7 +637,7 @@ class MessageArchivalService:
             Dictionary with archival statistics
         """
         try:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
             # Count messages by age and status
             archive_cutoff = current_time - timedelta(days=self.policy.archive_after_days)
@@ -704,7 +704,7 @@ class MessageArchivalService:
 
         while True:
             try:
-                current_time = datetime.utcnow()
+                current_time = datetime.now(timezone.utc)
 
                 # Only run during low traffic periods
                 if self.is_low_traffic_period(current_time):
@@ -832,7 +832,7 @@ class ScheduledCleanupService:
             True if cleanup should run
         """
         if current_time is None:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
         # Run cleanup during low traffic hours
         return self.archival_service.is_low_traffic_period(current_time)
@@ -851,7 +851,7 @@ class ScheduledCleanupService:
             'function': task_func,
             'interval_hours': interval_hours,
             'last_run': None,
-            'next_run': datetime.utcnow()
+            'next_run': datetime.now(timezone.utc)
         }
         self._cleanup_tasks.append(task_info)
         _logger.info("Scheduled cleanup task '%s' with %d hour interval", task_name, interval_hours)
@@ -867,7 +867,7 @@ class ScheduledCleanupService:
             Dictionary with results from each task
         """
         if current_time is None:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
         results = {}
 
@@ -945,7 +945,7 @@ class ScheduledCleanupService:
         Returns:
             Dictionary with cleanup status information
         """
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
 
         task_status = []
         for task in self._cleanup_tasks:
@@ -975,7 +975,7 @@ class ScheduledCleanupService:
 
         while self._running:
             try:
-                current_time = datetime.utcnow()
+                current_time = datetime.now(timezone.utc)
                 results = self.run_cleanup_cycle(current_time)
 
                 if results:

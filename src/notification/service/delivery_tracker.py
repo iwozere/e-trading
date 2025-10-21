@@ -173,17 +173,17 @@ class MessageDeliveryStatus:
             # All channels delivered successfully
             self.overall_status = DeliveryResult.SUCCESS
             if not self.completed_at:
-                self.completed_at = datetime.utcnow()
+                self.completed_at = datetime.now(timezone.utc)
         elif len(successful_channels) > 0 and len(pending_channels) == 0:
             # Some channels succeeded, some failed, none pending
             self.overall_status = DeliveryResult.PARTIAL_SUCCESS
             if not self.completed_at:
-                self.completed_at = datetime.utcnow()
+                self.completed_at = datetime.now(timezone.utc)
         elif len(pending_channels) == 0 and len(successful_channels) == 0:
             # All channels failed
             self.overall_status = DeliveryResult.FAILED
             if not self.completed_at:
-                self.completed_at = datetime.utcnow()
+                self.completed_at = datetime.now(timezone.utc)
         else:
             # Still have pending channels
             self.overall_status = DeliveryResult.PENDING
@@ -470,7 +470,7 @@ class DeliveryTracker:
                 message_id=message_id,
                 channel=channel,
                 status=DeliveryStatus.SENDING,
-                started_at=datetime.utcnow()
+                started_at=datetime.now(timezone.utc)
             )
 
             # Get retry count from previous attempts
@@ -533,7 +533,7 @@ class DeliveryTracker:
 
         # Update attempt
         attempt.status = status
-        attempt.completed_at = datetime.utcnow()
+        attempt.completed_at = datetime.now(timezone.utc)
         attempt.response_time_ms = response_time_ms
         attempt.external_id = external_id
         attempt.error_message = error_message
@@ -763,7 +763,7 @@ class DeliveryTracker:
 
     async def _cleanup_completed_deliveries(self):
         """Clean up completed deliveries from memory."""
-        cutoff_time = datetime.utcnow() - timedelta(hours=24)  # Keep 24 hours in memory
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)  # Keep 24 hours in memory
 
         with self._lock:
             completed_ids = []

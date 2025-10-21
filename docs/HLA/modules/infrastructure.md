@@ -202,13 +202,13 @@ async def execute_scheduled_job(job_id: int):
     job_run = JobRun(
         job_id=job_id,
         status="ENQUEUED",
-        enqueued_at=datetime.utcnow()
+        enqueued_at=datetime.now(timezone.utc)
     )
     
     try:
         # Start execution
         job_run.status = "RUNNING"
-        job_run.started_at = datetime.utcnow()
+        job_run.started_at = datetime.now(timezone.utc)
         
         # Execute job logic
         result = await job_executor.execute(job_id)
@@ -216,13 +216,13 @@ async def execute_scheduled_job(job_id: int):
         # Record success
         job_run.status = "COMPLETED"
         job_run.result = result
-        job_run.finished_at = datetime.utcnow()
+        job_run.finished_at = datetime.now(timezone.utc)
         
     except Exception as e:
         # Record failure
         job_run.status = "FAILED"
         job_run.error = str(e)
-        job_run.finished_at = datetime.utcnow()
+        job_run.finished_at = datetime.now(timezone.utc)
         
         # Trigger error handling
         await error_handler.handle_job_failure(job_id, e)
@@ -369,7 +369,7 @@ class HealthCheckManager:
                 result = await check_func()
                 results[name] = {
                     "status": "healthy" if result else "unhealthy",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "details": result
                 }
                 if not result:
@@ -377,7 +377,7 @@ class HealthCheckManager:
             except Exception as e:
                 results[name] = {
                     "status": "error",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "error": str(e)
                 }
                 overall_status = "unhealthy"
@@ -385,7 +385,7 @@ class HealthCheckManager:
         return {
             "overall_status": overall_status,
             "checks": results,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 ```
 
@@ -485,7 +485,7 @@ logger = setup_logger(__name__)
 def log_with_context(level: str, message: str, **context):
     """Log message with structured context."""
     log_data = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "level": level,
         "message": message,
         "service": "trading_platform",

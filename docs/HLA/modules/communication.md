@@ -338,7 +338,7 @@ class WebSocketManager:
         message = {
             "type": event_type,
             "data": data,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         subscribers = self.subscriptions.get(event_type, set())
@@ -377,7 +377,7 @@ class AuthManager:
             "sub": str(user.id),
             "username": user.username,
             "role": user.role,
-            "exp": datetime.utcnow() + timedelta(hours=24)
+            "exp": datetime.now(timezone.utc) + timedelta(hours=24)
         }
         return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 ```

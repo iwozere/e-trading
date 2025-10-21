@@ -164,7 +164,7 @@ class WebUIAppService:
                     return None
 
                 # Update last login
-                user.last_login = datetime.utcnow()
+                user.last_login = datetime.now(timezone.utc)
                 r.s.commit()
 
                 return user.to_dict()

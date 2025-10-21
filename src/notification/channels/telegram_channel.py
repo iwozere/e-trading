@@ -133,7 +133,7 @@ class TelegramChannel(NotificationChannel):
         Returns:
             DeliveryResult with delivery status and metadata
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Use recipient as chat_id, or fall back to default
@@ -158,7 +158,7 @@ class TelegramChannel(NotificationChannel):
                 message_thread_id=message_thread_id
             )
 
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             return DeliveryResult(
                 success=True,
@@ -181,7 +181,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.BOUNCED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
         except TelegramBadRequest as e:
@@ -192,7 +192,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
         except TelegramAPIError as e:
@@ -203,7 +203,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
         except Exception as e:
@@ -214,7 +214,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
     async def _send_with_attachments(
@@ -249,7 +249,7 @@ class TelegramChannel(NotificationChannel):
                         reply_to_message_id, message_thread_id
                     )
 
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             return DeliveryResult(
                 success=True,
@@ -271,7 +271,7 @@ class TelegramChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
     async def _send_photo_with_caption(
@@ -533,17 +533,17 @@ class TelegramChannel(NotificationChannel):
         Returns:
             ChannelHealth with current status and metrics
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Test bot API by getting bot info
             bot_info = await self.bot.get_me()
 
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             return ChannelHealth(
                 status=ChannelHealthStatus.HEALTHY,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time,
                 metadata={
                     "bot_id": bot_info.id,
@@ -556,7 +556,7 @@ class TelegramChannel(NotificationChannel):
             )
 
         except TelegramAPIError as e:
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             error_msg = f"Telegram API error: {str(e)}"
 
             # Determine if this is a temporary or permanent issue
@@ -567,18 +567,18 @@ class TelegramChannel(NotificationChannel):
 
             return ChannelHealth(
                 status=status,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time,
                 error_message=error_msg
             )
 
         except Exception as e:
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             error_msg = f"Unexpected error: {str(e)}"
 
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time,
                 error_message=error_msg
             )

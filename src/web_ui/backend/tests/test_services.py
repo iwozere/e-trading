@@ -221,8 +221,8 @@ class TestTelegramAppService:
                 'is_admin': False,
                 'max_alerts': 5,
                 'max_schedules': 5,
-                'created_at': datetime.utcnow(),
-                'updated_at': datetime.utcnow()
+                'created_at': datetime.now(timezone.utc),
+                'updated_at': datetime.now(timezone.utc)
             }
         ]
         mock_users_service.list_telegram_users_dto.return_value = mock_users

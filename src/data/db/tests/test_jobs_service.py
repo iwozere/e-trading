@@ -204,7 +204,7 @@ def test_create_run(jobs_service, dbsess):
     run_data = ScheduleRunCreate(
         job_type=JobType.REPORT,
         job_id="test_job_123",
-        scheduled_for=datetime.utcnow(),
+        scheduled_for=datetime.now(timezone.utc),
         job_snapshot={"param1": "value1"}
     )
 
@@ -219,7 +219,7 @@ def test_create_run(jobs_service, dbsess):
 
 def test_list_runs_with_filters(jobs_service, dbsess):
     """Test listing runs with filters."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Create multiple runs
     run1_data = ScheduleRunCreate(job_type=JobType.REPORT, job_id="r1", scheduled_for=now, job_snapshot={})
@@ -248,14 +248,14 @@ def test_update_run(jobs_service, dbsess):
     run_data = ScheduleRunCreate(
         job_type=JobType.REPORT,
         job_id="update_test",
-        scheduled_for=datetime.utcnow(),
+        scheduled_for=datetime.now(timezone.utc),
         job_snapshot={}
     )
 
     created = jobs_service.create_run(user_id=1, run_data=run_data)
 
     # Update run
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     update_data = ScheduleRunUpdate(
         status=RunStatus.RUNNING,
         started_at=now,
@@ -275,7 +275,7 @@ def test_claim_run(jobs_service, dbsess):
     run_data = ScheduleRunCreate(
         job_type=JobType.SCREENER,
         job_id="claim_test",
-        scheduled_for=datetime.utcnow(),
+        scheduled_for=datetime.now(timezone.utc),
         job_snapshot={}
     )
 
@@ -295,7 +295,7 @@ def test_cancel_run(jobs_service, dbsess):
     run_data = ScheduleRunCreate(
         job_type=JobType.REPORT,
         job_id="cancel_test",
-        scheduled_for=datetime.utcnow(),
+        scheduled_for=datetime.now(timezone.utc),
         job_snapshot={}
     )
 
@@ -315,7 +315,7 @@ def test_cancel_running_run_fails(jobs_service, dbsess):
     run_data = ScheduleRunCreate(
         job_type=JobType.REPORT,
         job_id="running_test",
-        scheduled_for=datetime.utcnow(),
+        scheduled_for=datetime.now(timezone.utc),
         job_snapshot={}
     )
 
@@ -331,7 +331,7 @@ def test_cancel_running_run_fails(jobs_service, dbsess):
 
 def test_get_run_statistics(jobs_service, dbsess):
     """Test getting run statistics."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Create runs with different statuses
     run1_data = ScheduleRunCreate(job_type=JobType.REPORT, job_id="stats1", scheduled_for=now, job_snapshot={})
@@ -481,7 +481,7 @@ def test_calculate_next_run_time(jobs_service):
     next_run = jobs_service._calculate_next_run_time("0 9 * * *")
 
     assert isinstance(next_run, datetime)
-    assert next_run > datetime.utcnow()
+    assert next_run > datetime.now(timezone.utc)
 
 
 def test_calculate_next_run_time_invalid_cron(jobs_service):
@@ -491,7 +491,7 @@ def test_calculate_next_run_time_invalid_cron(jobs_service):
 
     assert isinstance(next_run, datetime)
     # Should be approximately 1 hour from now
-    expected = datetime.utcnow() + timedelta(hours=1)
+    expected = datetime.now(timezone.utc) + timedelta(hours=1)
     assert abs((next_run - expected).total_seconds()) < 60  # Within 1 minute
 
 

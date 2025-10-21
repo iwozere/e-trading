@@ -211,7 +211,7 @@ trade_data = {
     'exit_logic_name': 'ATRExitMixin',
     'symbol': 'BTCUSDT',
     'interval': '1h',
-    'entry_time': datetime.utcnow(),
+    'entry_time': datetime.now(timezone.utc),
     'entry_price': 50000.0,
     'size': 0.1,
     'direction': 'long',
@@ -221,7 +221,7 @@ trade = repo.create_trade(trade_data)
 
 # Update trade
 update_data = {
-    'exit_time': datetime.utcnow(),
+    'exit_time': datetime.now(timezone.utc),
     'exit_price': 51000.0,
     'status': 'closed',
     'net_pnl': 100.0

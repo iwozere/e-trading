@@ -111,7 +111,7 @@ def test_database_models():
         run_data = ScheduleRunCreate(
             job_type=JobType.SCREENER,
             job_id="test_job_123",
-            scheduled_for=datetime.utcnow(),
+            scheduled_for=datetime.now(timezone.utc),
             job_snapshot={"tickers": ["AAPL", "MSFT"]}
         )
 
@@ -131,7 +131,7 @@ def test_workers_import():
         # from src.backend.workers import (
         #     broker, setup_dramatiq,
         #     run_report, run_screener
-        )
+        #)
 
         # Test that workers are properly configured
         assert broker is not None

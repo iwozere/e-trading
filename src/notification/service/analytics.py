@@ -215,7 +215,7 @@ class NotificationAnalytics:
         self._channel_stats_cache: Dict[str, ChannelStats] = {}
         self._user_stats_cache: Dict[str, UserStats] = {}
         self._cache_expiry = timedelta(minutes=15)
-        self._last_cache_update = datetime.utcnow()
+        self._last_cache_update = datetime.now(timezone.utc)
 
         # Configuration
         self._max_trend_points = 100
@@ -238,7 +238,7 @@ class NotificationAnalytics:
         Returns:
             Dictionary with delivery rate statistics
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             with get_repository_context() as repo:
@@ -311,7 +311,7 @@ class NotificationAnalytics:
         Returns:
             Dictionary with response time statistics
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             with get_repository_context() as repo:
@@ -397,7 +397,7 @@ class NotificationAnalytics:
         Returns:
             Dictionary with time-aggregated statistics
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             with get_repository_context() as repo:
@@ -444,7 +444,7 @@ class NotificationAnalytics:
         Returns:
             TrendAnalysis object with trend information
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             with get_repository_context() as repo:
@@ -519,7 +519,7 @@ class NotificationAnalytics:
         Returns:
             Dictionary with channel performance comparison
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             # Get all channels first
@@ -600,7 +600,7 @@ class NotificationAnalytics:
             # Get basic delivery statistics
             delivery_stats = repo.delivery_status.get_delivery_statistics(
                 channel=channel,
-                days=(datetime.utcnow() - cutoff_date).days
+                days=(datetime.now(timezone.utc) - cutoff_date).days
             )
 
             return {
@@ -761,7 +761,7 @@ class NotificationAnalytics:
         # For now, return mock data
         time_series = []
         current_date = cutoff_date
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
 
         while current_date < end_date:
             if metric == "success_rate":

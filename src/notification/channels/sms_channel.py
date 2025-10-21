@@ -221,7 +221,7 @@ class SMSChannel(NotificationChannel):
         Returns:
             DeliveryResult with delivery status and metadata
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Use recipient or fall back to default
@@ -267,7 +267,7 @@ class SMSChannel(NotificationChannel):
             else:
                 raise ValueError(f"Unsupported SMS provider: {provider}")
 
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             result.response_time_ms = response_time
 
             return result
@@ -280,7 +280,7 @@ class SMSChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
         except Exception as e:
@@ -291,7 +291,7 @@ class SMSChannel(NotificationChannel):
                 success=False,
                 status=DeliveryStatus.FAILED,
                 error_message=error_msg,
-                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             )
 
     def _split_sms_message(self, text: str) -> list[str]:
@@ -464,7 +464,7 @@ class SMSChannel(NotificationChannel):
         Returns:
             ChannelHealth with current status and metrics
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             provider = self.config["provider"]
@@ -480,18 +480,18 @@ class SMSChannel(NotificationChannel):
             else:
                 raise ValueError(f"Unsupported provider: {provider}")
 
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             health.response_time_ms = response_time
-            health.last_check = datetime.utcnow()
+            health.last_check = datetime.now(timezone.utc)
 
             return health
 
         except Exception as e:
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 response_time_ms=response_time,
                 error_message=f"Health check failed: {str(e)}"
             )
@@ -520,7 +520,7 @@ class SMSChannel(NotificationChannel):
 
                         return ChannelHealth(
                             status=ChannelHealthStatus.HEALTHY,
-                            last_check=datetime.utcnow(),
+                            last_check=datetime.now(timezone.utc),
                             metadata={
                                 "provider": "twilio",
                                 "account_sid": account_sid,
@@ -532,14 +532,14 @@ class SMSChannel(NotificationChannel):
                         error_text = await response.text()
                         return ChannelHealth(
                             status=ChannelHealthStatus.DOWN,
-                            last_check=datetime.utcnow(),
+                            last_check=datetime.now(timezone.utc),
                             error_message=f"Twilio API error {response.status}: {error_text}"
                         )
 
         except Exception as e:
             return ChannelHealth(
                 status=ChannelHealthStatus.DOWN,
-                last_check=datetime.utcnow(),
+                last_check=datetime.now(timezone.utc),
                 error_message=f"Twilio health check error: {str(e)}"
             )
 
@@ -547,7 +547,7 @@ class SMSChannel(NotificationChannel):
         """Check AWS SNS health (placeholder)."""
         return ChannelHealth(
             status=ChannelHealthStatus.DOWN,
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             error_message="AWS SNS health check not implemented"
         )
 
@@ -555,7 +555,7 @@ class SMSChannel(NotificationChannel):
         """Check Nexmo health (placeholder)."""
         return ChannelHealth(
             status=ChannelHealthStatus.DOWN,
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             error_message="Nexmo health check not implemented"
         )
 
@@ -563,7 +563,7 @@ class SMSChannel(NotificationChannel):
         """Check MessageBird health (placeholder)."""
         return ChannelHealth(
             status=ChannelHealthStatus.DOWN,
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             error_message="MessageBird health check not implemented"
         )
 

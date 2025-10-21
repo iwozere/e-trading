@@ -313,7 +313,7 @@ async def test_data_structures():
         from src.notification.service.analytics import TimeSeriesPoint
 
         time_series = [
-            TimeSeriesPoint(datetime.utcnow() - timedelta(days=i), 0.8 + i * 0.01)
+            TimeSeriesPoint(datetime.now(timezone.utc) - timedelta(days=i), 0.8 + i * 0.01)
             for i in range(10)
         ]
 

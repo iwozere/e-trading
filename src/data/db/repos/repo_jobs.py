@@ -342,7 +342,7 @@ class JobsRepository:
 
             # Update the run to claimed state
             run.status = RunStatus.RUNNING.value
-            run.started_at = datetime.utcnow()
+            run.started_at = datetime.now(timezone.utc)
             run.worker_id = worker_id
 
             self.session.flush()
@@ -410,7 +410,7 @@ class JobsRepository:
         """
         from datetime import timedelta
 
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         query = self.session.query(ScheduleRun).filter(ScheduleRun.scheduled_for >= cutoff_date)
 
@@ -461,7 +461,7 @@ class JobsRepository:
         """
         from datetime import timedelta
 
-        cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
 
         # Delete old completed and failed runs
         deleted_count = self.session.query(ScheduleRun).filter(

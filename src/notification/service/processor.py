@@ -104,7 +104,7 @@ class MessageProcessor:
 
         self._running = True
         self._shutdown_event.clear()
-        self._stats['start_time'] = datetime.utcnow()
+        self._stats['start_time'] = datetime.now(timezone.utc)
 
         self._logger.info("Starting message processor...")
 
@@ -418,7 +418,7 @@ class MessageProcessor:
                     self._logger.error("Message processing exception: %s", result)
 
             processing_time = (time.time() - start_time) * 1000
-            self._stats['last_activity'] = datetime.utcnow()
+            self._stats['last_activity'] = datetime.now(timezone.utc)
 
             self._logger.info(
                 "Batch processed: %s messages in %.2fms (high_priority=%s, retry=%s)",
@@ -559,7 +559,7 @@ class MessageProcessor:
 
         # Add runtime information
         if stats['start_time']:
-            uptime_seconds = (datetime.utcnow() - stats['start_time']).total_seconds()
+            uptime_seconds = (datetime.now(timezone.utc) - stats['start_time']).total_seconds()
             stats['uptime_seconds'] = uptime_seconds
 
         # Add queue statistics
@@ -593,7 +593,7 @@ class MessageProcessor:
         """Get processor uptime in seconds."""
         if not self._stats['start_time']:
             return 0.0
-        return (datetime.utcnow() - self._stats['start_time']).total_seconds()
+        return (datetime.now(timezone.utc) - self._stats['start_time']).total_seconds()
 
 
 # Global message processor instance

@@ -57,8 +57,8 @@ def sample_messages(test_session):
             recipient_id=f"user_{i}",
             content={"title": f"Test Message {i}", "body": f"This is test message {i}"},
             status=MessageStatus.PENDING.value,
-            created_at=datetime.utcnow() - timedelta(minutes=i),
-            scheduled_for=datetime.utcnow() - timedelta(minutes=i)
+            created_at=datetime.now(timezone.utc) - timedelta(minutes=i),
+            scheduled_for=datetime.now(timezone.utc) - timedelta(minutes=i)
         )
         test_session.add(message)
         messages.append(message)
@@ -78,9 +78,9 @@ def sample_delivery_statuses(test_session, sample_messages):
                 message_id=message.id,
                 channel=channel,
                 status=DeliveryStatus.DELIVERED.value if i % 2 == 0 else DeliveryStatus.FAILED.value,
-                delivered_at=datetime.utcnow() - timedelta(minutes=i),
+                delivered_at=datetime.now(timezone.utc) - timedelta(minutes=i),
                 response_time_ms=100 + (i * 50),
-                created_at=datetime.utcnow() - timedelta(minutes=i)
+                created_at=datetime.now(timezone.utc) - timedelta(minutes=i)
             )
             test_session.add(status)
             statuses.append(status)
@@ -96,7 +96,7 @@ class TestOptimizedRepositoryIntegration:
         """Test optimized pending messages query."""
         repo = OptimizedMessageRepository(test_session)
 
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         pending_messages = repo.get_pending_messages_optimized(current_time, limit=10)
 
         # Should return all pending messages
@@ -111,7 +111,7 @@ class TestOptimizedRepositoryIntegration:
         repo = OptimizedMessageRepository(test_session)
 
         message_ids = [msg.id for msg in sample_messages[:3]]
-        processed_at = datetime.utcnow()
+        processed_at = datetime.now(timezone.utc)
 
         updated_count = repo.bulk_update_message_status(
             message_ids,
@@ -131,8 +131,8 @@ class TestOptimizedRepositoryIntegration:
         """Test optimized message statistics query."""
         repo = OptimizedMessageRepository(test_session)
 
-        start_date = datetime.utcnow() - timedelta(days=1)
-        end_date = datetime.utcnow() + timedelta(hours=1)
+        start_date = datetime.now(timezone.utc) - timedelta(days=1)
+        end_date = datetime.now(timezone.utc) + timedelta(hours=1)
 
         stats = repo.get_message_statistics_optimized(start_date, end_date)
 
@@ -167,8 +167,8 @@ class TestOptimizedRepositoryIntegration:
         """Test channel performance metrics query."""
         repo = OptimizedDeliveryStatusRepository(test_session)
 
-        start_date = datetime.utcnow() - timedelta(days=1)
-        end_date = datetime.utcnow() + timedelta(hours=1)
+        start_date = datetime.now(timezone.utc) - timedelta(days=1)
+        end_date = datetime.now(timezone.utc) + timedelta(hours=1)
 
         metrics = repo.get_channel_performance_metrics(start_date, end_date)
 
@@ -245,7 +245,7 @@ class TestDatabaseOptimizationWorkflow:
         delivery_repo = OptimizedDeliveryStatusRepository(test_session)
 
         # Test message operations
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         pending_messages = message_repo.get_pending_messages_optimized(current_time)
         assert len(pending_messages) > 0
 
@@ -255,8 +255,8 @@ class TestDatabaseOptimizationWorkflow:
         assert total > 0
 
         # Test performance metrics
-        start_date = datetime.utcnow() - timedelta(days=1)
-        end_date = datetime.utcnow() + timedelta(hours=1)
+        start_date = datetime.now(timezone.utc) - timedelta(days=1)
+        end_date = datetime.now(timezone.utc) + timedelta(hours=1)
 
         metrics = delivery_repo.get_channel_performance_metrics(start_date, end_date)
         assert len(metrics) > 0
@@ -267,7 +267,7 @@ class TestDatabaseOptimizationWorkflow:
         repo = OptimizedMessageRepository(test_session)
 
         # Perform some database operations
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
 
         # This should generate some query metrics if monitoring was enabled
         pending_messages = repo.get_pending_messages_optimized(current_time)

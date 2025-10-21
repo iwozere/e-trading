@@ -54,7 +54,7 @@ class TestOptimizedMessageRepository:
 
     def test_get_pending_messages_optimized(self, repository, mock_session):
         """Test optimized pending messages query."""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
 
         # Mock return data
         mock_messages = [
@@ -77,7 +77,7 @@ class TestOptimizedMessageRepository:
         """Test bulk message status update."""
         message_ids = [1, 2, 3]
         status = MessageStatus.PROCESSING
-        processed_at = datetime.utcnow()
+        processed_at = datetime.now(timezone.utc)
 
         # Mock update result
         mock_session.query.return_value.filter.return_value.update.return_value = 3
@@ -105,12 +105,12 @@ class TestOptimizedMessageRepository:
 
     def test_get_message_statistics_optimized(self, repository, mock_session):
         """Test optimized message statistics query."""
-        start_date = datetime.utcnow() - timedelta(days=7)
-        end_date = datetime.utcnow()
+        start_date = datetime.now(timezone.utc) - timedelta(days=7)
+        end_date = datetime.now(timezone.utc)
 
         # Mock aggregation result
         mock_row = Mock()
-        mock_row.time_period = datetime.utcnow()
+        mock_row.time_period = datetime.now(timezone.utc)
         mock_row.status = "DELIVERED"
         mock_row.priority = "NORMAL"
         mock_row.message_count = 10
@@ -178,8 +178,8 @@ class TestOptimizedDeliveryStatusRepository:
 
     def test_get_channel_performance_metrics(self, repository, mock_session):
         """Test channel performance metrics query."""
-        start_date = datetime.utcnow() - timedelta(days=1)
-        end_date = datetime.utcnow()
+        start_date = datetime.now(timezone.utc) - timedelta(days=1)
+        end_date = datetime.now(timezone.utc)
 
         # Mock aggregation result
         mock_row = Mock()
@@ -426,8 +426,8 @@ class TestNotificationServiceMigrations:
         table_row.deletes = 10
         table_row.live_tuples = 990
         table_row.dead_tuples = 110
-        table_row.last_vacuum = datetime.utcnow()
-        table_row.last_analyze = datetime.utcnow()
+        table_row.last_vacuum = datetime.now(timezone.utc)
+        table_row.last_analyze = datetime.now(timezone.utc)
 
         # Mock index stats
         index_row = Mock()
