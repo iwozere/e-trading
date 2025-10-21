@@ -74,15 +74,79 @@ class TelegramBot:
 
 ### 2. Scheduled Job Services Layer
 
-#### 2.1 Job Scheduling System
+#### 2.1 System Scheduler Implementation
+
+The System Scheduler module provides APScheduler-based job scheduling and alert evaluation capabilities. It consists of several key components:
+
+**Core Components**:
+- **SchedulerService** (`src/scheduler/scheduler_service.py`): Main service orchestrating job scheduling
+- **AlertEvaluator** (`src/common/alerts/alert_evaluator.py`): Centralized alert evaluation with rearm logic
+- **CronParser** (`src/common/alerts/cron_parser.py`): Cron expression parsing and validation
+- **AlertSchemaValidator** (`src/common/alerts/schema_validator.py`): JSON schema validation for configurations
+
+**Service Architecture**:
+```mermaid
+graph TB
+    subgraph "System Scheduler Service"
+        SS[SchedulerService]
+        APS[APScheduler]
+        AE[AlertEvaluator]
+    end
+    
+    subgraph "Alert Services"
+        CP[CronParser]
+        ASV[AlertSchemaValidator]
+    end
+    
+    subgraph "Data Layer"
+        JS[JobsService]
+        DM[DataManager]
+        IS[IndicatorService]
+    end
+    
+    subgraph "Notification Layer"
+        NSC[NotificationServiceClient]
+        TB[TelegramBot]
+    end
+    
+    SS --> APS
+    APS --> AE
+    AE --> CP
+    AE --> ASV
+    AE --> JS
+    AE --> DM
+    AE --> IS
+    SS --> NSC
+    NSC --> TB
+    
+    classDef scheduler fill:#e1f5fe
+    classDef alert fill:#f3e5f5
+    classDef data fill:#e8f5e8
+    classDef notification fill:#fff3e0
+    
+    class SS,APS scheduler
+    class AE,CP,ASV alert
+    class JS,DM,IS data
+    class NSC,TB notification
+```
+
+**Key Features**:
+- **Centralized Alert Evaluation**: All alert logic consolidated in `AlertEvaluator`
+- **Rearm Logic**: Sophisticated rearm mechanisms with hysteresis, cooldown, and persistence
+- **Schema Validation**: JSON schema validation for alert and schedule configurations
+- **State Persistence**: Alert state maintained in database across service restarts
+- **Timezone Support**: Full timezone awareness for cron scheduling
+- **Error Handling**: Comprehensive error handling with retry logic and graceful degradation
+
+#### 2.2 Job Scheduling System
 
 #### APScheduler Integration
-- **Framework**: Advanced Python Scheduler (APScheduler) - *Implementation Planned*
+- **Framework**: Advanced Python Scheduler (APScheduler) - *✅ Implemented*
 - **Storage**: PostgreSQL-based job store for persistence
-- **Executors**: ThreadPoolExecutor for I/O-bound alert evaluations
+- **Executors**: AsyncIOExecutor for concurrent I/O-bound alert evaluations
 - **Triggers**: Cron-based scheduling with 5/6 field support and timezone awareness
-- **Background Service**: `src/scheduler/scheduler_service.py` - *Implementation Planned*
-- **Alert Services**: Centralized in `src/common/alerts/` with schema validation
+- **Background Service**: `src/scheduler/scheduler_service.py` - *✅ Implemented*
+- **Alert Services**: Centralized in `src/common/alerts/` with schema validation - *✅ Implemented*
 
 #### Job Types
 The system supports multiple job types:
@@ -168,19 +232,28 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant SchedulerService
-    participant Database
-    participant Worker
+    participant APScheduler
+    participant AlertEvaluator
+    participant DataManager
+    participant IndicatorService
+    participant NotificationClient
     participant TelegramBot
-    participant NotificationService
+    participant Database
     
-    SchedulerService->>Database: Check pending jobs
-    SchedulerService->>Worker: Spawn worker process
-    Worker->>Database: Claim job
-    Worker->>Worker: Execute alert/screener
-    Worker->>Database: Update result
-    Worker->>TelegramBot: POST /api/notify (FastAPI)
-    TelegramBot->>NotificationService: Queue notification
-    NotificationService->>User: Send Telegram message
+    SchedulerService->>APScheduler: Register scheduled jobs
+    APScheduler->>AlertEvaluator: Execute alert job
+    AlertEvaluator->>Database: Create job run record
+    AlertEvaluator->>DataManager: Fetch market data
+    AlertEvaluator->>IndicatorService: Calculate indicators
+    AlertEvaluator->>AlertEvaluator: Evaluate alert conditions
+    AlertEvaluator->>AlertEvaluator: Apply rearm logic
+    AlertEvaluator->>Database: Update alert state
+    alt Alert triggered
+        AlertEvaluator->>NotificationClient: Send notification
+        NotificationClient->>TelegramBot: Deliver message
+        TelegramBot->>User: Send Telegram message
+    end
+    AlertEvaluator->>Database: Update job run result
 ```
 
 #### 3.4 Service Communication Patterns
@@ -191,10 +264,10 @@ sequenceDiagram
 - No real-time communication needed between TelegramBot and SchedulerService
 
 **Notification Delivery**:
-- Background workers execute alerts/schedules
-- Workers call TelegramBot FastAPI endpoint: `POST /api/notify`
-- TelegramBot queues notifications in background notification service
-- Notification service handles actual message delivery to users
+- SchedulerService executes alerts/schedules via AlertEvaluator
+- AlertEvaluator uses NotificationServiceClient for message delivery
+- NotificationServiceClient handles message formatting and delivery
+- TelegramBot receives and processes notification messages
 
 **Service Dependencies**:
 - **TelegramBot**: Independent systemd service, exposes FastAPI for notifications
@@ -224,7 +297,103 @@ stateDiagram-v2
 - **FAILED**: Execution failed with error
 - **CANCELLED**: Cancelled before execution
 
-### 5. Scheduled Job Types
+### 5. Alert Evaluation Architecture
+
+#### 5.1 AlertEvaluator Service
+
+The `AlertEvaluator` is the core component responsible for processing alert jobs with sophisticated evaluation logic:
+
+**Key Capabilities**:
+- **Rule Tree Evaluation**: Supports complex logical operators (AND, OR, NOT)
+- **Market Data Integration**: Seamless integration with DataManager for OHLCV data
+- **Indicator Integration**: Uses IndicatorService for technical indicator calculations
+- **Rearm Logic**: Advanced rearm mechanisms including:
+  - Hysteresis-based rearm conditions
+  - Cooldown periods between triggers
+  - Persistence bar requirements
+  - Crossing detection with side tracking
+- **State Management**: Persistent alert state in database `state_json` field
+- **Error Handling**: Graceful handling of data unavailability and calculation errors
+
+**Alert Configuration Structure**:
+```json
+{
+  "ticker": "AAPL",
+  "timeframe": "1h",
+  "rule": {
+    "operator": "and",
+    "conditions": [
+      {
+        "indicator": "rsi",
+        "operator": ">",
+        "value": 70
+      },
+      {
+        "indicator": "price",
+        "operator": ">",
+        "value": 150
+      }
+    ]
+  },
+  "rearm": {
+    "type": "hysteresis",
+    "threshold": 0.02,
+    "cooldown": 300
+  },
+  "notify": {
+    "channels": ["telegram"],
+    "message_template": "Alert triggered for {ticker}"
+  }
+}
+```
+
+**Rearm Logic Types**:
+- **Simple**: Alert rearms immediately after trigger
+- **Hysteresis**: Requires value to move away from trigger by threshold percentage
+- **Cooldown**: Prevents retriggering for specified time period
+- **Persistence**: Requires condition to persist for specified number of bars
+- **Crossing**: Tracks value crossing above/below threshold with side detection
+
+#### 5.2 CronParser Service
+
+Handles cron expression parsing with enhanced capabilities:
+
+**Features**:
+- **Dual Format Support**: Both 5-field (minute precision) and 6-field (second precision)
+- **Timezone Awareness**: Full timezone support for global trading
+- **Validation**: Comprehensive cron expression validation
+- **Next Run Calculation**: Accurate next execution time calculation
+
+**Usage Examples**:
+```python
+# 5-field cron (every minute)
+cron_5 = "* * * * *"
+
+# 6-field cron (every 30 seconds)
+cron_6 = "*/30 * * * * *"
+
+# Timezone-aware scheduling
+next_run = CronParser.calculate_next_run(
+    expression="0 9 * * 1-5",  # 9 AM weekdays
+    timezone="America/New_York"
+)
+```
+
+#### 5.3 AlertSchemaValidator Service
+
+Provides JSON schema validation for alert configurations:
+
+**Schema Types**:
+- **Alert Schema**: Validates alert job configurations
+- **Schedule Schema**: Validates schedule job configurations
+- **Custom Schemas**: Extensible for new job types
+
+**Validation Features**:
+- **Schema Caching**: Efficient schema loading and caching
+- **Detailed Error Messages**: Clear validation error reporting
+- **Version Support**: Schema versioning for backward compatibility
+
+### 6. Scheduled Job Types
 
 #### 5.1 Report Generation Jobs
 **Purpose**: Generate and deliver scheduled trading reports
@@ -314,9 +483,9 @@ stateDiagram-v2
 - Updated data available to TradingBot for strategy execution
 - Cache updates improve TelegramBot response times
 
-### 6. Service Deployment and Management
+### 7. Service Deployment and Management
 
-#### 6.1 System Service Deployment (Current Implementation)
+#### 7.1 System Service Deployment (Current Implementation)
 
 **TradingBot Service** (`systemd` service):
 - Deployed as independent systemd service on Linux
@@ -331,15 +500,15 @@ stateDiagram-v2
 - Contains background notification service for message queuing
 - Stores user alerts/schedules in PostgreSQL database
 
-#### 6.2 Scheduled Service Deployment (Planned Implementation)
+#### 7.2 Scheduled Service Deployment (✅ Implemented)
 
-**Background Scheduler Service** (`systemd` service - *Implementation Planned*):
-- New independent systemd service for alert/schedule processing using APScheduler
+**Background Scheduler Service** (`systemd` service - *✅ Implemented*):
+- Independent systemd service for alert/schedule processing using APScheduler
 - Centralized alert evaluation with rearm logic in `src/common/alerts/`
 - Reads `job_schedules` table on startup and registers with APScheduler
-- Uses ThreadPoolExecutor for I/O-bound alert evaluations
+- Uses AsyncIOExecutor for concurrent I/O-bound alert evaluations
 - Integrates with existing DataManager and IndicatorService
-- Workers communicate back to TelegramBot via FastAPI calls
+- Communicates back to TelegramBot via NotificationServiceClient
 
 **Service Architecture**:
 ```
@@ -530,7 +699,61 @@ async def execute_screener_job(run: Run) -> dict:
 
 ### 12. Configuration Management
 
-#### 10.1 Scheduler Configuration
+#### 12.1 System Scheduler Configuration
+
+The System Scheduler uses a comprehensive configuration system with environment variable support:
+
+**Main Configuration** (`src/scheduler/config.py`):
+```python
+class SchedulerConfig:
+    # Database Configuration
+    database_url: str = "postgresql+asyncpg://user:pass@localhost/db"
+    
+    # APScheduler Configuration
+    max_workers: int = 10
+    job_defaults: Dict[str, Any] = {
+        'coalesce': False,
+        'max_instances': 3,
+        'misfire_grace_time': 30
+    }
+    
+    # Alert Evaluation Configuration
+    alert_timeout: int = 300  # 5 minutes
+    data_cache_ttl: int = 60  # 1 minute
+    
+    # Notification Configuration
+    notification_timeout: int = 30
+    notification_retries: int = 3
+    
+    # Service Configuration
+    startup_delay: int = 10
+    shutdown_timeout: int = 30
+    health_check_interval: int = 60
+```
+
+**Environment Variables**:
+```bash
+# Database
+SCHEDULER_DATABASE_URL=postgresql+asyncpg://user:pass@localhost/trading_db
+
+# APScheduler
+SCHEDULER_MAX_WORKERS=10
+SCHEDULER_MISFIRE_GRACE_TIME=30
+
+# Alert Processing
+SCHEDULER_ALERT_TIMEOUT=300
+SCHEDULER_DATA_CACHE_TTL=60
+
+# Notifications
+SCHEDULER_NOTIFICATION_TIMEOUT=30
+SCHEDULER_NOTIFICATION_RETRIES=3
+
+# Service
+SCHEDULER_STARTUP_DELAY=10
+SCHEDULER_SHUTDOWN_TIMEOUT=30
+```
+
+#### 12.2 APScheduler Configuration
 ```python
 SCHEDULER_CONFIG = {
     'jobstores': {
@@ -781,10 +1004,191 @@ TELEGRAM_BOT_CONFIG = {
 #### Implementation Status
 - ✅ **TradingBot**: Implemented as systemd service
 - ✅ **TelegramBot**: Implemented as systemd service with FastAPI
-- 📋 **SchedulerService**: Specification complete, ready for implementation
+- ✅ **SchedulerService**: Fully implemented and operational
   - APScheduler-based job scheduling and execution
   - Centralized alert evaluation with rearm logic
   - Integration with existing data and notification services
-- 🔄 **Notification Service**: Background service integration within TelegramBot
+  - Comprehensive error handling and state management
+  - JSON schema validation for configurations
+  - Timezone-aware cron parsing with 5/6 field support
+- ✅ **Alert Services**: Complete implementation in `src/common/alerts/`
+  - AlertEvaluator with sophisticated rearm logic
+  - CronParser with dual format support
+  - AlertSchemaValidator with caching
+- ✅ **Notification Integration**: NotificationServiceClient integration
 
-This architecture provides robust separation of concerns while enabling efficient communication between services through well-defined interfaces and persistent storage.
+### 17. Operational Procedures
+
+#### 17.1 Service Management
+
+**Starting the System Scheduler**:
+```bash
+# Using systemd (production)
+sudo systemctl start trading-scheduler
+sudo systemctl enable trading-scheduler
+
+# Using CLI (development)
+cd /path/to/trading-framework
+python -m src.scheduler.cli start
+
+# Using main module (development)
+python -m src.scheduler.main
+```
+
+**Service Status and Monitoring**:
+```bash
+# Check service status
+sudo systemctl status trading-scheduler
+
+# View logs
+sudo journalctl -u trading-scheduler -f
+
+# Check scheduler health
+curl http://localhost:8002/health
+
+# View job statistics
+curl http://localhost:8002/stats
+```
+
+#### 17.2 Configuration Management
+
+**Configuration Files**:
+- **Main Config**: `config/scheduler/scheduler.json`
+- **Alert Schemas**: `src/common/alerts/schemas/`
+- **Systemd Service**: `src/scheduler/deployment/trading-scheduler.service`
+- **Docker Compose**: `src/scheduler/deployment/docker-compose.yml`
+
+**Configuration Validation**:
+```bash
+# Validate configuration
+python -m src.scheduler.cli validate-config
+
+# Test database connection
+python -m src.scheduler.cli test-db
+
+# Validate alert schemas
+python -m src.scheduler.cli validate-schemas
+```
+
+#### 17.3 Database Operations
+
+**Schedule Management**:
+```sql
+-- View active schedules
+SELECT id, name, job_type, cron, enabled, next_run_at 
+FROM job_schedules 
+WHERE enabled = true;
+
+-- View recent job runs
+SELECT run_id, job_type, status, started_at, finished_at, error
+FROM job_schedule_runs 
+ORDER BY started_at DESC 
+LIMIT 20;
+
+-- Check failed jobs
+SELECT * FROM job_schedule_runs 
+WHERE status = 'FAILED' 
+AND started_at > NOW() - INTERVAL '24 hours';
+```
+
+**Maintenance Operations**:
+```sql
+-- Clean up old job runs (keep last 30 days)
+DELETE FROM job_schedule_runs 
+WHERE started_at < NOW() - INTERVAL '30 days';
+
+-- Reset stuck jobs
+UPDATE job_schedule_runs 
+SET status = 'FAILED', error = 'Service restart cleanup'
+WHERE status = 'RUNNING' 
+AND started_at < NOW() - INTERVAL '1 hour';
+```
+
+### 18. Monitoring and Alerting
+
+#### 18.1 Health Checks
+
+The scheduler service provides comprehensive health monitoring:
+
+**Health Endpoint** (`/health`):
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "components": {
+    "scheduler": "running",
+    "database": "connected",
+    "job_store": "operational",
+    "alert_evaluator": "ready"
+  },
+  "metrics": {
+    "active_jobs": 15,
+    "pending_runs": 3,
+    "failed_jobs_24h": 1,
+    "avg_execution_time": 2.5
+  }
+}
+```
+
+**Statistics Endpoint** (`/stats`):
+```json
+{
+  "job_counts": {
+    "total_schedules": 25,
+    "enabled_schedules": 20,
+    "active_jobs": 15
+  },
+  "execution_stats": {
+    "runs_24h": 1440,
+    "success_rate": 0.995,
+    "avg_duration": 2.3,
+    "max_duration": 45.2
+  },
+  "error_stats": {
+    "failed_runs_24h": 7,
+    "common_errors": [
+      "Data unavailable: 3",
+      "Timeout: 2",
+      "Network error: 2"
+    ]
+  }
+}
+```
+
+#### 18.2 Logging and Observability
+
+**Log Levels and Categories**:
+- **INFO**: Service lifecycle, job execution, successful operations
+- **WARNING**: Recoverable errors, data unavailability, timeout warnings
+- **ERROR**: Job failures, configuration errors, database issues
+- **DEBUG**: Detailed execution flow, data processing, state changes
+
+**Key Log Messages**:
+```
+[INFO] SchedulerService started with 15 active schedules
+[INFO] Job alert_123 executed successfully in 2.3s
+[WARNING] Market data unavailable for AAPL, using cached data
+[ERROR] Job screener_456 failed: Database connection timeout
+[DEBUG] Alert state updated: {"status": "ARMED", "last_value": 150.25}
+```
+
+**Structured Logging**:
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "level": "INFO",
+  "service": "scheduler",
+  "component": "alert_evaluator",
+  "job_id": 123,
+  "user_id": 456,
+  "message": "Alert triggered",
+  "context": {
+    "ticker": "AAPL",
+    "condition": "price > 150",
+    "current_value": 152.50,
+    "execution_time": 2.3
+  }
+}
+```
+
+This architecture provides robust separation of concerns while enabling efficient communication between services through well-defined interfaces and persistent storage. The comprehensive monitoring and operational procedures ensure reliable service operation and easy troubleshooting.

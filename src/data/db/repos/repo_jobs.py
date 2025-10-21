@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc, asc, func
 from sqlalchemy.exc import IntegrityError
 
-from src.data.db.models.model_jobs import Schedule, Run, RunStatus, JobType
+from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -206,7 +206,7 @@ class JobsRepository:
 
     # ---------- Run Operations ----------
 
-    def create_run(self, run_data: Dict[str, Any]) -> Run:
+    def create_run(self, run_data: Dict[str, Any]) -> ScheduleRun:
         """
         Create a new run.
 
@@ -214,13 +214,13 @@ class JobsRepository:
             run_data: Dictionary with run data
 
         Returns:
-            Created Run object
+            Created ScheduleRun object
 
         Raises:
             IntegrityError: If run with same job_type, job_id, scheduled_for already exists
         """
         try:
-            run = Run(**run_data)
+            run = ScheduleRun(**run_data)
             self.session.add(run)
             self.session.flush()  # Get the run_id without committing
             _logger.info("Created run: %s (%s:%s)", run.run_id, run.job_type, run.job_id)
@@ -230,7 +230,7 @@ class JobsRepository:
             _logger.error("Failed to create run: %s", e)
             raise
 
-    def get_run(self, run_id) -> Optional[Run]:
+    def get_run(self, run_id) -> Optional[ScheduleRun]:
         """
         Get a run by ID.
 
@@ -238,9 +238,9 @@ class JobsRepository:
             run_id: Run ID (UUID)
 
         Returns:
-            Run object or None if not found
+            ScheduleRun object or None if not found
         """
-        return self.session.query(Run).filter(Run.run_id == run_id).first()
+        return self.session.query(ScheduleRun).filter(ScheduleRun.run_id == run_id).first()
 
     def list_runs(
         self,

@@ -209,7 +209,8 @@ class SchedulerService:
             "max_workers": self.max_workers,
             "scheduler_state": None,
             "job_count": 0,
-            "datastore_url": self.database_url
+            "datastore_url": self.database_url,
+            "notification_client": self.notification_client.get_stats() if self.notification_client else None
         }
 
         if self.scheduler:
@@ -218,6 +219,24 @@ class SchedulerService:
             # This would need to be implemented by querying the datastore directly
 
         return status
+
+    async def check_notification_health(self) -> Dict[str, Any]:
+        """
+        Check notification service health.
+
+        Returns:
+            Dictionary with notification service health status
+        """
+        try:
+            if not self.notification_client:
+                return {"status": "unavailable", "error": "No notification client configured"}
+
+            health_status = await self.notification_client.get_health_status()
+            return health_status
+
+        except Exception as e:
+            _logger.error("Error checking notification service health: %s", str(e))
+            return {"status": "unhealthy", "error": str(e)}
 
     async def _initialize_scheduler(self) -> None:
         """
@@ -461,14 +480,15 @@ class SchedulerService:
                 await self._update_schedule_state(schedule.id, result.state_updates)
 
             # Send notification if triggered
+            notification_sent = False
             if result.triggered and result.notification_data:
-                await self._send_notification(result.notification_data)
+                notification_sent = await self._send_notification(result.notification_data)
 
             return {
                 "triggered": result.triggered,
                 "rearmed": result.rearmed,
                 "error": result.error,
-                "notification_sent": result.triggered and result.notification_data is not None
+                "notification_sent": notification_sent
             }
 
         except Exception as e:
@@ -602,75 +622,228 @@ class SchedulerService:
         except Exception as e:
             _logger.error("Error updating schedule state for %d: %s", schedule_id, str(e))
 
-    async def _send_notification(self, notification_data: Dict[str, Any]) -> None:
+    async def _send_notification(self, notification_data: Dict[str, Any]) -> bool:
         """
-        Send notification for triggered alert.
+        Send notification for triggered alert with enhanced formatting and error handling.
 
         Args:
             notification_data: Notification data from alert evaluation
+
+        Returns:
+            True if notification was sent successfully, False otherwise
         """
         try:
             # Extract notification configuration
             notify_config = notification_data.get("notify_config", {})
 
-            # Build notification title and message
+            # Build enhanced notification title and message
             ticker = notification_data.get("ticker", "Unknown")
             timeframe = notification_data.get("timeframe", "Unknown")
             price = notification_data.get("price", 0.0)
+            alert_name = notification_data.get("alert_name", "Alert")
 
-            title = f"Alert Triggered: {ticker} ({timeframe})"
+            # Safely convert price to float
+            try:
+                price_float = float(price) if price is not None else 0.0
+            except (ValueError, TypeError):
+                price_float = 0.0
+                _logger.warning("Invalid price value: %s, using 0.0", price)
 
-            # Build detailed message
+            # Create contextual title
+            title = f"🚨 {alert_name}: {ticker} ({timeframe})"
+
+            # Build comprehensive message with enhanced formatting
             message_parts = [
-                f"🚨 Alert triggered for {ticker} on {timeframe} timeframe",
-                f"💰 Current price: ${price:.4f}",
-                f"⏰ Time: {notification_data.get('timestamp', 'Unknown')}"
+                f"**Alert Triggered: {alert_name}**",
+                f"📈 Symbol: {ticker}",
+                f"⏱️ Timeframe: {timeframe}",
+                f"💰 Current Price: ${price_float:.4f}",
+                f"🕐 Triggered At: {notification_data.get('timestamp', datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC'))}"
             ]
 
-            # Add indicator values if available
+            # Add market context if available
+            market_data = notification_data.get("market_data", {})
+            if market_data:
+                message_parts.append("\n**📊 Market Context:**")
+
+                # Add OHLCV data if available
+                if "open" in market_data:
+                    try:
+                        open_price = float(market_data["open"])
+                        high_price = float(market_data.get("high", price_float))
+                        low_price = float(market_data.get("low", price_float))
+                        volume = float(market_data.get("volume", 0))
+
+                        # Calculate price change
+                        price_change = ((price_float - open_price) / open_price * 100) if open_price > 0 else 0
+                        change_emoji = "📈" if price_change >= 0 else "📉"
+
+                        message_parts.extend([
+                            f"  • Open: ${open_price:.4f}",
+                            f"  • High: ${high_price:.4f}",
+                            f"  • Low: ${low_price:.4f}",
+                            f"  • Change: {change_emoji} {price_change:+.2f}%"
+                        ])
+
+                        if volume > 0:
+                            message_parts.append(f"  • Volume: {volume:,.0f}")
+
+                    except (ValueError, TypeError):
+                        _logger.warning("Invalid market data values, skipping market context")
+
+            # Add technical indicators with enhanced formatting
             indicators = notification_data.get("indicators", {})
             if indicators:
-                message_parts.append("\n📊 Indicators:")
-                for name, value in indicators.items():
-                    message_parts.append(f"  • {name}: {value:.4f}")
+                message_parts.append("\n**📊 Technical Indicators:**")
 
-            # Add rule snapshot if available
+                # Group indicators by type for better readability
+                trend_indicators = {}
+                momentum_indicators = {}
+                volatility_indicators = {}
+                other_indicators = {}
+
+                for name, value in indicators.items():
+                    name_lower = name.lower()
+                    if any(trend in name_lower for trend in ["sma", "ema", "ma", "trend", "supertrend"]):
+                        trend_indicators[name] = value
+                    elif any(momentum in name_lower for momentum in ["rsi", "macd", "stoch", "momentum"]):
+                        momentum_indicators[name] = value
+                    elif any(vol in name_lower for vol in ["bb", "bollinger", "atr", "volatility"]):
+                        volatility_indicators[name] = value
+                    else:
+                        other_indicators[name] = value
+
+                # Format indicators by category
+                for category, indicators_dict in [
+                    ("Trend", trend_indicators),
+                    ("Momentum", momentum_indicators),
+                    ("Volatility", volatility_indicators),
+                    ("Other", other_indicators)
+                ]:
+                    if indicators_dict:
+                        for name, value in indicators_dict.items():
+                            if isinstance(value, bool):
+                                message_parts.append(f"  • {name}: {value}")
+                            elif isinstance(value, (int, float)):
+                                message_parts.append(f"  • {name}: {value:.4f}")
+                            else:
+                                message_parts.append(f"  • {name}: {value}")
+
+            # Add rule evaluation details
             rule_snapshot = notification_data.get("rule_snapshot", {})
-            if rule_snapshot:
-                message_parts.append("\n📋 Rule Values:")
-                for name, value in rule_snapshot.items():
-                    message_parts.append(f"  • {name}: {value:.4f}")
+            rule_description = notification_data.get("rule_description", "")
+
+            if rule_snapshot or rule_description:
+                message_parts.append("\n**📋 Alert Rule Details:**")
+
+                if rule_description:
+                    message_parts.append(f"  • Rule: {rule_description}")
+
+                if rule_snapshot:
+                    message_parts.append("  • Values:")
+                    for name, value in rule_snapshot.items():
+                        if isinstance(value, bool):
+                            message_parts.append(f"    - {name}: {value}")
+                        elif isinstance(value, (int, float)):
+                            message_parts.append(f"    - {name}: {value:.4f}")
+                        else:
+                            message_parts.append(f"    - {name}: {value}")
+
+            # Add rearm status if available
+            rearm_info = notification_data.get("rearm_info", {})
+            if rearm_info:
+                message_parts.append("\n**🔄 Rearm Status:**")
+                rearm_type = rearm_info.get("type", "unknown")
+                rearm_value = rearm_info.get("value", "N/A")
+                message_parts.append(f"  • Type: {rearm_type}")
+                message_parts.append(f"  • Value: {rearm_value}")
+
+            # Add alert configuration summary
+            alert_config = notification_data.get("alert_config", {})
+            if alert_config:
+                message_parts.append("\n**⚙️ Alert Configuration:**")
+                if "description" in alert_config:
+                    message_parts.append(f"  • Description: {alert_config['description']}")
+                if "priority" in alert_config:
+                    message_parts.append(f"  • Priority: {alert_config['priority']}")
+
+            # Add footer with action suggestions
+            message_parts.extend([
+                "\n" + "─" * 30,
+                "💡 **Next Steps:**",
+                "• Review your trading strategy",
+                "• Check market conditions",
+                "• Consider position sizing",
+                "",
+                f"🤖 Generated by Scheduler Service at {datetime.now(UTC).strftime('%H:%M:%S UTC')}"
+            ])
 
             message = "\n".join(message_parts)
 
-            # Determine channels from notify config
+            # Determine channels from notify config with smart defaults
             channels = notify_config.get("channels", ["telegram"])
             if isinstance(channels, str):
                 channels = [channels]
 
+            # Add email for high-priority alerts
+            priority = notify_config.get("priority", "normal")
+            if priority in ["high", "critical"] and "email" not in channels:
+                channels.append("email")
+
             # Determine recipient
             recipient_id = notify_config.get("recipient_id") or notify_config.get("user_id") or "default"
 
-            # Send notification using the service client
-            success = await self.notification_client.send_notification(
-                notification_type=MessageType.ALERT,
-                title=title,
-                message=message,
-                priority=MessagePriority.HIGH,
-                data=notification_data,
-                source="scheduler_service",
-                channels=channels,
-                recipient_id=recipient_id
-            )
+            # Adjust message priority based on alert configuration
+            message_priority = MessagePriority.NORMAL
+            if priority == "critical":
+                message_priority = MessagePriority.CRITICAL
+            elif priority == "high":
+                message_priority = MessagePriority.HIGH
+            elif priority == "low":
+                message_priority = MessagePriority.LOW
 
-            if success:
-                _logger.info("Alert notification sent successfully for %s", ticker)
-            else:
-                _logger.warning("Failed to send alert notification for %s", ticker)
+            # Send notification using the service client with retry logic
+            max_notification_retries = 3
+            for attempt in range(max_notification_retries):
+                try:
+                    success = await self.notification_client.send_notification(
+                        notification_type=MessageType.ALERT,
+                        title=title,
+                        message=message,
+                        priority=message_priority,
+                        data=notification_data,
+                        source="scheduler_service",
+                        channels=channels,
+                        recipient_id=recipient_id
+                    )
+
+                    if success:
+                        _logger.info("Enhanced alert notification sent successfully for %s (attempt %d/%d)",
+                                   ticker, attempt + 1, max_notification_retries)
+                        return True
+                    else:
+                        _logger.warning("Notification service returned failure for %s (attempt %d/%d)",
+                                      ticker, attempt + 1, max_notification_retries)
+
+                except Exception as e:
+                    _logger.error("Error sending notification for %s (attempt %d/%d): %s",
+                                ticker, attempt + 1, max_notification_retries, str(e))
+
+                # Wait before retry (except on last attempt)
+                if attempt < max_notification_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff
+                    _logger.info("Retrying notification in %d seconds...", wait_time)
+                    await asyncio.sleep(wait_time)
+
+            _logger.error("Failed to send enhanced alert notification for %s after %d attempts",
+                         ticker, max_notification_retries)
+            return False
 
         except Exception as e:
-            _logger.error("Error sending notification: %s", str(e))
+            _logger.error("Unexpected error sending enhanced notification: %s", str(e))
+            _logger.debug("Notification error traceback: %s", traceback.format_exc())
             # Don't raise - notification failures shouldn't stop job execution
+            return False
 
     async def _clear_all_jobs(self) -> None:
         """Remove all jobs from APScheduler."""

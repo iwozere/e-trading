@@ -18,12 +18,6 @@
   - Add schema loading, caching, and validation error reporting
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [x] 1.3 Write unit tests for core services
-  - Create tests for CronParser with various cron expressions
-  - Create tests for AlertSchemaValidator with valid/invalid configurations
-  - Test edge cases and error conditions
-  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 3.1, 3.2, 3.3, 3.4, 3.5_
-
 - [x] 2. Implement centralized alert evaluation service
   - Create AlertEvaluator service with rule evaluation and rearm logic
   - Integrate with existing market data and indicator services
@@ -53,12 +47,6 @@
   - Implement state loading, updating, and error handling
   - Handle missing or corrupted state with default initialization
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
-
-- [x] 2.5 Write unit tests for alert evaluator
-  - Test rule evaluation with various logical combinations
-  - Test rearm logic with different configurations
-  - Test state persistence and recovery scenarios
-  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 8.1, 8.2, 8.3, 8.4, 8.5_
 
 - [x] 3. Create main scheduler service
   - Implement SchedulerService with APScheduler integration
@@ -96,90 +84,132 @@
   - Test error recovery and retry mechanisms
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [-] 4. Implement notification integration
-
-
-
-  - Add TelegramBot FastAPI endpoint integration
-  - Create notification formatting and delivery logic
+- [x] 4. Complete notification integration
+  - Integrate with existing notification service client
+  - Update scheduler service to use NotificationServiceClient
   - Handle notification failures gracefully
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 4.1 Create notification client
-
-
-  - Implement TelegramNotificationClient in src/scheduler/notification_client.py
-  - Add FastAPI endpoint calling with proper error handling
-  - Include alert context and market conditions in notifications
+- [x] 4.1 Update scheduler service notification integration
+  - Modify SchedulerService to use existing NotificationServiceClient
+  - Remove placeholder notification client code
+  - Ensure proper error handling for notification failures
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 4.2 Add notification formatting
-  - Create notification message templates for different alert types
-  - Include relevant market data and alert details
-  - Format messages for optimal readability
+- [x] 4.2 Add notification formatting enhancements
+  - Enhance notification message formatting in SchedulerService._send_notification
+  - Include more detailed market data and alert context
+  - Format messages for optimal readability across channels
   - _Requirements: 4.1, 4.3, 4.4_
 
-- [ ] 4.3 Implement delivery error handling
-  - Add retry logic for failed notification deliveries
-  - Log notification failures without stopping job execution
-  - Handle TelegramBot service unavailability gracefully
-  - _Requirements: 4.2, 4.5_
-
-- [ ] 4.4 Write tests for notification integration
-  - Test FastAPI endpoint calling with mock responses
+- [x] 4.3 Write tests for notification integration
+  - Test notification service client integration with mock responses
   - Test notification formatting with various alert types
   - Test error handling and retry scenarios
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 5. Create main scheduler application
+- [x] 5. Create main scheduler application
   - Implement main application entry point
   - Add configuration management and dependency injection
   - Create service orchestration and startup logic
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 5.1 Create main application module
+- [x] 5.1 Create main application module
   - Implement main scheduler application in src/scheduler/main.py
   - Add configuration loading from environment and config files
   - Initialize all required services with proper dependency injection
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 5.2 Add service orchestration
+- [x] 5.2 Add service orchestration
   - Wire together SchedulerService, AlertEvaluator, and supporting services
   - Implement graceful startup and shutdown procedures
   - Add health check and status reporting endpoints
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 5.3 Create configuration management
+- [x] 5.3 Create configuration management
   - Add configuration classes for scheduler settings
   - Support environment variable and file-based configuration
   - Include database connection, APScheduler, and service settings
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 5.4 Write integration tests for main application
+- [x] 5.4 Write integration tests for main application
   - Test complete service initialization and startup
   - Test configuration loading and validation
   - Test graceful shutdown and cleanup
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 6. Update documentation and create deployment artifacts
-  - Update HLA documentation with new scheduler architecture
-  - Create deployment configuration and service files
-  - Add monitoring and operational documentation
-  - _Requirements: All requirements covered through comprehensive documentation_
-
-- [ ] 6.1 Update HLA documentation
-  - Update docs/HLA/background-services.md with new scheduler implementation
-  - Add architecture diagrams showing service interactions
-  - Document configuration options and operational procedures
-  - _Requirements: All requirements for comprehensive system documentation_
-
-- [ ] 6.2 Create deployment configuration
+- [x] 6. Create deployment configuration
   - Create systemd service file for scheduler service
   - Add configuration templates and environment setup
   - Create startup and monitoring scripts
   - _Requirements: Service deployment and operational requirements_
 
-- [ ] 6.3 Add operational documentation
+- [x] 7. Add missing unit tests for core alert services
+
+
+
+
+
+
+
+  - Create comprehensive unit tests for CronParser
+  - Create comprehensive unit tests for AlertSchemaValidator  
+  - Create comprehensive unit tests for AlertEvaluator components
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 3.1, 3.2, 3.3, 3.4, 3.5, 2.1, 2.2, 2.3, 2.4, 2.5, 8.1, 8.2, 8.3, 8.4, 8.5_
+
+- [x] 7.1 Create unit tests for CronParser
+
+
+  - Create tests/test_cron_parser.py with comprehensive test coverage
+  - Test 5-field and 6-field cron expression parsing
+  - Test timezone handling and next run calculations
+  - Test validation and error handling for invalid expressions
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
+
+- [x] 7.2 Create unit tests for AlertSchemaValidator
+
+
+  - Create tests/test_alert_schema_validator.py with comprehensive test coverage
+  - Test schema loading and caching mechanisms
+  - Test validation with valid and invalid configurations
+  - Test error message formatting and warnings
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 7.3 Create unit tests for AlertEvaluator
+
+
+
+
+
+
+  - Create tests/test_alert_evaluator.py with comprehensive test coverage
+  - Test rule evaluation with various logical operators (and/or/not)
+  - Test rearm logic with different configurations (hysteresis, cooldown, persistence)
+  - Test state persistence and recovery scenarios
+  - Test market data and indicator integration
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 8.1, 8.2, 8.3, 8.4, 8.5_
+
+- [x] 8. Update documentation and operational guides
+
+
+
+
+
+  - Update HLA documentation with new scheduler architecture
+  - Add monitoring and operational documentation
+  - _Requirements: All requirements covered through comprehensive documentation_
+
+- [x] 8.1 Update HLA documentation
+
+
+  - Update docs/HLA/background-services.md with new scheduler implementation
+  - Add architecture diagrams showing service interactions
+  - Document configuration options and operational procedures
+  - _Requirements: All requirements for comprehensive system documentation_
+
+- [x] 8.2 Add operational documentation
+
+
   - Create troubleshooting guide for common issues
   - Add monitoring and alerting recommendations
   - Document backup and recovery procedures
