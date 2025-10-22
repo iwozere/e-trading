@@ -81,7 +81,7 @@ class WebUITestRunner:
 
             if self.coverage:
                 cmd.extend([
-                    "--cov=src.web_ui.backend",
+                    "--cov=src.api",
                     "--cov-report=term-missing",
                     "--cov-report=html:htmlcov",
                     "--cov-report=json:coverage.json",

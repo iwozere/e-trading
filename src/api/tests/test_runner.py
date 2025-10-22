@@ -35,7 +35,7 @@ def run_all_tests():
     try:
         import coverage
         args.extend([
-            "--cov=src.web_ui.backend",
+            "--cov=src.api",
             "--cov-report=term-missing",
             "--cov-report=html:htmlcov",
             "--cov-fail-under=80"  # Require 80% coverage

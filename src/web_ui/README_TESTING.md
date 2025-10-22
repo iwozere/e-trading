@@ -120,7 +120,7 @@ src/web_ui/backend/tests/
 
 ```bash
 cd src/web_ui/backend
-python -m pytest tests/ -v --cov=src.web_ui.backend --cov-report=html
+python -m pytest tests/ -v --cov=src.api --cov-report=html
 ```
 
 ### Backend Test Categories

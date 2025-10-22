@@ -19,7 +19,7 @@ cd src/web_ui/backend
 pip install -r tests/requirements-test.txt
 
 # Run all tests with coverage
-python -m pytest tests/ -v --cov=src.web_ui.backend --cov-report=html
+python -m pytest tests/ -v --cov=src.api --cov-report=html
 
 # Run specific test categories
 python tests/test_runner.py auth      # Authentication tests
@@ -98,7 +98,7 @@ npm test -- simple.test.ts   # Simple assertions
 ### **1. Run Backend Tests (Ready Now):**
 ```bash
 cd src/web_ui/backend
-python -m pytest tests/ -v --cov=src.web_ui.backend --cov-report=html
+python -m pytest tests/ -v --cov=src.api --cov-report=html
 ```
 
 ### **2. Fix Frontend TypeScript Issues:**

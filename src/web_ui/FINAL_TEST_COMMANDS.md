@@ -5,7 +5,7 @@
 ### **Run All Backend Tests:**
 ```bash
 cd src/web_ui/backend
-python -m pytest tests/ -v --cov=src.web_ui.backend --cov-report=html
+python -m pytest tests/ -v --cov=src.api --cov-report=html
 ```
 
 ### **Run Specific Backend Test Categories:**
@@ -151,7 +151,7 @@ cd src/web_ui/frontend && npm test -- working.test.js
 
 ### **4. View Coverage Report:**
 ```bash
-cd src/web_ui/backend && python -m pytest tests/ --cov=src.web_ui.backend --cov-report=html
+cd src/web_ui/backend && python -m pytest tests/ --cov=src.api --cov-report=html
 # Then open htmlcov/index.html
 ```
 

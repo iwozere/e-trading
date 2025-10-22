@@ -28,7 +28,7 @@ python test_runner.py services  # Service layer tests
 python test_runner.py telegram  # Telegram tests
 
 # Run with pytest directly
-pytest -v --cov=src.web_ui.backend
+pytest -v --cov=src.api
 ```
 
 ## Coverage Target

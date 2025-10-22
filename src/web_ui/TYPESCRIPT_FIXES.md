@@ -54,7 +54,7 @@ npm test
 ### **Backend Tests (Always Worked):**
 ```bash
 cd src/web_ui/backend
-python -m pytest tests/ -v --cov=src.web_ui.backend --cov-report=html
+python -m pytest tests/ -v --cov=src.api --cov-report=html
 ```
 
 ## 📊 **CURRENT STATUS**
