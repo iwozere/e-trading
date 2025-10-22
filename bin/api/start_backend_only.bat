@@ -25,6 +25,6 @@ echo Press Ctrl+C to stop
 echo.
 
 REM Start backend
-".venv\Scripts\python.exe" -m uvicorn src.web_ui.backend.main:app --host 0.0.0.0 --port 5003 --reload
+".venv\Scripts\python.exe" -m uvicorn src.api.main:app --host 0.0.0.0 --port 5003 --reload
 
 pause
