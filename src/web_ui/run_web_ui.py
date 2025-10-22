@@ -170,7 +170,7 @@ class WebUIRunner:
         if self.dev_mode:
             # Development mode with auto-reload
             uvicorn.run(
-                "src.web_ui.backend.main:app",
+                "src.api.main:app",
                 host=self.host,
                 port=self.port,
                 reload=True,
@@ -180,7 +180,7 @@ class WebUIRunner:
         else:
             # Production mode
             uvicorn.run(
-                "src.web_ui.backend.main:app",
+                "src.api.main:app",
                 host=self.host,
                 port=self.port,
                 log_level="info",

@@ -22,8 +22,8 @@ import asyncio
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.main import app
-from src.web_ui.backend.services import StrategyValidationError, StrategyOperationError
+from src.api.main import app
+from src.api.services import StrategyValidationError, StrategyOperationError
 
 
 class TestRootAndHealthEndpoints:
@@ -69,7 +69,7 @@ class TestRootAndHealthEndpoints:
 class TestStrategyManagementEndpoints:
     """Test cases for strategy management CRUD operations."""
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_list_strategies_success(self, mock_service, authenticated_client_admin):
         """Test successful strategy listing."""
         mock_strategies = [
@@ -97,7 +97,7 @@ class TestStrategyManagementEndpoints:
         assert data[0]["name"] == "Test Strategy 1"
         assert data[0]["status"] == "running"
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_list_strategies_error(self, mock_service, authenticated_client_admin):
         """Test strategy listing with service error."""
         mock_service.get_all_strategies_status.side_effect = Exception("Service error")
@@ -108,7 +108,7 @@ class TestStrategyManagementEndpoints:
         data = response.json()
         assert "Service error" in data["detail"]
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_create_strategy_success(self, mock_service, authenticated_client_trader, sample_strategy_config):
         """Test successful strategy creation."""
         from unittest.mock import AsyncMock
@@ -125,7 +125,7 @@ class TestStrategyManagementEndpoints:
         assert data["strategy_id"] == "test-strategy"
         mock_service.create_strategy.assert_called_once()
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_create_strategy_validation_error(self, mock_service, authenticated_client_trader, sample_strategy_config):
         """Test strategy creation with validation error."""
         mock_service.create_strategy.side_effect = StrategyValidationError("Invalid configuration")
@@ -136,7 +136,7 @@ class TestStrategyManagementEndpoints:
         data = response.json()
         assert "Invalid configuration" in data["detail"]
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_create_strategy_operation_error(self, mock_service, authenticated_client_trader, sample_strategy_config):
         """Test strategy creation with operation error."""
         mock_service.create_strategy.side_effect = StrategyOperationError("Service unavailable")
@@ -155,7 +155,7 @@ class TestStrategyManagementEndpoints:
         data = response.json()
         assert "Access denied" in data["detail"]
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_get_strategy_success(self, mock_service, authenticated_client_admin, sample_strategy_status):
         """Test successful strategy retrieval."""
         mock_service.get_strategy_status.return_value = sample_strategy_status
@@ -167,7 +167,7 @@ class TestStrategyManagementEndpoints:
         assert data["instance_id"] == sample_strategy_status["instance_id"]
         assert data["name"] == sample_strategy_status["name"]
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_get_strategy_not_found(self, mock_service, authenticated_client_admin):
         """Test strategy retrieval when strategy not found."""
         mock_service.get_strategy_status.return_value = None
@@ -178,7 +178,7 @@ class TestStrategyManagementEndpoints:
         data = response.json()
         assert "Strategy not found" in data["detail"]
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_update_strategy_success(self, mock_service, authenticated_client_trader, sample_strategy_config):
         """Test successful strategy update."""
         mock_service.update_strategy = AsyncMock(return_value={
@@ -193,7 +193,7 @@ class TestStrategyManagementEndpoints:
         assert data["message"] == "Strategy updated successfully"
         assert data["strategy_id"] == "test-strategy"
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_update_strategy_not_found(self, mock_service, authenticated_client_trader, sample_strategy_config):
         """Test strategy update when strategy not found."""
         mock_service.update_strategy.side_effect = StrategyOperationError("Strategy not found")
@@ -204,7 +204,7 @@ class TestStrategyManagementEndpoints:
         data = response.json()
         assert "Strategy not found" in data["detail"]
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_delete_strategy_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy deletion."""
         mock_service.delete_strategy = AsyncMock(return_value={
@@ -219,7 +219,7 @@ class TestStrategyManagementEndpoints:
         assert data["message"] == "Strategy deleted successfully"
         assert data["strategy_id"] == "test-strategy"
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_delete_strategy_not_found(self, mock_service, authenticated_client_trader):
         """Test strategy deletion when strategy not found."""
         mock_service.delete_strategy.side_effect = StrategyOperationError("Strategy not found")
@@ -234,7 +234,7 @@ class TestStrategyManagementEndpoints:
 class TestStrategyLifecycleEndpoints:
     """Test cases for strategy lifecycle management."""
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_start_strategy_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy start."""
         mock_service.start_strategy = AsyncMock(return_value={
@@ -250,7 +250,7 @@ class TestStrategyLifecycleEndpoints:
         assert data["message"] == "Strategy started successfully"
         mock_service.start_strategy.assert_called_once_with("test-strategy", confirm_live_trading=False)
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_start_strategy_confirmation_required(self, mock_service, authenticated_client_trader):
         """Test strategy start requiring live trading confirmation."""
         mock_service.start_strategy.side_effect = StrategyOperationError("Live trading confirmation required")
@@ -262,7 +262,7 @@ class TestStrategyLifecycleEndpoints:
         data = response.json()
         assert "confirmation" in data["detail"].lower()
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_start_strategy_not_found(self, mock_service, authenticated_client_trader):
         """Test strategy start when strategy not found."""
         mock_service.start_strategy.side_effect = StrategyOperationError("Strategy not found")
@@ -274,7 +274,7 @@ class TestStrategyLifecycleEndpoints:
         data = response.json()
         assert "not found" in data["detail"].lower()
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_stop_strategy_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy stop."""
         mock_service.stop_strategy = AsyncMock(return_value={
@@ -289,7 +289,7 @@ class TestStrategyLifecycleEndpoints:
         assert data["message"] == "Strategy stopped successfully"
         mock_service.stop_strategy.assert_called_once_with("test-strategy")
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_restart_strategy_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy restart."""
         mock_service.restart_strategy = AsyncMock(return_value={
@@ -309,8 +309,8 @@ class TestStrategyLifecycleEndpoints:
 class TestSystemMonitoringEndpoints:
     """Test cases for system monitoring endpoints."""
 
-    @patch('src.web_ui.backend.main.monitoring_service')
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.monitoring_service')
+    @patch('src.api.main.strategy_service')
     def test_get_system_status_success(self, mock_strategy_service, mock_monitoring_service, authenticated_client_admin):
         """Test successful system status retrieval."""
         # Mock strategy service status
@@ -347,7 +347,7 @@ class TestSystemMonitoringEndpoints:
         assert data["system_metrics"]["temperature_c"] == 45.0
         assert data["system_metrics"]["disk_usage_percent"] == 75.0  # Max of partitions
 
-    @patch('src.web_ui.backend.main.monitoring_service')
+    @patch('src.api.main.monitoring_service')
     def test_get_system_metrics_success(self, mock_service, authenticated_client_admin):
         """Test successful system metrics retrieval."""
         mock_metrics = {
@@ -363,7 +363,7 @@ class TestSystemMonitoringEndpoints:
         data = response.json()
         assert data == mock_metrics
 
-    @patch('src.web_ui.backend.main.monitoring_service')
+    @patch('src.api.main.monitoring_service')
     def test_get_system_alerts_success(self, mock_service, authenticated_client_admin):
         """Test successful system alerts retrieval."""
         mock_alerts = [
@@ -379,7 +379,7 @@ class TestSystemMonitoringEndpoints:
         assert data["alerts"] == mock_alerts
         mock_service.get_alerts.assert_called_once_with(False)  # unacknowledged_only=False
 
-    @patch('src.web_ui.backend.main.monitoring_service')
+    @patch('src.api.main.monitoring_service')
     def test_get_system_alerts_unacknowledged_only(self, mock_service, authenticated_client_admin):
         """Test system alerts retrieval with unacknowledged filter."""
         mock_service.get_alerts.return_value = []
@@ -389,7 +389,7 @@ class TestSystemMonitoringEndpoints:
         assert response.status_code == 200
         mock_service.get_alerts.assert_called_once_with(True)
 
-    @patch('src.web_ui.backend.main.monitoring_service')
+    @patch('src.api.main.monitoring_service')
     def test_acknowledge_alert_success(self, mock_service, authenticated_client_trader):
         """Test successful alert acknowledgment."""
         mock_service.acknowledge_alert.return_value = True
@@ -401,7 +401,7 @@ class TestSystemMonitoringEndpoints:
         assert data["message"] == "Alert acknowledged successfully"
         mock_service.acknowledge_alert.assert_called_once_with(1)
 
-    @patch('src.web_ui.backend.main.monitoring_service')
+    @patch('src.api.main.monitoring_service')
     def test_acknowledge_alert_not_found(self, mock_service, authenticated_client_trader):
         """Test alert acknowledgment when alert not found."""
         mock_service.acknowledge_alert.return_value = False
@@ -412,7 +412,7 @@ class TestSystemMonitoringEndpoints:
         data = response.json()
         assert "Alert not found" in data["detail"]
 
-    @patch('src.web_ui.backend.main.monitoring_service')
+    @patch('src.api.main.monitoring_service')
     def test_get_performance_history_success(self, mock_service, authenticated_client_admin):
         """Test successful performance history retrieval."""
         mock_history = [
@@ -440,7 +440,7 @@ class TestSystemMonitoringEndpoints:
 class TestConfigurationEndpoints:
     """Test cases for configuration management endpoints."""
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_update_strategy_parameters_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy parameter update."""
         mock_result = {"message": "Parameters updated", "updated_params": {"fast_period": 15}}
@@ -454,7 +454,7 @@ class TestConfigurationEndpoints:
         assert data == mock_result
         mock_service.update_strategy_parameters.assert_called_once_with("test-strategy", parameters)
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_get_strategy_templates_success(self, mock_service, authenticated_client_admin):
         """Test successful strategy templates retrieval."""
         mock_templates = [
@@ -469,7 +469,7 @@ class TestConfigurationEndpoints:
         data = response.json()
         assert data["templates"] == mock_templates
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_validate_configuration_valid(self, mock_service, authenticated_client_admin, sample_strategy_config):
         """Test configuration validation with valid config."""
         mock_service.validate_strategy_config.return_value = None  # No exception means valid
@@ -481,7 +481,7 @@ class TestConfigurationEndpoints:
         assert data["valid"] is True
         assert data["errors"] == []
 
-    @patch('src.web_ui.backend.main.strategy_service')
+    @patch('src.api.main.strategy_service')
     def test_validate_configuration_invalid(self, mock_service, authenticated_client_admin, sample_strategy_config):
         """Test configuration validation with invalid config."""
         mock_service.validate_strategy_config.side_effect = StrategyValidationError("Invalid symbol")

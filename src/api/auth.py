@@ -19,7 +19,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.services.webui_app_service import webui_app_service
+from src.api.services.webui_app_service import webui_app_service
 from src.data.db.models.model_users import User
 from src.data.db.models.model_webui import WebUIAuditLog
 from src.data.db.services.database_service import get_database_service

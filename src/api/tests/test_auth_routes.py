@@ -20,13 +20,13 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.auth import create_access_token, create_refresh_token
+from src.api.auth import create_access_token, create_refresh_token
 
 
 class TestAuthenticationRoutes:
     """Test cases for authentication route endpoints."""
 
-    @patch('src.web_ui.backend.auth_routes.webui_app_service')
+    @patch('src.api.auth_routes.webui_app_service')
     def test_login_success(self, mock_service, client):
         """Test successful user login."""
         # Mock successful authentication
@@ -55,7 +55,7 @@ class TestAuthenticationRoutes:
 
         mock_service.authenticate_user.assert_called_once_with("admin", "admin")
 
-    @patch('src.web_ui.backend.auth_routes.webui_app_service')
+    @patch('src.api.auth_routes.webui_app_service')
     def test_login_invalid_credentials(self, mock_service, client):
         """Test login with invalid credentials."""
         # Mock failed authentication
@@ -105,7 +105,7 @@ class TestAuthenticationRoutes:
         data = response.json()
         assert "Incorrect username or password" in data["detail"]
 
-    @patch('src.web_ui.backend.auth_routes.webui_app_service')
+    @patch('src.api.auth_routes.webui_app_service')
     def test_login_service_error(self, mock_service, client):
         """Test login when authentication service fails."""
         # Mock service error
@@ -122,7 +122,7 @@ class TestAuthenticationRoutes:
         data = response.json()
         assert "Internal server error" in data["detail"]
 
-    @patch('src.web_ui.backend.auth_routes.verify_token')
+    @patch('src.api.auth_routes.verify_token')
     def test_refresh_token_success(self, mock_verify_token, client):
         """Test successful token refresh."""
         # Mock token verification
@@ -157,10 +157,10 @@ class TestAuthenticationRoutes:
 
         assert response.status_code == 422  # Validation error
 
-    @patch('src.web_ui.backend.auth_routes.verify_token')
+    @patch('src.api.auth_routes.verify_token')
     def test_refresh_token_invalid(self, mock_verify_token, client):
         """Test token refresh with invalid refresh token."""
-        from src.web_ui.backend.auth import AuthenticationError
+        from src.api.auth import AuthenticationError
         mock_verify_token.side_effect = AuthenticationError("Invalid token")
 
         refresh_data = {
@@ -173,7 +173,7 @@ class TestAuthenticationRoutes:
         data = response.json()
         assert "Invalid token" in data["detail"]
 
-    @patch('src.web_ui.backend.auth_routes.verify_token')
+    @patch('src.api.auth_routes.verify_token')
     def test_refresh_token_wrong_type(self, mock_verify_token, client):
         """Test token refresh with access token instead of refresh token."""
         # Mock token verification returning access token type
@@ -196,7 +196,7 @@ class TestAuthenticationRoutes:
         data = response.json()
         assert "Invalid token type" in data["detail"]
 
-    @patch('src.web_ui.backend.auth_routes.verify_token')
+    @patch('src.api.auth_routes.verify_token')
     def test_refresh_token_user_not_found(self, mock_verify_token, client):
         """Test token refresh when user no longer exists."""
         # Mock token verification
@@ -218,7 +218,7 @@ class TestAuthenticationRoutes:
         # Should still work since current implementation doesn't validate user existence
         assert response.status_code == 200
 
-    @patch('src.web_ui.backend.auth_routes.verify_token')
+    @patch('src.api.auth_routes.verify_token')
     def test_refresh_token_inactive_user(self, mock_verify_token, client):
         """Test token refresh with inactive user."""
         # Mock token verification
@@ -254,7 +254,7 @@ class TestAuthenticationRoutes:
 
         assert response.status_code == 403  # No authorization header
 
-    @patch('src.web_ui.backend.auth_routes.webui_app_service')
+    @patch('src.api.auth_routes.webui_app_service')
     def test_login_with_audit_logging(self, mock_service, client):
         """Test login with audit logging."""
         # Mock successful authentication
@@ -280,7 +280,7 @@ class TestAuthenticationRoutes:
         call_args = mock_service.log_user_action.call_args[1]  # Get keyword arguments
         assert call_args["action"] == "login"
 
-    @patch('src.web_ui.backend.auth_routes.webui_app_service')
+    @patch('src.api.auth_routes.webui_app_service')
     def test_logout_with_audit_logging(self, mock_service, authenticated_client_admin, mock_admin_user):
         """Test logout with audit logging."""
         response = authenticated_client_admin.post("/auth/logout")
@@ -339,7 +339,7 @@ class TestAuthenticationValidation:
         # Should handle gracefully (either validation error or authentication failure)
         assert response.status_code in [400, 401, 422]
 
-    @patch('src.web_ui.backend.auth_routes.webui_app_service')
+    @patch('src.api.auth_routes.webui_app_service')
     def test_login_special_characters(self, mock_service, client):
         """Test login with special characters in credentials."""
         mock_service.authenticate_user.return_value = None

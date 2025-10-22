@@ -20,10 +20,10 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.services.webui_app_service import WebUIAppService, webui_app_service
-from src.web_ui.backend.services.telegram_app_service import TelegramAppService
-from src.web_ui.backend.services.monitoring_service import SystemMonitoringService
-from src.web_ui.backend.services.strategy_service import StrategyManagementService, StrategyValidationError, StrategyOperationError
+from src.api.services.webui_app_service import WebUIAppService, webui_app_service
+from src.api.services.telegram_app_service import TelegramAppService
+from src.api.services.monitoring_service import SystemMonitoringService
+from src.api.services.strategy_service import StrategyManagementService, StrategyValidationError, StrategyOperationError
 
 
 class TestWebUIAppService:
@@ -33,7 +33,7 @@ class TestWebUIAppService:
         """Set up test dependencies."""
         self.service = WebUIAppService()
 
-    @patch('src.web_ui.backend.services.webui_app_service.get_database_service')
+    @patch('src.api.services.webui_app_service.get_database_service')
     def test_get_db_session(self, mock_get_db_service):
         """Test database session generator."""
         mock_db_service = Mock()
@@ -54,8 +54,8 @@ class TestWebUIAppService:
 
         assert session == mock_session
 
-    @patch('src.web_ui.backend.services.webui_app_service.get_database_service')
-    @patch('src.web_ui.backend.services.webui_app_service.PROJECT_ROOT')
+    @patch('src.api.services.webui_app_service.get_database_service')
+    @patch('src.api.services.webui_app_service.PROJECT_ROOT')
     def test_init_database_success(self, mock_project_root, mock_get_db_service):
         """Test successful database initialization."""
         # Mock project root and database directory
@@ -66,15 +66,15 @@ class TestWebUIAppService:
         mock_get_db_service.return_value = mock_db_service
 
         # Mock users service to return existing users
-        with patch('src.web_ui.backend.services.webui_app_service.users_service') as mock_users_service:
+        with patch('src.api.services.webui_app_service.users_service') as mock_users_service:
             mock_users_service.list_telegram_users_dto.return_value = [{"id": 1}]  # Existing users
 
             self.service.init_database()
 
             mock_db_service.init_databases.assert_called_once()
 
-    @patch('src.web_ui.backend.services.webui_app_service.get_database_service')
-    @patch('src.web_ui.backend.services.webui_app_service.users_service')
+    @patch('src.api.services.webui_app_service.get_database_service')
+    @patch('src.api.services.webui_app_service.users_service')
     def test_create_default_users(self, mock_users_service, mock_get_db_service):
         """Test creation of default users."""
         # Mock no existing users
@@ -99,7 +99,7 @@ class TestWebUIAppService:
         assert mock_session.add.call_count == 3  # admin, trader, viewer
         mock_session.commit.assert_called_once()
 
-    @patch('src.web_ui.backend.services.webui_app_service.get_database_service')
+    @patch('src.api.services.webui_app_service.get_database_service')
     def test_authenticate_user_success(self, mock_get_db_service):
         """Test successful user authentication."""
         # Mock database service and user
@@ -129,7 +129,7 @@ class TestWebUIAppService:
         mock_user.verify_password.assert_called_once_with("password")
         mock_session.commit.assert_called_once()
 
-    @patch('src.web_ui.backend.services.webui_app_service.get_database_service')
+    @patch('src.api.services.webui_app_service.get_database_service')
     def test_authenticate_user_not_found(self, mock_get_db_service):
         """Test user authentication when user not found."""
         mock_db_service = Mock()
@@ -149,7 +149,7 @@ class TestWebUIAppService:
 
         assert result is None
 
-    @patch('src.web_ui.backend.services.webui_app_service.webui_service')
+    @patch('src.api.services.webui_app_service.webui_service')
     def test_log_user_action_success(self, mock_webui_service):
         """Test successful user action logging."""
         mock_webui_service.audit_log.return_value = 123
@@ -173,7 +173,7 @@ class TestWebUIAppService:
             user_agent=None
         )
 
-    @patch('src.web_ui.backend.services.webui_app_service.webui_service')
+    @patch('src.api.services.webui_app_service.webui_service')
     def test_get_system_config(self, mock_webui_service):
         """Test system configuration retrieval."""
         mock_config = {"key": "value", "setting": "enabled"}
@@ -184,7 +184,7 @@ class TestWebUIAppService:
         assert result == mock_config
         mock_webui_service.get_config.assert_called_once_with("test_key")
 
-    @patch('src.web_ui.backend.services.webui_app_service.webui_service')
+    @patch('src.api.services.webui_app_service.webui_service')
     def test_set_system_config(self, mock_webui_service):
         """Test system configuration setting."""
         mock_result = {"id": 1, "key": "test_key", "value": {"setting": "value"}}
@@ -204,7 +204,7 @@ class TestTelegramAppService:
         """Set up test dependencies."""
         self.service = TelegramAppService()
 
-    @patch('src.web_ui.backend.services.telegram_app_service.users_service')
+    @patch('src.api.services.telegram_app_service.users_service')
     def test_get_user_stats(self, mock_users_service):
         """Test getting Telegram user statistics."""
         mock_users = [
@@ -223,7 +223,7 @@ class TestTelegramAppService:
         assert result['pending_approvals'] == 1  # verified but not approved
         assert result['admin_users'] == 1
 
-    @patch('src.web_ui.backend.services.telegram_app_service.users_service')
+    @patch('src.api.services.telegram_app_service.users_service')
     def test_get_users_list_all(self, mock_users_service):
         """Test getting all Telegram users."""
         mock_users = [
@@ -249,7 +249,7 @@ class TestTelegramAppService:
         assert result[0]['verified'] is True
         assert result[0]['approved'] is True
 
-    @patch('src.web_ui.backend.services.telegram_app_service.users_service')
+    @patch('src.api.services.telegram_app_service.users_service')
     def test_get_users_list_filtered(self, mock_users_service):
         """Test getting filtered Telegram users."""
         mock_users = [
@@ -271,7 +271,7 @@ class TestTelegramAppService:
         result = self.service.get_users_list(filter_type="pending")
         assert len(result) == 1  # Verified but not approved
 
-    @patch('src.web_ui.backend.services.telegram_app_service.users_service')
+    @patch('src.api.services.telegram_app_service.users_service')
     def test_verify_user_success(self, mock_users_service):
         """Test successful user verification."""
         mock_users_service.update_telegram_profile.return_value = None
@@ -281,7 +281,7 @@ class TestTelegramAppService:
         assert "verified successfully" in result["message"]
         mock_users_service.update_telegram_profile.assert_called_once_with("123456789", verified=True)
 
-    @patch('src.web_ui.backend.services.telegram_app_service.users_service')
+    @patch('src.api.services.telegram_app_service.users_service')
     def test_approve_user_success(self, mock_users_service):
         """Test successful user approval."""
         # Mock user profile with verified status
@@ -293,7 +293,7 @@ class TestTelegramAppService:
         assert "approved successfully" in result["message"]
         mock_users_service.update_telegram_profile.assert_called_once_with("123456789", approved=True)
 
-    @patch('src.web_ui.backend.services.telegram_app_service.users_service')
+    @patch('src.api.services.telegram_app_service.users_service')
     def test_approve_user_not_verified(self, mock_users_service):
         """Test user approval when user is not verified."""
         # Mock user profile without verified status
@@ -302,7 +302,7 @@ class TestTelegramAppService:
         with pytest.raises(ValueError, match="User must be verified before approval"):
             self.service.approve_user("123456789")
 
-    @patch('src.web_ui.backend.services.telegram_app_service.users_service')
+    @patch('src.api.services.telegram_app_service.users_service')
     def test_approve_user_not_found(self, mock_users_service):
         """Test user approval when user not found."""
         mock_users_service.get_telegram_profile.return_value = None
@@ -310,7 +310,7 @@ class TestTelegramAppService:
         with pytest.raises(ValueError, match="User not found"):
             self.service.approve_user("123456789")
 
-    @patch('src.web_ui.backend.services.telegram_app_service.telegram_service')
+    @patch('src.api.services.telegram_app_service.telegram_service')
     def test_get_alert_stats(self, mock_telegram_service):
         """Test getting alert statistics."""
         mock_alerts = [
@@ -325,7 +325,7 @@ class TestTelegramAppService:
         assert result['total_alerts'] == 3
         assert result['active_alerts'] == 3  # Only active alerts returned by service
 
-    @patch('src.web_ui.backend.services.telegram_app_service.telegram_service')
+    @patch('src.api.services.telegram_app_service.telegram_service')
     def test_send_broadcast_success(self, mock_telegram_service):
         """Test successful broadcast sending."""
         mock_users = [
@@ -382,7 +382,7 @@ class TestStrategyManagementService:
         assert result == []
 
     @pytest.mark.asyncio
-    @patch('src.web_ui.backend.services.strategy_service.StrategyInstance')
+    @patch('src.api.services.strategy_service.StrategyInstance')
     async def test_create_strategy_success(self, mock_strategy_instance):
         """Test successful strategy creation."""
         config = {
@@ -488,7 +488,7 @@ class TestSystemMonitoringService:
         """Set up test dependencies."""
         self.service = SystemMonitoringService()
 
-    @patch('src.web_ui.backend.services.monitoring_service.psutil')
+    @patch('src.api.services.monitoring_service.psutil')
     def test_get_comprehensive_metrics_success(self, mock_psutil):
         """Test successful comprehensive metrics retrieval."""
         # Mock psutil responses

@@ -11,8 +11,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
-from src.web_ui.backend.auth import get_current_user, require_trader_or_admin
-from src.web_ui.backend.services.webui_app_service import webui_app_service
+from src.api.auth import get_current_user, require_trader_or_admin
+from src.api.services.webui_app_service import webui_app_service
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.models.model_jobs import (
     Schedule, ScheduleRun, JobType, RunStatus,

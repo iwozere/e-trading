@@ -19,9 +19,9 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.services.webui_app_service import webui_app_service
+from src.api.services.webui_app_service import webui_app_service
 from src.data.db.models.model_users import User
-from src.web_ui.backend.auth import (
+from src.api.auth import (
     authenticate_user,
     create_access_token,
     create_refresh_token,

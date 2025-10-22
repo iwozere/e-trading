@@ -20,9 +20,9 @@ from datetime import datetime, timedelta, timezone
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.main import app
+from src.api.main import app
 from src.data.db.models.model_users import User
-from src.web_ui.backend.auth import create_access_token, get_current_user, require_admin, require_trader_or_admin
+from src.api.auth import create_access_token, get_current_user, require_admin, require_trader_or_admin
 
 
 @pytest.fixture

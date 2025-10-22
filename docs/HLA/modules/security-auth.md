@@ -37,7 +37,7 @@ The Security & Authentication module provides comprehensive security infrastruct
 The authentication system provides secure, stateless authentication using JSON Web Tokens (JWT) with access and refresh token mechanisms.
 
 ```python
-from src.web_ui.backend.auth import (
+from src.api.auth import (
     create_access_token,
     create_refresh_token,
     verify_token,

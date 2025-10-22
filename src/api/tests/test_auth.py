@@ -19,7 +19,7 @@ import jwt
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.auth import (
+from src.api.auth import (
     create_access_token,
     create_refresh_token,
     verify_token,
@@ -139,7 +139,7 @@ class TestTokenManagement:
 class TestUserAuthentication:
     """Test cases for user authentication."""
 
-    @patch('src.web_ui.backend.auth.webui_app_service')
+    @patch('src.api.auth.webui_app_service')
     def test_authenticate_user_by_email_success(self, mock_service):
         """Test successful authentication by email."""
         # Mock database session and user
@@ -158,9 +158,9 @@ class TestUserAuthentication:
         mock_db.commit.assert_called_once()
         assert mock_user.last_login is not None
 
-    @patch('src.web_ui.backend.auth.webui_app_service')
-    @patch('src.web_ui.backend.auth.get_user_by_telegram_id')
-    @patch('src.web_ui.backend.auth.get_user_by_email')
+    @patch('src.api.auth.webui_app_service')
+    @patch('src.api.auth.get_user_by_telegram_id')
+    @patch('src.api.auth.get_user_by_email')
     def test_authenticate_user_by_telegram_id_success(self, mock_get_by_email, mock_get_by_telegram, mock_service):
         """Test successful authentication by telegram ID."""
         mock_db = Mock()
@@ -180,7 +180,7 @@ class TestUserAuthentication:
         mock_get_by_telegram.assert_called_once_with("123456789")
         mock_user.verify_password.assert_called_once_with("password")
 
-    @patch('src.web_ui.backend.auth.webui_app_service')
+    @patch('src.api.auth.webui_app_service')
     def test_authenticate_user_not_found(self, mock_service):
         """Test authentication when user not found."""
         mock_db = Mock()
@@ -190,7 +190,7 @@ class TestUserAuthentication:
 
         assert result is None
 
-    @patch('src.web_ui.backend.auth.webui_app_service')
+    @patch('src.api.auth.webui_app_service')
     def test_authenticate_user_inactive(self, mock_service):
         """Test authentication with inactive user."""
         mock_db = Mock()
@@ -203,7 +203,7 @@ class TestUserAuthentication:
 
         assert result is None
 
-    @patch('src.web_ui.backend.auth.webui_app_service')
+    @patch('src.api.auth.webui_app_service')
     def test_authenticate_user_wrong_password(self, mock_service):
         """Test authentication with wrong password."""
         mock_db = Mock()
@@ -222,7 +222,7 @@ class TestUserAuthentication:
 class TestGetCurrentUser:
     """Test cases for get_current_user dependency."""
 
-    @patch('src.web_ui.backend.auth.get_database_service')
+    @patch('src.api.auth.get_database_service')
     def test_get_current_user_success(self, mock_get_db_service):
         """Test successful user retrieval from token."""
         # Mock token
@@ -285,7 +285,7 @@ class TestGetCurrentUser:
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "Invalid token type" in str(exc_info.value.detail)
 
-    @patch('src.web_ui.backend.auth.get_database_service')
+    @patch('src.api.auth.get_database_service')
     def test_get_current_user_user_not_found(self, mock_get_db_service):
         """Test get_current_user when user not found in database."""
         token_data = {"sub": "999", "username": "nonexistent", "type": "access"}
@@ -311,7 +311,7 @@ class TestGetCurrentUser:
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
         assert "User not found" in str(exc_info.value.detail)
 
-    @patch('src.web_ui.backend.auth.get_database_service')
+    @patch('src.api.auth.get_database_service')
     def test_get_current_user_inactive_user(self, mock_get_db_service):
         """Test get_current_user with inactive user."""
         token_data = {"sub": "123", "username": "testuser", "type": "access"}
@@ -381,7 +381,7 @@ class TestRoleBasedAccess:
 class TestUserActionLogging:
     """Test cases for user action logging."""
 
-    @patch('src.web_ui.backend.auth.webui_app_service')
+    @patch('src.api.auth.webui_app_service')
     def test_log_user_action_success(self, mock_service, mock_admin_user):
         """Test successful user action logging."""
         mock_service.log_user_action.return_value = 1
@@ -406,8 +406,8 @@ class TestUserActionLogging:
             user_agent="Mozilla/5.0"
         )
 
-    @patch('src.web_ui.backend.auth.webui_app_service')
-    @patch('src.web_ui.backend.auth._logger')
+    @patch('src.api.auth.webui_app_service')
+    @patch('src.api.auth._logger')
     def test_log_user_action_failure(self, mock_logger, mock_service, mock_admin_user):
         """Test user action logging failure handling."""
         mock_service.log_user_action.side_effect = Exception("Database error")
@@ -421,7 +421,7 @@ class TestUserActionLogging:
         mock_logger.error.assert_called_once()
         assert "Failed to log user action" in str(mock_logger.error.call_args)
 
-    @patch('src.web_ui.backend.auth.webui_app_service')
+    @patch('src.api.auth.webui_app_service')
     def test_log_user_action_minimal_params(self, mock_service, mock_admin_user):
         """Test user action logging with minimal parameters."""
         mock_service.log_user_action.return_value = 1

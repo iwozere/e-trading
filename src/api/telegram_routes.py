@@ -25,9 +25,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.web_ui.backend.auth import get_current_user, require_admin
+from src.api.auth import get_current_user, require_admin
 from src.data.db.models.model_users import User
-from src.web_ui.backend.services.telegram_app_service import TelegramAppService
+from src.api.services.telegram_app_service import TelegramAppService
 
 _logger = setup_logger(__name__)
 

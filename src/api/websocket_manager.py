@@ -499,7 +499,7 @@ class WebSocketManager:
 
             # Try to get current user (this will be mocked in tests)
             try:
-                from src.web_ui.backend.websocket_manager import get_current_user
+                from src.api.websocket_manager import get_current_user
                 user = get_current_user(token)
             except Exception as e:
                 # Authentication failed

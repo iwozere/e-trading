@@ -10,14 +10,14 @@ from datetime import datetime, timezone
 # Mock the notification service calls for testing
 @pytest.fixture
 def mock_notification_service():
-    with patch('src.web_ui.backend.notification_routes._call_notification_service') as mock:
+    with patch('src.api.notification_routes._call_notification_service') as mock:
         yield mock
 
 
 def test_notification_routes_health_endpoint(authenticated_client_viewer):
     """Test the notification routes health endpoint."""
     client = authenticated_client_viewer
-    with patch('src.web_ui.backend.notification_routes._call_notification_service') as mock_service:
+    with patch('src.api.notification_routes._call_notification_service') as mock_service:
         mock_service.return_value = {
             "status": "healthy",
             "service": "notification_service",
@@ -47,7 +47,7 @@ def test_create_notification_endpoint_structure(authenticated_client_trader):
         }
     }
 
-    with patch('src.web_ui.backend.notification_routes._call_notification_service') as mock_service:
+    with patch('src.api.notification_routes._call_notification_service') as mock_service:
         mock_service.return_value = {
             "message_id": 123,
             "status": "enqueued",
@@ -70,7 +70,7 @@ def test_create_notification_endpoint_structure(authenticated_client_trader):
 def test_list_channels_endpoint(authenticated_client_viewer):
     """Test the list channels endpoint."""
     client = authenticated_client_viewer
-    with patch('src.web_ui.backend.notification_routes._call_notification_service') as mock_service:
+    with patch('src.api.notification_routes._call_notification_service') as mock_service:
         mock_service.return_value = [
             {
                 "channel": "telegram",
@@ -102,7 +102,7 @@ def test_send_alert_convenience_endpoint(authenticated_client_trader):
         "channels": ["telegram", "email"]
     }
 
-    with patch('src.web_ui.backend.notification_routes._call_notification_service') as mock_service:
+    with patch('src.api.notification_routes._call_notification_service') as mock_service:
         mock_service.return_value = {
             "message_id": 456,
             "status": "enqueued",
@@ -132,7 +132,7 @@ def test_send_trade_convenience_endpoint(authenticated_client_trader):
         "channels": ["telegram"]
     }
 
-    with patch('src.web_ui.backend.notification_routes._call_notification_service') as mock_service:
+    with patch('src.api.notification_routes._call_notification_service') as mock_service:
         mock_service.return_value = {
             "message_id": 789,
             "status": "enqueued",
@@ -152,7 +152,7 @@ def test_send_trade_convenience_endpoint(authenticated_client_trader):
 
 def test_notification_service_unavailable_handling(client: TestClient):
     """Test handling when notification service is unavailable."""
-    with patch('src.web_ui.backend.notification_routes._call_notification_service') as mock_service:
+    with patch('src.api.notification_routes._call_notification_service') as mock_service:
         from httpx import ConnectError
         mock_service.side_effect = ConnectError("Connection failed")
 
@@ -167,7 +167,7 @@ def test_notification_service_unavailable_handling(client: TestClient):
 def test_get_notification_statistics(authenticated_client_viewer):
     """Test getting notification statistics."""
     client = authenticated_client_viewer
-    with patch('src.web_ui.backend.notification_routes._call_notification_service') as mock_service:
+    with patch('src.api.notification_routes._call_notification_service') as mock_service:
         # Mock the stats call
         mock_service.return_value = {
             "delivery_statistics": {

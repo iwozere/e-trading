@@ -202,7 +202,7 @@ const App: React.FC = () => {
 
 ```python
 from fastapi import FastAPI, Depends, HTTPException
-from src.web_ui.backend.auth import get_current_user, require_admin
+from src.api.auth import get_current_user, require_admin
 
 app = FastAPI(title="Trading System API")
 
@@ -324,7 +324,7 @@ class NotificationQueue:
 The WebSocket system provides real-time updates for the web interface and live system monitoring.
 
 ```python
-from src.web_ui.backend.websocket_manager import WebSocketManager
+from src.api.websocket_manager import WebSocketManager
 
 class WebSocketManager:
     """Manages WebSocket connections and real-time updates."""
@@ -359,7 +359,7 @@ class WebSocketManager:
 Comprehensive user management system with role-based access control and multi-factor authentication.
 
 ```python
-from src.web_ui.backend.auth import AuthManager
+from src.api.auth import AuthManager
 
 class AuthManager:
     """Handles authentication and authorization."""

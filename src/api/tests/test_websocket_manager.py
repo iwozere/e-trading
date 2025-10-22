@@ -19,7 +19,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.web_ui.backend.websocket_manager import (
+from src.api.websocket_manager import (
     WebSocketConnection,
     WebSocketManager,
     ConnectionManager,
@@ -286,7 +286,7 @@ class TestWebSocketManager:
         mock_user.role = "trader"
 
         # Mock authentication
-        with patch('src.web_ui.backend.websocket_manager.get_current_user') as mock_auth:
+        with patch('src.api.websocket_manager.get_current_user') as mock_auth:
             mock_auth.return_value = mock_user
 
             # Mock WebSocket accept and receive
@@ -309,7 +309,7 @@ class TestWebSocketManager:
         mock_websocket = AsyncMock()
 
         # Mock authentication failure
-        with patch('src.web_ui.backend.websocket_manager.get_current_user') as mock_auth:
+        with patch('src.api.websocket_manager.get_current_user') as mock_auth:
             mock_auth.side_effect = Exception("Invalid token")
 
             await self.manager.handle_connection(mock_websocket, "invalid_token")
