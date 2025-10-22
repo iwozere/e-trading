@@ -113,7 +113,7 @@ def _validate_and_cache_config(self, config: Dict[str, Any], config_path: Path):
         self.registry.register_config(config_id, validated_config, config_type)
         
     except ValidationError as e:
-        logger.error("Configuration validation failed: %s", e)
+        logger.exception("Configuration validation failed:")
         raise
 ```
 

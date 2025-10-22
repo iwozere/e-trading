@@ -214,7 +214,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
             logger.debug("ATR indicators initialized successfully")
 
         except Exception as e:
-            logger.error(f"Error initializing ATR indicators: {e}")
+            logger.exception("Error initializing ATR indicators:")
             raise
 
     def are_indicators_ready(self) -> bool:
@@ -243,7 +243,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
             return True
 
         except Exception as e:
-            logger.error(f"Error checking indicator readiness: {e}")
+            logger.exception("Error checking indicator readiness:")
             return False
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
@@ -316,7 +316,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
             return atr_eff
 
         except Exception as e:
-            logger.error(f"Error calculating effective ATR: {e}")
+            logger.exception("Error calculating effective ATR:")
             return self.atr_floor
 
     def _set_initial_stop(self, direction: str):
@@ -360,7 +360,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
             return False
 
         except Exception as e:
-            logger.error(f"Error in should_exit: {e}")
+            logger.exception("Error in should_exit:")
             return False
 
     def get_exit_reason(self) -> str:
@@ -382,7 +382,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
             return "unknown"
 
         except Exception as e:
-            logger.error(f"Error in get_exit_reason: {e}")
+            logger.exception("Error in get_exit_reason:")
             return "error"
 
     def _update_price_tracking(self, high: float, low: float):
@@ -448,7 +448,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
                 logger.debug(f"Stop updated to {self.current_stop} (candidate: {candidate_stop})")
 
         except Exception as e:
-            logger.error(f"Error updating trailing stop: {e}")
+            logger.exception("Error updating trailing stop:")
 
     def _should_skip_due_to_noise(self, atr_eff: float) -> bool:
         """Check if update should be skipped due to noise filter."""

@@ -301,7 +301,7 @@ try:
 except NotificationServiceUnavailableError:
     logger.warning("Notification service unavailable, will retry later")
 except NotificationServiceError as e:
-    logger.error(f"Failed to send notification: {e}")
+    logger.exception("Failed to send notification:")
 ```
 
 ### 3. Use Appropriate Priorities
@@ -488,7 +488,7 @@ try:
     if health['status'] != 'healthy':
         logger.warning(f"Service health: {health}")
 except Exception as e:
-    logger.error(f"Health check failed: {e}")
+    logger.exception(f"Health check failed:")
 ```
 
 ## Examples

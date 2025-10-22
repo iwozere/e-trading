@@ -144,7 +144,7 @@ def main():
 
             except Exception as e:
                 failed += 1
-                logger.error("Error processing %s: %s", symbol, e)
+                logger.exception("Error processing %s: %s", symbol, e)
 
         # Summary
         end_time = datetime.now()
@@ -155,11 +155,11 @@ def main():
 
         # Exit with error code if too many failures
         if failed > successful:
-            logger.error("Too many failures (%d > %d), exiting with error", failed, successful)
+            logger.exception("Too many failures (%d > %d), exiting with error", failed, successful)
             sys.exit(1)
 
     except Exception as e:
-        logger.error("Fatal error during refresh: %s", e)
+        logger.exception("Fatal error during refresh:")
         sys.exit(1)
 
 if __name__ == "__main__":

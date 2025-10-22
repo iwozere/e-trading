@@ -22,9 +22,9 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.config import config
 from src.notification.service.dependencies import (
-    init_database, get_notification_repo, get_config
+    init_database, get_config
 )
-from src.data.db.repos.repo_notification import NotificationRepository
+from src.data.db.services.database_service import get_database_service
 from src.data.db.models.model_notification import (
     Message, MessageDeliveryStatus,
     MessageCreate, MessageResponse, MessageUpdate,
@@ -154,9 +154,10 @@ async def health_check():
     """Service health check endpoint."""
     try:
         # Test database connection
-        with get_notification_repo() as repo:
+        db_service = get_database_service()
+        with db_service.uow() as r:
             # Simple query to test database connectivity
-            repo.session.execute("SELECT 1")
+            r.s.execute("SELECT 1")
 
         return {
             "status": "healthy",
@@ -183,8 +184,7 @@ async def health_check():
 @app.post("/api/v1/messages", response_model=Dict[str, Any])
 async def enqueue_message(
     message: MessageCreate,
-    background_tasks: BackgroundTasks,
-    repo: NotificationRepository = Depends(get_notification_repo)
+    background_tasks: BackgroundTasks
 ):
     """
     Enqueue a new message for delivery.
@@ -192,7 +192,6 @@ async def enqueue_message(
     Args:
         message: Message data
         background_tasks: FastAPI background tasks
-        repo: Notification repository
 
     Returns:
         Message ID and status
@@ -218,8 +217,9 @@ async def enqueue_message(
             message_data['scheduled_for'] = datetime.now(timezone.utc)
 
         # Create message in database
-        db_message = repo.messages.create_message(message_data)
-        repo.commit()
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            db_message = r.notifications.messages.create_message(message_data)
 
         # Message processing is handled automatically by the processor workers
 
@@ -235,32 +235,29 @@ async def enqueue_message(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        repo.rollback()
         _logger.error("Failed to enqueue message: %s", e)
         raise HTTPException(status_code=500, detail="Failed to enqueue message")
 
 
 @app.get("/api/v1/messages/{message_id}/status", response_model=MessageResponse)
-async def get_message_status(
-    message_id: int,
-    repo: NotificationRepository = Depends(get_notification_repo)
-):
+async def get_message_status(message_id: int):
     """
     Get message status and details.
 
     Args:
         message_id: Message ID
-        repo: Notification repository
 
     Returns:
         Message details and status
     """
     try:
-        message = repo.messages.get_message(message_id)
-        if not message:
-            raise HTTPException(status_code=404, detail="Message not found")
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            message = r.notifications.messages.get_message(message_id)
+            if not message:
+                raise HTTPException(status_code=404, detail="Message not found")
 
-        return MessageResponse.from_orm(message)
+            return MessageResponse.from_orm(message)
 
     except HTTPException:
         raise
@@ -276,8 +273,7 @@ async def list_messages(
     recipient_id: Optional[str] = None,
     message_type: Optional[str] = None,
     limit: int = 100,
-    offset: int = 0,
-    repo: NotificationRepository = Depends(get_notification_repo)
+    offset: int = 0
 ):
     """
     List messages with optional filtering.
@@ -289,22 +285,23 @@ async def list_messages(
         message_type: Filter by message type
         limit: Maximum number of results
         offset: Number of results to skip
-        repo: Notification repository
 
     Returns:
         List of messages
     """
     try:
-        messages = repo.messages.list_messages(
-            status=status,
-            priority=priority,
-            recipient_id=recipient_id,
-            message_type=message_type,
-            limit=min(limit, 1000),  # Cap at 1000
-            offset=offset
-        )
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            messages = r.notifications.messages.list_messages(
+                status=status,
+                priority=priority,
+                recipient_id=recipient_id,
+                message_type=message_type,
+                limit=min(limit, 1000),  # Cap at 1000
+                offset=offset
+            )
 
-        return [MessageResponse.from_orm(msg) for msg in messages]
+            return [MessageResponse.from_orm(msg) for msg in messages]
 
     except Exception as e:
         _logger.error("Failed to list messages: %s", e)
@@ -312,30 +309,28 @@ async def list_messages(
 
 
 @app.get("/api/v1/messages/{message_id}/delivery", response_model=List[DeliveryStatusResponse])
-async def get_message_delivery_status(
-    message_id: int,
-    repo: NotificationRepository = Depends(get_notification_repo)
-):
+async def get_message_delivery_status(message_id: int):
     """
     Get delivery status for all channels of a message.
 
     Args:
         message_id: Message ID
-        repo: Notification repository
 
     Returns:
         List of delivery statuses
     """
     try:
-        # Check if message exists
-        message = repo.messages.get_message(message_id)
-        if not message:
-            raise HTTPException(status_code=404, detail="Message not found")
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            # Check if message exists
+            message = r.notifications.messages.get_message(message_id)
+            if not message:
+                raise HTTPException(status_code=404, detail="Message not found")
 
-        # Get delivery statuses
-        delivery_statuses = repo.delivery_status.get_delivery_statuses_by_message(message_id)
+            # Get delivery statuses
+            delivery_statuses = r.notifications.delivery_status.get_delivery_statuses_by_message(message_id)
 
-        return [DeliveryStatusResponse.from_orm(ds) for ds in delivery_statuses]
+            return [DeliveryStatusResponse.from_orm(ds) for ds in delivery_statuses]
 
     except HTTPException:
         raise
@@ -346,48 +341,45 @@ async def get_message_delivery_status(
 
 # Channel management endpoints
 @app.get("/api/v1/channels", response_model=List[Dict[str, Any]])
-async def list_channels(
-    repo: NotificationRepository = Depends(get_notification_repo)
-):
+async def list_channels():
     """
     List available notification channels.
-
-    Args:
-        repo: Notification repository
 
     Returns:
         List of channel configurations
     """
     try:
-        # Get channel configurations from database
-        channel_configs = repo.channel_configs.list_channel_configs()
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            # Get channel configurations from database
+            channel_configs = r.notifications.channel_configs.list_channel_configs()
 
-        # Convert to response format
-        channels = []
-        for channel_config in channel_configs:
-            channels.append({
-                "channel": channel_config.channel,
-                "enabled": channel_config.enabled,
-                "rate_limit_per_minute": channel_config.rate_limit_per_minute,
-                "max_retries": channel_config.max_retries,
-                "timeout_seconds": channel_config.timeout_seconds
-            })
-
-        # Add default channels if not in database
-        default_channels = ["telegram", "email", "sms"]
-        existing_channels = {ch["channel"] for ch in channels}
-
-        for channel_name in default_channels:
-            if channel_name not in existing_channels:
+            # Convert to response format
+            channels = []
+            for channel_config in channel_configs:
                 channels.append({
-                    "channel": channel_name,
-                    "enabled": config.is_channel_enabled(channel_name),
-                    "rate_limit_per_minute": config.get_rate_limit_for_channel(channel_name),
-                    "max_retries": 3,
-                    "timeout_seconds": 30
+                    "channel": channel_config.channel,
+                    "enabled": channel_config.enabled,
+                    "rate_limit_per_minute": channel_config.rate_limit_per_minute,
+                    "max_retries": channel_config.max_retries,
+                    "timeout_seconds": channel_config.timeout_seconds
                 })
 
-        return channels
+            # Add default channels if not in database
+            default_channels = ["telegram", "email", "sms"]
+            existing_channels = {ch["channel"] for ch in channels}
+
+            for channel_name in default_channels:
+                if channel_name not in existing_channels:
+                    channels.append({
+                        "channel": channel_name,
+                        "enabled": config.is_channel_enabled(channel_name),
+                        "rate_limit_per_minute": config.get_rate_limit_for_channel(channel_name),
+                        "max_retries": 3,
+                        "timeout_seconds": 30
+                    })
+
+            return channels
 
     except Exception as e:
         _logger.error("Failed to list channels: %s", e)
@@ -395,21 +387,18 @@ async def list_channels(
 
 
 @app.get("/api/v1/channels/health", response_model=List[ChannelHealthResponse])
-async def get_channels_health(
-    repo: NotificationRepository = Depends(get_notification_repo)
-):
+async def get_channels_health():
     """
     Get health status for all channels.
-
-    Args:
-        repo: Notification repository
 
     Returns:
         List of channel health statuses
     """
     try:
-        health_records = repo.channel_health.list_channel_health()
-        return [ChannelHealthResponse.from_orm(health) for health in health_records]
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            health_records = r.notifications.channel_health.list_channel_health()
+            return [ChannelHealthResponse.from_orm(health) for health in health_records]
 
     except Exception as e:
         _logger.error("Failed to get channel health: %s", e)
@@ -420,8 +409,7 @@ async def get_channels_health(
 @app.get("/api/v1/stats", response_model=Dict[str, Any])
 async def get_delivery_statistics(
     channel: Optional[str] = None,
-    days: int = 30,
-    repo: NotificationRepository = Depends(get_notification_repo)
+    days: int = 30
 ):
     """
     Get delivery statistics.
@@ -429,7 +417,6 @@ async def get_delivery_statistics(
     Args:
         channel: Filter by channel (optional)
         days: Number of days to look back
-        repo: Notification repository
 
     Returns:
         Delivery statistics
@@ -438,22 +425,22 @@ async def get_delivery_statistics(
         if days < 1 or days > 365:
             raise ValueError("Days must be between 1 and 365")
 
-        stats = repo.delivery_status.get_delivery_statistics(channel=channel, days=days)
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            stats = r.notifications.delivery_status.get_delivery_statistics(channel=channel, days=days)
 
-        # Add message statistics
-        message_stats = {}
-        for status in MessageStatus:
-            count = repo.session.query(repo.messages.session.query(repo.messages.__class__).filter(
-                repo.messages.__class__.status == status.value
-            ).count())
-            message_stats[status.value] = count
+            # Add message statistics
+            message_stats = {}
+            for status in MessageStatus:
+                count = r.s.query(Message).filter(Message.status == status.value).count()
+                message_stats[status.value] = count
 
-        return {
-            "delivery_statistics": stats,
-            "message_statistics": message_stats,
-            "period_days": days,
-            "channel_filter": channel
-        }
+            return {
+                "delivery_statistics": stats,
+                "message_statistics": message_stats,
+                "period_days": days,
+                "channel_filter": channel
+            }
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -474,8 +461,7 @@ async def get_message_history(
     limit: int = 100,
     offset: int = 0,
     order_by: str = "created_at",
-    order_desc: bool = True,
-    repo: NotificationRepository = Depends(get_notification_repo)
+    order_desc: bool = True
 ):
     """
     Get message history with filtering and pagination.
@@ -491,7 +477,6 @@ async def get_message_history(
         offset: Number of results to skip
         order_by: Field to order by (created_at, scheduled_for, processed_at)
         order_desc: Order in descending order
-        repo: Notification repository
 
     Returns:
         Paginated message history with metadata
@@ -507,8 +492,10 @@ async def get_message_history(
         if order_by not in ["created_at", "scheduled_for", "processed_at"]:
             raise ValueError("Invalid order_by field")
 
-        # Build query filters
-        query = repo.session.query(Message)
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            # Build query filters
+            query = r.s.query(Message)
 
         if user_id:
             query = query.filter(Message.recipient_id == user_id)
@@ -583,8 +570,7 @@ async def get_delivery_history(
     limit: int = 100,
     offset: int = 0,
     order_by: str = "created_at",
-    order_desc: bool = True,
-    repo: NotificationRepository = Depends(get_notification_repo)
+    order_desc: bool = True
 ):
     """
     Get delivery history with filtering and pagination.
@@ -600,7 +586,6 @@ async def get_delivery_history(
         offset: Number of results to skip
         order_by: Field to order by (created_at, delivered_at)
         order_desc: Order in descending order
-        repo: Notification repository
 
     Returns:
         Paginated delivery history with metadata
@@ -616,14 +601,16 @@ async def get_delivery_history(
         if order_by not in ["created_at", "delivered_at"]:
             raise ValueError("Invalid order_by field")
 
-        # Build query with optional join
-        if user_id:
-            # Need to join with messages table to filter by user_id
-            query = repo.session.query(MessageDeliveryStatus).join(Message).filter(
-                Message.recipient_id == user_id
-            )
-        else:
-            query = repo.session.query(MessageDeliveryStatus)
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            # Build query with optional join
+            if user_id:
+                # Need to join with messages table to filter by user_id
+                query = r.s.query(MessageDeliveryStatus).join(Message).filter(
+                    Message.recipient_id == user_id
+                )
+            else:
+                query = r.s.query(MessageDeliveryStatus)
 
         if message_id:
             query = query.filter(MessageDeliveryStatus.message_id == message_id)
@@ -691,8 +678,7 @@ async def export_history(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     limit: int = 10000,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-    repo: NotificationRepository = Depends(get_notification_repo)
+    background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     """
     Export message and delivery history for analytics.
@@ -707,7 +693,6 @@ async def export_history(
         end_date: Filter messages created before this date
         limit: Maximum number of records to export (max 50000)
         background_tasks: FastAPI background tasks
-        repo: Notification repository
 
     Returns:
         Export status and download information
@@ -722,69 +707,71 @@ async def export_history(
 
         # For small exports, return data immediately
         if limit <= 1000:
-            # Build query
-            query = repo.session.query(Message)
+            db_service = get_database_service()
+            with db_service.uow() as r:
+                # Build query
+                query = r.s.query(Message)
 
-            if user_id:
-                query = query.filter(Message.recipient_id == user_id)
+                if user_id:
+                    query = query.filter(Message.recipient_id == user_id)
 
-            if status:
-                query = query.filter(Message.status == status.value)
+                if status:
+                    query = query.filter(Message.status == status.value)
 
-            if message_type:
-                query = query.filter(Message.message_type == message_type)
+                if message_type:
+                    query = query.filter(Message.message_type == message_type)
 
-            if start_date:
-                query = query.filter(Message.created_at >= start_date)
+                if start_date:
+                    query = query.filter(Message.created_at >= start_date)
 
-            if end_date:
-                query = query.filter(Message.created_at <= end_date)
+                if end_date:
+                    query = query.filter(Message.created_at <= end_date)
 
-            if channel:
-                # Filter messages that include the specified channel
-                # Use PostgreSQL array contains operation with proper casting
-                from sqlalchemy import text
-                query = query.filter(text("channels @> ARRAY[:channel]")).params(channel=channel)
+                if channel:
+                    # Filter messages that include the specified channel
+                    # Use PostgreSQL array contains operation with proper casting
+                    from sqlalchemy import text
+                    query = query.filter(text("channels @> ARRAY[:channel]")).params(channel=channel)
 
-            # Get messages with delivery statuses
-            messages = query.order_by(desc(Message.created_at)).limit(limit).all()
+                # Get messages with delivery statuses
+                messages = query.order_by(desc(Message.created_at)).limit(limit).all()
 
-            export_data = []
-            for message in messages:
-                message_data = {
-                    "message_id": message.id,
-                    "message_type": message.message_type,
-                    "priority": message.priority,
-                    "channels": message.channels,
-                    "recipient_id": message.recipient_id,
-                    "template_name": message.template_name,
-                    "content": message.content,
-                    "metadata": message.message_metadata,
-                    "created_at": message.created_at.isoformat(),
-                    "scheduled_for": message.scheduled_for.isoformat(),
-                    "status": message.status,
-                    "retry_count": message.retry_count,
-                    "max_retries": message.max_retries,
-                    "last_error": message.last_error,
-                    "processed_at": message.processed_at.isoformat() if message.processed_at else None,
-                    "deliveries": []
-                }
-
-                # Add delivery statuses
-                for delivery in message.delivery_statuses:
-                    delivery_data = {
-                        "delivery_id": delivery.id,
-                        "channel": delivery.channel,
-                        "status": delivery.status,
-                        "delivered_at": delivery.delivered_at.isoformat() if delivery.delivered_at else None,
-                        "response_time_ms": delivery.response_time_ms,
-                        "error_message": delivery.error_message,
-                        "external_id": delivery.external_id,
-                        "created_at": delivery.created_at.isoformat()
+                export_data = []
+                for message in messages:
+                    message_data = {
+                        "message_id": message.id,
+                        "message_type": message.message_type,
+                        "priority": message.priority,
+                        "channels": message.channels,
+                        "recipient_id": message.recipient_id,
+                        "template_name": message.template_name,
+                        "content": message.content,
+                        "metadata": message.message_metadata,
+                        "created_at": message.created_at.isoformat(),
+                        "scheduled_for": message.scheduled_for.isoformat(),
+                        "status": message.status,
+                        "retry_count": message.retry_count,
+                        "max_retries": message.max_retries,
+                        "last_error": message.last_error,
+                        "processed_at": message.processed_at.isoformat() if message.processed_at else None,
+                        "deliveries": []
                     }
-                    message_data["deliveries"].append(delivery_data)
 
-                export_data.append(message_data)
+                    # Add delivery statuses
+                    for delivery in message.delivery_statuses:
+                        delivery_data = {
+                            "delivery_id": delivery.id,
+                            "channel": delivery.channel,
+                            "status": delivery.status,
+                            "delivered_at": delivery.delivered_at.isoformat() if delivery.delivered_at else None,
+                            "response_time_ms": delivery.response_time_ms,
+                            "error_message": delivery.error_message,
+                            "external_id": delivery.external_id,
+                            "created_at": delivery.created_at.isoformat()
+                        }
+                        message_data["deliveries"].append(delivery_data)
+
+                    export_data.append(message_data)
 
             if format == "json":
                 return {
@@ -905,8 +892,7 @@ async def export_history(
 async def get_history_summary(
     user_id: Optional[str] = None,
     channel: Optional[str] = None,
-    days: int = 30,
-    repo: NotificationRepository = Depends(get_notification_repo)
+    days: int = 30
 ):
     """
     Get summary statistics for message and delivery history.
@@ -915,7 +901,6 @@ async def get_history_summary(
         user_id: Filter by recipient user ID
         channel: Filter by specific channel
         days: Number of days to analyze
-        repo: Notification repository
 
     Returns:
         Summary statistics for the specified period
@@ -926,90 +911,92 @@ async def get_history_summary(
 
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-        # Message statistics
-        message_query = repo.session.query(Message).filter(
-            Message.created_at >= cutoff_date
-        )
-
-        if user_id:
-            message_query = message_query.filter(Message.recipient_id == user_id)
-
-        if channel:
-            # Filter messages that include the specified channel
-            # Use PostgreSQL array contains operation with proper casting
-            from sqlalchemy import text
-            message_query = message_query.filter(text("channels @> ARRAY[:channel]")).params(channel=channel)
-
-        # Count messages by status
-        message_stats = {}
-        for status in MessageStatus:
-            count = message_query.filter(Message.status == status.value).count()
-            message_stats[status.value] = count
-
-        total_messages = message_query.count()
-
-        # Delivery statistics
-        delivery_query = repo.session.query(MessageDeliveryStatus).filter(
-            MessageDeliveryStatus.created_at >= cutoff_date
-        )
-
-        if user_id:
-            delivery_query = delivery_query.join(Message).filter(
-                Message.recipient_id == user_id
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            # Message statistics
+            message_query = r.s.query(Message).filter(
+                Message.created_at >= cutoff_date
             )
 
-        if channel:
-            delivery_query = delivery_query.filter(MessageDeliveryStatus.channel == channel)
+            if user_id:
+                message_query = message_query.filter(Message.recipient_id == user_id)
 
-        # Count deliveries by status
-        delivery_stats = {}
-        for status in DeliveryStatus:
-            count = delivery_query.filter(MessageDeliveryStatus.status == status.value).count()
-            delivery_stats[status.value] = count
+            if channel:
+                # Filter messages that include the specified channel
+                # Use PostgreSQL array contains operation with proper casting
+                from sqlalchemy import text
+                message_query = message_query.filter(text("channels @> ARRAY[:channel]")).params(channel=channel)
 
-        total_deliveries = delivery_query.count()
+            # Count messages by status
+            message_stats = {}
+            for status in MessageStatus:
+                count = message_query.filter(Message.status == status.value).count()
+                message_stats[status.value] = count
 
-        # Calculate success rates
-        message_success_rate = (
-            message_stats.get(MessageStatus.DELIVERED.value, 0) / total_messages
-            if total_messages > 0 else 0.0
-        )
+            total_messages = message_query.count()
 
-        delivery_success_rate = (
-            delivery_stats.get(DeliveryStatus.DELIVERED.value, 0) / total_deliveries
-            if total_deliveries > 0 else 0.0
-        )
-
-        # Get channel breakdown if not filtering by channel
-        channel_breakdown = {}
-        if not channel:
-            channel_stats = repo.session.query(
-                MessageDeliveryStatus.channel,
-                func.count(MessageDeliveryStatus.id).label('total'),
-                func.sum(
-                    case(
-                        (MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1),
-                        else_=0
-                    )
-                ).label('delivered')
-            ).filter(
+            # Delivery statistics
+            delivery_query = r.s.query(MessageDeliveryStatus).filter(
                 MessageDeliveryStatus.created_at >= cutoff_date
             )
 
             if user_id:
-                channel_stats = channel_stats.join(Message).filter(
+                delivery_query = delivery_query.join(Message).filter(
                     Message.recipient_id == user_id
                 )
 
-            channel_stats = channel_stats.group_by(MessageDeliveryStatus.channel).all()
+            if channel:
+                delivery_query = delivery_query.filter(MessageDeliveryStatus.channel == channel)
 
-            for row in channel_stats:
-                success_rate = row.delivered / row.total if row.total > 0 else 0.0
-                channel_breakdown[row.channel] = {
-                    "total_deliveries": row.total,
-                    "successful_deliveries": row.delivered,
-                    "success_rate": success_rate
-                }
+            # Count deliveries by status
+            delivery_stats = {}
+            for status in DeliveryStatus:
+                count = delivery_query.filter(MessageDeliveryStatus.status == status.value).count()
+                delivery_stats[status.value] = count
+
+            total_deliveries = delivery_query.count()
+
+            # Calculate success rates
+            message_success_rate = (
+                message_stats.get(MessageStatus.DELIVERED.value, 0) / total_messages
+                if total_messages > 0 else 0.0
+            )
+
+            delivery_success_rate = (
+                delivery_stats.get(DeliveryStatus.DELIVERED.value, 0) / total_deliveries
+                if total_deliveries > 0 else 0.0
+            )
+
+            # Get channel breakdown if not filtering by channel
+            channel_breakdown = {}
+            if not channel:
+                channel_stats = r.s.query(
+                    MessageDeliveryStatus.channel,
+                    func.count(MessageDeliveryStatus.id).label('total'),
+                    func.sum(
+                        case(
+                            (MessageDeliveryStatus.status == DeliveryStatus.DELIVERED.value, 1),
+                            else_=0
+                        )
+                    ).label('delivered')
+                ).filter(
+                    MessageDeliveryStatus.created_at >= cutoff_date
+                )
+
+                if user_id:
+                    channel_stats = channel_stats.join(Message).filter(
+                        Message.recipient_id == user_id
+                    )
+
+                channel_stats = channel_stats.group_by(MessageDeliveryStatus.channel).all()
+
+                for row in channel_stats:
+                    success_rate = row.delivered / row.total if row.total > 0 else 0.0
+                    channel_breakdown[row.channel] = {
+                        "total_deliveries": row.total,
+                        "successful_deliveries": row.delivered,
+                        "success_rate": success_rate
+                    }
 
         return {
             "period": {
@@ -1222,8 +1209,7 @@ async def get_channel_performance_comparison(days: int = 30):
 @app.post("/api/v1/admin/cleanup")
 async def cleanup_old_messages(
     background_tasks: BackgroundTasks,
-    days_to_keep: int = 30,
-    repo: NotificationRepository = Depends(get_notification_repo)
+    days_to_keep: int = 30
 ):
     """
     Clean up old delivered messages.
@@ -1231,7 +1217,6 @@ async def cleanup_old_messages(
     Args:
         days_to_keep: Number of days of messages to keep
         background_tasks: FastAPI background tasks
-        repo: Notification repository
 
     Returns:
         Cleanup status
@@ -1242,9 +1227,10 @@ async def cleanup_old_messages(
 
         # Run cleanup in background
         def cleanup_task():
-            deleted_count = repo.messages.cleanup_old_messages(days_to_keep)
-            repo.commit()
-            _logger.info("Cleanup completed: %s messages deleted", deleted_count)
+            db_service = get_database_service()
+            with db_service.uow() as r:
+                deleted_count = r.notifications.messages.cleanup_old_messages(days_to_keep)
+                _logger.info("Cleanup completed: %s messages deleted", deleted_count)
 
         background_tasks.add_task(cleanup_task)
 

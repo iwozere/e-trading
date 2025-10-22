@@ -647,7 +647,24 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
 async def cmd_start(message: Message):
     _logger.info("Received /start command from user %s", message.from_user.id)
     try:
-        await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_client)
+        # Check if notification service is available
+        if notification_client:
+            try:
+                health = await notification_client.get_health_status()
+                if health.get('status') == 'unhealthy':
+                    raise Exception("Notification service is unhealthy")
+                # Service is healthy, use normal processing
+                await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_client)
+            except Exception as service_error:
+                _logger.warning("Notification service unavailable for /start command: %s", service_error)
+                # Fallback: send welcome message directly
+                welcome_text = f"Welcome to the Alkotrader Bot! 🤖\n\n{HELP_TEXT}"
+                await message.answer(welcome_text)
+        else:
+            # No notification service, send welcome message directly
+            _logger.info("No notification service available, sending welcome message directly")
+            welcome_text = f"Welcome to the Alkotrader Bot! 🤖\n\n{HELP_TEXT}"
+            await message.answer(welcome_text)
         _logger.info("Successfully processed /start command for user %s", message.from_user.id)
     except Exception as e:
         _logger.exception("Error processing /start command for user %s", message.from_user.id)
@@ -657,10 +674,26 @@ async def cmd_start(message: Message):
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
     try:
-        await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_client)
+        # Check if notification service is available
+        if notification_client:
+            # Try to get health status to verify service is working
+            try:
+                health = await notification_client.get_health_status()
+                if health.get('status') == 'unhealthy':
+                    raise Exception("Notification service is unhealthy")
+                # Service is healthy, use normal processing
+                await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_client)
+            except Exception as service_error:
+                _logger.warning("Notification service unavailable for /help command: %s", service_error)
+                # Fallback: send help text directly
+                await message.answer(HELP_TEXT)
+        else:
+            # No notification service, send help text directly
+            _logger.info("No notification service available, sending help text directly")
+            await message.answer(HELP_TEXT)
     except Exception as e:
         _logger.exception("Error processing /help command for user %s", message.from_user.id)
-        # Fallback: send built-in help text directly
+        # Final fallback: send built-in help text directly
         try:
             await message.answer(HELP_TEXT)
         except Exception:
@@ -770,8 +803,33 @@ async def unknown_command(message: Message):
 
 @dp.message()
 async def all_messages(message: Message):
-    """Catch all messages for debugging"""
+    """Catch all messages for debugging and provide help for non-command messages"""
     _logger.info("Received message: %s from user %s", message.text, message.from_user.id)
+
+    # For non-command messages, provide help
+    if message.text and not message.text.startswith("/"):
+        try:
+            # Check if notification service is available
+            if notification_client:
+                try:
+                    health = await notification_client.get_health_status()
+                    if health.get('status') == 'unhealthy':
+                        raise Exception("Notification service is unhealthy")
+                    # Service is healthy, use normal processing
+                    await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_client, HELP_TEXT)
+                except Exception as service_error:
+                    _logger.warning("Notification service unavailable for non-command message: %s", service_error)
+                    # Fallback: send help message directly
+                    help_message = f"❓ I don't understand '{message.text}'\n\nPlease use /help to see all available commands."
+                    await message.answer(help_message)
+            else:
+                # No notification service, send help message directly
+                _logger.info("No notification service available, sending help message directly for non-command")
+                help_message = f"❓ I don't understand '{message.text}'\n\nPlease use /help to see all available commands."
+                await message.answer(help_message)
+        except Exception as e:
+            _logger.exception("Error processing non-command message for user %s", message.from_user.id)
+            await message.answer("Please use /help to see available commands.")
 
 async def main():
     global notification_client
@@ -796,7 +854,7 @@ async def main():
     _logger.info("Initializing notification service client...")
     try:
         import os
-        notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
+        notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:5003")
         notification_client = NotificationServiceClient(
             service_url=notification_service_url,
             timeout=30,

@@ -53,11 +53,11 @@ async def run_report(
             scheduled_for=request.scheduled_for
         )
 
-        logger.info(f"Created report run: {run.id} for user {current_user.id}")
+        _logger.info(f"Created report run: {run.id} for user {current_user.id}")
         return ScheduleRunResponse.from_orm(run)
 
     except Exception as e:
-        logger.error(f"Failed to create report run: {e}")
+        _logger.exception("Failed to create report run:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create report run: {str(e)}"
@@ -85,17 +85,17 @@ async def run_screener(
             scheduled_for=request.scheduled_for
         )
 
-        logger.info(f"Created screener run: {run.id} for user {current_user.id}")
+        _logger.info(f"Created screener run: {run.id} for user {current_user.id}")
         return ScheduleRunResponse.from_orm(run)
 
     except ValueError as e:
-        logger.error(f"Invalid screener request: {e}")
+        _logger.exception("Invalid screener request:")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Failed to create screener run: {e}")
+        _logger.exception("Failed to create screener run:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create screener run: {str(e)}"
@@ -210,17 +210,17 @@ async def create_schedule(
     """
     try:
         schedule = jobs_service.create_schedule(current_user.id, schedule_data)
-        logger.info(f"Created schedule: {schedule.name} for user {current_user.id}")
+        _logger.info(f"Created schedule: {schedule.name} for user {current_user.id}")
         return ScheduleResponse.from_orm(schedule)
 
     except ValueError as e:
-        logger.error(f"Invalid schedule data: {e}")
+        _logger.exception("Invalid schedule data:")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Failed to create schedule: {e}")
+        _logger.exception("Failed to create schedule:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create schedule: {str(e)}"
@@ -317,17 +317,17 @@ async def update_schedule(
                 detail="Schedule not found"
             )
 
-        logger.info(f"Updated schedule: {updated_schedule.name} (ID: {schedule_id})")
+        _logger.info(f"Updated schedule: {updated_schedule.name} (ID: {schedule_id})")
         return ScheduleResponse.from_orm(updated_schedule)
 
     except ValueError as e:
-        logger.error(f"Invalid schedule update data: {e}")
+        _logger.exception("Invalid schedule update data:")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Failed to update schedule {schedule_id}: {e}")
+        _logger.exception(f"Failed to update schedule {schedule_id}:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update schedule: {str(e)}"
@@ -400,17 +400,17 @@ async def trigger_schedule(
                 detail="Schedule not found"
             )
 
-        logger.info(f"Triggered schedule: {schedule.name} (ID: {schedule_id})")
+        _logger.info(f"Triggered schedule: {schedule.name} (ID: {schedule_id})")
         return ScheduleRunResponse.from_orm(run)
 
     except ValueError as e:
-        logger.error(f"Cannot trigger schedule: {e}")
+        _logger.exception("Cannot trigger schedule:")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Failed to trigger schedule {schedule_id}: {e}")
+        _logger.exception(f"Failed to trigger schedule {schedule_id}:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger schedule: {str(e)}"
@@ -454,7 +454,7 @@ async def list_screener_sets(
         return screener_sets
 
     except Exception as e:
-        logger.error(f"Failed to list screener sets: {e}")
+        _logger.exception("Failed to list screener sets:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list screener sets: {str(e)}"
@@ -489,7 +489,7 @@ async def get_screener_set(
             detail=f"Screener set not found: {set_name}"
         )
     except Exception as e:
-        logger.error(f"Failed to get screener set {set_name}: {e}")
+        _logger.exception(f"Failed to get screener set {set_name}:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get screener set: {str(e)}"
@@ -522,7 +522,7 @@ async def get_run_statistics(
         return stats
 
     except Exception as e:
-        logger.error(f"Failed to get run statistics: {e}")
+        _logger.exception("Failed to get run statistics:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get run statistics: {str(e)}"
@@ -544,11 +544,11 @@ async def cleanup_old_runs(
     """
     try:
         deleted_count = jobs_service.cleanup_old_runs(days_to_keep)
-        logger.info(f"Cleaned up {deleted_count} old runs")
+        _logger.info(f"Cleaned up {deleted_count} old runs")
         return {"deleted_count": deleted_count, "days_to_keep": days_to_keep}
 
     except Exception as e:
-        logger.error(f"Failed to cleanup old runs: {e}")
+        _logger.exception("Failed to cleanup old runs:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to cleanup old runs: {str(e)}"

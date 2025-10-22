@@ -524,7 +524,7 @@ try:
         # Process RSI...
         pass
 except IndicatorServiceError as e:
-    logger.error(f"Indicator calculation failed: {e}")
+    logger.exception("Indicator calculation failed:")
     # Handle error appropriately
 ```
 

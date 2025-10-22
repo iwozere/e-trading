@@ -17,6 +17,7 @@ from src.data.db.models.model_telegram import Base as TelegramBase
 from src.data.db.models.model_trading import Base as TradingBase
 from src.data.db.models.model_webui import Base as WebUIBase
 from src.data.db.models.model_jobs import Base as JobsBase
+from src.data.db.models.model_notification import Base as NotificationBase
 
 # Repositories
 # NOTE: every repo must accept a sqlalchemy.orm.Session in __init__
@@ -44,6 +45,7 @@ from src.data.db.repos.repo_trading import (
 )
 
 from src.data.db.repos.repo_jobs import JobsRepository
+from src.data.db.repos.repo_notification import NotificationRepository
 
 
 # ------------------------------- UoW bundle ----------------------------------
@@ -59,6 +61,9 @@ class ReposBundle:
 
     # Jobs (replaces telegram alerts/schedules)
     jobs: JobsRepository
+
+    # Notifications
+    notifications: NotificationRepository
 
     # Telegram
     telegram_feedback: TelegramFeedbackRepo
@@ -91,7 +96,7 @@ class DatabaseService:
     def init_databases(self) -> None:
         """Create all tables for every model base (idempotent)."""
         eng = getattr(self, "engine", None) or engine
-        for base in (UsersBase, TelegramBase, TradingBase, WebUIBase, JobsBase):
+        for base in (UsersBase, TelegramBase, TradingBase, WebUIBase, JobsBase, NotificationBase):
             base.metadata.create_all(bind=eng)
 
     # for tests that call ds.get_database_service()
@@ -116,6 +121,9 @@ class DatabaseService:
 
                 # Jobs (replaces telegram alerts/schedules)
                 jobs=JobsRepository(s),
+
+                # Notifications
+                notifications=NotificationRepository(s),
 
                 # Telegram
                 telegram_feedback=TelegramFeedbackRepo(s),

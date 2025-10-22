@@ -28,8 +28,15 @@ _logger = setup_logger(__name__)
 # Create router
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
-# Configuration for notification service
-NOTIFICATION_SERVICE_URL = "http://localhost:8001"  # Default notification service port
+# Direct database access instead of proxying to notification service
+from src.data.db.repos.repo_notification import NotificationRepository
+from src.data.db.core.database import get_db_session
+from src.data.db.models.model_notification import (
+    Message, MessageDeliveryStatus, ChannelHealth,
+    MessageStatus, DeliveryStatus, ChannelHealthStatus
+)
+from sqlalchemy.orm import Session
+from sqlalchemy import func, desc
 
 
 # Pydantic models for API
@@ -79,19 +86,21 @@ class NotificationStats(BaseModel):
     channels_health: Dict[str, str]
 
 
-# Helper function to make requests to notification service
-async def _call_notification_service(
-    method: str,
-    endpoint: str,
-    data: Optional[Dict[str, Any]] = None,
-    params: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+# Helper function to get database session
+def get_notification_repo() -> NotificationRepository:
+    """Get notification repository instance."""
+    session = get_db_session()
+    return NotificationRepository(session)
+
+
+# Helper function to call notification service
+async def _call_notification_service(method: str, endpoint: str, data: Optional[Dict[str, Any]] = None, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Make HTTP request to notification service.
+    Call the notification service API.
 
     Args:
         method: HTTP method (GET, POST, etc.)
-        endpoint: API endpoint path
+        endpoint: API endpoint
         data: Request body data
         params: Query parameters
 
@@ -99,10 +108,13 @@ async def _call_notification_service(
         Response data
 
     Raises:
-        HTTPException: If request fails
+        HTTPException: If the service call fails
     """
     try:
-        url = f"{NOTIFICATION_SERVICE_URL}/api/v1{endpoint}"
+        # Get notification service URL from config or use default
+        service_url = "http://localhost:8001"  # Default notification service URL
+
+        url = f"{service_url}/api/v1{endpoint}"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             if method.upper() == "GET":
@@ -119,7 +131,7 @@ async def _call_notification_service(
             if response.status_code == 404:
                 raise HTTPException(status_code=404, detail="Resource not found")
             elif response.status_code >= 400:
-                error_detail = response.text
+                error_detail = "Notification service error"
                 try:
                     error_data = response.json()
                     error_detail = error_data.get("detail", error_detail)
@@ -129,26 +141,17 @@ async def _call_notification_service(
 
             return response.json()
 
-    except httpx.ConnectError:
-        _logger.error("Cannot connect to notification service at %s", NOTIFICATION_SERVICE_URL)
-        raise HTTPException(
-            status_code=503,
-            detail="Notification service is unavailable"
-        )
     except httpx.TimeoutException:
-        _logger.error("Timeout connecting to notification service")
-        raise HTTPException(
-            status_code=504,
-            detail="Notification service timeout"
-        )
+        _logger.error("Timeout calling notification service: %s %s", method, endpoint)
+        raise HTTPException(status_code=504, detail="Notification service timeout")
+    except httpx.ConnectError:
+        _logger.error("Connection error calling notification service: %s %s", method, endpoint)
+        raise HTTPException(status_code=503, detail="Notification service unavailable")
     except HTTPException:
         raise
     except Exception as e:
         _logger.error("Error calling notification service: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Internal error communicating with notification service"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Health check endpoint (must be before parameterized routes)

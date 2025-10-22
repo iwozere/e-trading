@@ -115,7 +115,7 @@ class BacktraderIndicatorWrapper(bt.Indicator):
             return df
 
         except Exception as e:
-            logger.error("Error building DataFrame from Backtrader data: %s", e)
+            logger.exception("Error building DataFrame from Backtrader data:")
             return None
 
     def next(self):
