@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import threading
 
-from src.notification.service.dependencies import get_repository_context
+from src.data.db.services.database_service import get_database_service
 from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
 
@@ -182,8 +182,9 @@ class RateLimiter:
     async def _load_bucket_from_db(self, user_id: str, channel: str) -> Optional[TokenBucket]:
         """Load token bucket state from database."""
         try:
-            with get_repository_context() as repo:
-                rate_limit = repo.rate_limits.get_rate_limit(user_id, channel)
+            db_service = get_database_service()
+            with db_service.uow() as r:
+                rate_limit = r.notifications.rate_limits.get_rate_limit(user_id, channel)
 
                 if rate_limit:
                     config = self._get_config(channel)
@@ -213,7 +214,8 @@ class RateLimiter:
     async def _save_bucket_to_db(self, user_id: str, channel: str, bucket: TokenBucket) -> None:
         """Save token bucket state to database."""
         try:
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 rate_limit_data = {
                     "user_id": user_id,
                     "channel": channel,
@@ -223,7 +225,7 @@ class RateLimiter:
                     "last_refill": datetime.fromtimestamp(bucket.last_refill)
                 }
 
-                repo.rate_limits.create_or_update_rate_limit(rate_limit_data)
+                r.notifications.rate_limits.create_or_update_rate_limit(rate_limit_data)
 
         except Exception as e:
             self._logger.error("Failed to save bucket to database for %s:%s: %s", user_id, channel, e)
@@ -575,11 +577,12 @@ class RateLimiter:
 
         # Also reset in database
         try:
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 if channel:
-                    rate_limit = repo.rate_limits.get_rate_limit(user_id, channel)
+                    rate_limit = r.notifications.rate_limits.get_rate_limit(user_id, channel)
                     if rate_limit:
-                        repo.rate_limits.create_or_update_rate_limit({
+                        r.notifications.rate_limits.create_or_update_rate_limit({
                             "user_id": user_id,
                             "channel": channel,
                             "tokens": rate_limit.max_tokens,

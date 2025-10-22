@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.config import config
-from src.notification.service.dependencies import init_database, get_repository_context
+from src.data.db.services.database_service import get_database_service
 from src.notification.service.message_queue import message_queue, MessagePriority
 from src.notification.service.processor import message_processor
 from src.data.db.models.model_notification import MessageStatus, DeliveryStatus
@@ -105,15 +105,14 @@ class EndToEndTestSuite:
             max_overflow=10
         )
 
-        # Create tables
-        from src.data.db.core.base import Base
-        from src.notification.service.dependencies import engine
-        Base.metadata.create_all(bind=engine)
+        # Create tables using database service
+        db_service = get_database_service()
+        db_service.init_databases()
 
         # Clean up any existing test data
-        with get_repository_context() as repo:
+        with db_service.uow() as r:
             # Delete test messages
-            repo.session.execute(
+            r.s.execute(
                 "DELETE FROM msg_delivery_status WHERE message_id IN "
                 "(SELECT id FROM msg_messages WHERE message_type LIKE 'e2e_test_%')"
             )
@@ -133,8 +132,9 @@ class EndToEndTestSuite:
             channel.reset()
 
         # Clean up test data
-        with get_repository_context() as repo:
-            repo.session.execute(
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            r.s.execute(
                 "DELETE FROM msg_delivery_status WHERE message_id IN "
                 "(SELECT id FROM msg_messages WHERE message_type LIKE 'e2e_test_%')"
             )
@@ -489,8 +489,9 @@ class EndToEndTestSuite:
             message_id = message_queue.enqueue(message_data, MessagePriority.NORMAL)
 
             # Check message was persisted
-            with get_repository_context() as repo:
-                message = repo.messages.get_message(message_id)
+            db_service = get_database_service()
+            with db_service.uow() as r:
+                message = r.notifications.messages.get_message(message_id)
 
                 if message:
                     if (message.message_type == 'e2e_test_persistence' and

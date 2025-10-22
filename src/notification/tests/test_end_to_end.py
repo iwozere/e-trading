@@ -22,7 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.config import config
-from src.notification.service.dependencies import init_database, get_repository_context
+from src.data.db.services.database_service import get_database_service
 from src.notification.service.main import app
 from src.notification.service.processor import message_processor
 from src.notification.service.health_monitor import health_monitor
@@ -83,10 +83,9 @@ async def test_client():
         max_overflow=10
     )
 
-    # Create tables
-    from src.data.db.core.base import Base
-    from src.notification.service.dependencies import engine
-    Base.metadata.create_all(bind=engine)
+    # Create tables using database service
+    db_service = get_database_service()
+    db_service.init_databases()
 
     # Mock channel plugins
     mock_channels = {

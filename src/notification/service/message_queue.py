@@ -16,7 +16,7 @@ from src.data.db.models.model_notification import (
     Message, MessagePriority, MessageStatus, MessageCreate
 )
 from src.data.db.repos.repo_notification import NotificationRepository
-from src.notification.service.dependencies import get_repository_context
+from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
@@ -159,8 +159,9 @@ class MessageQueue:
             })
 
             # Store in database
-            with get_repository_context() as repo:
-                message = repo.messages.create_message(db_message_data)
+            db_service = get_database_service()
+            with db_service.uow() as r:
+                message = r.notifications.messages.create_message(db_message_data)
                 message_id = message.id
 
             self._logger.info(
@@ -192,9 +193,10 @@ class MessageQueue:
         try:
             current_time = datetime.now(timezone.utc)
 
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 # Get pending messages
-                messages = repo.messages.get_pending_messages(
+                messages = r.notifications.messages.get_pending_messages(
                     current_time=current_time,
                     priority=priority_filter,
                     limit=limit
@@ -238,7 +240,8 @@ class MessageQueue:
         try:
             current_time = datetime.now(timezone.utc)
 
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 # Get high priority messages first
                 high_priority_messages = []
 
@@ -301,9 +304,10 @@ class MessageQueue:
         try:
             current_time = datetime.now(timezone.utc)
 
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 # Get failed messages ready for retry
-                messages = repo.messages.get_failed_messages_for_retry(
+                messages = r.notifications.messages.get_failed_messages_for_retry(
                     current_time=current_time,
                     retry_delay_minutes=retry_delay_minutes,
                     limit=limit
@@ -347,8 +351,9 @@ class MessageQueue:
             True if successful, False if message not found
         """
         try:
-            with get_repository_context() as repo:
-                message = repo.messages.update_message(message_id, {
+            db_service = get_database_service()
+            with db_service.uow() as r:
+                message = r.notifications.messages.update_message(message_id, {
                     'status': MessageStatus.DELIVERED.value,
                     'processed_at': datetime.now(timezone.utc)
                 })
@@ -376,8 +381,9 @@ class MessageQueue:
             True if successful, False if message not found
         """
         try:
-            with get_repository_context() as repo:
-                message = repo.messages.update_message(message_id, {
+            db_service = get_database_service()
+            with db_service.uow() as r:
+                message = r.notifications.messages.update_message(message_id, {
                     'status': MessageStatus.FAILED.value,
                     'last_error': error_message,
                     'processed_at': datetime.now(timezone.utc)
@@ -405,12 +411,13 @@ class MessageQueue:
             Dictionary with queue statistics
         """
         try:
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 stats = {}
 
                 # Count messages by status
                 for status in MessageStatus:
-                    count = repo.session.query(Message).filter(
+                    count = r.s.query(Message).filter(
                         Message.status == status.value
                     ).count()
                     stats[f"{status.value.lower()}_count"] = count

@@ -16,7 +16,7 @@ import sys
 import httpx
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.web_ui.backend.auth import get_current_user, require_trader_or_admin
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 # Direct database access instead of proxying to notification service
 from src.data.db.repos.repo_notification import NotificationRepository
-from src.data.db.core.database import get_db_session
+from src.data.db.core.database import session_scope
 from src.data.db.models.model_notification import (
     Message, MessageDeliveryStatus, ChannelHealth,
     MessageStatus, DeliveryStatus, ChannelHealthStatus
@@ -89,8 +89,8 @@ class NotificationStats(BaseModel):
 # Helper function to get database session
 def get_notification_repo() -> NotificationRepository:
     """Get notification repository instance."""
-    session = get_db_session()
-    return NotificationRepository(session)
+    with session_scope() as session:
+        return NotificationRepository(session)
 
 
 # Helper function to call notification service

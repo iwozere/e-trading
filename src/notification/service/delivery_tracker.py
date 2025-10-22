@@ -16,7 +16,7 @@ import uuid
 
 from src.data.db.models.model_notification import MessageStatus, MessagePriority
 from src.notification.service.message_queue import QueuedMessage
-from src.notification.service.dependencies import get_repository_context
+from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

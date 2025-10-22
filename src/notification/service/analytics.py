@@ -15,7 +15,7 @@ from collections import defaultdict
 
 from src.data.db.models.model_notification import MessageStatus, MessagePriority
 from src.notification.service.delivery_tracker import DeliveryResult, DeliveryStatus
-from src.notification.service.dependencies import get_repository_context
+from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -241,9 +241,10 @@ class NotificationAnalytics:
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 # Get delivery statistics from database
-                delivery_stats = repo.delivery_status.get_delivery_statistics(
+                delivery_stats = r.notifications.delivery_status.get_delivery_statistics(
                     channel=channel, days=days
                 )
 
@@ -314,7 +315,8 @@ class NotificationAnalytics:
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 # Get response time data from database
                 response_times = self._get_response_time_data(
                     repo, channel, cutoff_date
@@ -400,7 +402,8 @@ class NotificationAnalytics:
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 # Get time-series data
                 time_series = self._get_time_series_data(
                     repo, granularity, cutoff_date, channel
@@ -447,7 +450,8 @@ class NotificationAnalytics:
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
-            with get_repository_context() as repo:
+            db_service = get_database_service()
+            with db_service.uow() as r:
                 # Get time series data for the metric
                 time_series_data = self._get_metric_time_series(
                     repo, metric, cutoff_date, channel
@@ -523,17 +527,18 @@ class NotificationAnalytics:
 
         try:
             # Get all channels first
-            with get_repository_context() as repo:
-                channels = self._get_active_channels(repo, cutoff_date)
+            db_service = get_database_service()
+            with db_service.uow() as r:
+                channels = self._get_active_channels(r, cutoff_date)
 
             channel_comparisons = {}
 
             # Process each channel
             for channel in channels:
                 # Get channel statistics
-                with get_repository_context() as repo:
+                with db_service.uow() as r:
                     channel_stats = self._get_channel_statistics(
-                        repo, channel, cutoff_date
+                        r, channel, cutoff_date
                     )
 
                 # Get trend analysis for this channel

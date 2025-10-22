@@ -21,9 +21,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.config import config
-from src.notification.service.dependencies import (
-    init_database, get_config
-)
 from src.data.db.services.database_service import get_database_service
 from src.data.db.models.model_notification import (
     Message, MessageDeliveryStatus,

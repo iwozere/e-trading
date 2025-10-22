@@ -177,16 +177,12 @@ class E2ETestRunner:
 
         try:
             from src.notification.service.config import config
-            from src.notification.service.dependencies import init_database
+            from src.data.db.services.database_service import get_database_service
 
             # Test database connection
             try:
-                init_database(
-                    database_url=config.database.url,
-                    echo=False,
-                    pool_size=2,
-                    max_overflow=5
-                )
+                db_service = get_database_service()
+                db_service.init_databases()
                 self.log_result("Database Connection", True, "Database accessible")
                 db_healthy = True
             except Exception as e:

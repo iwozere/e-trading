@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.config import config
-from src.notification.service.dependencies import init_database, get_repository_context
+from src.data.db.services.database_service import get_database_service
 from src.notification.service.message_queue import message_queue, MessagePriority
 from src.notification.service.processor import message_processor
 from src.notification.logger import setup_logger
@@ -28,23 +28,15 @@ async def test_database_connection():
     print("Testing database connection...")
 
     try:
-        init_database(
-            database_url=config.database.url,
-            echo=config.database.echo,
-            pool_size=config.database.pool_size,
-            max_overflow=config.database.max_overflow
-        )
-
-        # Create tables using SQLAlchemy
-        from src.data.db.core.base import Base
-        from src.notification.service.dependencies import engine
-        Base.metadata.create_all(bind=engine)
+        # Initialize database tables using database service
+        db_service = get_database_service()
+        db_service.init_databases()
         print("✓ Database tables created")
 
-        with get_repository_context() as repo:
+        with db_service.uow() as r:
             # Test basic query using SQLAlchemy text
             from sqlalchemy import text
-            repo.session.execute(text("SELECT 1"))
+            r.s.execute(text("SELECT 1"))
             print("✓ Database connection successful")
 
             # Test message creation
