@@ -55,7 +55,7 @@ Use either approach:
 from src.indicators.models import RecommendationType, IndicatorResult
 
 # Option 2: Backward compatibility (for existing code)
-from src.model.indicators import RecommendationType, IndicatorResult
+from src.indicators.models import RecommendationType, IndicatorResult
 ```
 
 ## Benefits

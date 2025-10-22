@@ -8,7 +8,7 @@ The Unified Indicator Service provides a comprehensive API for calculating techn
 
 ```python
 from src.indicators.service import get_unified_indicator_service
-from src.model.indicators import IndicatorCalculationRequest
+from src.indicators.models import IndicatorCalculationRequest
 
 # Get service instance
 service = get_unified_indicator_service()
@@ -58,7 +58,7 @@ Calculate indicators for a single ticker with recommendations.
 
 **Example:**
 ```python
-from src.model.indicators import IndicatorCalculationRequest
+from src.indicators.models import IndicatorCalculationRequest
 
 request = IndicatorCalculationRequest(
     ticker="AAPL",
@@ -108,7 +108,7 @@ Calculate indicators for multiple tickers efficiently.
 
 **Example:**
 ```python
-from src.model.indicators import BatchIndicatorRequest
+from src.indicators.models import BatchIndicatorRequest
 
 request = BatchIndicatorRequest(
     tickers=["AAPL", "GOOGL", "MSFT", "TSLA"],
@@ -244,7 +244,7 @@ Access the unified recommendation engine for custom recommendations.
 Get recommendation for a specific indicator value.
 
 ```python
-from src.model.indicators import Recommendation
+from src.indicators.models import Recommendation
 
 # Simple recommendation
 rec = service.recommendation_engine.get_recommendation("rsi", 75.0)

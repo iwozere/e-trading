@@ -305,7 +305,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from src.indicators.service import get_unified_indicator_service
-from src.model.indicators import IndicatorCalculationRequest
+from src.indicators.models import IndicatorCalculationRequest
 
 class TestMyIndicator:
     @pytest.fixture
