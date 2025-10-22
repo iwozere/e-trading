@@ -23,6 +23,87 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
+class NotificationServiceError(Exception):
+    """Base exception for notification service errors."""
+    pass
+
+
+class NotificationServiceUnavailableError(NotificationServiceError):
+    """Raised when the notification service is unavailable."""
+    pass
+
+
+class NotificationRequest:
+    """Notification request data structure."""
+
+    def __init__(self, notification_type: str, title: str, message: str, **kwargs):
+        self.notification_type = notification_type
+        self.title = title
+        self.message = message
+        self.kwargs = kwargs
+
+
+class NotificationResponse:
+    """Notification response data structure."""
+
+    def __init__(self, message_id: int, status: str, **kwargs):
+        self.message_id = message_id
+        self.status = status
+        self.kwargs = kwargs
+
+
+class CircuitBreakerState(str, Enum):
+    """Circuit breaker states."""
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class CircuitBreaker:
+    """Simple circuit breaker implementation."""
+
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.failure_count = 0
+        self.last_failure_time = None
+        self.state = CircuitBreakerState.CLOSED
+
+    def call(self, func, *args, **kwargs):
+        """Call function through circuit breaker."""
+        if self.state == CircuitBreakerState.OPEN:
+            if self._should_attempt_reset():
+                self.state = CircuitBreakerState.HALF_OPEN
+            else:
+                raise NotificationServiceUnavailableError("Circuit breaker is open")
+
+        try:
+            result = func(*args, **kwargs)
+            self._on_success()
+            return result
+        except Exception as e:
+            self._on_failure()
+            raise
+
+    def _should_attempt_reset(self) -> bool:
+        """Check if we should attempt to reset the circuit breaker."""
+        if self.last_failure_time is None:
+            return True
+        return (datetime.now(timezone.utc) - self.last_failure_time).seconds > self.recovery_timeout
+
+    def _on_success(self):
+        """Handle successful call."""
+        self.failure_count = 0
+        self.state = CircuitBreakerState.CLOSED
+
+    def _on_failure(self):
+        """Handle failed call."""
+        self.failure_count += 1
+        self.last_failure_time = datetime.now(timezone.utc)
+        if self.failure_count >= self.failure_threshold:
+            self.state = CircuitBreakerState.OPEN
+
+
 class MessagePriority(str, Enum):
     """Message priority levels."""
     LOW = "low"

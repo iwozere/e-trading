@@ -21,8 +21,8 @@ The client library is part of the notification service package. No additional in
 ### Basic Usage
 
 ```python
-from src.notification.client import NotificationServiceClient
-from src.model.notification import NotificationType, NotificationPriority
+from src.notification.service.client import NotificationServiceClient
+from src.notification.model import NotificationType, NotificationPriority
 
 # Initialize the client
 client = NotificationServiceClient(
@@ -46,7 +46,7 @@ print(f"Notification sent with ID: {response.message_id}")
 
 ```python
 import asyncio
-from src.notification.client import NotificationServiceClient
+from src.notification.service.client import NotificationServiceClient
 
 async def send_async_notification():
     client = NotificationServiceClient(base_url="http://localhost:8080")
@@ -249,7 +249,7 @@ channels:
 The client provides specific exception types for different error conditions:
 
 ```python
-from src.notification.client import (
+from src.notification.service.client import (
     NotificationServiceError,
     NotificationServiceUnavailableError
 )
@@ -359,7 +359,7 @@ client.send_notification(
    from src.notification.async_notification_manager import AsyncNotificationManager
    
    # New
-   from src.notification.client import NotificationServiceClient
+   from src.notification.service.client import NotificationServiceClient
    ```
 
 2. **Update initialization:**
@@ -408,7 +408,7 @@ manager = AsyncNotificationManager(...)
 await manager.send_notification(...)
 
 # Later, migrate to direct client usage
-from src.notification.client import NotificationServiceClient
+from src.notification.service.client import NotificationServiceClient
 client = NotificationServiceClient(...)
 await client.send_notification_async(...)
 ```
@@ -429,9 +429,9 @@ For testing your code that uses the client, you can mock the client:
 
 ```python
 from unittest.mock import Mock, patch
-from src.notification.client import NotificationServiceClient
+from src.notification.service.client import NotificationServiceClient
 
-@patch('src.notification.client.NotificationServiceClient.send_notification')
+@patch('src.notification.service.client.NotificationServiceClient.send_notification')
 def test_my_function(mock_send):
     mock_send.return_value = Mock(message_id=123, status="enqueued")
     

@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch, AsyncMock
 import json
 from datetime import datetime
 
-from src.notification.client import (
+from src.notification.service.client import (
     NotificationServiceClient,
     NotificationRequest,
     NotificationResponse,
@@ -17,7 +17,7 @@ from src.notification.client import (
     CircuitBreaker,
     CircuitBreakerState
 )
-from src.model.notification import NotificationType, NotificationPriority
+from src.notification.model import NotificationType, NotificationPriority
 
 
 class TestCircuitBreaker:

@@ -53,6 +53,7 @@ This index provides a comprehensive guide to all documentation, organized by top
 
 ### System Evolution
 - **[Migration & Evolution](migration-evolution.md)** - System upgrade and migration strategies
+- **[API Migration Summary](API_MIGRATION_SUMMARY.md)** - REST layer restructuring from web_ui/backend to src/api
 - **[Documentation Procedures](documentation-procedures.md)** - Maintenance and update procedures
 
 ### Templates & Standards

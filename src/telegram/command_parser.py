@@ -118,8 +118,12 @@ COMMAND_SPECS = {
         positional=["tickers"]
     ),
     "admin": CommandSpec(
-        parameters={},
-        defaults={},
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
         positional=["action", "params"]
     ),
     "alerts": CommandSpec(
@@ -166,6 +170,60 @@ COMMAND_SPECS = {
             "immediate": True,
         },
         positional=["screener_name_or_config"]
+    ),
+    "register": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=["email_address", "language"]
+    ),
+    "verify": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=["verification_code"]
+    ),
+    "language": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=["language_code"]
+    ),
+    "feedback": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=["message"]
+    ),
+    "feature": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=["message"]
+    ),
+    "request_approval": CommandSpec(
+        parameters={
+            "email": bool,
+        },
+        defaults={
+            "email": False,
+        },
+        positional=[]
     ),
 }
 

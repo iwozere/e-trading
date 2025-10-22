@@ -190,7 +190,7 @@ AI-Enhanced Strategies → Portfolio Manager → Multi-Broker Gateway → Event 
 #### Current Architecture
 ```
 Telegram Bot → Notification System → Database
-Web UI Backend → REST API → Database
+Web UI Backend (src/api/) → REST API → Database
 ```
 
 #### Target Architecture (Q4 2025)

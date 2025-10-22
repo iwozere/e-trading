@@ -1,18 +1,39 @@
-# Trading Bot Management API
+# Trading System REST API Documentation
 
 ## Overview
 
-This document provides comprehensive API documentation for the Crypto Trading Platform, including:
-- Trading bot management endpoints
-- Authentication methods
-- API documentation generation guide
+This document provides comprehensive API documentation for the Advanced Trading Framework REST API, including:
+- Complete endpoint reference for all system components
+- Authentication and authorization methods
+- Request/response models and examples
+- WebSocket real-time communication
+
+**API Location**: `src/api/` - Dedicated FastAPI backend module  
+**Base URL**: `http://localhost:8000` (configurable via `TRADING_API_PORT`)  
+**Documentation**: Auto-generated OpenAPI/Swagger at `/docs`
 
 ---
 
 ## Authentication
 
-- **api.py**: HTTP Basic Auth (username/password from environment or dontshare.py)
-- **webgui/app.py**: Session-based login (username/password from dontshare.py)
+The API uses JWT (JSON Web Token) based authentication with role-based access control:
+
+### Authentication Flow
+1. **Login**: `POST /auth/login` with username/password
+2. **Receive Tokens**: Access token (30min) + Refresh token (7 days)
+3. **API Access**: Include `Authorization: Bearer <access_token>` header
+4. **Token Refresh**: `POST /auth/refresh` with refresh token when access token expires
+
+### User Roles
+- **Admin**: Full system access including user management and system administration
+- **Trader**: Trading operations, strategy management, and monitoring access
+- **Viewer**: Read-only access to system status and reports
+
+### Authentication Endpoints
+- `POST /auth/login` - User authentication with JWT tokens
+- `POST /auth/refresh` - Token refresh using refresh token
+- `POST /auth/logout` - Session termination and token invalidation
+- `GET /auth/me` - Current user profile information
 
 ---
 

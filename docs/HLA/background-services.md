@@ -209,7 +209,7 @@ CREATE TABLE job_schedule_runs (
 #### 3.1 System Service Independence
 - **TradingBot** and **TelegramBot** run as separate **systemd services** (Linux deployment)
 - Each service manages its own lifecycle and error handling
-- Services communicate through PostgreSQL database and FastAPI endpoints
+- Services communicate through PostgreSQL database and FastAPI endpoints (src/api/)
 - No direct inter-process communication required
 
 #### 3.2 Alert/Schedule Creation Flow
@@ -495,7 +495,7 @@ Provides JSON schema validation for alert configurations:
 
 **TelegramBot Service** (`systemd` service):
 - Deployed as independent systemd service
-- Exposes FastAPI endpoints for notification delivery
+- Exposes FastAPI endpoints for notification delivery (integrated with src/api/)
 - Handles webhook or polling mode for Telegram API
 - Contains background notification service for message queuing
 - Stores user alerts/schedules in PostgreSQL database
@@ -543,7 +543,7 @@ Provides JSON schema validation for alert configurations:
 
 **API-Based Notification Flow**:
 - Background workers execute scheduled jobs
-- Workers POST results to TelegramBot FastAPI: `/api/notify`
+- Workers POST results to API service: `/api/notifications` (src/api/notification_routes.py)
 - TelegramBot queues notifications in background service
 - Asynchronous message delivery to users
 

@@ -198,13 +198,15 @@ const App: React.FC = () => {
 - **LiveTrading**: Real-time trading status and position monitoring
 - **RiskManagement**: Risk controls and position sizing configuration
 
-#### Backend API (FastAPI)
+#### Backend API (FastAPI - src/api/)
+
+The backend API has been restructured into a dedicated `src/api/` module with comprehensive endpoint coverage:
 
 ```python
 from fastapi import FastAPI, Depends, HTTPException
 from src.api.auth import get_current_user, require_admin
 
-app = FastAPI(title="Trading System API")
+app = FastAPI(title="Trading Web UI API")
 
 @app.get("/api/system/status")
 async def get_system_status(user: User = Depends(get_current_user)):
@@ -229,27 +231,263 @@ async def broadcast_message(
     )
 ```
 
-**API Endpoints:**
+**API Module Structure:**
+- `src/api/main.py` - Main FastAPI application and core endpoints
+- `src/api/auth.py` - Authentication utilities and JWT handling
+- `src/api/auth_routes.py` - Authentication endpoints (login, refresh, logout)
+- `src/api/telegram_routes.py` - Telegram bot management endpoints
+- `src/api/jobs_routes.py` - Job scheduling and execution endpoints
+- `src/api/notification_routes.py` - Notification management endpoints
+- `src/api/websocket_manager.py` - WebSocket connection management
+- `src/api/models.py` - Pydantic models for API requests/responses
+- `src/api/services/` - Business logic services for API operations
+
+**Core API Endpoints:**
 
 **Authentication & Authorization:**
-- `POST /api/auth/login` - User authentication with JWT tokens
-- `POST /api/auth/refresh` - Token refresh
-- `GET /api/auth/profile` - User profile information
-- `POST /api/auth/logout` - Session termination
+- `POST /auth/login` - User authentication with JWT tokens
+- `POST /auth/refresh` - Token refresh with refresh token
+- `POST /auth/logout` - Session termination and token invalidation
+- `GET /auth/me` - Current user profile information
+
+**Strategy Management:**
+- `GET /api/strategies` - List all configured strategies with status
+- `POST /api/strategies` - Create new trading strategy
+- `GET /api/strategies/{id}` - Get specific strategy details
+- `PUT /api/strategies/{id}` - Update strategy configuration
+- `DELETE /api/strategies/{id}` - Delete strategy
+- `POST /api/strategies/{id}/start` - Start strategy execution
+- `POST /api/strategies/{id}/stop` - Stop strategy execution
+- `POST /api/strategies/{id}/restart` - Restart strategy with confirmation
+- `PUT /api/strategies/{id}/parameters` - Update strategy parameters while running
 
 **System Management:**
-- `GET /api/system/status` - Comprehensive system health
-- `GET /api/system/metrics` - Performance metrics and statistics
-- `POST /api/system/restart` - System restart (admin only)
-- `GET /api/system/logs` - System log retrieval with filtering
+- `GET /api/health` - Basic health check endpoint
+- `GET /api/test-auth` - Authentication test endpoint
+- `GET /api/system/status` - Comprehensive system health and metrics
+- `GET /api/monitoring/metrics` - Detailed system performance metrics
+- `GET /api/monitoring/alerts` - System alerts and warnings
+- `POST /api/monitoring/alerts/{id}/acknowledge` - Acknowledge system alerts
+- `GET /api/monitoring/history` - Performance history data
+
+**Configuration Management:**
+- `GET /api/config/templates` - Available strategy templates
+- `POST /api/config/validate` - Validate strategy configuration
+
+**Job Management:**
+- `POST /api/reports/run` - Execute report generation immediately
+- `POST /api/screeners/run` - Execute screener analysis immediately
+- `GET /api/runs/{id}` - Get run status and details
+- `GET /api/runs` - List runs with filtering and pagination
+- `DELETE /api/runs/{id}` - Cancel pending run
+- `GET/POST /api/schedules` - List/create scheduled jobs
+- `GET /api/schedules/{id}` - Get schedule details
+- `PUT /api/schedules/{id}` - Update schedule configuration
+- `DELETE /api/schedules/{id}` - Delete schedule
+- `POST /api/schedules/{id}/trigger` - Manually trigger schedule
+- `GET /api/screener-sets` - List available screener sets
+- `GET /api/runs/statistics` - Run execution statistics
+- `POST /api/admin/cleanup-runs` - Clean up old runs (admin only)
 
 **Telegram Management:**
-- `GET /api/telegram/users` - List registered Telegram users
-- `POST /api/telegram/users/{user_id}/approve` - Approve user registration
-- `GET /api/telegram/alerts` - List active alerts
-- `POST /api/telegram/broadcast` - Send broadcast messages
+- `GET /api/telegram/users` - List registered Telegram users with filtering
+- `POST /api/telegram/users/{id}/verify` - Manually verify user email
+- `POST /api/telegram/users/{id}/approve` - Approve user registration
+- `POST /api/telegram/users/{id}/reset-email` - Reset user email verification
+- `GET /api/telegram/alerts` - List active alerts with pagination
+- `POST /api/telegram/alerts/{id}/toggle` - Toggle alert active status
+- `DELETE /api/telegram/alerts/{id}` - Delete alert
+- `GET /api/telegram/schedules` - List scheduled reports/screeners
+- `POST /api/telegram/broadcast` - Send broadcast message to users
+- `GET /api/telegram/broadcast/history` - Broadcast message history
+- `GET /api/telegram/audit` - Command audit logs with filtering
+- `GET /api/telegram/users/{id}/audit` - User-specific audit logs
+- `GET /api/telegram/stats/users` - User statistics
+- `GET /api/telegram/stats/alerts` - Alert statistics
+- `GET /api/telegram/stats/schedules` - Schedule statistics
+- `GET /api/telegram/stats/audit` - Audit statistics
 
-### 3. Notification System (Multi-Channel Delivery)
+**Notification Management:**
+- `GET /api/notifications/health` - Notification service health check
+- `POST /api/notifications` - Create and send notification
+- `GET /api/notifications` - List notifications with filtering
+- `GET /api/notifications/{id}` - Get notification status and details
+- `GET /api/notifications/{id}/delivery` - Get delivery status per channel
+- `GET /api/notifications/channels/health` - Channel health status
+- `GET /api/notifications/channels` - List available notification channels
+- `GET /api/notifications/stats` - Notification delivery statistics
+- `POST /api/notifications/alert` - Send alert notification (convenience)
+- `POST /api/notifications/trade` - Send trade notification (convenience)
+- `POST /api/notifications/admin/cleanup` - Clean up old notifications
+- `GET /api/notifications/admin/processor/stats` - Processor statistics
+
+### 3. REST API Backend (Comprehensive Management Interface)
+
+The REST API backend provides a complete management interface for the trading system, implemented as a dedicated module in `src/api/` with FastAPI.
+
+#### API Architecture Overview
+
+```python
+# Main application structure (src/api/main.py)
+from fastapi import FastAPI
+from src.api.auth_routes import router as auth_router
+from src.api.telegram_routes import router as telegram_router
+from src.api.jobs_routes import router as jobs_router
+from src.api.notification_routes import router as notification_router
+
+app = FastAPI(
+    title="Trading Web UI API",
+    description="REST API for managing multi-strategy trading system",
+    version="1.0.0"
+)
+
+# Include all route modules
+app.include_router(auth_router)
+app.include_router(telegram_router)
+app.include_router(jobs_router)
+app.include_router(notification_router)
+```
+
+#### Key API Features
+
+**Comprehensive Strategy Management:**
+- Full CRUD operations for trading strategies
+- Real-time strategy lifecycle control (start/stop/restart)
+- Dynamic parameter updates without restart
+- Strategy template management and validation
+- Performance monitoring and status tracking
+
+**Advanced User Management:**
+- JWT-based authentication with refresh tokens
+- Role-based access control (admin, trader, viewer)
+- Telegram user approval and verification workflows
+- User activity auditing and session management
+
+**System Monitoring & Administration:**
+- Real-time system health and performance metrics
+- Alert management with acknowledgment workflows
+- Historical performance data and analytics
+- System configuration and template management
+
+**Job Scheduling & Execution:**
+- Ad-hoc report and screener execution
+- Scheduled job management with cron-like syntax
+- Run status tracking and cancellation
+- Screener set management and configuration
+- Administrative cleanup and maintenance operations
+
+**Notification Integration:**
+- Multi-channel notification creation and management
+- Delivery status tracking across channels
+- Channel health monitoring and statistics
+- Convenience endpoints for common notification types
+- Administrative notification management
+
+#### API Security & Authentication
+
+```python
+# JWT-based authentication (src/api/auth.py)
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer
+import jwt
+
+security = HTTPBearer()
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Extract and validate JWT token."""
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return await get_user_by_id(user_id)
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def require_admin(current_user: User = Depends(get_current_user)):
+    """Require admin role for endpoint access."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+```
+
+**Security Features:**
+- JWT tokens with configurable expiration
+- Refresh token rotation for enhanced security
+- Role-based endpoint protection
+- Request rate limiting and input validation
+- CORS configuration for web client integration
+- Comprehensive audit logging for security events
+
+#### API Response Models
+
+```python
+# Standardized response models (src/api/models.py)
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
+
+class StrategyStatus(BaseModel):
+    """Strategy status response model."""
+    instance_id: str
+    name: str
+    status: str
+    uptime_seconds: float
+    error_count: int
+    last_error: Optional[str]
+    broker_type: Optional[str]
+    trading_mode: Optional[str]
+    symbol: Optional[str]
+    strategy_type: Optional[str]
+
+class SystemStatus(BaseModel):
+    """System status response model."""
+    service_name: str
+    version: str
+    status: str
+    uptime_seconds: float
+    active_strategies: int
+    total_strategies: int
+    system_metrics: Dict[str, Any]
+```
+
+#### WebSocket Integration
+
+```python
+# Real-time updates (src/api/websocket_manager.py)
+from fastapi import WebSocket
+from typing import Dict, Set
+
+class WebSocketManager:
+    """Manages WebSocket connections for real-time updates."""
+    
+    def __init__(self):
+        self.connections: Dict[str, WebSocket] = {}
+        self.subscriptions: Dict[str, Set[str]] = {}
+    
+    async def broadcast_update(self, event_type: str, data: Dict[str, Any]):
+        """Broadcast real-time updates to subscribed clients."""
+        message = {
+            "type": event_type,
+            "data": data,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+        subscribers = self.subscriptions.get(event_type, set())
+        for connection_id in subscribers:
+            if connection_id in self.connections:
+                await self.connections[connection_id].send_json(message)
+```
+
+**Real-time Events:**
+- Strategy status changes and performance updates
+- System alerts and monitoring events
+- User activity and authentication events
+- Job execution status and completion notifications
+- Market data updates and alert triggers
+
+### 4. Notification System (Multi-Channel Delivery)
+
+### 4. Notification System (Multi-Channel Delivery)
 
 The notification system provides unified, asynchronous notification delivery across multiple channels with advanced features.
 
@@ -319,7 +557,7 @@ class NotificationQueue:
 - **Filtering**: Duplicate detection and smart aggregation
 - **Templates**: Customizable message templates for different notification types
 
-### 4. Real-time Communication (WebSocket System)
+### 5. Real-time Communication (WebSocket System)
 
 The WebSocket system provides real-time updates for the web interface and live system monitoring.
 
@@ -354,7 +592,7 @@ class WebSocketManager:
 - **Alert Triggers**: Real-time alert notifications
 - **User Activity**: Login/logout events, command executions
 
-### 5. User Management & Authentication
+### 6. User Management & Authentication
 
 Comprehensive user management system with role-based access control and multi-factor authentication.
 
@@ -408,7 +646,7 @@ ROLE_PERMISSIONS = {
 }
 ```
 
-### 6. Alert Management System
+### 7. Alert Management System
 
 Sophisticated alert system with configurable triggers, delivery channels, and management interfaces.
 
@@ -584,7 +822,14 @@ The web API provides a simplified facade over the complex trading system, hiding
 - **Telegram Bot System**: Complete interactive bot with 20+ commands
 - **User Management**: Registration, verification, role-based access control
 - **Alert System**: Price and indicator alerts with configurable delivery
-- **Web UI Backend**: FastAPI-based REST API with authentication
+- **Web UI Backend**: Complete FastAPI-based REST API with comprehensive endpoints
+  - Authentication and authorization with JWT tokens
+  - Strategy management (CRUD operations, lifecycle control)
+  - System monitoring and metrics
+  - Telegram bot management and user administration
+  - Job scheduling and execution management
+  - Notification system integration
+  - Configuration management and validation
 - **Notification System**: Multi-channel async notification delivery
 - **Real-time Updates**: WebSocket-based live system monitoring
 - **Market Screener**: Advanced market scanning with custom criteria
@@ -592,6 +837,8 @@ The web API provides a simplified facade over the complex trading system, hiding
 
 ### 🔄 In Progress (Q1 2025)
 - **Web UI Frontend**: React-based dashboard and management interface (Target: Feb 2025)
+  - Backend API complete with comprehensive endpoint coverage
+  - Frontend development in progress with modern React architecture
 - **Advanced Analytics**: Enhanced reporting and visualization (Target: Mar 2025)
 - **Mobile App**: React Native mobile application (Target: Mar 2025)
 - **Voice Notifications**: Text-to-speech alert delivery (Target: Jan 2025)

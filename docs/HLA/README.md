@@ -137,7 +137,7 @@ graph TB
 | **[Scheduler](modules/infrastructure.md#job-management)** | Background job management | APScheduler, Job persistence, Cron jobs | APScheduler, Database | ✅ |
 | **[Notification](modules/communication.md#notification-system)** | Multi-channel notifications | Email, Telegram, Alert system | SMTP, Telegram API | ✅ |
 | **[Telegram](modules/communication.md#telegram-interface)** | Telegram bot interface | Command handlers, User management, Screener bot | aiogram, Notification, Analytics | ✅ |
-| **[Web UI](modules/communication.md#web-interface)** | Web-based management interface | FastAPI backend, React frontend, Dashboard | FastAPI, React, Trading | 🔄 |
+| **[Web UI](modules/communication.md#web-interface)** | Web-based management interface | FastAPI backend (src/api/), React frontend, Dashboard | FastAPI, React, Trading | ✅ |
 | **[Config](modules/configuration.md)** | Configuration management | Environment configs, Validation, Hot reload | Pydantic, JSON/YAML | ✅ |
 | **[Error Handling](modules/infrastructure.md#error-handling)** | System resilience, error recovery | Exception handling, Circuit breaker, Logging | Python logging, Custom handlers | ✅ |
 | **[Util](modules/infrastructure.md#utilities)** | General utilities, helpers | File operations, Date/time utils, Validation | Python standard library | ✅ |
@@ -312,7 +312,7 @@ graph TB
 
 **Module Implementation Status:**
 - ✅ **Fully Implemented** (11 modules): Core trading functionality complete
-- 🔄 **In Progress** (2 modules): ML features and Web UI enhancements
+- 🔄 **In Progress** (1 module): ML features and Web UI frontend enhancements
 - 📋 **Planned** (0 modules): All major modules have been implemented
 
 ## Data Flow Architecture
@@ -357,7 +357,8 @@ src/
 ├── trading/        # Trading engine and strategies
 ├── ml/            # Machine learning and analytics
 ├── telegram/      # Telegram bot interface
-├── web_ui/        # Web interface (backend/frontend)
+├── api/           # REST API backend (FastAPI)
+├── web_ui/        # Web interface frontend (React)
 ├── scheduler/     # Background job management
 ├── notification/  # Notification services
 ├── config/        # Configuration management

@@ -38,7 +38,7 @@ This report documents the technical accuracy validation of the High-Level Archit
 | **Communication** | Fully documented | `src/telegram/`, `src/web_ui/` - Complete | ✅ Accurate |
 | **Infrastructure** | Fully documented | `src/data/db/`, `src/scheduler/` - Complete | ✅ Accurate |
 | **Configuration** | Fully documented | `src/config/` - Complete implementation | ✅ Accurate |
-| **Security & Auth** | Documented as in-progress | `src/web_ui/backend/auth/` - Partial | ✅ Accurate |
+| **Security & Auth** | Documented as in-progress | `src/api/auth.py`, `src/api/auth_routes.py` - Complete | ✅ Accurate |
 
 #### Key Components Verified
 
@@ -62,7 +62,7 @@ This report documents the technical accuracy validation of the High-Level Archit
 
 **Communication Module:**
 - ✅ Telegram bot in `src/telegram/bot.py`
-- ✅ Web UI backend in `src/web_ui/backend/`
+- ✅ Web UI backend in `src/api/`
 - ✅ Notification system in `src/notification/`
 - ✅ Email integration implemented
 

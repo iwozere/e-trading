@@ -8,8 +8,8 @@ to send various types of notifications.
 import asyncio
 from datetime import datetime, timezone
 
-from src.notification.client import NotificationServiceClient, NotificationServiceError
-from src.model.notification import NotificationType, NotificationPriority
+from src.notification.service.client import NotificationServiceClient, NotificationServiceError
+from src.notification.model import NotificationType, NotificationPriority
 
 
 async def main():

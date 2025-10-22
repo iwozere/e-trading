@@ -384,7 +384,7 @@ ML_STATUS=$(check_module_status "src/ml" "ML & Analytics")
 COMM_STATUS=$(check_module_status "src/telegram" "Communication")
 INFRA_STATUS=$(check_module_status "src/data/db" "Infrastructure")
 CONFIG_STATUS=$(check_module_status "src/config" "Configuration")
-AUTH_STATUS=$(check_module_status "src/web_ui/backend/auth" "Security & Auth")
+AUTH_STATUS=$(check_module_status "src/api" "Security & Auth")
 
 echo "Module status updated"
 ```

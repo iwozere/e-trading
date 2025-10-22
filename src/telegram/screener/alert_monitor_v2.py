@@ -21,8 +21,8 @@ from src.telegram.screener.alert_logic_evaluator import AlertLogicEvaluator, eva
 from src.telegram.screener.rearm_alert_system import ReArmAlertEvaluator
 
 # Import new notification service client
-from src.notification.client import NotificationServiceClient, NotificationServiceError
-from src.model.notification import NotificationType, NotificationPriority
+from src.notification.service.client import NotificationServiceClient, NotificationServiceError
+from src.notification.model import NotificationType, NotificationPriority
 
 from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger(__name__)

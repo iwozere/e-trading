@@ -15,7 +15,13 @@ import random
 from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
 from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PASSWORD
 from src.telegram.screener.notifications import (
-    process_report_command, process_help_command, process_info_command, process_register_command, process_verify_command, process_language_command, process_admin_command, process_alerts_command, process_schedules_command, process_screener_command, process_feedback_command, process_feature_command, process_request_approval_command, process_unknown_command
+    process_report_command, process_help_command, process_screener_command, process_unknown_command
+)
+from src.telegram.screener.immediate_handlers import (
+    process_info_command_immediate, process_register_command_immediate, process_verify_command_immediate,
+    process_language_command_immediate, process_admin_command_immediate, process_alerts_command_immediate,
+    process_schedules_command_immediate, process_feedback_command_immediate, process_feature_command_immediate,
+    process_request_approval_command_immediate, process_unknown_command_immediate
 )
 from src.telegram.screener import business_logic
 
@@ -30,12 +36,69 @@ _logger = setup_logger("telegram_screener_bot")
 # Global variables
 notification_client = None
 
+# ARCHITECTURE NOTE:
+# Interactive commands (info, register, verify, admin, alerts, schedules, feedback, feature, etc.)
+# are now processed immediately without using the notification service queue.
+# Only heavy processing commands (report, screener) and background notifications
+# (email verification, admin broadcasts, scheduled reports) use the notification service.
+
 # HTTP API support
 from aiohttp import web
 import json
 from typing import Dict, Any, Optional
 
 # Service initialization and health check functions
+
+async def send_email_notification_if_requested(message: Message, response_text: str, command: str):
+    """
+    Send email notification if -email flag is present in the command.
+
+    Args:
+        message: Telegram message object
+        response_text: The response text to send via email
+        command: The command name for logging
+    """
+    try:
+        # Parse the command to check for -email flag
+        from src.telegram.command_parser import parse_command
+        parsed = parse_command(message.text)
+
+        if parsed.args.get("email", False):
+            # Get user information for email
+            telegram_svc, _ = get_service_instances()
+            if telegram_svc:
+                user_status = telegram_svc.get_user_status(str(message.from_user.id))
+                if user_status and user_status.get('email'):
+                    user_email = user_status['email']
+
+                    # Send email notification via notification service
+                    if notification_client:
+                        await notification_client.send_notification(
+                            notification_type="telegram_command_response",
+                            title=f"Telegram Bot - {command.upper()} Command Response",
+                            message=response_text,
+                            priority="normal",
+                            channels=["email"],
+                            email_receiver=user_email,
+                            recipient_id=str(message.from_user.id),
+                            data={
+                                "command": command,
+                                "telegram_user_id": str(message.from_user.id),
+                                "source": "telegram_bot"
+                            }
+                        )
+                        _logger.info("Email notification sent for %s command to user %s", command, message.from_user.id)
+                    else:
+                        _logger.warning("Notification client not available for email notification")
+                else:
+                    # Send Telegram message about missing email
+                    await message.answer("📧 Email notification requested but no verified email found. Use /register to set up email notifications.")
+            else:
+                _logger.warning("Telegram service not available for email notification")
+
+    except Exception as e:
+        _logger.error("Error sending email notification for %s command: %s", command, e)
+        # Don't fail the main command if email fails
 async def initialize_services() -> bool:
     """
     Initialize telegram_service and indicator_service instances.
@@ -426,6 +489,8 @@ api_app.router.add_get('/api/test', lambda r: web.json_response({'status': 'ok',
 
 HELP_TEXT = (
     "Welcome to the Telegram Screener Bot!\n\n"
+    "📧 Email Notifications: Add -email to any command to receive the response via email as well as Telegram.\n"
+    "Example: /help -email, /info -email, /alerts -email\n\n"
     "Basic Commands:\n"
     "/start - Show welcome message\n"
     "/help - Show this help message\n"
@@ -575,7 +640,7 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
             user_email = None
 
         # Execute the command - command handlers will use service instances through business logic
-        result = await command_func(message, *args, **kwargs)
+        result = await command_func(*args, **kwargs)
 
         # Calculate response time
         response_time_ms = int((time.time() - start_time) * 1000)
@@ -647,24 +712,16 @@ async def audit_command_wrapper(message: Message, command_func, *args, **kwargs)
 async def cmd_start(message: Message):
     _logger.info("Received /start command from user %s", message.from_user.id)
     try:
-        # Check if notification service is available
-        if notification_client:
-            try:
-                health = await notification_client.get_health_status()
-                if health.get('status') == 'unhealthy':
-                    raise Exception("Notification service is unhealthy")
-                # Service is healthy, use normal processing
-                await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_client)
-            except Exception as service_error:
-                _logger.warning("Notification service unavailable for /start command: %s", service_error)
-                # Fallback: send welcome message directly
-                welcome_text = f"Welcome to the Alkotrader Bot! 🤖\n\n{HELP_TEXT}"
-                await message.answer(welcome_text)
-        else:
-            # No notification service, send welcome message directly
-            _logger.info("No notification service available, sending welcome message directly")
-            welcome_text = f"Welcome to the Alkotrader Bot! 🤖\n\n{HELP_TEXT}"
-            await message.answer(welcome_text)
+        # Handle /start command immediately without notification service
+        welcome_text = f"Welcome to the Alkotrader Bot! 🤖\n\n{HELP_TEXT}"
+        await message.answer(welcome_text)
+
+        # Audit the command for logging purposes
+        async def start_command_func(*args, **kwargs):
+            return {"status": "ok", "message": "Start command processed"}
+
+        await audit_command_wrapper(message, start_command_func, str(message.from_user.id))
+
         _logger.info("Successfully processed /start command for user %s", message.from_user.id)
     except Exception as e:
         _logger.exception("Error processing /start command for user %s", message.from_user.id)
@@ -674,23 +731,18 @@ async def cmd_start(message: Message):
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
     try:
-        # Check if notification service is available
-        if notification_client:
-            # Try to get health status to verify service is working
-            try:
-                health = await notification_client.get_health_status()
-                if health.get('status') == 'unhealthy':
-                    raise Exception("Notification service is unhealthy")
-                # Service is healthy, use normal processing
-                await audit_command_wrapper(message, process_help_command, str(message.from_user.id), message.text, notification_client)
-            except Exception as service_error:
-                _logger.warning("Notification service unavailable for /help command: %s", service_error)
-                # Fallback: send help text directly
-                await message.answer(HELP_TEXT)
-        else:
-            # No notification service, send help text directly
-            _logger.info("No notification service available, sending help text directly")
-            await message.answer(HELP_TEXT)
+        # Handle /help command immediately without notification service
+        await message.answer(HELP_TEXT)
+
+        # Send email notification if -email flag is present
+        await send_email_notification_if_requested(message, HELP_TEXT, "help")
+
+        # Audit the command for logging purposes
+        async def help_command_func(*args, **kwargs):
+            return {"status": "ok", "message": "Help command processed"}
+
+        await audit_command_wrapper(message, help_command_func, str(message.from_user.id))
+
     except Exception as e:
         _logger.exception("Error processing /help command for user %s", message.from_user.id)
         # Final fallback: send built-in help text directly
@@ -701,62 +753,64 @@ async def cmd_help(message: Message):
 
 @dp.message(Command("info"))
 async def cmd_info(message: Message):
-    await audit_command_wrapper(message, process_info_command, str(message.from_user.id), notification_client)
+    await audit_command_wrapper(message, process_info_command_immediate, str(message.from_user.id), message)
 
 @dp.message(Command("register"))
 async def cmd_register(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_register_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_register_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(Command("verify"))
 async def cmd_verify(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_verify_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_verify_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(Command("request_approval"))
 async def cmd_request_approval(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_request_approval_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_request_approval_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(Command("language"))
 async def cmd_language(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_language_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_language_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(Command("admin"))
 async def cmd_admin(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_admin_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_admin_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(Command("report"))
 async def cmd_report(message: Message):
     args = message.text.split()
+    # Report command still uses notification service for heavy processing and email support
     await audit_command_wrapper(message, process_report_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("alerts"))
 async def cmd_alerts(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_alerts_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_alerts_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(Command("schedules"))
 async def cmd_schedules(message: Message):
     args = message.text.split()
-    await audit_command_wrapper(message, process_schedules_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_schedules_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(Command("screener"))
 async def cmd_screener(message: Message):
     args = message.text.split()
+    # Screener command still uses notification service for heavy processing and email support
     await audit_command_wrapper(message, process_screener_command, str(message.from_user.id), args, notification_client)
 
 @dp.message(Command("feedback"))
 async def cmd_feedback(message: Message):
     args = message.text.split(maxsplit=1)
-    await audit_command_wrapper(message, process_feedback_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_feedback_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(Command("feature"))
 async def cmd_feature(message: Message):
     args = message.text.split(maxsplit=1)
-    await audit_command_wrapper(message, process_feature_command, str(message.from_user.id), args, notification_client)
+    await audit_command_wrapper(message, process_feature_command_immediate, str(message.from_user.id), args, message)
 
 @dp.message(lambda message: message.text and message.text.startswith("/"))
 async def unknown_command(message: Message):
@@ -796,7 +850,7 @@ async def unknown_command(message: Message):
 
     # If not a case variation, process as unknown command
     try:
-        await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_client, HELP_TEXT)
+        await audit_command_wrapper(message, process_unknown_command_immediate, str(message.from_user.id), message, HELP_TEXT)
     except Exception as e:
         _logger.exception("Error processing unknown command for user %s", message.from_user.id)
         await message.answer("Sorry, there was an error processing your command. Please try again.")
@@ -809,24 +863,16 @@ async def all_messages(message: Message):
     # For non-command messages, provide help
     if message.text and not message.text.startswith("/"):
         try:
-            # Check if notification service is available
-            if notification_client:
-                try:
-                    health = await notification_client.get_health_status()
-                    if health.get('status') == 'unhealthy':
-                        raise Exception("Notification service is unhealthy")
-                    # Service is healthy, use normal processing
-                    await audit_command_wrapper(message, process_unknown_command, str(message.from_user.id), notification_client, HELP_TEXT)
-                except Exception as service_error:
-                    _logger.warning("Notification service unavailable for non-command message: %s", service_error)
-                    # Fallback: send help message directly
-                    help_message = f"❓ I don't understand '{message.text}'\n\nPlease use /help to see all available commands."
-                    await message.answer(help_message)
-            else:
-                # No notification service, send help message directly
-                _logger.info("No notification service available, sending help message directly for non-command")
-                help_message = f"❓ I don't understand '{message.text}'\n\nPlease use /help to see all available commands."
-                await message.answer(help_message)
+            # Handle non-command messages immediately
+            help_message = f"❓ I don't understand '{message.text}'\n\nPlease use /help to see all available commands."
+            await message.answer(help_message)
+
+            # Audit the interaction for logging purposes
+            async def non_command_func(*args, **kwargs):
+                return {"status": "ok", "message": "Non-command message processed"}
+
+            await audit_command_wrapper(message, non_command_func, str(message.from_user.id))
+
         except Exception as e:
             _logger.exception("Error processing non-command message for user %s", message.from_user.id)
             await message.answer("Please use /help to see available commands.")

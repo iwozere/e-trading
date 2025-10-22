@@ -26,8 +26,8 @@ from typing import Any, Dict, List, Optional
 
 from src.trading.services.trading_bot_service import trading_bot_service
 from src.trading.risk.controller import RiskController
-from src.notification.client import NotificationServiceClient, NotificationServiceError
-from src.model.notification import NotificationType, NotificationPriority
+from src.notification.service.client import NotificationServiceClient, NotificationServiceError
+from src.notification.model import NotificationType, NotificationPriority
 from src.trading.broker.base_broker import PositionNotificationManager
 from config.donotshare.donotshare import (TELEGRAM_BOT_TOKEN, SMTP_USER)
 
