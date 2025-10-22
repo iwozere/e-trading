@@ -58,7 +58,7 @@ class TestTokenManagement:
         assert "exp" in payload
 
         # Verify expiry is approximately correct (within 1 minute)
-        exp_time = datetime.utcfromtimestamp(payload["exp"])
+        exp_time = datetime.fromtimestamp(payload["exp"], timezone.utc)
         expected_exp = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 60  # Within 1 minute
@@ -70,7 +70,7 @@ class TestTokenManagement:
         token = create_access_token(data, custom_expiry)
 
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        exp_time = datetime.utcfromtimestamp(payload["exp"])
+        exp_time = datetime.fromtimestamp(payload["exp"], timezone.utc)
         expected_exp = datetime.now(timezone.utc) + custom_expiry
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 60  # Within 1 minute
@@ -92,7 +92,7 @@ class TestTokenManagement:
         assert "exp" in payload
 
         # Verify expiry is approximately correct
-        exp_time = datetime.utcfromtimestamp(payload["exp"])
+        exp_time = datetime.fromtimestamp(payload["exp"], timezone.utc)
         expected_exp = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         time_diff = abs((exp_time - expected_exp).total_seconds())
         assert time_diff < 3600  # Within 1 hour

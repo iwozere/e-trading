@@ -8,7 +8,7 @@ Usage:
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
 # Removed circular import - fundamentals should not depend on indicators service
-from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
+from src.indicators.models import IndicatorCalculationRequest, IndicatorCategory
 from src.data.data_manager import get_data_manager
 
 PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']

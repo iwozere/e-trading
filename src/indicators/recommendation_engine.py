@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Any, Optional
 from dataclasses import dataclass
 
-from src.model.indicators import (
+from src.indicators.models import (
     Recommendation, RecommendationType, IndicatorCategory,
     IndicatorSet, CompositeRecommendation
 )

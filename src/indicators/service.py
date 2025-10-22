@@ -23,7 +23,7 @@ from src.indicators.models import (
     IndicatorBatchConfig, IndicatorResultSet,
     IndicatorSpec, IndicatorValue, TickerIndicatorsRequest
 )
-from src.model.indicators import (
+from src.indicators.models import (
     IndicatorResult, IndicatorSet, IndicatorCategory,
     IndicatorCalculationRequest, BatchIndicatorRequest, PerformanceMetrics
 )

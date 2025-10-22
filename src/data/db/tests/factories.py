@@ -22,7 +22,7 @@ from src.data.db.models.model_telegram import (
 )
 from src.data.db.models.model_trading import Position  # (above) or your own path
 from src.data.db.models.model_trading import BotInstance
-from src.data.db.models.model_jobs import Schedule, ScheduleRun, Run, JobType, RunStatus
+from src.data.db.models.model_jobs import Schedule, ScheduleRun, JobType, RunStatus
 
 UTC = timezone.utc
 

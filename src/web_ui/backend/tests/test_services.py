@@ -41,8 +41,11 @@ class TestWebUIAppService:
         mock_session = Mock()
 
         mock_get_db_service.return_value = mock_db_service
-        mock_db_service.uow.return_value.__enter__.return_value = mock_uow
-        mock_db_service.uow.return_value.__exit__.return_value = None
+        # Mock the context manager properly
+        mock_context_manager = MagicMock()
+        mock_context_manager.__enter__.return_value = mock_uow
+        mock_context_manager.__exit__.return_value = None
+        mock_db_service.uow.return_value = mock_context_manager
         mock_uow.session = mock_session
 
         # Test the generator
@@ -83,7 +86,11 @@ class TestWebUIAppService:
         mock_session = Mock()
 
         mock_get_db_service.return_value = mock_db_service
-        mock_db_service.uow.return_value.__enter__.return_value = mock_uow
+        # Mock the context manager properly
+        mock_context_manager = MagicMock()
+        mock_context_manager.__enter__.return_value = mock_uow
+        mock_context_manager.__exit__.return_value = None
+        mock_db_service.uow.return_value = mock_context_manager
         mock_uow.s = mock_session
 
         self.service.create_default_users()
@@ -107,7 +114,11 @@ class TestWebUIAppService:
         mock_user.to_dict.return_value = {"id": 1, "email": "test@example.com"}
 
         mock_get_db_service.return_value = mock_db_service
-        mock_db_service.uow.return_value.__enter__.return_value = mock_uow
+        # Mock the context manager properly
+        mock_context_manager = MagicMock()
+        mock_context_manager.__enter__.return_value = mock_uow
+        mock_context_manager.__exit__.return_value = None
+        mock_db_service.uow.return_value = mock_context_manager
         mock_uow.s = mock_session
         mock_session.query.return_value.filter.return_value.first.return_value = mock_user
 
@@ -126,7 +137,11 @@ class TestWebUIAppService:
         mock_session = Mock()
 
         mock_get_db_service.return_value = mock_db_service
-        mock_db_service.uow.return_value.__enter__.return_value = mock_uow
+        # Mock the context manager properly
+        mock_context_manager = MagicMock()
+        mock_context_manager.__enter__.return_value = mock_uow
+        mock_context_manager.__exit__.return_value = None
+        mock_db_service.uow.return_value = mock_context_manager
         mock_uow.s = mock_session
         mock_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -337,6 +352,8 @@ class TestStrategyManagementService:
         """Set up test dependencies."""
         self.mock_strategy_manager = Mock()
         self.service = StrategyManagementService(self.mock_strategy_manager)
+        # Force the service to be available for testing
+        self.service.is_available = True
 
     def test_init_with_none_manager(self):
         """Test initialization with None strategy manager."""
@@ -349,12 +366,12 @@ class TestStrategyManagementService:
             {"id": "strategy-1", "status": "running"},
             {"id": "strategy-2", "status": "stopped"}
         ]
-        self.mock_strategy_manager.get_all_strategies_status.return_value = mock_strategies
+        self.mock_strategy_manager.get_all_status.return_value = mock_strategies
 
         result = self.service.get_all_strategies_status()
 
         assert result == mock_strategies
-        self.mock_strategy_manager.get_all_strategies_status.assert_called_once()
+        self.mock_strategy_manager.get_all_status.assert_called_once()
 
     def test_get_all_strategies_status_without_manager(self):
         """Test getting all strategies status without manager."""
@@ -364,18 +381,38 @@ class TestStrategyManagementService:
 
         assert result == []
 
-    async def test_create_strategy_success(self):
+    @pytest.mark.asyncio
+    @patch('src.web_ui.backend.services.strategy_service.StrategyInstance')
+    async def test_create_strategy_success(self, mock_strategy_instance):
         """Test successful strategy creation."""
-        config = {"id": "test-strategy", "name": "Test Strategy"}
-        expected_result = {"message": "Strategy created", "strategy_id": "test-strategy"}
+        config = {
+            "id": "test-strategy",
+            "name": "Test Strategy",
+            "symbol": "BTCUSDT",
+            "broker": {"type": "paper", "trading_mode": "paper"},
+            "strategy": {"type": "sma"}
+        }
+        expected_result = {
+            "strategy_id": "test-strategy",
+            "name": "Test Strategy",
+            "status": "created",
+            "message": "Strategy created successfully"
+        }
 
-        self.mock_strategy_manager.create_strategy.return_value = expected_result
+        # Mock strategy_instances as an empty dict to simulate no existing strategies
+        self.mock_strategy_manager.strategy_instances = {}
+
+        # Mock StrategyInstance creation
+        mock_instance = Mock()
+        mock_strategy_instance.return_value = mock_instance
 
         result = await self.service.create_strategy(config)
 
         assert result == expected_result
-        self.mock_strategy_manager.create_strategy.assert_called_once_with(config)
+        # Verify that the strategy was added to the manager's instances
+        assert "test-strategy" in self.mock_strategy_manager.strategy_instances
 
+    @pytest.mark.asyncio
     async def test_create_strategy_without_manager(self):
         """Test strategy creation without manager."""
         service = StrategyManagementService(None)

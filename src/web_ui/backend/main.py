@@ -224,7 +224,7 @@ async def create_strategy(
     """Create a new strategy."""
     try:
         # Convert Pydantic model to dict
-        config_dict = strategy_config.dict()
+        config_dict = strategy_config.model_dump()
 
         # Create strategy using service
         result = await strategy_service.create_strategy(config_dict)
@@ -267,7 +267,7 @@ async def update_strategy(
     """Update an existing strategy."""
     try:
         # Convert Pydantic model to dict
-        config_dict = strategy_config.dict()
+        config_dict = strategy_config.model_dump()
 
         # Update strategy using service
         result = await strategy_service.update_strategy(strategy_id, config_dict)

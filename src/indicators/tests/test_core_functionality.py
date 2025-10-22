@@ -31,7 +31,7 @@ from src.indicators.models import (
     IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest,
     IndicatorResultSet, IndicatorValue
 )
-from src.model.indicators import (
+from src.indicators.models import (
     IndicatorResult, IndicatorSet, IndicatorCategory,
     Recommendation, RecommendationType, CompositeRecommendation
 )

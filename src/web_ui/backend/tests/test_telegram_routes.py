@@ -54,8 +54,8 @@ class TestTelegramUserManagement:
         """Clean up test dependencies."""
         app.dependency_overrides.clear()
 
-    @patch('src.web_ui.backend.telegram_routes.db')
-    def test_get_telegram_users_all(self, mock_db):
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
+    def test_get_telegram_users_all(self, mock_service):
         """Test getting all Telegram users."""
         # Mock authentication by overriding the dependency
         app.dependency_overrides[require_admin] = lambda: mock_admin_user
@@ -83,7 +83,7 @@ class TestTelegramUserManagement:
                 'max_schedules': 5
             }
         ]
-        mock_db.list_users.return_value = mock_users
+        mock_service.get_users_list.return_value = mock_users
 
         # Make request
         response = client.get("/api/telegram/users")
@@ -91,16 +91,16 @@ class TestTelegramUserManagement:
         # Assertions
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
-        assert data[0]['telegram_user_id'] == '123456789'
-        assert data[0]['verified'] is True
-        assert data[1]['verified'] is False
-        mock_db.list_users.assert_called_once()
+        assert len(data['data']) == 2
+        assert data['data'][0]['telegram_user_id'] == '123456789'
+        assert data['data'][0]['verified'] is True
+        assert data['data'][1]['verified'] is False
+        mock_service.get_users_list.assert_called_once()
 
 
 
-    @patch('src.web_ui.backend.telegram_routes.db')
-    def test_get_telegram_users_verified_filter(self, mock_db):
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
+    def test_get_telegram_users_verified_filter(self, mock_service):
         """Test getting verified Telegram users only."""
         # Mock authentication
         app.dependency_overrides[require_admin] = lambda: mock_admin_user
@@ -128,7 +128,7 @@ class TestTelegramUserManagement:
                 'max_schedules': 5
             }
         ]
-        mock_db.list_users.return_value = mock_users
+        mock_service.get_users_list.return_value = mock_users
 
         # Make request with filter
         response = client.get("/api/telegram/users?filter=verified")
@@ -140,14 +140,14 @@ class TestTelegramUserManagement:
         assert data[0]['telegram_user_id'] == '123456789'
         assert data[0]['verified'] is True
 
-    @patch('src.web_ui.backend.telegram_routes.db')
-    def test_verify_telegram_user_success(self, mock_db):
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
+    def test_verify_telegram_user_success(self, mock_service):
         """Test successful user verification."""
         # Mock authentication
         app.dependency_overrides[require_admin] = lambda: mock_admin_user
 
-        # Mock database response
-        mock_db.update_user_verification.return_value = None
+        # Mock service response
+        mock_service.verify_user.return_value = {"message": "User verified successfully"}
 
         # Make request
         response = client.post("/api/telegram/users/123456789/verify")
@@ -156,18 +156,17 @@ class TestTelegramUserManagement:
         assert response.status_code == 200
         data = response.json()
         assert "verified successfully" in data['message']
-        mock_db.update_user_verification.assert_called_once_with('123456789', True)
+        mock_service.verify_user.assert_called_once_with('123456789')
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.require_admin')
-    def test_approve_telegram_user_success(self, mock_auth, mock_db):
+    def test_approve_telegram_user_success(self, mock_auth, mock_service):
         """Test successful user approval."""
         # Mock authentication
         mock_auth.return_value = mock_admin_user
 
-        # Mock database responses
-        mock_db.get_user_status.return_value = {'verified': True, 'approved': False}
-        mock_db.approve_user.return_value = True
+        # Mock service responses
+        mock_service.approve_user.return_value = {"message": "User approved successfully"}
 
         # Make request
         response = client.post("/api/telegram/users/123456789/approve")
@@ -176,18 +175,18 @@ class TestTelegramUserManagement:
         assert response.status_code == 200
         data = response.json()
         assert "approved successfully" in data['message']
-        mock_db.get_user_status.assert_called_once_with('123456789')
-        mock_db.approve_user.assert_called_once_with('123456789')
+        mock_service.approve_user.assert_called_once_with('123456789')
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.require_admin')
-    def test_approve_telegram_user_not_verified(self, mock_auth, mock_db):
+    def test_approve_telegram_user_not_verified(self, mock_auth, mock_service):
         """Test user approval when user is not verified."""
         # Mock authentication
         mock_auth.return_value = mock_admin_user
 
-        # Mock database response - user not verified
-        mock_db.get_user_status.return_value = {'verified': False, 'approved': False}
+        # Mock service response - user not verified (should raise HTTPException)
+        from fastapi import HTTPException
+        mock_service.approve_user.side_effect = HTTPException(status_code=400, detail="User must be verified first")
 
         # Make request
         response = client.post("/api/telegram/users/123456789/approve")
@@ -196,17 +195,17 @@ class TestTelegramUserManagement:
         assert response.status_code == 400
         data = response.json()
         assert "must be verified" in data['detail']
-        mock_db.approve_user.assert_not_called()
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.require_admin')
-    def test_approve_telegram_user_not_found(self, mock_auth, mock_db):
+    def test_approve_telegram_user_not_found(self, mock_auth, mock_service):
         """Test user approval when user doesn't exist."""
         # Mock authentication
         mock_auth.return_value = mock_admin_user
 
-        # Mock database response - user not found
-        mock_db.get_user_status.return_value = None
+        # Mock service response - user not found (should raise HTTPException)
+        from fastapi import HTTPException
+        mock_service.approve_user.side_effect = HTTPException(status_code=404, detail="User not found")
 
         # Make request
         response = client.post("/api/telegram/users/999999999/approve")
@@ -216,17 +215,15 @@ class TestTelegramUserManagement:
         data = response.json()
         assert "not found" in data['detail']
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.require_admin')
-    def test_reset_telegram_user_email_success(self, mock_auth, mock_db):
+    def test_reset_telegram_user_email_success(self, mock_auth, mock_service):
         """Test successful email reset."""
         # Mock authentication
         mock_auth.return_value = mock_admin_user
 
         # Mock database responses
-        mock_db.get_user_status.return_value = {'verified': True, 'approved': True}
-        mock_db.update_user_verification.return_value = None
-        mock_db.reject_user.return_value = True
+        mock_service.reset_user_email.return_value = {"message": "Email reset successfully"}
 
         # Make request
         response = client.post("/api/telegram/users/123456789/reset-email")
@@ -235,12 +232,11 @@ class TestTelegramUserManagement:
         assert response.status_code == 200
         data = response.json()
         assert "Email reset" in data['message']
-        mock_db.update_user_verification.assert_called_once_with('123456789', False)
-        mock_db.reject_user.assert_called_once_with('123456789')
+        mock_service.reset_user_email.assert_called_once_with('123456789')
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.get_current_user')
-    def test_get_telegram_user_stats(self, mock_auth, mock_db):
+    def test_get_telegram_user_stats(self, mock_auth, mock_service):
         """Test getting user statistics."""
         # Mock authentication
         mock_auth.return_value = mock_regular_user
@@ -252,7 +248,13 @@ class TestTelegramUserManagement:
             {'verified': False, 'approved': False, 'is_admin': False},
             {'verified': True, 'approved': True, 'is_admin': True}
         ]
-        mock_db.list_users.return_value = mock_users
+        mock_service.get_user_stats.return_value = {
+            "total_users": 3,
+            "verified_users": 2,
+            "approved_users": 1,
+            "pending_approvals": 1,
+            "admin_users": 1
+        }
 
         # Make request
         response = client.get("/api/telegram/stats/users")
@@ -270,9 +272,9 @@ class TestTelegramUserManagement:
 class TestTelegramAlertManagement:
     """Test cases for Telegram alert management endpoints."""
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.get_current_user')
-    def test_get_telegram_alerts_all(self, mock_auth, mock_db):
+    def test_get_telegram_alerts_all(self, mock_auth, mock_service):
         """Test getting all Telegram alerts."""
         # Mock authentication
         mock_auth.return_value = mock_regular_user
@@ -290,7 +292,7 @@ class TestTelegramAlertManagement:
                 'created': '2024-01-01T00:00:00Z'
             }
         ]
-        mock_db.get_alerts_by_type.return_value = mock_alerts
+        mock_service.get_alerts_by_type.return_value = mock_alerts
 
         # Make request
         response = client.get("/api/telegram/alerts")
@@ -303,16 +305,16 @@ class TestTelegramAlertManagement:
         assert data[0]['ticker'] == 'BTCUSDT'
         assert data[0]['active'] is True
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.require_admin')
-    def test_toggle_telegram_alert_success(self, mock_auth, mock_db):
+    def test_toggle_telegram_alert_success(self, mock_auth, mock_service):
         """Test successful alert toggle."""
         # Mock authentication
         mock_auth.return_value = mock_admin_user
 
         # Mock database responses
-        mock_db.get_alert.return_value = {'id': 1, 'active': True}
-        mock_db.update_alert.return_value = True
+        mock_service.get_alert.return_value = {'id': 1, 'active': True}
+        mock_service.update_alert.return_value = True
 
         # Make request
         response = client.post("/api/telegram/alerts/1/toggle")
@@ -321,18 +323,18 @@ class TestTelegramAlertManagement:
         assert response.status_code == 200
         data = response.json()
         assert "deactivated successfully" in data['message']
-        mock_db.update_alert.assert_called_once_with(1, active=False)
+        mock_service.update_alert.assert_called_once_with(1, active=False)
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.require_admin')
-    def test_delete_telegram_alert_success(self, mock_auth, mock_db):
+    def test_delete_telegram_alert_success(self, mock_auth, mock_service):
         """Test successful alert deletion."""
         # Mock authentication
         mock_auth.return_value = mock_admin_user
 
         # Mock database responses
-        mock_db.get_alert.return_value = {'id': 1, 'active': True}
-        mock_db.delete_alert.return_value = True
+        mock_service.get_alert.return_value = {'id': 1, 'active': True}
+        mock_service.delete_alert.return_value = True
 
         # Make request
         response = client.delete("/api/telegram/alerts/1")
@@ -341,17 +343,17 @@ class TestTelegramAlertManagement:
         assert response.status_code == 200
         data = response.json()
         assert "deleted successfully" in data['message']
-        mock_db.delete_alert.assert_called_once_with(1)
+        mock_service.delete_alert.assert_called_once_with(1)
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.require_admin')
-    def test_delete_telegram_alert_not_found(self, mock_auth, mock_db):
+    def test_delete_telegram_alert_not_found(self, mock_auth, mock_service):
         """Test alert deletion when alert doesn't exist."""
         # Mock authentication
         mock_auth.return_value = mock_admin_user
 
         # Mock database response - alert not found
-        mock_db.get_alert.return_value = None
+        mock_service.get_alert.return_value = None
 
         # Make request
         response = client.delete("/api/telegram/alerts/999")
@@ -360,15 +362,15 @@ class TestTelegramAlertManagement:
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data['detail']
-        mock_db.delete_alert.assert_not_called()
+        mock_service.delete_alert.assert_not_called()
 
 
 class TestTelegramBroadcast:
     """Test cases for Telegram broadcast endpoints."""
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.require_admin')
-    def test_send_telegram_broadcast_success(self, mock_auth, mock_db):
+    def test_send_telegram_broadcast_success(self, mock_auth, mock_service):
         """Test successful broadcast sending."""
         # Mock authentication
         mock_auth.return_value = mock_admin_user
@@ -379,7 +381,7 @@ class TestTelegramBroadcast:
             {'approved': True},
             {'approved': False}  # This user won't receive the broadcast
         ]
-        mock_db.list_users.return_value = mock_users
+        mock_service.list_users.return_value = mock_users
 
         # Make request
         response = client.post(
@@ -398,9 +400,9 @@ class TestTelegramBroadcast:
 class TestTelegramAudit:
     """Test cases for Telegram audit endpoints."""
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.get_current_user')
-    def test_get_telegram_audit_logs(self, mock_auth, mock_db):
+    def test_get_telegram_audit_logs(self, mock_auth, mock_service):
         """Test getting audit logs."""
         # Mock authentication
         mock_auth.return_value = mock_regular_user
@@ -415,7 +417,7 @@ class TestTelegramAudit:
                 'created': '2024-01-01T00:00:00Z'
             }
         ]
-        mock_db.get_all_command_audit.return_value = mock_logs
+        mock_service.get_all_command_audit.return_value = mock_logs
 
         # Make request
         response = client.get("/api/telegram/audit")
@@ -427,9 +429,9 @@ class TestTelegramAudit:
         assert data[0]['command'] == '/start'
         assert data[0]['success'] is True
 
-    @patch('src.web_ui.backend.telegram_routes.db')
+    @patch('src.web_ui.backend.telegram_routes.telegram_app_service')
     @patch('src.web_ui.backend.telegram_routes.get_current_user')
-    def test_get_user_audit_logs(self, mock_auth, mock_db):
+    def test_get_user_audit_logs(self, mock_auth, mock_service):
         """Test getting audit logs for specific user."""
         # Mock authentication
         mock_auth.return_value = mock_regular_user
@@ -443,7 +445,7 @@ class TestTelegramAudit:
                 'created': '2024-01-01T00:00:00Z'
             }
         ]
-        mock_db.get_user_command_history.return_value = mock_logs
+        mock_service.get_user_command_history.return_value = mock_logs
 
         # Make request
         response = client.get("/api/telegram/users/123456789/audit")
@@ -453,7 +455,7 @@ class TestTelegramAudit:
         data = response.json()
         assert len(data) == 1
         assert data[0]['command'] == '/start'
-        mock_db.get_user_command_history.assert_called_once_with('123456789', 50)
+        mock_service.get_user_command_history.assert_called_once_with('123456789', 50)
 
 
 if __name__ == "__main__":

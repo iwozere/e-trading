@@ -17,7 +17,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.data.db.models.model_users import User, AuthIdentity, VerificationCode
 from src.data.db.models.model_telegram import TelegramFeedback
-from src.data.db.models.model_jobs import Run, Schedule
+from src.data.db.models.model_jobs import Schedule, ScheduleRun
 from src.data.db.tests.factories import (
     make_user, add_telegram_identity, make_verification_code,
     make_feedback, make_run, make_job_schedule, RNG

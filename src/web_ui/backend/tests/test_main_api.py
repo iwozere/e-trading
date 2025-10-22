@@ -12,7 +12,7 @@ Tests for the core FastAPI application endpoints including:
 """
 
 import pytest
-from unittest.mock import patch, Mock, MagicMock
+from unittest.mock import patch, Mock, MagicMock, AsyncMock
 from fastapi import HTTPException, status
 from pathlib import Path
 import sys
@@ -111,10 +111,11 @@ class TestStrategyManagementEndpoints:
     @patch('src.web_ui.backend.main.strategy_service')
     def test_create_strategy_success(self, mock_service, authenticated_client_trader, sample_strategy_config):
         """Test successful strategy creation."""
-        mock_service.create_strategy.return_value = {
+        from unittest.mock import AsyncMock
+        mock_service.create_strategy = AsyncMock(return_value={
             "message": "Strategy created successfully",
             "strategy_id": "test-strategy"
-        }
+        })
 
         response = authenticated_client_trader.post("/api/strategies", json=sample_strategy_config)
 
@@ -180,10 +181,10 @@ class TestStrategyManagementEndpoints:
     @patch('src.web_ui.backend.main.strategy_service')
     def test_update_strategy_success(self, mock_service, authenticated_client_trader, sample_strategy_config):
         """Test successful strategy update."""
-        mock_service.update_strategy.return_value = {
+        mock_service.update_strategy = AsyncMock(return_value={
             "message": "Strategy updated successfully",
             "strategy_id": "test-strategy"
-        }
+        })
 
         response = authenticated_client_trader.put("/api/strategies/test-strategy", json=sample_strategy_config)
 
@@ -206,10 +207,10 @@ class TestStrategyManagementEndpoints:
     @patch('src.web_ui.backend.main.strategy_service')
     def test_delete_strategy_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy deletion."""
-        mock_service.delete_strategy.return_value = {
+        mock_service.delete_strategy = AsyncMock(return_value={
             "message": "Strategy deleted successfully",
             "strategy_id": "test-strategy"
-        }
+        })
 
         response = authenticated_client_trader.delete("/api/strategies/test-strategy")
 
@@ -236,10 +237,10 @@ class TestStrategyLifecycleEndpoints:
     @patch('src.web_ui.backend.main.strategy_service')
     def test_start_strategy_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy start."""
-        mock_service.start_strategy.return_value = {
+        mock_service.start_strategy = AsyncMock(return_value={
             "message": "Strategy started successfully",
             "strategy_id": "test-strategy"
-        }
+        })
 
         action_data = {"action": "start", "confirm_live_trading": False}
         response = authenticated_client_trader.post("/api/strategies/test-strategy/start", json=action_data)
@@ -276,10 +277,10 @@ class TestStrategyLifecycleEndpoints:
     @patch('src.web_ui.backend.main.strategy_service')
     def test_stop_strategy_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy stop."""
-        mock_service.stop_strategy.return_value = {
+        mock_service.stop_strategy = AsyncMock(return_value={
             "message": "Strategy stopped successfully",
             "strategy_id": "test-strategy"
-        }
+        })
 
         response = authenticated_client_trader.post("/api/strategies/test-strategy/stop")
 
@@ -291,10 +292,10 @@ class TestStrategyLifecycleEndpoints:
     @patch('src.web_ui.backend.main.strategy_service')
     def test_restart_strategy_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy restart."""
-        mock_service.restart_strategy.return_value = {
+        mock_service.restart_strategy = AsyncMock(return_value={
             "message": "Strategy restarted successfully",
             "strategy_id": "test-strategy"
-        }
+        })
 
         action_data = {"action": "restart", "confirm_live_trading": True}
         response = authenticated_client_trader.post("/api/strategies/test-strategy/restart", json=action_data)
@@ -443,7 +444,7 @@ class TestConfigurationEndpoints:
     def test_update_strategy_parameters_success(self, mock_service, authenticated_client_trader):
         """Test successful strategy parameter update."""
         mock_result = {"message": "Parameters updated", "updated_params": {"fast_period": 15}}
-        mock_service.update_strategy_parameters.return_value = mock_result
+        mock_service.update_strategy_parameters = AsyncMock(return_value=mock_result)
 
         parameters = {"fast_period": 15, "slow_period": 25}
         response = authenticated_client_trader.put("/api/strategies/test-strategy/parameters", json=parameters)

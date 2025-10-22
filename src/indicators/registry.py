@@ -25,7 +25,7 @@ class IndicatorMeta:
 # Build indicator metadata dynamically from constants
 def _build_indicator_meta() -> Dict[str, IndicatorMeta]:
     """Build indicator metadata from unified constants."""
-    from src.model.indicators import TECHNICAL_INDICATORS, FUNDAMENTAL_INDICATORS, LEGACY_INDICATOR_NAMES
+    from src.indicators.models import TECHNICAL_INDICATORS, FUNDAMENTAL_INDICATORS, LEGACY_INDICATOR_NAMES
 
     meta = {}
 
@@ -64,7 +64,7 @@ def _build_indicator_meta() -> Dict[str, IndicatorMeta]:
 INDICATOR_META = _build_indicator_meta()
 
 # Import unified naming utilities
-from src.model.indicators import get_canonical_name as get_unified_canonical_name
+from src.indicators.models import get_canonical_name as get_unified_canonical_name
 
 # Legacy name mapping for backward compatibility (built from metadata)
 LEGACY_NAME_MAPPING = {}

@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from sqlalchemy import inspect, BigInteger, Text, String
 from sqlalchemy.dialects.postgresql import JSONB
 
-from src.data.db.models.model_jobs import Schedule, Run, ScheduleRun
+from src.data.db.models.model_jobs import Schedule, ScheduleRun
 
 
 class TestJobModelStructure:

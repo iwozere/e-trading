@@ -1,3 +1,8 @@
+pytest -vv src/web_ui/backend/tests
+
+python -m pytest -vv src/web_ui/backend/tests --tb=short
+
+
 # Run & collect only your DB tests:
 pytest --collect-only -q src/data/db/tests
 

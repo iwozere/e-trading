@@ -6,7 +6,7 @@ for all indicators across the unified indicator system.
 """
 
 from typing import Dict, List, Optional, Set
-from src.model.indicators import (
+from src.indicators.models import (
     TECHNICAL_INDICATORS,
     FUNDAMENTAL_INDICATORS,
     ALL_INDICATORS,

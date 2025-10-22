@@ -4,7 +4,7 @@ from src.common import get_ohlcv, determine_provider, get_ticker_info
 from src.model.telegram_bot import TickerAnalysis
 from src.common.technicals import format_technical_analysis
 from src.indicators.service import get_unified_indicator_service
-from src.model.indicators import IndicatorCalculationRequest, IndicatorCategory
+from src.indicators.models import IndicatorCalculationRequest, IndicatorCategory
 from src.notification.logger import setup_logger
 #from src.backtester.plotter.base_plotter import
 from src.model.telegram_bot import Technicals

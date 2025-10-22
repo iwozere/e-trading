@@ -116,7 +116,7 @@ async def login(
             )
 
         # Create tokens
-        token_data = {"sub": str(user["id"]), "username": user["username"], "role": user["role"]}
+        token_data = {"sub": str(user["id"]), "username": user.get("username") or user.get("email", ""), "role": user["role"]}
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
 
@@ -128,7 +128,7 @@ async def login(
             user_agent=request.headers.get("user-agent")
         )
 
-        _logger.info("User %s logged in successfully", user["username"])
+        _logger.info("User %s logged in successfully", user.get("username") or user.get("email", "unknown"))
 
         return LoginResponse(
             access_token=access_token,
@@ -189,7 +189,7 @@ async def refresh_token(
         }
 
         # Create new tokens
-        token_data = {"sub": str(user["id"]), "username": user["username"], "role": user["role"]}
+        token_data = {"sub": str(user["id"]), "username": user.get("username") or user.get("email", ""), "role": user["role"]}
         access_token = create_access_token(token_data)
         new_refresh_token = create_refresh_token(token_data)
 
