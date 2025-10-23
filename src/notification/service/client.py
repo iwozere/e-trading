@@ -133,20 +133,43 @@ class NotificationServiceClient:
 
     def __init__(self,
                  service_url: str = "http://localhost:8000",
+                 base_url: str = None,  # For backward compatibility
                  timeout: int = 30,
                  max_retries: int = 3):
         """
         Initialize the notification service client.
 
+        NOTE: This client now connects to the Main API Service instead of
+        the notification service directly, as part of the database-centric architecture.
+
         Args:
-            service_url: Base URL of the notification service
+            service_url: Base URL of the Main API service (default: http://localhost:8000)
+            base_url: Deprecated parameter for backward compatibility
             timeout: Request timeout in seconds
             max_retries: Maximum number of retry attempts
         """
+        # Handle backward compatibility
+        if base_url is not None:
+            service_url = base_url
+
+        # Ensure we're using the Main API service, not the notification service
+        if ":8080" in service_url or ":5003" in service_url:
+            _logger.warning(
+                "Redirecting notification service client from %s to Main API at http://localhost:8000 "
+                "(database-centric architecture)", service_url
+            )
+            service_url = "http://localhost:8000"
+
+        # Always ensure we're pointing to the Main API service for database-centric architecture
+        if not service_url.endswith(":8000") and "localhost" in service_url:
+            service_url = "http://localhost:8000"
+
         self.service_url = service_url.rstrip('/')
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.max_retries = max_retries
         self._session: Optional[aiohttp.ClientSession] = None
+
+        _logger.info("NotificationServiceClient initialized for Main API at %s", self.service_url)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create HTTP session."""
@@ -272,7 +295,7 @@ class NotificationServiceClient:
             try:
                 response = await self._make_request(
                     "POST",
-                    "/api/v1/messages",
+                    "/api/notifications",
                     json=message_data,
                     headers={"Content-Type": "application/json"}
                 )
@@ -312,16 +335,17 @@ class NotificationServiceClient:
         """
         try:
             # Import here to avoid circular dependencies and reduce startup time
-            from src.data.db.core.database import session_scope
-            from src.data.db.services.notification_service import NotificationService
-            from src.data.db.repos.repo_notification import NotificationRepository
+            from src.data.db.services.database_service import get_database_service
+            from src.data.db.repos.repo_notification import MessageRepository
             from datetime import datetime, timezone
             import base64
 
-            with session_scope() as session:
-                # Create notification repository and service
-                notification_repo = NotificationRepository(session)
-                notification_service = NotificationService(notification_repo)
+            # Use the database service directly
+            db_service = get_database_service()
+
+            with db_service.uow() as uow:
+                # Create message repository
+                message_repo = MessageRepository(uow.s)
 
                 # Process attachments if present
                 processed_attachments = None
@@ -348,9 +372,12 @@ class NotificationServiceClient:
                             processed_attachments[filename] = file_data
 
                 # Prepare database message data
+                # Convert priority to uppercase to match database constraints
+                priority = message_data["priority"].upper() if message_data["priority"] else "NORMAL"
+
                 db_message_data = {
                     "message_type": message_data["message_type"],
-                    "priority": message_data["priority"],
+                    "priority": priority,
                     "channels": message_data["channels"],
                     "recipient_id": message_data["recipient_id"],
                     "template_name": message_data.get("template_name"),
@@ -369,8 +396,9 @@ class NotificationServiceClient:
                 }
 
                 # Create the message in database
-                message = notification_service.create_message(db_message_data)
+                message = message_repo.create_message(db_message_data)
                 _logger.info("Created notification message %s directly in database via fallback", message.id)
+                # Commit is handled automatically by the UOW context manager
 
         except Exception as e:
             _logger.error("Failed to insert notification directly to database: %s", e)
@@ -474,7 +502,7 @@ class NotificationServiceClient:
             Message details and status, or None if not found
         """
         try:
-            response = await self._make_request("GET", f"/api/v1/messages/{message_id}/status")
+            response = await self._make_request("GET", f"/api/notifications/{message_id}")
             return response
         except ValueError:
             return None
@@ -493,7 +521,7 @@ class NotificationServiceClient:
             List of delivery statuses
         """
         try:
-            response = await self._make_request("GET", f"/api/v1/messages/{message_id}/delivery")
+            response = await self._make_request("GET", f"/api/notifications/{message_id}/delivery")
             return response
         except Exception as e:
             _logger.error("Failed to get delivery status: %s", e)
@@ -535,7 +563,7 @@ class NotificationServiceClient:
             if offset:
                 params["offset"] = offset
 
-            response = await self._make_request("GET", "/api/v1/messages", params=params)
+            response = await self._make_request("GET", "/api/notifications", params=params)
             return response
         except Exception as e:
             _logger.error("Failed to list messages: %s", e)
@@ -549,7 +577,7 @@ class NotificationServiceClient:
             Health status information
         """
         try:
-            response = await self._make_request("GET", "/api/v1/health")
+            response = await self._make_request("GET", "/api/notifications/health")
             return response
         except Exception as e:
             _logger.error("Failed to get health status: %s", e)
@@ -563,7 +591,7 @@ class NotificationServiceClient:
             List of channel health statuses
         """
         try:
-            response = await self._make_request("GET", "/api/v1/channels/health")
+            response = await self._make_request("GET", "/api/notifications/channels/health")
             return response
         except Exception as e:
             _logger.error("Failed to get channels health: %s", e)

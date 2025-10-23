@@ -34,7 +34,7 @@ class AlertMonitorV2:
     Updated to use the new notification service client.
     """
 
-    def __init__(self, notification_service_url: str = "http://localhost:8080", telegram_service=None):
+    def __init__(self, notification_service_url: str = "http://localhost:8000", telegram_service=None):
         """
         Initialize the alert monitor.
 
@@ -43,7 +43,7 @@ class AlertMonitorV2:
             telegram_service: Telegram service instance for database operations
         """
         self.notification_client = NotificationServiceClient(
-            base_url=notification_service_url,
+            service_url=notification_service_url,
             timeout=30,
             max_retries=3
         )
@@ -491,7 +491,7 @@ async def main():
     try:
         # Create alert monitor with notification service
         monitor = AlertMonitorV2(
-            notification_service_url="http://localhost:8080",
+            notification_service_url="http://localhost:8000",
             telegram_service=db
         )
         await monitor.start()

@@ -307,39 +307,50 @@ class HealthMonitor:
             )
 
     async def _check_notification_health(self, component: Optional[str] = None) -> HealthCheckResult:
-        """Check notification service health."""
+        """Check notification service health via database (database-centric architecture)."""
         try:
-            # Try to connect to notification service
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    "http://localhost:8080/api/v1/health",
-                    timeout=aiohttp.ClientTimeout(total=5)
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return HealthCheckResult(
-                            system="notification",
-                            component=component,
-                            status=SystemHealthStatus.HEALTHY,
-                            response_time_ms=None,
-                            error_message=None,
-                            metadata=data
-                        )
-                    else:
-                        return HealthCheckResult(
-                            system="notification",
-                            component=component,
-                            status=SystemHealthStatus.DEGRADED,
-                            response_time_ms=None,
-                            error_message=f"HTTP {response.status}"
-                        )
+            # Check notification service health from database instead of HTTP
+            from src.data.db.services.database_service import get_database_service
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            db_service = get_database_service()
+
+            with db_service.uow() as uow:
+                # Initialize health service
+                health_repo = SystemHealthRepository(uow.s)
+                health_service = SystemHealthService(health_repo)
+
+                # Get notification system health from database
+                system_health = health_service.get_system_health("notification", component)
+
+                if system_health:
+                    # Convert database health status to HealthCheckResult
+                    return HealthCheckResult(
+                        system="notification",
+                        component=component,
+                        status=system_health.get('status', SystemHealthStatus.UNKNOWN),
+                        response_time_ms=system_health.get('avg_response_time_ms'),
+                        error_message=system_health.get('error_message'),
+                        metadata=system_health.get('metadata', {})
+                    )
+                else:
+                    # No health record found - service might not be running
+                    return HealthCheckResult(
+                        system="notification",
+                        component=component,
+                        status=SystemHealthStatus.UNKNOWN,
+                        response_time_ms=None,
+                        error_message="No health record found in database"
+                    )
+
         except Exception as e:
             return HealthCheckResult(
                 system="notification",
                 component=component,
                 status=SystemHealthStatus.DOWN,
                 response_time_ms=None,
-                error_message=str(e)
+                error_message=f"Database health check failed: {str(e)}"
             )
 
     async def _check_telegram_bot_health(self, component: Optional[str] = None) -> HealthCheckResult:

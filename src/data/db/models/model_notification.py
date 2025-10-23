@@ -17,6 +17,7 @@ from sqlalchemy.orm import relationship
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from src.data.db.core.base import Base
+from src.data.db.models.model_system_health import SystemHealthStatus
 # Logger will be set up by importing modules as needed
 
 
@@ -66,6 +67,10 @@ class Message(Base):
     max_retries = Column(Integer, nullable=False, default=3)
     last_error = Column(Text, nullable=True)
     processed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Distributed processing lock fields
+    locked_by = Column(String(100), nullable=True, index=True)
+    locked_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # Relationships
     delivery_statuses = relationship("MessageDeliveryStatus", back_populates="message", cascade="all, delete-orphan")
@@ -282,7 +287,7 @@ class ChannelHealthResponse(BaseModel):
     """Pydantic model for channel health API responses."""
     id: int
     channel: str
-    status: ChannelHealthStatus
+    status: SystemHealthStatus
     last_success: Optional[datetime]
     last_failure: Optional[datetime]
     failure_count: int

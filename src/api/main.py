@@ -196,6 +196,60 @@ app.include_router(jobs_router)
 # Include notification management routes
 app.include_router(notification_router)
 
+# Add unified analytics endpoints
+from src.api.services.unified_analytics_service import unified_analytics_service
+
+@app.get("/api/analytics")
+async def get_available_analytics(current_user: User = Depends(get_current_user)):
+    """Get information about available analytics methods."""
+    try:
+        return unified_analytics_service.get_available_analytics()
+    except Exception as e:
+        _logger.error("Error getting available analytics: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to get available analytics")
+
+@app.get("/api/analytics/dashboard")
+async def get_unified_dashboard_data(
+    days: int = 30,
+    current_user: User = Depends(get_current_user)
+):
+    """Get unified dashboard data combining notifications and trading analytics."""
+    try:
+        if days < 1 or days > 365:
+            raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
+
+        dashboard_data = await unified_analytics_service.get_unified_dashboard_data(days=days)
+        return dashboard_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Error getting unified dashboard data: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to get unified dashboard data")
+
+@app.get("/api/analytics/correlation")
+async def get_correlation_analysis(
+    notification_metric: str = "success_rate",
+    trading_metric: str = "win_rate",
+    days: int = 30,
+    current_user: User = Depends(get_current_user)
+):
+    """Analyze correlations between notification and trading metrics."""
+    try:
+        if days < 1 or days > 365:
+            raise HTTPException(status_code=400, detail="Days must be between 1 and 365")
+
+        correlation_data = await unified_analytics_service.get_correlation_analysis(
+            notification_metric=notification_metric,
+            trading_metric=trading_metric,
+            days=days
+        )
+        return correlation_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Error getting correlation analysis: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to get correlation analysis")
+
 # Security
 security = HTTPBearer()
 

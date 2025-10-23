@@ -12,8 +12,8 @@ from sqlalchemy import and_, or_, desc, asc, func, text
 from sqlalchemy.exc import IntegrityError
 
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, ChannelHealth, RateLimit, ChannelConfig,
-    MessagePriority, MessageStatus, DeliveryStatus, ChannelHealthStatus
+    Message, MessageDeliveryStatus, RateLimit, ChannelConfig,
+    MessagePriority, MessageStatus, DeliveryStatus
 )
 from src.notification.logger import setup_logger
 from src.notification.service.database_optimization import (
@@ -241,6 +241,151 @@ class MessageRepository:
 
         _logger.info("Cleaned up %s old messages", deleted_count)
         return deleted_count
+
+    def get_pending_messages_with_lock(
+        self,
+        limit: int = 10,
+        lock_instance_id: str = None
+    ) -> List[Message]:
+        """
+        Get pending messages with distributed locking for database-centric processing.
+
+        This method atomically claims messages for processing by a specific instance,
+        preventing multiple notification service instances from processing the same message.
+
+        Args:
+            limit: Maximum number of messages to claim
+            lock_instance_id: Unique identifier for the processing instance
+
+        Returns:
+            List of Message objects claimed for processing
+        """
+        if not lock_instance_id:
+            raise ValueError("lock_instance_id is required for distributed processing")
+
+        current_time = datetime.now(timezone.utc)
+        stale_lock_threshold = current_time - timedelta(minutes=5)  # Locks older than 5 minutes are stale
+
+        try:
+            # Use raw SQL for atomic message claiming with PostgreSQL-specific features
+            query = text("""
+                UPDATE msg_messages
+                SET locked_by = :lock_instance_id,
+                    locked_at = :current_time
+                WHERE id IN (
+                    SELECT id FROM msg_messages
+                    WHERE status = 'PENDING'
+                    AND scheduled_for <= :current_time
+                    AND (
+                        locked_by IS NULL
+                        OR locked_at < :stale_threshold
+                    )
+                    ORDER BY
+                        CASE priority
+                            WHEN 'CRITICAL' THEN 1
+                            WHEN 'HIGH' THEN 2
+                            WHEN 'NORMAL' THEN 3
+                            WHEN 'LOW' THEN 4
+                        END,
+                        scheduled_for ASC
+                    LIMIT :limit
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING *
+            """)
+
+            result = self.session.execute(query, {
+                'lock_instance_id': lock_instance_id,
+                'current_time': current_time,
+                'stale_threshold': stale_lock_threshold,
+                'limit': limit
+            })
+
+            # Convert result rows to Message objects
+            messages = []
+            for row in result:
+                message = Message()
+                for column in row._mapping.keys():
+                    setattr(message, column, row._mapping[column])
+                messages.append(message)
+
+            if messages:
+                _logger.info(
+                    "Claimed %s messages for processing by instance %s",
+                    len(messages), lock_instance_id
+                )
+
+            return messages
+
+        except Exception as e:
+            _logger.error("Error claiming messages with lock: %s", e)
+            self.session.rollback()
+            return []
+
+    def release_message_lock(self, message_id: int, lock_instance_id: str) -> bool:
+        """
+        Release the lock on a message after processing.
+
+        Args:
+            message_id: Message ID to unlock
+            lock_instance_id: Instance ID that owns the lock
+
+        Returns:
+            True if lock was released, False otherwise
+        """
+        try:
+            updated_rows = self.session.query(Message).filter(
+                and_(
+                    Message.id == message_id,
+                    Message.locked_by == lock_instance_id
+                )
+            ).update({
+                'locked_by': None,
+                'locked_at': None
+            })
+
+            if updated_rows > 0:
+                _logger.debug("Released lock on message %s", message_id)
+                return True
+            else:
+                _logger.warning("Could not release lock on message %s (not owned by %s)", message_id, lock_instance_id)
+                return False
+
+        except Exception as e:
+            _logger.error("Error releasing lock on message %s: %s", message_id, e)
+            return False
+
+    def cleanup_stale_locks(self, stale_threshold_minutes: int = 5) -> int:
+        """
+        Clean up stale message locks from failed or crashed instances.
+
+        Args:
+            stale_threshold_minutes: Minutes after which a lock is considered stale
+
+        Returns:
+            Number of stale locks cleaned up
+        """
+        try:
+            stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=stale_threshold_minutes)
+
+            updated_rows = self.session.query(Message).filter(
+                and_(
+                    Message.locked_by.isnot(None),
+                    Message.locked_at < stale_threshold
+                )
+            ).update({
+                'locked_by': None,
+                'locked_at': None
+            })
+
+            if updated_rows > 0:
+                _logger.info("Cleaned up %s stale message locks", updated_rows)
+
+            return updated_rows
+
+        except Exception as e:
+            _logger.error("Error cleaning up stale locks: %s", e)
+            return 0
 
 
 class DeliveryStatusRepository:

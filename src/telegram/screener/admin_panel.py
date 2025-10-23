@@ -71,7 +71,7 @@ _logger = setup_logger(__name__)
 app = Flask(__name__)
 
 # Bot API configuration
-BOT_API_URL = "http://localhost:8080"
+BOT_API_URL = "http://localhost:8000"
 
 # Authentication functions
 def login_required(f):

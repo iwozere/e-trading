@@ -28,10 +28,10 @@ class AlertMonitor:
     Uses HTTP API to communicate with the bot microservice.
     """
 
-    def __init__(self, api_client: BotHttpApiClient = None, telegram_service=None, notification_service_url: str = "http://localhost:8080"):
+    def __init__(self, api_client: BotHttpApiClient = None, telegram_service=None, notification_service_url: str = "http://localhost:8000"):
         self.api_client = api_client
         self.notification_client = NotificationServiceClient(
-            base_url=notification_service_url,
+            service_url=notification_service_url,
             timeout=30,
             max_retries=3
         )
@@ -577,7 +577,7 @@ async def main():
         monitor = AlertMonitor(
             api_client=api_client,
             telegram_service=db,
-            notification_service_url=os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8080")
+            notification_service_url=os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
         )
         await monitor.start()
 

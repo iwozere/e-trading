@@ -19,7 +19,7 @@ class BotHttpApiClient:
     Provides methods to send notifications without direct notification manager dependency.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8080"):
+    def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
         self.session: Optional[aiohttp.ClientSession] = None
 

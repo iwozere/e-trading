@@ -1,436 +1,297 @@
-# Notification Service Implementation Plan
+# Notification Service Implementation Plan - Database-Centric Architecture
 
 ## Implementation Status
 
-### ✅ COMPLETED FEATURES
-- [x] Requirements analysis and specification
-- [x] Architecture design and database schema
-- [x] Migration strategy planning
-- [x] Database schema implementation (PostgreSQL tables created with comprehensive views and procedures)
-- [x] Core service infrastructure setup (FastAPI application with full lifecycle management)
+### ✅ COMPLETED FEATURES (Legacy REST Architecture)
+- [x] Database schema implementation (PostgreSQL tables with comprehensive views and procedures)
 - [x] Channel plugin system architecture (base classes and registry with dynamic loading)
 - [x] Channel plugin implementations (Telegram, Email, SMS with health monitoring)
 - [x] Rate limiting and priority handling (token bucket algorithm with bypass for high priority)
 - [x] Delivery tracking and analytics (comprehensive statistics with trend analysis)
-- [x] Channel health monitoring (periodic health checks with fallback routing)
-- [x] REST API implementation (all endpoints functional including admin and analytics)
-- [x] Delivery history API (with filtering, pagination, and export functionality)
-- [x] Channel fallback and recovery mechanisms (fully implemented with multiple strategies)
-- [x] Message archiving and cleanup (automated retention policies with background processing)
 - [x] Message processor engine (async processing with workers and priority queues)
 - [x] Database optimization (optimized repositories and queries with indexes)
-- [x] Notification service client library (full compatibility with AsyncNotificationManager)
-- [x] Advanced analytics endpoints (delivery rates, response times, trends, channel comparison)
-- [x] Dead letter queue and message reprocessing (manual and automatic recovery)
-- [x] Comprehensive error handling and logging throughout the service
 
-### 🔄 IN PROGRESS
-- [ ] Service deployment and containerization
-- [ ] End-to-end testing and validation
+### 🔄 MAJOR REFACTORING REQUIRED
+- [x] **Complete migration to database-centric architecture**
 
-### ✅ RECENTLY COMPLETED
-- [x] Consumer migration to new service (AlertEvaluator, SchedulerService, TelegramBot, Trading services)
-- [x] Legacy notification system cleanup and dependency removal
 
-### 🚀 PLANNED ENHANCEMENTS
-- [ ] Machine learning for delivery optimization
-- [ ] Multi-tenant support
-- [ ] Performance monitoring and observability
+
+
+
+- [x] **Remove all REST endpoints from notification service**
+
+
+
+
+
+- [x] **Consolidate all REST operations in Main API Service**
+
+
+
+
+
+- [x] **Implement database-only communication between services**
+
+
+
+
+
 
 ## Implementation Tasks
 
-### 1. Database Schema and Models
+### 1. Notification Service Refactoring (Remove REST)
 
-- [x] 1.1 Create database migration scripts
-  - Create msg_messages table with indexes
-  - Create msg_delivery_status table with relationships
-  - Create msg_channel_health table for monitoring
-  - Create msg_rate_limits table for user throttling
-  - Create msg_channel_configs table for plugin configuration
-  - _Requirements: 1.4, 2.2, 5.2, 8.1_
+- [ ] 1.1 Remove FastAPI application from notification service
+  - Remove all REST endpoint definitions
+  - Remove HTTP server startup and configuration
+  - Remove CORS middleware and HTTP dependencies
+  - Keep only core message processing components
+  - _Requirements: 1.1, 1.3, 5.1_
 
-- [x] 1.2 Implement SQLAlchemy models
-  - Define Message model with relationships
-  - Define DeliveryStatus model with foreign keys
-  - Define ChannelHealth model for monitoring
-  - Define RateLimit model for user throttling
-  - Define ChannelConfig model for plugin settings
-  - _Requirements: 1.4, 5.2, 8.1_
+- [ ] 1.2 Implement database message polling
+  - Create MessagePoller class for continuous database polling
+  - Implement distributed locking for multi-instance coordination
+  - Add priority-based message selection from database
+  - Handle database connectivity issues and reconnection
+  - _Requirements: 1.2, 5.1, 11.2_
 
-- [x] 1.3 Create repository layer
-  - Implement MessageRepository with CRUD operations
-  - Implement DeliveryStatusRepository for tracking
-  - Implement ChannelHealthRepository for monitoring
-  - Implement RateLimitRepository for throttling
-  - Follow existing src/data/db pattern
-  - _Requirements: 1.4, 5.2, 8.1_
+- [ ] 1.3 Convert health monitoring to database-only
+  - Remove health REST endpoints from notification service
+  - Implement HealthReporter class for database-only health updates
+  - Update channel health monitoring to write to msg_system_health table
+  - Remove HTTP-based health check dependencies
+  - _Requirements: 1.4, 4.3, 7.3_
 
-- [x] 1.4 Write unit tests for models and repositories
-  - Test model validation and relationships
-  - Test repository CRUD operations
-  - Test database constraints and indexes
-  - _Requirements: 1.4, 5.2_
+- [ ] 1.4 Update service lifecycle management
+  - Remove HTTP server from service startup
+  - Implement graceful shutdown for message polling
+  - Add proper signal handling for service termination
+  - Update logging to remove HTTP request logging
+  - _Requirements: 1.1, 11.4_
 
-### 2. Core Service Infrastructure
+### 2. Main API Service Enhancement (Consolidate REST)
 
-- [x] 2.1 Set up FastAPI application structure
-  - Create main application with dependency injection
-  - Set up configuration management with Pydantic
-  - Implement health check endpoints
-  - Set up logging and error handling
-  - _Requirements: 1.1, 2.1, 6.4_
-
-- [x] 2.2 Implement message queue system
-  - Create MessageQueue class with priority handling
-  - Implement database-backed queue operations
-  - Add message validation and sanitization
-  - Support for scheduled message delivery
-  - _Requirements: 1.4, 2.2, 3.3_
-
-- [x] 2.3 Create message processor engine
-  - Implement asynchronous message processing
-  - Add priority-based message handling
-  - Create worker pool for concurrent processing
-  - Implement graceful shutdown handling
-  - _Requirements: 1.5, 3.1, 3.3_
-
-- [x] 2.4 Write integration tests for core infrastructure
-  - Test API endpoints with various message types
-  - Test message queue operations and priorities
-  - Test processor engine with concurrent messages
-  - _Requirements: 1.5, 2.2_
-
-### 3. Channel Plugin System
-
-- [x] 3.1 Design channel plugin interface
-  - Create abstract NotificationChannel base class
-  - Define DeliveryResult and ChannelHealth data classes
-  - Implement plugin discovery and loading mechanism
-  - Create channel configuration validation
-  - _Requirements: 7.1, 7.3, 7.4_
-
-- [x] 3.2 Implement Telegram channel plugin
-  - Port existing TelegramChannel from AsyncNotificationManager
-  - Add message splitting and attachment support
-  - Implement health monitoring for Telegram API
-  - Support dynamic chat IDs and reply functionality
-  - _Requirements: 7.1, 7.5, 6.2_
-
-- [x] 3.3 Implement Email channel plugin
-  - Port existing EmailChannel from AsyncNotificationManager
-  - Add MIME attachment support and HTML formatting
-  - Implement SMTP health monitoring
-  - Support dynamic recipient addresses
-  - _Requirements: 7.1, 7.5, 6.2_
-
-- [x] 3.4 Create SMS channel plugin template
-  - Implement basic SMS channel interface
-  - Add support for Twilio or similar providers
-  - Implement message length validation
-  - Add delivery confirmation tracking
-  - _Requirements: 7.1, 7.2, 7.5_
-
-- [x] 3.5 Write unit tests for channel plugins
-  - Test plugin loading and configuration
-  - Test message formatting and delivery
-  - Test health monitoring functionality
-  - Mock external API calls for testing
-  - _Requirements: 7.1, 7.5_
-
-### 4. Rate Limiting and Priority Handling
-
-- [x] 4.1 Implement per-user rate limiting
-  - Create RateLimiter class with token bucket algorithm
-  - Support configurable limits per channel and user
-  - Implement rate limit bypass for high-priority messages
-  - Add rate limit violation tracking and statistics
-  - _Requirements: 4.1, 4.2, 4.4_
-
-- [x] 4.2 Create priority message handling
-  - Implement priority queue with CRITICAL, HIGH, NORMAL, LOW levels
-  - Add immediate processing for high-priority messages
-  - Bypass batching and rate limits for critical messages
-  - Ensure 5-second delivery SLA for critical messages
-  - _Requirements: 3.1, 3.2, 3.5_
-
-- [x] 4.3 Add batching system for normal priority messages
-  - Implement time-based and size-based batching
-  - Create configurable batching rules per channel
-  - Add batch processing optimization
-  - Maintain individual message tracking within batches
-  - _Requirements: 3.1, 8.5_
-
-- [x] 4.4 Write performance tests for rate limiting
-  - Test rate limiting under high load
-  - Verify priority message bypass functionality
-  - Test batching efficiency and timing
-  - _Requirements: 4.1, 3.5_
-
-### 5. Delivery Tracking and Analytics
-
-- [x] 5.1 Implement delivery status tracking
-  - Record delivery attempts and results for each message
-  - Track response times and external message IDs
-  - Implement delivery confirmation callbacks
-  - Support partial delivery tracking for multi-channel messages
-  - _Requirements: 5.1, 5.2, 5.3_
-
-- [x] 5.2 Create analytics and statistics system
-  - Implement delivery rate calculations per channel and user
-  - Track average response times and success rates
-  - Create daily/weekly/monthly statistics aggregation
-  - Add performance trend analysis
-  - _Requirements: 5.3, 5.4_
-
-- [x] 5.3 Build delivery history API
-  - Create endpoints for querying message history
-  - Support filtering by user, channel, date range, status
-  - Implement pagination for large result sets
-  - Add export functionality for analytics
-  - _Requirements: 5.4, 5.5_
-
-- [x] 5.4 Write tests for tracking and analytics
-  - Test delivery status recording accuracy
-  - Verify statistics calculation correctness
-  - Test history API with various filters
-  - _Requirements: 5.1, 5.4_
-
-### 6. Channel Health Monitoring
-
-- [x] 6.1 Implement channel health monitoring
-  - Create HealthMonitor class for periodic health checks
-  - Implement health status detection and classification
-  - Add automatic channel disable/enable based on health
-  - Track health metrics and failure patterns
-  - _Requirements: 6.1, 6.2, 6.4_
-
-- [x] 6.2 Create fallback and recovery mechanisms
-  - Implement channel fallback routing when primary fails
-  - Add automatic retry with exponential backoff
-  - Create dead letter queue for permanently failed messages
-  - Support manual message reprocessing from admin interface
-  - _Requirements: 6.3, 9.1, 9.4_
-
-- [x] 6.3 Build health monitoring API
-  - Create endpoints for real-time health status
-  - Support health history and trend analysis
-  - Add alerting for channel failures
-  - Implement health dashboard data endpoints
-  - _Requirements: 6.4, 6.5_
-
-- [x] 6.4 Write tests for health monitoring
-  - Test health detection under various failure scenarios
-  - Verify fallback routing functionality
-  - Test recovery mechanisms and retry logic
-  - _Requirements: 6.1, 6.3_
-
-### 7. REST API Implementation
-
-- [x] 7.1 Create message enqueueing API
-  - Implement POST /api/v1/messages endpoint
-  - Add request validation and sanitization
-  - Support bulk message enqueueing
-  - Return message IDs for tracking
+- [ ] 2.1 Move notification REST endpoints to Main API
+  - Migrate all notification endpoints from notification service
+  - Implement direct database operations instead of HTTP proxy calls
+  - Remove HTTP client dependencies for notification service calls
+  - Add proper authentication and authorization to all endpoints
   - _Requirements: 2.1, 2.2, 2.3_
 
-- [x] 7.2 Implement status and monitoring APIs
-  - Create GET /api/v1/messages/{id}/status endpoint
-  - Implement GET /api/v1/health service health check
-  - Add GET /api/v1/channels for channel listing
-  - Create GET /api/v1/stats for delivery statistics
-  - _Requirements: 2.4, 5.4, 6.4_
+- [ ] 2.2 Implement unified analytics module
+  - Create analytics framework that supports both notifications and trading
+  - Implement notification analytics with direct database queries
+  - Design reusable analytics patterns for future trading analytics
+  - Add comprehensive delivery rate and performance analytics
+  - _Requirements: 3.1, 3.2, 3.4_
 
-- [x] 7.3 Add administrative APIs
-  - Implement channel configuration management endpoints
-  - Add user rate limit configuration APIs
-  - Create message reprocessing endpoints
-  - Support bulk operations for admin tasks
-  - _Requirements: 4.5, 9.5_
+- [ ] 2.3 Consolidate administrative operations
+  - Move all admin endpoints from notification service to Main API
+  - Implement proper admin authentication and authorization
+  - Add notification cleanup operations with direct database access
+  - Create processor statistics endpoints with database queries
+  - _Requirements: 6.1, 6.2, 6.3_
 
-- [x] 7.4 Write API integration tests
-  - Test all endpoints with various input scenarios
-  - Verify error handling and validation
-  - Test authentication and authorization
-  - Performance test under load
-  - _Requirements: 2.1, 2.5_
+- [ ] 2.4 Implement consolidated health endpoints
+  - Create unified health API that aggregates all system health
+  - Implement channel health endpoints with database queries
+  - Add overall system health status aggregation
+  - Remove dependency on notification service health endpoints
+  - _Requirements: 4.1, 4.2, 4.4_
 
-### 8. Message Archiving and Cleanup
+### 3. Database Schema Enhancement
 
-- [x] 8.1 Implement message archiving system
-  - Create archival process for messages older than 30 days
-  - Implement compressed storage for archived messages
-  - Support archival policy configuration
-  - Add archival status tracking
-  - _Requirements: 8.1, 8.4_
+- [ ] 3.1 Add distributed processing support
+  - Add locked_by and locked_at columns to msg_messages table
+  - Create indexes for efficient message polling and locking
+  - Implement database functions for atomic message claiming
+  - Add cleanup procedures for stale locks
+  - _Requirements: 11.1, 11.2, 11.3_
 
-- [x] 8.2 Create cleanup and retention system
-  - Implement automatic deletion of archived messages after 1 year
-  - Add cleanup for failed messages after 90 days
-  - Create configurable retention policies
-  - Schedule cleanup during low-traffic periods
-  - _Requirements: 8.2, 8.3, 8.5_
+- [ ] 3.2 Enhance system health table integration
+  - Ensure msg_system_health table supports notification channels
+  - Add proper indexes for health query performance
+  - Create views for backward compatibility if needed
+  - Add cleanup procedures for old health records
+  - _Requirements: 4.3, 7.3_
 
-- [x] 8.3 Build archival management API
-  - Create endpoints for manual archival operations
-  - Support archival policy configuration
-  - Add archival statistics and reporting
-  - Implement archival data export functionality
-  - _Requirements: 8.4_
+- [ ] 3.3 Optimize database operations for polling
+  - Add specialized indexes for message polling queries
+  - Implement database connection pooling optimization
+  - Add query performance monitoring and optimization
+  - Create database maintenance procedures
+  - _Requirements: 5.1, 11.5_
 
-- [x] 8.4 Write tests for archiving system
-  - Test archival process with various message ages
-  - Verify cleanup operations and retention policies
-  - Test archival API functionality
-  - _Requirements: 8.1, 8.4_
+### 4. Communication Pattern Implementation
 
-### 9. Consumer Migration to New Interface
+- [ ] 4.1 Implement database-centric message creation
+  - Update Main API to write messages directly to database
+  - Remove HTTP calls to notification service for message creation
+  - Implement proper transaction handling for message operations
+  - Add validation and sanitization at API level
+  - _Requirements: 2.2, 2.5, 8.1_
 
-- [x] 9.1 Create notification service client library
-  - Implement NotificationServiceClient with HTTP client and retry logic
-  - Add circuit breaker patterns and exponential backoff
-  - Support both synchronous and asynchronous interfaces
-  - Include proper error handling and logging
-  - Full compatibility with AsyncNotificationManager interface
-  - _Requirements: 10.1, 10.2_
+- [ ] 4.2 Implement database-centric status queries
+  - Update Main API to query message status from database
+  - Remove HTTP calls to notification service for status queries
+  - Implement efficient queries for delivery status aggregation
+  - Add caching strategies for frequently accessed data
+  - _Requirements: 2.4, 10.3, 10.4_
 
-- [x] 9.2 Migrate AlertEvaluator to notification service
-  - AlertEvaluator already designed to return notification data without direct sending
-  - SchedulerService handles notification sending and already uses NotificationServiceClient
-  - Alert configuration already uses new channel format
-  - Alert delivery tested through scheduler service integration
-  - _Requirements: 10.2_
+- [ ] 4.3 Implement database-centric analytics
+  - Create analytics queries that work directly with database
+  - Remove HTTP calls to notification service for analytics
+  - Implement efficient aggregation queries for large datasets
+  - Add analytics caching and performance optimization
+  - _Requirements: 3.3, 10.1, 10.2_
 
-- [x] 9.3 Migrate SchedulerService for report notifications
-  - SchedulerService already migrated to use NotificationServiceClient
-  - Scheduled report notifications already use new API endpoints
-  - Report templates already use new message format
-  - Scheduled notification delivery working through new service
-  - _Requirements: 10.2_
+### 5. Service Integration Updates
 
-- [x] 9.4 Migrate TelegramBot for non-interactive notifications
-  - Replaced undefined notification_manager with NotificationServiceClient
-  - Updated all bot notification methods to use new API
-  - Updated telegram screener notifications to use NotificationServiceClient
-  - Preserved interactive message handling in bot
-  - Updated all command handlers to use notification service client
-  - _Requirements: 10.2_
+- [ ] 5.1 Update notification service client library
+  - Modify NotificationServiceClient to use Main API endpoints
+  - Remove direct HTTP calls to notification service
+  - Update client to point to Main API Service URLs
+  - Maintain backward compatibility for existing client code
+  - _Requirements: 8.1, 8.2_
 
-- [x] 9.5 Migrate trading services and brokers
-  - BaseBroker already designed to accept notification_client parameter
-  - PositionNotificationManager already uses NotificationServiceClient when available
-  - Trade notification calls already use new API format
-  - Error notification handling already updated to new service
-  - Trading notification delivery ready for new service integration
-  - _Requirements: 10.2_
+- [ ] 5.2 Update service consumers
+  - Update all services to use Main API notification endpoints
+  - Remove notification service URL configurations
+  - Update service discovery to point to Main API Service
+  - Verify all notification functionality works through Main API
+  - _Requirements: 8.2, 8.4_
 
-- [x] 9.6 Remove AsyncNotificationManager dependencies
-  - Removed AsyncNotificationManager and legacy notification files
-  - Cleaned up legacy notification code from base broker
-  - Removed unused legacy notification directories (batching, priority, rate_limiting)
-  - Removed legacy notification model files
-  - Verified no remaining dependencies to old notification system
-  - _Requirements: 10.2_
+- [ ] 5.3 Update deployment configuration
+  - Remove notification service REST port exposure
+  - Update service discovery and load balancing configuration
+  - Modify health check configurations for new architecture
+  - Update monitoring and alerting for new endpoint structure
+  - _Requirements: 8.5_
 
-### 10. Service Deployment and Operations
+### 6. Testing and Validation
 
-- [ ] 10.1 Create service deployment configuration
-  - Set up Docker containerization for notification service
-  - Add notification service to docker-compose.yml with proper dependencies
-  - Configure environment-specific settings and secrets management
-  - Set up service discovery and load balancing
-  - _Requirements: 1.1_
+- [ ] 6.1 Create database-centric integration tests
+  - Test message creation through Main API and processing by notification service
+  - Verify database-only communication between services
+  - Test distributed processing with multiple notification service instances
+  - Validate health reporting and monitoring through database
+  - _Requirements: 1.2, 5.1, 11.3_
 
-- [ ] 10.2 Implement monitoring and observability
-  - Add Prometheus metrics for service monitoring
-  - Implement structured logging with correlation IDs
-  - Set up distributed tracing for message flow
-  - Create alerting rules for operational issues
-  - _Requirements: 5.5, 6.5_
+- [ ] 6.2 Test unified analytics functionality
+  - Verify analytics work with direct database queries
+  - Test performance of analytics queries under load
+  - Validate analytics data accuracy and consistency
+  - Test analytics caching and optimization
+  - _Requirements: 3.1, 3.4_
 
-- [ ] 10.3 Create operational documentation
-  - Write deployment and configuration guides
-  - Create troubleshooting and maintenance procedures
-  - Document API usage and integration patterns
-  - Add monitoring and alerting runbooks
-  - _Requirements: 10.5_
+- [ ] 6.3 Test administrative operations
+  - Verify admin operations work through Main API
+  - Test cleanup operations with direct database access
+  - Validate processor statistics accuracy
+  - Test admin authentication and authorization
+  - _Requirements: 6.1, 6.3_
 
-- [ ] 10.4 Write end-to-end tests
-  - Test complete message flow from API to delivery
+- [ ] 6.4 End-to-end testing
+  - Test complete message flow from Main API to delivery
   - Verify service behavior under various failure scenarios
   - Test service startup, shutdown, and recovery
   - Performance test under high load conditions
-  - _Requirements: 1.5, 2.5_
+  - _Requirements: 8.4, 11.4, 11.5_
 
-## Next Priority Tasks for Production Readiness
+### 7. Migration and Deployment
 
-### Immediate Actions Required
+- [ ] 7.1 Create migration scripts
+  - Create database migration scripts for schema enhancements
+  - Implement data migration for any schema changes
+  - Create rollback procedures for safe migration
+  - Test migration scripts on staging environment
+  - _Requirements: 8.3, 8.4_
 
-1. **Service Deployment Configuration** (Task 10.1)
-   - Docker containerization needed for deployment
-   - Add notification service to docker-compose.yml
-   - Environment configuration and secrets management
-   - Priority: HIGH - Required for production deployment
+- [ ] 7.2 Implement gradual migration strategy
+  - Deploy new Main API endpoints alongside existing ones
+  - Gradually migrate clients to new endpoints
+  - Monitor system behavior during migration
+  - Implement feature flags for safe rollback
+  - _Requirements: 8.1, 8.5_
 
-2. **Consumer Migration** (Tasks 9.2-9.6)
-   - Migrate AlertEvaluator, SchedulerService, TelegramBot, and trading services
-   - Replace AsyncNotificationManager usage with NotificationServiceClient
-   - Validate notification delivery through new service
-   - Priority: HIGH - Essential for service adoption
+- [ ] 7.3 Update deployment configuration
+  - Update Docker configurations for new architecture
+  - Modify service discovery and networking configuration
+  - Update monitoring and alerting for new endpoint structure
+  - Create deployment documentation for new architecture
+  - _Requirements: 8.5_
 
-3. **End-to-End Testing** (Task 10.4)
-   - Comprehensive testing of complete message flows
-   - Performance and load testing
-   - Failure scenario validation
-   - Priority: MEDIUM - Critical for production confidence
+- [ ] 7.4 Complete legacy cleanup
+  - Remove REST endpoints from notification service
+  - Clean up unused HTTP dependencies
+  - Remove notification service client HTTP configurations
+  - Update documentation to reflect new architecture
+  - _Requirements: 8.1, 8.5_
 
-4. **Monitoring and Observability** (Task 10.2)
-   - Add Prometheus metrics and structured logging
-   - Set up distributed tracing and alerting
-   - Priority: MEDIUM - Important for operational visibility
+## Priority Implementation Order
 
-## Remaining Critical Tasks
+### Phase 1: Core Refactoring (High Priority)
+1. **Task 1.1**: Remove FastAPI from notification service
+2. **Task 1.2**: Implement database message polling
+3. **Task 2.1**: Move notification REST endpoints to Main API
+4. **Task 3.1**: Add distributed processing support to database
 
-The notification service implementation is nearly complete with all core functionality implemented. The remaining tasks focus on deployment and migration:
+### Phase 2: Analytics and Admin Consolidation (Medium Priority)
+1. **Task 2.2**: Implement unified analytics module
+2. **Task 2.3**: Consolidate administrative operations
+3. **Task 1.3**: Convert health monitoring to database-only
+4. **Task 4.1**: Implement database-centric message creation
 
-## Technical Debt
+### Phase 3: Integration and Testing (Medium Priority)
+1. **Task 5.1**: Update notification service client library
+2. **Task 6.1**: Create database-centric integration tests
+3. **Task 4.2**: Implement database-centric status queries
+4. **Task 4.3**: Implement database-centric analytics
 
-- [x] Refactor existing AsyncNotificationManager for reusability
-- [x] Improve error handling consistency across channels
-- [x] Add comprehensive input validation and sanitization
-- [x] Optimize database queries and indexing strategy
-- [x] Complete channel plugin integration with processor
-- [x] Implement comprehensive analytics and reporting
-- [x] Add fallback and recovery mechanisms
-- [x] Create client library for service integration
-- [ ] Add comprehensive end-to-end testing
-- [ ] Add performance benchmarking and load testing
-- [ ] Create deployment configuration and containerization
+### Phase 4: Migration and Deployment (Low Priority)
+1. **Task 7.1**: Create migration scripts
+2. **Task 7.2**: Implement gradual migration strategy
+3. **Task 5.2**: Update service consumers
+4. **Task 7.4**: Complete legacy cleanup
 
-## Known Issues
+## Success Criteria
 
-- Service needs deployment configuration and containerization
-- Need operational monitoring and alerting setup
-- Missing end-to-end integration testing
+### Technical Success Criteria
+- [ ] Notification service runs without any REST endpoints
+- [ ] All notification operations work through Main API Service
+- [ ] Database-only communication between services is functional
+- [ ] Multiple notification service instances can run concurrently
+- [ ] Analytics work with direct database queries
+- [ ] Health monitoring works through database reporting
 
-## Testing Requirements
+### Performance Success Criteria
+- [ ] Message processing latency remains under 5 seconds for critical messages
+- [ ] Database polling does not impact overall system performance
+- [ ] Analytics queries complete within acceptable time limits
+- [ ] System can handle existing message throughput
 
-- [x] Unit tests for all core components and plugins
-- [x] Integration tests for API endpoints and database operations
-- [x] Performance tests for high-load scenarios
-- [x] Analytics and reporting functionality tests
-- [x] Fallback and recovery mechanism tests
-- [x] Client library compatibility tests
-- [ ] End-to-end tests for complete message delivery flows
-- [ ] Load testing for production readiness
-- [ ] Consumer migration integration tests
+### Operational Success Criteria
+- [ ] Single endpoint for all client interactions (Main API Service)
+- [ ] Simplified service discovery and configuration
+- [ ] Unified monitoring and alerting
+- [ ] Consistent authentication and authorization across all endpoints
 
-## Documentation Updates
+## Risk Mitigation
 
-- [x] Update HLA documentation with notification service architecture
-- [x] Create comprehensive API documentation with all endpoints
-- [x] Document client library usage and compatibility
-- [x] Create analytics and reporting documentation
-- [ ] Add deployment and operational guides
+### Technical Risks
+- **Database Performance**: Implement proper indexing and query optimization
+- **Service Coordination**: Use database locking for distributed processing
+- **Data Consistency**: Implement proper transaction handling
+
+### Operational Risks
+- **Migration Complexity**: Implement gradual migration with rollback capability
+- **Service Dependencies**: Maintain backward compatibility during transition
+- **Monitoring Gaps**: Update monitoring before removing old endpoints
+
+## Documentation Updates Required
+
+- [ ] Update API documentation to reflect Main API Service endpoints
+- [ ] Create database-centric architecture documentation
+- [ ] Update deployment and configuration guides
 - [ ] Create migration documentation for service consumers
-- [ ] Create troubleshooting and maintenance guides
-- [ ] Document monitoring and alerting setup
+- [ ] Update troubleshooting guides for new architecture

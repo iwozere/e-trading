@@ -14,7 +14,7 @@ from sqlalchemy import (
     BigInteger, CheckConstraint, Column, DateTime, Integer, String, Text, func
 )
 
-from src.data.db.models.base import Base
+from src.data.db.core.base import Base
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -56,7 +56,7 @@ class SystemHealth(Base):
     failure_count = Column(Integer, nullable=False, default=0)
     avg_response_time_ms = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
-    metadata = Column(Text, nullable=True)  # JSON string for system-specific data
+    system_metadata = Column("metadata", Text, nullable=True)  # JSON string for system-specific data
     checked_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)
 
     # Constraints

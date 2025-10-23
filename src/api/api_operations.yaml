@@ -1,0 +1,1202 @@
+---
+# Trading Web UI API Operations Documentation
+# ============================================
+# 
+# This YAML file documents all available API operations in the src/api module.
+# It provides a comprehensive overview of endpoints, methods, authentication requirements,
+# and response models for the Trading Web UI Backend API.
+
+api_info:
+  title: "Trading Web UI API"
+  description: "REST API for managing multi-strategy trading system"
+  version: "1.0.0"
+  base_url: "http://localhost:8000"
+  authentication: "JWT Bearer Token"
+
+# ============================================
+# CORE API ENDPOINTS (main.py)
+# ============================================
+
+core_endpoints:
+  root:
+    path: "/"
+    method: "GET"
+    description: "Root endpoint"
+    authentication: false
+    response:
+      message: "Trading Web UI API"
+      version: "1.0.0"
+
+  health_check:
+    path: "/api/health"
+    method: "GET"
+    description: "Health check endpoint"
+    authentication: false
+    response:
+      status: "healthy"
+      timestamp: "float"
+      trading_system_available: "boolean"
+
+  test_auth:
+    path: "/api/test-auth"
+    method: "GET"
+    description: "Test authentication endpoint"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response:
+      message: "Authentication successful"
+      user: "User object"
+
+# ============================================
+# AUTHENTICATION ENDPOINTS (auth_routes.py)
+# ============================================
+
+authentication:
+  login:
+    path: "/auth/login"
+    method: "POST"
+    description: "Authenticate user and return JWT tokens"
+    authentication: false
+    request_body:
+      username: "string"
+      password: "string"
+    response:
+      access_token: "string"
+      refresh_token: "string"
+      token_type: "bearer"
+      expires_in: "integer (seconds)"
+      user: "User object"
+
+  refresh_token:
+    path: "/auth/refresh"
+    method: "POST"
+    description: "Refresh access token using refresh token"
+    authentication: false
+    request_body:
+      refresh_token: "string"
+    response:
+      access_token: "string"
+      refresh_token: "string"
+      token_type: "bearer"
+      expires_in: "integer (seconds)"
+      user: "User object"
+
+  logout:
+    path: "/auth/logout"
+    method: "POST"
+    description: "Logout user (invalidate tokens on client side)"
+    authentication: true
+    response:
+      message: "Successfully logged out"
+
+  get_current_user:
+    path: "/auth/me"
+    method: "GET"
+    description: "Get current user information"
+    authentication: true
+    response:
+      id: "integer"
+      username: "string"
+      email: "string"
+      role: "string"
+      is_active: "boolean"
+      created_at: "string (ISO datetime)"
+      last_login: "string (ISO datetime)"
+
+# ============================================
+# STRATEGY MANAGEMENT ENDPOINTS (main.py)
+# ============================================
+
+strategy_management:
+  list_strategies:
+    path: "/api/strategies"
+    method: "GET"
+    description: "List all configured strategies"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "Array of StrategyStatus objects"
+
+  create_strategy:
+    path: "/api/strategies"
+    method: "POST"
+    description: "Create a new strategy"
+    authentication: true
+    roles: ["trader", "admin"]
+    request_body: "StrategyConfig object"
+    response:
+      message: "string"
+      strategy_id: "string"
+
+  get_strategy:
+    path: "/api/strategies/{strategy_id}"
+    method: "GET"
+    description: "Get details of a specific strategy"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      strategy_id: "string (path parameter)"
+    response: "StrategyStatus object"
+
+  update_strategy:
+    path: "/api/strategies/{strategy_id}"
+    method: "PUT"
+    description: "Update an existing strategy"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      strategy_id: "string (path parameter)"
+    request_body: "StrategyConfig object"
+    response:
+      message: "string"
+      strategy_id: "string"
+
+  delete_strategy:
+    path: "/api/strategies/{strategy_id}"
+    method: "DELETE"
+    description: "Delete a strategy"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      strategy_id: "string (path parameter)"
+    response:
+      message: "string"
+      strategy_id: "string"
+
+# ============================================
+# STRATEGY LIFECYCLE ENDPOINTS (main.py)
+# ============================================
+
+strategy_lifecycle:
+  start_strategy:
+    path: "/api/strategies/{strategy_id}/start"
+    method: "POST"
+    description: "Start a strategy"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      strategy_id: "string (path parameter)"
+    request_body:
+      action: "start"
+      confirm_live_trading: "boolean"
+    response:
+      message: "string"
+      strategy_id: "string"
+
+  stop_strategy:
+    path: "/api/strategies/{strategy_id}/stop"
+    method: "POST"
+    description: "Stop a strategy"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      strategy_id: "string (path parameter)"
+    response:
+      message: "string"
+      strategy_id: "string"
+
+  restart_strategy:
+    path: "/api/strategies/{strategy_id}/restart"
+    method: "POST"
+    description: "Restart a strategy"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      strategy_id: "string (path parameter)"
+    request_body:
+      action: "restart"
+      confirm_live_trading: "boolean"
+    response:
+      message: "string"
+      strategy_id: "string"
+
+  update_strategy_parameters:
+    path: "/api/strategies/{strategy_id}/parameters"
+    method: "PUT"
+    description: "Update strategy parameters while running"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      strategy_id: "string (path parameter)"
+    request_body: "Dictionary of parameters"
+    response: "Updated parameters object"
+
+# ============================================
+# SYSTEM MONITORING ENDPOINTS (main.py)
+# ============================================
+
+system_monitoring:
+  get_system_status:
+    path: "/api/system/status"
+    method: "GET"
+    description: "Get overall system status"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response:
+      service_name: "string"
+      version: "string"
+      status: "string"
+      uptime_seconds: "float"
+      active_strategies: "integer"
+      total_strategies: "integer"
+      system_metrics: "object"
+
+  get_system_metrics:
+    path: "/api/monitoring/metrics"
+    method: "GET"
+    description: "Get comprehensive system metrics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "System metrics object"
+
+  get_system_alerts:
+    path: "/api/monitoring/alerts"
+    method: "GET"
+    description: "Get system alerts"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      unacknowledged_only: "boolean"
+    response:
+      alerts: "Array of alert objects"
+
+  acknowledge_alert:
+    path: "/api/monitoring/alerts/{alert_index}/acknowledge"
+    method: "POST"
+    description: "Acknowledge a system alert"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      alert_index: "integer (path parameter)"
+    response:
+      message: "Alert acknowledged successfully"
+
+  get_performance_history:
+    path: "/api/monitoring/history"
+    method: "GET"
+    description: "Get performance history"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      hours: "integer (1-24)"
+    response:
+      history: "Array of performance data points"
+
+# ============================================
+# CONFIGURATION MANAGEMENT ENDPOINTS (main.py)
+# ============================================
+
+configuration_management:
+  get_strategy_templates:
+    path: "/api/config/templates"
+    method: "GET"
+    description: "Get available strategy templates"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response:
+      templates: "Array of template objects"
+
+  validate_configuration:
+    path: "/api/config/validate"
+    method: "POST"
+    description: "Validate a strategy configuration"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    request_body: "Strategy configuration object"
+    response:
+      valid: "boolean"
+      errors: "Array of error messages"
+
+# ============================================
+# UNIFIED ANALYTICS ENDPOINTS (main.py)
+# ============================================
+
+unified_analytics:
+  get_available_analytics:
+    path: "/api/analytics"
+    method: "GET"
+    description: "Get information about available analytics methods"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "Available analytics methods object"
+
+  get_unified_dashboard_data:
+    path: "/api/analytics/dashboard"
+    method: "GET"
+    description: "Get unified dashboard data combining notifications and trading analytics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      days: "integer (1-365, default: 30)"
+    response: "Unified dashboard data object"
+
+  get_correlation_analysis:
+    path: "/api/analytics/correlation"
+    method: "GET"
+    description: "Analyze correlations between notification and trading metrics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      notification_metric: "string (default: success_rate)"
+      trading_metric: "string (default: win_rate)"
+      days: "integer (1-365, default: 30)"
+    response: "Correlation analysis data object"
+
+# ============================================
+# NOTIFICATION ENDPOINTS (notification_routes.py)
+# ============================================
+
+notifications:
+  health_check:
+    path: "/api/notifications/health"
+    method: "GET"
+    description: "Health check for notification routes and database connectivity"
+    authentication: false
+    response:
+      status: "string"
+      timestamp: "string (ISO datetime)"
+      database: "string"
+      routes: "string"
+      total_messages: "integer"
+
+  create_notification:
+    path: "/api/notifications"
+    method: "POST"
+    description: "Create and enqueue a new notification message"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    request_body:
+      message_type: "string"
+      priority: "string"
+      channels: "Array of strings"
+      recipient_id: "string"
+      template_name: "string (optional)"
+      content: "object"
+      metadata: "object (optional)"
+      scheduled_for: "string (ISO datetime, optional)"
+    response:
+      message_id: "integer"
+      status: "string"
+      channels: "Array of strings"
+      priority: "string"
+      scheduled_for: "string (ISO datetime)"
+
+  list_notifications:
+    path: "/api/notifications"
+    method: "GET"
+    description: "List notifications with optional filtering"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      status: "string (optional)"
+      priority: "string (optional)"
+      recipient_id: "string (optional)"
+      message_type: "string (optional)"
+      limit: "integer (default: 100)"
+      offset: "integer (default: 0)"
+    response: "Array of NotificationResponse objects"
+
+  get_notification_status:
+    path: "/api/notifications/{message_id}"
+    method: "GET"
+    description: "Get notification status and details"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      message_id: "integer (path parameter)"
+    response: "NotificationResponse object"
+
+  get_notification_delivery_status:
+    path: "/api/notifications/{message_id}/delivery"
+    method: "GET"
+    description: "Get delivery status for all channels of a notification"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      message_id: "integer (path parameter)"
+    response: "Array of DeliveryStatusResponse objects"
+
+  # Channel Management
+  get_channels_health:
+    path: "/api/notifications/channels/health"
+    method: "GET"
+    description: "Get health status for all notification channels"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response:
+      channels_health: "Array of channel health objects"
+      timestamp: "string (ISO datetime)"
+
+  list_notification_channels:
+    path: "/api/notifications/channels"
+    method: "GET"
+    description: "List available notification channels"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response:
+      channels: "Array of channel configuration objects"
+
+  # Statistics and Analytics
+  get_notification_statistics:
+    path: "/api/notifications/stats"
+    method: "GET"
+    description: "Get notification delivery statistics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      channel: "string (optional)"
+      days: "integer (default: 30)"
+    response: "NotificationStats object"
+
+  get_delivery_rates_analytics:
+    path: "/api/notifications/analytics/delivery-rates"
+    method: "GET"
+    description: "Get comprehensive delivery rate analytics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      channel: "string (optional)"
+      user_id: "string (optional)"
+      days: "integer (default: 30)"
+    response:
+      analytics: "Delivery rate analytics object"
+      timestamp: "string (ISO datetime)"
+
+  get_response_time_analytics:
+    path: "/api/notifications/analytics/response-times"
+    method: "GET"
+    description: "Get detailed response time analytics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      channel: "string (optional)"
+      days: "integer (default: 30)"
+    response:
+      analytics: "Response time analytics object"
+      timestamp: "string (ISO datetime)"
+
+  get_trend_analytics:
+    path: "/api/notifications/analytics/trends"
+    method: "GET"
+    description: "Get trend analysis for notification metrics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      metric: "string (success_rate, response_time, message_count)"
+      channel: "string (optional)"
+      days: "integer (default: 30)"
+    response:
+      analytics: "Trend analysis object"
+      timestamp: "string (ISO datetime)"
+
+  get_aggregated_analytics:
+    path: "/api/notifications/analytics/aggregated"
+    method: "GET"
+    description: "Get time-aggregated notification statistics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      granularity: "string (hourly, daily, weekly, monthly)"
+      channel: "string (optional)"
+      days: "integer (default: 30)"
+    response:
+      analytics: "Aggregated statistics object"
+      timestamp: "string (ISO datetime)"
+
+  get_channel_performance_comparison:
+    path: "/api/notifications/analytics/channel-comparison"
+    method: "GET"
+    description: "Get performance comparison across all notification channels"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      days: "integer (default: 30)"
+    response:
+      analytics: "Channel performance comparison object"
+      timestamp: "string (ISO datetime)"
+
+  # Administrative Operations
+  cleanup_old_notifications:
+    path: "/api/notifications/admin/cleanup"
+    method: "POST"
+    description: "Clean up old delivered notifications"
+    authentication: true
+    roles: ["trader", "admin"]
+    query_parameters:
+      days_to_keep: "integer (default: 30)"
+    response:
+      status: "completed"
+      deleted_count: "integer"
+      days_to_keep: "integer"
+      timestamp: "string (ISO datetime)"
+
+  get_processor_statistics:
+    path: "/api/notifications/admin/processor/stats"
+    method: "GET"
+    description: "Get message processor statistics from database"
+    authentication: true
+    roles: ["trader", "admin"]
+    response:
+      processor_stats: "Processor statistics object"
+      timestamp: "string (ISO datetime)"
+      note: "string"
+
+  # Convenience Endpoints
+  send_alert_notification:
+    path: "/api/notifications/alert"
+    method: "POST"
+    description: "Send an alert notification (convenience endpoint)"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    request_body:
+      title: "string"
+      message: "string"
+      severity: "string (default: normal)"
+      channels: "Array of strings (default: [telegram])"
+      recipient_id: "string (optional)"
+    response: "Notification creation result"
+
+  send_trade_notification:
+    path: "/api/notifications/trade"
+    method: "POST"
+    description: "Send a trade notification (convenience endpoint)"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    request_body:
+      action: "string"
+      symbol: "string"
+      quantity: "float"
+      price: "float"
+      strategy_name: "string"
+      channels: "Array of strings (default: [telegram])"
+      recipient_id: "string (optional)"
+    response: "Notification creation result"
+
+# ============================================
+# TELEGRAM BOT MANAGEMENT ENDPOINTS (telegram_routes.py)
+# ============================================
+
+telegram_management:
+  # User Management
+  get_telegram_users:
+    path: "/api/telegram/users"
+    method: "GET"
+    description: "Get Telegram users with optional filtering"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      status: "string (all, verified, approved, pending)"
+    response: "Array of TelegramUser objects"
+
+  verify_telegram_user:
+    path: "/api/telegram/users/{user_id}/verify"
+    method: "POST"
+    description: "Verify a Telegram user"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      user_id: "string (path parameter)"
+    response:
+      message: "string"
+      user_id: "string"
+
+  approve_telegram_user:
+    path: "/api/telegram/users/{user_id}/approve"
+    method: "POST"
+    description: "Approve a Telegram user"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      user_id: "string (path parameter)"
+    response:
+      message: "string"
+      user_id: "string"
+
+  reset_telegram_user_email:
+    path: "/api/telegram/users/{user_id}/reset-email"
+    method: "POST"
+    description: "Reset Telegram user email verification"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      user_id: "string (path parameter)"
+    response:
+      message: "string"
+      user_id: "string"
+
+  get_telegram_user_stats:
+    path: "/api/telegram/stats/users"
+    method: "GET"
+    description: "Get Telegram user statistics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "UserStats object"
+
+  # Alert Management
+  get_telegram_alerts:
+    path: "/api/telegram/alerts"
+    method: "GET"
+    description: "Get Telegram alerts with optional filtering"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      status: "string (all, active, inactive)"
+    response: "Array of TelegramAlert objects"
+
+  toggle_telegram_alert:
+    path: "/api/telegram/alerts/{alert_id}/toggle"
+    method: "POST"
+    description: "Toggle Telegram alert status"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      alert_id: "integer (path parameter)"
+    response:
+      message: "string"
+      alert_id: "integer"
+      new_status: "string"
+
+  delete_telegram_alert:
+    path: "/api/telegram/alerts/{alert_id}"
+    method: "DELETE"
+    description: "Delete a Telegram alert"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      alert_id: "integer (path parameter)"
+    response:
+      message: "string"
+      alert_id: "integer"
+
+  get_telegram_alert_config:
+    path: "/api/telegram/alerts/{alert_id}/config"
+    method: "GET"
+    description: "Get Telegram alert configuration"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      alert_id: "integer (path parameter)"
+    response: "Alert configuration object"
+
+  get_telegram_alert_stats:
+    path: "/api/telegram/stats/alerts"
+    method: "GET"
+    description: "Get Telegram alert statistics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "AlertStats object"
+
+  # Schedule Management
+  get_telegram_schedules:
+    path: "/api/telegram/schedules"
+    method: "GET"
+    description: "Get Telegram schedules with optional filtering"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      status: "string (all, active, inactive)"
+    response: "Array of TelegramSchedule objects"
+
+  toggle_telegram_schedule:
+    path: "/api/telegram/schedules/{schedule_id}/toggle"
+    method: "POST"
+    description: "Toggle Telegram schedule status"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      schedule_id: "integer (path parameter)"
+    response:
+      message: "string"
+      schedule_id: "integer"
+      new_status: "string"
+
+  delete_telegram_schedule:
+    path: "/api/telegram/schedules/{schedule_id}"
+    method: "DELETE"
+    description: "Delete a Telegram schedule"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      schedule_id: "integer (path parameter)"
+    response:
+      message: "string"
+      schedule_id: "integer"
+
+  update_telegram_schedule:
+    path: "/api/telegram/schedules/{schedule_id}"
+    method: "PUT"
+    description: "Update a Telegram schedule"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      schedule_id: "integer (path parameter)"
+    request_body: "Schedule update object"
+    response:
+      message: "string"
+      schedule_id: "integer"
+
+  get_telegram_schedule_stats:
+    path: "/api/telegram/stats/schedules"
+    method: "GET"
+    description: "Get Telegram schedule statistics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "ScheduleStats object"
+
+  # Broadcast Messaging
+  send_telegram_broadcast:
+    path: "/api/telegram/broadcast"
+    method: "POST"
+    description: "Send broadcast message to Telegram users"
+    authentication: true
+    roles: ["trader", "admin"]
+    request_body: "BroadcastMessage object"
+    response: "BroadcastResult object"
+
+  get_telegram_broadcast_history:
+    path: "/api/telegram/broadcast/history"
+    method: "GET"
+    description: "Get Telegram broadcast message history"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      page: "integer (default: 1)"
+      limit: "integer (default: 50)"
+    response: "Paginated broadcast history object"
+
+  # Audit Logging
+  get_telegram_audit_logs:
+    path: "/api/telegram/audit"
+    method: "GET"
+    description: "Get Telegram audit logs"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      page: "integer (default: 1)"
+      limit: "integer (default: 100)"
+      user_id: "string (optional)"
+      command: "string (optional)"
+      start_date: "string (ISO date, optional)"
+      end_date: "string (ISO date, optional)"
+    response: "Paginated audit logs object"
+
+  get_telegram_audit_stats:
+    path: "/api/telegram/stats/audit"
+    method: "GET"
+    description: "Get Telegram audit statistics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "AuditStats object"
+
+  get_user_audit_logs:
+    path: "/api/telegram/users/{user_id}/audit"
+    method: "GET"
+    description: "Get audit logs for a specific Telegram user"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      user_id: "string (path parameter)"
+    query_parameters:
+      page: "integer (default: 1)"
+      limit: "integer (default: 50)"
+    response: "Paginated user audit logs object"
+
+# ============================================
+# JOBS AND SCHEDULING ENDPOINTS (jobs_routes.py)
+# ============================================
+
+jobs_scheduling:
+  # Ad-hoc Execution
+  run_report:
+    path: "/api/reports/run"
+    method: "POST"
+    description: "Run a report immediately"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    request_body: "ReportRequest object"
+    response: "ScheduleRunResponse object"
+
+  run_screener:
+    path: "/api/screeners/run"
+    method: "POST"
+    description: "Run a screener immediately"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    request_body: "ScreenerRequest object"
+    response: "ScheduleRunResponse object"
+
+  get_run:
+    path: "/api/runs/{run_id}"
+    method: "GET"
+    description: "Get run status and details"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      run_id: "integer (path parameter)"
+    response: "ScheduleRunResponse object"
+
+  list_runs:
+    path: "/api/runs"
+    method: "GET"
+    description: "List runs with optional filtering"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      job_type: "JobType enum (optional)"
+      status: "RunStatus enum (optional)"
+      limit: "integer (1-1000, default: 100)"
+      offset: "integer (default: 0)"
+      order_by: "string (default: scheduled_for)"
+      order_desc: "boolean (default: true)"
+    response: "Array of ScheduleRunResponse objects"
+
+  cancel_run:
+    path: "/api/runs/{run_id}"
+    method: "DELETE"
+    description: "Cancel a pending run"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      run_id: "integer (path parameter)"
+    response: "204 No Content"
+
+  # Schedule Management
+  create_schedule:
+    path: "/api/schedules"
+    method: "POST"
+    description: "Create a new schedule"
+    authentication: true
+    roles: ["trader", "admin"]
+    request_body: "ScheduleCreate object"
+    response: "ScheduleResponse object"
+
+  list_schedules:
+    path: "/api/schedules"
+    method: "GET"
+    description: "List schedules with optional filtering"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      job_type: "JobType enum (optional)"
+      enabled: "boolean (optional)"
+      limit: "integer (1-1000, default: 100)"
+      offset: "integer (default: 0)"
+    response: "Array of ScheduleResponse objects"
+
+  get_schedule:
+    path: "/api/schedules/{schedule_id}"
+    method: "GET"
+    description: "Get schedule details"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      schedule_id: "integer (path parameter)"
+    response: "ScheduleResponse object"
+
+  update_schedule:
+    path: "/api/schedules/{schedule_id}"
+    method: "PUT"
+    description: "Update a schedule"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      schedule_id: "integer (path parameter)"
+    request_body: "ScheduleUpdate object"
+    response: "ScheduleResponse object"
+
+  delete_schedule:
+    path: "/api/schedules/{schedule_id}"
+    method: "DELETE"
+    description: "Delete a schedule"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      schedule_id: "integer (path parameter)"
+    response: "204 No Content"
+
+  trigger_schedule:
+    path: "/api/schedules/{schedule_id}/trigger"
+    method: "POST"
+    description: "Manually trigger a schedule"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      schedule_id: "integer (path parameter)"
+    response: "ScheduleRunResponse object"
+
+  # Screener Sets
+  list_screener_sets:
+    path: "/api/screener-sets"
+    method: "GET"
+    description: "List available screener sets"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      category: "string (optional)"
+      search: "string (optional)"
+    response: "Array of ScreenerSetInfo objects"
+
+  get_screener_set:
+    path: "/api/screener-sets/{set_name}"
+    method: "GET"
+    description: "Get screener set details"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      set_name: "string (path parameter)"
+    response: "ScreenerSetInfo object"
+
+  # Statistics
+  get_run_statistics:
+    path: "/api/runs/statistics"
+    method: "GET"
+    description: "Get run statistics"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    query_parameters:
+      job_type: "JobType enum (optional)"
+      days: "integer (1-365, default: 30)"
+    response: "Run statistics object"
+
+  # Admin Operations
+  cleanup_old_runs:
+    path: "/api/admin/cleanup-runs"
+    method: "POST"
+    description: "Clean up old runs (Admin only)"
+    authentication: true
+    roles: ["trader", "admin"]
+    query_parameters:
+      days_to_keep: "integer (1-365, default: 90)"
+    response:
+      deleted_count: "integer"
+      days_to_keep: "integer"
+
+# ============================================
+# DATA MODELS AND SCHEMAS
+# ============================================
+
+data_models:
+  StrategyConfig:
+    description: "Strategy configuration model"
+    fields:
+      id: "string (unique identifier)"
+      name: "string (human-readable name)"
+      enabled: "boolean (default: true)"
+      symbol: "string (trading symbol, e.g., BTCUSDT)"
+      broker: "object (broker configuration)"
+      strategy: "object (strategy parameters)"
+      data: "object (data configuration)"
+      trading: "object (trading settings)"
+      risk_management: "object (risk management settings)"
+      notifications: "object (notification settings)"
+
+  StrategyStatus:
+    description: "Strategy status model"
+    fields:
+      instance_id: "string"
+      name: "string"
+      status: "string"
+      uptime_seconds: "float"
+      error_count: "integer"
+      last_error: "string (optional)"
+      broker_type: "string (optional)"
+      trading_mode: "string (optional)"
+      symbol: "string (optional)"
+      strategy_type: "string (optional)"
+
+  SystemStatus:
+    description: "System status model"
+    fields:
+      service_name: "string"
+      version: "string"
+      status: "string"
+      uptime_seconds: "float"
+      active_strategies: "integer"
+      total_strategies: "integer"
+      system_metrics: "object"
+
+  NotificationResponse:
+    description: "Notification response model"
+    fields:
+      message_id: "integer"
+      status: "string"
+      channels: "Array of strings"
+      priority: "string"
+      created_at: "string (ISO datetime)"
+      scheduled_for: "string (ISO datetime)"
+      processed_at: "string (ISO datetime, optional)"
+      retry_count: "integer"
+      last_error: "string (optional)"
+
+  DeliveryStatusResponse:
+    description: "Delivery status response model"
+    fields:
+      delivery_id: "integer"
+      channel: "string"
+      status: "string"
+      delivered_at: "string (ISO datetime, optional)"
+      response_time_ms: "integer (optional)"
+      error_message: "string (optional)"
+      external_id: "string (optional)"
+
+  NotificationStats:
+    description: "Notification statistics model"
+    fields:
+      total_messages: "integer"
+      delivered_messages: "integer"
+      failed_messages: "integer"
+      pending_messages: "integer"
+      success_rate: "float"
+      channels_health: "object (channel -> status mapping)"
+
+# ============================================
+# AUTHENTICATION AND AUTHORIZATION
+# ============================================
+
+authentication_details:
+  token_type: "JWT Bearer Token"
+  token_expiry: "30 minutes (access token)"
+  refresh_token_expiry: "7 days"
+  
+  roles:
+    viewer:
+      description: "Read-only access to system information and analytics"
+      permissions:
+        - "View strategies"
+        - "View system status"
+        - "View notifications"
+        - "View analytics"
+        - "View Telegram data"
+        - "View job runs and schedules"
+    
+    trader:
+      description: "Full trading operations access"
+      permissions:
+        - "All viewer permissions"
+        - "Create/update/delete strategies"
+        - "Start/stop/restart strategies"
+        - "Send notifications"
+        - "Manage Telegram alerts and schedules"
+        - "Create/manage job schedules"
+        - "Administrative cleanup operations"
+    
+    admin:
+      description: "Full system administration access"
+      permissions:
+        - "All trader permissions"
+        - "User management"
+        - "System configuration"
+        - "Advanced administrative operations"
+
+  authentication_flow:
+    1: "POST /auth/login with username/password"
+    2: "Receive access_token and refresh_token"
+    3: "Include 'Authorization: Bearer <access_token>' in requests"
+    4: "Use POST /auth/refresh to get new tokens when expired"
+    5: "POST /auth/logout to invalidate tokens (client-side)"
+
+# ============================================
+# ERROR HANDLING
+# ============================================
+
+error_responses:
+  400:
+    description: "Bad Request"
+    examples:
+      - "Invalid request parameters"
+      - "Validation errors"
+      - "Missing required fields"
+  
+  401:
+    description: "Unauthorized"
+    examples:
+      - "Invalid or expired token"
+      - "Missing authentication"
+  
+  403:
+    description: "Forbidden"
+    examples:
+      - "Insufficient permissions"
+      - "Role-based access denied"
+  
+  404:
+    description: "Not Found"
+    examples:
+      - "Strategy not found"
+      - "Notification not found"
+      - "Schedule not found"
+  
+  500:
+    description: "Internal Server Error"
+    examples:
+      - "Database connection error"
+      - "Trading system unavailable"
+      - "Unexpected server error"
+  
+  503:
+    description: "Service Unavailable"
+    examples:
+      - "Trading system not available"
+      - "Strategy operation failed"
+
+# ============================================
+# RATE LIMITING AND QUOTAS
+# ============================================
+
+rate_limiting:
+  default_rate_limit: "100 requests per minute per user"
+  burst_limit: "200 requests per minute"
+  
+  endpoint_specific_limits:
+    "/api/notifications": "50 requests per minute"
+    "/api/strategies/*/start": "10 requests per minute"
+    "/api/strategies/*/stop": "10 requests per minute"
+    "/api/telegram/broadcast": "5 requests per minute"
+
+# ============================================
+# WEBSOCKET ENDPOINTS
+# ============================================
+
+websocket_endpoints:
+  real_time_updates:
+    path: "/ws"
+    description: "Real-time system updates and notifications"
+    authentication: true
+    message_types:
+      - "strategy_status_update"
+      - "system_metrics_update"
+      - "notification_update"
+      - "alert_update"
+
+# ============================================
+# API VERSIONING
+# ============================================
+
+versioning:
+  current_version: "1.0.0"
+  version_strategy: "URL path versioning (future: /api/v2/...)"
+  backward_compatibility: "Maintained for at least 6 months"
+  deprecation_notice: "30 days advance notice for breaking changes"
+
+# ============================================
+# DEVELOPMENT AND TESTING
+# ============================================
+
+development:
+  base_urls:
+    development: "http://localhost:8000"
+    staging: "https://staging-api.trading.example.com"
+    production: "https://api.trading.example.com"
+  
+  cors_origins:
+    - "http://localhost:3000"  # React dev server
+    - "http://localhost:5173"  # Vite dev server
+    - "http://localhost:5002"  # Alternative dev server
+  
+  test_endpoints:
+    health_check: "/api/health"
+    auth_test: "/api/test-auth"
+  
+  documentation:
+    swagger_ui: "/docs"
+    redoc: "/redoc"
+    openapi_json: "/openapi.json"

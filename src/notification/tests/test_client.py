@@ -129,7 +129,7 @@ class TestNotificationServiceClient:
     def setup_method(self):
         """Setup test client."""
         self.client = NotificationServiceClient(
-            base_url="http://test-service:8080",
+            service_url="http://test-service:8000",
             timeout=10,
             circuit_breaker_enabled=False  # Disable for testing
         )
@@ -350,7 +350,7 @@ class TestNotificationServiceClient:
 
         # Verify request
         mock_get.assert_called_once_with(
-            "http://test-service:8080/api/v1/messages/123/status",
+            "http://test-service:8000/api/notifications/123",
             timeout=10
         )
 
@@ -376,7 +376,7 @@ class TestNotificationServiceClient:
 
         # Verify request
         mock_get.assert_called_once_with(
-            "http://test-service:8080/api/v1/health",
+            "http://test-service:8000/api/notifications/health",
             timeout=10
         )
 
@@ -384,7 +384,7 @@ class TestNotificationServiceClient:
         """Test circuit breaker integration."""
         # Create client with circuit breaker enabled
         client = NotificationServiceClient(
-            base_url="http://test-service:8080",
+            service_url="http://test-service:8000",
             circuit_breaker_enabled=True
         )
 
@@ -409,7 +409,7 @@ class TestAsyncNotificationServiceClient:
     def setup_method(self):
         """Setup test client."""
         self.client = NotificationServiceClient(
-            base_url="http://test-service:8080",
+            service_url="http://test-service:8000",
             timeout=10,
             circuit_breaker_enabled=False
         )
@@ -508,7 +508,7 @@ class TestAsyncNotificationServiceClient:
         async with NotificationServiceClient() as client:
             assert client is not None
             # Client should be properly initialized
-            assert client.base_url == "http://localhost:8080"
+            assert client.service_url == "http://localhost:8000"
 
 
 if __name__ == "__main__":

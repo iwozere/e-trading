@@ -13,8 +13,8 @@ from sqlalchemy.sql import select
 from sqlalchemy.dialects.postgresql import insert
 
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, ChannelHealth, RateLimit, ChannelConfig,
-    MessagePriority, MessageStatus, DeliveryStatus, ChannelHealthStatus
+    Message, MessageDeliveryStatus, RateLimit, ChannelConfig,
+    MessagePriority, MessageStatus, DeliveryStatus
 )
 from src.notification.logger import setup_logger
 
@@ -32,6 +32,174 @@ class OptimizedMessageRepository:
             session: SQLAlchemy database session
         """
         self.session = session
+
+    def create_message(self, message_data: Dict[str, Any]) -> Message:
+        """
+        Create a new message.
+
+        Args:
+            message_data: Dictionary with message data
+
+        Returns:
+            Created Message object
+
+        Raises:
+            IntegrityError: If message creation fails
+        """
+        try:
+            from sqlalchemy.exc import IntegrityError
+            message = Message(**message_data)
+            self.session.add(message)
+            self.session.flush()  # Get the ID without committing
+            _logger.info("Created message %s with type %s", message.id, message.message_type)
+            return message
+        except IntegrityError as e:
+            self.session.rollback()
+            _logger.error("Failed to create message: %s", e)
+            raise
+
+    def get_message(self, message_id: int) -> Optional[Message]:
+        """
+        Get a message by ID.
+
+        Args:
+            message_id: Message ID
+
+        Returns:
+            Message object or None if not found
+        """
+        return self.session.query(Message).filter(Message.id == message_id).first()
+
+    def list_messages(
+        self,
+        status: Optional[MessageStatus] = None,
+        priority: Optional[MessagePriority] = None,
+        recipient_id: Optional[str] = None,
+        message_type: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+        order_by: str = "created_at",
+        order_desc: bool = True
+    ) -> List[Message]:
+        """
+        List messages with optional filtering.
+
+        Args:
+            status: Filter by status
+            priority: Filter by priority
+            recipient_id: Filter by recipient ID
+            message_type: Filter by message type
+            limit: Maximum number of results
+            offset: Number of results to skip
+            order_by: Field to order by
+            order_desc: Order in descending order
+
+        Returns:
+            List of Message objects
+        """
+        query = self.session.query(Message)
+
+        if status is not None:
+            query = query.filter(Message.status == status.value)
+
+        if priority is not None:
+            query = query.filter(Message.priority == priority.value)
+
+        if recipient_id is not None:
+            query = query.filter(Message.recipient_id == recipient_id)
+
+        if message_type is not None:
+            query = query.filter(Message.message_type == message_type)
+
+        # Apply ordering
+        order_field = getattr(Message, order_by, Message.created_at)
+        if order_desc:
+            query = query.order_by(desc(order_field))
+        else:
+            query = query.order_by(asc(order_field))
+
+        return query.offset(offset).limit(limit).all()
+
+    def get_pending_messages_with_lock(
+        self,
+        limit: int = 10,
+        lock_instance_id: str = None
+    ) -> List[Message]:
+        """
+        Get pending messages with distributed locking for database-centric processing.
+
+        This method atomically claims messages for processing by a specific instance,
+        preventing multiple notification service instances from processing the same message.
+
+        Args:
+            limit: Maximum number of messages to claim
+            lock_instance_id: Unique identifier for the processing instance
+
+        Returns:
+            List of Message objects claimed for processing
+        """
+        if not lock_instance_id:
+            raise ValueError("lock_instance_id is required for distributed processing")
+
+        from datetime import datetime, timezone, timedelta
+        current_time = datetime.now(timezone.utc)
+        stale_lock_threshold = current_time - timedelta(minutes=5)  # Locks older than 5 minutes are stale
+
+        try:
+            # Use raw SQL for atomic message claiming with PostgreSQL-specific features
+            query = text("""
+                UPDATE msg_messages
+                SET locked_by = :lock_instance_id,
+                    locked_at = :current_time
+                WHERE id IN (
+                    SELECT id FROM msg_messages
+                    WHERE status = 'PENDING'
+                    AND scheduled_for <= :current_time
+                    AND (
+                        locked_by IS NULL
+                        OR locked_at < :stale_threshold
+                    )
+                    ORDER BY
+                        CASE priority
+                            WHEN 'CRITICAL' THEN 1
+                            WHEN 'HIGH' THEN 2
+                            WHEN 'NORMAL' THEN 3
+                            WHEN 'LOW' THEN 4
+                        END,
+                        scheduled_for ASC
+                    LIMIT :limit
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING *
+            """)
+
+            result = self.session.execute(query, {
+                'lock_instance_id': lock_instance_id,
+                'current_time': current_time,
+                'stale_threshold': stale_lock_threshold,
+                'limit': limit
+            })
+
+            # Convert result rows to Message objects
+            messages = []
+            for row in result:
+                message = Message()
+                for column in row._mapping.keys():
+                    setattr(message, column, row._mapping[column])
+                messages.append(message)
+
+            if messages:
+                _logger.info(
+                    "Claimed %s messages for processing by instance %s",
+                    len(messages), lock_instance_id
+                )
+
+            return messages
+
+        except Exception as e:
+            _logger.error("Error claiming messages with lock: %s", e)
+            self.session.rollback()
+            return []
 
     def get_pending_messages_optimized(
         self,

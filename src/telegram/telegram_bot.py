@@ -1012,7 +1012,7 @@ async def main():
     _logger.info("Initializing notification service client...")
     try:
         import os
-        notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:5003")
+        notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
         notification_client = NotificationServiceClient(
             service_url=notification_service_url,
             timeout=30,

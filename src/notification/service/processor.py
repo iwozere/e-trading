@@ -20,7 +20,7 @@ from src.notification.service.config import config
 from src.notification.service.fallback_manager import FallbackManager
 from src.notification.service.health_monitor import health_monitor
 from src.notification.channels.base import channel_registry, MessageContent
-from src.data.db.models.model_notification import MessagePriority, MessageStatus
+from src.data.db.models.model_notification import MessagePriority, MessageStatus, Message
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
@@ -594,6 +594,160 @@ class MessageProcessor:
         if not self._stats['start_time']:
             return 0.0
         return (datetime.now(timezone.utc) - self._stats['start_time']).total_seconds()
+
+    async def process_database_message(self, db_message) -> ProcessingResult:
+        """
+        Process a message directly from the database (for database-centric architecture).
+
+        Args:
+            db_message: Message object from database
+
+        Returns:
+            ProcessingResult with processing outcome
+        """
+        start_time = time.time()
+
+        try:
+            self._logger.debug(
+                "Processing database message %s (type=%s, priority=%s)",
+                db_message.id, db_message.message_type, db_message.priority
+            )
+
+            # Create message content from database message
+            from src.notification.channels.base import MessageContent
+            content = MessageContent(
+                text=db_message.content.get('text', ''),
+                subject=db_message.content.get('subject'),
+                html=db_message.content.get('html'),
+                attachments=db_message.content.get('attachments'),
+                metadata=db_message.message_metadata or {}
+            )
+
+            # Get recipient
+            recipient = db_message.recipient_id
+
+            # Attempt delivery with fallback
+            success, delivery_results, failed_message = await self.fallback_manager.attempt_delivery_with_fallback(
+                message_id=db_message.id,
+                channels=db_message.channels,
+                recipient=recipient,
+                content=content,
+                priority=db_message.priority,
+                channel_instances=self._channel_instances
+            )
+
+            processing_time_ms = int((time.time() - start_time) * 1000)
+
+            # Update message status in database
+            from src.data.db.services.database_service import get_database_service
+            db_service = get_database_service()
+
+            with db_service.uow() as uow:
+                if success:
+                    # Update message status to delivered
+                    uow.s.query(Message).filter(Message.id == db_message.id).update({
+                        'status': MessageStatus.DELIVERED.value,
+                        'processed_at': datetime.now(timezone.utc),
+                        'locked_by': None,
+                        'locked_at': None
+                    })
+
+                    self._logger.info(
+                        "Database message %s delivered successfully in %sms",
+                        db_message.id, processing_time_ms
+                    )
+                else:
+                    error_message = failed_message.failure_details if failed_message else "Delivery failed"
+
+                    # Update message status to failed or increment retry count
+                    if db_message.retry_count < db_message.max_retries:
+                        # Increment retry count and reset lock
+                        uow.s.query(Message).filter(Message.id == db_message.id).update({
+                            'status': MessageStatus.PENDING.value,
+                            'retry_count': db_message.retry_count + 1,
+                            'last_error': error_message,
+                            'locked_by': None,
+                            'locked_at': None
+                        })
+                        self._logger.warning(
+                            "Database message %s failed, retry %s/%s: %s",
+                            db_message.id, db_message.retry_count + 1, db_message.max_retries, error_message
+                        )
+                    else:
+                        # Mark as permanently failed
+                        uow.s.query(Message).filter(Message.id == db_message.id).update({
+                            'status': MessageStatus.FAILED.value,
+                            'last_error': error_message,
+                            'processed_at': datetime.now(timezone.utc),
+                            'locked_by': None,
+                            'locked_at': None
+                        })
+                        self._logger.error(
+                            "Database message %s permanently failed after %s retries: %s",
+                            db_message.id, db_message.max_retries, error_message
+                        )
+
+                uow.commit()
+
+            # Update stats
+            self._stats['messages_processed'] += 1
+            if success:
+                self._stats['messages_delivered'] += 1
+            else:
+                self._stats['messages_failed'] += 1
+
+            # Convert delivery results for response
+            result_dict = {}
+            for result in delivery_results:
+                if hasattr(result, 'metadata') and result.metadata:
+                    channel_name = result.metadata.get('channel', 'unknown')
+                    result_dict[channel_name] = {
+                        "status": result.status.value,
+                        "external_id": result.external_id,
+                        "response_time_ms": result.response_time_ms,
+                        "success": result.success
+                    }
+
+            return ProcessingResult(
+                message_id=db_message.id,
+                success=success,
+                error_message=failed_message.failure_details if failed_message else None,
+                delivery_results=result_dict,
+                processing_time_ms=processing_time_ms
+            )
+
+        except Exception as e:
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            error_message = f"Processing exception: {str(e)}"
+
+            # Update message status in database
+            try:
+                from src.data.db.services.database_service import get_database_service
+                db_service = get_database_service()
+
+                with db_service.uow() as uow:
+                    uow.s.query(Message).filter(Message.id == db_message.id).update({
+                        'status': MessageStatus.FAILED.value,
+                        'last_error': error_message,
+                        'processed_at': datetime.now(timezone.utc),
+                        'locked_by': None,
+                        'locked_at': None
+                    })
+                    uow.commit()
+            except Exception as db_error:
+                self._logger.error("Failed to update message status in database: %s", db_error)
+
+            self._logger.error(
+                "Database message %s processing failed: %s",
+                db_message.id, error_message
+            )
+
+            return ProcessingResult(
+                message_id=db_message.id,
+                success=False,
+                error_message=error_message,
+                processing_time_ms=processing_time_ms
+            )
 
 
 # Global message processor instance

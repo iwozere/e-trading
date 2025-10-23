@@ -83,10 +83,10 @@ class BaseTradingBot:
         self.position_notification_manager = None
 
         try:
-            # Initialize notification service client
-            notification_service_url = config.get('notification_service_url', 'http://localhost:8080')
+            # Initialize notification service client (using Main API Service)
+            notification_service_url = config.get('notification_service_url', 'http://localhost:8000')
             self.notification_client = NotificationServiceClient(
-                base_url=notification_service_url,
+                service_url=notification_service_url,
                 timeout=30,
                 max_retries=3
             )

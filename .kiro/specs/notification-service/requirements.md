@@ -1,137 +1,162 @@
-# Notification Service Requirements
+# Notification Service Requirements - Database-Centric Architecture
 
 ## Introduction
 
-The Notification Service is a dedicated, autonomous service that handles all outbound communications for the Advanced Trading Framework. It provides a unified interface for sending notifications across multiple channels (Telegram, Email, SMS, etc.) with advanced features like queuing, batching, rate limiting, retry mechanisms, and delivery tracking.
+The Notification Service is being refactored to a **database-centric architecture** where it operates as a pure message delivery engine without REST endpoints. All client interactions will be handled through the Main API Service, with communication between services occurring exclusively through the database. This approach consolidates all REST operations in a single location while maintaining the notification service as an autonomous delivery engine.
 
 ## Glossary
 
-- **Notification Service**: Autonomous service responsible for all outbound communications
-- **Message Queue**: Database-backed queue for storing pending notifications
+- **Notification Service**: Autonomous message delivery engine that processes messages from database and delivers to external channels
+- **Main API Service**: Centralized REST API service that handles all client interactions and database operations
+- **Message Queue**: Database-backed queue for storing pending notifications (no in-memory queues)
 - **Channel Plugin**: Modular component responsible for delivering messages to specific channels (Telegram, Email, etc.)
-- **Priority Message**: High-priority message that bypasses batching and rate limiting
-- **Delivery Status**: Tracking information for message delivery success/failure
-- **Rate Limiting**: Per-user throttling mechanism to prevent spam and respect API limits
-- **Channel Health**: Monitoring system for detecting channel availability and performance
+- **Database-Centric Communication**: All inter-service communication occurs through database operations, no HTTP calls
+- **Unified Analytics Service**: Consolidated analytics module in Main API that handles both notification and trading analytics
+- **Delivery Engine**: Core processing component that polls database and delivers messages to external APIs
+- **Health Heartbeat**: Database-only health reporting mechanism without REST endpoints
 
 ## Requirements
 
 ### Requirement 1
 
-**User Story:** As a system administrator, I want a dedicated notification service that handles all outbound communications, so that I can decouple notification logic from business services and improve system maintainability.
+**User Story:** As a system architect, I want the notification service to be a pure delivery engine without REST endpoints, so that all client interactions are consolidated in the Main API Service and communication occurs through the database.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL run as a separate autonomous process
-2. THE Notification Service SHALL provide a unified API for all outbound communications
-3. THE Notification Service SHALL support multiple notification channels through a plugin architecture
-4. THE Notification Service SHALL persist all messages in a database-backed queue
-5. THE Notification Service SHALL process messages asynchronously without blocking client services
+1. THE Notification Service SHALL NOT expose any REST API endpoints
+2. THE Notification Service SHALL poll the database for pending messages
+3. THE Notification Service SHALL communicate status updates only through database writes
+4. THE Notification Service SHALL report health status only to the database
+5. THE Main API Service SHALL handle all client REST interactions for notifications
 
 ### Requirement 2
 
-**User Story:** As a developer, I want to send notifications through a simple API, so that I can focus on business logic without worrying about channel-specific implementation details.
+**User Story:** As a developer, I want to send notifications through the Main API Service, so that I have a single endpoint for all system interactions and don't need to discover multiple services.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL expose a REST API for enqueueing messages
-2. THE Notification Service SHALL accept messages with channel list, content, and metadata
-3. THE Notification Service SHALL return immediate acknowledgment when messages are queued
-4. THE Notification Service SHALL support message templates with dynamic data
-5. THE Notification Service SHALL validate message format and channel availability before queuing
+1. THE Main API Service SHALL provide REST endpoints for creating notifications
+2. THE Main API Service SHALL write notification messages directly to the database
+3. THE Main API Service SHALL provide REST endpoints for querying notification status
+4. THE Main API Service SHALL provide REST endpoints for notification analytics
+5. THE Notification Service SHALL automatically process messages written to the database
 
 ### Requirement 3
 
-**User Story:** As a trading system, I want to send high-priority notifications immediately, so that critical alerts and interactive responses are delivered without delay.
+**User Story:** As a system administrator, I want all analytics consolidated in the Main API Service, so that I can access both notification and trading analytics through a unified interface.
 
 #### Acceptance Criteria
 
-1. WHEN a message has high priority, THE Notification Service SHALL bypass batching mechanisms
-2. WHEN a message has high priority, THE Notification Service SHALL bypass rate limiting
-3. THE Notification Service SHALL process high-priority messages before normal priority messages
-4. THE Notification Service SHALL support priority levels: LOW, NORMAL, HIGH, CRITICAL
-5. THE Notification Service SHALL deliver critical messages within 5 seconds of receipt
+1. THE Main API Service SHALL provide unified analytics endpoints for notifications
+2. THE Main API Service SHALL provide unified analytics endpoints for trading data
+3. THE Main API Service SHALL query notification data directly from the database
+4. THE Main API Service SHALL support analytics patterns reusable across domains
+5. THE Notification Service SHALL NOT provide any analytics endpoints
 
 ### Requirement 4
 
-**User Story:** As a system operator, I want per-user rate limiting, so that individual users cannot overwhelm external APIs or spam other users.
+**User Story:** As a system operator, I want health monitoring consolidated in the Main API Service, so that I can view overall system health through a single interface.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL implement per-user rate limiting for each channel
-2. THE Notification Service SHALL configure different rate limits per channel type
-3. THE Notification Service SHALL queue rate-limited messages for later delivery
-4. THE Notification Service SHALL track rate limit violations and provide statistics
-5. THE Notification Service SHALL allow administrators to configure rate limits per user
+1. THE Main API Service SHALL provide consolidated health endpoints
+2. THE Main API Service SHALL aggregate health data from all subsystems
+3. THE Notification Service SHALL report health status only to the database
+4. THE Main API Service SHALL query health data directly from the database
+5. THE Main API Service SHALL provide channel health status through REST endpoints
 
 ### Requirement 5
 
-**User Story:** As a system administrator, I want comprehensive delivery tracking, so that I can monitor notification system performance and troubleshoot delivery issues.
+**User Story:** As a notification service, I want to focus solely on message delivery, so that I can optimize for reliability and performance without REST API overhead.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL record delivery status for every message
-2. THE Notification Service SHALL track delivery timestamps and response times
-3. THE Notification Service SHALL maintain delivery statistics per channel and per user
-4. THE Notification Service SHALL provide APIs for querying delivery history
-5. THE Notification Service SHALL expose delivery metrics for monitoring systems
+1. THE Notification Service SHALL poll the database for PENDING messages
+2. THE Notification Service SHALL deliver messages through channel plugins
+3. THE Notification Service SHALL update message status in the database
+4. THE Notification Service SHALL record delivery results in the database
+5. THE Notification Service SHALL implement retry logic and error handling
 
 ### Requirement 6
 
-**User Story:** As a system administrator, I want channel health monitoring, so that I can detect and respond to channel outages or performance degradation.
+**User Story:** As a system administrator, I want administrative operations in the Main API Service, so that I can manage all system operations through a single authenticated interface.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL monitor health of each notification channel
-2. THE Notification Service SHALL detect channel failures and mark channels as unhealthy
-3. THE Notification Service SHALL implement fallback mechanisms when primary channels fail
-4. THE Notification Service SHALL provide health status APIs for monitoring
-5. THE Notification Service SHALL log channel health events for analysis
+1. THE Main API Service SHALL provide administrative endpoints with proper authentication
+2. THE Main API Service SHALL handle notification cleanup operations
+3. THE Main API Service SHALL provide processor statistics through database queries
+4. THE Main API Service SHALL support administrative operations for both notifications and trading
+5. THE Notification Service SHALL NOT provide any administrative endpoints
 
 ### Requirement 7
 
-**User Story:** As a developer, I want to add new notification channels easily, so that the system can support future communication methods without major architectural changes.
+**User Story:** As a developer, I want channel plugins to remain in the notification service, so that delivery logic stays close to the processing engine while configuration is managed through the Main API.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL support a plugin architecture for notification channels
-2. THE Notification Service SHALL load channel plugins dynamically at startup
-3. THE Notification Service SHALL provide a standard interface for channel implementations
-4. THE Notification Service SHALL support channel-specific configuration and credentials
-5. THE Notification Service SHALL handle channel plugin failures gracefully
+1. THE Notification Service SHALL maintain channel plugin architecture
+2. THE Notification Service SHALL load channel configurations from the database
+3. THE Notification Service SHALL report channel health to the database
+4. THE Main API Service SHALL provide REST endpoints for channel configuration
+5. THE Main API Service SHALL provide REST endpoints for channel health status
 
 ### Requirement 8
 
-**User Story:** As a system administrator, I want message archiving and cleanup, so that the system maintains good performance while preserving important notification history.
+**User Story:** As a system integrator, I want seamless migration from the current architecture, so that existing functionality continues to work while moving to the new database-centric approach.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL archive delivered messages older than 30 days
-2. THE Notification Service SHALL delete archived messages older than 1 year
-3. THE Notification Service SHALL maintain failed message history for 90 days
-4. THE Notification Service SHALL provide configurable retention policies
-5. THE Notification Service SHALL perform cleanup operations during low-traffic periods
+1. THE Main API Service SHALL provide backward-compatible notification endpoints
+2. THE database schema SHALL remain compatible with existing data
+3. THE migration SHALL preserve all existing message and delivery history
+4. THE Notification Service SHALL continue processing existing pending messages
+5. THE migration SHALL be completed without service downtime
 
 ### Requirement 9
 
-**User Story:** As a service consumer, I want reliable message delivery with retry mechanisms, so that temporary failures don't result in lost notifications.
+**User Story:** As a system architect, I want rate limiting and priority handling in the notification service, so that delivery policies are enforced at the processing level while configuration is managed through the Main API.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL retry failed message deliveries automatically
-2. THE Notification Service SHALL implement exponential backoff for retry delays
-3. THE Notification Service SHALL limit maximum retry attempts per message
-4. THE Notification Service SHALL move permanently failed messages to dead letter queue
-5. THE Notification Service SHALL provide APIs for reprocessing failed messages
+1. THE Notification Service SHALL implement per-user rate limiting from database configuration
+2. THE Notification Service SHALL process messages based on priority levels
+3. THE Notification Service SHALL bypass rate limits for critical messages
+4. THE Main API Service SHALL provide REST endpoints for rate limit configuration
+5. THE Main API Service SHALL provide REST endpoints for priority configuration
 
 ### Requirement 10
 
-**User Story:** As a system integrator, I want to migrate from the current AsyncNotificationManager smoothly, so that existing functionality continues to work during the transition.
+**User Story:** As a system operator, I want comprehensive delivery tracking through the Main API Service, so that I can monitor notification performance and troubleshoot issues through a unified interface.
 
 #### Acceptance Criteria
 
-1. THE Notification Service SHALL provide backward compatibility APIs
-2. THE Notification Service SHALL support gradual migration of service consumers
-3. THE Notification Service SHALL maintain existing message formats and templates
-4. THE Notification Service SHALL preserve current channel configurations
-5. THE Notification Service SHALL provide migration tools and documentation
+1. THE Notification Service SHALL record all delivery attempts in the database
+2. THE Notification Service SHALL track response times and external message IDs
+3. THE Main API Service SHALL provide REST endpoints for delivery history
+4. THE Main API Service SHALL provide REST endpoints for delivery statistics
+5. THE Main API Service SHALL support delivery analytics and reporting
+
+### Requirement 11
+
+**User Story:** As a system architect, I want the notification service to be stateless, so that it can be scaled horizontally without coordination between instances.
+
+#### Acceptance Criteria
+
+1. THE Notification Service SHALL NOT maintain any in-memory state
+2. THE Notification Service SHALL coordinate through database locks for message processing
+3. THE Notification Service SHALL support multiple concurrent instances
+4. THE Notification Service SHALL handle instance failures gracefully
+5. THE Notification Service SHALL resume processing after restarts without data loss
+
+### Requirement 12
+
+**User Story:** As a developer, I want unified error handling patterns, so that both notification and trading errors are handled consistently through the Main API Service.
+
+#### Acceptance Criteria
+
+1. THE Main API Service SHALL provide consistent error response formats
+2. THE Main API Service SHALL handle both notification and trading errors uniformly
+3. THE Notification Service SHALL record errors in the database with structured format
+4. THE Main API Service SHALL provide error analytics across all domains
+5. THE Main API Service SHALL support error notification and alerting
