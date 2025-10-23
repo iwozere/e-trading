@@ -587,101 +587,6 @@ class DeliveryStatusRepository:
         return [row.channel for row in channels]
 
 
-class ChannelHealthRepository:
-    """Repository for channel health operations."""
-
-    def __init__(self, session: Session):
-        """
-        Initialize the repository with a database session.
-
-        Args:
-            session: SQLAlchemy database session
-        """
-        self.session = session
-
-    def create_or_update_channel_health(self, health_data: Dict[str, Any]) -> ChannelHealth:
-        """
-        Create or update channel health.
-
-        Args:
-            health_data: Dictionary with channel health data
-
-        Returns:
-            ChannelHealth object
-        """
-        channel_name = health_data.get('channel')
-        if not channel_name:
-            raise ValueError("Channel name is required")
-
-        # Try to get existing health record
-        health = self.session.query(ChannelHealth).filter(
-            ChannelHealth.channel == channel_name
-        ).first()
-
-        try:
-            if health:
-                # Update existing record
-                for key, value in health_data.items():
-                    if hasattr(health, key):
-                        setattr(health, key, value)
-                health.checked_at = datetime.now(timezone.utc)
-            else:
-                # Create new record
-                health_data['checked_at'] = datetime.now(timezone.utc)
-                health = ChannelHealth(**health_data)
-                self.session.add(health)
-
-            self.session.flush()
-            _logger.info("Updated channel health for %s: %s", channel_name, health.status)
-            return health
-        except Exception as e:
-            self.session.rollback()
-            _logger.error("Failed to update channel health for %s: %s", channel_name, e)
-            raise
-
-    def get_channel_health(self, channel: str) -> Optional[ChannelHealth]:
-        """
-        Get channel health by channel name.
-
-        Args:
-            channel: Channel name
-
-        Returns:
-            ChannelHealth object or None if not found
-        """
-        return self.session.query(ChannelHealth).filter(ChannelHealth.channel == channel).first()
-
-    def list_channel_health(self, status: Optional[ChannelHealthStatus] = None) -> List[ChannelHealth]:
-        """
-        List channel health records.
-
-        Args:
-            status: Filter by status
-
-        Returns:
-            List of ChannelHealth objects
-        """
-        query = self.session.query(ChannelHealth)
-
-        if status is not None:
-            query = query.filter(ChannelHealth.status == status.value)
-
-        return query.order_by(desc(ChannelHealth.checked_at)).all()
-
-    def get_healthy_channels(self) -> List[str]:
-        """
-        Get list of healthy channel names.
-
-        Returns:
-            List of healthy channel names
-        """
-        channels = self.session.query(ChannelHealth.channel).filter(
-            ChannelHealth.status.in_([ChannelHealthStatus.HEALTHY.value, ChannelHealthStatus.DEGRADED.value])
-        ).all()
-
-        return [channel[0] for channel in channels]
-
-
 class RateLimitRepository:
     """Repository for rate limit operations."""
 
@@ -932,13 +837,11 @@ class NotificationRepository:
             self.delivery_status = OptimizedDeliveryStatusRepository(session)
             self.rate_limits = OptimizedRateLimitRepository(session)
             # Keep standard implementations for these
-            self.channel_health = ChannelHealthRepository(session)
             self.channel_configs = ChannelConfigRepository(session)
         else:
             # Use standard implementations
             self.messages = MessageRepository(session)
             self.delivery_status = DeliveryStatusRepository(session)
-            self.channel_health = ChannelHealthRepository(session)
             self.rate_limits = RateLimitRepository(session)
             self.channel_configs = ChannelConfigRepository(session)
 

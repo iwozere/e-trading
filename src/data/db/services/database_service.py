@@ -18,6 +18,7 @@ from src.data.db.models.model_trading import Base as TradingBase
 from src.data.db.models.model_webui import Base as WebUIBase
 from src.data.db.models.model_jobs import Base as JobsBase
 from src.data.db.models.model_notification import Base as NotificationBase
+from src.data.db.models.model_system_health import Base as SystemHealthBase
 
 # Repositories
 # NOTE: every repo must accept a sqlalchemy.orm.Session in __init__
@@ -46,6 +47,7 @@ from src.data.db.repos.repo_trading import (
 
 from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.repos.repo_notification import NotificationRepository
+from src.data.db.repos.repo_system_health import SystemHealthRepository
 
 
 # ------------------------------- UoW bundle ----------------------------------
@@ -64,6 +66,9 @@ class ReposBundle:
 
     # Notifications
     notifications: NotificationRepository
+
+    # System Health
+    system_health: SystemHealthRepository
 
     # Telegram
     telegram_feedback: TelegramFeedbackRepo
@@ -96,7 +101,7 @@ class DatabaseService:
     def init_databases(self) -> None:
         """Create all tables for every model base (idempotent)."""
         eng = getattr(self, "engine", None) or engine
-        for base in (UsersBase, TelegramBase, TradingBase, WebUIBase, JobsBase, NotificationBase):
+        for base in (UsersBase, TelegramBase, TradingBase, WebUIBase, JobsBase, NotificationBase, SystemHealthBase):
             base.metadata.create_all(bind=eng)
 
     # for tests that call ds.get_database_service()
@@ -124,6 +129,9 @@ class DatabaseService:
 
                 # Notifications
                 notifications=NotificationRepository(s),
+
+                # System Health
+                system_health=SystemHealthRepository(s),
 
                 # Telegram
                 telegram_feedback=TelegramFeedbackRepo(s),

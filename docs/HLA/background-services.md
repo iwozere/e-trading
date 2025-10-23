@@ -685,13 +685,58 @@ async def execute_screener_job(run: Run) -> dict:
 
 ### 11. Monitoring and Observability
 
-#### 9.1 Job Metrics
+#### 11.1 Job Metrics
 - **Execution Times**: Track job duration and performance
 - **Success Rates**: Monitor job completion rates
 - **Queue Depths**: Track pending job counts
 - **Worker Utilization**: Monitor worker pool usage
 
-#### 9.2 Alerting
+#### 11.2 System Health Monitoring
+
+**Integrated Health System**: All background services participate in the platform-wide health monitoring system:
+
+**Monitored Services**:
+- **Notification Service**: Message processor health, channel connectivity
+- **Telegram Bot**: Bot API connectivity, command processing capability
+- **API Service**: REST API health, service initialization status
+- **Web UI**: Frontend/backend process health, static file serving
+- **Trading Bot**: Strategy execution health, broker connectivity
+- **Database**: Connection pool health, query performance
+
+**Health Reporting**:
+```python
+# Each service implements automatic heartbeat reporting
+from src.common.heartbeat_manager import HeartbeatManager
+
+# Service-specific health check
+def service_health_check():
+    return {
+        'status': 'HEALTHY' | 'DEGRADED' | 'DOWN' | 'UNKNOWN',
+        'response_time_ms': Optional[int],
+        'error_message': Optional[str],
+        'metadata': Optional[Dict[str, Any]]
+    }
+
+# Automatic heartbeat every 30-60 seconds
+heartbeat_manager = HeartbeatManager(
+    system='service_name',
+    interval_seconds=30
+)
+heartbeat_manager.set_health_check_function(service_health_check)
+heartbeat_manager.start_heartbeat()
+```
+
+**Health Monitoring APIs**:
+- `GET /api/v1/health` - Overall platform health
+- `GET /api/v1/health/systems` - All systems health details
+- `GET /api/v1/health/system/{system_name}` - Specific system health
+- `GET /api/v1/health/unhealthy` - All unhealthy systems
+
+**Health Data Storage**: All health data is stored in `msg_system_health` table with automatic cleanup and historical tracking.
+
+For comprehensive health monitoring documentation, see [System Health Monitoring](system-health-monitoring.md).
+
+#### 11.3 Traditional Job Alerting
 - **Failed Jobs**: Alert on job failures
 - **Queue Backlog**: Alert on growing queues
 - **Worker Failures**: Alert on worker crashes

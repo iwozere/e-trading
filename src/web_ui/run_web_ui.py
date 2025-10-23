@@ -231,6 +231,14 @@ class WebUIRunner:
         """Shutdown all processes."""
         _logger.info("Shutting down web UI...")
 
+        # Stop heartbeat
+        try:
+            if hasattr(self, 'heartbeat_manager') and self.heartbeat_manager:
+                self.heartbeat_manager.stop_heartbeat()
+                _logger.info("Stopped web UI heartbeat")
+        except Exception as e:
+            _logger.error("Error stopping heartbeat: %s", e)
+
         for process in self.processes:
             if process and process.poll() is None:
                 try:
@@ -284,6 +292,72 @@ class WebUIRunner:
                 _logger.info(f"Web UI: http://{self.host}:{self.port}")
 
             _logger.info("=" * 60)
+
+            # Initialize heartbeat manager
+            _logger.info("Initializing heartbeat manager...")
+            try:
+                from src.common.heartbeat_manager import HeartbeatManager
+
+                def web_ui_health_check():
+                    """Health check function for web UI."""
+                    try:
+                        # Check if processes are running
+                        backend_running = self.backend_process is not None and self.backend_process.poll() is None
+                        frontend_running = True  # In production, frontend is served by backend
+
+                        if self.dev_mode:
+                            frontend_running = self.frontend_process is not None and self.frontend_process.poll() is None
+
+                        if backend_running and frontend_running:
+                            return {
+                                'status': 'HEALTHY',
+                                'metadata': {
+                                    'mode': 'development' if self.dev_mode else 'production',
+                                    'host': self.host,
+                                    'port': self.port,
+                                    'backend_running': backend_running,
+                                    'frontend_running': frontend_running
+                                }
+                            }
+                        elif backend_running:
+                            return {
+                                'status': 'DEGRADED',
+                                'error_message': 'Frontend not running' if self.dev_mode else 'Backend only',
+                                'metadata': {
+                                    'mode': 'development' if self.dev_mode else 'production',
+                                    'backend_running': backend_running,
+                                    'frontend_running': frontend_running
+                                }
+                            }
+                        else:
+                            return {
+                                'status': 'DOWN',
+                                'error_message': 'Backend not running',
+                                'metadata': {
+                                    'mode': 'development' if self.dev_mode else 'production',
+                                    'backend_running': backend_running,
+                                    'frontend_running': frontend_running
+                                }
+                            }
+                    except Exception as e:
+                        return {
+                            'status': 'DOWN',
+                            'error_message': f'Health check failed: {str(e)}'
+                        }
+
+                # Create and start heartbeat manager
+                self.heartbeat_manager = HeartbeatManager(
+                    system='web_ui',
+                    interval_seconds=30
+                )
+                self.heartbeat_manager.set_health_check_function(web_ui_health_check)
+                self.heartbeat_manager.start_heartbeat()
+
+                _logger.info("Heartbeat manager started for web UI")
+
+            except Exception as e:
+                _logger.error("Failed to initialize heartbeat manager: %s", e)
+                self.heartbeat_manager = None
 
             # Start backend (this blocks)
             self.start_backend()

@@ -268,20 +268,113 @@ class NotificationServiceClient:
             if email_receiver:
                 message_data["message_metadata"]["email_receiver"] = email_receiver
 
-            # Send request
-            response = await self._make_request(
-                "POST",
-                "/api/v1/messages",
-                json=message_data,
-                headers={"Content-Type": "application/json"}
-            )
+            # Try HTTP API first
+            try:
+                response = await self._make_request(
+                    "POST",
+                    "/api/v1/messages",
+                    json=message_data,
+                    headers={"Content-Type": "application/json"}
+                )
 
-            _logger.info("Notification sent successfully: %s", response.get("message_id"))
-            return True
+                _logger.info("Notification sent successfully via HTTP API: %s", response.get("message_id"))
+                return True
+
+            except Exception as api_error:
+                _logger.warning("HTTP API failed, attempting direct database fallback: %s", api_error)
+
+                # Fallback to direct database insertion
+                try:
+                    await self._send_notification_direct_to_db(message_data)
+                    _logger.info("Notification queued successfully via direct database fallback")
+                    return True
+
+                except Exception as db_error:
+                    _logger.error("Both HTTP API and database fallback failed: API=%s, DB=%s", api_error, db_error)
+                    return False
 
         except Exception as e:
             _logger.error("Failed to send notification: %s", e)
             return False
+
+    async def _send_notification_direct_to_db(self, message_data: Dict[str, Any]) -> None:
+        """
+        Directly insert notification into database when HTTP API is unavailable.
+
+        This fallback method ensures notifications are always queued even when
+        the notification service HTTP API is not available.
+
+        Args:
+            message_data: Message data dictionary prepared for the API
+
+        Raises:
+            Exception: If database insertion fails
+        """
+        try:
+            # Import here to avoid circular dependencies and reduce startup time
+            from src.data.db.core.database import session_scope
+            from src.data.db.services.notification_service import NotificationService
+            from src.data.db.repos.repo_notification import NotificationRepository
+            from datetime import datetime, timezone
+            import base64
+
+            with session_scope() as session:
+                # Create notification repository and service
+                notification_repo = NotificationRepository(session)
+                notification_service = NotificationService(notification_repo)
+
+                # Process attachments if present
+                processed_attachments = None
+                if "attachments" in message_data.get("message_metadata", {}):
+                    attachments = message_data["message_metadata"]["attachments"]
+                    processed_attachments = {}
+
+                    for filename, file_data in attachments.items():
+                        if isinstance(file_data, bytes):
+                            # Convert bytes to base64 for JSON storage
+                            processed_attachments[filename] = {
+                                "data": base64.b64encode(file_data).decode('utf-8'),
+                                "type": "base64",
+                                "size": len(file_data)
+                            }
+                        elif isinstance(file_data, str):
+                            # File path
+                            processed_attachments[filename] = {
+                                "path": file_data,
+                                "type": "file_path"
+                            }
+                        else:
+                            # Already processed attachment data
+                            processed_attachments[filename] = file_data
+
+                # Prepare database message data
+                db_message_data = {
+                    "message_type": message_data["message_type"],
+                    "priority": message_data["priority"],
+                    "channels": message_data["channels"],
+                    "recipient_id": message_data["recipient_id"],
+                    "template_name": message_data.get("template_name"),
+                    "content": {
+                        **message_data["content"],
+                        "attachments": processed_attachments
+                    } if processed_attachments else message_data["content"],
+                    "message_metadata": {
+                        **message_data.get("message_metadata", {}),
+                        "fallback_method": "direct_db",
+                        "fallback_timestamp": datetime.now(timezone.utc).isoformat()
+                    },
+                    "scheduled_for": datetime.now(timezone.utc),
+                    "max_retries": 3,
+                    "retry_count": 0
+                }
+
+                # Create the message in database
+                message = notification_service.create_message(db_message_data)
+                _logger.info("Created notification message %s directly in database via fallback", message.id)
+
+        except Exception as e:
+            _logger.error("Failed to insert notification directly to database: %s", e)
+            raise
 
     async def send_trade_notification(self,
                                     symbol: str,

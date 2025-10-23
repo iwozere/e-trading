@@ -43,6 +43,7 @@ This index provides a comprehensive guide to all documentation, organized by top
 ### Background Services
 - **[Background Services](background-services.md)** - APScheduler system and job management
 - **[Notification Services](notification-services.md)** - Multi-channel notification integration
+- **[System Health Monitoring](system-health-monitoring.md)** - Comprehensive health monitoring and alerting
 - **[Service Communication Diagram](diagrams/service-communication.mmd)** - Inter-service communication patterns
 
 ### API & External Integration
@@ -76,6 +77,8 @@ This index provides a comprehensive guide to all documentation, organized by top
 | **Service Layer** | Business logic encapsulation pattern | All Modules | [README](README.md#architectural-design-principles) |
 | **Event-Driven Architecture** | Asynchronous processing and loose coupling | Infrastructure, Communication | [Background Services](background-services.md#event-processing) |
 | **Circuit Breaker** | Failure detection and recovery pattern | Infrastructure | [Infrastructure](modules/infrastructure.md#error-handling) |
+| **Health Monitoring** | Automated system health tracking and alerting | All Systems | [System Health Monitoring](system-health-monitoring.md) |
+| **Heartbeat System** | Automatic health status reporting from all processes | Infrastructure | [System Health Monitoring](system-health-monitoring.md#heartbeat-implementation) |
 
 ### Data & ML Concepts
 | Term | Definition | Related Modules | Documentation |

@@ -7,6 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 import signal
+import time
 from typing import Optional
 
 from src.trading.live_trading_bot import LiveTradingBot
@@ -61,16 +62,93 @@ def main(config_name: Optional[str] = None):
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
+        # Initialize heartbeat manager
+        _logger.info("Initializing heartbeat manager...")
+        heartbeat_manager = None
+        try:
+            from src.common.heartbeat_manager import HeartbeatManager
+
+            def trading_bot_health_check():
+                """Health check function for trading bot."""
+                try:
+                    # Check if bot is running and healthy
+                    if bot and hasattr(bot, 'is_running') and bot.is_running:
+                        # You can add more specific health checks here
+                        # For example, check last trade time, connection status, etc.
+                        return {
+                            'status': 'HEALTHY',
+                            'metadata': {
+                                'config_name': config_name,
+                                'bot_running': True,
+                                'last_check': time.time()
+                            }
+                        }
+                    elif bot:
+                        return {
+                            'status': 'DOWN',
+                            'error_message': 'Trading bot not running',
+                            'metadata': {
+                                'config_name': config_name,
+                                'bot_running': False
+                            }
+                        }
+                    else:
+                        return {
+                            'status': 'DOWN',
+                            'error_message': 'Trading bot not initialized',
+                            'metadata': {
+                                'config_name': config_name,
+                                'bot_running': False
+                            }
+                        }
+                except Exception as e:
+                    return {
+                        'status': 'DOWN',
+                        'error_message': f'Health check failed: {str(e)}',
+                        'metadata': {
+                            'config_name': config_name
+                        }
+                    }
+
+            # Create and start heartbeat manager
+            heartbeat_manager = HeartbeatManager(
+                system='trading_bot',
+                interval_seconds=30
+            )
+            heartbeat_manager.set_health_check_function(trading_bot_health_check)
+            heartbeat_manager.start_heartbeat()
+
+            _logger.info("Heartbeat manager started for trading bot")
+
+        except Exception as e:
+            _logger.error("Failed to initialize heartbeat manager: %s", e)
+
+        # Update signal handler to stop heartbeat
+        def signal_handler_with_heartbeat(signum):
+            _logger.info("Received signal %s, shutting down...", signum)
+            if heartbeat_manager:
+                heartbeat_manager.stop_heartbeat()
+                _logger.info("Stopped trading bot heartbeat")
+            bot.stop()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, signal_handler_with_heartbeat)
+        signal.signal(signal.SIGTERM, signal_handler_with_heartbeat)
+
         # Start the bot
         _logger.info("Starting live trading bot...")
         bot.start()
 
     except KeyboardInterrupt:
         _logger.info("Received keyboard interrupt, shutting down...")
+        if heartbeat_manager:
+            heartbeat_manager.stop_heartbeat()
         if 'bot' in locals():
             bot.stop()
     except Exception as e:
         _logger.exception("Error running live trading bot: %s")
+        if heartbeat_manager:
+            heartbeat_manager.stop_heartbeat()
         if 'bot' in locals():
             bot.stop()
         sys.exit(1)

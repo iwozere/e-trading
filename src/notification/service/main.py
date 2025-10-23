@@ -87,10 +87,97 @@ async def lifespan(app: FastAPI):
     await health_monitor.start()
     _logger.info("Health monitor started")
 
+    # Initialize heartbeat manager
+    from src.common.heartbeat_manager import get_process_heartbeat_manager
+    heartbeat_manager = get_process_heartbeat_manager('notification')
+
+    # Add main notification service heartbeat
+    def notification_health_check():
+        """Health check function for notification service."""
+        try:
+            # Check if message processor is running
+            if message_processor and message_processor.is_running:
+                return {
+                    'status': 'HEALTHY',
+                    'metadata': {
+                        'service': config.service_name,
+                        'version': config.version,
+                        'message_processor_running': True
+                    }
+                }
+            else:
+                return {
+                    'status': 'DOWN',
+                    'error_message': 'Message processor not running',
+                    'metadata': {
+                        'service': config.service_name,
+                        'version': config.version,
+                        'message_processor_running': False
+                    }
+                }
+        except Exception as e:
+            return {
+                'status': 'DOWN',
+                'error_message': f'Health check failed: {str(e)}',
+                'metadata': {
+                    'service': config.service_name,
+                    'version': config.version
+                }
+            }
+
+    main_heartbeat = heartbeat_manager.add_main_heartbeat(
+        interval_seconds=30,
+        health_check_func=notification_health_check
+    )
+
+    # Add heartbeats for each notification channel
+    enabled_channels = ['email', 'telegram', 'sms', 'slack', 'discord']  # Add your channels here
+    for channel in enabled_channels:
+        if config.is_channel_enabled(channel):
+            def create_channel_health_check(channel_name):
+                def channel_health_check():
+                    """Health check function for notification channel."""
+                    try:
+                        # You can add specific channel health checks here
+                        # For now, just check if the channel is enabled
+                        return {
+                            'status': 'HEALTHY',
+                            'metadata': {
+                                'channel': channel_name,
+                                'enabled': True,
+                                'last_check': datetime.now(timezone.utc).isoformat()
+                            }
+                        }
+                    except Exception as e:
+                        return {
+                            'status': 'DOWN',
+                            'error_message': f'Channel {channel_name} health check failed: {str(e)}',
+                            'metadata': {
+                                'channel': channel_name,
+                                'enabled': False
+                            }
+                        }
+                return channel_health_check
+
+            heartbeat_manager.add_component_heartbeat(
+                component=channel,
+                interval_seconds=60,  # Channels can have longer intervals
+                health_check_func=create_channel_health_check(channel)
+            )
+
+    # Start all heartbeats
+    heartbeat_manager.start_all_heartbeats()
+    _logger.info("Heartbeat manager started for notification service")
+
     yield
 
     # Shutdown
     _logger.info("Shutting down Notification Service...")
+
+    # Stop heartbeats
+    heartbeat_manager.stop_all_heartbeats()
+    _logger.info("Stopped heartbeat manager")
+
     if message_processor:
         await message_processor.shutdown()
     if health_monitor:
@@ -150,19 +237,37 @@ async def root():
 async def health_check():
     """Service health check endpoint."""
     try:
-        # Test database connection
         db_service = get_database_service()
-        with db_service.uow() as r:
-            # Simple query to test database connectivity
-            r.s.execute("SELECT 1")
 
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "service": config.service_name,
-            "version": config.version,
-            "database": "connected"
-        }
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Get systems overview
+            overview = health_service.get_systems_overview()
+
+            # Determine HTTP status code based on overall health
+            status_code = 200
+            if overview["overall_status"] == "DOWN":
+                status_code = 503
+            elif overview["overall_status"] == "DEGRADED":
+                status_code = 200  # Still operational but degraded
+
+            # Add service-specific information
+            overview.update({
+                "service": config.service_name,
+                "version": config.version,
+            })
+
+            return JSONResponse(
+                status_code=status_code,
+                content=overview
+            )
+
     except Exception as e:
         _logger.error("Health check failed: %s", e)
         return JSONResponse(
@@ -172,7 +277,86 @@ async def health_check():
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "service": config.service_name,
                 "version": config.version,
-                "error": str(e)
+                "error": str(e),
+                "overall_status": "DOWN"
+            }
+        )
+
+
+@app.get("/api/v1/health/systems")
+async def get_systems_health():
+    """Get detailed health information for all systems."""
+    try:
+        db_service = get_database_service()
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Get all systems health
+            all_systems = health_service.get_all_systems_health()
+            overview = health_service.get_systems_overview()
+
+            return {
+                "overview": overview,
+                "systems": all_systems,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except Exception as e:
+        _logger.error("Failed to get systems health: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Failed to retrieve systems health",
+                "message": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
+
+
+@app.get("/api/v1/health/system/{system_name}")
+async def get_system_health(system_name: str, component: Optional[str] = None):
+    """Get health information for a specific system."""
+    try:
+        db_service = get_database_service()
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Get system health
+            system_health = health_service.get_system_health(system_name, component)
+
+            if not system_health:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"System '{system_name}' not found"
+                )
+
+            return {
+                "system_health": system_health,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Failed to get health for system %s: %s", system_name, e)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": f"Failed to retrieve health for system {system_name}",
+                "message": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         )
 
@@ -383,23 +567,330 @@ async def list_channels():
         raise HTTPException(status_code=500, detail="Failed to list channels")
 
 
-@app.get("/api/v1/channels/health", response_model=List[ChannelHealthResponse])
+@app.get("/api/v1/channels/health")
 async def get_channels_health():
     """
-    Get health status for all channels.
+    Get health status for all notification channels (backward compatibility).
 
     Returns:
         List of channel health statuses
     """
     try:
         db_service = get_database_service()
-        with db_service.uow() as r:
-            health_records = r.notifications.channel_health.list_channel_health()
-            return [ChannelHealthResponse.from_orm(health) for health in health_records]
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Get notification channels health
+            channels_health = health_service.get_notification_channels_health()
+
+            return {
+                "channels": channels_health,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
 
     except Exception as e:
         _logger.error("Failed to get channel health: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get channel health")
+
+
+@app.get("/api/v1/channels/{channel_name}/health")
+async def get_channel_health(channel_name: str):
+    """
+    Get health status for a specific notification channel (backward compatibility).
+
+    Args:
+        channel_name: Channel name (e.g., 'email', 'slack', 'discord')
+
+    Returns:
+        Channel health status
+    """
+    try:
+        db_service = get_database_service()
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Get specific channel health
+            channel_health = health_service.get_notification_channel_health(channel_name)
+
+            if not channel_health:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Channel '{channel_name}' not found"
+                )
+
+            return {
+                "channel_health": channel_health,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Failed to get health for channel %s: %s", channel_name, e)
+        raise HTTPException(status_code=500, detail=f"Failed to get health for channel {channel_name}")
+
+
+@app.post("/api/v1/channels/{channel_name}/health")
+async def update_channel_health(
+    channel_name: str,
+    health_data: Dict[str, Any]
+):
+    """
+    Update health status for a specific notification channel.
+
+    Args:
+        channel_name: Channel name (e.g., 'email', 'slack', 'discord')
+        health_data: Health status data
+
+    Returns:
+        Updated channel health status
+    """
+    try:
+        db_service = get_database_service()
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+            from src.data.db.models.model_system_health import SystemHealthStatus
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Parse status
+            status_str = health_data.get('status', 'UNKNOWN').upper()
+            try:
+                status = SystemHealthStatus(status_str)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid status '{status_str}'. Must be one of: HEALTHY, DEGRADED, DOWN, UNKNOWN"
+                )
+
+            # Update channel health
+            updated_record = health_service.update_notification_channel_health(
+                channel=channel_name,
+                status=status,
+                response_time_ms=health_data.get('response_time_ms'),
+                error_message=health_data.get('error_message'),
+                metadata=health_data.get('metadata')
+            )
+
+            uow.commit()
+
+            # Return updated health data
+            channel_health = health_service.get_notification_channel_health(channel_name)
+
+            return {
+                "channel_health": channel_health,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Failed to update health for channel %s: %s", channel_name, e)
+        raise HTTPException(status_code=500, detail=f"Failed to update health for channel {channel_name}")
+
+
+@app.get("/api/v1/health/unhealthy")
+async def get_unhealthy_systems():
+    """Get all systems that are not healthy."""
+    try:
+        db_service = get_database_service()
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Get unhealthy systems
+            unhealthy_systems = health_service.get_unhealthy_systems()
+
+            return {
+                "unhealthy_systems": unhealthy_systems,
+                "count": len(unhealthy_systems),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except Exception as e:
+        _logger.error("Failed to get unhealthy systems: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to get unhealthy systems")
+
+
+@app.post("/api/v1/health/system/{system_name}")
+async def update_system_health(
+    system_name: str,
+    health_data: Dict[str, Any],
+    component: Optional[str] = None
+):
+    """
+    Update health status for a specific system.
+
+    Args:
+        system_name: System name (e.g., 'telegram_bot', 'api_service', 'web_ui')
+        health_data: Health status data
+        component: Component name (optional)
+
+    Returns:
+        Updated system health status
+    """
+    try:
+        db_service = get_database_service()
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+            from src.data.db.models.model_system_health import SystemHealthStatus
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Parse status
+            status_str = health_data.get('status', 'UNKNOWN').upper()
+            try:
+                status = SystemHealthStatus(status_str)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid status '{status_str}'. Must be one of: HEALTHY, DEGRADED, DOWN, UNKNOWN"
+                )
+
+            # Update system health
+            updated_record = health_service.update_system_health(
+                system=system_name,
+                component=component,
+                status=status,
+                response_time_ms=health_data.get('response_time_ms'),
+                error_message=health_data.get('error_message'),
+                metadata=health_data.get('metadata')
+            )
+
+            uow.commit()
+
+            # Return updated health data
+            system_health = health_service.get_system_health(system_name, component)
+
+            return {
+                "system_health": system_health,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Failed to update health for system %s: %s", system_name, e)
+        raise HTTPException(status_code=500, detail=f"Failed to update health for system {system_name}")
+
+
+@app.delete("/api/v1/health/system/{system_name}")
+async def delete_system_health(system_name: str, component: Optional[str] = None):
+    """
+    Delete health record for a specific system.
+
+    Args:
+        system_name: System name
+        component: Component name (optional)
+
+    Returns:
+        Deletion status
+    """
+    try:
+        db_service = get_database_service()
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Delete system health record
+            deleted = health_service.delete_system_health(system_name, component)
+
+            if not deleted:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"System '{system_name}' not found"
+                )
+
+            uow.commit()
+
+            return {
+                "deleted": True,
+                "system": system_name,
+                "component": component,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Failed to delete health for system %s: %s", system_name, e)
+        raise HTTPException(status_code=500, detail=f"Failed to delete health for system {system_name}")
+
+
+@app.post("/api/v1/health/cleanup")
+async def cleanup_stale_health_records(stale_threshold_hours: int = 24):
+    """
+    Clean up stale health records.
+
+    Args:
+        stale_threshold_hours: Hours after which a record is considered stale
+
+    Returns:
+        Cleanup statistics
+    """
+    try:
+        if stale_threshold_hours < 1 or stale_threshold_hours > 168:  # Max 1 week
+            raise HTTPException(
+                status_code=400,
+                detail="Stale threshold must be between 1 and 168 hours"
+            )
+
+        db_service = get_database_service()
+
+        with db_service.uow() as uow:
+            from src.data.db.repos.repo_system_health import SystemHealthRepository
+            from src.data.db.services.system_health_service import SystemHealthService
+
+            # Initialize health service
+            health_repo = SystemHealthRepository(uow.s)
+            health_service = SystemHealthService(health_repo)
+
+            # Cleanup stale records
+            deleted_count = health_service.cleanup_stale_records(stale_threshold_hours)
+
+            uow.commit()
+
+            return {
+                "deleted_count": deleted_count,
+                "stale_threshold_hours": stale_threshold_hours,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error("Failed to cleanup stale health records: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to cleanup stale health records")
 
 
 # Statistics endpoints

@@ -307,12 +307,47 @@ erDiagram
 - `telegram_broadcast_logs`: Message broadcast history
 - `telegram_feedbacks`: User feedback collection
 - `telegram_settings`: System-wide Telegram configuration
+- `msg_messages`: Notification message queue
+- `msg_delivery_status`: Message delivery tracking
+- `msg_system_health`: System and component health monitoring
+- `msg_rate_limits`: Per-user rate limiting
+- `msg_channel_configs`: Channel configuration management
 
 **Key Features:**
 - Command audit trail with performance metrics
 - Broadcast message tracking
 - User feedback system
 - Configurable Telegram settings
+- Multi-channel notification system with queuing
+- Comprehensive system health monitoring
+- Per-user rate limiting and delivery tracking
+
+**System Health Monitoring:**
+The `msg_system_health` table provides comprehensive health monitoring for all platform components:
+
+```sql
+CREATE TABLE msg_system_health (
+    id BIGSERIAL PRIMARY KEY,
+    system VARCHAR(50) NOT NULL,              -- System name (notification, telegram_bot, etc.)
+    component VARCHAR(100),                   -- Component name (email, slack, etc.) - optional
+    status VARCHAR(20) NOT NULL,              -- HEALTHY, DEGRADED, DOWN, UNKNOWN
+    last_success TIMESTAMPTZ,                 -- Last successful health check
+    last_failure TIMESTAMPTZ,                 -- Last failed health check
+    failure_count INTEGER NOT NULL DEFAULT 0, -- Consecutive failure count
+    avg_response_time_ms INTEGER,             -- Average response time
+    error_message TEXT,                       -- Error details
+    metadata TEXT,                            -- JSON metadata
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW() -- Last check timestamp
+);
+```
+
+**Monitored Systems:**
+- `notification`: Main notification service and individual channels (email, telegram, sms, slack)
+- `telegram_bot`: Telegram bot health and connectivity
+- `api_service`: REST API service health
+- `web_ui`: Web UI frontend and backend health
+- `trading_bot`: Trading bot execution health
+- `database`: Database connectivity and performance
 
 ### 5. Web UI Module
 

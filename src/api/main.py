@@ -94,10 +94,76 @@ async def lifespan(app: FastAPI):
     monitoring_service = SystemMonitoringService()
     _logger.info("System monitoring service initialized")
 
+    # Initialize heartbeat manager
+    _logger.info("Initializing heartbeat manager...")
+    try:
+        from src.common.heartbeat_manager import HeartbeatManager
+
+        def api_service_health_check():
+            """Health check function for API service."""
+            try:
+                # Check if services are initialized
+                strategy_service_healthy = strategy_service is not None
+                monitoring_service_healthy = monitoring_service is not None
+                trading_system_healthy = TRADING_SYSTEM_AVAILABLE and strategy_manager is not None
+
+                if strategy_service_healthy and monitoring_service_healthy:
+                    status = 'HEALTHY' if trading_system_healthy else 'DEGRADED'
+                    error_msg = None if trading_system_healthy else 'Trading system not available'
+
+                    return {
+                        'status': status,
+                        'error_message': error_msg,
+                        'metadata': {
+                            'strategy_service_initialized': strategy_service_healthy,
+                            'monitoring_service_initialized': monitoring_service_healthy,
+                            'trading_system_available': TRADING_SYSTEM_AVAILABLE,
+                            'strategy_manager_initialized': strategy_manager is not None,
+                            'api_port': TRADING_API_PORT,
+                            'webgui_port': TRADING_WEBGUI_PORT
+                        }
+                    }
+                else:
+                    return {
+                        'status': 'DOWN',
+                        'error_message': 'Core services not initialized',
+                        'metadata': {
+                            'strategy_service_initialized': strategy_service_healthy,
+                            'monitoring_service_initialized': monitoring_service_healthy,
+                            'trading_system_available': TRADING_SYSTEM_AVAILABLE
+                        }
+                    }
+            except Exception as e:
+                return {
+                    'status': 'DOWN',
+                    'error_message': f'Health check failed: {str(e)}'
+                }
+
+        # Create and start heartbeat manager
+        api_heartbeat_manager = HeartbeatManager(
+            system='api_service',
+            interval_seconds=30
+        )
+        api_heartbeat_manager.set_health_check_function(api_service_health_check)
+        api_heartbeat_manager.start_heartbeat()
+
+        _logger.info("Heartbeat manager started for API service")
+
+    except Exception as e:
+        _logger.error("Failed to initialize heartbeat manager: %s", e)
+
     yield
 
     # Shutdown
     _logger.info("Shutting down Trading Web UI Backend...")
+
+    # Stop heartbeat
+    try:
+        api_heartbeat_manager.stop_heartbeat()
+        _logger.info("Stopped API service heartbeat")
+    except:
+        pass
+
     if strategy_manager:
         await strategy_manager.shutdown()
 

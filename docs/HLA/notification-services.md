@@ -55,7 +55,7 @@ graph TB
     subgraph "Database"
         Messages[(msg_messages)]
         DeliveryStatus[(msg_delivery_status)]
-        ChannelHealth[(msg_channel_health)]
+        SystemHealth[(msg_system_health)]
         RateLimits[(msg_rate_limits)]
     end
 
@@ -84,7 +84,7 @@ graph TB
 
     Processor --> Messages
     Processor --> DeliveryStatus
-    HealthMonitor --> ChannelHealth
+    HealthMonitor --> SystemHealth
     RateLimiter --> RateLimits
 
     %% Styling
@@ -98,7 +98,7 @@ graph TB
     class API,MessageQueue,Processor,RateLimiter,ChannelManager,HealthMonitor serviceLayer
     class TelegramChannel,EmailChannel,SMSChannel,SlackChannel,WebSocketChannel pluginLayer
     class TelegramAPI,SMTPServer,SMSProvider,SlackAPI,WebSocketMgr endpointLayer
-    class Messages,DeliveryStatus,ChannelHealth,RateLimits dataLayer
+    class Messages,DeliveryStatus,SystemHealth,RateLimits dataLayer
 ```
 
 ### 2. Core Service Components
@@ -198,15 +198,49 @@ CREATE TABLE msg_delivery_status (
     error_message TEXT
 );
 
--- Channel health monitoring
-CREATE TABLE msg_channel_health (
+-- System health monitoring (replaces msg_channel_health)
+-- Notification channels are stored as system='notification', component=channel_name
+CREATE TABLE msg_system_health (
     id BIGSERIAL PRIMARY KEY,
-    channel VARCHAR(50) NOT NULL UNIQUE,
-    status VARCHAR(20) NOT NULL,
-    last_success TIMESTAMP WITH TIME ZONE,
-    failure_count INTEGER DEFAULT 0,
-    avg_response_time_ms INTEGER
+    system VARCHAR(50) NOT NULL,              -- 'notification' for notification channels
+    component VARCHAR(100),                   -- channel name (email, telegram, sms, etc.)
+    status VARCHAR(20) NOT NULL,              -- HEALTHY, DEGRADED, DOWN, UNKNOWN
+    last_success TIMESTAMPTZ,                 -- Last successful health check
+    last_failure TIMESTAMPTZ,                 -- Last failed health check
+    failure_count INTEGER NOT NULL DEFAULT 0, -- Consecutive failure count
+    avg_response_time_ms INTEGER,             -- Average response time
+    error_message TEXT,                       -- Error details
+    metadata TEXT,                            -- JSON metadata
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), -- Last check timestamp
+    
+    CONSTRAINT check_system_health_status 
+        CHECK (status IN ('HEALTHY', 'DEGRADED', 'DOWN', 'UNKNOWN')),
+    CONSTRAINT check_failure_count_positive 
+        CHECK (failure_count >= 0),
+    CONSTRAINT check_avg_response_time_positive 
+        CHECK (avg_response_time_ms >= 0)
 );
+
+-- Indexes for performance
+CREATE INDEX idx_system_health_system ON msg_system_health(system);
+CREATE INDEX idx_system_health_status ON msg_system_health(status);
+CREATE INDEX idx_system_health_checked_at ON msg_system_health(checked_at);
+CREATE UNIQUE INDEX idx_system_health_unique 
+    ON msg_system_health (system, COALESCE(component, ''));
+
+-- Backward compatibility view for channel health
+CREATE OR REPLACE VIEW v_channel_health AS
+SELECT 
+    component as channel,
+    status,
+    last_success,
+    last_failure,
+    failure_count,
+    avg_response_time_ms,
+    error_message,
+    checked_at
+FROM msg_system_health 
+WHERE system = 'notification' AND component IS NOT NULL;
 
 -- Per-user rate limiting
 CREATE TABLE msg_rate_limits (
@@ -464,12 +498,71 @@ RATE_LIMITS = {
 ```
 
 #### 5.4 Channel Health and Fallback
-Automatic health monitoring with intelligent fallback:
+Automatic health monitoring with intelligent fallback integrated into the platform-wide health monitoring system:
 
-- **Health Checks**: Periodic connectivity tests for all channels
+**Health Monitoring Integration**:
+- **Unified Health System**: Channel health is now part of the comprehensive system health monitoring
+- **Automatic Heartbeats**: Each notification channel reports health status every 60 seconds
+- **System Integration**: Channel health data is stored in `msg_system_health` table as notification system components
+- **Backward Compatibility**: Original channel health APIs remain functional
+
+**Health Check Implementation**:
+```python
+def create_channel_health_check(channel_name):
+    def channel_health_check():
+        try:
+            # Channel-specific health checks
+            if channel_name == 'email':
+                # Test SMTP connectivity
+                return test_smtp_connection()
+            elif channel_name == 'telegram':
+                # Test Telegram Bot API
+                return test_telegram_api()
+            # ... other channels
+            
+            return {
+                'status': 'HEALTHY',
+                'metadata': {
+                    'channel': channel_name,
+                    'last_check': datetime.now().isoformat()
+                }
+            }
+        except Exception as e:
+            return {
+                'status': 'DOWN',
+                'error_message': f'Channel {channel_name} failed: {str(e)}'
+            }
+    return channel_health_check
+```
+
+**Health Status Levels**:
+- **HEALTHY**: Channel fully operational and responsive
+- **DEGRADED**: Channel operational but with warnings (slow response, rate limits)
+- **DOWN**: Channel unavailable or failing
+- **UNKNOWN**: Health status cannot be determined
+
+**Fallback and Recovery**:
 - **Automatic Fallback**: Route to secondary channels when primary fails
 - **Recovery Detection**: Automatic re-enabling when channels recover
-- **Admin Alerts**: Notify administrators of channel failures
+- **Admin Alerts**: Notify administrators of channel failures via healthy channels
+- **Intelligent Routing**: Route messages based on channel health and user preferences
+
+**Health Monitoring APIs**:
+```bash
+# Get all notification channel health (backward compatible)
+GET /api/v1/channels/health
+
+# Get specific channel health
+GET /api/v1/channels/{channel_name}/health
+
+# Update channel health status
+POST /api/v1/channels/{channel_name}/health
+
+# Get notification system health (new unified API)
+GET /api/v1/health/system/notification
+```
+
+For comprehensive health monitoring documentation, see [System Health Monitoring](system-health-monitoring.md).
 
 ### 6. Advanced Features
 

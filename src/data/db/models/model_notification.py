@@ -46,13 +46,6 @@ class DeliveryStatus(str, Enum):
     BOUNCED = "BOUNCED"
 
 
-class ChannelHealthStatus(str, Enum):
-    """Channel health status enumeration."""
-    HEALTHY = "HEALTHY"
-    DEGRADED = "DEGRADED"
-    DOWN = "DOWN"
-
-
 class Message(Base):
     """Message model for notification messages queue."""
 
@@ -125,42 +118,6 @@ class MessageDeliveryStatus(Base):
 
     def __repr__(self):
         return f"<MessageDeliveryStatus(id={self.id}, message_id={self.message_id}, channel='{self.channel}', status='{self.status}')>"
-
-
-class ChannelHealth(Base):
-    """Channel health model for monitoring channel status."""
-
-    __tablename__ = "msg_channel_health"
-
-    id = Column(BigInteger, primary_key=True, index=True)
-    channel = Column(String(50), nullable=False, unique=True)
-    status = Column(String(20), nullable=False, index=True)
-    last_success = Column(DateTime(timezone=True), nullable=True)
-    last_failure = Column(DateTime(timezone=True), nullable=True)
-    failure_count = Column(Integer, nullable=False, default=0)
-    avg_response_time_ms = Column(Integer, nullable=True)
-    error_message = Column(Text, nullable=True)
-    checked_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)
-
-    # Constraints
-    __table_args__ = (
-        CheckConstraint("status IN ('HEALTHY', 'DEGRADED', 'DOWN')", name="check_channel_health_status"),
-        CheckConstraint("failure_count >= 0", name="check_failure_count_positive"),
-        CheckConstraint("avg_response_time_ms >= 0", name="check_avg_response_time_positive"),
-    )
-
-    def __repr__(self):
-        return f"<ChannelHealth(id={self.id}, channel='{self.channel}', status='{self.status}')>"
-
-    @property
-    def is_healthy(self) -> bool:
-        """Check if channel is healthy."""
-        return self.status == ChannelHealthStatus.HEALTHY.value
-
-    @property
-    def is_available(self) -> bool:
-        """Check if channel is available (healthy or degraded)."""
-        return self.status in [ChannelHealthStatus.HEALTHY.value, ChannelHealthStatus.DEGRADED.value]
 
 
 class RateLimit(Base):

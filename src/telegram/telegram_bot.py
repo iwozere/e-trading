@@ -52,6 +52,7 @@ from typing import Dict, Any, Optional
 async def send_email_notification_if_requested(message: Message, response_text: str, command: str):
     """
     Send email notification if -email flag is present in the command.
+    The NotificationServiceClient handles fallback logic automatically.
 
     Args:
         message: Telegram message object
@@ -72,8 +73,9 @@ async def send_email_notification_if_requested(message: Message, response_text: 
                     user_email = user_status['email']
 
                     # Send email notification via notification service
+                    # The client automatically handles HTTP API + database fallback
                     if notification_client:
-                        await notification_client.send_notification(
+                        success = await notification_client.send_notification(
                             notification_type="telegram_command_response",
                             title=f"Telegram Bot - {command.upper()} Command Response",
                             message=response_text,
@@ -87,7 +89,10 @@ async def send_email_notification_if_requested(message: Message, response_text: 
                                 "source": "telegram_bot"
                             }
                         )
-                        _logger.info("Email notification sent for %s command to user %s", command, message.from_user.id)
+                        if success:
+                            _logger.info("Email notification sent for %s command to user %s", command, message.from_user.id)
+                        else:
+                            _logger.warning("Email notification failed for %s command to user %s", command, message.from_user.id)
                     else:
                         _logger.warning("Notification client not available for email notification")
                 else:
@@ -99,6 +104,113 @@ async def send_email_notification_if_requested(message: Message, response_text: 
     except Exception as e:
         _logger.error("Error sending email notification for %s command: %s", command, e)
         # Don't fail the main command if email fails
+        # Don't fail the main command if email fails
+
+
+async def send_email_notification_with_attachments(message: Message, response_text: str, command: str, attachments: dict = None):
+    """
+    Send email notification with support for attachments (pictures, documents).
+
+    Args:
+        message: Telegram message object
+        response_text: The response text to send via email
+        command: The command name for logging
+        attachments: Dictionary of filename -> file_data (bytes or file path)
+    """
+    try:
+        # Parse the command to check for -email flag
+        from src.telegram.command_parser import parse_command
+        parsed = parse_command(message.text)
+
+        if parsed.args.get("email", False):
+            # Get user information for email
+            telegram_svc, _ = get_service_instances()
+            if telegram_svc:
+                user_status = telegram_svc.get_user_status(str(message.from_user.id))
+                if user_status and user_status.get('email'):
+                    user_email = user_status['email']
+
+                    # Send email notification with attachments via notification service
+                    # The client automatically handles HTTP API + database fallback
+                    if notification_client:
+                        success = await notification_client.send_notification(
+                            notification_type="telegram_command_response",
+                            title=f"Telegram Bot - {command.upper()} Command Response",
+                            message=response_text,
+                            priority="normal",
+                            channels=["email"],
+                            email_receiver=user_email,
+                            recipient_id=str(message.from_user.id),
+                            attachments=attachments,
+                            data={
+                                "command": command,
+                                "telegram_user_id": str(message.from_user.id),
+                                "source": "telegram_bot",
+                                "has_attachments": bool(attachments)
+                            }
+                        )
+                        if success:
+                            _logger.info("Email notification with attachments sent for %s command to user %s", command, message.from_user.id)
+                        else:
+                            _logger.warning("Email notification with attachments failed for %s command to user %s", command, message.from_user.id)
+                    else:
+                        _logger.warning("Notification client not available for email notification")
+                else:
+                    # Send Telegram message about missing email
+                    await message.answer("📧 Email notification requested but no verified email found. Use /register to set up email notifications.")
+            else:
+                _logger.warning("Telegram service not available for email notification")
+
+    except Exception as e:
+        _logger.error("Error sending email notification with attachments for %s command: %s", command, e)
+
+
+
+async def extract_attachments_from_telegram_message(message: Message) -> dict:
+    """
+    Extract attachments (photos, documents) from a Telegram message.
+
+    Args:
+        message: Telegram message object
+
+    Returns:
+        Dictionary of filename -> file_data (bytes)
+    """
+    attachments = {}
+
+    try:
+        # Handle photos
+        if message.photo:
+            # Get the largest photo size
+            photo = message.photo[-1]
+            file_info = await bot.get_file(photo.file_id)
+            file_data = await bot.download_file(file_info.file_path)
+
+            # Generate filename
+            filename = f"photo_{photo.file_id}.jpg"
+            attachments[filename] = file_data.read()
+
+        # Handle documents
+        if message.document:
+            file_info = await bot.get_file(message.document.file_id)
+            file_data = await bot.download_file(file_info.file_path)
+
+            # Use original filename or generate one
+            filename = message.document.file_name or f"document_{message.document.file_id}"
+            attachments[filename] = file_data.read()
+
+        # Handle stickers (as images)
+        if message.sticker:
+            file_info = await bot.get_file(message.sticker.file_id)
+            file_data = await bot.download_file(file_info.file_path)
+
+            filename = f"sticker_{message.sticker.file_id}.webp"
+            attachments[filename] = file_data.read()
+
+    except Exception as e:
+        _logger.error("Error extracting attachments from Telegram message: %s", e)
+
+    return attachments
 async def initialize_services() -> bool:
     """
     Initialize telegram_service and indicator_service instances.
@@ -914,6 +1026,64 @@ async def main():
     except Exception as e:
         _logger.exception("Failed to initialize notification service client: %s", e)
         notification_client = None
+
+    # Initialize heartbeat manager
+    _logger.info("Initializing heartbeat manager...")
+    try:
+        from src.common.heartbeat_manager import HeartbeatManager
+
+        def telegram_bot_health_check():
+            """Health check function for telegram bot."""
+            try:
+                # Check if bot is initialized and notification client is working
+                bot_healthy = bot is not None and TELEGRAM_BOT_TOKEN is not None
+                notification_healthy = notification_client is not None
+
+                if bot_healthy and notification_healthy:
+                    return {
+                        'status': 'HEALTHY',
+                        'metadata': {
+                            'bot_token_present': bool(TELEGRAM_BOT_TOKEN),
+                            'notification_client_connected': notification_healthy,
+                            'last_check': time.time()
+                        }
+                    }
+                elif bot_healthy:
+                    return {
+                        'status': 'DEGRADED',
+                        'error_message': 'Notification client not available',
+                        'metadata': {
+                            'bot_token_present': True,
+                            'notification_client_connected': False
+                        }
+                    }
+                else:
+                    return {
+                        'status': 'DOWN',
+                        'error_message': 'Bot not properly initialized',
+                        'metadata': {
+                            'bot_token_present': bool(TELEGRAM_BOT_TOKEN),
+                            'notification_client_connected': notification_healthy
+                        }
+                    }
+            except Exception as e:
+                return {
+                    'status': 'DOWN',
+                    'error_message': f'Health check failed: {str(e)}'
+                }
+
+        # Create and start heartbeat manager
+        heartbeat_manager = HeartbeatManager(
+            system='telegram_bot',
+            interval_seconds=30
+        )
+        heartbeat_manager.set_health_check_function(telegram_bot_health_check)
+        heartbeat_manager.start_heartbeat()
+
+        _logger.info("Heartbeat manager started for telegram bot")
+
+    except Exception as e:
+        _logger.error("Failed to initialize heartbeat manager: %s", e)
 
     _logger.info("Starting Telegram Screener Bot with HTTP API...")
 
