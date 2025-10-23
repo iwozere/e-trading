@@ -28,16 +28,14 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import logging
 from enum import Enum
 import hashlib
 
-from .config_validator import validate_and_create_broker_config
-from .binance_utils import create_binance_config_template
-from .ibkr_utils import create_ibkr_config_template
+from src.trading.broker.config_validator import validate_and_create_broker_config
+from src.trading.broker.binance_utils import create_binance_config_template
+from src.trading.broker.ibkr_utils import create_ibkr_config_template
 
 from src.notification.logger import setup_logger
-
 _logger = setup_logger(__name__)
 
 

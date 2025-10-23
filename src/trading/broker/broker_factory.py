@@ -20,7 +20,6 @@ Functions:
 """
 
 from typing import Any, Dict, List, Optional
-import logging
 
 from src.trading.broker.binance_broker import BinanceBroker
 from src.trading.broker.ibkr_broker import IBKRBroker
@@ -33,7 +32,6 @@ from config.donotshare.donotshare import (
 )
 
 from src.notification.logger import setup_logger
-
 _logger = setup_logger(__name__)
 
 

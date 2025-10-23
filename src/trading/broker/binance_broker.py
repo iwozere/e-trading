@@ -38,7 +38,7 @@ from .base_broker import (
     BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
     OrderType, TradingMode, PaperTradingMode, ExecutionMetrics
 )
-from .paper_trading_mixin import PaperTradingMixin
+from src.trading.broker.paper_trading_mixin import PaperTradingMixin
 
 from src.notification.logger import setup_logger
 

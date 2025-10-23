@@ -26,7 +26,6 @@ import asyncio
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any, Tuple, Union
-import logging
 import threading
 from decimal import Decimal
 
@@ -39,7 +38,7 @@ from .base_broker import (
     BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
     OrderType, TradingMode, PaperTradingMode, ExecutionMetrics
 )
-from .paper_trading_mixin import PaperTradingMixin
+from src.trading.broker.paper_trading_mixin import PaperTradingMixin
 
 from src.notification.logger import setup_logger
 

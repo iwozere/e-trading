@@ -27,12 +27,9 @@ import math
 from typing import Dict, List, Optional, Any, Tuple
 from decimal import Decimal, ROUND_DOWN
 from datetime import datetime, timezone, timedelta
-import logging
-
 from ib_insync import Stock, Option, Future, Forex, Contract
 
 from src.notification.logger import setup_logger
-
 _logger = setup_logger(__name__)
 
 

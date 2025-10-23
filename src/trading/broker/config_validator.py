@@ -21,11 +21,9 @@ Classes:
 
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
-import logging
 from datetime import datetime
 
 from src.notification.logger import setup_logger
-
 _logger = setup_logger(__name__)
 
 
