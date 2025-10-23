@@ -164,12 +164,12 @@ Create a configuration file in `config/trading/` (see `rsi_bb_volume1.json` for 
 
 ### b. Run Trading Bot
 ```bash
-python src/trading/run_bot.py <config_file.json>
+python src/trading/trading_bot.py <config_file.json>
 ```
 
 Example:
 ```bash
-python src/trading/run_bot.py rsi_bb_volume1.json
+python src/trading/trading_bot.py rsi_bb_volume1.json
 ```
 
 ### c. Available Brokers
@@ -227,7 +227,7 @@ Typical workflow for strategy development:
 2. **Optimization**: Run `src/optimizer/run_optimizer.py`
 3. **Visualization**: Run `src/plotter/run_plotter.py`
 4. **Analysis**: Run `src/data/process_results.py` for CSV export
-5. **Live Trading**: Configure and run `src/trading/run_bot.py`
+5. **Live Trading**: Configure and run `src/trading/trading_bot.py`
 
 ---
 

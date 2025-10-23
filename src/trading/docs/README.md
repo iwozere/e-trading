@@ -16,7 +16,7 @@ The trading bot system consists of:
 2. **Create Configuration** (see Design.md)
 3. **Run the Bot**:
    ```bash
-   python src/trading/run_bot.py paper_trading_rsi_atr.json
+   python src/trading/trading_bot.py paper_trading_rsi_atr.json
    ```
 
 ## Documentation Structure

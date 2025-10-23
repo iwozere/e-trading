@@ -232,7 +232,7 @@ Errors are logged with appropriate levels:
 
 ## Integration with Trading Bots
 
-### Using with run_bot.py
+### Using with trading_bot.py
 
 ```python
 # In your trading bot configuration

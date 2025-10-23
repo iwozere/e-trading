@@ -108,7 +108,7 @@ The bot reads a single JSON configuration file with the following structure:
 
 ```bash
 # Run with configuration file
-python src/trading/run_bot.py 0001.json
+python src/trading/trading_bot.py 0001.json
 
 # Test configuration
 python test_live_bot_config.py 0001.json
@@ -331,7 +331,7 @@ Ctrl+C
 tail -f logs/live/trading_bot_0001.log
 
 # Restart the bot
-python src/trading/run_bot.py 0001.json
+python src/trading/trading_bot.py 0001.json
 ```
 
 ## Monitoring and Logging

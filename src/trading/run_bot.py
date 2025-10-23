@@ -29,8 +29,8 @@ def main(config_name: Optional[str] = None):
     # Get config file name
     if not config_name:
         if len(sys.argv) != 2:
-            _logger.error("Usage: python run_bot.py <config.json>")
-            _logger.error("Example: python run_bot.py 0001.json")
+            _logger.error("Usage: python trading_bot.py <config.json>")
+            _logger.error("Example: python trading_bot.py 0001.json")
             sys.exit(1)
         config_name = sys.argv[1]
 

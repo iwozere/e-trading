@@ -190,7 +190,7 @@ print('✅ CustomStrategy with mixins loaded successfully')
 ### Task 4.1: Start Paper Trading Bot
 ```bash
 # Run the paper trading bot
-python src/trading/run_bot.py paper_trading_rsi_atr.json
+python src/trading/trading_bot.py paper_trading_rsi_atr.json
 ```
 
 Expected output:
@@ -332,7 +332,7 @@ Update `paper_trading_rsi_atr.json` with optimized parameters from backtest resu
 
 3. **Start Live Trading**
    ```bash
-   python src/trading/run_bot.py live_trading_rsi_atr.json
+   python src/trading/trading_bot.py live_trading_rsi_atr.json
    ```
 
 ## Troubleshooting Tasks

@@ -54,12 +54,12 @@ This will:
 
 **Option A: RSI/BB Strategy (Best Performance)**
 ```bash
-python src/trading/run_bot.py paper_trading_rsi_or_bb.json
+python src/trading/trading_bot.py paper_trading_rsi_or_bb.json
 ```
 
 **Option B: Simple ATR Strategy (Simplified)**
 ```bash
-python src/trading/run_bot.py paper_trading_simple_atr.json
+python src/trading/trading_bot.py paper_trading_simple_atr.json
 ```
 
 ## 📊 Strategy Configurations
