@@ -1,0 +1,72 @@
+Analyze src/trading folder.
+I need a service, which will be started at the system startup, load configuration from the table trading_bots (src/data/db/services) and spawns each bot in a separate process. Does src/trading/trading_runner.py meet these requirements?
+I want that each thread then using async operations . Does src/trading/strategy_manager.py meet this requirement?
+I want that this thread loads not from file but from DB the JSON with the broker/strategy/risk etc configuration and would run this strategy with configured parameters.
+Please find below an example of the strategy with entry/exit mixins.
+In the future there will be more different strategy types, not only CustomStrategy. Any strategy based on the src/strategy/base_strategy.py
+I would like that this trading bot will be smart enough and will load different strategy handlers depending on the strategy type.
+I also want that strategy sends notification according to the notification configuration to the user, who created this trading bot in case of buy/sell event.
+These trading notifications should be sent via notification service (src/notification).
+
+Example of the JSON configuration.
+
+    {
+      "id": "rsi_atr_btc_paper",
+      "name": "RSI+ATR BTC Paper Trading",
+      "enabled": true,
+      "symbol": "BTCUSDT",
+      "broker": {
+        "type": "binance",
+        "trading_mode": "paper",
+        "name": "rsi_atr_btc_paper_broker",
+        "cash": 100.0
+      },
+      "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+          "entry_logic": {
+            "name": "RSIBBVolumeEntryMixin",
+            "params": {
+              "e_rsi_period": 14,
+              "e_rsi_oversold": 30,
+              "e_bb_period": 20,
+              "e_bb_dev": 2.0,
+              "e_vol_ma_period": 20,
+              "e_min_volume_ratio": 1.1,
+              "e_use_bb_touch": true
+            }
+          },
+          "exit_logic": {
+            "name": "ATRExitMixin",
+            "params": {
+              "x_atr_period": 14,
+              "x_sl_multiplier": 1.5
+            }
+          },
+          "position_size": 0.1
+        }
+      },
+      "data": {
+        "data_source": "binance",
+        "interval": "1h",
+        "lookback_bars": 500
+      },
+      "trading": {
+        "position_size": 0.1,
+        "max_positions": 1
+      },
+      "risk_management": {
+        "max_position_size": 1000.0,
+        "stop_loss_pct": 3.0,
+        "take_profit_pct": 6.0,
+        "max_daily_loss": 200.0,
+        "max_daily_trades": 5
+      },
+      "notifications": {
+        "position_opened": true,
+        "position_closed": true,
+        "email_enabled": false,
+        "telegram_enabled": true,
+        "error_notifications": true
+      }
+    },

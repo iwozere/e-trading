@@ -1,3 +1,5 @@
+python -m pytest backend/tests -v
+
 pytest -vv src/web_ui/backend/tests
 
 python -m pytest -vv src/web_ui/backend/tests --tb=short

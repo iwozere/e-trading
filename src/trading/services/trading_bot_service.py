@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
-from src.data.db.services import trading_service
+from src.trading.services import trading_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

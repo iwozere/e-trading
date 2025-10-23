@@ -16,11 +16,11 @@ Features:
 - Comprehensive logging and notifications
 
 Usage:
-    python enhanced_multi_strategy_runner.py [config_file]
+    python src/trading/trading_runner.py [config_file]
 
 Examples:
-    python enhanced_multi_strategy_runner.py
-    python enhanced_multi_strategy_runner.py config/enhanced_trading/simple_multi_strategy.json
+    python src/trading/trading_runner.py
+    python src/trading/trading_runner.py config/enhanced_trading/simple_multi_strategy.json
 """
 
 import asyncio
