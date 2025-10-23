@@ -28,7 +28,7 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-class BaseLiveDataFeed:
+class BaseLiveDataFeed(bt.feed.DataBase):
     """
     Base class for live data feeds that provide real-time market data to Backtrader.
 
@@ -69,6 +69,8 @@ class BaseLiveDataFeed:
             data_manager: DataManager instance for historical data loading
             **kwargs: Additional arguments passed to PandasData
         """
+        # Call parent constructor first
+        super().__init__(**kwargs)
         self.symbol = symbol
         self.interval = interval
         self.lookback_bars = lookback_bars

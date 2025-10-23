@@ -27,7 +27,7 @@ Classes:
 
 _logger = setup_logger(__name__)
 
-class BinanceEnhancedFeed(bt.feed.DataBase):
+class BinanceEnhancedFeed(BaseLiveDataFeed):
     """
     Backtrader data feed for Binance supporting historical and real-time data via REST API and WebSocket.
     """

@@ -45,7 +45,6 @@ from abc import abstractmethod
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
-import logging
 from datetime import datetime, timezone
 import uuid
 import asyncio
@@ -54,7 +53,6 @@ import random
 import math
 
 from src.notification.logger import setup_logger
-
 _logger = setup_logger(__name__)
 
 # Log backtrader availability
