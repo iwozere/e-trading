@@ -11,6 +11,7 @@ import backtrader as bt
 from src.notification.logger import setup_logger
 from src.data.utils.retry import retry_on_exception
 from src.data.utils.rate_limiting import get_provider_limiter
+from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 
 """
 Data feed implementation for Binance, providing real-time and historical market data for trading strategies.

@@ -96,9 +96,7 @@ class FileDataFeed(bt.feed.DataBase):
             # Read CSV file
             df = pd.read_csv(
                 file_path,
-                sep=self.p.separator,
-                parse_dates=[self.p.datetime_col] if self.p.datetime_col else None,
-                date_parser=self._parse_datetime if self.p.datetime_format else None
+                sep=self.p.separator
             )
 
             # Validate required columns

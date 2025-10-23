@@ -1,0 +1,89 @@
+{
+  "id": "mock_file_test_ltc_simple",
+  "name": "Mock File Test Bot - LTC Simple",
+  "enabled": true,
+  "symbol": "LTCUSDT",
+  "broker": {
+    "type": "mock",
+    "trading_mode": "paper",
+    "name": "mock_test_broker_ltc",
+    "cash": 2000.0,
+    "paper_trading_config": {
+      "mode": "basic",
+      "initial_balance": 2000.0,
+      "commission_rate": 0.001,
+      "slippage_model": "fixed",
+      "base_slippage": 0.001,
+      "latency_simulation": false,
+      "market_impact_enabled": false,
+      "realistic_fills": false,
+      "partial_fill_probability": 0.0,
+      "reject_probability": 0.0,
+      "enable_execution_quality": false
+    }
+  },
+  "strategy": {
+    "type": "CustomStrategy",
+    "parameters": {
+      "entry_logic": {
+        "name": "SMAEntryMixin",
+        "params": {
+          "e_sma_fast": 10,
+          "e_sma_slow": 20,
+          "e_crossover_type": "golden_cross"
+        }
+      },
+      "exit_logic": {
+        "name": "SMAExitMixin",
+        "params": {
+          "x_sma_period": 10,
+          "x_exit_on_cross": true
+        }
+      },
+      "position_size": 0.2
+    }
+  },
+  "data": {
+    "data_source": "file",
+    "file_path": "data/LTCUSDT_15m_20220101_20250707.csv",
+    "interval": "15m",
+    "datetime_col": "timestamp",
+    "open_col": "open",
+    "high_col": "high",
+    "low_col": "low",
+    "close_col": "close",
+    "volume_col": "volume",
+    "separator": ",",
+    "simulate_realtime": false,
+    "fromdate": "2024-01-01",
+    "todate": "2024-06-30"
+  },
+  "trading": {
+    "position_size": 0.2,
+    "max_positions": 1,
+    "allow_short": false
+  },
+  "risk_management": {
+    "max_position_size": 400.0,
+    "stop_loss_pct": 5.0,
+    "take_profit_pct": 10.0,
+    "max_daily_loss": 100.0,
+    "max_daily_trades": 5
+  },
+  "notifications": {
+    "position_opened": true,
+    "position_closed": true,
+    "email_enabled": false,
+    "telegram_enabled": false,
+    "error_notifications": true,
+    "performance_summaries": "none",
+    "risk_alerts": false
+  },
+  "testing": {
+    "description": "Simple test bot with basic paper trading simulation",
+    "test_mode": true,
+    "log_level": "WARNING",
+    "save_trades": false,
+    "generate_reports": false
+  }
+}
