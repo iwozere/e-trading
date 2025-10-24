@@ -196,6 +196,12 @@ app.include_router(jobs_router)
 # Include notification management routes
 app.include_router(notification_router)
 
+# Include trading bot management routes
+from src.api.trading_bot_routes import router as trading_bot_router
+app.include_router(trading_bot_router)
+
+# Note: Static files and HTML templates removed since using React frontend
+
 # Add unified analytics endpoints
 from src.api.services.unified_analytics_service import unified_analytics_service
 

@@ -17,14 +17,14 @@ from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
 # Registry of all available exit mixins
 EXIT_MIXIN_REGISTRY = {
     "ATRExitMixin": ATRExitMixin,
-    #"AdvancedATRExitMixin": AdvancedATRExitMixin,
-    #"SimpleATRExitMixin": SimpleATRExitMixin,
-    #"FixedRatioExitMixin": FixedRatioExitMixin,
-    #"MACrossoverExitMixin": MACrossoverExitMixin,
-    #"RSIBBExitMixin": RSIBBExitMixin,
-    #"RSIOrBBExitMixin": RSIOrBBExitMixin,
-    #"TimeBasedExitMixin": TimeBasedExitMixin,
-    #"TrailingStopExitMixin": TrailingStopExitMixin,
+    "AdvancedATRExitMixin": AdvancedATRExitMixin,
+    "SimpleATRExitMixin": SimpleATRExitMixin,
+    "FixedRatioExitMixin": FixedRatioExitMixin,
+    "MACrossoverExitMixin": MACrossoverExitMixin,
+    "RSIBBExitMixin": RSIBBExitMixin,
+    "RSIOrBBExitMixin": RSIOrBBExitMixin,
+    "TimeBasedExitMixin": TimeBasedExitMixin,
+    "TrailingStopExitMixin": TrailingStopExitMixin,
     # Add other mixins...
 }
 
