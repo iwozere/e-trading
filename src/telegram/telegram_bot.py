@@ -79,6 +79,26 @@ async def process_unknown_command_immediate(user_id: str, message, help_text):
 # Global variables
 notification_client = None
 
+async def get_notification_client():
+    """Lazily initialize notification client when needed."""
+    global notification_client
+
+    if notification_client is None:
+        try:
+            import os
+            notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
+            notification_client = NotificationServiceClient(
+                service_url=notification_service_url,
+                timeout=30,
+                max_retries=3
+            )
+            _logger.info("Notification service client initialized for heavy commands")
+        except Exception as e:
+            _logger.warning("Could not initialize notification service client: %s", e)
+            notification_client = None
+
+    return notification_client
+
 # ARCHITECTURE NOTE:
 # Interactive commands (info, register, verify, admin, alerts, schedules, feedback, feature, etc.)
 # are now processed immediately without using the notification service queue.
@@ -117,8 +137,9 @@ async def send_email_notification_if_requested(message: Message, response_text: 
 
                     # Send email notification via notification service
                     # The client automatically handles HTTP API + database fallback
-                    if notification_client:
-                        success = await notification_client.send_notification(
+                    client = await get_notification_client()
+                    if client:
+                        success = await client.send_notification(
                             notification_type="telegram_command_response",
                             title=f"Telegram Bot - {command.upper()} Command Response",
                             message=response_text,
@@ -175,8 +196,9 @@ async def send_email_notification_with_attachments(message: Message, response_te
 
                     # Send email notification with attachments via notification service
                     # The client automatically handles HTTP API + database fallback
-                    if notification_client:
-                        success = await notification_client.send_notification(
+                    client = await get_notification_client()
+                    if client:
+                        success = await client.send_notification(
                             notification_type="telegram_command_response",
                             title=f"Telegram Bot - {command.upper()} Command Response",
                             message=response_text,
@@ -423,12 +445,16 @@ async def check_indicator_service_health() -> bool:
 
 def get_service_instances() -> tuple:
     """
-    Get the initialized service instances.
+    Get the initialized service instances from business logic.
 
     Returns:
         tuple: (telegram_service_instance, indicator_service_instance)
     """
-    return telegram_service_instance, indicator_service_instance
+    try:
+        return business_logic.get_service_instances()
+    except Exception as e:
+        _logger.debug("Service instances not available: %s", e)
+        return None, None
 
 
 # Initialize bot and dispatcher
@@ -455,7 +481,10 @@ async def api_send_message(request: web.Request) -> web.Response:
             }, status=400)
 
         # Use notification service client to send message
-        success = await notification_client.send_notification(
+        client = await get_notification_client()
+        if not client:
+            return web.json_response({'success': False, 'error': 'Notification service unavailable'}, status=503)
+        success = await client.send_notification(
             notification_type=MessageType.INFO,
             title=title,
             message=message,
@@ -508,10 +537,14 @@ async def api_broadcast(request: web.Request) -> web.Response:
         total_count = len(users)
 
         # Queue messages for all users
+        client = await get_notification_client()
+        if not client:
+            return web.json_response({'success': False, 'error': 'Notification service unavailable'}, status=503)
+
         for user in users:
             user_id = user["telegram_user_id"]
             if user_id and user_id.isdigit():
-                success = await notification_client.send_notification(
+                success = await client.send_notification(
                     notification_type=MessageType.INFO,
                     title=title,
                     message=message,
@@ -871,11 +904,13 @@ async def cmd_start(message: Message):
         welcome_text = f"Welcome to the Alkotrader Bot! 🤖\n\n{HELP_TEXT}"
         await message.answer(welcome_text)
 
-        # Audit the command for logging purposes
-        async def start_command_func(*args, **kwargs):
-            return {"status": "ok", "message": "Start command processed"}
-
-        await audit_command_wrapper(message, start_command_func, str(message.from_user.id))
+        # Audit the command for logging purposes (optional, won't block if service unavailable)
+        try:
+            async def start_command_func(*args, **kwargs):
+                return {"status": "ok", "message": "Start command processed"}
+            await audit_command_wrapper(message, start_command_func, str(message.from_user.id))
+        except Exception as audit_error:
+            _logger.debug("Audit not available for /start command: %s", audit_error)
 
         _logger.info("Successfully processed /start command for user %s", message.from_user.id)
     except Exception as e:
@@ -889,14 +924,19 @@ async def cmd_help(message: Message):
         # Handle /help command immediately without notification service
         await message.answer(HELP_TEXT)
 
-        # Send email notification if -email flag is present
-        await send_email_notification_if_requested(message, HELP_TEXT, "help")
+        # Send email notification if -email flag is present (optional, won't block if service unavailable)
+        try:
+            await send_email_notification_if_requested(message, HELP_TEXT, "help")
+        except Exception as email_error:
+            _logger.debug("Email notification not available for /help command: %s", email_error)
 
-        # Audit the command for logging purposes
-        async def help_command_func(*args, **kwargs):
-            return {"status": "ok", "message": "Help command processed"}
-
-        await audit_command_wrapper(message, help_command_func, str(message.from_user.id))
+        # Audit the command for logging purposes (optional, won't block if service unavailable)
+        try:
+            async def help_command_func(*args, **kwargs):
+                return {"status": "ok", "message": "Help command processed"}
+            await audit_command_wrapper(message, help_command_func, str(message.from_user.id))
+        except Exception as audit_error:
+            _logger.debug("Audit not available for /help command: %s", audit_error)
 
     except Exception as e:
         _logger.exception("Error processing /help command for user %s", message.from_user.id)
@@ -1045,30 +1085,20 @@ async def main():
     # Set logging context so that notification service client logs go to telegram bot log file
     set_logging_context("telegram_screener_bot")
 
-    # Initialize service layer first
+    # Initialize service layer (optional for basic commands)
     _logger.info("Initializing service layer...")
-    if not await initialize_services():
-        _logger.error("Failed to initialize services. Bot cannot start.")
-        return
-
-    # Initialize notification service client
-    _logger.info("Initializing notification service client...")
     try:
-        import os
-        notification_service_url = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
-        notification_client = NotificationServiceClient(
-            service_url=notification_service_url,
-            timeout=30,
-            max_retries=3
-        )
-
-        # Test connectivity
-        health = await notification_client.get_health_status()
-        _logger.info("Notification service health: %s", health.get('status', 'unknown'))
-
+        services_initialized = await initialize_services()
+        if services_initialized:
+            _logger.info("Service layer initialized successfully")
+        else:
+            _logger.warning("Service layer initialization failed - bot will run with limited functionality")
     except Exception as e:
-        _logger.exception("Failed to initialize notification service client: %s", e)
-        notification_client = None
+        _logger.warning("Service layer initialization error: %s - bot will run with limited functionality", e)
+
+    # Notification service client will be initialized lazily when needed
+    _logger.info("Notification service client will be initialized when needed for heavy commands")
+    notification_client = None
 
     # Initialize heartbeat manager
     _logger.info("Initializing heartbeat manager...")
