@@ -253,3 +253,50 @@ class UnifiedEMAIndicator(BacktraderIndicatorWrapper):
     def _use_fallback(self):
         """Fallback not implemented in simplified version"""
         self.lines.ema[0] = float("nan")
+
+
+class UnifiedSuperTrendIndicator(BacktraderIndicatorWrapper):
+    """SuperTrend indicator using unified service"""
+
+    lines = ("super_trend", "direction")
+    params = (
+        ("length", 10),
+        ("multiplier", 3.0),
+        ("backend", "bt"),
+        ("use_unified_service", True),
+    )
+
+    def _init_fallback(self):
+        """Initialize - simplified version uses only unified service"""
+        self.addminperiod(self.p.length)
+
+    def _get_indicator_name(self) -> str:
+        return "super_trend"
+
+    def _get_indicator_params(self) -> Dict[str, Any]:
+        return {"length": self.p.length, "multiplier": self.p.multiplier}
+
+    def _map_unified_results(self, results: Dict[str, pd.Series]):
+        """Map unified service results to SuperTrend lines"""
+        if "value" in results and len(results["value"]) > 0:
+            latest_value = results["value"].iloc[-1]
+            if not pd.isna(latest_value):
+                self.lines.super_trend[0] = float(latest_value)
+            else:
+                self.lines.super_trend[0] = float("nan")
+        else:
+            self.lines.super_trend[0] = float("nan")
+
+        if "trend" in results and len(results["trend"]) > 0:
+            latest_trend = results["trend"].iloc[-1]
+            if not pd.isna(latest_trend):
+                self.lines.direction[0] = float(latest_trend)
+            else:
+                self.lines.direction[0] = float("nan")
+        else:
+            self.lines.direction[0] = float("nan")
+
+    def _use_fallback(self):
+        """Fallback not implemented in simplified version"""
+        self.lines.super_trend[0] = float("nan")
+        self.lines.direction[0] = float("nan")

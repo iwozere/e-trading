@@ -94,7 +94,7 @@ rsi_indicator = factory.create_backtrader_rsi(
 
 #### After
 ```python
-from src.strategy.indicator.indicator_factory import IndicatorFactory
+from src.indicators.indicator_factory import IndicatorFactory
 
 factory = IndicatorFactory()
 rsi_indicator = factory.create_backtrader_rsi(
@@ -116,7 +116,7 @@ from src.strategy.indicator.rsi import RSIIndicator  # Legacy individual files -
 ```python
 # Single unified import path
 from src.indicators.service import UnifiedIndicatorService
-from src.strategy.indicator.rsi import RsiIndicator  # Unified implementation
+from src.indicators.adapters.backtrader_wrappers import UnifiedRSIIndicator as RsiIndicator  # Unified implementation
 ```
 
 ## Parameter Changes

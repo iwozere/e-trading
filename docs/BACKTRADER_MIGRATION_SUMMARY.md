@@ -147,9 +147,11 @@ factory = IndicatorFactory()
 
 ### Direct Indicator Usage
 ```python
-from src.strategy.indicator.rsi import RsiIndicator
-from src.strategy.indicator.bollinger_band import BollingerBandIndicator
-from src.strategy.indicator.macd import MacdIndicator
+from src.indicators.adapters.backtrader_wrappers import (
+    UnifiedRSIIndicator as RsiIndicator,
+    UnifiedBollingerBandsIndicator as BollingerBandIndicator,
+    UnifiedMACDIndicator as MacdIndicator
+)
 
 class MyStrategy(bt.Strategy):
     def __init__(self):
@@ -160,7 +162,7 @@ class MyStrategy(bt.Strategy):
 
 ### Factory Usage
 ```python
-from src.strategy.indicator.indicator_factory import IndicatorFactory
+from src.indicators.indicator_factory import IndicatorFactory
 
 factory = IndicatorFactory()
 rsi = factory.create_backtrader_rsi(data, period=14, backend="bt")

@@ -10,9 +10,12 @@ import backtrader as bt
 import numpy as np
 import pandas as pd
 
-from src.strategy.indicator.rsi import RsiIndicator
-from src.strategy.indicator.bollinger_band import BollingerBandIndicator
-from src.strategy.indicator.macd import MacdIndicator
+# Import unified indicators from backtrader wrappers
+from src.indicators.adapters.backtrader_wrappers import (
+    UnifiedRSIIndicator as RsiIndicator,
+    UnifiedBollingerBandsIndicator as BollingerBandIndicator,
+    UnifiedMACDIndicator as MacdIndicator
+)
 
 # Import available unified indicators from backtrader wrappers
 from src.indicators.adapters.backtrader_wrappers import (
@@ -21,8 +24,8 @@ from src.indicators.adapters.backtrader_wrappers import (
     UnifiedEMAIndicator as EmaIndicator,
 )
 
-# Import SuperTrend from local implementation
-from src.strategy.indicator.super_trend import SuperTrend
+# Import SuperTrend from unified service
+from src.indicators.adapters.backtrader_wrappers import UnifiedSuperTrendIndicator as SuperTrend
 
 # Create placeholder classes for indicators not yet in unified service
 class AdrIndicator(bt.Indicator):

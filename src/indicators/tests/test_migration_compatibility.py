@@ -18,7 +18,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.indicators.service import IndicatorService
 from src.indicators.models import IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest
-from src.strategy.indicator.indicator_factory import IndicatorFactory
+from src.indicators.indicator_factory import IndicatorFactory
 
 
 class TestMigrationCompatibility:

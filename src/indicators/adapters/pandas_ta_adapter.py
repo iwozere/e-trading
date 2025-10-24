@@ -210,6 +210,17 @@ class PandasTaAdapter(BaseAdapter):
             s = getattr(pta, "obv")(close=close, volume=volume)
             return {"value": _as_series(s, "value", df.index)}
 
+        if name == "super_trend":
+            st = getattr(pta, "supertrend")(high=high, low=low, close=close, **p)
+            # SuperTrend typically returns [SUPERT, SUPERTd, SUPERTl, SUPERTs]
+            # where SUPERT is the main line and SUPERTd is the direction
+            if st.shape[1] >= 2:
+                value = st.iloc[:, 0].rename("value").reindex(df.index)
+                trend = st.iloc[:, 1].rename("trend").reindex(df.index)
+                return {"value": value, "trend": trend}
+            else:
+                return {"value": st.iloc[:, 0].rename("value").reindex(df.index)}
+
         # Fallback: try function by name
         if hasattr(pta, name):
             fn = getattr(pta, name)

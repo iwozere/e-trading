@@ -26,7 +26,7 @@ from typing import Any, Dict, Optional
 
 import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
-from src.strategy.indicator.super_trend import SuperTrend
+from src.indicators.adapters.backtrader_wrappers import UnifiedSuperTrendIndicator
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -89,10 +89,10 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
             self.register_indicator(self.rsi_name, self.rsi)
             self.register_indicator(self.vol_ma_name, self.sma)
 
-            # Create Supertrend indicator (same for both TA-Lib and Backtrader)
-            supertrend = SuperTrend(
+            # Create Supertrend indicator using unified service
+            supertrend = UnifiedSuperTrendIndicator(
                 self.strategy.data,
-                period=self.get_param("e_st_period"),
+                length=self.get_param("e_st_period"),
                 multiplier=self.get_param("e_st_multiplier"),
             )
             self.register_indicator(self.supertrend_name, supertrend)

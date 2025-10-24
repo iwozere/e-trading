@@ -10,13 +10,15 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-# Import the unified indicators directly
-from src.strategy.indicator.rsi import RsiIndicator
-from src.strategy.indicator.bollinger_band import BollingerBandIndicator
-from src.strategy.indicator.macd import MacdIndicator
+# Import the unified indicators directly from backtrader wrappers
+from src.indicators.adapters.backtrader_wrappers import (
+    UnifiedRSIIndicator as RsiIndicator,
+    UnifiedBollingerBandsIndicator as BollingerBandIndicator,
+    UnifiedMACDIndicator as MacdIndicator
+)
 
 # Import the factory for programmatic creation
-from src.strategy.indicator.indicator_factory import IndicatorFactory
+from src.indicators.indicator_factory import IndicatorFactory
 
 
 class UnifiedIndicatorStrategy(bt.Strategy):
