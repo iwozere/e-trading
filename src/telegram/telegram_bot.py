@@ -17,12 +17,7 @@ from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PAS
 from src.telegram.screener.notifications import (
     process_report_command, process_help_command, process_screener_command, process_unknown_command
 )
-from src.telegram.screener.immediate_handlers import (
-    process_info_command_immediate, process_register_command_immediate, process_verify_command_immediate,
-    process_language_command_immediate, process_admin_command_immediate, process_alerts_command_immediate,
-    process_schedules_command_immediate, process_feedback_command_immediate, process_feature_command_immediate,
-    process_request_approval_command_immediate, process_unknown_command_immediate
-)
+# Immediate handlers moved inline since immediate_handlers.py was removed
 from src.telegram.screener import business_logic
 
 # Service layer imports
@@ -32,6 +27,54 @@ from src.indicators.service import IndicatorService
 # Configure logging
 from src.notification.logger import setup_logger, set_logging_context
 _logger = setup_logger("telegram_screener_bot")
+
+# Inline immediate handlers (replacing removed immediate_handlers.py)
+async def process_info_command_immediate(user_id: str, message):
+    """Simple info command handler."""
+    info_text = "ℹ️ **Alkotrader Bot Information**\n\n"
+    info_text += "This bot provides market analysis and trading alerts.\n"
+    info_text += "Use /help to see available commands."
+    await message.reply(info_text, parse_mode="Markdown")
+
+async def process_register_command_immediate(user_id: str, args, message):
+    """Simple register command handler."""
+    await message.reply("📝 Registration functionality moved to Web UI. Please use the web interface.")
+
+async def process_verify_command_immediate(user_id: str, args, message):
+    """Simple verify command handler."""
+    await message.reply("✅ Verification functionality moved to Web UI. Please use the web interface.")
+
+async def process_language_command_immediate(user_id: str, args, message):
+    """Simple language command handler."""
+    await message.reply("🌐 Language settings moved to Web UI. Please use the web interface.")
+
+async def process_admin_command_immediate(user_id: str, args, message):
+    """Simple admin command handler."""
+    await message.reply("⚙️ Admin functionality moved to Web UI. Please use the web interface.")
+
+async def process_alerts_command_immediate(user_id: str, args, message):
+    """Simple alerts command handler."""
+    await message.reply("🔔 Alert management moved to Web UI and Scheduler. Please use the web interface.")
+
+async def process_schedules_command_immediate(user_id: str, args, message):
+    """Simple schedules command handler."""
+    await message.reply("📅 Schedule management moved to Scheduler subsystem. Please use the web interface.")
+
+async def process_feedback_command_immediate(user_id: str, args, message):
+    """Simple feedback command handler."""
+    await message.reply("💬 Feedback functionality moved to Web UI. Please use the web interface.")
+
+async def process_feature_command_immediate(user_id: str, args, message):
+    """Simple feature command handler."""
+    await message.reply("🚀 Feature requests moved to Web UI. Please use the web interface.")
+
+async def process_request_approval_command_immediate(user_id: str, args, message):
+    """Simple request approval command handler."""
+    await message.reply("📋 Approval requests moved to Web UI. Please use the web interface.")
+
+async def process_unknown_command_immediate(user_id: str, message, help_text):
+    """Simple unknown command handler."""
+    await message.reply(f"❓ Unknown command. {help_text}")
 
 # Global variables
 notification_client = None

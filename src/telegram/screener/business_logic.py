@@ -2198,9 +2198,8 @@ def handle_alerts_list(telegram_user_id: str) -> Dict[str, Any]:
                     f"#{alert['id']}: {alert['ticker']} {alert['condition']} ${alert['price']:.2f} {email_flag} - {status}"
                 )
             else:
-                # Indicator alert
-                from src.telegram.screener.alert_logic_evaluator import get_alert_summary
-                summary = get_alert_summary(alert)
+                # Indicator alert - simplified since alert_logic_evaluator was removed
+                summary = {"indicators": [alert.get('condition', 'Unknown condition')]}
                 alert_type_icon = "📊" if alert_type == "indicator" else "❓"
                 timeframe = alert.get("timeframe", "15m")
                 action = alert.get("alert_action", "notify")
@@ -2263,17 +2262,15 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
             _logger.error("Error checking user limits for alerts: %s", e)
             return {"status": "error", "message": "Unable to verify alert limits. Please try again later."}
 
-        # Create enhanced alert configuration with error handling
+        # Create simple alert configuration (enhanced alert system moved to scheduler)
         try:
-            from src.telegram.screener.rearm_alert_system import EnhancedAlertConfig
-
-            enhanced_config = EnhancedAlertConfig.from_simple_params(
-                ticker=ticker.upper(),
-                threshold=price,
-                direction=condition.lower(),
-                email=email,
-                rearm_enabled=True
-            )
+            enhanced_config = {
+                "ticker": ticker.upper(),
+                "threshold": price,
+                "direction": condition.lower(),
+                "email": email,
+                "rearm_enabled": True
+            }
         except Exception as e:
             _logger.error("Error creating enhanced alert configuration: %s", e)
             return {"status": "error", "message": "Unable to create alert configuration. Please try again."}
@@ -2402,10 +2399,12 @@ def handle_alerts_add_indicator(telegram_user_id: str, ticker: str, config_json:
         if alert_action not in valid_actions:
             return {"status": "error", "message": f"Invalid action. Must be one of: {', '.join(valid_actions)}"}
 
-        # Validate JSON configuration
+        # Simple validation (alert_config_parser moved to scheduler)
         try:
-            from src.telegram.screener.alert_config_parser import validate_alert_config
-            is_valid, errors = validate_alert_config(config_json)
+            # Basic validation - ensure required fields exist
+            required_fields = ["ticker", "condition", "threshold"]
+            is_valid = all(field in config_json for field in required_fields)
+            errors = [f"Missing field: {field}" for field in required_fields if field not in config_json]
             if not is_valid:
                 return {"status": "error", "message": f"Invalid alert configuration: {'; '.join(errors)}"}
         except Exception as e:
@@ -2438,8 +2437,7 @@ def handle_alerts_add_indicator(telegram_user_id: str, ticker: str, config_json:
             email=email
         )
 
-        # Get alert summary for display
-        from src.telegram.screener.alert_logic_evaluator import get_alert_summary
+        # Simple alert summary (alert_logic_evaluator moved to scheduler)
         alert_data = {
             "id": alert_id,
             "ticker": ticker.upper(),
@@ -2448,7 +2446,7 @@ def handle_alerts_add_indicator(telegram_user_id: str, ticker: str, config_json:
             "timeframe": timeframe,
             "alert_action": alert_action
         }
-        summary = get_alert_summary(alert_data)
+        summary = {"indicators": [f"{ticker.upper()} {config_json.get('condition', 'alert')}"]}  # Simplified summary
 
         email_text = " and email" if email else ""
         return {
