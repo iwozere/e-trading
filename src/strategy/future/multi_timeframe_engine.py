@@ -10,7 +10,7 @@ from typing import Dict, List, Any
 from datetime import datetime
 from src.notification.logger import setup_logger
 
-from .strategy_core import BaseStrategy, StrategySignal
+from src.strategy.future.strategy_core import BaseStrategy, StrategySignal
 
 logger = setup_logger(__name__)
 

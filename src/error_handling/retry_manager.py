@@ -17,7 +17,7 @@ from typing import Callable, Optional, Dict, Any
 from functools import wraps
 
 from src.model.error_handling import RetryConfig, RetryStrategy
-from .exceptions import TradingException
+from src.error_handling.exceptions import TradingException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -247,7 +247,7 @@ def retry(config: Optional[RetryConfig] = None):
 # Pre-configured retry decorators for common use cases
 def retry_on_network_error(max_attempts: int = 3, base_delay: float = 1.0):
     """Retry decorator specifically for network errors."""
-    from .exceptions import NetworkException
+    from src.error_handling.exceptions import NetworkException
     config = RetryConfig(
         max_attempts=max_attempts,
         base_delay=base_delay,
@@ -259,7 +259,7 @@ def retry_on_network_error(max_attempts: int = 3, base_delay: float = 1.0):
 
 def retry_on_api_error(max_attempts: int = 3, base_delay: float = 2.0):
     """Retry decorator specifically for API errors."""
-    from .exceptions import BrokerException, DataFeedException
+    from src.error_handling.exceptions import BrokerException, DataFeedException
     config = RetryConfig(
         max_attempts=max_attempts,
         base_delay=base_delay,
@@ -271,7 +271,7 @@ def retry_on_api_error(max_attempts: int = 3, base_delay: float = 2.0):
 
 def retry_on_validation_error(max_attempts: int = 2, base_delay: float = 0.5):
     """Retry decorator for validation errors (usually don't retry much)."""
-    from .exceptions import ValidationException
+    from src.error_handling.exceptions import ValidationException
     config = RetryConfig(
         max_attempts=max_attempts,
         base_delay=base_delay,

@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import pandas as pd
 
-from .strategy_core import (
+from src.strategy.future.strategy_core import (
     BaseStrategy,
     StrategySignal,
     CompositeSignal,
@@ -18,7 +18,7 @@ from .strategy_core import (
     AggregationMethod,
     MarketRegimeDetector
 )
-from .multi_timeframe_engine import TimeframeSyncer, MultiTimeframeStrategy
+from src.strategy.future.multi_timeframe_engine import TimeframeSyncer, MultiTimeframeStrategy
 
 from src.notification.logger import setup_logger
 logger = setup_logger(__name__)

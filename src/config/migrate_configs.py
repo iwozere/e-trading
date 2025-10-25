@@ -18,7 +18,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Any
 from datetime import datetime
-from .config_manager import ConfigManager
+from src.config.config_manager import ConfigManager
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

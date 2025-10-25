@@ -19,9 +19,9 @@ import functools
 from typing import Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
-from .retry_manager import RetryManager, RetryConfig
-from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig
-from .error_monitor import error_monitor, ErrorSeverity
+from src.error_handling.retry_manager import RetryManager, RetryConfig
+from src.error_handling.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from src.error_handling.error_monitor import error_monitor, ErrorSeverity
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -168,7 +168,7 @@ def retry_on_failure(max_attempts: int = 3,
             # Function that may fail
             pass
     """
-    from .retry_manager import RetryStrategy
+    from src.error_handling.retry_manager import RetryStrategy
 
     strategy_map = {
         "fixed": RetryStrategy.FIXED,

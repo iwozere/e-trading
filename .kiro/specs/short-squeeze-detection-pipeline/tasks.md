@@ -108,15 +108,24 @@
     - Test data storage and retrieval operations
     - _Requirements: 1.1-1.5, 2.1-2.5_
 
-- [ ] 5. Implement scoring and alert system
-  - [ ] 5.1 Create Scoring Engine
+- [x] 5. Implement scoring and alert system
+
+
+
+
+
+  - [x] 5.1 Create Scoring Engine
+
+
     - Implement ScoringEngine class with metric normalization
     - Create weighted scoring algorithm combining structural and transient metrics
     - Add configurable weight system for different metric types
     - Implement score validation and bounds checking
     - _Requirements: 2.1-2.5_
 
-  - [ ] 5.2 Implement Alert Engine
+  - [x] 5.2 Implement Alert Engine
+
+
     - Create AlertEngine class with threshold evaluation
     - Implement three-tier alert system (high, medium, low)
     - Add cooldown period enforcement with database tracking
@@ -124,19 +133,30 @@
     - Store alert events in ss_alerts table
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 6.3_
 
-  - [ ] 5.3 Write scoring and alert tests
+  - [x] 5.3 Write scoring and alert tests
+
+
     - Test scoring algorithm with various metric combinations
     - Test alert threshold evaluation and cooldown logic
     - Mock notification system integration tests
     - _Requirements: 3.1-3.5_
 
-- [ ] 6. Build candidate management system
-  - [ ] 6.1 Implement Candidate Store
+- [x] 6. Build candidate management system
+
+
+
+
+
+  - [x] 6.1 Implement Candidate Store
+
+
     - Create CandidateStore class with PostgreSQL integration
     - Implement screener snapshot storage and retrieval
     - Add deep scan results storage with date-based updates
     - Create candidate lifecycle management (creation, updates, expiration)
     - _Requirements: 1.4, 2.1, 6.2_
+
+
 
   - [ ] 6.2 Implement Ad-hoc Candidate Manager
     - Create AdHocManager class for manual candidate additions
@@ -144,6 +164,8 @@
     - Add candidate activation/deactivation functionality
     - Integrate with deep scan processing pipeline
     - Store ad-hoc candidates in ss_ad_hoc_candidates table
+
+
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
   - [ ] 6.3 Write candidate management tests

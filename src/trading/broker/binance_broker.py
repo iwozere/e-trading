@@ -34,7 +34,7 @@ from binance.client import Client
 from binance.enums import *
 from binance.exceptions import BinanceAPIException
 
-from .base_broker import (
+from src.trading.broker.base_broker import (
     BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
     OrderType, TradingMode, PaperTradingMode, ExecutionMetrics
 )

@@ -19,7 +19,7 @@ from functools import wraps
 from threading import Lock
 
 from src.model.error_handling import CircuitState, CircuitBreakerConfig
-from .exceptions import NetworkException, CircuitBreakerOpenException
+from src.error_handling.exceptions import NetworkException, CircuitBreakerOpenException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

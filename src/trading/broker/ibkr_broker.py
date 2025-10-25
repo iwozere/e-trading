@@ -34,7 +34,7 @@ from ib_insync import MarketOrder, LimitOrder, StopOrder, StopLimitOrder, Bracke
 from ib_insync import Trade, Position as IBPosition, PortfolioItem, AccountValue
 from ib_insync import util, BarData, Ticker
 
-from .base_broker import (
+from src.trading.broker.base_broker import (
     BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
     OrderType, TradingMode, PaperTradingMode, ExecutionMetrics
 )

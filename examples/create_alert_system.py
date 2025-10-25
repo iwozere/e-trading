@@ -22,7 +22,7 @@ from enum import Enum
 import re
 from collections import defaultdict
 
-from .async_notification_manager import AsyncNotificationManager
+from src.notification.async_notification_manager import AsyncNotificationManager
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 

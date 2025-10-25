@@ -11,8 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 import logging
 
-from .validation import validate_ohlcv_data, get_data_quality_score
-from .caching import get_cache
+from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
+from src.data.utils.caching import get_cache
 
 _logger = logging.getLogger(__name__)
 

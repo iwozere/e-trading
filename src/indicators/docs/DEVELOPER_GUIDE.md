@@ -382,7 +382,7 @@ Create a new adapter in `src/indicators/adapters/`:
 # my_custom_adapter.py
 from typing import Dict, Any
 import pandas as pd
-from .base_adapter import BaseAdapter
+from src.indicators.adapters.base_adapter import BaseAdapter
 
 class MyCustomAdapter(BaseAdapter):
     """Custom adapter for my calculation backend."""

@@ -22,7 +22,7 @@ import json
 import threading
 
 from src.model.error_handling import AlertConfig, ErrorSeverity, ErrorEvent
-from .exceptions import TradingException
+from src.error_handling.exceptions import TradingException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

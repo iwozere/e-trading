@@ -19,7 +19,7 @@ from typing import Callable, Optional, Dict, Any
 from functools import wraps
 
 from src.model.error_handling import RecoveryConfig, RecoveryStrategy
-from .exceptions import TradingException, RecoveryException
+from src.error_handling.exceptions import TradingException, RecoveryException
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

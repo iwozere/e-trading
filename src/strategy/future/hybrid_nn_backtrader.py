@@ -23,7 +23,7 @@ cerebro.run()
 
 import backtrader as bt
 import pandas as pd
-from .hybrid_nn_core import HybridNNCore
+from src.strategy.future.hybrid_nn_core import HybridNNCore
 
 class HybridNNBacktraderStrategy(bt.Strategy):
     params = (

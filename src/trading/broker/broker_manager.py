@@ -317,7 +317,7 @@ class BrokerManager:
         """
         try:
             # Validate configuration
-            from .config_validator import validate_and_create_broker_config
+            from src.trading.broker.config_validator import validate_and_create_broker_config
             validated_config = validate_and_create_broker_config(broker_config)
 
             # Create broker

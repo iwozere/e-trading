@@ -27,8 +27,8 @@ from src.model.schemas import (
     OptimizerConfig,
     DataConfig,
 )
-from .registry import ConfigRegistry
-from .templates import ConfigTemplates
+from src.config.registry import ConfigRegistry
+from src.config.templates import ConfigTemplates
 
 _logger = setup_logger(__name__)
 

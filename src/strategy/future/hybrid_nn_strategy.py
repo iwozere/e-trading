@@ -28,7 +28,7 @@ signal = strategy.predict_signal(ohlcv_df)
 print('Signal:', signal)  # 'buy', 'sell', or 'hold'
 """
 
-from .hybrid_nn_core import HybridNNCore
+from src.strategy.future.hybrid_nn_core import HybridNNCore
 
 class HybridNNStrategy(HybridNNCore):
     def __init__(self, cnn_lstm_path, xgb_path, window_size=100, device=None):

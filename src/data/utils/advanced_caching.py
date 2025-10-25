@@ -32,7 +32,7 @@ try:
 except ImportError:
     ZSTD_AVAILABLE = False
 
-from .caching import DataCache
+from src.data.utils.caching import DataCache
 
 # Import cache directory setting
 try:

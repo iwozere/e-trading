@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 from dataclasses import asdict
 
 from src.notification.logger import setup_logger
-from .data_classes import (
+from src.ml.pipeline.p04_short_squeeze.config.data_classes import (
     PipelineConfig, SchedulingConfig, ScreenerConfig, DeepScanConfig,
     AlertConfig, AdHocConfig, ReportConfig, PerformanceConfig, ScoringConfig,
     UniverseConfig, ScreenerFilters, ScreenerWeights, DeepScanMetrics,

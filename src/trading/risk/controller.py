@@ -1,9 +1,9 @@
 # src/risk/controller.py
 
 from typing import List, Dict
-from .pre_trade import position_sizing, exposure_limits, correlation_check
-from .real_time import stop_loss_manager, drawdown_control, volatility_scaling
-from .post_trade import pnl_attribution, trade_analysis, risk_reporting
+from src.trading.risk.pre_trade import position_sizing, exposure_limits, correlation_check
+from src.trading.risk.real_time import stop_loss_manager, drawdown_control, volatility_scaling
+from src.trading.risk.post_trade import pnl_attribution, trade_analysis, risk_reporting
 
 
 class RiskController:
