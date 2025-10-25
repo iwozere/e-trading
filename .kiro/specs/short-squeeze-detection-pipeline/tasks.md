@@ -1,26 +1,34 @@
 # Short Squeeze Detection Pipeline Implementation Plan
 
-- [ ] 1. Set up project structure and configuration system
+- [x] 1. Set up project structure and configuration system
   - Create directory structure for pipeline modules, configuration, and tests
   - Implement YAML configuration loader with validation
   - Create configuration data classes for type safety
   - Set up logging integration with existing notification system
   - _Requirements: 5.1, 5.2, 6.4, 6.5_
 
-- [ ] 2. Create database schema and data models
-  - [ ] 2.1 Implement database schema creation scripts
+- [-] 2. Create database schema and data models using centralized infrastructure
+
+  - [x] 2.1 Implement database schema creation scripts
     - Write SQL migration scripts for the four new tables (ss_snapshot, ss_deep_metrics, ss_alerts, ss_ad_hoc_candidates)
     - Create database indexes for performance optimization
+    - Integrate with centralized migration system in `src/data/db/migrations/`
     - _Requirements: 6.2_
 
-  - [ ] 2.2 Create data model classes
-    - Implement StructuralMetrics, TransientMetrics, Candidate, ScoredCandidate, and Alert dataclasses
-    - Create database ORM models or direct SQL query classes
+  - [x] 2.2 Create data model classes
+    - Implement SQLAlchemy models in `src/data/db/models/model_short_squeeze.py`
+    - Create repository layer in `src/data/db/repos/repo_short_squeeze.py`
+    - Implement service layer in `src/data/db/services/short_squeeze_service.py`
+
+
+    - Create business logic dataclasses in `src/ml/pipeline/p04_short_squeeze/core/models.py`
+    - Pipeline modules use centralized `ShortSqueezeService` directly (no facade layer needed)
     - _Requirements: 6.2_
 
   - [ ] 2.3 Write database integration tests
-    - Create test database setup and teardown utilities
-    - Write tests for CRUD operations on all tables
+    - Create test database setup and teardown utilities using centralized test patterns
+    - Write tests for CRUD operations on all tables using repository and service layers
+    - Test direct usage of centralized service from pipeline modules
     - _Requirements: 6.2_
 
 - [ ] 3. Implement data provider integration layer

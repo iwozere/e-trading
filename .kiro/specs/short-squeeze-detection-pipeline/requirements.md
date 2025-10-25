@@ -15,7 +15,7 @@ The Short Squeeze Detection Pipeline is a comprehensive system that identifies p
 - **FMP_Provider**: Financial Modeling Prep data provider for fundamentals and short interest data
 - **Finnhub_Provider**: Finnhub data provider for sentiment, options, and borrow rate data
 - **Notification_System**: Existing platform notification infrastructure for Telegram and email alerts
-- **Database_System**: Existing PostgreSQL database system for data persistence
+- **Database_System**: Centralized PostgreSQL database system with repository/service pattern for data persistence
 
 ## Requirements
 

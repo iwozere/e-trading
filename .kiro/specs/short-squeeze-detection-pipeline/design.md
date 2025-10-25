@@ -206,25 +206,28 @@ class AlertEngine:
 - Interface with existing notification system
 - Log all alert events
 
-### 7. Candidate Store
+### 7. Database Service Integration
 
-**Purpose**: Manage persistent storage of candidates and results.
+**Purpose**: Use centralized database service for all short squeeze operations.
 
 **Interface**:
 ```python
-class CandidateStore:
-    def __init__(self, db_connection: DatabaseConnection)
-    def save_screener_snapshot(self, results: ScreenerResults) -> None
-    def load_active_candidates(self) -> List[Candidate]
-    def save_deep_scan_results(self, results: DeepScanResults) -> None
-    def add_adhoc_candidate(self, ticker: str, reason: str, ttl_days: int) -> None
-    def expire_adhoc_candidates(self) -> None
+# Pipeline modules use the centralized service directly:
+from src.data.db.core.database import session_scope
+from src.data.db.services.short_squeeze_service import ShortSqueezeService
+
+with session_scope() as session:
+    service = ShortSqueezeService(session)
+    service.save_screener_results(results, run_date)
+    service.get_candidates_for_deep_scan()
+    service.add_adhoc_candidate(ticker, reason, ttl_days)
 ```
 
 **Key Responsibilities**:
-- Manage database operations for all pipeline data
-- Handle candidate lifecycle (creation, updates, expiration)
-- Maintain data quality and integrity
+- Use centralized `ShortSqueezeService` for all database operations
+- Handle session management through `session_scope()` context manager
+- Follow established patterns from other platform modules
+- No additional abstraction layers needed
 
 ### 8. Ad-hoc Candidate Manager
 
@@ -268,71 +271,21 @@ class ReportingEngine:
 
 ### Database Schema
 
-The pipeline introduces four new tables to the existing PostgreSQL database:
+The pipeline uses the centralized database infrastructure in `src/data/db/` and introduces four new tables to the existing PostgreSQL database:
 
-```sql
--- Weekly screener snapshots (append-only)
-CREATE TABLE ss_snapshot (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL,
-    run_date DATE NOT NULL,
-    short_interest_pct DECIMAL(5,4),
-    days_to_cover DECIMAL(8,2),
-    float_shares BIGINT,
-    avg_volume_14d BIGINT,
-    market_cap BIGINT,
-    screener_score DECIMAL(5,4),
-    raw_payload JSONB,
-    data_quality DECIMAL(3,2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+**Database Models Location**: `src/data/db/models/model_short_squeeze.py`
+**Repository Layer**: `src/data/db/repos/repo_short_squeeze.py`  
+**Service Layer**: `src/data/db/services/short_squeeze_service.py`
+**Migration**: `src/data/db/migrations/add_short_squeeze_tables.py`
 
--- Daily deep scan metrics
-CREATE TABLE ss_deep_metrics (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL,
-    date DATE NOT NULL,
-    volume_spike DECIMAL(6,2),
-    call_put_ratio DECIMAL(6,2),
-    sentiment_24h DECIMAL(4,3),
-    borrow_fee_pct DECIMAL(5,4),
-    squeeze_score DECIMAL(5,4),
-    alert_level VARCHAR(10),
-    raw_payload JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(ticker, date)
-);
+The four tables are:
 
--- Alert history and cooldown tracking
-CREATE TABLE ss_alerts (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL,
-    alert_level VARCHAR(10) NOT NULL,
-    reason TEXT,
-    squeeze_score DECIMAL(5,4),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    sent BOOLEAN DEFAULT FALSE,
-    cooldown_expires TIMESTAMP,
-    notification_id VARCHAR(50)
-);
+1. **ss_snapshot**: Weekly screener snapshots (append-only)
+2. **ss_deep_metrics**: Daily deep scan metrics with unique constraint on (ticker, date)
+3. **ss_alerts**: Alert history and cooldown tracking
+4. **ss_ad_hoc_candidates**: Ad-hoc candidate management with unique ticker constraint
 
--- Ad-hoc candidate management
-CREATE TABLE ss_ad_hoc_candidates (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL UNIQUE,
-    reason TEXT,
-    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP,
-    active BOOLEAN DEFAULT TRUE,
-    promoted_by_screener BOOLEAN DEFAULT FALSE
-);
-
--- Indexes for performance
-CREATE INDEX idx_ss_snapshot_ticker_date ON ss_snapshot(ticker, run_date);
-CREATE INDEX idx_ss_deep_metrics_ticker_date ON ss_deep_metrics(ticker, date);
-CREATE INDEX idx_ss_alerts_ticker_cooldown ON ss_alerts(ticker, cooldown_expires);
-CREATE INDEX idx_ss_adhoc_active ON ss_ad_hoc_candidates(active, expires_at);
-```
+All tables include proper constraints, indexes, and follow the existing database naming conventions. The pipeline uses the centralized database connection management, session handling, and follows the established repository/service pattern.
 
 ### Core Data Structures
 
@@ -463,9 +416,12 @@ class TestDataManager:
    - Maintain compatibility with existing API key management
 
 2. **Database System**:
-   - Use existing PostgreSQL connection management
-   - Follow existing table naming and schema conventions
-   - Integrate with existing migration system
+   - **INTEGRATED**: Uses centralized database infrastructure in `src/data/db/`
+   - **Models**: SQLAlchemy models in `src/data/db/models/model_short_squeeze.py`
+   - **Repositories**: Data access layer in `src/data/db/repos/repo_short_squeeze.py`
+   - **Services**: Business logic in `src/data/db/services/short_squeeze_service.py`
+   - **Migrations**: Centralized migration system with `add_short_squeeze_tables.py`
+   - **Connection Management**: Uses existing `session_scope()` and connection pooling
 
 3. **Notification System**:
    - Use existing `NotificationSystem` for alerts
