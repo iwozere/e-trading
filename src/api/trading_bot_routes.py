@@ -62,7 +62,7 @@ class BotConfigRequest(BaseModel):
 
 class BotStatusRequest(BaseModel):
     """Request model for bot status update."""
-    action: str = Field(..., description="Action to perform", regex="^(start|stop|restart)$")
+    action: str = Field(..., description="Action to perform", pattern="^(start|stop|restart)$")
 
 
 class BotResponse(BaseModel):

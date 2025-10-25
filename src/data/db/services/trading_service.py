@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
 from src.data.db.services.database_service import get_database_service
-from src.data.db.services.bot_config_validator import validate_database_bot_record, BotConfigValidator
+from src.trading.services.bot_config_validator import validate_database_bot_record, BotConfigValidator
 
 # Resolve once per module to avoid repeated lookups.
 _db = get_database_service()

@@ -52,7 +52,6 @@ export SENDGRID_API_KEY="your_sendgrid_api_key"
 
 #### Web GUI
 ```bash
-export TELEGRAM_WEBGUI_PORT="5000"
 export WEBGUI_LOGIN="admin"
 export WEBGUI_PASSWORD="your_password"
 ```

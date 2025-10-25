@@ -31,7 +31,6 @@ DB_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_H
 # 0 - off, 1 - log SQL queries into the log files
 SQL_ECHO = "1"
 
-TELEGRAM_WEBGUI_PORT=5000
 TELEGRAM_API_PORT=5001
 
 TRADING_WEBGUI_PORT=5002
@@ -83,7 +82,6 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 # This can be removed from environment variables
 #TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-TELEGRAM_WEBGUI_PORT = os.getenv("TELEGRAM_WEBGUI_PORT")
 WEBGUI_LOGIN = os.getenv("WEBGUI_LOGIN")
 WEBGUI_PASSWORD = os.getenv("WEBGUI_PASSWORD")
 

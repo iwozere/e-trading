@@ -23,7 +23,7 @@ _logger = setup_logger(__name__)
 
 # Import trading system components with error handling
 try:
-    from src.trading.enhanced_strategy_manager import EnhancedStrategyManager, StrategyInstance
+    from src.trading.strategy_manager import EnhancedStrategyManager, StrategyInstance
     from src.model.config_models import StrategyConfig as TradingStrategyConfig
     TRADING_SYSTEM_AVAILABLE = True
 except ImportError as e:

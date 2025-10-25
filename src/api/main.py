@@ -37,7 +37,7 @@ _logger = setup_logger(__name__)
 
 # Make trading system import optional for testing
 try:
-    from src.trading.enhanced_strategy_manager import EnhancedStrategyManager
+    from src.trading.strategy_manager import EnhancedStrategyManager
     TRADING_SYSTEM_AVAILABLE = True
 except ImportError as e:
     _logger.warning("Trading system not available: %s", e)
