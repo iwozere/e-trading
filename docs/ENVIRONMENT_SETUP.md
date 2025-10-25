@@ -58,7 +58,6 @@ export WEBGUI_PASSWORD="your_password"
 
 #### API
 ```bash
-export TELEGRAM_API_PORT="8000"
 export API_LOGIN="api_user"
 export API_PASSWORD="your_api_password"
 ```
