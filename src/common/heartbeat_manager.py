@@ -193,7 +193,7 @@ class HeartbeatManager:
                     metadata=metadata
                 )
 
-                uow.commit()
+                # No need to call uow.commit() - the context manager handles it automatically
 
         except Exception as e:
             _logger.error("Failed to update health status for %s.%s: %s",
