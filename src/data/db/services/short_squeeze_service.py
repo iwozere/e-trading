@@ -174,6 +174,11 @@ class ShortSqueezeService:
 
     def add_adhoc_candidate(self, ticker: str, reason: str, ttl_days: int = 7) -> bool:
         """Add an ad-hoc candidate for monitoring."""
+        # Validate ticker
+        if not ticker or not ticker.strip():
+            _logger.error("Cannot add ad-hoc candidate: ticker cannot be empty")
+            return False
+
         expires_at = datetime.now() + timedelta(days=ttl_days)
 
         try:

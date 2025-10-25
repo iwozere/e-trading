@@ -478,6 +478,206 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.error("Error getting DCF valuation for %s: %s", symbol, e)
             return None
 
+    # Short Squeeze Detection Pipeline Extensions
+
+    def get_short_interest_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get short interest data for a symbol.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            Dictionary with short interest data or None if failed
+        """
+        try:
+            url = f"{self.base_url}/short-interest/{symbol}"
+            params = {'apikey': self.api_key}
+
+            _logger.debug("Fetching short interest data for %s", symbol)
+
+            time.sleep(self.rate_limit_delay)
+            response = requests.get(url, params=params, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if isinstance(data, list) and len(data) > 0:
+                # Return the most recent short interest data
+                short_data = data[0]
+                _logger.debug("Retrieved short interest data for %s: %s shares short",
+                            symbol, short_data.get('shortInterest', 'N/A'))
+                return short_data
+            else:
+                _logger.warning("No short interest data found for %s", symbol)
+                return None
+
+        except Exception as e:
+            _logger.error("Error getting short interest data for %s: %s", symbol, e)
+            return None
+
+    def get_float_shares_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get float shares data for a symbol from company profile.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            Dictionary with float shares data or None if failed
+        """
+        try:
+            # Float shares are typically available in the company profile
+            profile = self.get_company_profile(symbol)
+            if not profile:
+                return None
+
+            # Extract float-related data
+            float_data = {
+                'symbol': symbol,
+                'sharesOutstanding': profile.get('sharesOutstanding'),
+                'floatShares': profile.get('floatShares'),
+                'marketCap': profile.get('mktCap'),
+                'lastUpdated': profile.get('lastUpdated', datetime.now().isoformat())
+            }
+
+            _logger.debug("Retrieved float shares data for %s: %s float shares",
+                        symbol, float_data.get('floatShares', 'N/A'))
+            return float_data
+
+        except Exception as e:
+            _logger.error("Error getting float shares data for %s: %s", symbol, e)
+            return None
+
+    def get_market_cap_data(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get market capitalization data for a symbol.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            Dictionary with market cap data or None if failed
+        """
+        try:
+            profile = self.get_company_profile(symbol)
+            if not profile:
+                return None
+
+            market_cap_data = {
+                'symbol': symbol,
+                'marketCap': profile.get('mktCap'),
+                'price': profile.get('price'),
+                'sharesOutstanding': profile.get('sharesOutstanding'),
+                'lastUpdated': profile.get('lastUpdated', datetime.now().isoformat())
+            }
+
+            _logger.debug("Retrieved market cap data for %s: $%s",
+                        symbol, market_cap_data.get('marketCap', 'N/A'))
+            return market_cap_data
+
+        except Exception as e:
+            _logger.error("Error getting market cap data for %s: %s", symbol, e)
+            return None
+
+    def load_universe_from_screener(self, criteria: Optional[Dict[str, Any]] = None) -> List[str]:
+        """
+        Load universe of stocks from FMP stock screener for short squeeze analysis.
+
+        Args:
+            criteria: Optional screening criteria. If None, uses default criteria for short squeeze detection
+
+        Returns:
+            List of ticker symbols that meet the criteria
+        """
+        try:
+            # Default criteria for short squeeze detection
+            default_criteria = {
+                'marketCapMoreThan': 100_000_000,  # > $100M market cap
+                'marketCapLowerThan': 10_000_000_000,  # < $10B market cap
+                'volumeMoreThan': 200_000,  # > 200k average volume
+                'exchange': 'NYSE,NASDAQ',  # Major US exchanges
+                'limit': 1000  # Maximum results
+            }
+
+            # Use provided criteria or defaults
+            screening_criteria = criteria or default_criteria
+
+            _logger.info("Loading universe with criteria: %s", screening_criteria)
+
+            # Get screener results
+            screener_results = self.get_stock_screener(screening_criteria)
+
+            if not screener_results:
+                _logger.warning("No stocks returned from screener")
+                return []
+
+            # Extract ticker symbols
+            tickers = []
+            for stock in screener_results:
+                symbol = stock.get('symbol')
+                if symbol:
+                    tickers.append(symbol)
+
+            _logger.info("Loaded universe of %d stocks from FMP screener", len(tickers))
+            return tickers
+
+        except Exception as e:
+            _logger.error("Error loading universe from screener: %s", e)
+            return []
+
+    def get_short_squeeze_batch_data(self, tickers: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Get short squeeze relevant data for multiple tickers in batch.
+
+        Args:
+            tickers: List of ticker symbols
+
+        Returns:
+            Dictionary mapping ticker symbols to their short squeeze data
+        """
+        try:
+            batch_data = {}
+            total_tickers = len(tickers)
+
+            _logger.info("Fetching short squeeze data for %d tickers", total_tickers)
+
+            for i, ticker in enumerate(tickers, 1):
+                try:
+                    # Get company profile (includes market cap, float shares)
+                    profile = self.get_company_profile(ticker)
+
+                    # Get short interest data
+                    short_interest = self.get_short_interest_data(ticker)
+
+                    # Get key metrics for additional data
+                    metrics = self.get_key_metrics(ticker)
+
+                    # Combine all data
+                    ticker_data = {
+                        'symbol': ticker,
+                        'profile': profile,
+                        'shortInterest': short_interest,
+                        'metrics': metrics,
+                        'timestamp': datetime.now().isoformat()
+                    }
+
+                    batch_data[ticker] = ticker_data
+
+                    if i % 50 == 0:  # Log progress every 50 tickers
+                        _logger.info("Processed %d/%d tickers", i, total_tickers)
+
+                except Exception as e:
+                    _logger.warning("Failed to get data for ticker %s: %s", ticker, e)
+                    continue
+
+            _logger.info("Successfully retrieved data for %d/%d tickers", len(batch_data), total_tickers)
+            return batch_data
+
+        except Exception as e:
+            _logger.error("Error in batch data retrieval: %s", e)
+            return {}
+
     def test_connection(self) -> bool:
         """Test API connection."""
         try:

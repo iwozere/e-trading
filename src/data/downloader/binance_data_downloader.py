@@ -24,7 +24,6 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Union
 
 import pandas as pd
-from binance.client import Client
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.notification.logger import setup_logger
@@ -95,6 +94,8 @@ class BinanceDataDownloader(BaseDataDownloader):
         """Get or create Binance client with lazy initialization."""
         if self.client is None:
             try:
+                # Lazy import to avoid loading binance package at module import time
+                from binance.client import Client
                 self.client = Client(self.api_key, self.api_secret)
             except Exception as e:
                 _logger.warning("Failed to initialize Binance client: %s", e)

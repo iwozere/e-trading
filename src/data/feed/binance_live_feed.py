@@ -24,8 +24,6 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
-from binance.client import Client
-from binance.exceptions import BinanceAPIException
 
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
@@ -68,8 +66,9 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         self.api_secret = api_secret
         self.testnet = testnet
 
-        # Initialize Binance client
-        self.client = Client(api_key, api_secret, testnet=testnet)
+        # Initialize Binance client (lazy initialization)
+        self.client = None
+        self._client_initialized = False
 
         # WebSocket connection
         self.ws = None
@@ -82,6 +81,19 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
         super().__init__(symbol=symbol, interval=interval, **kwargs)
 
+    def _get_client(self):
+        """Get or create Binance client with lazy initialization."""
+        if not self._client_initialized:
+            try:
+                # Lazy import to avoid loading binance package at module import time
+                from binance.client import Client
+                self.client = Client(self.api_key, self.api_secret, testnet=self.testnet)
+                self._client_initialized = True
+            except Exception as e:
+                _logger.warning("Failed to initialize Binance client: %s", e)
+                self.client = None
+        return self.client
+
     def _convert_interval(self, interval: str) -> str:
         """
         Convert standard interval format to Binance format.
@@ -92,16 +104,17 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
         Returns:
             Binance interval format
         """
+        # Use string constants instead of Client constants to avoid early import
         interval_map = {
-            '1m': Client.KLINE_INTERVAL_1MINUTE,
-            '5m': Client.KLINE_INTERVAL_5MINUTE,
-            '15m': Client.KLINE_INTERVAL_15MINUTE,
-            '30m': Client.KLINE_INTERVAL_30MINUTE,
-            '1h': Client.KLINE_INTERVAL_1HOUR,
-            '4h': Client.KLINE_INTERVAL_4HOUR,
-            '1d': Client.KLINE_INTERVAL_1DAY,
+            '1m': '1m',
+            '5m': '5m',
+            '15m': '15m',
+            '30m': '30m',
+            '1h': '1h',
+            '4h': '4h',
+            '1d': '1d',
         }
-        return interval_map.get(interval, Client.KLINE_INTERVAL_1MINUTE)
+        return interval_map.get(interval, '1m')
 
     # Note: _load_historical_data() is now inherited from BaseLiveDataFeed
     # which uses DataManager for historical data loading. This ensures
@@ -129,7 +142,11 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
 
             while remaining > 0:
                 batch_limit = min(per_call_limit, remaining)
-                klines = self.client.get_historical_klines(
+                client = self._get_client()
+                if client is None:
+                    _logger.error("Binance client not available")
+                    return None
+                klines = client.get_historical_klines(
                     symbol=self.symbol,
                     interval=self.binance_interval,
                     start_str=start_str,
@@ -182,8 +199,16 @@ class BinanceLiveDataFeed(BaseLiveDataFeed):
             _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
             return df
 
-        except BinanceAPIException as e:
-            _logger.exception("Binance API error loading historical data: %s", e)
+        except Exception as e:
+            # Check if it's a Binance API exception (lazy import)
+            try:
+                from binance.exceptions import BinanceAPIException
+                if isinstance(e, BinanceAPIException):
+                    _logger.exception("Binance API error loading historical data: %s", e)
+                else:
+                    _logger.exception("Unexpected error loading historical data for %s: %s", self.symbol, e)
+            except ImportError:
+                _logger.exception("Error loading historical data for %s: %s", self.symbol, e)
             return None
         except Exception as e:
             _logger.exception("Unexpected error loading historical data for %s: %s", self.symbol, e)
