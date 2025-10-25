@@ -23,12 +23,12 @@ _logger = setup_logger(__name__)
 
 # Import trading system components with error handling
 try:
-    from src.trading.strategy_manager import EnhancedStrategyManager, StrategyInstance
+    from src.trading.strategy_manager import StrategyManager, StrategyInstance
     from src.model.config_models import StrategyConfig as TradingStrategyConfig
     TRADING_SYSTEM_AVAILABLE = True
 except ImportError as e:
     _logger.warning("Trading system not available: %s", e)
-    EnhancedStrategyManager = None
+    StrategyManager = None
     StrategyInstance = None
     TradingStrategyConfig = None
     TRADING_SYSTEM_AVAILABLE = False
@@ -56,7 +56,7 @@ class StrategyManagementService:
     - Error handling and logging
     """
 
-    def __init__(self, strategy_manager: Optional[EnhancedStrategyManager] = None):
+    def __init__(self, strategy_manager: Optional[StrategyManager] = None):
         """
         Initialize the strategy management service.
 

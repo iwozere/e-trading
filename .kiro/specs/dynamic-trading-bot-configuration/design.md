@@ -188,7 +188,7 @@ class EnhancedTradingRunner:
     """Enhanced multi-bot trading service runner with database integration."""
     
     def __init__(self):
-        self.strategy_manager = EnhancedStrategyManager()
+        self.strategy_manager = StrategyManager()
         self.db_connection = DatabaseConnection()
         self.running_bots = {}
         self.is_running = False
@@ -210,7 +210,7 @@ class EnhancedTradingRunner:
 ### Enhanced Strategy Manager
 
 ```python
-class EnhancedStrategyManager:
+class StrategyManager:
     """Enhanced strategy manager with database integration and async bot management."""
     
     def __init__(self):

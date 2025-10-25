@@ -36,7 +36,7 @@ from typing import Optional
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.trading.strategy_manager import EnhancedStrategyManager
+from src.trading.strategy_manager import StrategyManager
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -49,7 +49,7 @@ class RaspberryPiTradingService:
         """Initialize the service."""
         self.config_file = config_file or "config/enhanced_trading/raspberry_pi_multi_strategy.json"
         self.config = None
-        self.strategy_manager = EnhancedStrategyManager()
+        self.strategy_manager = StrategyManager()
         self.is_running = False
         self.start_time = None
         self.system_monitor_task = None

@@ -37,11 +37,11 @@ _logger = setup_logger(__name__)
 
 # Make trading system import optional for testing
 try:
-    from src.trading.strategy_manager import EnhancedStrategyManager
+    from src.trading.strategy_manager import StrategyManager
     TRADING_SYSTEM_AVAILABLE = True
 except ImportError as e:
     _logger.warning("Trading system not available: %s", e)
-    EnhancedStrategyManager = None
+    StrategyManager = None
     TRADING_SYSTEM_AVAILABLE = False
 from config.donotshare.donotshare import TRADING_API_PORT, TRADING_WEBGUI_PORT
 from src.api.services.webui_app_service import webui_app_service
@@ -57,7 +57,7 @@ from src.api.services import (
 )
 
 # Global strategy manager and service instances
-strategy_manager: Optional[EnhancedStrategyManager] = None
+strategy_manager: Optional[StrategyManager] = None
 strategy_service: Optional[StrategyManagementService] = None
 monitoring_service: Optional[SystemMonitoringService] = None
 
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize strategy manager if available
     if TRADING_SYSTEM_AVAILABLE:
-        strategy_manager = EnhancedStrategyManager()
+        strategy_manager = StrategyManager()
 
         # Load existing strategies if config exists
         config_file = "config/enhanced_trading/raspberry_pi_multi_strategy.json"

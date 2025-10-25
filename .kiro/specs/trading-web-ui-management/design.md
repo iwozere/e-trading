@@ -53,7 +53,7 @@ The web UI follows a modern client-server architecture with dual-purpose functio
 │                Domain Services Layer                       │
 ├─────────────────────────────────────────────────────────────┤
 │  ├── Enhanced Trading System                               │
-│  │   ├── EnhancedStrategyManager                          │
+│  │   ├── StrategyManager                          │
 │  │   ├── RaspberryPiTradingService                        │
 │  │   └── Configuration Management                         │
 │  ├── Database Services                                     │
@@ -399,7 +399,7 @@ The web UI follows a modern client-server architecture with dual-purpose functio
 
 The web UI integrates with the existing enhanced trading system through:
 
-1. **Service Communication**: Direct API calls to EnhancedStrategyManager
+1. **Service Communication**: Direct API calls to StrategyManager
 2. **Configuration Management**: Read/write access to JSON configuration files
 3. **Real-Time Monitoring**: WebSocket integration with strategy status updates
 4. **System Control**: Integration with systemd service management
@@ -427,7 +427,7 @@ Clean architecture through domain services:
 ### Data Flow
 
 1. **Trading Configuration Flow**: 
-   Web UI → FastAPI → StrategyManagementService → EnhancedStrategyManager → JSON Config
+   Web UI → FastAPI → StrategyManagementService → StrategyManager → JSON Config
 
 2. **Telegram Management Flow**: 
    Web UI → FastAPI → TelegramAppService → Domain Services → Database

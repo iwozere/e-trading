@@ -405,7 +405,7 @@ This implementation plan converts the trading paper trading enhancement design i
 
 - [x] 15. Enhanced Multi-Strategy System Service (NEW)
   - [x] 15.1 Create enhanced strategy manager
-    - ✅ **IMPLEMENTED**: EnhancedStrategyManager for multiple strategy instances
+    - ✅ **IMPLEMENTED**: StrategyManager for multiple strategy instances
     - ✅ **IMPLEMENTED**: Strategy lifecycle management (start, stop, restart)
     - ✅ **IMPLEMENTED**: Per-strategy broker configuration (paper/live)
     - ✅ **IMPLEMENTED**: Strategy isolation and error containment

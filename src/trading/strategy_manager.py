@@ -174,7 +174,7 @@ class StrategyInstance:
         # self.trading_bot.stop()  # Uncomment when ready
 
 
-class EnhancedStrategyManager:
+class StrategyManager:
     """Manages multiple strategy instances in a single service."""
 
     def __init__(self):
