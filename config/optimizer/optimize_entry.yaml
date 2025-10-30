@@ -1,0 +1,136 @@
+# Schema for Entry Mixin JSON Configurations
+# This schema defines the structure and validation rules for entry mixin configurations
+
+schema:
+  type: object
+  required:
+    - name
+    - params
+  properties:
+    name:
+      type: string
+      description: "Name of the entry mixin class"
+      pattern: "^[A-Za-z]+Mixin$"
+    
+    params:
+      type: object
+      description: "Parameters for the entry mixin"
+      additionalProperties:
+        type: object
+        required:
+          - type
+          - default
+        properties:
+          type:
+            type: string
+            enum: ["int", "float", "bool", "categorical"]
+            description: "Data type of the parameter"
+          
+          low:
+            type: number
+            description: "Minimum value for numeric parameters"
+            when:
+              type: ["int", "float"]
+          
+          high:
+            type: number
+            description: "Maximum value for numeric parameters"
+            when:
+              type: ["int", "float"]
+          
+          default:
+            oneOf:
+              - type: number
+              - type: boolean
+              - type: string
+            description: "Default value for the parameter"
+          
+          choices:
+            type: array
+            items:
+              type: string
+            description: "Available choices for categorical parameters"
+            when:
+              type: "categorical"
+
+# Common parameter patterns across entry mixins
+common_parameters:
+  rsi_period:
+    type: int
+    low: 5
+    high: 30
+    default: 14
+    description: "Period for RSI calculation"
+  
+  bb_period:
+    type: int
+    low: 10
+    high: 50
+    default: 20
+    description: "Period for Bollinger Bands calculation"
+  
+  bb_dev:
+    type: float
+    low: 1.0
+    high: 3.0
+    default: 2.0
+    description: "Standard deviation multiplier for Bollinger Bands"
+  
+  vol_ma_period:
+    type: int
+    low: 5
+    high: 50
+    default: 20
+    description: "Period for Volume Moving Average"
+  
+  rsi_oversold:
+    type: int
+    low: 20
+    high: 40
+    default: 30
+    description: "RSI oversold threshold"
+  
+  st_period:
+    type: int
+    low: 5
+    high: 30
+    default: 10
+    description: "Period for SuperTrend calculation"
+  
+  st_multiplier:
+    type: float
+    low: 1.0
+    high: 5.0
+    default: 3.0
+    description: "Multiplier for SuperTrend ATR"
+  
+  use_talib:
+    type: bool
+    default: false
+    description: "Whether to use TA-Lib for calculations"
+
+# Example valid configurations
+examples:
+  RSIBBMixin:
+    name: "RSIBBMixin"
+    params:
+      rsi_period:
+        type: "int"
+        low: 5
+        high: 30
+        default: 14
+      bb_period:
+        type: "int"
+        low: 10
+        high: 50
+        default: 20
+      bb_dev:
+        type: "float"
+        low: 1.0
+        high: 3.0
+        default: 2.0
+      rsi_oversold:
+        type: "int"
+        low: 20
+        high: 40
+        default: 30 

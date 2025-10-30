@@ -1,0 +1,62 @@
+{
+  "bot_id": "paper_trading_simple_atr",
+  "environment": "development",
+  "version": "1.0.0",
+  "description": "Paper trading bot with RSIOrBBEntryMixin + SimpleATRExitMixin strategy",
+  "symbol": "LTCUSDT",
+  "timeframe": "4h",
+  "risk_per_trade": 0.02,
+  "max_open_trades": 3,
+  "position_size": 0.1,
+  "broker_type": "binance_paper",
+  "initial_balance": 10000.0,
+  "commission": 0.001,
+  "data_source": "binance",
+  "lookback_bars": 1000,
+  "retry_interval": 60,
+  "strategy_type": "custom",
+  "strategy_params": {
+    "entry_logic": {
+      "name": "RSIOrBBEntryMixin",
+      "params": {
+        "e_rsi_period": 20,
+        "e_rsi_oversold": 25,
+        "e_bb_period": 16,
+        "e_bb_dev": 2.08,
+        "e_rsi_cross": false,
+        "e_bb_reentry": false,
+        "e_cooldown_bars": 4,
+        "e_use_bb_touch": true
+      }
+    },
+    "exit_logic": {
+      "name": "SimpleATRExitMixin",
+      "params": {
+        "x_atr_period": 14,
+        "x_atr_multiplier": 2.0,
+        "x_breakeven_atr": 1.0,
+        "x_use_breakeven": true
+      }
+    },
+    "use_talib": true
+  },
+  "stop_loss_pct": 5.0,
+  "take_profit_pct": 10.0,
+  "max_daily_trades": 10,
+  "max_daily_loss": 100.0,
+  "max_drawdown_pct": 20.0,
+  "max_exposure": 1.0,
+  "log_level": "INFO",
+  "save_trades": true,
+  "save_equity_curve": true,
+  "log_file": "logs/paper_trading_simple_atr.log",
+  "notifications_enabled": true,
+  "telegram_enabled": false,
+  "email_enabled": false,
+  "paper_trading": true,
+  "trading_settings": {
+    "enable_database_logging": true,
+    "bot_type": "paper",
+    "description": "Paper trading with RSI/BB entry + Simple ATR exit"
+  }
+}

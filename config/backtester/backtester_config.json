@@ -1,0 +1,7 @@
+{
+    "backtester_settings": {
+        "enable_database_logging": false,
+        "bot_type": "optimization",
+        "description": "Backtester configuration - database logging disabled for performance"
+    }
+}

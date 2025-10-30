@@ -1,0 +1,58 @@
+{
+    "optimizer_settings": {
+        "optimizer_type": "optuna",
+        "initial_capital": 1000.0,
+        "commission": 0.001,
+        "risk_free_rate": 0.01,
+        "n_trials": 100,
+        "n_jobs": -1,
+        "plot": true,
+        "save_trades": true,
+        "output_dir": "results",
+        "position_size": 0.10
+    },
+    "optimization_space": {
+        "cnn": {
+            "kernel_size": {"type": "categorical", "choices": [3, 5, 7]},
+            "num_layers": {"type": "int", "low": 1, "high": 5},
+            "filters": {"type": "int", "low": 16, "high": 256},
+            "learning_rate": {"type": "float", "low": 1e-4, "high": 1e-2, "log": true}
+        },
+        "lstm": {
+            "timesteps": {"type": "int", "low": 100, "high": 200},
+            "hidden_size": {"type": "int", "low": 32, "high": 256},
+            "num_layers": {"type": "int", "low": 1, "high": 4},
+            "dropout": {"type": "float", "low": 0.2, "high": 0.5},
+            "learning_rate": {"type": "float", "low": 1e-4, "high": 1e-2, "log": true}
+        },
+        "xgboost": {
+            "learning_rate": {"type": "float", "low": 0.01, "high": 0.3},
+            "max_depth": {"type": "int", "low": 3, "high": 12},
+            "subsample": {"type": "float", "low": 0.6, "high": 0.8}
+        },
+        "indicators": {
+            "rsi_period": {"type": "int", "low": 7, "high": 21},
+            "atr_period": {"type": "int", "low": 7, "high": 21},
+            "macd_fast": {"type": "int", "low": 8, "high": 16},
+            "macd_slow": {"type": "int", "low": 18, "high": 32},
+            "macd_signal": {"type": "int", "low": 5, "high": 12},
+            "bbands_period": {"type": "int", "low": 10, "high": 30},
+            "bbands_dev": {"type": "float", "low": 1.5, "high": 3.0},
+            "stoch_k": {"type": "int", "low": 7, "high": 21},
+            "stoch_d": {"type": "int", "low": 3, "high": 9}
+        }
+    },
+    "visualization_settings": {
+        "plot_size": [60, 30],
+        "plot_style": "default",
+        "font_size": 10,
+        "plot_dpi": 300,
+        "show_grid": true,
+        "legend_loc": "upper left",
+        "save_plot": true,
+        "show_plot": false,
+        "plot_format": "png",
+        "show_equity_curve": true,
+        "show_indicators": true
+    }
+} 

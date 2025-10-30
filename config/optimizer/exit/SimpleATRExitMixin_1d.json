@@ -1,0 +1,31 @@
+{
+    "name": "SimpleATRExitMixin",
+    "timeframe": "1d",
+    "trading_style": "position_trading",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 14,
+            "high": 30,
+            "default": 20
+        },
+        "x_atr_multiplier": {
+            "type": "float",
+            "low": 2.5,
+            "high": 4.0,
+            "default": 3.0
+        },
+        "x_breakeven_atr": {
+            "type": "float",
+            "low": 1.5,
+            "high": 3.0,
+            "default": 2.0
+        },
+        "x_use_breakeven": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        }
+    },
+    "description": "1d timeframe simple ATR exit - wide parameters for position trading"
+}

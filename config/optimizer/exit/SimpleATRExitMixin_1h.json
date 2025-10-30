@@ -1,0 +1,31 @@
+{
+    "name": "SimpleATRExitMixin",
+    "timeframe": "1h",
+    "trading_style": "swing_trading",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14
+        },
+        "x_atr_multiplier": {
+            "type": "float",
+            "low": 1.8,
+            "high": 3.0,
+            "default": 2.2
+        },
+        "x_breakeven_atr": {
+            "type": "float",
+            "low": 0.8,
+            "high": 2.0,
+            "default": 1.2
+        },
+        "x_use_breakeven": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        }
+    },
+    "description": "1h timeframe simple ATR exit - wider parameters for swing trading"
+}

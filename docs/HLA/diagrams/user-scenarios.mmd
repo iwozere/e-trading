@@ -1,0 +1,131 @@
+sequenceDiagram
+    %% Key User Scenarios - Message Flow Diagrams
+    
+    participant User as Web UI User
+    participant WebUI as Web Frontend
+    participant API as FastAPI Backend
+    participant StrategyMgr as Strategy Manager
+    participant TradingBot as Trading Bot
+    participant Database as PostgreSQL DB
+    participant NotificationMgr as Notification Manager
+    participant WebSocket as WebSocket Manager
+    participant TelegramBot as Telegram Bot
+
+    Note over User, TelegramBot: Scenario 1: Create and Start Trading Strategy
+
+    User->>WebUI: Login to Web Interface
+    WebUI->>API: POST /auth/login
+    API->>Database: Validate credentials
+    Database-->>API: User authenticated
+    API-->>WebUI: JWT tokens
+    WebUI-->>User: Dashboard loaded
+
+    User->>WebUI: Create new strategy
+    WebUI->>API: POST /api/strategies
+    API->>StrategyMgr: Create strategy config
+    StrategyMgr->>Database: Store strategy config
+    Database-->>StrategyMgr: Config saved
+    StrategyMgr-->>API: Strategy created
+    API-->>WebUI: Strategy ID returned
+    WebUI-->>User: Strategy created successfully
+
+    User->>WebUI: Start strategy
+    WebUI->>API: POST /api/strategies/{id}/start
+    API->>StrategyMgr: Start strategy instance
+    StrategyMgr->>TradingBot: Initialize bot instance
+    TradingBot->>Database: Log startup
+    TradingBot-->>StrategyMgr: Bot started
+    StrategyMgr->>NotificationMgr: Strategy started notification
+    NotificationMgr->>WebSocket: Broadcast strategy update
+    WebSocket-->>WebUI: Real-time status update
+    StrategyMgr-->>API: Strategy started
+    API-->>WebUI: Success response
+    WebUI-->>User: Strategy running
+
+    Note over User, TelegramBot: Scenario 2: Trade Execution and Notification
+
+    TradingBot->>TradingBot: Market analysis
+    TradingBot->>TradingBot: Generate buy signal
+    TradingBot->>Database: Log trade decision
+    TradingBot->>TradingBot: Execute buy order
+    TradingBot->>Database: Log trade execution
+    TradingBot->>NotificationMgr: Trade notification
+    
+    par Parallel Notifications
+        NotificationMgr->>WebSocket: Real-time trade update
+        WebSocket-->>WebUI: Trade notification
+        WebUI-->>User: Trade alert displayed
+    and
+        NotificationMgr->>TelegramBot: Send Telegram message
+        TelegramBot-->>User: Telegram trade notification
+    end
+
+    Note over User, TelegramBot: Scenario 3: Telegram Bot Report Request
+
+    User->>TelegramBot: /report BTCUSDT -email
+    TelegramBot->>Database: Validate user permissions
+    Database-->>TelegramBot: User authorized
+    TelegramBot->>TelegramBot: Parse command parameters
+    TelegramBot->>Database: Queue report job
+    Database-->>TelegramBot: Job queued
+    TelegramBot-->>User: Report generation started
+
+    TelegramBot->>TelegramBot: Generate report
+    TelegramBot->>NotificationMgr: Send report notification
+    
+    par Report Delivery
+        NotificationMgr->>TelegramBot: Send Telegram report
+        TelegramBot-->>User: Report via Telegram
+    and
+        NotificationMgr->>NotificationMgr: Send email report
+        NotificationMgr-->>User: Report via email
+    end
+
+    Note over User, TelegramBot: Scenario 4: System Monitoring and Alerts
+
+    loop System Monitoring
+        StrategyMgr->>StrategyMgr: Monitor strategy health
+        StrategyMgr->>Database: Update strategy metrics
+        StrategyMgr->>WebSocket: Broadcast metrics
+        WebSocket-->>WebUI: Real-time metrics
+        WebUI-->>User: Dashboard updates
+    end
+
+    alt System Error Detected
+        TradingBot->>TradingBot: Error condition detected
+        TradingBot->>Database: Log error
+        TradingBot->>NotificationMgr: Error notification
+        
+        par Error Notifications
+            NotificationMgr->>WebSocket: Broadcast error alert
+            WebSocket-->>WebUI: Error alert
+            WebUI-->>User: Error notification
+        and
+            NotificationMgr->>TelegramBot: Send error message
+            TelegramBot-->>User: Telegram error alert
+        end
+    end
+
+    Note over User, TelegramBot: Scenario 5: Scheduled Job Execution
+
+    Database->>Database: Scheduled job trigger
+    Database->>TelegramBot: Execute scheduled report
+    TelegramBot->>TelegramBot: Generate scheduled report
+    TelegramBot->>Database: Log job execution
+    TelegramBot->>NotificationMgr: Send scheduled notification
+    NotificationMgr->>TelegramBot: Deliver report
+    TelegramBot-->>User: Scheduled report delivered
+
+    Note over User, TelegramBot: Scenario 6: WebSocket Real-time Updates
+
+    WebUI->>WebSocket: Connect WebSocket
+    WebSocket->>WebSocket: Authenticate connection
+    WebSocket-->>WebUI: Connection established
+    WebUI->>WebSocket: Subscribe to strategy updates
+    WebSocket->>WebSocket: Add subscription
+
+    loop Real-time Updates
+        StrategyMgr->>WebSocket: Strategy status update
+        WebSocket->>WebUI: Broadcast update
+        WebUI->>User: Update UI components
+    end

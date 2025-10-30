@@ -1,0 +1,148 @@
+graph TB
+    %% External Systems
+    subgraph "External Data Sources"
+        BINANCE[Binance API]
+        YAHOO[Yahoo Finance]
+        IBKR[Interactive Brokers]
+        COINGECKO[CoinGecko API]
+    end
+
+    subgraph "External Services"
+        TELEGRAM_API[Telegram API]
+        EMAIL_SMTP[Email SMTP]
+        MLFLOW_SERVER[MLflow Server]
+    end
+
+    %% Core System Modules
+    subgraph "Advanced Trading Framework"
+        %% Data Layer
+        subgraph "Data Management Layer"
+            DATA[Data Module]
+            MODEL[Model Module]
+            CONFIG[Config Module]
+        end
+
+        %% Processing Layer
+        subgraph "Processing & Analytics Layer"
+            STRATEGY[Strategy Module]
+            BACKTESTER[Backtester Module]
+            ML[ML Module]
+            ANALYTICS[Analytics Module]
+            INDICATORS[Indicators Module]
+        end
+
+        %% Execution Layer
+        subgraph "Trading Execution Layer"
+            TRADING[Trading Module]
+            SCHEDULER[Scheduler Module]
+            ERROR_HANDLING[Error Handling Module]
+        end
+
+        %% Interface Layer
+        subgraph "User Interface Layer"
+            WEB_UI[Web UI Module]
+            TELEGRAM[Telegram Module]
+            NOTIFICATION[Notification Module]
+        end
+
+        %% Infrastructure Layer
+        subgraph "Infrastructure Layer"
+            COMMON[Common Module]
+            UTIL[Util Module]
+            DATABASE[(PostgreSQL Database)]
+        end
+    end
+
+    %% Data Flow Connections
+    BINANCE --> DATA
+    YAHOO --> DATA
+    IBKR --> DATA
+    COINGECKO --> DATA
+
+    DATA --> MODEL
+    CONFIG --> DATA
+    CONFIG --> STRATEGY
+    CONFIG --> TRADING
+
+    DATA --> STRATEGY
+    DATA --> BACKTESTER
+    DATA --> ML
+    DATA --> ANALYTICS
+
+    MODEL --> STRATEGY
+    MODEL --> BACKTESTER
+    MODEL --> ML
+    MODEL --> TRADING
+
+    INDICATORS --> STRATEGY
+    INDICATORS --> BACKTESTER
+    INDICATORS --> ML
+
+    STRATEGY --> BACKTESTER
+    STRATEGY --> TRADING
+    ML --> STRATEGY
+    ANALYTICS --> STRATEGY
+
+    BACKTESTER --> ANALYTICS
+    TRADING --> ANALYTICS
+
+    SCHEDULER --> TRADING
+    SCHEDULER --> ML
+    SCHEDULER --> ANALYTICS
+
+    ERROR_HANDLING --> TRADING
+    ERROR_HANDLING --> SCHEDULER
+    ERROR_HANDLING --> DATA
+
+    TRADING --> NOTIFICATION
+    ANALYTICS --> NOTIFICATION
+    ML --> NOTIFICATION
+
+    NOTIFICATION --> TELEGRAM_API
+    NOTIFICATION --> EMAIL_SMTP
+
+    TELEGRAM --> TELEGRAM_API
+    TELEGRAM --> STRATEGY
+    TELEGRAM --> ANALYTICS
+    TELEGRAM --> TRADING
+
+    WEB_UI --> STRATEGY
+    WEB_UI --> ANALYTICS
+    WEB_UI --> TRADING
+    WEB_UI --> ML
+
+    ML --> MLFLOW_SERVER
+
+    %% Database connections
+    DATA --> DATABASE
+    MODEL --> DATABASE
+    TRADING --> DATABASE
+    TELEGRAM --> DATABASE
+    WEB_UI --> DATABASE
+    SCHEDULER --> DATABASE
+
+    COMMON --> DATA
+    COMMON --> STRATEGY
+    COMMON --> TRADING
+    COMMON --> ML
+
+    UTIL --> DATA
+    UTIL --> STRATEGY
+    UTIL --> ANALYTICS
+
+    %% Styling
+    classDef external fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef dataLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef processLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef execLayer fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef interfaceLayer fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef infraLayer fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    classDef database fill:#e3f2fd,stroke:#0d47a1,stroke-width:3px
+
+    class BINANCE,YAHOO,IBKR,COINGECKO,TELEGRAM_API,EMAIL_SMTP,MLFLOW_SERVER external
+    class DATA,MODEL,CONFIG dataLayer
+    class STRATEGY,BACKTESTER,ML,ANALYTICS,INDICATORS processLayer
+    class TRADING,SCHEDULER,ERROR_HANDLING execLayer
+    class WEB_UI,TELEGRAM,NOTIFICATION interfaceLayer
+    class COMMON,UTIL,DATABASE infraLayer
+    class DATABASE database

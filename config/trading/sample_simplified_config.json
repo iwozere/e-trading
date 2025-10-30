@@ -1,0 +1,45 @@
+{
+  "bot_id": "sample_bot_001",
+  "environment": "development",
+  "version": "1.0.0",
+  "description": "Sample trading bot configuration in new simplified format",
+  "symbol": "BTCUSDT",
+  "timeframe": "1h",
+  "risk_per_trade": 0.02,
+  "max_open_trades": 5,
+  "position_size": 0.1,
+  "broker_type": "binance_paper",
+  "initial_balance": 10000.0,
+  "commission": 0.001,
+  "data_source": "binance",
+  "lookback_bars": 1000,
+  "retry_interval": 60,
+  "strategy_type": "custom",
+  "strategy_params": {
+    "entry": {
+      "rsi_period": 14,
+      "rsi_oversold": 30,
+      "bb_period": 20,
+      "bb_dev": 2.0
+    },
+    "exit": {
+      "rsi_period": 14,
+      "rsi_overbought": 70
+    },
+    "use_talib": false
+  },
+  "stop_loss_pct": 5.0,
+  "take_profit_pct": 10.0,
+  "max_daily_trades": 10,
+  "max_daily_loss": 50.0,
+  "max_drawdown_pct": 20.0,
+  "max_exposure": 1.0,
+  "log_level": "INFO",
+  "save_trades": true,
+  "save_equity_curve": true,
+  "log_file": "logs/sample_bot_001.log",
+  "notifications_enabled": true,
+  "telegram_enabled": false,
+  "email_enabled": false,
+  "paper_trading": true
+} 

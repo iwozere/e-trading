@@ -1,0 +1,181 @@
+graph TB
+    %% API Endpoints and Service Interfaces
+    
+    subgraph Clients ["Client Applications"]
+        WebClient["Web UI Client"]
+        TelegramClient["Telegram Bot Client"]
+        APIClient["External API Client"]
+    end
+
+    subgraph FastAPI ["FastAPI Backend (src/api) - Port 8000"]
+        MainAPI["Main FastAPI App"]
+        
+        subgraph Auth ["Authentication Routes (/auth)"]
+            LoginEP["POST /auth/login"]
+            RefreshEP["POST /auth/refresh"]
+            LogoutEP["POST /auth/logout"]
+            MeEP["GET /auth/me"]
+        end
+
+        subgraph Strategy ["Strategy Management (/api/strategies)"]
+            ListStrategiesEP["GET /api/strategies"]
+            CreateStrategyEP["POST /api/strategies"]
+            GetStrategyEP["GET /api/strategies/{id}"]
+            UpdateStrategyEP["PUT /api/strategies/{id}"]
+            DeleteStrategyEP["DELETE /api/strategies/{id}"]
+            StartStrategyEP["POST /api/strategies/{id}/start"]
+            StopStrategyEP["POST /api/strategies/{id}/stop"]
+            RestartStrategyEP["POST /api/strategies/{id}/restart"]
+            UpdateParamsEP["PUT /api/strategies/{id}/parameters"]
+        end
+
+        subgraph System ["System Monitoring (/api)"]
+            SystemStatusEP["GET /api/system/status"]
+            HealthEP["GET /api/health"]
+            TestAuthEP["GET /api/test-auth"]
+            MetricsEP["GET /api/monitoring/metrics"]
+            AlertsEP["GET /api/monitoring/alerts"]
+            AckAlertEP["POST /api/monitoring/alerts/{id}/acknowledge"]
+            HistoryEP["GET /api/monitoring/history"]
+        end
+
+        subgraph Config ["Configuration Management (/api/config)"]
+            TemplatesEP["GET /api/config/templates"]
+            ValidateEP["POST /api/config/validate"]
+        end
+
+        subgraph Jobs ["Job Management (/api)"]
+            RunReportEP["POST /api/reports/run"]
+            RunScreenerEP["POST /api/screeners/run"]
+            GetRunEP["GET /api/runs/{id}"]
+            ListRunsEP["GET /api/runs"]
+            CancelRunEP["DELETE /api/runs/{id}"]
+            SchedulesEP["GET/POST /api/schedules"]
+            GetScheduleEP["GET /api/schedules/{id}"]
+            UpdateScheduleEP["PUT /api/schedules/{id}"]
+            DeleteScheduleEP["DELETE /api/schedules/{id}"]
+            TriggerScheduleEP["POST /api/schedules/{id}/trigger"]
+            ScreenerSetsEP["GET /api/screener-sets"]
+            RunStatsEP["GET /api/runs/statistics"]
+            CleanupEP["POST /api/admin/cleanup-runs"]
+        end
+
+        subgraph TelegramMgmt ["Telegram Management (/api/telegram)"]
+            TelegramUsersEP["GET /api/telegram/users"]
+            VerifyUserEP["POST /api/telegram/users/{id}/verify"]
+            ApproveUserEP["POST /api/telegram/users/{id}/approve"]
+            ResetEmailEP["POST /api/telegram/users/{id}/reset-email"]
+            TelegramAlertsEP["GET /api/telegram/alerts"]
+            ToggleAlertEP["POST /api/telegram/alerts/{id}/toggle"]
+            DeleteAlertEP["DELETE /api/telegram/alerts/{id}"]
+            TelegramSchedulesEP["GET /api/telegram/schedules"]
+            BroadcastEP["POST /api/telegram/broadcast"]
+            BroadcastHistoryEP["GET /api/telegram/broadcast/history"]
+            AuditEP["GET /api/telegram/audit"]
+            UserAuditEP["GET /api/telegram/users/{id}/audit"]
+            UserStatsEP["GET /api/telegram/stats/users"]
+            AlertStatsEP["GET /api/telegram/stats/alerts"]
+            ScheduleStatsEP["GET /api/telegram/stats/schedules"]
+            AuditStatsEP["GET /api/telegram/stats/audit"]
+        end
+
+        subgraph Notifications ["Notification Management (/api/notifications)"]
+            NotifyHealthEP["GET /api/notifications/health"]
+            CreateNotificationEP["POST /api/notifications"]
+            ListNotificationsEP["GET /api/notifications"]
+            GetNotificationEP["GET /api/notifications/{id}"]
+            GetDeliveryEP["GET /api/notifications/{id}/delivery"]
+            ChannelsHealthEP["GET /api/notifications/channels/health"]
+            ListChannelsEP["GET /api/notifications/channels"]
+            NotifyStatsEP["GET /api/notifications/stats"]
+            SendAlertEP["POST /api/notifications/alert"]
+            SendTradeEP["POST /api/notifications/trade"]
+            CleanupNotificationsEP["POST /api/notifications/admin/cleanup"]
+            ProcessorStatsEP["GET /api/notifications/admin/processor/stats"]
+        end
+
+        subgraph WS ["WebSocket"]
+            WSEndpoint["WebSocket /ws"]
+            WSAuth["WS Authentication"]
+        end
+    end
+
+    subgraph TelegramBot ["Telegram Bot Service - Port 8001"]
+        TelegramBotAPI["Telegram Bot API"]
+        
+        subgraph BotCommands ["Bot Commands"]
+            StartCmd["/start"]
+            HelpCmd["/help"]
+            RegisterCmd["/register"]
+            ReportCmd["/report"]
+            AlertsCmd["/alerts"]
+            SchedulesCmd["/schedules"]
+        end
+
+        subgraph BotAPI ["HTTP API Endpoints"]
+            BotSendEP["POST /api/send_message"]
+            BotBroadcastEP["POST /api/broadcast"]
+            BotStatusEP["GET /api/status"]
+            NotifyEP["POST /api/notify"]
+        end
+    end
+
+    %% Client Connections
+    WebClient --> MainAPI
+    WebClient --> WSEndpoint
+    TelegramClient --> TelegramBotAPI
+    APIClient --> MainAPI
+
+    %% Authentication Flow
+    WebClient --> LoginEP
+    WebClient --> RefreshEP
+    WebClient --> MeEP
+
+    %% Strategy Management Flow
+    WebClient --> ListStrategiesEP
+    WebClient --> CreateStrategyEP
+    WebClient --> StartStrategyEP
+
+    %% System Monitoring Flow
+    WebClient --> SystemStatusEP
+    WebClient --> MetricsEP
+
+    %% Job Management Flow
+    WebClient --> RunReportEP
+    WebClient --> ListRunsEP
+    WebClient --> SchedulesEP
+
+    %% Telegram Management Flow
+    WebClient --> TelegramUsersEP
+    WebClient --> BroadcastEP
+
+    %% Telegram Bot Commands
+    TelegramClient --> StartCmd
+    TelegramClient --> ReportCmd
+    TelegramClient --> AlertsCmd
+
+    %% Bot HTTP API
+    APIClient --> BotSendEP
+    APIClient --> BotStatusEP
+
+    %% Background Service Communication
+    MainAPI -.-> NotifyEP
+
+    %% Styling
+    classDef clientStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef apiStyle fill:#f1f8e9,stroke:#388e3c,stroke-width:2px
+    classDef authStyle fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef strategyStyle fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+    classDef systemStyle fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    classDef jobStyle fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
+    classDef telegramStyle fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px
+    classDef botStyle fill:#f9fbe7,stroke:#8bc34a,stroke-width:2px
+
+    class WebClient,TelegramClient,APIClient clientStyle
+    class MainAPI apiStyle
+    class LoginEP,RefreshEP,LogoutEP,MeEP authStyle
+    class ListStrategiesEP,CreateStrategyEP,GetStrategyEP,UpdateStrategyEP,StartStrategyEP,StopStrategyEP strategyStyle
+    class SystemStatusEP,MetricsEP,AlertsEP,HistoryEP systemStyle
+    class RunReportEP,RunScreenerEP,GetRunEP,ListRunsEP,SchedulesEP jobStyle
+    class TelegramUsersEP,TelegramAlertsEP,BroadcastEP,AuditEP telegramStyle
+    class TelegramBotAPI,StartCmd,HelpCmd,RegisterCmd,ReportCmd,AlertsCmd,SchedulesCmd,BotSendEP,BotBroadcastEP,BotStatusEP,NotifyEP botStyle

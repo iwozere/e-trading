@@ -1,0 +1,61 @@
+{
+  "optimizer_type": "hmm_lstm",
+  "initial_capital": 10000.0,
+  "commission": 0.001,
+  "position_size": 0.1,
+  "plot": true,
+  "save_trades": true,
+  "output_dir": "results",
+  
+  "ml_models": {
+      "pipeline_dir": "src/ml/pipeline/p01_hmm_lstm",
+  "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+    "config_file": "config/pipeline/p01.yaml"
+  },
+  
+  "strategy": {
+      "name": "HMMLSTMStrategy",
+      "entry_threshold": 0.001,
+      "regime_confidence_threshold": 0.4
+  },
+
+  "data": {
+    "data_dir": "data/raw",
+    "start_date": "2023-01-01",
+    "end_date": "2024-01-01"
+  },
+  
+  "risk_management": {
+    "max_position_size": 0.2,
+    "stop_loss_pct": 0.005,
+    "take_profit_pct": 0.01,
+    "max_drawdown": 0.15
+  },
+  
+  "optimization": {
+    "enabled": false,
+    "n_trials": 50,
+    "optimize_params": [
+      "entry_threshold",
+      "exit_threshold",
+      "regime_confidence_threshold"
+    ],
+    "parameter_ranges": {
+      "entry_threshold": {
+        "min": 0.0001,
+        "max": 0.002,
+        "type": "float"
+      },
+      "exit_threshold": {
+        "min": 0.0002,
+        "max": 0.002,
+        "type": "float"
+      },
+      "regime_confidence_threshold": {
+        "min": 0.3,
+        "max": 0.7,
+        "type": "float"
+      }
+    }
+  }
+}

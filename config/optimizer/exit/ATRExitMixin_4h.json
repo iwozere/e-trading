@@ -1,0 +1,20 @@
+{
+    "name": "ATRExitMixin",
+    "timeframe": "4h",
+    "trading_style": "swing_trading",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 14,
+            "high": 30,
+            "default": 18
+        },
+        "x_sl_multiplier": {
+            "type": "float",
+            "low": 2.2,
+            "high": 3.5,
+            "default": 2.8
+        }
+    },
+    "description": "4h timeframe ATR trailing stop - wider trailing distance for swing trading"
+}

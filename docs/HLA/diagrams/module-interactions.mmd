@@ -1,0 +1,93 @@
+graph TB
+    subgraph "Presentation Layer"
+        TG_BOT[Telegram Bot]
+        WEB_UI[Web UI Frontend]
+        REST_API[REST API]
+    end
+    
+    subgraph "Service Layer"
+        TRADE_SVC[Trading Service]
+        DATA_SVC[Data Service]
+        ML_SVC[ML Service]
+        NOTIF_SVC[Notification Service]
+        SCHED_SVC[Scheduler Service]
+        CONFIG_SVC[Configuration Service]
+        AUTH_SVC[Authentication Service]
+    end
+    
+    subgraph "Repository Layer"
+        TRADE_REPO[Trading Repository]
+        USER_REPO[User Repository]
+        DATA_REPO[Data Repository]
+        JOB_REPO[Job Repository]
+        TG_REPO[Telegram Repository]
+    end
+    
+    subgraph "Data Layer"
+        POSTGRES[(PostgreSQL)]
+        REDIS[(Redis Cache)]
+        FILES[File System]
+    end
+    
+    subgraph "External APIs"
+        BINANCE_API[Binance API]
+        YAHOO_API[Yahoo Finance]
+        IBKR_API[IBKR API]
+        EMAIL_API[Email Service]
+    end
+    
+    TG_BOT --> REST_API
+    WEB_UI --> REST_API
+    
+    REST_API --> AUTH_SVC
+    REST_API --> TRADE_SVC
+    REST_API --> DATA_SVC
+    REST_API --> ML_SVC
+    REST_API --> NOTIF_SVC
+    
+    TRADE_SVC --> TRADE_REPO
+    TRADE_SVC --> DATA_SVC
+    TRADE_SVC --> NOTIF_SVC
+    TRADE_SVC --> CONFIG_SVC
+    
+    DATA_SVC --> DATA_REPO
+    DATA_SVC --> BINANCE_API
+    DATA_SVC --> YAHOO_API
+    DATA_SVC --> IBKR_API
+    
+    ML_SVC --> DATA_SVC
+    ML_SVC --> TRADE_REPO
+    
+    NOTIF_SVC --> USER_REPO
+    NOTIF_SVC --> TG_REPO
+    NOTIF_SVC --> EMAIL_API
+    
+    SCHED_SVC --> JOB_REPO
+    SCHED_SVC --> NOTIF_SVC
+    SCHED_SVC --> DATA_SVC
+    
+    AUTH_SVC --> USER_REPO
+    AUTH_SVC --> TG_REPO
+    
+    CONFIG_SVC --> FILES
+    
+    TRADE_REPO --> POSTGRES
+    USER_REPO --> POSTGRES
+    DATA_REPO --> POSTGRES
+    JOB_REPO --> POSTGRES
+    TG_REPO --> POSTGRES
+    
+    DATA_SVC --> REDIS
+    TRADE_SVC --> REDIS
+    
+    classDef presentation fill:#e3f2fd
+    classDef service fill:#f1f8e9
+    classDef repository fill:#fce4ec
+    classDef data fill:#fff8e1
+    classDef external fill:#e8eaf6
+    
+    class TG_BOT,WEB_UI,REST_API presentation
+    class TRADE_SVC,DATA_SVC,ML_SVC,NOTIF_SVC,SCHED_SVC,CONFIG_SVC,AUTH_SVC service
+    class TRADE_REPO,USER_REPO,DATA_REPO,JOB_REPO,TG_REPO repository
+    class POSTGRES,REDIS,FILES data
+    class BINANCE_API,YAHOO_API,IBKR_API,EMAIL_API external

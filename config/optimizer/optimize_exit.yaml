@@ -1,0 +1,141 @@
+# Schema for Exit Mixin JSON Configurations
+# This schema defines the structure and validation rules for exit mixin configurations
+
+schema:
+  type: object
+  required:
+    - name
+    - params
+  properties:
+    name:
+      type: string
+      description: "Name of the exit mixin class"
+      pattern: "^[A-Za-z]+ExitMixin$"
+    
+    params:
+      type: object
+      description: "Parameters for the exit mixin"
+      additionalProperties:
+        type: object
+        required:
+          - type
+          - default
+        properties:
+          type:
+            type: string
+            enum: ["int", "float", "bool", "categorical"]
+            description: "Data type of the parameter"
+          
+          low:
+            type: number
+            description: "Minimum value for numeric parameters"
+            when:
+              type: ["int", "float"]
+          
+          high:
+            type: number
+            description: "Maximum value for numeric parameters"
+            when:
+              type: ["int", "float"]
+          
+          default:
+            oneOf:
+              - type: number
+              - type: boolean
+              - type: string
+            description: "Default value for the parameter"
+          
+          choices:
+            type: array
+            items:
+              type: string
+            description: "Available choices for categorical parameters"
+            when:
+              type: "categorical"
+
+# Common parameter patterns across exit mixins
+common_parameters:
+  atr_period:
+    type: int
+    low: 5
+    high: 30
+    default: 14
+    description: "Period for ATR calculation"
+  
+  tp_multiplier:
+    type: float
+    low: 1.0
+    high: 5.0
+    default: 2.0
+    description: "Multiplier for take profit level"
+  
+  sl_multiplier:
+    type: float
+    low: 0.5
+    high: 3.0
+    default: 1.0
+    description: "Multiplier for stop loss level"
+  
+  take_profit:
+    type: float
+    low: 0.01
+    high: 0.1
+    default: 0.03
+    description: "Fixed take profit percentage"
+  
+  stop_loss:
+    type: float
+    low: 0.005
+    high: 0.05
+    default: 0.02
+    description: "Fixed stop loss percentage"
+  
+  ma_period:
+    type: int
+    low: 5
+    high: 50
+    default: 20
+    description: "Period for Moving Average"
+  
+  time_period:
+    type: int
+    low: 5
+    high: 100
+    default: 20
+    description: "Number of bars to hold position"
+  
+  trail_pct:
+    type: float
+    low: 0.01
+    high: 0.1
+    default: 0.02
+    description: "Trailing stop percentage"
+  
+  use_talib:
+    type: bool
+    default: false
+    description: "Whether to use TA-Lib for calculations"
+
+# Example valid configurations
+examples:
+  ATRExitMixin:
+    name: "ATRExitMixin"
+    params:
+      atr_period:
+        type: "int"
+        low: 5
+        high: 30
+        default: 14
+      tp_multiplier:
+        type: "float"
+        low: 1.0
+        high: 5.0
+        default: 2.0
+      sl_multiplier:
+        type: "float"
+        low: 0.5
+        high: 3.0
+        default: 1.0
+      use_talib:
+        type: "bool"
+        default: false 

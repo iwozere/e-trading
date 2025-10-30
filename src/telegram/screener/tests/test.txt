@@ -1,0 +1,2 @@
+/report mrns VTI
+returns only Unknown response for MRNS and does not return anything for VTI

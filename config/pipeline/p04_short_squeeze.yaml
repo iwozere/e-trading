@@ -1,0 +1,142 @@
+# Short Squeeze Detection Pipeline Configuration
+# This file contains all configuration parameters for the pipeline
+
+# Scheduling configuration for future scheduler integration
+scheduling:
+  screener:
+    frequency: weekly
+    day: monday
+    time: '08:00'
+  deep_scan:
+    frequency: daily
+    time: '10:00'
+  timezone: Europe/Zurich
+
+# Weekly screener configuration
+screener:
+  universe:
+    min_market_cap: 100_000_000  # $100M
+    max_market_cap: 10_000_000_000  # $10B
+    min_avg_volume: 200_000
+    exchanges: ['NYSE', 'NASDAQ']
+    # Optimization settings
+    use_multi_strategy_loading: true
+    prioritize_known_candidates: true
+    max_universe_size: 1000  # Limit universe size for efficiency
+    use_finra_filtering: true  # Enable FINRA filtering using database data (no API calls)
+  
+  filters:
+    si_percent_min: 0.05  # 5% minimum (FINRA data is more reliable)
+    days_to_cover_min: 2.0  # 2 days minimum
+    float_max: 100_000_000  # 100M shares max float
+    top_k_candidates: 50
+    # Volume-based filters
+    min_volume_spike: 1.5  # 1.5x average volume
+    min_momentum_score: 0.3  # Minimum momentum score
+  
+  # Hybrid scoring weights
+  hybrid_scoring:
+    volume_weight: 0.6  # Volume analysis weight
+    finra_weight: 0.4   # FINRA data weight (when available)
+    
+  # Data sources
+  data_sources:
+    finra_enabled: true
+    volume_analysis_enabled: true
+    fmp_fallback_enabled: true
+  
+  scoring:
+    weights:
+      short_interest_pct: 0.4
+      days_to_cover: 0.3
+      float_ratio: 0.2
+      volume_consistency: 0.1
+
+# Daily deep scan configuration
+deep_scan:
+  batch_size: 10
+  api_delay_seconds: 0.2
+  
+  metrics:
+    volume_lookback_days: 14
+    sentiment_lookback_hours: 24
+    options_min_volume: 100
+  
+  scoring:
+    weights:
+      volume_spike: 0.35
+      sentiment_24h: 0.25
+      call_put_ratio: 0.20
+      borrow_fee: 0.20
+
+# Alert system configuration
+alerting:
+  thresholds:
+    high:
+      squeeze_score: 0.8
+      min_si_percent: 0.25
+      min_volume_spike: 4.0
+      min_sentiment: 0.6
+    medium:
+      squeeze_score: 0.6
+      min_si_percent: 0.20
+      min_volume_spike: 3.0
+      min_sentiment: 0.5
+    low:
+      squeeze_score: 0.4
+      min_si_percent: 0.15
+      min_volume_spike: 2.0
+      min_sentiment: 0.4
+  
+  cooldown:
+    high_alert_days: 7
+    medium_alert_days: 5
+    low_alert_days: 3
+  
+  channels:
+    telegram:
+      enabled: true
+      chat_ids: ['${TELEGRAM_CHAT_ID:@trading_alerts}']
+    email:
+      enabled: true
+      recipients: ['${EMAIL_RECIPIENT:trader@example.com}']
+
+# Ad-hoc candidate management
+adhoc:
+  default_ttl_days: 7
+  max_active_candidates: 20
+  auto_promote_threshold: 0.7
+
+# Reporting configuration
+reporting:
+  weekly_summary:
+    top_candidates: 20
+    include_charts: true
+    formats: ['html', 'csv']
+  
+  daily_report:
+    top_scores: 10
+    include_trends: true
+    formats: ['html']
+
+# Performance and reliability configuration
+performance:
+  api_rate_limits:
+    fmp_calls_per_minute: 250  # Leave buffer from 300 limit
+    finnhub_calls_per_minute: 50  # Leave buffer from 60 limit
+  
+  database:
+    batch_size: 100
+    connection_timeout: 30
+    query_timeout: 60
+  
+  error_handling:
+    max_retries: 3
+    backoff_factor: 2.0
+    circuit_breaker_threshold: 0.5
+
+# Scoring engine configuration
+scoring:
+  normalization_method: minmax
+  score_bounds: [0.0, 1.0]
+  weight_validation: true

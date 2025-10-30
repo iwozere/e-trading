@@ -1,0 +1,45 @@
+{
+    "name": "RSIOrBBEntryMixin",
+    "params": {
+        "e_rsi_period": {
+            "type": "int",
+            "low": 10,
+            "high": 20,
+            "default": 14
+        },
+        "e_rsi_oversold": {
+            "type": "int",
+            "low": 18,
+            "high": 32,
+            "default": 25
+        },
+        "e_bb_period": {
+            "type": "int",
+            "low": 15,
+            "high": 25,
+            "default": 20
+        },
+        "e_bb_dev": {
+            "type": "float",
+            "low": 2.0,
+            "high": 3.0,
+            "default": 2.5
+        },
+        "e_rsi_cross": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        },
+        "e_bb_reentry": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        },
+        "e_cooldown_bars": {
+            "type": "int",
+            "low": 2,
+            "high": 8,
+            "default": 3
+        }
+    }
+} 

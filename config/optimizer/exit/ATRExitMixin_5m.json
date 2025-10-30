@@ -1,0 +1,20 @@
+{
+    "name": "ATRExitMixin",
+    "timeframe": "5m",
+    "trading_style": "day_trading",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 5,
+            "high": 14,
+            "default": 8
+        },
+        "x_sl_multiplier": {
+            "type": "float",
+            "low": 1.5,
+            "high": 2.5,
+            "default": 2.0
+        }
+    },
+    "description": "5m timeframe ATR trailing stop - fast ATR period with tight trailing distance for day trading"
+}

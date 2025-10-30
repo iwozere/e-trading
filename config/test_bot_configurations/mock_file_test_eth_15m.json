@@ -1,0 +1,98 @@
+{
+  "id": "mock_file_test_eth_15m",
+  "name": "Mock File Test Bot - ETH 15m",
+  "enabled": true,
+  "symbol": "ETHUSDT",
+  "broker": {
+    "type": "mock",
+    "trading_mode": "paper",
+    "name": "mock_test_broker_eth",
+    "cash": 5000.0,
+    "paper_trading_config": {
+      "mode": "realistic",
+      "initial_balance": 5000.0,
+      "commission_rate": 0.001,
+      "slippage_model": "linear",
+      "base_slippage": 0.0008,
+      "latency_simulation": true,
+      "min_latency_ms": 15,
+      "max_latency_ms": 75,
+      "market_impact_enabled": true,
+      "market_impact_factor": 0.00015,
+      "realistic_fills": true,
+      "partial_fill_probability": 0.08,
+      "reject_probability": 0.015,
+      "enable_execution_quality": true
+    }
+  },
+  "strategy": {
+    "type": "CustomStrategy",
+    "parameters": {
+      "entry_logic": {
+        "name": "MACDEntryMixin",
+        "params": {
+          "e_macd_fast": 12,
+          "e_macd_slow": 26,
+          "e_macd_signal": 9,
+          "e_macd_threshold": 0.0,
+          "e_use_histogram": true
+        }
+      },
+      "exit_logic": {
+        "name": "FixedExitMixin",
+        "params": {
+          "x_take_profit_pct": 4.0,
+          "x_stop_loss_pct": 2.0,
+          "x_trailing_stop": false
+        }
+      },
+      "position_size": 0.15
+    }
+  },
+  "data": {
+    "data_source": "file",
+    "file_path": "data/ETHUSDT_15m_20220101_20250707.csv",
+    "interval": "15m",
+    "datetime_col": "timestamp",
+    "open_col": "open",
+    "high_col": "high",
+    "low_col": "low",
+    "close_col": "close",
+    "volume_col": "volume",
+    "separator": ",",
+    "simulate_realtime": true,
+    "realtime_interval": 15,
+    "fromdate": "2024-06-01",
+    "todate": "2024-12-31"
+  },
+  "trading": {
+    "position_size": 0.15,
+    "max_positions": 2,
+    "allow_short": false
+  },
+  "risk_management": {
+    "max_position_size": 750.0,
+    "stop_loss_pct": 2.0,
+    "take_profit_pct": 4.0,
+    "max_daily_loss": 150.0,
+    "max_daily_trades": 8,
+    "max_portfolio_risk": 0.025
+  },
+  "notifications": {
+    "position_opened": true,
+    "position_closed": true,
+    "email_enabled": false,
+    "telegram_enabled": true,
+    "error_notifications": true,
+    "performance_summaries": "weekly",
+    "risk_alerts": true
+  },
+  "testing": {
+    "description": "Test bot using mock broker with ETH 15m CSV data",
+    "test_mode": true,
+    "log_level": "INFO",
+    "save_trades": true,
+    "generate_reports": true,
+    "benchmark_symbol": "ETHUSDT"
+  }
+}

@@ -1,0 +1,31 @@
+{
+    "name": "SimpleATRExitMixin",
+    "timeframe": "5m",
+    "trading_style": "day_trading",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 8,
+            "high": 14,
+            "default": 10
+        },
+        "x_atr_multiplier": {
+            "type": "float",
+            "low": 1.2,
+            "high": 2.5,
+            "default": 1.8
+        },
+        "x_breakeven_atr": {
+            "type": "float",
+            "low": 0.5,
+            "high": 1.5,
+            "default": 0.8
+        },
+        "x_use_breakeven": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        }
+    },
+    "description": "5m timeframe simple ATR exit - tighter parameters for day trading"
+}

@@ -1,0 +1,223 @@
+{
+  "name": "CNN-XGBoost Backtesting and Optimization",
+  "description": "Comprehensive backtesting and optimization system for CNN-XGBoost trading strategy using models from pipeline p03_cnn_xgboost",
+  "version": "1.0.0",
+  "timestamp": "2025-01-29T00:00:00Z",
+  
+  "data": {
+    "data_dir": "data/raw",
+    "start_date": "2023-01-01",
+    "end_date": "2024-01-01"
+  },
+  
+  "models": {
+    "models_dir": "src/ml/pipeline/p03_cnn_xgboost/models"
+  },
+  
+  "output": {
+    "results_dir": "results/cnn_xgboost"
+  },
+  
+  "strategy": {
+    "name": "CNNXGBoostStrategy",
+    "prediction_threshold": 0.6,
+    "direction_weight": 0.4,
+    "volatility_weight": 0.2,
+    "trend_weight": 0.2,
+    "magnitude_weight": 0.2,
+    "sequence_length": 120,
+    "cnn_input_channels": 5,
+    "cnn_num_filters": [32, 64, 128],
+    "cnn_kernel_sizes": [3, 5, 7],
+    "cnn_dropout_rate": 0.3
+  },
+  
+  "risk_management": {
+    "max_position_size": 0.2,
+    "stop_loss_pct": 0.01,
+    "take_profit_pct": 0.02,
+    "max_drawdown": 0.15
+  },
+  
+  "trading_parameters": {
+    "position_size": 0.1,
+    "min_position_size": 0.01,
+    "max_position_size": 0.5,
+    "commission": 0.001,
+    "initial_cash": 100000
+  },
+  
+  "optimization": {
+    "enabled": true,
+    "n_trials": 100,
+    "objective": "sharpe_ratio",
+    "parameter_ranges": {
+      "prediction_threshold": {
+        "min": 0.3,
+        "max": 0.8,
+        "type": "float"
+      },
+      "direction_weight": {
+        "min": 0.2,
+        "max": 0.6,
+        "type": "float"
+      },
+      "volatility_weight": {
+        "min": 0.1,
+        "max": 0.3,
+        "type": "float"
+      },
+      "trend_weight": {
+        "min": 0.1,
+        "max": 0.3,
+        "type": "float"
+      },
+      "magnitude_weight": {
+        "min": 0.1,
+        "max": 0.3,
+        "type": "float"
+      },
+      "profit_target": {
+        "min": 0.01,
+        "max": 0.05,
+        "type": "float"
+      },
+      "stop_loss": {
+        "min": 0.005,
+        "max": 0.03,
+        "type": "float"
+      },
+      "base_position_size": {
+        "min": 0.05,
+        "max": 0.3,
+        "type": "float"
+      }
+    }
+  },
+  
+  "targets": {
+    "target_direction": {
+      "description": "Price direction prediction (up/down)",
+      "type": "binary_classification",
+      "weight": 0.4
+    },
+    "target_volatility": {
+      "description": "Volatility regime prediction (high/low)",
+      "type": "binary_classification",
+      "weight": 0.2
+    },
+    "target_trend": {
+      "description": "Trend strength prediction (strong/weak)",
+      "type": "binary_classification",
+      "weight": 0.2
+    },
+    "target_magnitude": {
+      "description": "Price movement magnitude prediction (large/small)",
+      "type": "binary_classification",
+      "weight": 0.2
+    }
+  },
+  
+  "model_architecture": {
+    "cnn": {
+      "input_channels": 5,
+      "sequence_length": 120,
+      "num_filters": [32, 64, 128],
+      "kernel_sizes": [3, 5, 7],
+      "dropout_rate": 0.3,
+      "description": "1D CNN for OHLCV feature extraction"
+    },
+    "xgboost": {
+      "n_estimators": 100,
+      "max_depth": 6,
+      "learning_rate": 0.1,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "random_state": 42,
+      "description": "XGBoost classifier for target prediction"
+    }
+  },
+  
+  "feature_engineering": {
+    "technical_indicators": {
+      "rsi": {
+        "period": 14,
+        "description": "Relative Strength Index"
+      },
+      "bollinger_bands": {
+        "period": 20,
+        "std": 2.0,
+        "description": "Bollinger Bands"
+      },
+      "macd": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9,
+        "description": "MACD indicator"
+      },
+      "sma": {
+        "short": 10,
+        "long": 30,
+        "description": "Simple Moving Averages"
+      },
+      "atr": {
+        "period": 14,
+        "description": "Average True Range"
+      }
+    },
+    "price_features": {
+      "returns": true,
+      "high_low_ratio": true,
+      "volume_features": true,
+      "description": "Price-based features"
+    }
+  },
+  
+  "backtesting": {
+    "timeframe": "1d",
+    "warmup_period": 120,
+    "validation_split": 0.2,
+    "commission_model": "percentage",
+    "slippage": 0.0,
+    "description": "Backtesting configuration"
+  },
+  
+  "performance_metrics": {
+    "primary": ["sharpe_ratio", "total_return", "max_drawdown"],
+    "secondary": ["win_rate", "profit_factor", "calmar_ratio"],
+    "risk_metrics": ["var_95", "cvar_95", "sortino_ratio"],
+    "description": "Performance metrics to track"
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "file_logging": true,
+    "console_logging": true,
+    "log_file": "logs/cnn_xgboost_optimizer.log",
+    "description": "Logging configuration"
+  },
+  
+  "output_formats": {
+    "json": true,
+    "csv": true,
+    "html": false,
+    "plots": true,
+    "description": "Output format configuration"
+  },
+  
+  "file_naming": {
+    "data_pattern": "{provider}_{symbol}_{timeframe}_{start_date}_{end_date}.csv",
+    "cnn_model_pattern": "cnn_{provider}_{symbol}_{timeframe}_{start_date}_{end_date}_{timestamp}.pth",
+    "xgb_model_pattern": "{target}_model.pkl",
+    "results_pattern": "cnn_xgboost_results_{timestamp}.json",
+    "description": "File naming conventions"
+  },
+  
+  "validation": {
+    "min_data_points": 1000,
+    "min_trades": 10,
+    "max_drawdown_threshold": 0.5,
+    "min_sharpe_threshold": 0.0,
+    "description": "Validation criteria for results"
+  }
+}

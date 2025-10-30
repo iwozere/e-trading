@@ -1,0 +1,7 @@
+[flake8]
+exclude = .git,__pycache__,build,dist,venv,.venv
+max-line-length = 120
+
+# Custom rule: Disallow direct 'import logging' except in src/notification/logger.py
+# Use flake8-import-restrictions or flake8-builtins for enforcement if available.
+# Policy: Use 'from src.notification.logger import setup_logger' everywhere except in src/notification/logger.py 

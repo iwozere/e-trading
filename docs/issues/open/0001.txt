@@ -1,0 +1,37 @@
+Now I need to resolve following problem: Sometimes entry and exit mixins have the same indicators. RSIBBVolumeEntryMixin and RSIBBExitMixin for example. 
+But parameters for them should be different. Each mixin has its own configuration json, but in the resulting json best_params looks like this.
+Indicators in entry and exit mixins have the same values.
+See below: rsi_period and bb_period.
+When parameters names are different, for example bb_dev and bb_stddev, then values are different.
+
+Quick solution: provide different parameter names for indicators. For example: x_rsi_period for exit mixin, e_rsi_period for entry.
+
+    "best_params": {
+        "entry_logic": {
+            "name": "RSIBBVolumeEntryMixin",
+            "params": {
+                "rsi_period": 20,
+                "bb_period": 38,
+                "bb_dev": 1.0282547926809855,
+                "vol_ma_period": 6,
+                "min_volume_ratio": 1.657928558474786,
+                "rsi_oversold": 33,
+                "bb_stddev": 2.0,
+                "volume_ma_period": 20,
+                "use_bb_touch": true
+            }
+        },
+        "exit_logic": {
+            "name": "RSIBBExitMixin",
+            "params": {
+                "rsi_period": 20,
+                "rsi_overbought": 74.27851598557454,
+                "bb_period": 38,
+                "bb_stddev": 2.5952752486898625,
+                "use_bb_touch": true
+            }
+        },
+        "use_talib": false,
+        "position_size": 0.1
+    },
+

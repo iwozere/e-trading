@@ -1,0 +1,16 @@
+{
+    "name": "MACrossoverExitMixin",
+    "params": {
+        "x_ma_period": {
+            "type": "int",
+            "low": 5,
+            "high": 50,
+            "default": 20
+        },
+        "x_ma_type": {
+            "type": "categorical",
+            "choices": ["SMA", "EMA"],
+            "default": "SMA"
+        }
+    }
+} 

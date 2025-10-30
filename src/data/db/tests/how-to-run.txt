@@ -1,0 +1,25 @@
+python -m pytest backend/tests -v
+
+pytest -vv src/web_ui/backend/tests
+
+python -m pytest -vv src/web_ui/backend/tests --tb=short
+
+
+# Run & collect only your DB tests:
+pytest --collect-only -q src/data/db/tests
+
+# Run them verbosely to see each test:
+pytest -vv src/data/db/tests
+
+# One-off suppression from CLI (if you don’t want pytest.ini):
+pytest -q src/data/db/tests -W ignore::DeprecationWarning
+
+pytest src/data/db/tests/test_factories.py -q -rA
+
+& { $env:ETRADING_LIGHT_IMPORTS='1'; pytest -vv src/data/db/tests }
+
+
+[pytest]
+testpaths = src/data/db/tests
+pythonpath = .
+addopts = -rA --disable-warnings

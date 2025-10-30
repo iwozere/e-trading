@@ -1,0 +1,20 @@
+{
+    "name": "ATRExitMixin",
+    "timeframe": "1d",
+    "trading_style": "position_trading",
+    "params": {
+        "x_atr_period": {
+            "type": "int",
+            "low": 14,
+            "high": 50,
+            "default": 21
+        },
+        "x_sl_multiplier": {
+            "type": "float",
+            "low": 2.5,
+            "high": 4.0,
+            "default": 3.2
+        }
+    },
+    "description": "1d timeframe ATR trailing stop - wide trailing distance for position trading"
+}

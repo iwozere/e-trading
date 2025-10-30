@@ -1,0 +1,120 @@
+{
+    "strategy_name": "HMM-LSTM Entry Mixin Strategy",
+    "description": "Uses HMM-LSTM entry mixin with the existing CustomStrategy framework",
+    "strategy_class": "CustomStrategy",
+    "strategy_module": "src.strategy.custom_strategy",
+    
+    "default_config": {
+        "entry_logic": {
+            "name": "HMMLSTMEntryMixin",
+            "params": {
+                "symbol": "BTCUSDT",
+                "timeframe": "1h",
+                "prediction_threshold": 0.001,
+                "regime_confidence_threshold": 0.6,
+                "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                "results_dir": "results"
+            }
+        },
+        "exit_logic": {
+            "name": "FixedRatioExitMixin",
+            "params": {
+                "profit_ratio": 2.0,
+                "stop_loss_ratio": 1.0
+            }
+        },
+        "position_size": 0.1,
+        "use_talib": false
+    },
+    
+    "variants": {
+        "conservative_trailing": {
+            "entry_logic": {
+                "name": "HMMLSTMEntryMixin",
+                "params": {
+                    "symbol": "BTCUSDT",
+                    "timeframe": "1h",
+                    "prediction_threshold": 0.002,
+                    "regime_confidence_threshold": 0.75,
+                    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                    "results_dir": "results"
+                }
+            },
+            "exit_logic": {
+                "name": "TrailingStopExitMixin",
+                "params": {
+                    "trail_percent": 3.0,
+                    "min_profit_percent": 1.0
+                }
+            },
+            "position_size": 0.05
+        },
+        
+        "aggressive_fixed": {
+            "entry_logic": {
+                "name": "HMMLSTMEntryMixin",
+                "params": {
+                    "symbol": "BTCUSDT",
+                    "timeframe": "1h",
+                    "prediction_threshold": 0.0005,
+                    "regime_confidence_threshold": 0.5,
+                    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                    "results_dir": "results"
+                }
+            },
+            "exit_logic": {
+                "name": "FixedRatioExitMixin",
+                "params": {
+                    "profit_ratio": 3.0,
+                    "stop_loss_ratio": 1.5
+                }
+            },
+            "position_size": 0.15
+        },
+        
+        "balanced_atr": {
+            "entry_logic": {
+                "name": "HMMLSTMEntryMixin",
+                "params": {
+                    "symbol": "BTCUSDT",
+                    "timeframe": "1h",
+                    "prediction_threshold": 0.001,
+                    "regime_confidence_threshold": 0.65,
+                    "models_dir": "src/ml/pipeline/p01_hmm_lstm/models",
+                    "results_dir": "results"
+                }
+            },
+            "exit_logic": {
+                "name": "ATRBasedExitMixin",
+                "params": {
+                    "atr_period": 14,
+                    "profit_multiplier": 2.5,
+                    "stop_multiplier": 1.5
+                }
+            },
+            "position_size": 0.1
+        }
+    },
+    
+    "backtesting_config": {
+        "initial_cash": 100000,
+        "commission": 0.001,
+        "data_source": "csv",
+        "timeframe": "1H"
+    },
+    
+    "notes": {
+        "requirements": [
+            "Trained HMM models must be available in models/hmm/",
+            "Trained LSTM models must be available in models/lstm/",
+            "Optimized indicator parameters should be available in results/",
+            "HMMLSTMEntryMixin must be registered in ENTRY_MIXIN_REGISTRY"
+        ],
+        "usage": [
+            "This configuration integrates HMM-LSTM predictions with existing exit strategies",
+            "The entry mixin handles all ML model loading and prediction logic",
+            "Different exit strategies can be combined with the HMM-LSTM entries",
+            "Position sizing and risk management are handled by the exit mixins"
+        ]
+    }
+}

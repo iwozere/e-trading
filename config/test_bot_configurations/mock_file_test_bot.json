@@ -1,0 +1,100 @@
+{
+  "id": "mock_file_test_btc_5m",
+  "name": "Mock File Test Bot - BTC 5m",
+  "enabled": true,
+  "symbol": "BTCUSDT",
+  "broker": {
+    "type": "mock",
+    "trading_mode": "paper",
+    "name": "mock_test_broker",
+    "cash": 10000.0,
+    "paper_trading_config": {
+      "mode": "realistic",
+      "initial_balance": 10000.0,
+      "commission_rate": 0.001,
+      "slippage_model": "linear",
+      "base_slippage": 0.0005,
+      "latency_simulation": true,
+      "min_latency_ms": 10,
+      "max_latency_ms": 50,
+      "market_impact_enabled": true,
+      "market_impact_factor": 0.0001,
+      "realistic_fills": true,
+      "partial_fill_probability": 0.05,
+      "reject_probability": 0.01,
+      "enable_execution_quality": true
+    }
+  },
+  "strategy": {
+    "type": "CustomStrategy",
+    "parameters": {
+      "entry_logic": {
+        "name": "RSIBBVolumeEntryMixin",
+        "params": {
+          "e_rsi_period": 14,
+          "e_rsi_oversold": 30,
+          "e_rsi_overbought": 70,
+          "e_bb_period": 20,
+          "e_bb_dev": 2.0,
+          "e_vol_ma_period": 20,
+          "e_min_volume_ratio": 1.1,
+          "e_use_bb_touch": true
+        }
+      },
+      "exit_logic": {
+        "name": "ATRExitMixin",
+        "params": {
+          "x_atr_period": 14,
+          "x_sl_multiplier": 1.5,
+          "x_tp_multiplier": 2.0
+        }
+      },
+      "position_size": 0.1
+    }
+  },
+  "data": {
+    "data_source": "file",
+    "file_path": "data/BTCUSDT_5m_20220101_20250707.csv",
+    "interval": "5m",
+    "datetime_col": "timestamp",
+    "open_col": "open",
+    "high_col": "high",
+    "low_col": "low",
+    "close_col": "close",
+    "volume_col": "volume",
+    "separator": ",",
+    "simulate_realtime": true,
+    "realtime_interval": 5,
+    "fromdate": "2024-01-01",
+    "todate": "2024-12-31"
+  },
+  "trading": {
+    "position_size": 0.1,
+    "max_positions": 1,
+    "allow_short": false
+  },
+  "risk_management": {
+    "max_position_size": 1000.0,
+    "stop_loss_pct": 3.0,
+    "take_profit_pct": 6.0,
+    "max_daily_loss": 200.0,
+    "max_daily_trades": 10,
+    "max_portfolio_risk": 0.02
+  },
+  "notifications": {
+    "position_opened": true,
+    "position_closed": true,
+    "email_enabled": false,
+    "telegram_enabled": true,
+    "error_notifications": true,
+    "performance_summaries": "daily",
+    "risk_alerts": true
+  },
+  "testing": {
+    "description": "Test bot using mock broker with CSV file data feed",
+    "test_mode": true,
+    "log_level": "DEBUG",
+    "save_trades": true,
+    "generate_reports": true
+  }
+}

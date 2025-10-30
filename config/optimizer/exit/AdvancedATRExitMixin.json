@@ -1,0 +1,167 @@
+{
+    "name": "AdvancedATRExitMixin",
+    "params": {
+        "anchor": {
+            "type": "categorical",
+            "choices": ["high", "close", "mid"],
+            "default": "high"
+        },
+        "k_init": {
+            "type": "float",
+            "low": 1.0,
+            "high": 1.4,
+            "default": 1.2
+        },
+        "k_run": {
+            "type": "float",
+            "low": 1.5,
+            "high": 2.2,
+            "default": 1.8
+        },
+        "k_phase2": {
+            "type": "float",
+            "low": 1.0,
+            "high": 1.7,
+            "default": 1.3
+        },
+        "p_fast": {
+            "type": "int",
+            "low": 5,
+            "high": 21,
+            "default": 7
+        },
+        "p_slow": {
+            "type": "int",
+            "low": 14,
+            "high": 100,
+            "default": 21
+        },
+        "use_htf_atr": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        },
+        "alpha_fast": {
+            "type": "float",
+            "low": 0.25,
+            "high": 2.0,
+            "default": 1.0
+        },
+        "alpha_slow": {
+            "type": "float",
+            "low": 0.25,
+            "high": 2.0,
+            "default": 1.0
+        },
+        "alpha_htf": {
+            "type": "float",
+            "low": 0.25,
+            "high": 2.0,
+            "default": 1.0
+        },
+        "arm_at_R": {
+            "type": "float",
+            "low": 0.5,
+            "high": 1.0,
+            "default": 0.7
+        },
+        "breakeven_offset_atr": {
+            "type": "float",
+            "low": 0.05,
+            "high": 0.35,
+            "default": 0.15
+        },
+        "phase2_at_R": {
+            "type": "float",
+            "low": 1.5,
+            "high": 2.0,
+            "default": 1.7
+        },
+        "use_swing_ratchet": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        },
+        "swing_lookback": {
+            "type": "int",
+            "low": 5,
+            "high": 30,
+            "default": 10
+        },
+        "struct_buffer_atr": {
+            "type": "float",
+            "low": 0.30,
+            "high": 0.45,
+            "default": 0.35
+        },
+        "tighten_if_stagnant_bars": {
+            "type": "int",
+            "low": 10,
+            "high": 20,
+            "default": 15
+        },
+        "tighten_k_factor": {
+            "type": "float",
+            "low": 0.7,
+            "high": 0.9,
+            "default": 0.8
+        },
+        "noise_filter_atr": {
+            "type": "float",
+            "low": 0.02,
+            "high": 0.08,
+            "default": 0.05
+        },
+        "atr_floor": {
+            "type": "float",
+            "low": 0.0,
+            "high": 0.01,
+            "default": 0.0
+        },
+        "min_stop_step": {
+            "type": "float",
+            "low": 0.02,
+            "high": 0.06,
+            "default": 0.03
+        },
+        "max_trail_freq": {
+            "type": "int",
+            "low": 1,
+            "high": 3,
+            "default": 2
+        },
+        "min_bars_between_tighten": {
+            "type": "int",
+            "low": 1,
+            "high": 10,
+            "default": 5
+        },
+        "tick_size": {
+            "type": "float",
+            "low": 0.0001,
+            "high": 0.1,
+            "default": 0.01
+        }
+    },
+    "description": "Advanced ATR-based trailing stop with multi-timeframe analysis, state machine, structural ratcheting, and time-based tightening",
+    "optimization_stages": {
+        "stage_a": {
+            "description": "Core ATR parameters",
+            "params": ["k_init", "k_run", "p_fast", "p_slow", "use_htf_atr"]
+        },
+        "stage_b": {
+            "description": "Risk management and phases",
+            "params": ["arm_at_R", "breakeven_offset_atr", "phase2_at_R", "k_phase2", "use_swing_ratchet", "struct_buffer_atr"]
+        },
+        "stage_c": {
+            "description": "Fine-tuning and filters",
+            "params": ["tighten_if_stagnant_bars", "tighten_k_factor", "noise_filter_atr", "alpha_fast", "alpha_slow", "alpha_htf"]
+        }
+    },
+    "constraints": {
+        "max_drawdown": 0.15,
+        "min_trades": 10,
+        "max_loss_streak": 5
+    },
+    "objectives": ["sharpe_ratio", "calmar_ratio", "profit_factor"]
+}

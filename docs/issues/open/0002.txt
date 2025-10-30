@@ -1,0 +1,13 @@
+why total_profit is always the same as total_profit_with_commission. show me the root cause and possible fixes
+
+    "total_trades": 10,
+    "total_profit": 96.9447796552782,
+    "total_profit_with_commission": 96.9447796552782,
+
+Now I can see the issue! Let me examine the Backtrader TradeAnalyzer documentation and check how the commission is being handled. The problem is in the calculation logic on lines 185-187:
+
+total_profit = trades_analysis.get("pnl", {}).get("net", {}).get("total", 0.0)
+total_commission = trades_analysis.get("pnl", {}).get("comm", {}).get("total", 0.0)
+total_profit_with_comm = total_profit - total_commission
+
+The issue is that total_profit is already the net profit (after commission), but the code is subtracting commission again. Let me verify this by checking the Backtrader documentation and looking at the actual trade analyzer output structure:

@@ -1,0 +1,75 @@
+## How to Run Short Squeeze Detection Pipeline
+
+### Current Status: SHORT INTEREST DATA NOT AVAILABLE
+
+**IMPORTANT**: FMP's short interest API currently returns empty data for all stocks.
+The pipeline has been optimized but needs alternative data sources or strategy changes.
+
+### Available Commands:
+
+1. **Test API Connection**:
+   ```bash
+   python -m src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener --test-connection
+   ```
+
+2. **Small Test Run** (recommended):
+   ```bash
+   python -m src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener --dry-run --max-universe 20 --verbose
+   ```
+
+3. **Test with Known Stocks**:
+   ```bash
+   python -m src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener --dry-run --max-universe 50 --verbose
+   ```
+
+### Current Issues:
+- FMP short interest API returns empty arrays []
+- 0% success rate for short interest data retrieval
+- Pipeline optimized for batch processing but data source is the bottleneck
+
+### Recommended Solutions:
+
+#### Option 1: Alternative Data Sources
+- **Yahoo Finance**: Has some short interest data
+- **Alpha Vantage**: Fundamental data includes short metrics
+- **FINRA**: Official short interest reports (bi-monthly)
+- **Quandl/Nasdaq**: Comprehensive but paid
+
+#### Option 2: Volume-Based Squeeze Detection
+Use available metrics as proxies:
+- **Volume Spikes**: Unusual volume vs average
+- **Price Momentum**: Rapid price increases
+- **Float Analysis**: Small float stocks (higher squeeze potential)
+- **Options Activity**: High call/put ratios
+- **Technical Indicators**: RSI, MACD divergences
+
+#### Option 3: Hybrid Approach
+- Use volume/momentum for initial screening
+- Add manual short interest data for top candidates
+- Focus on known high-short-interest sectors
+
+### Performance Optimizations Implemented:
+✅ Batch API processing (when data is available)
+✅ Multi-strategy universe loading
+✅ Known candidate prioritization
+✅ Pre-filtering for data availability
+✅ Improved caching system
+✅ Better error handling
+
+### Next Steps:
+1. Implement alternative data source integration
+2. Create volume-based screening algorithm
+3. Add manual short interest data input capability
+4. Test with paper trading to validate effectiveness
+
+
+
+Store Universe in Database:
+Small Test (50 stocks):
+python -m src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener --max-universe 50 --verbose
+
+Full Universe:
+python -m src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener --verbose
+
+***With Output Reports:
+python -m src.ml.pipeline.p04_short_squeeze.scripts.run_weekly_screener --max-universe 100 --verbose --output-dir ./reports

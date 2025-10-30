@@ -1,0 +1,362 @@
+# Screener Sets Configuration
+# Defines predefined sets of tickers for screening operations
+# Used by the job scheduler system for batch processing
+
+screener_sets:
+  # US Large Cap Stocks
+  us_large_caps:
+    name: "US Large Cap Stocks"
+    description: "Large capitalization US stocks (S&P 500 constituents)"
+    categories: ["us", "large_cap", "equity"]
+    tickers:
+      - "AAPL"  # Apple Inc.
+      - "MSFT"  # Microsoft Corporation
+      - "GOOGL" # Alphabet Inc. Class A
+      - "GOOG"  # Alphabet Inc. Class C
+      - "AMZN"  # Amazon.com Inc.
+      - "TSLA"  # Tesla Inc.
+      - "META"  # Meta Platforms Inc.
+      - "NVDA"  # NVIDIA Corporation
+      - "BRK.B" # Berkshire Hathaway Inc. Class B
+      - "UNH"   # UnitedHealth Group Incorporated
+      - "JNJ"   # Johnson & Johnson
+      - "V"     # Visa Inc.
+      - "PG"    # Procter & Gamble Company
+      - "JPM"   # JPMorgan Chase & Co.
+      - "MA"    # Mastercard Incorporated
+      - "HD"    # Home Depot Inc.
+      - "CVX"   # Chevron Corporation
+      - "PFE"   # Pfizer Inc.
+      - "ABBV"  # AbbVie Inc.
+      - "BAC"   # Bank of America Corporation
+      - "KO"    # Coca-Cola Company
+      - "AVGO"  # Broadcom Inc.
+      - "PEP"   # PepsiCo Inc.
+      - "TMO"   # Thermo Fisher Scientific Inc.
+      - "COST"  # Costco Wholesale Corporation
+      - "WMT"   # Walmart Inc.
+      - "DHR"   # Danaher Corporation
+      - "VZ"    # Verizon Communications Inc.
+      - "ADBE"  # Adobe Inc.
+      - "NFLX"  # Netflix Inc.
+
+  # Technology Sector
+  tech_majors:
+    name: "Technology Majors"
+    description: "Major technology companies across different market caps"
+    categories: ["us", "technology", "equity"]
+    tickers:
+      - "AAPL"  # Apple Inc.
+      - "MSFT"  # Microsoft Corporation
+      - "GOOGL" # Alphabet Inc. Class A
+      - "GOOG"  # Alphabet Inc. Class C
+      - "AMZN"  # Amazon.com Inc.
+      - "TSLA"  # Tesla Inc.
+      - "META"  # Meta Platforms Inc.
+      - "NVDA"  # NVIDIA Corporation
+      - "NFLX"  # Netflix Inc.
+      - "ADBE"  # Adobe Inc.
+      - "CRM"   # Salesforce Inc.
+      - "ORCL"  # Oracle Corporation
+      - "INTC"  # Intel Corporation
+      - "AMD"   # Advanced Micro Devices Inc.
+      - "QCOM"  # QUALCOMM Incorporated
+      - "CSCO"  # Cisco Systems Inc.
+      - "IBM"   # International Business Machines Corporation
+      - "NOW"   # ServiceNow Inc.
+      - "SNOW"  # Snowflake Inc.
+      - "ZM"    # Zoom Video Communications Inc.
+
+  # Financial Sector
+  financial_majors:
+    name: "Financial Majors"
+    description: "Major financial institutions and banks"
+    categories: ["us", "financial", "equity"]
+    tickers:
+      - "JPM"   # JPMorgan Chase & Co.
+      - "BAC"   # Bank of America Corporation
+      - "WFC"   # Wells Fargo & Company
+      - "GS"    # Goldman Sachs Group Inc.
+      - "MS"    # Morgan Stanley
+      - "C"     # Citigroup Inc.
+      - "AXP"   # American Express Company
+      - "V"     # Visa Inc.
+      - "MA"    # Mastercard Incorporated
+      - "PYPL"  # PayPal Holdings Inc.
+      - "COF"   # Capital One Financial Corporation
+      - "USB"   # U.S. Bancorp
+      - "PNC"   # PNC Financial Services Group Inc.
+      - "TFC"   # Truist Financial Corporation
+      - "BK"    # Bank of New York Mellon Corporation
+      - "STT"   # State Street Corporation
+      - "BLK"   # BlackRock Inc.
+      - "SCHW"  # Charles Schwab Corporation
+      - "ICE"   # Intercontinental Exchange Inc.
+      - "CME"   # CME Group Inc.
+
+  # Healthcare & Biotech
+  healthcare_majors:
+    name: "Healthcare & Biotech"
+    description: "Major healthcare, pharmaceutical, and biotechnology companies"
+    categories: ["us", "healthcare", "biotech", "equity"]
+    tickers:
+      - "JNJ"   # Johnson & Johnson
+      - "PFE"   # Pfizer Inc.
+      - "ABBV"  # AbbVie Inc.
+      - "UNH"   # UnitedHealth Group Incorporated
+      - "TMO"   # Thermo Fisher Scientific Inc.
+      - "DHR"   # Danaher Corporation
+      - "ABT"   # Abbott Laboratories
+      - "LLY"   # Eli Lilly and Company
+      - "MRK"   # Merck & Co. Inc.
+      - "BMY"   # Bristol Myers Squibb Company
+      - "AMGN"  # Amgen Inc.
+      - "GILD"  # Gilead Sciences Inc.
+      - "BIIB"  # Biogen Inc.
+      - "REGN"  # Regeneron Pharmaceuticals Inc.
+      - "VRTX"  # Vertex Pharmaceuticals Incorporated
+      - "ILMN"  # Illumina Inc.
+      - "MRNA"  # Moderna Inc.
+      - "BNTX"  # BioNTech SE
+      - "ZTS"   # Zoetis Inc.
+      - "ISRG"  # Intuitive Surgical Inc.
+
+  # Energy Sector
+  energy_majors:
+    name: "Energy Majors"
+    description: "Major energy companies including oil, gas, and renewable energy"
+    categories: ["us", "energy", "equity"]
+    tickers:
+      - "CVX"   # Chevron Corporation
+      - "XOM"   # Exxon Mobil Corporation
+      - "COP"   # ConocoPhillips
+      - "EOG"   # EOG Resources Inc.
+      - "PXD"   # Pioneer Natural Resources Company
+      - "MPC"   # Marathon Petroleum Corporation
+      - "VLO"   # Valero Energy Corporation
+      - "PSX"   # Phillips 66
+      - "KMI"   # Kinder Morgan Inc.
+      - "WMB"   # Williams Companies Inc.
+      - "OKE"   # ONEOK Inc.
+      - "EPD"   # Enterprise Products Partners L.P.
+      - "ENB"   # Enbridge Inc.
+      - "TRP"   # TC Energy Corporation
+      - "NEE"   # NextEra Energy Inc.
+      - "DUK"   # Duke Energy Corporation
+      - "SO"    # Southern Company
+      - "AEP"   # American Electric Power Company Inc.
+      - "EXC"   # Exelon Corporation
+      - "XEL"   # Xcel Energy Inc.
+
+  # Consumer Discretionary
+  consumer_discretionary:
+    name: "Consumer Discretionary"
+    description: "Consumer discretionary stocks including retail, automotive, and entertainment"
+    categories: ["us", "consumer_discretionary", "equity"]
+    tickers:
+      - "AMZN"  # Amazon.com Inc.
+      - "TSLA"  # Tesla Inc.
+      - "HD"    # Home Depot Inc.
+      - "MCD"   # McDonald's Corporation
+      - "NKE"   # NIKE Inc.
+      - "SBUX"  # Starbucks Corporation
+      - "LOW"   # Lowe's Companies Inc.
+      - "TJX"   # TJX Companies Inc.
+      - "BKNG"  # Booking Holdings Inc.
+      - "MAR"   # Marriott International Inc.
+      - "HLT"   # Hilton Worldwide Holdings Inc.
+      - "ABNB"  # Airbnb Inc.
+      - "UBER"  # Uber Technologies Inc.
+      - "LYFT"  # Lyft Inc.
+      - "F"     # Ford Motor Company
+      - "GM"    # General Motors Company
+      - "HMC"   # Honda Motor Co. Ltd.
+      - "TM"    # Toyota Motor Corporation
+      - "NCLH"  # Norwegian Cruise Line Holdings Ltd.
+      - "CCL"   # Carnival Corporation
+
+  # Crypto Majors
+  crypto_majors:
+    name: "Cryptocurrency Majors"
+    description: "Major cryptocurrency-related stocks and crypto assets"
+    categories: ["crypto", "equity", "digital_assets"]
+    tickers:
+      - "COIN"  # Coinbase Global Inc.
+      - "MSTR"  # MicroStrategy Incorporated
+      - "RIOT"  # Riot Platforms Inc.
+      - "MARA"  # Marathon Digital Holdings Inc.
+      - "HUT"   # Hut 8 Mining Corp.
+      - "BITF"  # Bitfarms Ltd.
+      - "ARBKF" # Argo Blockchain plc
+      - "CAN"   # Canaan Inc.
+      - "EBON"  # Ebang International Holdings Inc.
+      - "SOS"   # SOS Limited
+      - "BTBT"  # Bit Brother Limited
+      - "WULF"  # TeraWulf Inc.
+      - "CIFR"  # Cipher Mining Inc.
+      - "IREN"  # Iris Energy Limited
+      - "CORZ"  # Core Scientific Inc.
+      - "BIT"   # Bit Brother Limited
+      - "HIVE"  # HIVE Blockchain Technologies Ltd.
+      - "DMGGF" # DMG Blockchain Solutions Inc.
+      - "ARB"   # Argo Blockchain plc
+      - "HODL"  # ETFMG Alternative Harvest ETF
+
+  # Mid Cap Growth
+  mid_cap_growth:
+    name: "Mid Cap Growth"
+    description: "Mid-capitalization growth stocks with strong potential"
+    categories: ["us", "mid_cap", "growth", "equity"]
+    tickers:
+      - "ZM"    # Zoom Video Communications Inc.
+      - "DOCU"  # DocuSign Inc.
+      - "OKTA"  # Okta Inc.
+      - "TWLO"  # Twilio Inc.
+      - "SQ"    # Block Inc.
+      - "ROKU"  # Roku Inc.
+      - "PTON"  # Peloton Interactive Inc.
+      - "SPOT"  # Spotify Technology S.A.
+      - "SNAP"  # Snap Inc.
+      - "PINS"  # Pinterest Inc.
+      - "ETSY"  # Etsy Inc.
+      - "SHOP"  # Shopify Inc.
+      - "CRWD"  # CrowdStrike Holdings Inc.
+      - "NET"   # Cloudflare Inc.
+      - "DDOG"  # Datadog Inc.
+      - "MDB"   # MongoDB Inc.
+      - "ESTC"  # Elastic N.V.
+      - "SPLK"  # Splunk Inc.
+      - "WDAY"  # Workday Inc.
+      - "TEAM"  # Atlassian Corporation
+
+  # Dividend Aristocrats
+  dividend_aristocrats:
+    name: "Dividend Aristocrats"
+    description: "Companies with consistent dividend growth over 25+ years"
+    categories: ["us", "dividend", "value", "equity"]
+    tickers:
+      - "JNJ"   # Johnson & Johnson
+      - "PG"    # Procter & Gamble Company
+      - "KO"    # Coca-Cola Company
+      - "PEP"   # PepsiCo Inc.
+      - "WMT"   # Walmart Inc.
+      - "MCD"   # McDonald's Corporation
+      - "ABT"   # Abbott Laboratories
+      - "T"     # AT&T Inc.
+      - "VZ"    # Verizon Communications Inc.
+      - "CVX"   # Chevron Corporation
+      - "XOM"   # Exxon Mobil Corporation
+      - "JPM"   # JPMorgan Chase & Co.
+      - "WFC"   # Wells Fargo & Company
+      - "BAC"   # Bank of America Corporation
+      - "C"     # Citigroup Inc.
+      - "AXP"   # American Express Company
+      - "MMM"   # 3M Company
+      - "BA"    # Boeing Company
+      - "CAT"   # Caterpillar Inc.
+      - "GE"    # General Electric Company
+
+  # REITs
+  reits:
+    name: "Real Estate Investment Trusts"
+    description: "Major REITs across different property types"
+    categories: ["us", "reit", "real_estate", "equity"]
+    tickers:
+      - "AMT"   # American Tower Corporation
+      - "PLD"   # Prologis Inc.
+      - "CCI"   # Crown Castle Inc.
+      - "EQIX"  # Equinix Inc.
+      - "PSA"   # Public Storage
+      - "EXR"   # Extra Space Storage Inc.
+      - "AVB"   # AvalonBay Communities Inc.
+      - "EQR"   # Equity Residential
+      - "MAA"   # Mid-America Apartment Communities Inc.
+      - "UDR"   # UDR Inc.
+      - "ESS"   # Essex Property Trust Inc.
+      - "CPT"   # Camden Property Trust
+      - "BXP"   # Boston Properties Inc.
+      - "SLG"   # SL Green Realty Corp.
+      - "VTR"   # Ventas Inc.
+      - "WELL"  # Welltower Inc.
+      - "PEAK"  # Healthpeak Properties Inc.
+      - "O"     # Realty Income Corporation
+      - "STOR"  # STORE Capital Corporation
+      - "WPC"   # W.P. Carey Inc.
+
+  # International Developed Markets
+  international_developed:
+    name: "International Developed Markets"
+    description: "Major companies from developed international markets"
+    categories: ["international", "developed", "equity"]
+    tickers:
+      - "ASML"  # ASML Holding N.V.
+      - "TSM"   # Taiwan Semiconductor Manufacturing Company Limited
+      - "SAP"   # SAP SE
+      - "UL"    # Unilever PLC
+      - "NVO"   # Novo Nordisk A/S
+      - "TM"    # Toyota Motor Corporation
+      - "HMC"   # Honda Motor Co. Ltd.
+      - "SONY"  # Sony Group Corporation
+      - "NTT"   # Nippon Telegraph and Telephone Corporation
+      - "MUFG"  # Mitsubishi UFJ Financial Group Inc.
+      - "SMFG"  # Sumitomo Mitsui Financial Group Inc.
+      - "MFG"   # Mizuho Financial Group Inc.
+      - "BABA"  # Alibaba Group Holding Limited
+      - "JD"    # JD.com Inc.
+      - "PDD"   # Pinduoduo Inc.
+      - "BIDU"  # Baidu Inc.
+      - "NIO"   # NIO Inc.
+      - "XPEV"  # XPeng Inc.
+      - "LI"    # Li Auto Inc.
+      - "TME"   # Tencent Music Entertainment Group
+
+# Default screener configurations
+default_configs:
+  fundamental:
+    description: "Default fundamental analysis criteria"
+    fmp_criteria:
+      marketCapMoreThan: 1000000000
+      peRatioLessThan: 20
+      priceToBookRatioLessThan: 2.0
+      returnOnEquityMoreThan: 0.10
+      isETF: false
+      isFund: false
+      isActivelyTrading: true
+      limit: 100
+
+  technical:
+    description: "Default technical analysis criteria"
+    fmp_criteria:
+      marketCapMoreThan: 500000000
+      isETF: false
+      isFund: false
+      isActivelyTrading: true
+      limit: 150
+
+  conservative_value:
+    description: "Conservative value screening criteria"
+    fmp_criteria:
+      marketCapMoreThan: 5000000000
+      peRatioLessThan: 12
+      priceToBookRatioLessThan: 1.2
+      debtToEquityLessThan: 0.3
+      returnOnEquityMoreThan: 0.15
+      isETF: false
+      isFund: false
+      isActivelyTrading: true
+      limit: 50
+
+  growth:
+    description: "Growth stock screening criteria"
+    fmp_criteria:
+      marketCapMoreThan: 1000000000
+      peRatioLessThan: 30
+      peRatioMoreThan: 8
+      returnOnEquityMoreThan: 0.15
+      revenueGrowthMoreThan: 0.10
+      isETF: false
+      isFund: false
+      isActivelyTrading: true
+      limit: 60
+
+

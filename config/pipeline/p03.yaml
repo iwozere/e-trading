@@ -1,0 +1,288 @@
+# CNN + XGBoost Pipeline Configuration
+# Configuration file for the hybrid CNN + XGBoost trading pipeline
+
+# Multi-provider data configuration
+data_sources:
+#  binance:
+#    symbols: [BTCUSDT, ETHUSDT, LTCUSDT]
+#    timeframes: [15m, 1h, 4h]
+#    period: "2y"  # 2 years for crypto data (should give enough data)
+  yfinance:
+    symbols: [VT, PSNY, GOOG]
+    timeframes: [1d]
+    period: "4y"  # 4 years for stock data (should give ~1000 trading days)
+
+# Data Configuration
+data:
+  # Date range for data processing
+  start_date: "2022-01-01"
+  end_date: "2025-08-27"
+  
+  # Data quality requirements
+  min_records: 1000
+  max_missing_pct: 5.0
+  
+  # Data download period
+  period: "1y"  # 1 year of historical data
+  
+  # File naming pattern
+  file_pattern: "{provider}_{symbol}_{timeframe}_{start_date}_{end_date}.csv"
+
+# Paths Configuration
+paths:
+  data_raw: "data/raw"
+  data_labeled: "data/labeled"
+  models_cnn: "src/ml/pipeline/p03_cnn_xgboost/models/cnn"
+  models_xgboost: "src/ml/pipeline/p03_cnn_xgboost/models/xgboost"
+  results: "src/ml/pipeline/p03_cnn_xgboost/models/results"
+
+# CNN Configuration
+cnn:
+  # Sequence length for CNN input (number of candles)
+  sequence_length: 120
+  
+  # Maximum samples to use for training (to avoid memory issues)
+  max_samples: 10000
+  
+  # Number of optimization trials
+  optimization_trials: 10
+  
+  # Number of filters for convolutional layers
+  filters: [32, 64, 128]
+  
+  # Kernel sizes for convolutional layers
+  kernel_sizes: [3, 5, 7]
+  
+  # Dropout rates
+  dropout: [0.1, 0.2, 0.3]
+  
+  # Batch sizes for training
+  batch_size: [32, 64]
+  
+  # Learning rates
+  learning_rate: [0.0001, 0.001]
+  
+  # Number of epochs
+  epochs: [50, 100]
+  
+  # Early stopping patience
+  early_stopping_patience: 20
+  
+  # Validation split
+  validation_split: 0.2
+  
+  # Model save directory (will use paths.models_cnn)
+
+# Technical Indicators Configuration
+technical_indicators:
+  # RSI parameters
+  rsi_period: 14
+  
+  # MACD parameters
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  
+  # Bollinger Bands parameters
+  bb_period: 20
+  bb_std: 2
+  
+  # ATR parameters
+  atr_period: 14
+  
+  # Moving averages
+  sma_period: 20
+  ema_period: 12
+  
+  # Stochastic parameters
+  stoch_k_period: 14
+  stoch_d_period: 3
+  
+  # Volume parameters
+  volume_sma_period: 20
+
+# Feature Engineering Configuration
+feature_engineering:
+  # Feature combination weights (will be optimized)
+  cnn_weight: 0.6
+  ta_weight: 0.4
+  
+  # Feature scaling
+  scaling_method: "standard"  # "standard", "minmax", "robust"
+  
+  # Feature selection
+  correlation_threshold: 0.95
+  feature_selection_method: "xgboost_importance"
+  
+  # Dimensionality reduction
+  use_pca: false
+  pca_components: 0.95
+
+# XGBoost Configuration
+xgboost:
+  # Optimization parameters
+  n_trials: 200
+  cv_folds: 5
+  early_stopping_rounds: 20
+  eval_metric: "mlogloss"
+  
+  # Hyperparameter search space
+  max_depth: [3, 6, 9, 12]
+  learning_rate: [0.01, 0.05, 0.1, 0.2]
+  n_estimators: [100, 200, 500, 1000]
+  subsample: [0.6, 0.8, 1.0]
+  colsample_bytree: [0.6, 0.8, 1.0]
+  reg_alpha: [0, 0.1, 1.0]
+  reg_lambda: [0, 0.1, 1.0]
+  min_child_weight: [1, 3, 5, 7]
+  gamma: [0, 0.1, 0.2, 0.3]
+  
+  # Training parameters
+  random_state: 42
+  verbosity: 1
+  
+  # Model save directory (will use paths.models_xgboost)
+
+# Target Configuration
+targets:
+  # Price direction threshold
+  direction_threshold: 0.001
+  
+  # Volatility percentiles for regime classification
+  volatility_percentiles: [33, 66]
+  
+  # Trend strength threshold
+  trend_threshold: 0.0001
+  
+  # Lookahead periods for target generation
+  lookahead_periods: 1
+  
+  # Target variables to generate
+  generate_direction: true
+  generate_volatility: true
+  generate_trend: true
+
+# Training Configuration
+training:
+  # Data split ratios
+  train_ratio: 0.7
+  validation_ratio: 0.15
+  test_ratio: 0.15
+  
+  # Time series split
+  use_time_series_split: true
+  
+  # Class balancing
+  use_class_weights: true
+  class_balance_method: "balanced"  # "balanced", "smote", "none"
+  
+  # Cross-validation
+  cv_method: "time_series"  # "time_series", "stratified", "simple"
+  cv_folds: 5
+
+# Validation Configuration
+validation:
+  # Backtesting parameters
+  initial_capital: 10000
+  transaction_cost: 0.001  # 0.1%
+  slippage: 0.0005  # 0.05%
+  
+  # Risk management
+  max_position_size: 0.1  # 10% of capital
+  stop_loss: 0.02  # 2%
+  take_profit: 0.04  # 4%
+  
+  # Performance metrics
+  calculate_sharpe: true
+  calculate_max_drawdown: true
+  calculate_win_rate: true
+  calculate_profit_factor: true
+
+# Performance Configuration
+performance:
+  # Parallel processing
+  num_workers: 4
+  use_multiprocessing: true
+  
+  # GPU settings
+  use_gpu: true
+  gpu_memory_fraction: 0.8
+  mixed_precision: true
+  
+  # Memory management
+  batch_size: 64
+  memory_limit: 0.8  # 80% of available RAM
+  
+  # Caching
+  use_cache: true
+  cache_dir: "cache"
+
+# Logging Configuration
+logging:
+  # Log level
+  level: "INFO"  # "DEBUG", "INFO", "WARNING", "ERROR"
+  
+  # Log format
+  format: "json"  # "json", "text"
+  
+  # Log file
+  file: "logs/p03_cnn_xgboost.log"
+  max_size: "100MB"
+  backup_count: 5
+  
+  # Console output
+  console_output: true
+  
+  # Progress tracking
+  show_progress: true
+  progress_bar: true
+
+# Output Configuration
+output:
+  # Results directory
+  results_dir: "results/p03_cnn_xgboost"
+  
+  # Save intermediate results
+  save_intermediate: true
+  
+  # Save visualizations
+  save_plots: true
+  plot_format: "png"  # "png", "pdf", "svg"
+  
+  # Save predictions
+  save_predictions: true
+  
+  # Save feature importance
+  save_feature_importance: true
+  
+  # Save model artifacts
+  save_models: true
+  save_configs: true
+
+# Advanced Configuration
+advanced:
+  # Optuna settings
+  optuna:
+    storage: null  # SQLite database path for study persistence
+    study_name: "cnn_xgboost_optimization"
+    direction: "minimize"
+    sampler: "TPESampler"
+    pruner: "MedianPruner"
+  
+  # Model ensemble
+  ensemble:
+    use_ensemble: false
+    ensemble_method: "voting"  # "voting", "stacking", "bagging"
+    n_models: 3
+  
+  # Feature selection
+  feature_selection:
+    method: "xgboost_importance"
+    top_k_features: 50
+    correlation_threshold: 0.95
+  
+  # Hyperparameter optimization
+  optimization:
+    timeout: 3600  # 1 hour per trial
+    n_jobs: 1
+    show_progress_bar: true

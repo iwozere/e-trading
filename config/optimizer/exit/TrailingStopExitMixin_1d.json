@@ -1,0 +1,36 @@
+{
+    "name": "TrailingStopExitMixin",
+    "timeframe": "1d",
+    "trading_style": "position_trading",
+    "params": {
+        "x_trail_pct": {
+            "type": "float",
+            "low": 0.03,
+            "high": 0.08,
+            "default": 0.05
+        },
+        "x_activation_pct": {   
+            "type": "float",
+            "low": 0.0,
+            "high": 0.5,
+            "default": 0.0
+        },
+        "x_atr_period": {
+            "type": "int",
+            "low": 14,
+            "high": 20,
+            "default": 14
+        },
+        "x_use_atr": {
+            "type": "bool",
+            "default": true
+        },
+        "x_atr_multiplier": {
+            "type": "float",
+            "low": 2.0,
+            "high": 3.0,
+            "default": 2.2
+        }
+    },
+    "description": "1d timeframe trailing stop - position trading with wide stops"
+}

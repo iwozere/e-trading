@@ -1,0 +1,48 @@
+# Risk Management Configuration - not used at the moment. To be redesigned later.
+# Currently RM settings are inside each trading bot config file, like config/trading/0001.json
+
+# config/strategies.yaml
+# Configuration for each strategy (unique strategy identifier)
+strategies:
+  rsi_bb_trailing:
+    # Capital allocated to this strategy (in USD, if trading BTCUSDT on spot)
+    capital_allocation: 2000
+    # Maximum size of a single open position for this strategy (in USD)
+    max_position_size: 800
+    # Maximum allowable drawdown from the peak capital value (e.g., 0.15 = 15%)
+    max_drawdown: 0.15
+    # Maximum risk per trade — fraction of the strategy’s capital (e.g., 0.01 = 1%)
+    risk_per_trade: 0.01
+    # Maximum number of open positions at the same time for this strategy
+    max_concurrent_trades: 1
+
+  trend_breakout:
+    # Capital allocated to this strategy (in USD)
+    capital_allocation: 3000
+    # Maximum size of a single open position for this strategy (in USD)
+    max_position_size: 1200
+    # Maximum allowable drawdown from the peak capital value (e.g., 0.20 = 20%)
+    max_drawdown: 0.2
+    # Maximum risk per trade — fraction of the strategy’s capital (e.g., 0.02 = 2%)
+    risk_per_trade: 0.02
+    # Maximum number of open positions at the same time for this strategy
+    max_concurrent_trades: 2
+
+# Global constraints at the portfolio level (shared across all strategies)
+portfolio:
+  # Maximum total capital that can be invested at the same time (in USD)
+  # Example: if total capital = 10000 and max_total_exposure = 6000 → no more than $6000 in the market simultaneously
+  max_total_exposure: 6000
+
+  # Maximum exposure to a single asset (e.g., BTCUSDT) from total capital
+  # Limits concentration risk in one instrument
+  # Example: max_asset_exposure = 2500 → no more than $2500 in BTCUSDT regardless of the number of strategies
+  max_asset_exposure: 2500
+
+  # Overall maximum daily loss (e.g., 0.05 = 5%)
+  # If exceeded — all new trade entries are blocked for the rest of the day
+  max_daily_loss: 0.05
+
+  # Prevent opening opposite positions on the same pair simultaneously (e.g., long and short in BTCUSDT)
+  # If true → RiskManager will reject the second trade if there is already an opposite position
+  prevent_conflicting_positions: true
