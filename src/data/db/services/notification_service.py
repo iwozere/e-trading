@@ -19,6 +19,7 @@ from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.models.model_notification import (
     Message, MessageDeliveryStatus, MessageStatus
 )
+from src.data.db.services.base_service import BaseDBService
 from src.notification.channels.base import (
     NotificationChannel, DeliveryResult, ChannelHealth, MessageContent,
     DeliveryStatus, ChannelHealthStatus
@@ -28,94 +29,64 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-class NotificationService:
-    """
-    Service layer for notification operations.
+class NotificationService(BaseDBService):
+    """Service layer for notification operations."""
 
-    Provides high-level business logic for creating, managing, and tracking notifications.
-    """
+    def __init__(self, db_service=None):
+        """Initialize the service."""
+        super().__init__(db_service)
 
-    def __init__(self, notification_repo: NotificationRepository):
-        """
-        Initialize the notification service.
+    @BaseDBService.with_uow
+    @BaseDBService.handle_db_error
+    def create_message(self, repos, message_data: Dict[str, Any]) -> Message:
+        """Create a new notification message."""
+        # Validate required fields
+        required_fields = ['message_type', 'channels', 'recipient_id', 'content']
+        for field in required_fields:
+            if field not in message_data:
+                raise ValueError(f"Missing required field: {field}")
 
-        Args:
-            notification_repo: Notification repository instance
-        """
-        self.repo = notification_repo
+        # Set defaults
+        if 'priority' not in message_data:
+            message_data['priority'] = 'NORMAL'
 
-    def create_message(self, message_data: Dict[str, Any]) -> Message:
-        """
-        Create a new notification message.
+        if 'status' not in message_data:
+            message_data['status'] = MessageStatus.PENDING.value
 
-        Args:
-            message_data: Message data dictionary
+        if 'scheduled_for' not in message_data:
+            message_data['scheduled_for'] = datetime.now(timezone.utc)
 
-        Returns:
-            Created Message object
+        if 'max_retries' not in message_data:
+            message_data['max_retries'] = 3
 
-        Raises:
-            ValueError: If message data is invalid
-        """
-        try:
-            # Validate required fields
-            required_fields = ['message_type', 'channels', 'recipient_id', 'content']
-            for field in required_fields:
-                if field not in message_data:
-                    raise ValueError(f"Missing required field: {field}")
+        if 'retry_count' not in message_data:
+            message_data['retry_count'] = 0
 
-            # Set defaults
-            if 'priority' not in message_data:
-                message_data['priority'] = 'NORMAL'
+        # Create message
+        message = repos.notifications.create_message(message_data)
 
-            if 'status' not in message_data:
-                message_data['status'] = MessageStatus.PENDING.value
+        # Create delivery status records for each channel
+        for channel in message_data['channels']:
+            delivery_data = {
+                'message_id': message.id,
+                'channel': channel,
+                'status': DeliveryStatus.PENDING.value,
+                'created_at': datetime.now(timezone.utc)
+            }
+            repos.notifications.create_delivery_status(delivery_data)
 
-            if 'scheduled_for' not in message_data:
-                message_data['scheduled_for'] = datetime.now(timezone.utc)
+        self._logger.info("Created message %s with %d delivery channels", message.id, len(message_data['channels']))
+        return message
 
-            if 'max_retries' not in message_data:
-                message_data['max_retries'] = 3
+    @BaseDBService.with_uow
+    def get_message(self, repos, message_id: int) -> Optional[Message]:
+        """Get a message by ID."""
+        return repos.notifications.get_message(message_id)
 
-            if 'retry_count' not in message_data:
-                message_data['retry_count'] = 0
-
-            # Create message
-            message = self.repo.messages.create_message(message_data)
-
-            # Create delivery status records for each channel
-            for channel in message_data['channels']:
-                delivery_data = {
-                    'message_id': message.id,
-                    'channel': channel,
-                    'status': DeliveryStatus.PENDING.value,
-                    'created_at': datetime.now(timezone.utc)
-                }
-                self.repo.delivery_status.create_delivery_status(delivery_data)
-
-            self.repo.commit()
-            _logger.info("Created message %s with %d delivery channels", message.id, len(message_data['channels']))
-            return message
-
-        except Exception as e:
-            self.repo.rollback()
-            _logger.exception("Failed to create message:")
-            raise
-
-    def get_message(self, message_id: int) -> Optional[Message]:
-        """
-        Get a message by ID.
-
-        Args:
-            message_id: Message ID
-
-        Returns:
-            Message object or None if not found
-        """
-        return self.repo.messages.get_message(message_id)
-
+    @BaseDBService.with_uow
     def list_messages(
         self,
+        repos,
         status: Optional[str] = None,
         priority: Optional[str] = None,
         recipient_id: Optional[str] = None,
@@ -123,27 +94,14 @@ class NotificationService:
         limit: int = 100,
         offset: int = 0
     ) -> List[Message]:
-        """
-        List messages with filtering.
-
-        Args:
-            status: Filter by status
-            priority: Filter by priority
-            recipient_id: Filter by recipient ID
-            message_type: Filter by message type
-            limit: Maximum number of results
-            offset: Number of results to skip
-
-        Returns:
-            List of Message objects
-        """
+        """List messages with filtering."""
         # Convert string status to enum if provided
         status_enum = None
         if status:
             try:
                 status_enum = MessageStatus(status.upper())
             except ValueError:
-                _logger.warning("Invalid status filter: %s", status)
+                self._logger.warning("Invalid status filter: %s", status)
 
         # Convert string priority to enum if provided
         from src.data.db.models.model_notification import MessagePriority
@@ -152,9 +110,9 @@ class NotificationService:
             try:
                 priority_enum = MessagePriority(priority.upper())
             except ValueError:
-                _logger.warning("Invalid priority filter: %s", priority)
+                self._logger.warning("Invalid priority filter: %s", priority)
 
-        return self.repo.messages.list_messages(
+        return repos.notifications.list_messages(
             status=status_enum,
             priority=priority_enum,
             recipient_id=recipient_id,
@@ -163,53 +121,34 @@ class NotificationService:
             offset=offset
         )
 
-    def update_message_status(self, message_id: int, status: str, error_message: Optional[str] = None) -> Optional[Message]:
-        """
-        Update message status.
+    @BaseDBService.with_uow
+    @BaseDBService.handle_db_error
+    def update_message_status(self, repos, message_id: int, status: str, error_message: Optional[str] = None) -> Optional[Message]:
+        """Update message status."""
+        update_data = {
+            'status': status,
+            'processed_at': datetime.now(timezone.utc)
+        }
 
-        Args:
-            message_id: Message ID
-            status: New status
-            error_message: Error message if status is FAILED
+        if error_message:
+            update_data['last_error'] = error_message
 
-        Returns:
-            Updated Message object or None if not found
-        """
-        try:
-            update_data = {
-                'status': status,
-                'processed_at': datetime.now(timezone.utc)
-            }
+        message = repos.notifications.update_message(message_id, update_data)
+        if message:
+            self._logger.info("Updated message %s status to %s", message_id, status)
 
-            if error_message:
-                update_data['last_error'] = error_message
+        return message
 
-            message = self.repo.messages.update_message(message_id, update_data)
-            if message:
-                self.repo.commit()
-                _logger.info("Updated message %s status to %s", message_id, status)
+    @BaseDBService.with_uow
+    def get_delivery_status(self, repos, message_id: int) -> List[MessageDeliveryStatus]:
+        """Get delivery status for all channels of a message."""
+        return repos.notifications.get_delivery_statuses_by_message(message_id)
 
-            return message
-
-        except Exception as e:
-            self.repo.rollback()
-            _logger.exception("Failed to update message %s status:", message_id)
-            raise
-
-    def get_delivery_status(self, message_id: int) -> List[MessageDeliveryStatus]:
-        """
-        Get delivery status for all channels of a message.
-
-        Args:
-            message_id: Message ID
-
-        Returns:
-            List of MessageDeliveryStatus objects
-        """
-        return self.repo.delivery_status.get_delivery_statuses_by_message(message_id)
-
+    @BaseDBService.with_uow
+    @BaseDBService.handle_db_error
     def update_delivery_status(
         self,
+        repos,
         delivery_id: int,
         status: str,
         delivered_at: Optional[datetime] = None,
@@ -217,163 +156,81 @@ class NotificationService:
         error_message: Optional[str] = None,
         external_id: Optional[str] = None
     ) -> Optional[MessageDeliveryStatus]:
-        """
-        Update delivery status.
+        """Update delivery status."""
+        update_data = {'status': status}
 
-        Args:
-            delivery_id: Delivery status ID
-            status: New delivery status
-            delivered_at: Delivery timestamp
-            response_time_ms: Response time in milliseconds
-            error_message: Error message if delivery failed
-            external_id: External service message ID
+        if delivered_at:
+            update_data['delivered_at'] = delivered_at
+        elif status == DeliveryStatus.DELIVERED.value:
+            update_data['delivered_at'] = datetime.now(timezone.utc)
 
-        Returns:
-            Updated MessageDeliveryStatus object or None if not found
-        """
-        try:
-            update_data = {'status': status}
+        if response_time_ms is not None:
+            update_data['response_time_ms'] = response_time_ms
 
-            if delivered_at:
-                update_data['delivered_at'] = delivered_at
-            elif status == DeliveryStatus.DELIVERED.value:
-                update_data['delivered_at'] = datetime.now(timezone.utc)
+        if error_message:
+            update_data['error_message'] = error_message
 
-            if response_time_ms is not None:
-                update_data['response_time_ms'] = response_time_ms
+        if external_id:
+            update_data['external_id'] = external_id
 
-            if error_message:
-                update_data['error_message'] = error_message
+        delivery_status = repos.notifications.update_delivery_status(delivery_id, update_data)
+        if delivery_status:
+            self._logger.info("Updated delivery status %s to %s", delivery_id, status)
 
-            if external_id:
-                update_data['external_id'] = external_id
+        return delivery_status
 
-            delivery_status = self.repo.delivery_status.update_delivery_status(delivery_id, update_data)
-            if delivery_status:
-                self.repo.commit()
-                _logger.info("Updated delivery status %s to %s", delivery_id, status)
+    @BaseDBService.with_uow
+    def get_channel_health(self, repos) -> List[ChannelHealth]:
+        """Get health status for all channels."""
+        return repos.notifications.list_channel_health()
 
-            return delivery_status
+    @BaseDBService.with_uow
+    @BaseDBService.handle_db_error
+    def update_channel_health(self, repos, channel: str, status: str, error_message: Optional[str] = None) -> ChannelHealth:
+        """Update channel health status."""
+        health_data = {
+            'channel': channel,
+            'status': status,
+            'error_message': error_message,
+            'checked_at': datetime.now(timezone.utc)
+        }
 
-        except Exception as e:
-            self.repo.rollback()
-            _logger.exception("Failed to update delivery status %s:", delivery_id)
-            raise
+        health = repos.notifications.create_or_update_channel_health(health_data)
+        self._logger.info("Updated channel health for %s: %s", channel, status)
+        return health
 
-    def get_channel_health(self) -> List[ChannelHealth]:
-        """
-        Get health status for all channels.
+    @BaseDBService.with_uow
+    def get_delivery_statistics(self, repos, channel: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
+        """Get delivery statistics."""
+        return repos.notifications.get_delivery_statistics(channel=channel, days=days)
 
-        Returns:
-            List of ChannelHealth objects
-        """
-        return self.repo.channel_health.list_channel_health()
+    @BaseDBService.with_uow
+    @BaseDBService.handle_db_error
+    def cleanup_old_messages(self, repos, days_to_keep: int = 30) -> int:
+        """Clean up old delivered messages."""
+        deleted_count = repos.notifications.cleanup_old_messages(days_to_keep)
+        self._logger.info("Cleaned up %d old messages", deleted_count)
+        return deleted_count
 
-    def update_channel_health(self, channel: str, status: str, error_message: Optional[str] = None) -> ChannelHealth:
-        """
-        Update channel health status.
-
-        Args:
-            channel: Channel name
-            status: Health status
-            error_message: Error message if unhealthy
-
-        Returns:
-            Updated ChannelHealth object
-        """
-        try:
-            health_data = {
-                'channel': channel,
-                'status': status,
-                'error_message': error_message,
-                'checked_at': datetime.now(timezone.utc)
-            }
-
-            health = self.repo.channel_health.create_or_update_channel_health(health_data)
-            self.repo.commit()
-            _logger.info("Updated channel health for %s: %s", channel, status)
-            return health
-
-        except Exception as e:
-            self.repo.rollback()
-            _logger.exception("Failed to update channel health for %s:", channel)
-            raise
-
-    def get_delivery_statistics(self, channel: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
-        """
-        Get delivery statistics.
-
-        Args:
-            channel: Filter by channel
-            days: Number of days to analyze
-
-        Returns:
-            Dictionary with statistics
-        """
-        return self.repo.delivery_status.get_delivery_statistics(channel=channel, days=days)
-
-    def cleanup_old_messages(self, days_to_keep: int = 30) -> int:
-        """
-        Clean up old delivered messages.
-
-        Args:
-            days_to_keep: Number of days of messages to keep
-
-        Returns:
-            Number of messages deleted
-        """
-        try:
-            deleted_count = self.repo.messages.cleanup_old_messages(days_to_keep)
-            self.repo.commit()
-            _logger.info("Cleaned up %d old messages", deleted_count)
-            return deleted_count
-
-        except Exception as e:
-            self.repo.rollback()
-            _logger.exception("Failed to cleanup old messages:")
-            raise
-
-    def get_pending_messages(self, limit: int = 100) -> List[Message]:
-        """
-        Get pending messages ready for processing.
-
-        Args:
-            limit: Maximum number of messages to return
-
-        Returns:
-            List of pending Message objects
-        """
+    @BaseDBService.with_uow
+    def get_pending_messages(self, repos, limit: int = 100) -> List[Message]:
+        """Get pending messages ready for processing."""
         current_time = datetime.now(timezone.utc)
-        return self.repo.messages.get_pending_messages(current_time, limit=limit)
+        return repos.notifications.get_pending_messages(current_time, limit=limit)
 
-    def get_failed_messages_for_retry(self, limit: int = 50) -> List[Message]:
-        """
-        Get failed messages that can be retried.
-
-        Args:
-            limit: Maximum number of messages to return
-
-        Returns:
-            List of failed Message objects ready for retry
-        """
+    @BaseDBService.with_uow
+    def get_failed_messages_for_retry(self, repos, limit: int = 50) -> List[Message]:
+        """Get failed messages that can be retried."""
         current_time = datetime.now(timezone.utc)
-        return self.repo.messages.get_failed_messages_for_retry(current_time, limit=limit)
+        return repos.notifications.get_failed_messages_for_retry(current_time, limit=limit)
 
-    def check_rate_limit(self, user_id: str, channel: str) -> bool:
-        """
-        Check if user is within rate limits for a channel.
-
-        Args:
-            user_id: User ID
-            channel: Channel name
-
-        Returns:
-            True if within limits, False if rate limited
-        """
+    @BaseDBService.with_uow
+    def check_rate_limit(self, repos, user_id: str, channel: str) -> bool:
+        """Check if user is within rate limits for a channel."""
         # Default rate limit configuration
         default_config = {
             'max_tokens': 60,  # 60 messages per hour
             'refill_rate': 60  # Refill 1 token per minute
         }
 
-        return self.repo.rate_limits.check_and_consume_token(user_id, channel, default_config)
+        return repos.notifications.check_and_consume_token(user_id, channel, default_config)

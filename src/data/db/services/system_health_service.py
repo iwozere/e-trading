@@ -11,11 +11,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sys
 import json
+from functools import wraps
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.models.model_system_health import SystemHealth, SystemType, SystemHealthStatus
 from src.notification.logger import setup_logger
@@ -23,7 +25,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-class SystemHealthService:
+class SystemHealthService(BaseDBService):
     """
     Service layer for system health monitoring operations.
 
@@ -31,15 +33,12 @@ class SystemHealthService:
     across all subsystems in the e-trading platform.
     """
 
-    def __init__(self, system_health_repo: SystemHealthRepository):
-        """
-        Initialize the system health service.
+    def __init__(self):
+        """Initialize the system health service."""
+        super().__init__()
 
-        Args:
-            system_health_repo: System health repository instance
-        """
-        self.repo = system_health_repo
-
+    @with_uow
+    @handle_db_error
     def update_system_health(
         self,
         system: str,
@@ -63,32 +62,29 @@ class SystemHealthService:
         Returns:
             Updated SystemHealth object
         """
-        try:
-            metadata_json = None
-            if metadata:
-                metadata_json = json.dumps(metadata)
+        metadata_json = None
+        if metadata:
+            metadata_json = json.dumps(metadata)
 
-            health_record = self.repo.update_system_status(
-                system=system,
-                component=component,
-                status=status,
-                response_time_ms=response_time_ms,
-                error_message=error_message,
-                metadata=metadata_json
-            )
+        health_record = self.uow.system_health.update_system_status(
+            system=system,
+            component=component,
+            status=status,
+            response_time_ms=response_time_ms,
+            error_message=error_message,
+            metadata=metadata_json
+        )
 
-            _logger.debug(
-                "Updated health for %s.%s: %s",
-                system,
-                component or 'main',
-                status.value
-            )
-            return health_record
+        _logger.debug(
+            "Updated health for %s.%s: %s",
+            system,
+            component or 'main',
+            status.value
+        )
+        return health_record
 
-        except Exception as e:
-            _logger.exception("Failed to update system health for %s.%s:", system, component)
-            raise
-
+    @with_uow
+    @handle_db_error
     def get_system_health(self, system: str, component: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Get health status for a specific system/component.
@@ -100,18 +96,15 @@ class SystemHealthService:
         Returns:
             Dictionary with health data or None if not found
         """
-        try:
-            health_record = self.repo.get_system_health(system, component)
+        health_record = self.uow.system_health.get_system_health(system, component)
 
-            if not health_record:
-                return None
+        if not health_record:
+            return None
 
-            return self._format_health_record(health_record)
+        return self._format_health_record(health_record)
 
-        except Exception as e:
-            _logger.exception("Failed to get system health for %s.%s:", system, component)
-            raise
-
+    @with_uow
+    @handle_db_error
     def get_all_systems_health(self, include_stale: bool = True) -> List[Dict[str, Any]]:
         """
         Get health status for all systems.
@@ -122,14 +115,11 @@ class SystemHealthService:
         Returns:
             List of dictionaries with health data
         """
-        try:
-            health_records = self.repo.list_system_health(include_stale=include_stale)
-            return [self._format_health_record(record) for record in health_records]
+        health_records = self.uow.system_health.list_system_health(include_stale=include_stale)
+        return [self._format_health_record(record) for record in health_records]
 
-        except Exception as e:
-            _logger.exception("Failed to get all systems health:")
-            raise
-
+    @with_uow
+    @handle_db_error
     def get_systems_overview(self) -> Dict[str, Any]:
         """
         Get overview of all systems with aggregated statistics.
@@ -137,30 +127,27 @@ class SystemHealthService:
         Returns:
             Dictionary with systems overview data
         """
-        try:
-            overview_data = self.repo.get_systems_overview()
-            statistics = self.repo.get_health_statistics()
+        overview_data = self.uow.system_health.get_systems_overview()
+        statistics = self.uow.system_health.get_health_statistics()
 
-            # Determine overall platform status
-            overall_status = "HEALTHY"
-            if statistics.get('down_systems', 0) > 0:
-                overall_status = "DOWN"
-            elif statistics.get('degraded_systems', 0) > 0:
-                overall_status = "DEGRADED"
-            elif statistics.get('unknown_systems', 0) > 0:
-                overall_status = "UNKNOWN"
+        # Determine overall platform status
+        overall_status = "HEALTHY"
+        if statistics.get('down_systems', 0) > 0:
+            overall_status = "DOWN"
+        elif statistics.get('degraded_systems', 0) > 0:
+            overall_status = "DEGRADED"
+        elif statistics.get('unknown_systems', 0) > 0:
+            overall_status = "UNKNOWN"
 
-            return {
-                "overall_status": overall_status,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "systems_overview": overview_data,
-                "statistics": statistics
-            }
+        return {
+            "overall_status": overall_status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "systems_overview": overview_data,
+            "statistics": statistics
+        }
 
-        except Exception as e:
-            _logger.exception("Failed to get systems overview:")
-            raise
-
+    @with_uow
+    @handle_db_error
     def get_unhealthy_systems(self) -> List[Dict[str, Any]]:
         """
         Get all systems that are not healthy.
@@ -168,16 +155,13 @@ class SystemHealthService:
         Returns:
             List of dictionaries with unhealthy systems data
         """
-        try:
-            unhealthy_records = self.repo.get_unhealthy_systems()
-            return [self._format_health_record(record) for record in unhealthy_records]
-
-        except Exception as e:
-            _logger.exception("Failed to get unhealthy systems:")
-            raise
+        unhealthy_records = self.uow.system_health.get_unhealthy_systems()
+        return [self._format_health_record(record) for record in unhealthy_records]
 
     # Backward compatibility methods for notification channels
 
+    @with_uow
+    @handle_db_error
     def get_notification_channels_health(self) -> List[Dict[str, Any]]:
         """
         Get health status for all notification channels (backward compatibility).
@@ -185,14 +169,11 @@ class SystemHealthService:
         Returns:
             List of dictionaries with channel health data
         """
-        try:
-            channel_records = self.repo.get_notification_channels_health()
-            return [self._format_channel_health_record(record) for record in channel_records]
+        channel_records = self.uow.system_health.get_notification_channels_health()
+        return [self._format_channel_health_record(record) for record in channel_records]
 
-        except Exception as e:
-            _logger.exception("Failed to get notification channels health:")
-            raise
-
+    @with_uow
+    @handle_db_error
     def get_notification_channel_health(self, channel: str) -> Optional[Dict[str, Any]]:
         """
         Get health status for a specific notification channel (backward compatibility).
@@ -203,17 +184,12 @@ class SystemHealthService:
         Returns:
             Dictionary with channel health data or None if not found
         """
-        try:
-            channel_record = self.repo.get_notification_channel_health(channel)
+        channel_record = self.uow.system_health.get_notification_channel_health(channel)
 
-            if not channel_record:
-                return None
+        if not channel_record:
+            return None
 
-            return self._format_channel_health_record(channel_record)
-
-        except Exception as e:
-            _logger.error("Failed to get notification channel health for %s: %s", channel, e)
-            raise
+        return self._format_channel_health_record(channel_record)
 
     def update_notification_channel_health(
         self,

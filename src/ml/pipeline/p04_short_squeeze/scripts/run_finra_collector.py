@@ -4,6 +4,10 @@ FINRA Data Collector Script for Short Squeeze Detection Pipeline
 
 This script runs bi-weekly to download official FINRA short interest data
 and store it in the ss_finra_short_interest table for use in squeeze detection.
+Enhanced with float shares and volume data from yfinance to calculate:
+- float_shares (from yfinance)
+- short_interest_pct (calculated)
+- days_to_cover (calculated using 30-day avg volume)
 
 Usage:
     python run_finra_collector.py [options]
@@ -20,6 +24,9 @@ Examples:
 
     # Run in dry-run mode (no database writes)
     python run_finra_collector.py --dry-run
+
+    # Skip enrichment (faster, but no float/volume data)
+    python run_finra_collector.py --skip-enrichment
 
     # Run with verbose logging
     python run_finra_collector.py --verbose
@@ -42,11 +49,261 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.finra_data_downloader import create_finra_downloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.data.db.core.database import session_scope
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.ml.pipeline.p04_short_squeeze.config.config_manager import ConfigManager
 
 _logger = setup_logger(__name__)
+
+
+class FINRADataEnricher:
+    """
+    Enriches FINRA data with additional metrics from yfinance.
+
+    Calculates:
+    - float_shares: From yfinance ticker info
+    - short_interest_pct: 100 * short_interest_shares / float_shares
+    - days_to_cover: short_interest_shares / avg_daily_volume_30d
+    """
+
+    def __init__(self, yf_downloader: YahooDataDownloader):
+        """
+        Initialize the FINRA data enricher.
+
+        Args:
+            yf_downloader: Yahoo Finance downloader instance
+        """
+        self.yf_downloader = yf_downloader
+        self._float_cache: Dict[str, Optional[int]] = {}
+        self._volume_cache: Dict[str, Optional[float]] = {}
+
+    def enrich_finra_records(self, finra_records: List[Dict[str, Any]],
+                            settlement_date: date,
+                            batch_size: int = 50) -> List[Dict[str, Any]]:
+        """
+        Enrich FINRA records with float shares and volume data.
+
+        Args:
+            finra_records: List of FINRA data records
+            settlement_date: Settlement date for volume calculation
+            batch_size: Number of tickers to process in each batch
+
+        Returns:
+            Enriched FINRA records with float_shares, short_interest_pct, days_to_cover
+        """
+        if not finra_records:
+            return finra_records
+
+        _logger.info("Enriching %d FINRA records with float and volume data", len(finra_records))
+
+        # Extract unique tickers
+        tickers = list(set(record['ticker'] for record in finra_records))
+        _logger.info("Processing %d unique tickers", len(tickers))
+
+        # Enrich float shares in batches
+        self._enrich_float_shares_batch(tickers, batch_size)
+
+        # Enrich volume data in batches
+        self._enrich_volume_data_batch(tickers, settlement_date, batch_size)
+
+        # Apply enrichments to records
+        enriched_records = []
+        skipped_count = 0
+
+        for record in finra_records:
+            ticker = record['ticker']
+            short_interest_shares = record.get('short_interest_shares', 0)
+
+            # Get float shares from cache
+            float_shares = self._float_cache.get(ticker)
+
+            # Get average volume from cache
+            avg_volume_30d = self._volume_cache.get(ticker)
+
+            # Calculate short_interest_pct
+            short_interest_pct = None
+            if float_shares and float_shares > 0 and short_interest_shares > 0:
+                short_interest_pct = 100.0 * short_interest_shares / float_shares
+
+            # Calculate days_to_cover
+            days_to_cover = None
+            if avg_volume_30d and avg_volume_30d > 0 and short_interest_shares > 0:
+                days_to_cover = short_interest_shares / avg_volume_30d
+
+            # Add enriched fields to record
+            enriched_record = record.copy()
+            enriched_record['float_shares'] = float_shares
+            enriched_record['short_interest_pct'] = short_interest_pct
+            enriched_record['days_to_cover'] = days_to_cover
+
+            # Track records with missing data
+            if float_shares is None or avg_volume_30d is None:
+                skipped_count += 1
+                _logger.debug("Incomplete data for %s: float=%s, volume=%s",
+                            ticker, float_shares, avg_volume_30d)
+
+            enriched_records.append(enriched_record)
+
+        _logger.info("Enrichment complete: %d records enriched, %d with incomplete data",
+                    len(enriched_records), skipped_count)
+
+        return enriched_records
+
+    def _enrich_float_shares_batch(self, tickers: List[str], batch_size: int) -> None:
+        """
+        Enrich float shares for tickers in batches.
+
+        Args:
+            tickers: List of tickers to enrich
+            batch_size: Number of tickers per batch
+        """
+        _logger.info("Fetching float shares for %d tickers (batch size: %d)",
+                    len(tickers), batch_size)
+
+        # Process in batches to avoid overwhelming yfinance
+        for i in range(0, len(tickers), batch_size):
+            batch = tickers[i:i + batch_size]
+            _logger.debug("Processing float shares batch %d/%d (%d tickers)",
+                         i // batch_size + 1,
+                         (len(tickers) + batch_size - 1) // batch_size,
+                         len(batch))
+
+            try:
+                # Use batch fundamentals to get float shares efficiently
+                fundamentals_batch = self.yf_downloader.get_fundamentals_batch(batch)
+
+                for ticker in batch:
+                    if ticker in fundamentals_batch:
+                        fundamentals = fundamentals_batch[ticker]
+                        float_shares = fundamentals.float_shares
+                        self._float_cache[ticker] = float_shares
+
+                        if float_shares:
+                            _logger.debug("Float shares for %s: %s", ticker,
+                                        f"{float_shares:,}")
+                        else:
+                            _logger.debug("No float shares data for %s", ticker)
+                    else:
+                        _logger.warning("No fundamentals data for %s", ticker)
+                        self._float_cache[ticker] = None
+
+                # Small delay between batches to respect rate limits
+                if i + batch_size < len(tickers):
+                    time.sleep(0.5)
+
+            except Exception as e:
+                _logger.exception("Error fetching float shares for batch:")
+                # Mark all tickers in failed batch as None
+                for ticker in batch:
+                    if ticker not in self._float_cache:
+                        self._float_cache[ticker] = None
+
+        success_count = sum(1 for v in self._float_cache.values() if v is not None)
+        _logger.info("Float shares enrichment: %d/%d tickers successful",
+                    success_count, len(tickers))
+
+    def _enrich_volume_data_batch(self, tickers: List[str], settlement_date: date,
+                                  batch_size: int) -> None:
+        """
+        Enrich volume data for tickers in batches.
+
+        Args:
+            tickers: List of tickers to enrich
+            settlement_date: Settlement date (end date for volume calculation)
+            batch_size: Number of tickers per batch
+        """
+        _logger.info("Fetching 30-day average volume for %d tickers (batch size: %d)",
+                    len(tickers), batch_size)
+
+        # Calculate date range: 30 trading days before settlement_date
+        # Use 45 calendar days to ensure we get 30 trading days
+        end_date = datetime.combine(settlement_date, datetime.min.time())
+        start_date = end_date - timedelta(days=45)
+
+        _logger.debug("Volume date range: %s to %s", start_date.date(), end_date.date())
+
+        # Process in batches
+        for i in range(0, len(tickers), batch_size):
+            batch = tickers[i:i + batch_size]
+            _logger.debug("Processing volume batch %d/%d (%d tickers)",
+                         i // batch_size + 1,
+                         (len(tickers) + batch_size - 1) // batch_size,
+                         len(batch))
+
+            try:
+                # Use batch OHLCV download for efficiency
+                ohlcv_batch = self.yf_downloader.get_ohlcv_batch(
+                    batch,
+                    interval='1d',
+                    start_date=start_date,
+                    end_date=end_date
+                )
+
+                for ticker in batch:
+                    if ticker in ohlcv_batch:
+                        df = ohlcv_batch[ticker]
+
+                        if not df.empty and 'volume' in df.columns:
+                            # Calculate average volume over the last 30 trading days
+                            volumes = df['volume'].tail(30)
+
+                            if len(volumes) > 0:
+                                avg_volume = float(volumes.mean())
+                                self._volume_cache[ticker] = avg_volume
+                                _logger.debug("30-day avg volume for %s: %s (from %d days)",
+                                            ticker, f"{avg_volume:,.0f}", len(volumes))
+                            else:
+                                _logger.debug("No volume data for %s", ticker)
+                                self._volume_cache[ticker] = None
+                        else:
+                            _logger.debug("Empty OHLCV data for %s", ticker)
+                            self._volume_cache[ticker] = None
+                    else:
+                        _logger.warning("No OHLCV data for %s", ticker)
+                        self._volume_cache[ticker] = None
+
+                # Small delay between batches
+                if i + batch_size < len(tickers):
+                    time.sleep(0.5)
+
+            except Exception as e:
+                _logger.exception("Error fetching volume data for batch:")
+                # Mark all tickers in failed batch as None
+                for ticker in batch:
+                    if ticker not in self._volume_cache:
+                        self._volume_cache[ticker] = None
+
+        success_count = sum(1 for v in self._volume_cache.values() if v is not None)
+        _logger.info("Volume enrichment: %d/%d tickers successful",
+                    success_count, len(tickers))
+
+    def get_enrichment_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about the enrichment process.
+
+        Returns:
+            Dictionary with enrichment statistics
+        """
+        total_tickers = len(self._float_cache)
+        float_success = sum(1 for v in self._float_cache.values() if v is not None)
+        volume_success = sum(1 for v in self._volume_cache.values() if v is not None)
+
+        both_success = sum(
+            1 for ticker in self._float_cache.keys()
+            if self._float_cache.get(ticker) is not None
+            and self._volume_cache.get(ticker) is not None
+        )
+
+        return {
+            'total_tickers': total_tickers,
+            'float_success_count': float_success,
+            'float_success_rate': float_success / total_tickers if total_tickers > 0 else 0,
+            'volume_success_count': volume_success,
+            'volume_success_rate': volume_success / total_tickers if total_tickers > 0 else 0,
+            'both_success_count': both_success,
+            'both_success_rate': both_success / total_tickers if total_tickers > 0 else 0
+        }
 
 
 class FINRACollectorRunner:
@@ -61,6 +318,8 @@ class FINRACollectorRunner:
         """Initialize the FINRA collector runner."""
         self.config_manager: Optional[ConfigManager] = None
         self.finra_downloader = None
+        self.yf_downloader: Optional[YahooDataDownloader] = None
+        self.enricher: Optional[FINRADataEnricher] = None
         self.start_time: Optional[datetime] = None
         self.run_id: Optional[str] = None
 
@@ -93,6 +352,19 @@ class FINRACollectorRunner:
             '--dry-run',
             action='store_true',
             help='Run without writing results to database'
+        )
+
+        parser.add_argument(
+            '--skip-enrichment',
+            action='store_true',
+            help='Skip float shares and volume enrichment (faster but incomplete data)'
+        )
+
+        parser.add_argument(
+            '--enrichment-batch-size',
+            type=int,
+            default=50,
+            help='Batch size for enrichment operations (default: 50)'
         )
 
         parser.add_argument(
@@ -176,12 +448,15 @@ class FINRACollectorRunner:
             _logger.exception("Failed to load configuration:")
             return False
 
-    def initialize_finra_downloader(self) -> bool:
+    def initialize_downloaders(self, skip_enrichment: bool) -> bool:
         """
-        Initialize and test FINRA downloader.
+        Initialize FINRA and Yahoo Finance downloaders.
+
+        Args:
+            skip_enrichment: If True, skip Yahoo Finance downloader initialization
 
         Returns:
-            True if downloader initialized successfully, False otherwise
+            True if downloaders initialized successfully, False otherwise
         """
         try:
             _logger.info("Initializing FINRA downloader...")
@@ -198,10 +473,19 @@ class FINRACollectorRunner:
             else:
                 _logger.info("FINRA downloader initialized (no connection test available)")
 
+            # Initialize Yahoo Finance downloader for enrichment
+            if not skip_enrichment:
+                _logger.info("Initializing Yahoo Finance downloader for enrichment...")
+                self.yf_downloader = YahooDataDownloader()
+                self.enricher = FINRADataEnricher(self.yf_downloader)
+                _logger.info("Yahoo Finance downloader initialized")
+            else:
+                _logger.info("Skipping Yahoo Finance downloader (enrichment disabled)")
+
             return True
 
         except Exception as e:
-            _logger.exception("Failed to initialize FINRA downloader:")
+            _logger.exception("Failed to initialize downloaders:")
             return False
 
     def determine_collection_dates(self, date_str: Optional[str]) -> List[date]:
@@ -403,6 +687,54 @@ class FINRACollectorRunner:
             _logger.exception("Failed to download FINRA data:")
             return None
 
+    def enrich_finra_data(self, finra_data: List[Dict[str, Any]],
+                         settlement_date: date,
+                         batch_size: int) -> List[Dict[str, Any]]:
+        """
+        Enrich FINRA data with float shares and volume metrics.
+
+        Args:
+            finra_data: List of FINRA data records
+            settlement_date: Settlement date for the data
+            batch_size: Batch size for enrichment operations
+
+        Returns:
+            Enriched FINRA data records
+        """
+        if not self.enricher:
+            _logger.warning("Enricher not initialized - skipping enrichment")
+            return finra_data
+
+        try:
+            _logger.info("Starting enrichment process for %d records", len(finra_data))
+            enriched_data = self.enricher.enrich_finra_records(
+                finra_data,
+                settlement_date,
+                batch_size
+            )
+
+            # Log enrichment statistics
+            stats = self.enricher.get_enrichment_stats()
+            _logger.info("Enrichment statistics:")
+            _logger.info("  Float shares: %d/%d tickers (%.1f%%)",
+                        stats['float_success_count'],
+                        stats['total_tickers'],
+                        stats['float_success_rate'] * 100)
+            _logger.info("  Volume data: %d/%d tickers (%.1f%%)",
+                        stats['volume_success_count'],
+                        stats['total_tickers'],
+                        stats['volume_success_rate'] * 100)
+            _logger.info("  Complete data: %d/%d tickers (%.1f%%)",
+                        stats['both_success_count'],
+                        stats['total_tickers'],
+                        stats['both_success_rate'] * 100)
+
+            return enriched_data
+
+        except Exception as e:
+            _logger.exception("Error during enrichment - returning original data:")
+            return finra_data
+
     def store_finra_data(self, finra_data: List[Dict[str, Any]], dry_run: bool = False) -> int:
         """
         Store FINRA data in the database.
@@ -417,6 +749,15 @@ class FINRACollectorRunner:
         try:
             if dry_run:
                 _logger.info("DRY RUN MODE: Would store %d FINRA records", len(finra_data))
+                # Log sample of what would be stored
+                if finra_data:
+                    sample = finra_data[0]
+                    _logger.debug("Sample record: ticker=%s, si_shares=%s, float=%s, si_pct=%s, dtc=%s",
+                                sample.get('ticker'),
+                                sample.get('short_interest_shares'),
+                                sample.get('float_shares'),
+                                sample.get('short_interest_pct'),
+                                sample.get('days_to_cover'))
                 return len(finra_data)
 
             _logger.info("Storing %d FINRA records in database...", len(finra_data))
@@ -461,6 +802,23 @@ class FINRACollectorRunner:
             _logger.info("Total Records Stored: %d", results.get('total_records_stored', 0))
             _logger.info("Download Success: %s", "✅" if results.get('download_success') else "❌")
             _logger.info("Storage Success: %s", "✅" if results.get('storage_success') else "❌")
+
+            # Enrichment statistics
+            enrichment_stats = results.get('enrichment_stats')
+            if enrichment_stats:
+                _logger.info("Enrichment Statistics:")
+                _logger.info("  Float Shares Success: %d/%d (%.1f%%)",
+                            enrichment_stats.get('float_success_count', 0),
+                            enrichment_stats.get('total_tickers', 0),
+                            enrichment_stats.get('float_success_rate', 0) * 100)
+                _logger.info("  Volume Data Success: %d/%d (%.1f%%)",
+                            enrichment_stats.get('volume_success_count', 0),
+                            enrichment_stats.get('total_tickers', 0),
+                            enrichment_stats.get('volume_success_rate', 0) * 100)
+                _logger.info("  Complete Enrichment: %d/%d (%.1f%%)",
+                            enrichment_stats.get('both_success_count', 0),
+                            enrichment_stats.get('total_tickers', 0),
+                            enrichment_stats.get('both_success_rate', 0) * 100)
 
             # Per-date breakdown
             download_results = results.get('download_results', [])
@@ -539,8 +897,8 @@ class FINRACollectorRunner:
             if not self.load_configuration(args.config):
                 return 1
 
-            # Initialize FINRA downloader
-            if not self.initialize_finra_downloader():
+            # Initialize downloaders (FINRA + optionally Yahoo Finance)
+            if not self.initialize_downloaders(args.skip_enrichment):
                 return 1
 
             # Test connection mode
@@ -568,6 +926,7 @@ class FINRACollectorRunner:
             successful_downloads = 0
             failed_downloads = 0
             download_results = []
+            all_enrichment_stats = []
 
             for i, collection_date in enumerate(dates_to_download, 1):
                 _logger.info("Processing date %d/%d: %s", i, len(dates_to_download), collection_date)
@@ -577,6 +936,22 @@ class FINRACollectorRunner:
                     finra_data = self.download_finra_data(collection_date, args.max_retries)
 
                     if finra_data:
+                        # Enrich with float shares and volume data (unless skipped)
+                        if not args.skip_enrichment:
+                            _logger.info("Enriching %d records with float and volume data...",
+                                       len(finra_data))
+                            finra_data = self.enrich_finra_data(
+                                finra_data,
+                                collection_date,
+                                args.enrichment_batch_size
+                            )
+
+                            # Collect enrichment stats
+                            if self.enricher:
+                                all_enrichment_stats.append(self.enricher.get_enrichment_stats())
+                        else:
+                            _logger.info("Skipping enrichment as requested")
+
                         # Store FINRA data
                         records_stored = self.store_finra_data(finra_data, args.dry_run)
 
@@ -618,6 +993,24 @@ class FINRACollectorRunner:
             end_time = datetime.now()
             total_runtime = (end_time - self.start_time).total_seconds()
 
+            # Aggregate enrichment stats
+            aggregated_enrichment = None
+            if all_enrichment_stats:
+                total_tickers = sum(s['total_tickers'] for s in all_enrichment_stats)
+                float_success = sum(s['float_success_count'] for s in all_enrichment_stats)
+                volume_success = sum(s['volume_success_count'] for s in all_enrichment_stats)
+                both_success = sum(s['both_success_count'] for s in all_enrichment_stats)
+
+                aggregated_enrichment = {
+                    'total_tickers': total_tickers,
+                    'float_success_count': float_success,
+                    'float_success_rate': float_success / total_tickers if total_tickers > 0 else 0,
+                    'volume_success_count': volume_success,
+                    'volume_success_rate': volume_success / total_tickers if total_tickers > 0 else 0,
+                    'both_success_count': both_success,
+                    'both_success_rate': both_success / total_tickers if total_tickers > 0 else 0
+                }
+
             # Prepare results
             results = {
                 'run_id': self.run_id,
@@ -631,6 +1024,8 @@ class FINRACollectorRunner:
                 'storage_success': total_records_stored > 0,
                 'duration_seconds': total_runtime,
                 'download_results': download_results,
+                'enrichment_enabled': not args.skip_enrichment,
+                'enrichment_stats': aggregated_enrichment,
                 'data_quality_metrics': {
                     'success_rate': (successful_downloads / len(dates_to_download) * 100) if dates_to_download else 0,
                     'avg_records_per_date': (total_records_downloaded / successful_downloads) if successful_downloads > 0 else 0
@@ -646,6 +1041,13 @@ class FINRACollectorRunner:
             _logger.info("FINRA collector script completed successfully in %.2f seconds", total_runtime)
             _logger.info("Summary: %d/%d dates successful, %d total records stored",
                         successful_downloads, len(dates_to_download), total_records_stored)
+
+            if aggregated_enrichment:
+                _logger.info("Enrichment: %.1f%% float data, %.1f%% volume data, %.1f%% complete",
+                           aggregated_enrichment['float_success_rate'] * 100,
+                           aggregated_enrichment['volume_success_rate'] * 100,
+                           aggregated_enrichment['both_success_rate'] * 100)
+
             return 0 if successful_downloads > 0 else 1
 
         except KeyboardInterrupt:

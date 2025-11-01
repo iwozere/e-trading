@@ -4,214 +4,22 @@ Trading Service
 Orchestrates trading DB operations (bots, trades, positions, metrics)
 via the repository layer. Returns plain dicts/primitives.
 
-All operations use a single Unit-of-Work:
-    with _db.uow() as r:
-        ... r.<repo>
+All operations use a single Unit-of-Work and BaseDBService inheritance for
+error handling and transactions.
+
+Core functionality:
+- Bot management (CRUD, status, performance tracking)
+- Trade tracking (open/close trades, PnL calculations)
+- Position management (entry/exit fills, PnL tracking)
+- Metrics collection and analysis
 """
 
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
-from src.data.db.services.database_service import get_database_service
+from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.trading.services.bot_config_validator import validate_database_bot_record, BotConfigValidator
-
-# Resolve once per module to avoid repeated lookups.
-_db = get_database_service()
-
-# ---------- Bots ----------
-def upsert_bot(bot: Dict[str, Any]) -> Dict[str, Any]:
-    with _db.uow() as r:
-        row = r.bots.upsert_bot(bot)
-        return _bot_to_dict(row)
-
-def heartbeat(bot_id: str) -> None:
-    with _db.uow() as r:
-        r.bots.heartbeat(bot_id)
-
-def get_bot_by_id(bot_id: int) -> Optional[Dict[str, Any]]:
-    """Get a specific bot by ID."""
-    with _db.uow() as r:
-        from src.data.db.models.model_trading import BotInstance
-        bot = r.s.get(BotInstance, bot_id)
-        return _bot_to_dict(bot) if bot else None
-
-def get_enabled_bots(user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Get all enabled bots, optionally filtered by user."""
-    with _db.uow() as r:
-        from sqlalchemy import select
-        from src.data.db.models.model_trading import BotInstance
-
-        query = select(BotInstance).where(BotInstance.status != 'disabled')
-        if user_id:
-            query = query.where(BotInstance.user_id == user_id)
-
-        bots = r.s.execute(query).scalars().all()
-        return [_bot_to_dict(bot) for bot in bots]
-
-def get_bots_by_status(status: str, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Get bots by status, optionally filtered by user."""
-    with _db.uow() as r:
-        from sqlalchemy import select
-        from src.data.db.models.model_trading import BotInstance
-
-        query = select(BotInstance).where(BotInstance.status == status)
-        if user_id:
-            query = query.where(BotInstance.user_id == user_id)
-
-        bots = r.s.execute(query).scalars().all()
-        return [_bot_to_dict(bot) for bot in bots]
-
-def update_bot_status(bot_id: int, status: str, error_message: Optional[str] = None) -> bool:
-    """Update bot status and optionally increment error count."""
-    with _db.uow() as r:
-        from sqlalchemy import update
-        from src.data.db.models.model_trading import BotInstance
-
-        update_data = {"status": status, "updated_at": datetime.now()}
-
-        if status == "error" and error_message:
-            # Increment error count and store error in extra_metadata
-            bot = r.s.get(BotInstance, bot_id)
-            if bot:
-                error_count = (bot.error_count or 0) + 1
-                metadata = bot.extra_metadata or {}
-                metadata["last_error"] = error_message
-                metadata["last_error_time"] = datetime.now().isoformat()
-
-                update_data.update({
-                    "error_count": error_count,
-                    "extra_metadata": metadata
-                })
-
-        result = r.s.execute(
-            update(BotInstance)
-            .where(BotInstance.id == bot_id)
-            .values(**update_data)
-        )
-        return result.rowcount > 0
-
-def update_bot_performance(bot_id: int, current_balance: Optional[float] = None,
-                          total_pnl: Optional[float] = None) -> bool:
-    """Update bot performance metrics."""
-    with _db.uow() as r:
-        from sqlalchemy import update
-        from src.data.db.models.model_trading import BotInstance
-
-        update_data = {"updated_at": datetime.now()}
-
-        if current_balance is not None:
-            update_data["current_balance"] = current_balance
-        if total_pnl is not None:
-            update_data["total_pnl"] = total_pnl
-
-        result = r.s.execute(
-            update(BotInstance)
-            .where(BotInstance.id == bot_id)
-            .values(**update_data)
-        )
-        return result.rowcount > 0
-
-
-# ---------- Trades ----------
-def add_trade(trade: Dict[str, Any]) -> Dict[str, Any]:
-    with _db.uow() as r:
-        row = r.trades.add(trade)
-        return _trade_to_dict(row)
-
-def close_trade(trade_id: str, **fields) -> bool:
-    if not fields:
-        return False
-    with _db.uow() as r:
-        r.trades.close_trade(trade_id, **fields)
-        return True
-
-def get_open_trades(symbol: Optional[str] = None) -> List[Dict[str, Any]]:
-    with _db.uow() as r:
-        rows = r.trades.open_trades(symbol)
-        return [_trade_to_dict(t) for t in rows]
-
-def get_pnl_summary(bot_id: Optional[str] = None) -> Dict[str, Any]:
-    with _db.uow() as r:
-        agg = r.trades.pnl_summary(bot_id)
-        return {
-            "net_pnl": float(agg.net_pnl or 0),
-            "n_trades": int(agg.n_trades or 0),
-        }
-
-
-# ---------- Positions ----------
-def ensure_open_position(
-    *,
-    bot_id: str,
-    trade_type: str,
-    symbol: str,
-    direction: str,
-    opened_at: Optional[datetime] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    with _db.uow() as r:
-        row = r.positions.ensure_open(
-            bot_id=bot_id,
-            trade_type=trade_type,
-            symbol=symbol,
-            direction=direction,
-            opened_at=opened_at,
-            metadata=metadata,
-        )
-        return _position_to_dict(row)
-
-def apply_fill(
-    position_id: str,
-    *,
-    action: str,
-    qty: float,
-    price: float,
-    ts: Optional[datetime] = None,
-    close_when_flat: bool = True,
-) -> Dict[str, Any]:
-    with _db.uow() as r:
-        row = r.positions.apply_fill(
-            position_id=position_id,
-            action=action,
-            qty=qty,
-            price=price,
-            ts=ts,
-            close_when_flat=close_when_flat,
-        )
-        return _position_to_dict(row)
-
-def close_if_flat(position_id: str, ts: Optional[datetime] = None) -> Dict[str, Any]:
-    with _db.uow() as r:
-        row = r.positions.close_if_flat(position_id=position_id, ts=ts)
-        return _position_to_dict(row)
-
-def mark_closed(position_id: str, ts: Optional[datetime] = None) -> Dict[str, Any]:
-    with _db.uow() as r:
-        row = r.positions.mark_closed(position_id=position_id, ts=ts)
-        return _position_to_dict(row)
-
-def get_open_positions(
-    *,
-    bot_id: Optional[str] = None,
-    symbol: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    with _db.uow() as r:
-        rows = r.positions.open_positions(bot_id=bot_id, symbol=symbol)
-        return [_position_to_dict(p) for p in rows]
-
-
-# ---------- Metrics ----------
-def add_metric(metric: Dict[str, Any]) -> Dict[str, Any]:
-    with _db.uow() as r:
-        row = r.metrics.add(metric)
-        return _metric_to_dict(row)
-
-def latest_metrics(bot_id: str, limit: int = 20) -> List[Dict[str, Any]]:
-    with _db.uow() as r:
-        rows = r.metrics.latest_for_bot(bot_id, limit=limit)
-        return [_metric_to_dict(m) for m in rows]
-
 
 # ---------- DTO helpers ----------
 def _bot_to_dict(b) -> Dict[str, Any]:
@@ -290,47 +98,300 @@ def _metric_to_dict(m) -> Dict[str, Any]:
         "created_at": m.created_at,
     }
 
-# ---------- Configuration Validation ----------
-def validate_bot_configuration(bot_id: int) -> Tuple[bool, List[str], List[str]]:
-    """
-    Validate a bot's configuration from the database.
 
-    Args:
-        bot_id: Bot ID to validate
-
-    Returns:
-        Tuple of (is_valid, errors, warnings)
+class TradingService(BaseDBService):
     """
-    with _db.uow() as r:
+    Service layer for trading operations.
+    Provides high-level business logic for managing bots, trades,
+    positions and metrics.
+    """
+
+    def __init__(self):
+        """Initialize the trading service."""
+        super().__init__()
+
+    @with_uow
+    @handle_db_error
+    def upsert_bot(self, bot: Dict[str, Any]) -> Dict[str, Any]:
+        """Upsert a bot configuration."""
+        row = self.uow.bots.upsert_bot(bot)
+        return self._bot_to_dict(row)
+
+    @with_uow
+    @handle_db_error
+    def heartbeat(self, bot_id: str) -> None:
+        """Update bot heartbeat."""
+        self.uow.bots.heartbeat(bot_id)
+
+    @with_uow
+    @handle_db_error
+    def get_bot_by_id(self, bot_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific bot by ID."""
+        from src.data.db.models.model_trading import BotInstance
+        bot = self.uow.s.get(BotInstance, bot_id)
+        return self._bot_to_dict(bot) if bot else None
+
+    @with_uow
+    @handle_db_error
+    def get_enabled_bots(self, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get all enabled bots, optionally filtered by user."""
+        from sqlalchemy import select
         from src.data.db.models.model_trading import BotInstance
 
-        bot = r.s.get(BotInstance, bot_id)
+        query = select(BotInstance).where(BotInstance.status != 'disabled')
+        if user_id:
+            query = query.where(BotInstance.user_id == user_id)
+
+        bots = self.uow.s.execute(query).scalars().all()
+        return [self._bot_to_dict(bot) for bot in bots]
+
+    @with_uow
+    @handle_db_error
+    def get_bots_by_status(self, status: str, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get bots by status, optionally filtered by user."""
+        from sqlalchemy import select
+        from src.data.db.models.model_trading import BotInstance
+
+        query = select(BotInstance).where(BotInstance.status == status)
+        if user_id:
+            query = query.where(BotInstance.user_id == user_id)
+
+        bots = self.uow.s.execute(query).scalars().all()
+        return [self._bot_to_dict(bot) for bot in bots]
+
+    @with_uow
+    @handle_db_error
+    def update_bot_status(self, bot_id: int, status: str, error_message: Optional[str] = None) -> bool:
+        """Update bot status and optionally increment error count."""
+        from sqlalchemy import update
+        from src.data.db.models.model_trading import BotInstance
+
+        update_data = {"status": status, "updated_at": datetime.now()}
+
+        if status == "error" and error_message:
+            # Increment error count and store error in extra_metadata
+            bot = self.uow.s.get(BotInstance, bot_id)
+            if bot:
+                error_count = (bot.error_count or 0) + 1
+                metadata = bot.extra_metadata or {}
+                metadata["last_error"] = error_message
+                metadata["last_error_time"] = datetime.now().isoformat()
+
+                update_data.update({
+                    "error_count": error_count,
+                    "extra_metadata": metadata
+                })
+
+        result = self.uow.s.execute(
+            update(BotInstance)
+            .where(BotInstance.id == bot_id)
+            .values(**update_data)
+        )
+        return result.rowcount > 0
+
+    @with_uow
+    @handle_db_error
+    def update_bot_performance(self, bot_id: int, current_balance: Optional[float] = None,
+            total_pnl: Optional[float] = None) -> bool:
+        """Update bot performance metrics."""
+        from sqlalchemy import update
+        from src.data.db.models.model_trading import BotInstance
+
+        update_data = {"updated_at": datetime.now()}
+
+        if current_balance is not None:
+            update_data["current_balance"] = current_balance
+        if total_pnl is not None:
+            update_data["total_pnl"] = total_pnl
+
+        result = self.uow.s.execute(
+            update(BotInstance)
+            .where(BotInstance.id == bot_id)
+            .values(**update_data)
+        )
+        return result.rowcount > 0
+
+    @with_uow
+    @handle_db_error
+    def add_trade(self, trade: Dict[str, Any]) -> Dict[str, Any]:
+        """Add a new trade."""
+        row = self.uow.trades.add(trade)
+        return self._trade_to_dict(row)
+
+    @with_uow
+    @handle_db_error
+    def close_trade(self, trade_id: str, **fields) -> bool:
+        """Close a trade."""
+        if not fields:
+            return False
+        self.uow.trades.close_trade(trade_id, **fields)
+        return True
+
+    @with_uow
+    @handle_db_error
+    def get_open_trades(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get open trades, optionally filtered by symbol."""
+        rows = self.uow.trades.open_trades(symbol)
+        return [self._trade_to_dict(t) for t in rows]
+
+    @with_uow
+    @handle_db_error
+    def get_pnl_summary(self, bot_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get PnL summary, optionally filtered by bot."""
+        agg = self.uow.trades.pnl_summary(bot_id)
+        return {
+            "net_pnl": float(agg.net_pnl or 0),
+            "n_trades": int(agg.n_trades or 0),
+        }
+
+    @with_uow
+    @handle_db_error
+    def ensure_open_position(
+        self,
+        *,
+        bot_id: str,
+        trade_type: str,
+        symbol: str,
+        direction: str,
+        opened_at: Optional[datetime] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Ensure an open position exists."""
+        row = self.uow.positions.ensure_open(
+            bot_id=bot_id,
+            trade_type=trade_type,
+            symbol=symbol,
+            direction=direction,
+            opened_at=opened_at,
+            metadata=metadata,
+        )
+        return self._position_to_dict(row)
+
+    @with_uow
+    @handle_db_error
+    def apply_fill(
+        self,
+        position_id: str,
+        *,
+        action: str,
+        qty: float,
+        price: float,
+        ts: Optional[datetime] = None,
+        close_when_flat: bool = True,
+    ) -> Dict[str, Any]:
+        """Apply a fill to a position."""
+        row = self.uow.positions.apply_fill(
+            position_id=position_id,
+            action=action,
+            qty=qty,
+            price=price,
+            ts=ts,
+            close_when_flat=close_when_flat,
+        )
+        return self._position_to_dict(row)
+
+    @with_uow
+    @handle_db_error
+    def close_if_flat(self, position_id: str, ts: Optional[datetime] = None) -> Dict[str, Any]:
+        """Close a position if it's flat."""
+        row = self.uow.positions.close_if_flat(position_id=position_id, ts=ts)
+        return self._position_to_dict(row)
+
+    @with_uow
+    @handle_db_error
+    def mark_closed(self, position_id: str, ts: Optional[datetime] = None) -> Dict[str, Any]:
+        """Mark a position as closed."""
+        row = self.uow.positions.mark_closed(position_id=position_id, ts=ts)
+        return self._position_to_dict(row)
+
+    @with_uow
+    @handle_db_error
+    def get_open_positions(
+        self,
+        *,
+        bot_id: Optional[str] = None,
+        symbol: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Get open positions, optionally filtered by bot and symbol."""
+        rows = self.uow.positions.open_positions(bot_id=bot_id, symbol=symbol)
+        return [self._position_to_dict(p) for p in rows]
+
+    @with_uow
+    @handle_db_error
+    def add_metric(self, metric: Dict[str, Any]) -> Dict[str, Any]:
+        """Add a new metric."""
+        row = self.uow.metrics.add(metric)
+        return self._metric_to_dict(row)
+
+    @with_uow
+    @handle_db_error
+    def latest_metrics(self, bot_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get latest metrics for a bot."""
+        rows = self.uow.metrics.latest_for_bot(bot_id, limit=limit)
+        return [self._metric_to_dict(m) for m in rows]
+
+    @with_uow
+    @handle_db_error
+    def validate_bot_configuration(self, bot_id: int) -> Tuple[bool, List[str], List[str]]:
+        """
+        Validate a bot's configuration from the database.
+
+        Args:
+            bot_id: Bot ID to validate
+
+        Returns:
+            Tuple of (is_valid, errors, warnings)
+        """
+        from src.data.db.models.model_trading import BotInstance
+
+        bot = self.uow.s.get(BotInstance, bot_id)
         if not bot:
             return False, [f"Bot with ID {bot_id} not found"], []
 
-        bot_dict = _bot_to_dict(bot)
+        bot_dict = self._bot_to_dict(bot)
         return validate_database_bot_record(bot_dict)
 
-def validate_all_bot_configurations(user_id: Optional[int] = None) -> Dict[int, Tuple[bool, List[str], List[str]]]:
-    """
-    Validate configurations for all bots, optionally filtered by user.
+    @with_uow
+    @handle_db_error
+    def validate_all_bot_configurations(self, user_id: Optional[int] = None) -> Dict[int, Tuple[bool, List[str], List[str]]]:
+        """
+        Validate configurations for all bots, optionally filtered by user.
 
-    Args:
-        user_id: Optional user ID to filter bots
+        Args:
+            user_id: Optional user ID to filter bots
 
-    Returns:
-        Dictionary mapping bot_id to (is_valid, errors, warnings)
-    """
-    bots = get_enabled_bots(user_id)
-    results = {}
+        Returns:
+            Dictionary mapping bot_id to (is_valid, errors, warnings)
+        """
+        bots = self.get_enabled_bots(user_id)
+        results = {}
 
-    for bot in bots:
-        bot_id = bot["id"]
-        is_valid, errors, warnings = validate_database_bot_record(bot)
-        results[bot_id] = (is_valid, errors, warnings)
+        for bot in bots:
+            bot_id = bot["id"]
+            is_valid, errors, warnings = validate_database_bot_record(bot)
+            results[bot_id] = (is_valid, errors, warnings)
 
-    return results
+        return results
 
+    # Keep DTO helpers as instance methods for convenience
+    def _bot_to_dict(self, b) -> Dict[str, Any]:
+        return _bot_to_dict(b)
+
+    def _trade_to_dict(self, t) -> Dict[str, Any]:
+        return _trade_to_dict(t)
+
+    def _position_to_dict(self, p) -> Dict[str, Any]:
+        return _position_to_dict(p)
+
+    def _metric_to_dict(self, m) -> Dict[str, Any]:
+        return _metric_to_dict(m)
+
+
+# Global service instance
+trading_service = TradingService()
+
+
+# Configuration schema for bot configurations
 def get_bot_configuration_schema() -> Dict[str, Any]:
     """
     Get the expected configuration schema for bot configurations.
