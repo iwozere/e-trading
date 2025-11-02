@@ -34,10 +34,7 @@ class TradingBotService:
     def get_bot_instance(self, bot_id: str) -> Optional[Dict[str, Any]]:
         """Get bot instance by ID."""
         try:
-            # The trading service doesn't have a direct get_bot method,
-            # so we'll need to implement this or use the repository directly
-            # For now, return None to indicate not found
-            return None
+            return trading_service.get_bot_by_id(int(bot_id))
         except Exception as e:
             _logger.exception("Error getting bot instance %s:", bot_id)
             return None

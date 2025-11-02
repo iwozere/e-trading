@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import croniter
 
-from src.data.db.services.base_service import BaseDBService
+from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.models.model_jobs import (
     Schedule, ScheduleRun, RunStatus, JobType,
@@ -50,8 +50,8 @@ class JobsService(BaseDBService):
 
     # ---------- Schedule Operations ----------
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def create_schedule(self, repos, user_id: int, schedule_data: ScheduleCreate) -> Schedule:
         """Create a new schedule."""
         # Validate cron expression
@@ -76,12 +76,12 @@ class JobsService(BaseDBService):
         self._logger.info("Created schedule: %s for user %s", schedule.name, user_id)
         return schedule
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_schedule(self, repos, schedule_id: int) -> Optional[Schedule]:
         """Get a schedule by ID."""
         return repos.jobs.get_schedule(schedule_id)
 
-    @BaseDBService.with_uow
+    @with_uow
     def list_schedules(
         self,
         repos,
@@ -94,8 +94,8 @@ class JobsService(BaseDBService):
         """List schedules with optional filtering."""
         return repos.jobs.list_schedules(user_id, job_type, enabled, limit, offset)
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def update_schedule(self, repos, schedule_id: int, update_data: ScheduleUpdate) -> Optional[Schedule]:
         """Update a schedule."""
         # Prepare update dictionary (only include non-None values)
@@ -116,8 +116,8 @@ class JobsService(BaseDBService):
 
         return schedule
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def delete_schedule(self, repos, schedule_id: int) -> bool:
         """Delete a schedule."""
         success = repos.jobs.delete_schedule(schedule_id)
@@ -125,8 +125,8 @@ class JobsService(BaseDBService):
             self._logger.info("Deleted schedule ID: %s", schedule_id)
         return success
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def trigger_schedule(self, repos, schedule_id: int) -> Optional[ScheduleRun]:
         """Manually trigger a schedule to create a run."""
         schedule = repos.jobs.get_schedule(schedule_id)
@@ -152,13 +152,13 @@ class JobsService(BaseDBService):
 
         return self.create_run(schedule.user_id, run_data)
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_pending_schedules(self, repos) -> List[Schedule]:
         """Get schedules that are due for execution."""
         return repos.jobs.get_pending_schedules(datetime.now(timezone.utc))
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def update_schedule_next_run(self, repos, schedule_id: int) -> bool:
         """Update the next run time for a schedule based on its cron expression."""
         schedule = repos.jobs.get_schedule(schedule_id)
@@ -170,8 +170,8 @@ class JobsService(BaseDBService):
 
     # ---------- Run Operations ----------
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def create_run(self, repos, user_id: int, run_data: ScheduleRunCreate) -> ScheduleRun:
         """Create a new run."""
         # Prepare run data
@@ -187,12 +187,12 @@ class JobsService(BaseDBService):
         self._logger.info("Created run: %s (%s:%s)", run.id, run.job_type, run.job_id)
         return run
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_run(self, repos, run_id: int) -> Optional[ScheduleRun]:
         """Get a run by ID."""
         return repos.jobs.get_run(run_id)
 
-    @BaseDBService.with_uow
+    @with_uow
     def list_runs(
         self,
         repos,
@@ -209,8 +209,8 @@ class JobsService(BaseDBService):
             user_id, job_type, status, limit, offset, order_by, order_desc
         )
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def update_run(self, repos, run_id: int, update_data: ScheduleRunUpdate) -> Optional[ScheduleRun]:
         """Update a run."""
         # Prepare update dictionary (only include non-None values)
@@ -228,8 +228,8 @@ class JobsService(BaseDBService):
 
         return run
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def claim_run(self, repos, run_id: int, worker_id: str) -> Optional[ScheduleRun]:
         """Atomically claim a run for execution by a worker."""
         run = repos.jobs.claim_run(run_id, worker_id)
@@ -237,12 +237,12 @@ class JobsService(BaseDBService):
             self._logger.info("Claimed run: %s by worker: %s", run.id, worker_id)
         return run
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_pending_runs(self, repos, job_type: Optional[JobType] = None, limit: int = 10) -> List[ScheduleRun]:
         """Get pending runs that can be claimed by workers."""
         return repos.jobs.get_pending_runs(job_type, limit)
 
-    @BaseDBService.with_uow
+    @with_uow
     def cancel_run(self, repos, run_id: int) -> bool:
         """Cancel a pending run."""
         run = self.get_run(run_id)
@@ -257,7 +257,7 @@ class JobsService(BaseDBService):
         updated_run = self.update_run(run_id, update_data)
         return updated_run is not None
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_run_statistics(
         self,
         repos,
@@ -268,8 +268,8 @@ class JobsService(BaseDBService):
         """Get run statistics for a time period."""
         return repos.jobs.get_run_statistics(user_id, job_type, days)
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def cleanup_old_runs(self, repos, days_to_keep: int = 90) -> int:
         """Clean up old completed and failed runs."""
         deleted_count = repos.jobs.cleanup_old_runs(days_to_keep)
@@ -340,7 +340,7 @@ class JobsService(BaseDBService):
 
         raise ValueError(f"Invalid screener target: {target}")
 
-    @BaseDBService.with_uow
+    @with_uow
     def create_screener_run(
         self,
         repos,
@@ -386,7 +386,7 @@ class JobsService(BaseDBService):
 
         return self.create_run(repos, user_id, run_data)
 
-    @BaseDBService.with_uow
+    @with_uow
     def create_report_run(
         self,
         repos,

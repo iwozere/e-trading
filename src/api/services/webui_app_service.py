@@ -84,7 +84,7 @@ class WebUIAppService:
                 _logger.info("Users already exist, skipping default user creation")
                 return
 
-            # Create default users using the database service
+            # Create default users using the users service
             default_users = [
                 {
                     "email": "admin@trading-system.local",
@@ -103,21 +103,13 @@ class WebUIAppService:
                 }
             ]
 
-            # Use the database service to create users
-            db_service = get_database_service()
-            with db_service.uow() as r:
-                from src.data.db.models.model_users import User
-
-                for user_data in default_users:
-                    # Create user using the repository
-                    user = User(
-                        email=user_data["email"],
-                        role=user_data["role"],
-                        is_active=user_data["is_active"]
-                    )
-                    r.s.add(user)
-
-                r.s.commit()
+            # Use users service to create users
+            for user_data in default_users:
+                users_service.create_user(
+                    email=user_data["email"],
+                    role=user_data["role"],
+                    is_active=user_data["is_active"]
+                )
 
             _logger.info("Created default users: admin, trader, viewer")
 
@@ -141,33 +133,23 @@ class WebUIAppService:
     def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """Authenticate user with username/email and password."""
         try:
-            # Use the database service to authenticate
-            db_service = get_database_service()
-            with db_service.uow() as r:
-                from src.data.db.models.model_users import User
+            # Try to authenticate with email first
+            if "@" in username:
+                result = users_service.authenticate_user_by_email(username, password)
+            else:
+                # Try with username, first directly
+                result = users_service.authenticate_user_by_username(username, password)
 
-                # Try to find user by email first - check if username is already an email
-                if "@" in username:
-                    user = r.s.query(User).filter(User.email == username).first()
-                else:
-                    # Try to find by username part of email (before @)
-                    user = r.s.query(User).filter(User.email.like(f"{username}@%")).first()
+                # If not found, try with default domain
+                if not result:
+                    email = f"{username}@trading-system.local"
+                    result = users_service.authenticate_user_by_email(email, password)
 
-                    # If not found, try the default trading-system.local domain
-                    if not user:
-                        user = r.s.query(User).filter(User.email == f"{username}@trading-system.local").first()
+            return result
 
-                if not user or not user.is_active:
-                    return None
-
-                if not user.verify_password(password):
-                    return None
-
-                # Update last login
-                user.last_login = datetime.now(timezone.utc)
-                r.s.commit()
-
-                return user.to_dict()
+        except Exception as e:
+            _logger.exception("Error authenticating user %s:", username)
+            return None
 
         except Exception as e:
             _logger.exception("Error authenticating user %s:", username)

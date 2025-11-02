@@ -60,7 +60,10 @@ Daily 10:00 AM: run_daily_deep_scan.py
 WEEKLY (Monday 8:00 AM):
 └── run_weekly_screener.py → Load universe from FMP (market cap filtering)
 
-BI-WEEKLY (1st & 15th, 9:00 AM):  
+WEEKLY (Monday 8:30 AM):
+└── run_short_data.py → Load short interest data for the current date.
+
+***--> NOT ANYMORE!!! BI-WEEKLY (1st & 15th, 9:00 AM):  
 └── run_finra_collector.py → Download FINRA short interest data
 
 DAILY (9:30 AM):

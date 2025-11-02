@@ -12,11 +12,12 @@ from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, BigInteger, JSON,
     CheckConstraint, UniqueConstraint, Index, ForeignKey, func
 )
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from src.data.db.core.base import Base
+from src.data.db.core.json_types import JsonType
 from src.data.db.models.model_system_health import SystemHealthStatus
 # Logger will be set up by importing modules as needed
 
@@ -58,8 +59,8 @@ class Message(Base):
     channels = Column(ARRAY(String), nullable=False)
     recipient_id = Column(String(100), nullable=True, index=True)
     template_name = Column(String(100), nullable=True)
-    content = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=False)
-    message_metadata = Column("metadata", JSON().with_variant(JSONB(), 'postgresql'), nullable=True)
+    content = Column(JsonType(), nullable=False)
+    message_metadata = Column("metadata", JsonType(), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)
     scheduled_for = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)
     status = Column(String(20), nullable=False, default=MessageStatus.PENDING.value, index=True)
@@ -185,7 +186,7 @@ class ChannelConfig(Base):
     id = Column(BigInteger, primary_key=True, index=True)
     channel = Column(String(50), nullable=False, unique=True)
     enabled = Column(Boolean, nullable=False, default=True, index=True)
-    config = Column(JSON().with_variant(JSONB(), 'postgresql'), nullable=False)
+    config = Column(JsonType(), nullable=False)
     rate_limit_per_minute = Column(Integer, nullable=False, default=60)
     max_retries = Column(Integer, nullable=False, default=3)
     timeout_seconds = Column(Integer, nullable=False, default=30)

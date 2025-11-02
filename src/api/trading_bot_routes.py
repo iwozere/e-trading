@@ -139,7 +139,7 @@ async def get_trading_bots(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/bots/{bot_id}", response_model=BotResponse)
-async def get_trading_bot(bot_id: int, current_user: User = Depends(get_current_user)):
+async def get_trading_bot(bot_id: str, current_user: User = Depends(get_current_user)):
     """
     Get a specific trading bot by ID.
 
@@ -253,7 +253,7 @@ async def create_trading_bot(
 
 @router.put("/bots/{bot_id}", response_model=BotResponse)
 async def update_trading_bot(
-    bot_id: int,
+    bot_id: str,
     config: BotConfigRequest,
     current_user: User = Depends(get_current_user)
 ):
@@ -344,7 +344,7 @@ async def update_trading_bot(
 
 @router.put("/bots/{bot_id}/status", response_model=BotResponse)
 async def update_bot_status(
-    bot_id: int,
+    bot_id: str,
     status_request: BotStatusRequest,
     current_user: User = Depends(get_current_user)
 ):
@@ -424,7 +424,7 @@ async def update_bot_status(
 
 
 @router.delete("/bots/{bot_id}", response_model=BotResponse)
-async def delete_trading_bot(bot_id: int, current_user: User = Depends(get_current_user)):
+async def delete_trading_bot(bot_id: str, current_user: User = Depends(get_current_user)):
     """
     Delete a trading bot.
 
@@ -552,7 +552,7 @@ async def get_configuration_options():
 
 @router.post("/bots/{bot_id}/validate", response_model=ValidationResponse)
 async def validate_bot_configuration(
-    bot_id: int,
+    bot_id: str,
     config: BotConfigRequest,
     current_user: User = Depends(get_current_user)
 ):

@@ -8,7 +8,7 @@ alert evaluator and provides a clean API for telegram and other consumers.
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from src.data.db.services.base_service import BaseDBService
+from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.common.alerts.alert_evaluator import AlertEvaluator, AlertConfig, AlertEvaluationResult
 from src.data.db.services.jobs_service import JobsService
 from src.data.data_manager import DataManager
@@ -54,7 +54,7 @@ class AlertsService(BaseDBService):
 
         self._logger.info("AlertsService initialized successfully")
 
-    @BaseDBService.handle_db_error
+    @handle_db_error
     async def create_alert(self, user_id: int, alert_config: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new alert."""
         # Validate the alert configuration
@@ -86,7 +86,7 @@ class AlertsService(BaseDBService):
             "alert_config": alert_config
         }
 
-    @BaseDBService.handle_db_error
+    @handle_db_error
     async def evaluate_user_alerts(self, user_id: int) -> Dict[str, Any]:
         """Evaluate all alerts for a specific user."""
         try:
@@ -102,7 +102,7 @@ class AlertsService(BaseDBService):
                 "error": str(e)
             }
 
-    @BaseDBService.handle_db_error
+    @handle_db_error
     async def evaluate_all_alerts(self, limit: Optional[int] = None) -> Dict[str, Any]:
         """Evaluate all active alerts across all users."""
         try:
@@ -118,8 +118,8 @@ class AlertsService(BaseDBService):
                 "error": str(e)
             }
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def get_user_alerts(self, repos, user_id: int, active_only: bool = True) -> List[Dict[str, Any]]:
         """Get all alerts for a user."""
         jobs = repos.jobs.get_user_jobs(
@@ -143,7 +143,7 @@ class AlertsService(BaseDBService):
 
         return alerts
 
-    @BaseDBService.handle_db_error
+    @handle_db_error
     def update_alert(self, job_id: int, updates: Dict[str, Any]) -> bool:
         """Update an alert."""
         try:
@@ -152,7 +152,7 @@ class AlertsService(BaseDBService):
             self._logger.exception("Error updating alert %s", job_id)
             return False
 
-    @BaseDBService.handle_db_error
+    @handle_db_error
     def delete_alert(self, job_id: int) -> bool:
         """Delete an alert."""
         try:

@@ -22,7 +22,7 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parents[2]
 sys.path.append(str(project_root))
 
-from src.data.db.services import telegram_service as db
+from src.data.db.services import telegram_service, users_service
 from src.notification.logger import setup_logger
 
 logger = setup_logger("create_admin")
@@ -44,11 +44,8 @@ def create_admin(telegram_user_id: str, email: str):
         bool: True if successful, False otherwise
     """
     try:
-        # Initialize database
-        db.init_db()
-
         # Check if user already exists
-        existing_status = db.get_user_status(telegram_user_id)
+        existing_status = telegram_service.get_user_status(telegram_user_id)
         if existing_status:
             logger.info("User %s already exists. Current status: %s", telegram_user_id, existing_status)
 
@@ -60,19 +57,18 @@ def create_admin(telegram_user_id: str, email: str):
             # If user exists but is not admin, update to admin
             logger.info("Updating existing user %s to admin role.", telegram_user_id)
 
-            # Generate new verification code and set as verified and approved
+            # Generate verification code
             code = generate_code()
             sent_time = int(time.time())
 
-            # Update user with admin privileges
-            db.set_user_email(telegram_user_id, email, code, sent_time, is_admin=True)
-
-            # Manually verify and approve the user
-            conn = db.sqlite3.connect(db.DB_PATH)
-            c = conn.cursor()
-            c.execute("UPDATE users SET verified=1, approved=1, is_admin=1 WHERE telegram_user_id=?", (telegram_user_id,))
-            conn.commit()
-            conn.close()
+            # Update user info and set as admin
+            users_service.update_user(
+                telegram_user_id=telegram_user_id,
+                email=email,
+                is_admin=True,
+                is_verified=True,
+                is_approved=True
+            )
 
             logger.info("Successfully updated user %s to admin role.", telegram_user_id)
             return True
@@ -80,23 +76,16 @@ def create_admin(telegram_user_id: str, email: str):
         # Create new admin user
         logger.info("Creating new admin user: %s with email: %s", telegram_user_id, email)
 
-        # Generate verification code
-        code = generate_code()
-        sent_time = int(time.time())
-
         # Create user with admin privileges
-        db.set_user_email(telegram_user_id, email, code, sent_time, is_admin=True)
-
-        # Manually verify and approve the user
-        conn = db.sqlite3.connect(db.DB_PATH)
-        c = conn.cursor()
-        c.execute("UPDATE users SET verified=1, approved=1, is_admin=1 WHERE telegram_user_id=?", (telegram_user_id,))
-        conn.commit()
-        conn.close()
+        users_service.create_user(
+            telegram_user_id=telegram_user_id,
+            email=email,
+            is_admin=True,
+            is_verified=True,
+            is_approved=True
+        )
 
         logger.info("Successfully created admin user %s with email %s", telegram_user_id, email)
-        logger.info("Verification code: %s (not needed since user is auto-verified)", code)
-
         return True
 
     except Exception as e:

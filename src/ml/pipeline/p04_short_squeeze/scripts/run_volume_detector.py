@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Volume Detector Script for Short Squeeze Detection Pipeline
+Volume Detector Script for Short Squeeze Detection Pipeline (using yfinance)
 
 This script runs daily to analyze volume patterns and identify potential
 short squeeze candidates using volume spikes and momentum indicators.
+
+This version uses yfinance for data fetching to avoid FMP API rate limits.
 
 Usage:
     python run_volume_detector.py [options]
@@ -44,12 +46,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.db.core.database import session_scope
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.ml.pipeline.p04_short_squeeze.config.config_manager import ConfigManager
 from src.ml.pipeline.p04_short_squeeze.core.universe_loader import create_universe_loader
-from src.ml.pipeline.p04_short_squeeze.core.volume_squeeze_detector import create_volume_squeeze_detector
+from src.ml.pipeline.p04_short_squeeze.core.volume_squeeze_detector_yf import create_volume_squeeze_detector_yf
 
 _logger = setup_logger(__name__)
 
@@ -118,7 +119,6 @@ class VolumeDetectorRunner:
     def __init__(self):
         """Initialize the volume detector runner."""
         self.config_manager: Optional[ConfigManager] = None
-        self.fmp_downloader: Optional[FMPDataDownloader] = None
         self.start_time: Optional[datetime] = None
         self.run_id: Optional[str] = None
         self.progress_tracker: Optional[ProgressTracker] = None
@@ -263,17 +263,9 @@ class VolumeDetectorRunner:
             True if all providers initialized successfully, False otherwise
         """
         try:
-            _logger.info("Initializing data providers...")
-
-            # Initialize FMP downloader
-            self.fmp_downloader = FMPDataDownloader()
-
-            # Test connection
-            if not self.fmp_downloader.test_connection():
-                _logger.error("FMP API connection test failed")
-                return False
-
-            _logger.info("FMP API connection successful")
+            _logger.info("Initializing data providers (using yfinance)...")
+            # No initialization needed for yfinance
+            _logger.info("yfinance ready for data fetching")
             return True
 
         except Exception as e:
@@ -313,30 +305,33 @@ class VolumeDetectorRunner:
             if universe_source == 'database':
                 _logger.info("Loading universe from database (latest screener run)...")
 
-                with session_scope() as session:
-                    service = ShortSqueezeService(session)
-                    # Get top candidates from latest screener run as universe
-                    candidates = service.get_top_candidates_by_screener_score(limit=5000)  # Large limit to get full universe
-                    universe = [c['ticker'] for c in candidates]
+                service = ShortSqueezeService()
+                # Get top candidates from latest screener run as universe
+                candidates = service.get_top_candidates_by_screener_score(limit=5000)  # Large limit to get full universe
+                universe = [c['ticker'] for c in candidates]
 
                 if not universe:
-                    _logger.warning("No universe found in database, falling back to FMP")
+                    _logger.warning("No universe found in database, using default universe")
                     universe_source = 'fmp'
                 else:
                     _logger.info("Loaded %d stocks from database universe", len(universe))
 
             if universe_source == 'fmp':
-                _logger.info("Loading fresh universe from FMP...")
+                _logger.warning("FMP universe loading not available with yfinance mode")
+                _logger.info("Using default S&P 500 universe as fallback")
 
-                config = self.config_manager.get_universe_config() if hasattr(self.config_manager, 'get_universe_config') else None
-                universe_loader = create_universe_loader(self.fmp_downloader, config)
-                universe = universe_loader.load_universe()
-
-                if not universe:
-                    _logger.error("Failed to load universe from FMP")
+                # Use a default universe (S&P 500 as example)
+                # You could also read from a file or use another source
+                import pandas as pd
+                try:
+                    # Try to get S&P 500 tickers from Wikipedia
+                    sp500_url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+                    sp500_table = pd.read_html(sp500_url)
+                    universe = sp500_table[0]['Symbol'].tolist()
+                    _logger.info("Loaded %d stocks from S&P 500 list", len(universe))
+                except Exception as e:
+                    _logger.error("Failed to load default universe: %s", e)
                     return None
-
-                _logger.info("Loaded %d stocks from FMP universe", len(universe))
 
             # Apply max universe limit if specified
             if max_universe and len(universe) > max_universe:
@@ -382,7 +377,7 @@ class VolumeDetectorRunner:
                 config.batch_size = batch_size
                 _logger.info("Using custom batch size: %d", batch_size)
 
-            volume_detector = create_volume_squeeze_detector(self.fmp_downloader)
+            volume_detector = create_volume_squeeze_detector_yf()
 
             # Setup progress tracking if enabled
             if enable_progress:
@@ -473,32 +468,30 @@ class VolumeDetectorRunner:
         """
         try:
             from src.data.db.core.database import session_scope
-            from src.data.db.services.short_squeeze_service import ShortSqueezeService
+            snapshots_data = []
 
-            stored_count = 0
+            # Prepare all snapshot data first
+            for candidate, indicators in results:
+                # Convert to screener snapshot format (ensure Python native types)
+                snapshot_data = {
+                    'ticker': candidate.ticker,
+                    'run_date': analysis_date,
+                    'screener_score': float(indicators.combined_score),  # Convert numpy to Python float
+                    'raw_payload': {
+                        'source': 'volume_detector',
+                        'volume_score': float(indicators.volume_score),
+                        'momentum_score': float(indicators.momentum_score),
+                        'squeeze_probability': str(indicators.squeeze_probability),
+                        'analysis_date': analysis_date.isoformat()
+                    },
+                    'data_quality': 1.0  # High quality from volume analysis
+                }
+                snapshots_data.append(snapshot_data)
 
-            with session_scope() as session:
-                service = ShortSqueezeService(session)
-
-                for candidate, indicators in results:
-                    # Convert to screener snapshot format (ensure Python native types)
-                    snapshot_data = {
-                        'ticker': candidate.ticker,
-                        'run_date': analysis_date,
-                        'screener_score': float(indicators.combined_score),  # Convert numpy to Python float
-                        'raw_payload': {
-                            'source': 'volume_detector',
-                            'volume_score': float(indicators.volume_score),
-                            'momentum_score': float(indicators.momentum_score),
-                            'squeeze_probability': str(indicators.squeeze_probability),
-                            'analysis_date': analysis_date.isoformat()
-                        },
-                        'data_quality': 1.0  # High quality from volume analysis
-                    }
-
-                    # Store as screener snapshot
-                    service.save_screener_results([snapshot_data], analysis_date)
-                    stored_count += 1
+            # Store all snapshots using service
+            if snapshots_data:
+                service = ShortSqueezeService()
+                stored_count = service.save_screener_results(snapshots_data, analysis_date)
 
             return stored_count
 

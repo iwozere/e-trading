@@ -12,19 +12,17 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, BigInteger,
-    CheckConstraint, UniqueConstraint, Index, func, JSON
+    CheckConstraint, UniqueConstraint, Index, func
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PostgresUUID
+from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from src.data.db.core.json_types import JsonType
 from sqlalchemy.dialects import postgresql, sqlite
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from src.data.db.core.base import Base
 
 
-# Database-agnostic JSON type
-def get_json_type():
-    """Get appropriate JSON type based on database dialect."""
-    return JSON().with_variant(postgresql.JSONB(), 'postgresql').with_variant(sqlite.JSON(), 'sqlite')
+## For PostgreSQL we prefer the native JSONB type
 
 
 
@@ -37,6 +35,7 @@ class JobType(str, Enum):
     NOTIFICATION = "notification"
     DATA_PROCESSING = "data_processing"
     BACKUP = "backup"
+    REPORT = "report"
 
 
 class RunStatus(str, Enum):
@@ -58,7 +57,7 @@ class Schedule(Base):
     name = Column(String(255), nullable=False)
     job_type = Column(String(50), nullable=False)
     target = Column(String(255), nullable=False)
-    task_params = Column(get_json_type(), nullable=False, default={})
+    task_params = Column(JsonType(), nullable=False, default={})
     cron = Column(String(100), nullable=False)
     enabled = Column(Boolean, nullable=False, default=True, index=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
@@ -68,9 +67,10 @@ class Schedule(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup')", name="check_job_type"),
+        # Use an explicit unique constraint for user_id + name
         UniqueConstraint("user_id", "name", name="unique_user_schedule_name"),
         Index("idx_schedules_enabled", "enabled"),
-        Index("idx_schedules_next_run_at", "next_run_at", postgresql_where="enabled = true"),
+        Index("idx_schedules_next_run_at", "next_run_at"),
     )
 
     def __repr__(self):
@@ -85,19 +85,19 @@ class ScheduleRun(Base):
     id = Column(Integer, primary_key=True, index=True)
     job_type = Column(Text, nullable=False)
     job_id = Column(BigInteger, nullable=True)
-    user_id = Column(BigInteger, nullable=True, index=True)
-    status = Column(Text, nullable=True, index=True)
-    scheduled_for = Column(DateTime(timezone=True), nullable=True, index=True)
+    user_id = Column(BigInteger, nullable=True)
+    status = Column(Text, nullable=True)
+    scheduled_for = Column(DateTime(timezone=True), nullable=True)
     enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
-    job_snapshot = Column(get_json_type(), nullable=True)
-    result = Column(get_json_type(), nullable=True)
+    job_snapshot = Column(JsonType(), nullable=True)
+    result = Column(JsonType(), nullable=True)
     error = Column(Text, nullable=True)
-    worker_id = Column(String(255), nullable=True)
 
-    # Constraints
+    # Constraints - using Index instead of UniqueConstraint for better SQLite compatibility
     __table_args__ = (
+        # Unique constraint on job_type + job_id + scheduled_for
         UniqueConstraint("job_type", "job_id", "scheduled_for", name="ux_runs_job_scheduled_for"),
     )
 
@@ -165,12 +165,11 @@ class ScheduleRunUpdate(BaseModel):
     finished_at: Optional[datetime] = None
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
-    worker_id: Optional[str] = None
 
 
 class ScheduleRunResponse(BaseModel):
     """Pydantic model for run API responses."""
-    run_id: UUID
+    id: int
     job_type: JobType
     job_id: Optional[int]
     user_id: Optional[int]
@@ -182,7 +181,6 @@ class ScheduleRunResponse(BaseModel):
     job_snapshot: Optional[Dict[str, Any]]
     result: Optional[Dict[str, Any]]
     error: Optional[str]
-    worker_id: Optional[str]
     model_config = ConfigDict(from_attributes=True)
 
 class ReportRequest(BaseModel):

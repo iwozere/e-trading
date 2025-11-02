@@ -1,7 +1,7 @@
 # model_users.py  (patched)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, DateTime, ForeignKey, text, UniqueConstraint, Index, CheckConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from src.data.db.core.json_types import JsonType
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -79,7 +79,7 @@ class AuthIdentity(Base):
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     external_id: Mapped[str] = mapped_column(String(255), nullable=False)
     # IMPORTANT: attribute renamed; keep DB column name as "metadata"
-    identity_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+    identity_metadata: Mapped[dict | None] = mapped_column("metadata", JsonType, nullable=True)
     created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
 
     __table_args__ = (

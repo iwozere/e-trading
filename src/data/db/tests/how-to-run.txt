@@ -1,3 +1,54 @@
+Alembic migrations (initial setup)
+
+Option A: Use existing test harness (no Alembic needed)
+- Tests create a temporary schema inside the DB pointed to by config.donotshare.DB_URL
+- They create and drop tables within that schema automatically
+- Production data is never touched
+
+Option B: Use a separate TEST database with Alembic (recommended for local dev)
+1) Point to a SAFE test database URL (never production):
+	 - Windows PowerShell examples:
+		 $env:ALEMBIC_DB_URL = "postgresql://user:pass@localhost/e_trading_test"
+		 $env:DATABASE_URL   = $env:ALEMBIC_DB_URL  # optional, used by app code
+
+2) Create the schema via Alembic:
+	 - Create initial revision (already added as 0001_initial.py). If you need to regenerate:
+		 alembic revision --autogenerate -m "initial"
+	 - Apply migrations:
+		 alembic upgrade head
+
+3) Run tests against the TEST database (ensure DB_URL points to test):
+	 - Either update config/donotshare/donotshare.py DB_URL to the test DB
+	 - Or set at runtime:
+		 $env:DATABASE_URL = $env:ALEMBIC_DB_URL
+
+
+	Repo-layer tests (create-and-drop TEST database automatically)
+	------------------------------------------------------------
+	- Location: src/data/db/tests/repos
+	- Behavior: Tests create a brand new Postgres database at session start, run Alembic migrations, and DROP the database at the end (WITH FORCE). Each test runs in a transaction and is rolled back.
+	- Safety: NEVER touches production DB or donotshare DB_URL.
+
+	Requirements (any one of the following):
+	1) Provide admin URL:
+	   - $env:PG_ADMIN_URL = "postgresql+psycopg2://user:pass@localhost:5432/postgres"
+	2) Or set POSTGRES_* so we can build an admin URL:
+	   - $env:POSTGRES_USER = "etrading"; $env:POSTGRES_PASSWORD = "etrading"; $env:POSTGRES_HOST = "localhost"; $env:POSTGRES_PORT = "5432"
+	3) Or provide ALEMBIC_DB_URL; we derive admin URL by switching its database to 'postgres'.
+
+	Run:
+		.\.venv\Scripts\Activate.ps1; pytest -q src/data/db/tests/repos
+
+
+Virtualenv
+----------
+Windows PowerShell:
+	.\.venv\Scripts\Activate.ps1
+
+
+
+python -m pytest src/data/db/tests -v
+
 python -m pytest backend/tests -v
 
 pytest -vv src/web_ui/backend/tests

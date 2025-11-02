@@ -19,7 +19,7 @@ from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.models.model_notification import (
     Message, MessageDeliveryStatus, MessageStatus
 )
-from src.data.db.services.base_service import BaseDBService
+from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.notification.channels.base import (
     NotificationChannel, DeliveryResult, ChannelHealth, MessageContent,
     DeliveryStatus, ChannelHealthStatus
@@ -36,8 +36,8 @@ class NotificationService(BaseDBService):
         """Initialize the service."""
         super().__init__(db_service)
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def create_message(self, repos, message_data: Dict[str, Any]) -> Message:
         """Create a new notification message."""
         # Validate required fields
@@ -78,12 +78,12 @@ class NotificationService(BaseDBService):
         self._logger.info("Created message %s with %d delivery channels", message.id, len(message_data['channels']))
         return message
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_message(self, repos, message_id: int) -> Optional[Message]:
         """Get a message by ID."""
         return repos.notifications.get_message(message_id)
 
-    @BaseDBService.with_uow
+    @with_uow
     def list_messages(
         self,
         repos,
@@ -121,8 +121,8 @@ class NotificationService(BaseDBService):
             offset=offset
         )
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def update_message_status(self, repos, message_id: int, status: str, error_message: Optional[str] = None) -> Optional[Message]:
         """Update message status."""
         update_data = {
@@ -139,13 +139,13 @@ class NotificationService(BaseDBService):
 
         return message
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_delivery_status(self, repos, message_id: int) -> List[MessageDeliveryStatus]:
         """Get delivery status for all channels of a message."""
         return repos.notifications.get_delivery_statuses_by_message(message_id)
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def update_delivery_status(
         self,
         repos,
@@ -179,13 +179,13 @@ class NotificationService(BaseDBService):
 
         return delivery_status
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_channel_health(self, repos) -> List[ChannelHealth]:
         """Get health status for all channels."""
         return repos.notifications.list_channel_health()
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def update_channel_health(self, repos, channel: str, status: str, error_message: Optional[str] = None) -> ChannelHealth:
         """Update channel health status."""
         health_data = {
@@ -199,32 +199,32 @@ class NotificationService(BaseDBService):
         self._logger.info("Updated channel health for %s: %s", channel, status)
         return health
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_delivery_statistics(self, repos, channel: Optional[str] = None, days: int = 30) -> Dict[str, Any]:
         """Get delivery statistics."""
         return repos.notifications.get_delivery_statistics(channel=channel, days=days)
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def cleanup_old_messages(self, repos, days_to_keep: int = 30) -> int:
         """Clean up old delivered messages."""
         deleted_count = repos.notifications.cleanup_old_messages(days_to_keep)
         self._logger.info("Cleaned up %d old messages", deleted_count)
         return deleted_count
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_pending_messages(self, repos, limit: int = 100) -> List[Message]:
         """Get pending messages ready for processing."""
         current_time = datetime.now(timezone.utc)
         return repos.notifications.get_pending_messages(current_time, limit=limit)
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_failed_messages_for_retry(self, repos, limit: int = 50) -> List[Message]:
         """Get failed messages that can be retried."""
         current_time = datetime.now(timezone.utc)
         return repos.notifications.get_failed_messages_for_retry(current_time, limit=limit)
 
-    @BaseDBService.with_uow
+    @with_uow
     def check_rate_limit(self, repos, user_id: str, channel: str) -> bool:
         """Check if user is within rate limits for a channel."""
         # Default rate limit configuration

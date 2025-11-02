@@ -10,9 +10,12 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Text, Numeric, Boolean, ForeignKey, func, Index
+    Column, Integer, String, DateTime, Text, Numeric, Boolean, ForeignKey, func, Index,
+    event
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import IntegrityError
+from src.data.db.core.json_types import JsonType
 from sqlalchemy.orm import relationship
 
 from src.data.db.core.base import Base
@@ -32,11 +35,16 @@ class BotInstance(Base):
     error_count = Column(Integer, nullable=True)
     current_balance = Column(Numeric(20, 8), nullable=True)
     total_pnl = Column(Numeric(20, 8), nullable=True)
-    extra_metadata = Column(JSONB, nullable=True)
+    extra_metadata = Column(JsonType(), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
     updated_at = Column(DateTime, nullable=True)
-    config = Column(JSONB, nullable=False)
+    config = Column(JsonType(), nullable=False, info={"required": True})
     description = Column(Text, nullable=True)
+
+    # Relationships
+    trades = relationship("Trade", back_populates="bot", cascade="all, delete-orphan")
+    positions = relationship("Position", back_populates="bot", cascade="all, delete-orphan")
+    performance_metrics = relationship("PerformanceMetric", back_populates="bot", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<BotInstance(id={self.id}, type='{self.type}', status='{self.status}')>"
@@ -73,14 +81,14 @@ class Trade(Base):
     pnl_percentage = Column(Numeric(10, 4), nullable=True)
     exit_reason = Column(String(100), nullable=True)
     status = Column(String(20), nullable=False)
-    extra_metadata = Column(JSONB, nullable=True)
+    extra_metadata = Column(JsonType(), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
     updated_at = Column(DateTime, nullable=True)
     position_id = Column(Integer, ForeignKey("trading_positions.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
-    bot = relationship("BotInstance", backref="trades")
-    position = relationship("Position", backref="trades")
+    bot = relationship("BotInstance", foreign_keys=[bot_id], back_populates="trades")
+    position = relationship("Position", foreign_keys=[position_id], back_populates="trades")
 
     __table_args__ = (
         Index("ix_trading_trades_bot_id", "bot_id"),
@@ -111,10 +119,11 @@ class Position(Base):
     avg_price = Column(Numeric(20, 8), nullable=True)
     realized_pnl = Column(Numeric(20, 8), nullable=True, default=0)
     status = Column(String(12), nullable=False)
-    extra_metadata = Column(JSONB, nullable=True)
+    extra_metadata = Column(JsonType(), nullable=True)
 
     # Relationship
-    bot = relationship("BotInstance", backref="positions")
+    bot = relationship("BotInstance", foreign_keys=[bot_id], back_populates="positions")
+    trades = relationship("Trade", back_populates="position", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_trading_positions_bot_id", "bot_id"),
@@ -137,12 +146,12 @@ class PerformanceMetric(Base):
     interval = Column(String(10), nullable=True)
     entry_logic_name = Column(String(100), nullable=True)
     exit_logic_name = Column(String(100), nullable=True)
-    metrics = Column(JSONB, nullable=False)
+    metrics = Column(JsonType(), nullable=False)
     calculated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
 
     # Relationship
-    bot = relationship("BotInstance", backref="performance_metrics")
+    bot = relationship("BotInstance", foreign_keys=[bot_id], back_populates="performance_metrics")
 
     __table_args__ = (
         Index("ix_trading_performance_metrics_bot_id", "bot_id"),
@@ -152,3 +161,18 @@ class PerformanceMetric(Base):
 
     def __repr__(self):
         return f"<PerformanceMetric(id={self.id}, bot_id={self.bot_id}, symbol='{self.symbol}')>"
+
+
+@event.listens_for(BotInstance, 'before_insert')
+def check_config_required(mapper, connection, instance):
+        """Ensure config is provided before insert.
+
+        Note:
+        - Do NOT call connection.rollback() inside event listeners. Doing so
+            will deassociate the surrounding Session transaction and cause
+            teardown warnings in tests (and can surprise callers elsewhere).
+            Raise an exception instead and let the Session manage rollback.
+        """
+        if not hasattr(instance, 'config') or instance.config is None:
+                # Let the Session handle rollback when this exception bubbles up.
+                raise IntegrityError("Config field is required", None, None)

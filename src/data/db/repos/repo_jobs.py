@@ -223,7 +223,7 @@ class JobsRepository:
             run = ScheduleRun(**run_data)
             self.session.add(run)
             self.session.flush()  # Get the run_id without committing
-            _logger.info("Created run: %s (%s:%s)", run.run_id, run.job_type, run.job_id)
+            _logger.info("Created run: %s (%s:%s)", run.id, run.job_type, run.job_id)
             return run
         except IntegrityError as e:
             self.session.rollback()
@@ -240,7 +240,7 @@ class JobsRepository:
         Returns:
             ScheduleRun object or None if not found
         """
-        return self.session.query(ScheduleRun).filter(ScheduleRun.run_id == run_id).first()
+        return self.session.query(ScheduleRun).filter(ScheduleRun.id == run_id).first()
 
     def list_runs(
         self,
@@ -343,7 +343,7 @@ class JobsRepository:
             # Update the run to claimed state
             run.status = RunStatus.RUNNING.value
             run.started_at = datetime.now(timezone.utc)
-            run.worker_id = worker_id
+            # worker_id field removed - not in DB schema
 
             self.session.flush()
             _logger.info("Claimed run: %s by worker: %s", run.id, worker_id)

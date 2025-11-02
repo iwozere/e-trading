@@ -39,7 +39,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
-from src.data.db.core.database import session_scope
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.ml.pipeline.p04_short_squeeze.config.config_manager import ConfigManager
 from src.ml.pipeline.p04_short_squeeze.core.universe_loader import create_universe_loader
@@ -284,9 +283,8 @@ class WeeklyUniverseLoader:
 
                 _logger.info("Preparing to store %d universe entries in ss_snapshot table", len(universe_data))
 
-                with session_scope() as session:
-                    service = ShortSqueezeService(session)
-                    stored_count = service.save_screener_results(universe_data, current_date)
+                service = ShortSqueezeService()
+                stored_count = service.save_screener_results(universe_data, current_date)
 
                 _logger.info("Database operation completed: %d entries stored for %s", stored_count, current_date)
 

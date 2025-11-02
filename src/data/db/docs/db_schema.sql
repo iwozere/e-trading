@@ -67,6 +67,15 @@ CREATE SEQUENCE public.msg_rate_limits_id_seq
 	START 1
 	CACHE 1
 	NO CYCLE;
+-- DROP SEQUENCE public.sentiment_payloads_id_seq;
+
+CREATE SEQUENCE public.sentiment_payloads_id_seq
+	INCREMENT BY 1
+	MINVALUE 1
+	MAXVALUE 2147483647
+	START 1
+	CACHE 1
+	NO CYCLE;
 -- DROP SEQUENCE public.ss_ad_hoc_candidates_id_seq;
 
 CREATE SEQUENCE public.ss_ad_hoc_candidates_id_seq
@@ -91,6 +100,15 @@ CREATE SEQUENCE public.ss_deep_metrics_id_seq
 	INCREMENT BY 1
 	MINVALUE 1
 	MAXVALUE 9223372036854775807
+	START 1
+	CACHE 1
+	NO CYCLE;
+-- DROP SEQUENCE public.ss_finra_short_interest_id_seq;
+
+CREATE SEQUENCE public.ss_finra_short_interest_id_seq
+	INCREMENT BY 1
+	MINVALUE 1
+	MAXVALUE 2147483647
 	START 1
 	CACHE 1
 	NO CYCLE;
@@ -304,6 +322,15 @@ CREATE UNIQUE INDEX idx_system_health_unique ON public.msg_system_health USING b
 COMMENT ON TABLE public.msg_system_health IS 'Health monitoring for notification channels';
 
 
+-- public.sentiment_payloads definition
+
+-- Drop table
+
+-- DROP TABLE public.sentiment_payloads;
+
+CREATE TABLE public.sentiment_payloads ( id serial4 NOT NULL, ticker text NULL, "date" date NULL, provider text NULL, payload jsonb NULL, created_at timestamp DEFAULT now() NULL, CONSTRAINT sentiment_payloads_pkey PRIMARY KEY (id));
+
+
 -- public.ss_ad_hoc_candidates definition
 
 -- Drop table
@@ -335,12 +362,45 @@ CREATE INDEX idx_ss_alerts_timestamp_desc ON public.ss_alerts USING btree ("time
 
 -- DROP TABLE public.ss_deep_metrics;
 
-CREATE TABLE public.ss_deep_metrics ( id bigserial NOT NULL, ticker varchar(10) NOT NULL, "date" date NOT NULL, volume_spike numeric(6, 2) NULL, call_put_ratio numeric(6, 2) NULL, sentiment_24h numeric(4, 3) NULL, borrow_fee_pct numeric(5, 4) NULL, squeeze_score numeric(5, 4) NULL, alert_level varchar(10) NULL, raw_payload jsonb NULL, created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL, CONSTRAINT ss_deep_metrics_alert_level_check CHECK (((alert_level)::text = ANY ((ARRAY['LOW'::character varying, 'MEDIUM'::character varying, 'HIGH'::character varying])::text[]))), CONSTRAINT ss_deep_metrics_borrow_fee_pct_check CHECK ((borrow_fee_pct >= (0)::numeric)), CONSTRAINT ss_deep_metrics_call_put_ratio_check CHECK ((call_put_ratio >= (0)::numeric)), CONSTRAINT ss_deep_metrics_pkey PRIMARY KEY (id), CONSTRAINT ss_deep_metrics_sentiment_24h_check CHECK (((sentiment_24h >= ('-1'::integer)::numeric) AND (sentiment_24h <= (1)::numeric))), CONSTRAINT ss_deep_metrics_squeeze_score_check CHECK (((squeeze_score >= (0)::numeric) AND (squeeze_score <= (1)::numeric))), CONSTRAINT ss_deep_metrics_ticker_date_key UNIQUE (ticker, date), CONSTRAINT ss_deep_metrics_volume_spike_check CHECK ((volume_spike >= (0)::numeric)));
+CREATE TABLE public.ss_deep_metrics ( id bigserial NOT NULL, ticker varchar(10) NOT NULL, "date" date NOT NULL, volume_spike numeric(6, 2) NULL, call_put_ratio numeric(6, 2) NULL, sentiment_24h numeric(4, 3) NULL, borrow_fee_pct numeric(5, 4) NULL, squeeze_score numeric(5, 4) NULL, alert_level varchar(10) NULL, raw_payload jsonb NULL, created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL, sentiment_score_24h float4 NULL, mentions_24h int4 NULL, unique_authors_24h int4 NULL, mentions_growth_7d float4 NULL, positive_ratio_24h float4 NULL, virality_index float4 NULL, bot_pct float4 NULL, sentiment_raw_payload jsonb NULL, sentiment_data_quality jsonb NULL, CONSTRAINT ss_deep_metrics_alert_level_check CHECK (((alert_level)::text = ANY ((ARRAY['LOW'::character varying, 'MEDIUM'::character varying, 'HIGH'::character varying])::text[]))), CONSTRAINT ss_deep_metrics_borrow_fee_pct_check CHECK ((borrow_fee_pct >= (0)::numeric)), CONSTRAINT ss_deep_metrics_call_put_ratio_check CHECK ((call_put_ratio >= (0)::numeric)), CONSTRAINT ss_deep_metrics_pkey PRIMARY KEY (id), CONSTRAINT ss_deep_metrics_sentiment_24h_check CHECK (((sentiment_24h >= ('-1'::integer)::numeric) AND (sentiment_24h <= (1)::numeric))), CONSTRAINT ss_deep_metrics_squeeze_score_check CHECK (((squeeze_score >= (0)::numeric) AND (squeeze_score <= (1)::numeric))), CONSTRAINT ss_deep_metrics_ticker_date_key UNIQUE (ticker, date), CONSTRAINT ss_deep_metrics_volume_spike_check CHECK ((volume_spike >= (0)::numeric)));
 CREATE INDEX idx_ss_deep_metrics_alert_level ON public.ss_deep_metrics USING btree (alert_level, date DESC);
 CREATE INDEX idx_ss_deep_metrics_created_at ON public.ss_deep_metrics USING btree (created_at);
 CREATE INDEX idx_ss_deep_metrics_date_desc ON public.ss_deep_metrics USING btree (date DESC);
+CREATE INDEX idx_ss_deep_metrics_sentiment24 ON public.ss_deep_metrics USING btree (sentiment_24h);
 CREATE INDEX idx_ss_deep_metrics_squeeze_score_desc ON public.ss_deep_metrics USING btree (squeeze_score DESC, date DESC);
 CREATE INDEX idx_ss_deep_metrics_ticker_date ON public.ss_deep_metrics USING btree (ticker, date);
+
+
+-- public.ss_finra_short_interest definition
+
+-- Drop table
+
+-- DROP TABLE public.ss_finra_short_interest;
+
+CREATE TABLE public.ss_finra_short_interest ( id serial4 NOT NULL, ticker varchar(10) NOT NULL, settlement_date date NOT NULL, short_interest_shares int8 NOT NULL, total_shares_outstanding int8 NULL, float_shares int8 NULL, short_interest_pct numeric(8, 4) NULL, days_to_cover numeric(8, 2) NULL, data_source varchar(50) DEFAULT 'FINRA'::character varying NULL, data_quality_score numeric(3, 2) DEFAULT 1.0 NULL, raw_data jsonb NULL, created_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL, updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NULL, CONSTRAINT ss_finra_short_interest_pkey PRIMARY KEY (id), CONSTRAINT unique_ticker_settlement UNIQUE (ticker, settlement_date), CONSTRAINT valid_days_to_cover CHECK ((days_to_cover >= (0)::numeric)), CONSTRAINT valid_percentage CHECK (((short_interest_pct >= (0)::numeric) AND (short_interest_pct <= (100)::numeric))), CONSTRAINT valid_short_interest CHECK ((short_interest_shares >= 0)));
+CREATE INDEX idx_ss_finra_days_to_cover ON public.ss_finra_short_interest USING btree (days_to_cover DESC);
+CREATE INDEX idx_ss_finra_settlement_date ON public.ss_finra_short_interest USING btree (settlement_date);
+CREATE INDEX idx_ss_finra_short_interest_pct ON public.ss_finra_short_interest USING btree (short_interest_pct DESC);
+CREATE INDEX idx_ss_finra_ticker ON public.ss_finra_short_interest USING btree (ticker);
+CREATE INDEX idx_ss_finra_ticker_date ON public.ss_finra_short_interest USING btree (ticker, settlement_date DESC);
+COMMENT ON TABLE public.ss_finra_short_interest IS 'Official FINRA short interest data for short squeeze detection pipeline';
+
+-- Column comments
+
+COMMENT ON COLUMN public.ss_finra_short_interest.ticker IS 'Stock ticker symbol (e.g., AAPL, TSLA)';
+COMMENT ON COLUMN public.ss_finra_short_interest.settlement_date IS 'FINRA settlement date for the short interest report';
+COMMENT ON COLUMN public.ss_finra_short_interest.short_interest_shares IS 'Number of shares sold short as reported by FINRA';
+COMMENT ON COLUMN public.ss_finra_short_interest.short_interest_pct IS 'Short interest as percentage of float shares';
+COMMENT ON COLUMN public.ss_finra_short_interest.days_to_cover IS 'Days to cover = short interest / average daily volume';
+COMMENT ON COLUMN public.ss_finra_short_interest.data_quality_score IS 'Data quality score (0.0 to 1.0) based on completeness and validation';
+COMMENT ON COLUMN public.ss_finra_short_interest.raw_data IS 'Original FINRA data in JSON format for audit trail';
+
+-- Table Triggers
+
+create trigger trigger_ss_finra_updated_at before
+update
+    on
+    public.ss_finra_short_interest for each row execute function update_ss_finra_updated_at();
 
 
 -- public.ss_snapshot definition

@@ -23,7 +23,7 @@ screener:
     use_multi_strategy_loading: true
     prioritize_known_candidates: true
     max_universe_size: 1000  # Limit universe size for efficiency
-    use_finra_filtering: true  # Enable FINRA filtering using database data (no API calls)
+    use_finra_filtering: false  # Enable FINRA filtering using database data (no API calls)
   
   filters:
     si_percent_min: 0.05  # 5% minimum (FINRA data is more reliable)

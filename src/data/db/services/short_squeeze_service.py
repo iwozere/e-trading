@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from src.data.db.services.base_service import BaseDBService
+from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
 from src.data.db.models.model_short_squeeze import AlertLevel, CandidateSource
 from src.notification.logger import setup_logger
@@ -197,18 +197,18 @@ class ShortSqueezeService(BaseDBService):
         """Initialize the service."""
         super().__init__(db_service)
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def save_screener_results(self, repos, results: List[Dict[str, Any]], run_date: date) -> int:
         """Save weekly screener results."""
         self._logger.info("Saving %d screener results for %s", len(results), run_date)
 
         # Check existing data before clearing
-        existing_count = repos.short_squeeze.get_snapshot_count_by_date(run_date)
+        existing_count = repos.short_squeeze.screener_snapshots.get_snapshot_count_by_date(run_date)
         self._logger.info("Found %d existing snapshots for %s", existing_count, run_date)
 
         # Clear existing snapshots for this run date to avoid duplicates
-        deleted_count = repos.short_squeeze.clear_snapshots_for_date(run_date)
+        deleted_count = repos.short_squeeze.screener_snapshots.clear_snapshots_for_date(run_date)
         if deleted_count > 0:
             self._logger.info("Cleared %d existing snapshots for %s before inserting new data", deleted_count, run_date)
 
@@ -216,16 +216,16 @@ class ShortSqueezeService(BaseDBService):
         for result in results:
             result['run_date'] = run_date
 
-        snapshots = repos.short_squeeze.bulk_create_snapshots(results)
+        snapshots = repos.short_squeeze.screener_snapshots.bulk_create_snapshots(results)
 
         # Verify the data was saved
-        final_count = repos.short_squeeze.get_snapshot_count_by_date(run_date)
+        final_count = repos.short_squeeze.screener_snapshots.get_snapshot_count_by_date(run_date)
         self._logger.info("Successfully saved %d screener snapshots (replaced %d existing). Final count: %d",
                     len(snapshots), deleted_count, final_count)
         return len(snapshots)
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def save_deep_scan_results(self, repos, results: List[Dict[str, Any]], scan_date: date) -> int:
         """Save daily deep scan results."""
         self._logger.info("Saving %d deep scan results for %s", len(results), scan_date)
@@ -234,17 +234,17 @@ class ShortSqueezeService(BaseDBService):
         for result in results:
             result['date'] = scan_date
 
-        metrics = repos.short_squeeze.bulk_upsert_metrics(results)
+        metrics = repos.short_squeeze.deep_scan_metrics.bulk_upsert_metrics(results)
         self._logger.info("Successfully saved %d deep scan metrics", len(metrics))
         return len(metrics)
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_candidates_for_deep_scan(self, repos) -> List[str]:
         """Get all tickers that should be analyzed in deep scan."""
         return repos.short_squeeze.get_active_candidates_for_deep_scan()
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def add_adhoc_candidate(self, repos, ticker: str, reason: str, ttl_days: int = 7) -> bool:
         """Add an ad-hoc candidate for monitoring."""
         # Validate ticker
@@ -253,39 +253,39 @@ class ShortSqueezeService(BaseDBService):
             return False
 
         expires_at = datetime.now() + timedelta(days=ttl_days)
-        candidate = repos.short_squeeze.add_candidate(ticker, reason, expires_at)
+        candidate = repos.short_squeeze.adhoc_candidates.add_candidate(ticker, reason, expires_at)
         self._logger.info("Added ad-hoc candidate: %s (reason: %s, expires: %s)",
                     ticker, reason, expires_at)
         return True
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def remove_adhoc_candidate(self, repos, ticker: str) -> bool:
         """Remove an ad-hoc candidate."""
-        success = repos.short_squeeze.deactivate_candidate(ticker)
+        success = repos.short_squeeze.adhoc_candidates.deactivate_candidate(ticker)
         if success:
             self._logger.info("Deactivated ad-hoc candidate: %s", ticker)
         else:
             self._logger.warning("Ad-hoc candidate not found: %s", ticker)
         return success
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def expire_adhoc_candidates(self, repos) -> List[str]:
         """Expire ad-hoc candidates past their TTL."""
-        expired_tickers = repos.short_squeeze.expire_candidates()
+        expired_tickers = repos.short_squeeze.adhoc_candidates.expire_candidates()
         if expired_tickers:
             self._logger.info("Expired %d ad-hoc candidates: %s",
                        len(expired_tickers), expired_tickers)
         return expired_tickers
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def create_alert(self, repos, ticker: str, alert_level: AlertLevel, reason: str,
                     squeeze_score: float, cooldown_days: int = 7) -> Optional[int]:
         """Create a new squeeze alert with cooldown."""
         # Check if ticker is in cooldown
-        if repos.short_squeeze.check_cooldown(ticker, alert_level):
+        if repos.short_squeeze.alerts.check_cooldown(ticker, alert_level):
             self._logger.debug("Ticker %s is in cooldown for %s alerts", ticker, alert_level.value)
             return None
 
@@ -299,28 +299,28 @@ class ShortSqueezeService(BaseDBService):
             'cooldown_expires': cooldown_expires
         }
 
-        alert = repos.short_squeeze.create_alert(alert_data)
+        alert = repos.short_squeeze.alerts.create_alert(alert_data)
         self._logger.info("Created %s alert for %s (score: %.3f, cooldown until: %s)",
                     alert_level.value, ticker, squeeze_score, cooldown_expires)
         return alert.id
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def mark_alert_sent(self, repos, alert_id: int, notification_id: str) -> bool:
         """Mark an alert as successfully sent."""
-        success = repos.short_squeeze.mark_alert_sent(alert_id, notification_id)
+        success = repos.short_squeeze.alerts.mark_alert_sent(alert_id, notification_id)
         if success:
             self._logger.info("Marked alert %d as sent (notification: %s)", alert_id, notification_id)
         return success
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_top_candidates_by_screener_score(self, repos, limit: int = 20) -> List[Dict[str, Any]]:
         """Get top candidates from latest screener run."""
-        latest_run_date = repos.short_squeeze.get_latest_run_date()
+        latest_run_date = repos.short_squeeze.screener_snapshots.get_latest_run_date()
         if not latest_run_date:
             return []
 
-        snapshots = repos.short_squeeze.get_top_candidates(latest_run_date, limit)
+        snapshots = repos.short_squeeze.screener_snapshots.get_top_candidates(latest_run_date, limit)
 
         results = []
         for snapshot in snapshots:
@@ -336,13 +336,13 @@ class ShortSqueezeService(BaseDBService):
 
         return results
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_top_squeeze_scores(self, repos, scan_date: Optional[date] = None, limit: int = 20) -> List[Dict[str, Any]]:
         """Get top squeeze scores from deep scan."""
         if scan_date is None:
             scan_date = date.today()
 
-        metrics = repos.short_squeeze.get_top_scores_by_date(scan_date, limit)
+        metrics = repos.short_squeeze.deep_scan_metrics.get_top_scores_by_date(scan_date, limit)
 
         results = []
         for metric in metrics:
@@ -359,22 +359,22 @@ class ShortSqueezeService(BaseDBService):
 
         return results
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_ticker_analysis(self, repos, ticker: str, days: int = 30) -> Dict[str, Any]:
         """Get comprehensive analysis for a ticker."""
         ticker = ticker.upper()
 
         # Get screener history
-        screener_history = repos.short_squeeze.get_ticker_history(ticker, days)
+        screener_history = repos.short_squeeze.screener_snapshots.get_ticker_history(ticker, days)
 
         # Get deep scan history
-        metrics_history = repos.short_squeeze.get_ticker_metrics_history(ticker, days)
+        metrics_history = repos.short_squeeze.deep_scan_metrics.get_ticker_metrics_history(ticker, days)
 
         # Get alert history
-        alert_history = repos.short_squeeze.get_ticker_alert_history(ticker, days)
+        alert_history = repos.short_squeeze.alerts.get_ticker_alert_history(ticker, days)
 
         # Get ad-hoc candidate info
-        adhoc_candidate = repos.short_squeeze.get_candidate(ticker)
+        adhoc_candidate = repos.short_squeeze.adhoc_candidates.get_candidate(ticker)
 
         return {
             'ticker': ticker,
@@ -415,8 +415,8 @@ class ShortSqueezeService(BaseDBService):
             } if adhoc_candidate else None
         }
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def cleanup_old_data(self, repos, days_to_keep: int = 90) -> Dict[str, int]:
         """Clean up old data beyond retention period."""
         self._logger.info("Starting cleanup of data older than %d days", days_to_keep)
@@ -424,21 +424,21 @@ class ShortSqueezeService(BaseDBService):
         self._logger.info("Cleanup completed: %s", cleanup_stats)
         return cleanup_stats
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_pipeline_statistics(self, repos) -> Dict[str, Any]:
         """Get pipeline statistics and health metrics."""
         try:
             # Get latest run date
-            latest_run_date = repos.short_squeeze.get_latest_run_date()
+            latest_run_date = repos.short_squeeze.screener_snapshots.get_latest_run_date()
 
             # Count active ad-hoc candidates
-            active_adhoc = len(repos.short_squeeze.get_active_candidates())
+            active_adhoc = len(repos.short_squeeze.adhoc_candidates.get_active_candidates())
 
             # Count recent alerts
-            recent_alerts = len(repos.short_squeeze.get_recent_alerts(7))
+            recent_alerts = len(repos.short_squeeze.alerts.get_recent_alerts(7))
 
             # Get today's deep scan count
-            today_metrics = len(repos.short_squeeze.get_metrics_by_date(date.today()))
+            today_metrics = len(repos.short_squeeze.deep_scan_metrics.get_metrics_by_date(date.today()))
 
             # Get FINRA data freshness
             finra_report = self.get_finra_data_freshness_report(repos)
@@ -460,23 +460,23 @@ class ShortSqueezeService(BaseDBService):
             }
 
     # FINRA Data Management Methods
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def store_finra_data(self, repos, finra_data_list: List[Dict[str, Any]]) -> int:
         """Store FINRA short interest data with upsert logic."""
         if not finra_data_list:
             self._logger.warning("No FINRA data to store")
             return 0
 
-        records = repos.short_squeeze.bulk_upsert_finra_data(finra_data_list)
+        records = repos.short_squeeze.finra_short_interest.bulk_upsert_finra_data(finra_data_list)
         self._logger.info("Successfully stored %d FINRA records", len(records))
         return len(records)
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_latest_finra_short_interest(self, repos, ticker: str) -> Optional[Dict[str, Any]]:
         """Get the latest FINRA short interest data for a ticker."""
         try:
-            record = repos.short_squeeze.get_latest_short_interest(ticker)
+            record = repos.short_squeeze.finra_short_interest.get_latest_short_interest(ticker)
             if record:
                 return {
                     'ticker': record.ticker,
@@ -495,12 +495,12 @@ class ShortSqueezeService(BaseDBService):
             self._logger.exception("Error getting latest FINRA short interest for %s:", ticker)
             return None
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_bulk_finra_short_interest(self, repos, tickers: List[str],
                                     settlement_date: Optional[date] = None) -> Dict[str, Dict[str, Any]]:
         """Get FINRA short interest data for multiple tickers."""
         try:
-            records = repos.short_squeeze.get_bulk_short_interest(tickers, settlement_date)
+            records = repos.short_squeeze.finra_short_interest.get_bulk_short_interest(tickers, settlement_date)
 
             result = {}
             for ticker, record in records.items():
@@ -521,23 +521,23 @@ class ShortSqueezeService(BaseDBService):
             self._logger.exception("Error getting bulk FINRA short interest:")
             return {}
 
-    @BaseDBService.with_uow
-    @BaseDBService.handle_db_error
+    @with_uow
+    @handle_db_error
     def update_finra_days_to_cover(self, repos, ticker: str, avg_volume: int) -> bool:
         """Update days to cover calculation for FINRA data."""
-        success = repos.short_squeeze.update_days_to_cover(ticker, avg_volume)
+        success = repos.short_squeeze.finra_short_interest.update_days_to_cover(ticker, avg_volume)
         if success:
             self._logger.debug("Updated FINRA days to cover for %s with avg volume %d", ticker, avg_volume)
         return success
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_high_finra_short_interest_candidates(self, repos, min_short_interest_pct: float = 15.0,
                                                min_days_to_cover: float = 3.0,
                                                max_data_age_days: int = 30,
                                                limit: int = 50) -> List[Dict[str, Any]]:
         """Get candidates with high FINRA short interest metrics."""
         try:
-            records = repos.short_squeeze.get_high_short_interest_candidates(
+            records = repos.short_squeeze.finra_short_interest.get_high_short_interest_candidates(
                 min_short_interest_pct, min_days_to_cover, max_data_age_days, limit
             )
 
@@ -558,38 +558,38 @@ class ShortSqueezeService(BaseDBService):
             self._logger.exception("Error getting high FINRA short interest candidates:")
             return []
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_finra_data_freshness_report(self, repos) -> Dict[str, Any]:
         """Get report on FINRA data freshness and coverage."""
         try:
-            return repos.short_squeeze.get_finra_data_freshness_report()
+            return repos.short_squeeze.finra_short_interest.get_finra_data_freshness_report()
         except Exception as e:
             self._logger.exception("Error getting FINRA data freshness report:")
             return {}
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_finra_data_count_for_date(self, repos, settlement_date: date) -> int:
         """Get count of FINRA records for a specific settlement date."""
         try:
-            return repos.short_squeeze.get_data_count_for_date(settlement_date)
+            return repos.short_squeeze.finra_short_interest.get_data_count_for_date(settlement_date)
         except Exception as e:
             self._logger.exception("Error getting FINRA data count for %s:", settlement_date)
             return 0
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_missing_finra_dates(self, repos, lookback_days: int = 365) -> List[date]:
         """Get list of missing FINRA settlement dates that should be available."""
         try:
-            return repos.short_squeeze.get_missing_settlement_dates(lookback_days)
+            return repos.short_squeeze.finra_short_interest.get_missing_settlement_dates(lookback_days)
         except Exception as e:
             self._logger.exception("Error getting missing FINRA dates:")
             return []
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_active_adhoc_candidates(self, repos) -> List[Dict[str, Any]]:
         """Get active ad-hoc candidates."""
         try:
-            candidates = repos.short_squeeze.get_active_candidates()
+            candidates = repos.short_squeeze.adhoc_candidates.get_active_candidates()
             result = []
             for candidate in candidates:
                 result.append({
@@ -605,15 +605,15 @@ class ShortSqueezeService(BaseDBService):
             self._logger.exception("Error getting active adhoc candidates:")
             return []
 
-    @BaseDBService.with_uow
+    @with_uow
     def get_candidates_for_deep_scan(self, repos) -> List[Dict[str, Any]]:
         """Get candidates for deep scan from latest screener run."""
         try:
-            latest_run_date = repos.short_squeeze.get_latest_run_date()
+            latest_run_date = repos.short_squeeze.screener_snapshots.get_latest_run_date()
             if not latest_run_date:
                 return []
 
-            snapshots = repos.short_squeeze.get_snapshots_by_run_date(latest_run_date)
+            snapshots = repos.short_squeeze.screener_snapshots.get_snapshots_by_run_date(latest_run_date)
             result = []
             for snapshot in snapshots:
                 result.append({

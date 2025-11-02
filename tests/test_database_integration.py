@@ -17,7 +17,9 @@ from datetime import datetime, timedelta, timezone
 # Add src to path
 sys.path.append('src')
 
-from src.data.database import get_database_manager, Trade, BotInstance, PerformanceMetrics
+from src.data.db.services import database_service as ds
+from src.data.db.models.model_trading import Trade, BotInstance, PerformanceMetrics
+from src.data.db.repos.repo_trading import TradeRepository
 from src.trading.services.trading_bot_service import trading_bot_service
 
 
@@ -25,14 +27,24 @@ def test_database_connection():
     """Test database connection and table creation."""
     print("🔧 Testing database connection...")
 
+    # Set test database environment
+    os.environ.update({
+        "POSTGRES_HOST": "localhost",
+        "POSTGRES_PORT": "5432",
+        "POSTGRES_USER": "postgres",
+        "POSTGRES_PASSWORD": "postgres",
+        "POSTGRES_DATABASE": "trading_test",
+        "ALLOW_TEST_DB_CREATE": "1"
+    })
+
     try:
-        # Initialize database manager
-        db_manager = get_database_manager()
-        session = db_manager.get_session()
+        # Initialize database service
+        db_service = ds.get_database_service()
+        session = db_service.get_session()
 
         # Test basic operations
         print("✅ Database connection successful")
-        print(f"✅ Database engine: {db_manager.engine}")
+        print(f"✅ Database engine: {db_service.engine}")
 
         session.close()
         return True

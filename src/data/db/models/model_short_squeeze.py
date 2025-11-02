@@ -15,6 +15,7 @@ from sqlalchemy import (
     CheckConstraint, UniqueConstraint, Index, func
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from src.data.db.core.json_types import JsonType
 
 from src.data.db.core.base import Base
 
@@ -49,7 +50,7 @@ class ScreenerSnapshot(Base):
     avg_volume_14d = Column(BigInteger, nullable=True)
     market_cap = Column(BigInteger, nullable=True)
     screener_score = Column(Numeric(5, 4), nullable=True)
-    raw_payload = Column(JSONB, nullable=True)
+    raw_payload = Column(JsonType(), nullable=True)
     data_quality = Column(Numeric(3, 2), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
 
@@ -104,7 +105,7 @@ class DeepScanMetrics(Base):
     borrow_fee_pct = Column(Numeric(5, 4), nullable=True)
     squeeze_score = Column(Numeric(5, 4), nullable=True)
     alert_level = Column(String(10), nullable=True)
-    raw_payload = Column(JSONB, nullable=True)
+    raw_payload = Column(JsonType(), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
 
     __table_args__ = (
@@ -238,7 +239,7 @@ class FINRAShortInterest(Base):
     days_to_cover = Column(Numeric(8, 2), nullable=True)
     data_source = Column(String(50), nullable=False, default='FINRA')
     data_quality_score = Column(Numeric(3, 2), nullable=False, default=1.0)
-    raw_data = Column(JSONB, nullable=True)
+    raw_data = Column(JsonType(), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
 
