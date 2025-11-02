@@ -193,41 +193,34 @@ class HealthReporter:
     async def _report_service_health(self):
         """Report notification service health to database."""
         try:
-            db_service = get_database_service()
+            from src.data.db.services.system_health_service import SystemHealthService
+            from src.data.db.models.model_system_health import SystemHealthStatus
 
-            with db_service.uow() as uow:
-                from src.data.db.repos.repo_system_health import SystemHealthRepository
-                from src.data.db.services.system_health_service import SystemHealthService
-                from src.data.db.models.model_system_health import SystemHealthStatus
+            # Initialize health service (no arguments needed - uses @with_uow decorator)
+            health_service = SystemHealthService()
 
-                # Initialize health service
-                health_repo = SystemHealthRepository(uow.s)
-                health_service = SystemHealthService(health_repo)
+            # Determine service health status
+            status = SystemHealthStatus.HEALTHY
+            error_message = None
+            metadata = {
+                'service': config.service_name,
+                'version': config.version,
+                'message_processor_running': message_processor.is_running if message_processor else False,
+                'message_poller_running': message_poller.running if message_poller else False
+            }
 
-                # Determine service health status
-                status = SystemHealthStatus.HEALTHY
-                error_message = None
-                metadata = {
-                    'service': config.service_name,
-                    'version': config.version,
-                    'message_processor_running': message_processor.is_running if message_processor else False,
-                    'message_poller_running': message_poller.running if message_poller else False
-                }
+            if not (message_processor and message_processor.is_running):
+                status = SystemHealthStatus.DOWN
+                error_message = 'Message processor not running'
 
-                if not (message_processor and message_processor.is_running):
-                    status = SystemHealthStatus.DOWN
-                    error_message = 'Message processor not running'
-
-                # Update service health
-                health_service.update_system_health(
-                    system='notification',
-                    component=None,
-                    status=status,
-                    error_message=error_message,
-                    metadata=metadata
-                )
-
-                uow.commit()
+            # Update service health (method manages its own UoW context)
+            health_service.update_system_health(
+                system='notification',
+                component=None,
+                status=status,
+                error_message=error_message,
+                metadata=metadata
+            )
 
         except Exception as e:
             self._logger.exception("Error reporting service health:")
@@ -238,53 +231,46 @@ class HealthReporter:
             if not message_processor or not hasattr(message_processor, '_channel_instances'):
                 return
 
-            db_service = get_database_service()
+            from src.data.db.services.system_health_service import SystemHealthService
+            from src.data.db.models.model_system_health import SystemHealthStatus
 
-            with db_service.uow() as uow:
-                from src.data.db.repos.repo_system_health import SystemHealthRepository
-                from src.data.db.services.system_health_service import SystemHealthService
-                from src.data.db.models.model_system_health import SystemHealthStatus
+            # Initialize health service (no arguments needed - uses @with_uow decorator)
+            health_service = SystemHealthService()
 
-                # Initialize health service
-                health_repo = SystemHealthRepository(uow.s)
-                health_service = SystemHealthService(health_repo)
+            # Report health for each channel
+            for channel_name, channel_instance in message_processor._channel_instances.items():
+                try:
+                    # Perform channel health check
+                    if hasattr(channel_instance, 'health_check'):
+                        health_result = await channel_instance.health_check()
 
-                # Report health for each channel
-                for channel_name, channel_instance in message_processor._channel_instances.items():
-                    try:
-                        # Perform channel health check
-                        if hasattr(channel_instance, 'health_check'):
-                            health_result = await channel_instance.health_check()
+                        status = SystemHealthStatus.HEALTHY if health_result.get('healthy', False) else SystemHealthStatus.DOWN
+                        error_message = health_result.get('error')
+                        response_time_ms = health_result.get('response_time_ms')
+                    else:
+                        # Default to healthy if no health check method
+                        status = SystemHealthStatus.HEALTHY
+                        error_message = None
+                        response_time_ms = None
 
-                            status = SystemHealthStatus.HEALTHY if health_result.get('healthy', False) else SystemHealthStatus.DOWN
-                            error_message = health_result.get('error')
-                            response_time_ms = health_result.get('response_time_ms')
-                        else:
-                            # Default to healthy if no health check method
-                            status = SystemHealthStatus.HEALTHY
-                            error_message = None
-                            response_time_ms = None
+                    # Update channel health (method manages its own UoW context)
+                    health_service.update_notification_channel_health(
+                        channel=channel_name,
+                        status=status,
+                        response_time_ms=response_time_ms,
+                        error_message=error_message,
+                        metadata={'last_check': datetime.now(timezone.utc).isoformat()}
+                    )
 
-                        # Update channel health
-                        health_service.update_notification_channel_health(
-                            channel=channel_name,
-                            status=status,
-                            response_time_ms=response_time_ms,
-                            error_message=error_message,
-                            metadata={'last_check': datetime.now(timezone.utc).isoformat()}
-                        )
+                except Exception as e:
+                    self._logger.error("Error checking health for channel %s: %s", channel_name, e)
 
-                    except Exception as e:
-                        self._logger.error("Error checking health for channel %s: %s", channel_name, e)
-
-                        # Report channel as down
-                        health_service.update_notification_channel_health(
-                            channel=channel_name,
-                            status=SystemHealthStatus.DOWN,
-                            error_message=f'Health check failed: {str(e)}'
-                        )
-
-                uow.commit()
+                    # Report channel as down
+                    health_service.update_notification_channel_health(
+                        channel=channel_name,
+                        status=SystemHealthStatus.DOWN,
+                        error_message=f'Health check failed: {str(e)}'
+                    )
 
         except Exception as e:
             self._logger.exception("Error reporting channel health:")

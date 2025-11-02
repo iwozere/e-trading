@@ -180,23 +180,18 @@ async def get_channels_health(current_user: User = Depends(get_current_user)):
         Channel health information
     """
     try:
-        db_service = get_database_service()
+        from src.data.db.services.system_health_service import SystemHealthService
 
-        with db_service.uow() as uow:
-            from src.data.db.repos.repo_system_health import SystemHealthRepository
-            from src.data.db.services.system_health_service import SystemHealthService
+        # Initialize health service (no arguments needed - uses @with_uow decorator)
+        health_service = SystemHealthService()
 
-            # Initialize health service
-            health_repo = SystemHealthRepository(uow.s)
-            health_service = SystemHealthService(health_repo)
+        # Get notification channels health (method manages its own UoW context)
+        channels_health = health_service.get_notification_channels_health()
 
-            # Get notification channels health
-            channels_health = health_service.get_notification_channels_health()
-
-            return {
-                "channels_health": channels_health,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
+        return {
+            "channels_health": channels_health,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
 
     except Exception as e:
         _logger.exception("Error getting channels health:")
@@ -296,11 +291,10 @@ async def get_notification_statistics(
 
             # Get channel health
             try:
-                from src.data.db.repos.repo_system_health import SystemHealthRepository
                 from src.data.db.services.system_health_service import SystemHealthService
 
-                health_repo = SystemHealthRepository(uow.s)
-                health_service = SystemHealthService(health_repo)
+                # Initialize health service (no arguments needed - uses @with_uow decorator)
+                health_service = SystemHealthService()
                 channels_health_data = health_service.get_notification_channels_health()
 
                 channels_health = {

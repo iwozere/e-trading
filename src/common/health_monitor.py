@@ -310,39 +310,33 @@ class HealthMonitor:
         """Check notification service health via database (database-centric architecture)."""
         try:
             # Check notification service health from database instead of HTTP
-            from src.data.db.services.database_service import get_database_service
-            from src.data.db.repos.repo_system_health import SystemHealthRepository
             from src.data.db.services.system_health_service import SystemHealthService
 
-            db_service = get_database_service()
+            # Initialize health service (no arguments needed - uses @with_uow decorator)
+            health_service = SystemHealthService()
 
-            with db_service.uow() as uow:
-                # Initialize health service
-                health_repo = SystemHealthRepository(uow.s)
-                health_service = SystemHealthService(health_repo)
+            # Get notification system health from database (method manages its own UoW context)
+            system_health = health_service.get_system_health("notification", component)
 
-                # Get notification system health from database
-                system_health = health_service.get_system_health("notification", component)
-
-                if system_health:
-                    # Convert database health status to HealthCheckResult
-                    return HealthCheckResult(
-                        system="notification",
-                        component=component,
-                        status=system_health.get('status', SystemHealthStatus.UNKNOWN),
-                        response_time_ms=system_health.get('avg_response_time_ms'),
-                        error_message=system_health.get('error_message'),
-                        metadata=system_health.get('metadata', {})
-                    )
-                else:
-                    # No health record found - service might not be running
-                    return HealthCheckResult(
-                        system="notification",
-                        component=component,
-                        status=SystemHealthStatus.UNKNOWN,
-                        response_time_ms=None,
-                        error_message="No health record found in database"
-                    )
+            if system_health:
+                # Convert database health status to HealthCheckResult
+                return HealthCheckResult(
+                    system="notification",
+                    component=component,
+                    status=system_health.get('status', SystemHealthStatus.UNKNOWN),
+                    response_time_ms=system_health.get('avg_response_time_ms'),
+                    error_message=system_health.get('error_message'),
+                    metadata=system_health.get('metadata', {})
+                )
+            else:
+                # No health record found - service might not be running
+                return HealthCheckResult(
+                    system="notification",
+                    component=component,
+                    status=SystemHealthStatus.UNKNOWN,
+                    response_time_ms=None,
+                    error_message="No health record found in database"
+                )
 
         except Exception as e:
             return HealthCheckResult(
