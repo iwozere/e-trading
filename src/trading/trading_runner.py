@@ -346,8 +346,8 @@ async def main():
     # Run setup if requested
     if args.setup:
         _logger.info("Running setup...")
-        import setup_enhanced_trading
-        setup_enhanced_trading.main()
+        import bin.setup_enhanced_trading as s
+        s.main()
         return
 
     # Create and run the system

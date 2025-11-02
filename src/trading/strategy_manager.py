@@ -26,6 +26,7 @@ from src.trading.broker.broker_factory import get_broker
 from src.trading.broker.broker_manager import BrokerManager
 from src.strategy.custom_strategy import CustomStrategy
 from src.notification.logger import setup_logger
+from src.data.db.services.trading_service import trading_service
 
 _logger = setup_logger(__name__)
 
@@ -183,6 +184,10 @@ class StrategyManager:
         self.broker_manager = BrokerManager()
         self.is_running = False
         self.monitoring_task = None
+        self.db_poll_task = None
+        self._db_poll_running = False
+        self._db_poll_user_id: Optional[int] = None
+        self._db_poll_interval: int = 60
 
     async def load_strategies_from_config(self, config_file: str) -> bool:
         """Load strategy configurations from JSON file."""
@@ -313,6 +318,15 @@ class StrategyManager:
             except asyncio.CancelledError:
                 pass
 
+        # Stop DB polling if running
+        self._db_poll_running = False
+        if self.db_poll_task:
+            self.db_poll_task.cancel()
+            try:
+                await self.db_poll_task
+            except asyncio.CancelledError:
+                pass
+
     async def _monitor_strategies(self):
         """Monitor strategy instances and handle auto-recovery."""
         while self.is_running:
@@ -337,6 +351,161 @@ class StrategyManager:
             except Exception as e:
                 _logger.exception("Error in strategy monitoring:")
                 await asyncio.sleep(10)
+
+    # -------------------- DB-backed loading and polling --------------------
+    async def load_strategies_from_db(self, user_id: Optional[int] = None) -> bool:
+        """Load strategy configurations from the database trading_bots table.
+
+        Behavior:
+        - Reads all bots where status != 'disabled'.
+        - Validates each bot config; invalid ones are skipped and marked error.
+        - Builds or updates StrategyInstance entries keyed by bot id.
+        """
+        try:
+            bots = trading_service.get_enabled_bots(user_id)
+            if not bots:
+                _logger.warning("No enabled bots found in DB%s",
+                                f" for user_id={user_id}" if user_id else "")
+
+            loaded = 0
+            for bot in bots:
+                instance_id = str(bot["id"])  # Use DB id as instance id
+
+                # Validate database record/config
+                is_valid, errors, warnings = trading_service.validate_bot_configuration(bot["id"])
+                if not is_valid:
+                    _logger.error("Bot %s config invalid, skipping. Errors: %s", bot["id"], errors)
+                    try:
+                        trading_service.update_bot_status(bot["id"], "error", error_message="; ".join(errors))
+                    except Exception:
+                        pass
+                    continue
+
+                # Map db record to StrategyInstance config
+                si_config = self._db_bot_to_strategy_config(bot)
+
+                if instance_id in self.strategy_instances:
+                    # Update existing config
+                    self.strategy_instances[instance_id].config = si_config
+                else:
+                    # Create new instance
+                    self.strategy_instances[instance_id] = StrategyInstance(instance_id, si_config)
+                loaded += 1
+
+            _logger.info("Loaded %d strategy configs from DB", loaded)
+            return True
+
+        except Exception:
+            _logger.exception("Failed to load strategies from DB:")
+            return False
+
+    def _db_bot_to_strategy_config(self, bot: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert a trading_bots row dict into StrategyInstance config shape."""
+        cfg = bot.get("config") or {}
+        # Prefer fields from config; fallback to DB row
+        name = cfg.get("name") or bot.get("description") or f"Bot {bot.get('id')}"
+        symbol = cfg.get("symbol") or cfg.get("trading_pair") or cfg.get("pair") or cfg.get("ticker")
+        broker_cfg = cfg.get("broker") or {}
+        strategy_cfg = cfg.get("strategy") or {}
+
+        # Enabled if DB status not 'disabled' and config doesn't explicitly disable
+        enabled = bot.get("status") != "disabled" and cfg.get("enabled", True)
+
+        return {
+            "id": str(bot.get("id")),
+            "name": name,
+            "enabled": enabled,
+            "symbol": symbol or "BTCUSDT",
+            "broker": broker_cfg,
+            "strategy": strategy_cfg,
+            "data": cfg.get("data", {}),
+            "trading": cfg.get("trading", {}),
+            "risk_management": cfg.get("risk_management", {}),
+            "notifications": cfg.get("notifications", {}),
+        }
+
+    async def start_db_polling(self, user_id: Optional[int] = None, interval_seconds: int = 60):
+        """Continuously poll DB and sync strategy processes.
+
+        Actions on each poll:
+        - Start new StrategyInstances for bots present in DB with status 'enabled' that aren't running yet.
+        - Stop and remove instances for bots that became 'disabled' or were deleted.
+        - Refresh configs for bots that changed.
+        - Update bot statuses in DB to 'running' when started and 'stopped' when stopped.
+        """
+        self._db_poll_user_id = user_id
+        self._db_poll_interval = max(5, interval_seconds)
+        self._db_poll_running = True
+
+        # Initial load
+        await self.load_strategies_from_db(user_id)
+
+        async def _poll_loop():
+            while self._db_poll_running:
+                try:
+                    # Fetch enabled bots (status != disabled)
+                    enabled_bots = {str(b["id"]): b for b in trading_service.get_enabled_bots(user_id)}
+
+                    # Start or update instances for enabled bots
+                    for bot_id, bot in enabled_bots.items():
+                        is_valid, errors, _ = trading_service.validate_bot_configuration(int(bot_id))
+                        if not is_valid:
+                            _logger.error("Bot %s invalid during polling, skipping start. Errors: %s", bot_id, errors)
+                            try:
+                                trading_service.update_bot_status(int(bot_id), "error", error_message="; ".join(errors))
+                            except Exception:
+                                pass
+                            continue
+
+                        desired_status = bot.get("status", "enabled")
+                        exists = bot_id in self.strategy_instances
+                        if not exists:
+                            # Create instance
+                            si_config = self._db_bot_to_strategy_config(bot)
+                            self.strategy_instances[bot_id] = StrategyInstance(bot_id, si_config)
+
+                        instance = self.strategy_instances[bot_id]
+                        # If bot should be running and isn't, start it
+                        if desired_status in ("enabled", "starting") and instance.status != "running":
+                            try:
+                                trading_service.update_bot_status(int(bot_id), "starting")
+                            except Exception:
+                                pass
+                            ok = await instance.start()
+                            try:
+                                trading_service.update_bot_status(int(bot_id), "running" if ok else "error",
+                                                                 error_message=None if ok else instance.last_error)
+                            except Exception:
+                                pass
+
+                        # If bot is running but config changed, we could implement hot-reload: simple restart
+                        else:
+                            # Refresh config in case changed
+                            instance.config = self._db_bot_to_strategy_config(bot)
+
+                    # Stop instances for bots no longer enabled
+                    to_stop = [iid for iid in list(self.strategy_instances.keys()) if iid not in enabled_bots]
+                    for iid in to_stop:
+                        instance = self.strategy_instances.get(iid)
+                        if instance and instance.status == "running":
+                            await instance.stop()
+                            try:
+                                trading_service.update_bot_status(int(iid), "stopped")
+                            except Exception:
+                                pass
+                        # Remove from manager
+                        self.strategy_instances.pop(iid, None)
+
+                    await asyncio.sleep(self._db_poll_interval)
+
+                except asyncio.CancelledError:
+                    break
+                except Exception:
+                    _logger.exception("Error during DB polling loop:")
+                    await asyncio.sleep(self._db_poll_interval)
+
+        # Launch poll loop
+        self.db_poll_task = asyncio.create_task(_poll_loop())
 
     async def shutdown(self):
         """Shutdown the strategy manager."""

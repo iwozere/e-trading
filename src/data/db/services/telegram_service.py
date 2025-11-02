@@ -69,6 +69,32 @@ class TelegramService(BaseDBService):
 
     @with_uow
     @handle_db_error
+    def get_user_status(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get user status including approval, verification, and limit information.
+
+        Args:
+            telegram_user_id: Telegram user ID
+
+        Returns:
+            Dictionary with user status or None if user not found
+        """
+        profile = self.uow.users.get_telegram_profile(telegram_user_id)
+        if not profile:
+            return None
+
+        return {
+            "telegram_user_id": telegram_user_id,
+            "approved": profile.get("approved", False),
+            "verified": profile.get("verified", False),
+            "max_alerts": profile.get("max_alerts"),
+            "max_schedules": profile.get("max_schedules"),
+            "language": profile.get("language", "en"),
+            "is_admin": profile.get("is_admin", False),
+        }
+
+    @with_uow
+    @handle_db_error
     def approve_user(self, telegram_user_id: str) -> bool:
         self.uow.users.update_telegram_profile(telegram_user_id, approved=True)
         return True
@@ -199,6 +225,77 @@ class TelegramService(BaseDBService):
             "email": email,
         })
         return self.add_json_alert(telegram_user_id, config_json, email=email)
+
+    @with_uow
+    @handle_db_error
+    def list_alerts(self, telegram_user_id: str) -> List[Dict[str, Any]]:
+        """
+        List all alerts for a specific telegram user.
+
+        Args:
+            telegram_user_id: Telegram user ID
+
+        Returns:
+            List of alert dictionaries with alert details
+        """
+        import json
+        from src.data.db.models.model_jobs import JobType
+
+        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
+
+        # Get all alert-type schedules for this user
+        schedules = self.uow.jobs.list_schedules(
+            user_id=uid,
+            job_type=JobType.ALERT
+        )
+
+        alerts: List[Dict[str, Any]] = []
+        for schedule in schedules:
+            task_params = schedule.task_params or {}
+            config_json = task_params.get("config_json", "{}")
+
+            try:
+                config = json.loads(config_json) if isinstance(config_json, str) else config_json
+            except (json.JSONDecodeError, TypeError):
+                config = {}
+
+            alert = {
+                "id": schedule.id,
+                "user_id": schedule.user_id,
+                "ticker": config.get("ticker", schedule.target or ""),
+                "active": schedule.enabled,
+                "email": task_params.get("email", config.get("email", False)),
+                "status": task_params.get("status", "ARMED" if schedule.enabled else "DISARMED"),
+                "created_at": schedule.created_at,
+                "updated_at": schedule.updated_at,
+            }
+
+            # Add alert-type specific fields
+            if "price" in config:
+                alert.update({
+                    "alert_type": "price",
+                    "price": config.get("price"),
+                    "condition": config.get("condition"),
+                })
+            elif "indicator" in config:
+                alert.update({
+                    "alert_type": "indicator",
+                    "indicator": config.get("indicator"),
+                    "condition": config.get("condition"),
+                    "value": config.get("value"),
+                    "timeframe": config.get("timeframe", "15m"),
+                    "alert_action": config.get("alert_action", "telegram"),
+                })
+            else:
+                # Generic alert type
+                alert.update({
+                    "alert_type": "custom",
+                    "config": config,
+                })
+
+            alerts.append(alert)
+
+        return alerts
 
     # --- Schedules ---
     @with_uow

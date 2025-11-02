@@ -33,14 +33,15 @@ class SystemHealthService(BaseDBService):
     across all subsystems in the e-trading platform.
     """
 
-    def __init__(self):
+    def __init__(self, db_service=None):
         """Initialize the system health service."""
-        super().__init__()
+        super().__init__(db_service)
 
     @with_uow
     @handle_db_error
     def update_system_health(
         self,
+        repos,
         system: str,
         component: Optional[str] = None,
         status: SystemHealthStatus = SystemHealthStatus.HEALTHY,
@@ -66,7 +67,7 @@ class SystemHealthService(BaseDBService):
         if metadata:
             metadata_json = json.dumps(metadata)
 
-        health_record = self.uow.system_health.update_system_status(
+        health_record = repos.system_health.update_system_status(
             system=system,
             component=component,
             status=status,
@@ -85,7 +86,7 @@ class SystemHealthService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_system_health(self, system: str, component: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_system_health(self, repos, system: str, component: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Get health status for a specific system/component.
 
@@ -96,7 +97,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             Dictionary with health data or None if not found
         """
-        health_record = self.uow.system_health.get_system_health(system, component)
+        health_record = repos.system_health.get_system_health(system, component)
 
         if not health_record:
             return None
@@ -105,7 +106,7 @@ class SystemHealthService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_all_systems_health(self, include_stale: bool = True) -> List[Dict[str, Any]]:
+    def get_all_systems_health(self, repos, include_stale: bool = True) -> List[Dict[str, Any]]:
         """
         Get health status for all systems.
 
@@ -115,20 +116,20 @@ class SystemHealthService(BaseDBService):
         Returns:
             List of dictionaries with health data
         """
-        health_records = self.uow.system_health.list_system_health(include_stale=include_stale)
+        health_records = repos.system_health.list_system_health(include_stale=include_stale)
         return [self._format_health_record(record) for record in health_records]
 
     @with_uow
     @handle_db_error
-    def get_systems_overview(self) -> Dict[str, Any]:
+    def get_systems_overview(self, repos) -> Dict[str, Any]:
         """
         Get overview of all systems with aggregated statistics.
 
         Returns:
             Dictionary with systems overview data
         """
-        overview_data = self.uow.system_health.get_systems_overview()
-        statistics = self.uow.system_health.get_health_statistics()
+        overview_data = repos.system_health.get_systems_overview()
+        statistics = repos.system_health.get_health_statistics()
 
         # Determine overall platform status
         overall_status = "HEALTHY"
@@ -148,33 +149,33 @@ class SystemHealthService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_unhealthy_systems(self) -> List[Dict[str, Any]]:
+    def get_unhealthy_systems(self, repos) -> List[Dict[str, Any]]:
         """
         Get all systems that are not healthy.
 
         Returns:
             List of dictionaries with unhealthy systems data
         """
-        unhealthy_records = self.uow.system_health.get_unhealthy_systems()
+        unhealthy_records = repos.system_health.get_unhealthy_systems()
         return [self._format_health_record(record) for record in unhealthy_records]
 
     # Backward compatibility methods for notification channels
 
     @with_uow
     @handle_db_error
-    def get_notification_channels_health(self) -> List[Dict[str, Any]]:
+    def get_notification_channels_health(self, repos) -> List[Dict[str, Any]]:
         """
         Get health status for all notification channels (backward compatibility).
 
         Returns:
             List of dictionaries with channel health data
         """
-        channel_records = self.uow.system_health.get_notification_channels_health()
+        channel_records = repos.system_health.get_notification_channels_health()
         return [self._format_channel_health_record(record) for record in channel_records]
 
     @with_uow
     @handle_db_error
-    def get_notification_channel_health(self, channel: str) -> Optional[Dict[str, Any]]:
+    def get_notification_channel_health(self, repos, channel: str) -> Optional[Dict[str, Any]]:
         """
         Get health status for a specific notification channel (backward compatibility).
 
@@ -184,7 +185,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             Dictionary with channel health data or None if not found
         """
-        channel_record = self.uow.system_health.get_notification_channel_health(channel)
+        channel_record = repos.system_health.get_notification_channel_health(channel)
 
         if not channel_record:
             return None
@@ -305,7 +306,9 @@ class SystemHealthService(BaseDBService):
 
     # Utility methods
 
-    def cleanup_stale_records(self, stale_threshold_hours: int = 24) -> int:
+    @with_uow
+    @handle_db_error
+    def cleanup_stale_records(self, repos, stale_threshold_hours: int = 24) -> int:
         """
         Clean up stale health records.
 
@@ -315,16 +318,13 @@ class SystemHealthService(BaseDBService):
         Returns:
             Number of records deleted
         """
-        try:
-            deleted_count = self.repo.cleanup_stale_records(stale_threshold_hours)
-            _logger.info("Cleaned up %d stale health records", deleted_count)
-            return deleted_count
+        deleted_count = repos.system_health.cleanup_stale_records(stale_threshold_hours)
+        _logger.info("Cleaned up %d stale health records", deleted_count)
+        return deleted_count
 
-        except Exception as e:
-            _logger.exception("Failed to cleanup stale records:")
-            raise
-
-    def delete_system_health(self, system: str, component: Optional[str] = None) -> bool:
+    @with_uow
+    @handle_db_error
+    def delete_system_health(self, repos, system: str, component: Optional[str] = None) -> bool:
         """
         Delete a system health record.
 
@@ -335,12 +335,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             True if record was deleted, False if not found
         """
-        try:
-            return self.repo.delete_system_health(system, component)
-
-        except Exception as e:
-            _logger.error("Failed to delete system health for %s.%s: %s", system, component, e)
-            raise
+        return repos.system_health.delete_system_health(system, component)
 
     # Private helper methods
 
@@ -349,9 +344,13 @@ class SystemHealthService(BaseDBService):
         metadata = None
         if record.metadata:
             try:
-                metadata = json.loads(record.metadata)
-            except json.JSONDecodeError:
-                metadata = {"raw": record.metadata}
+                # Check if it's already a string before parsing
+                if isinstance(record.metadata, str):
+                    metadata = json.loads(record.metadata)
+                else:
+                    metadata = record.metadata
+            except (json.JSONDecodeError, TypeError):
+                metadata = {"raw": str(record.metadata)}
 
         return {
             "system": record.system,
@@ -375,9 +374,13 @@ class SystemHealthService(BaseDBService):
         metadata = None
         if record.metadata:
             try:
-                metadata = json.loads(record.metadata)
-            except json.JSONDecodeError:
-                metadata = {"raw": record.metadata}
+                # Check if it's already a string before parsing
+                if isinstance(record.metadata, str):
+                    metadata = json.loads(record.metadata)
+                else:
+                    metadata = record.metadata
+            except (json.JSONDecodeError, TypeError):
+                metadata = {"raw": str(record.metadata)}
 
         return {
             "channel": record.component,  # Map component to channel for backward compatibility

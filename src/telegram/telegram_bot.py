@@ -21,7 +21,7 @@ from src.telegram.screener.notifications import (
 from src.telegram.screener import business_logic
 
 # Service layer imports
-from src.data.db.services import telegram_service
+# telegram_service is imported in initialize_services() to get the instance
 from src.indicators.service import IndicatorService
 
 # Configure logging
@@ -724,9 +724,10 @@ async def initialize_services() -> bool:
     try:
         _logger.info("Initializing service layer...")
 
-        # Initialize telegram service (it's a module with functions, not a class)
+        # Initialize telegram service instance from module
         try:
-            telegram_service_instance = telegram_service
+            # Import the actual service instance (not the module)
+            from src.data.db.services.telegram_service import telegram_service as telegram_service_instance
 
             # Validate telegram service has required methods
             required_methods = ['get_user_status', 'set_user_limit']

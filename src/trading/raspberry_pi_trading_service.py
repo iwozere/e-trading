@@ -45,7 +45,10 @@ _logger = setup_logger(__name__)
 class RaspberryPiTradingService:
     """Main trading service for Raspberry Pi."""
 
-    def __init__(self, config_file: Optional[str] = None):
+    def __init__(self, config_file: Optional[str] = None,
+                 use_db: bool = False,
+                 db_user_id: Optional[int] = None,
+                 db_poll_interval: int = 60):
         """Initialize the service."""
         self.config_file = config_file or "config/enhanced_trading/raspberry_pi_multi_strategy.json"
         self.config = None
@@ -53,6 +56,10 @@ class RaspberryPiTradingService:
         self.is_running = False
         self.start_time = None
         self.system_monitor_task = None
+        # DB-backed mode options
+        self.use_db = use_db
+        self.db_user_id = db_user_id
+        self.db_poll_interval = db_poll_interval
 
     async def load_config(self) -> bool:
         """Load service configuration."""
@@ -84,9 +91,16 @@ class RaspberryPiTradingService:
             if not await self.load_config():
                 return False
 
-            # Load strategies into manager
-            if not await self.strategy_manager.load_strategies_from_config(self.config_file):
-                return False
+            # Load strategies either from DB or config file
+            if self.use_db:
+                _logger.info("Using database-backed strategy loading and polling (user_id=%s, interval=%ss)",
+                             self.db_user_id, self.db_poll_interval)
+                ok = await self.strategy_manager.load_strategies_from_db(self.db_user_id)
+                if not ok:
+                    _logger.warning("Initial DB load returned no strategies or failed; will continue and poll")
+            else:
+                if not await self.strategy_manager.load_strategies_from_config(self.config_file):
+                    return False
 
             # Set service as running
             self.is_running = True
@@ -98,8 +112,14 @@ class RaspberryPiTradingService:
             # Start strategy monitoring
             await self.strategy_manager.start_monitoring()
 
-            # Start all strategies
-            started_count = await self.strategy_manager.start_all_strategies()
+            # Start strategies based on mode
+            if self.use_db:
+                await self.strategy_manager.start_db_polling(user_id=self.db_user_id,
+                                                            interval_seconds=self.db_poll_interval)
+                # In DB mode, strategies will be started by the poller; report current count
+                started_count = sum(1 for s in self.strategy_manager.get_all_status() if s["status"] == "running")
+            else:
+                started_count = await self.strategy_manager.start_all_strategies()
 
             if started_count == 0:
                 _logger.error("No strategies started successfully")
@@ -332,6 +352,13 @@ async def main():
                        help='Install as systemd service')
     parser.add_argument('--status', action='store_true',
                        help='Show service status')
+    # DB-backed mode
+    parser.add_argument('--use-db', action='store_true',
+                       help='Load bots from DB (trading_bots) and poll for changes')
+    parser.add_argument('--db-user-id', type=int, default=None,
+                       help='Optional user_id to filter bots in DB mode')
+    parser.add_argument('--db-poll-interval', type=int, default=60,
+                       help='DB polling interval in seconds (default: 60)')
 
     args = parser.parse_args()
 
@@ -341,7 +368,12 @@ async def main():
         return
 
     # Create service instance
-    service = RaspberryPiTradingService(args.config)
+    service = RaspberryPiTradingService(
+        args.config,
+        use_db=args.use_db,
+        db_user_id=args.db_user_id,
+        db_poll_interval=args.db_poll_interval,
+    )
     setup_signal_handlers(service)
 
     # Show status

@@ -180,25 +180,22 @@ class HeartbeatManager:
     ):
         """Update health status in the database."""
         try:
-            with self.db_service.uow() as uow:
-                health_repo = SystemHealthRepository(uow.s)
-                health_service = SystemHealthService(health_repo)
+            # SystemHealthService handles its own UoW via @with_uow decorator
+            health_service = SystemHealthService()
 
-                health_service.update_system_health(
-                    system=self.system,
-                    component=self.component,
-                    status=status,
-                    response_time_ms=response_time_ms,
-                    error_message=error_message,
-                    metadata=metadata
-                )
-
-                # No need to call uow.commit() - the context manager handles it automatically
+            health_service.update_system_health(
+                system=self.system,
+                component=self.component,
+                status=status,
+                response_time_ms=response_time_ms,
+                error_message=error_message,
+                metadata=metadata
+            )
 
         except Exception as e:
             _logger.exception("Failed to update health status for %s.%s:",
                          self.system, self.component or 'main')
-            raise
+            # Don't re-raise - heartbeat should continue even if health update fails
 
     @property
     def is_running(self) -> bool:
