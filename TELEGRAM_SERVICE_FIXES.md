@@ -63,6 +63,43 @@ Added `list_alerts(telegram_user_id)` method that:
 ### 4. SystemHealthService initialization error in HeartbeatManager ✅ FIXED
 **Error:**
 ```
+AttributeError: 'SystemHealthRepository' object has no attribute 'uow'
+```
+
+**Root Cause:**
+HeartbeatManager was incorrectly instantiating `SystemHealthService` with a repository instance instead of using the service layer properly.
+
+**Solution:**
+Simplified to let the service manage its own UoW via the `@with_uow` decorator.
+
+---
+
+### 5. UoW Pattern Bug - Missing `self.uow` Property ✅ FIXED
+**Error:**
+```
+TypeError: TelegramService.get_setting() takes 2 positional arguments but 3 were given
+```
+
+**Root Cause:**
+The `@with_uow` decorator was designed to inject `repos` as a parameter:
+```python
+def wrapper(self, *args, **kwargs):
+    with self._db.uow() as repos:
+        return func(self, repos, *args, **kwargs)  # repos injected!
+```
+
+But **all** TelegramService methods accessed `self.uow` (which didn't exist) instead of accepting `repos` parameter. This caused a parameter count mismatch.
+
+**Solution:**
+Added thread-local storage to `BaseDBService` so `self.uow` property works:
+- Decorator stores `repos` in thread-local storage
+- Added `@property def uow` to BaseDBService that retrieves it
+- Now methods can use `self.uow.users`, `self.uow.jobs`, etc.
+- Backward compatible with all existing service methods
+
+---
+**Error:**
+```
 RuntimeError: Telegram service missing required method: get_user_status
 ```
 

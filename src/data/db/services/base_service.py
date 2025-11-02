@@ -1,12 +1,16 @@
 """
 BaseDBService: Provides UoW pattern and error handling for DB services.
 """
-from typing import Callable, TypeVar, Any
+from typing import Callable, TypeVar, Any, Optional
 from functools import wraps
 from src.data.db.services.database_service import get_database_service, ReposBundle
 from src.notification.logger import setup_logger
+import threading
 
 T = TypeVar('T')
+
+# Thread-local storage for current UoW repos
+_thread_local = threading.local()
 
 def with_uow(func: Callable[..., T]) -> Callable[..., T]:
     """
@@ -16,7 +20,14 @@ def with_uow(func: Callable[..., T]) -> Callable[..., T]:
     @wraps(func)
     def wrapper(self, *args, **kwargs) -> T:
         with self._db.uow() as repos:
-            return func(self, repos, *args, **kwargs)
+            # Store repos in thread-local storage so self.uow can access it
+            old_repos = getattr(_thread_local, 'repos', None)
+            _thread_local.repos = repos
+            try:
+                return func(self, *args, **kwargs)
+            finally:
+                # Restore previous repos (for nested calls)
+                _thread_local.repos = old_repos
     return wrapper
 
 def handle_db_error(func: Callable[..., T]) -> Callable[..., T]:
@@ -37,3 +48,17 @@ class BaseDBService:
     def __init__(self, db_service=None):
         self._db = db_service or get_database_service()
         self._logger = setup_logger(self.__class__.__name__)
+
+    @property
+    def uow(self) -> ReposBundle:
+        """
+        Get the current Unit of Work (repos bundle) from thread-local storage.
+        This property is only available within methods decorated with @with_uow.
+        """
+        repos = getattr(_thread_local, 'repos', None)
+        if repos is None:
+            raise RuntimeError(
+                "UoW not available. This property can only be accessed from methods "
+                "decorated with @with_uow."
+            )
+        return repos
