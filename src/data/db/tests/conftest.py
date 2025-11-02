@@ -11,11 +11,30 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-# Prefer safe import of donotshare; fall back to env vars for CI/dev where the private module isn't present
-try:
-    from config.donotshare.donotshare import DB_URL  # type: ignore
-except Exception:
-    DB_URL = os.getenv("DATABASE_URL") or os.getenv("ALEMBIC_DB_URL")
+# ⚠️ CRITICAL: ALWAYS use TEST database for tests, NEVER production DB_URL!
+# Require TEST_DB_URL environment variable pointing to a PostgreSQL test database
+TEST_DB_URL = os.getenv("TEST_DB_URL")
+
+if not TEST_DB_URL:
+    # Try to construct from individual postgres env vars
+    pg_user = os.getenv("POSTGRES_TEST_USER", os.getenv("POSTGRES_USER"))
+    pg_pass = os.getenv("POSTGRES_TEST_PASSWORD", os.getenv("POSTGRES_PASSWORD"))
+    pg_host = os.getenv("POSTGRES_TEST_HOST", os.getenv("POSTGRES_HOST", "localhost"))
+    pg_port = os.getenv("POSTGRES_TEST_PORT", os.getenv("POSTGRES_PORT", "5432"))
+    pg_db = os.getenv("POSTGRES_TEST_DB", "e_trading_test")
+
+    if pg_user and pg_pass:
+        from urllib.parse import quote_plus
+        TEST_DB_URL = f"postgresql+psycopg2://{pg_user}:{quote_plus(pg_pass)}@{pg_host}:{pg_port}/{pg_db}"
+        print(f"⚠️  TEST_DB_URL constructed from env vars: postgresql+psycopg2://{pg_user}:***@{pg_host}:{pg_port}/{pg_db}")
+    else:
+        print("❌  ERROR: TEST_DB_URL not set and cannot construct from POSTGRES_* env vars")
+        print("❌  Tests require a PostgreSQL test database!")
+        print("❌  Set TEST_DB_URL or POSTGRES_TEST_USER/POSTGRES_TEST_PASSWORD environment variables")
+        TEST_DB_URL = None
+
+# NEVER import production DB_URL for tests!
+DB_URL = TEST_DB_URL
 
 
 # if psycopg2 is not available, skip DB tests (keeps test suite friendly when DB driver missing)
@@ -28,11 +47,18 @@ except Exception:
 
 @pytest.fixture(scope="session")
 def engine():
-    # Use DB_URL from config; tests require a running Postgres instance
+    # Require PostgreSQL test database - no SQLite fallback
     if not _HAS_PG:
-        pytest.skip("psycopg2 (Postgres DB driver) not installed; skipping DB model tests")
+        pytest.skip("psycopg2 (PostgreSQL driver) not installed; skipping DB model tests")
     if not DB_URL:
-        pytest.skip("DB_URL not available (donotshare missing and no DATABASE_URL/ALEMBIC_DB_URL set); skipping DB model tests")
+        pytest.skip(
+            "TEST_DB_URL not configured. Set environment variable:\n"
+            "  TEST_DB_URL=postgresql+psycopg2://test_user:test_pass@localhost/e_trading_test\n"
+            "OR set POSTGRES_TEST_USER and POSTGRES_TEST_PASSWORD"
+        )
+    if not DB_URL.startswith("postgresql"):
+        pytest.skip(f"TEST_DB_URL must point to PostgreSQL database, got: {DB_URL[:20]}...")
+
     engine = create_engine(DB_URL, future=True)
     yield engine
     engine.dispose()
@@ -41,11 +67,10 @@ def engine():
 @pytest.fixture(scope="session")
 def tmp_schema(engine):
     """
-    Create a temporary Postgres schema for tests and create tables for ORM metadata.
+    Create a temporary PostgreSQL schema for tests and create tables for ORM metadata.
 
-    Important: This does NOT create or drop the database. It only creates/drops a schema
-    inside the existing Postgres database pointed to by DB_URL. This follows the user's
-    constraint to avoid creating/dropping databases.
+    Important: This creates a schema inside the TEST database (not production).
+    The TEST database must be configured via TEST_DB_URL environment variable.
     """
     schema = f"test_models_{uuid.uuid4().hex[:8]}"
 
