@@ -1,5 +1,40 @@
 # Implementation Plan
 
+## Architecture Principles (UPDATED)
+
+**Key principle: Single source of configuration from database via `strategy_manager.py` ONLY.**
+
+### Component Responsibilities
+
+| Component | Purpose | Config Loading | Current Status |
+|-----------|---------|----------------|----------------|
+| `trading_runner.py` | Service orchestrator | ❌ NO (delegates to StrategyManager) | Needs simplification |
+| `strategy_manager.py` | Bot manager | ✅ YES (SOLE CONFIG LOADER) | Mostly complete, needs StrategyHandler integration |
+| `strategy_handler.py` | Strategy factory | ❌ NO (receives configs) | NEW - needs creation |
+| `StrategyInstance` | Bot wrapper | ❌ NO (receives configs) | Needs LiveTradingBot refactor |
+| `trading_bot.py` | Single-bot runner | N/A | DEPRECATED (replaced by trading_runner.py) |
+| `live_trading_bot.py` | Old bot implementation | N/A | REFACTOR into StrategyInstance |
+
+### Data Flow
+
+```
+Database (trading_bots table)
+    ↓
+trading_service.get_enabled_bots()
+    ↓
+strategy_manager.load_strategies_from_db() ← SOLE CONFIG LOADER
+    ↓
+StrategyInstance objects created
+    ↓
+strategy_handler.get_strategy_class() → Strategy instantiation
+    ↓
+Bot execution with BaseTradingBot
+```
+
+---
+
+## Implementation Tasks
+
 - [x] 1. Create database integration layer for bot configuration management
   - Implement database connection and query methods for trading_bots table
   - Create configuration validation and parsing utilities
@@ -25,43 +60,54 @@
     - Implement strategy type discovery mechanism
     - _Requirements: 3.4, 3.5_
 
-- [ ] 3. Enhance trading_runner.py for database-driven multi-bot management
-  - [ ] 3.1 Replace JSON configuration loading with database queries
-    - Remove JSON file loading logic
-    - Implement database configuration loading from trading_bots table
-    - Add configuration caching and refresh mechanisms
-    - _Requirements: 1.1, 1.2, 1.3, 6.2, 6.3_
+- [ ] 3. Simplify trading_runner.py as service orchestrator (NO CONFIG LOADING)
+  - [ ] 3.1 Remove JSON configuration loading completely
+    - **Remove** all JSON file loading logic
+    - **Remove** any database configuration loading (delegate to StrategyManager)
+    - Simplify to pure orchestration (start/stop coordination)
+    - _Requirements: 6.1, 6.2, 6.3_
+    - _Current state: Has JSON loading (lines 58-77) - MUST BE REMOVED_
 
-  - [ ] 3.2 Implement async bot instance management
-    - Convert bot spawning to async task-based execution
-    - Add bot lifecycle management (start/stop/restart)
-    - Implement bot isolation and error containment
-    - _Requirements: 2.1, 2.2, 2.3, 6.4_
+  - [ ] 3.2 Delegate all bot management to StrategyManager
+    - Replace direct bot creation with StrategyManager calls
+    - Call `strategy_manager.load_strategies_from_db()`
+    - Call `strategy_manager.start_all_strategies()`
+    - Call `strategy_manager.shutdown()` on stop
+    - _Requirements: 6.2, 6.3, 6.4, 6.5_
+    - _Current state: Partially delegates, needs cleanup_
 
-  - [ ] 3.3 Add system service integration and monitoring
-    - Implement service startup and shutdown procedures
-    - Add health monitoring and status reporting
-    - Create graceful shutdown with bot cleanup
-    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.5_
+  - [ ] 3.3 Add system service integration
+    - Implement systemd service file for Linux
+    - Add Windows service wrapper integration
+    - Implement signal handlers (SIGINT, SIGTERM)
+    - Create graceful shutdown coordination
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+    - _Current state: Signal handlers exist (lines 325-332), needs enhancement_
 
-- [ ] 4. Enhance strategy_manager.py for database integration and async operations
-  - [ ] 4.1 Replace JSON-based strategy loading with database configuration
-    - Modify StrategyInstance to use database configurations
-    - Update strategy creation to use StrategyHandler
-    - Implement configuration validation and error handling
+- [ ] 4. Enhance strategy_manager.py as SOLE CONFIG LOADER
+  - [ ] 4.1 Ensure strategy_manager is ONLY config loader (already mostly done)
+    - **Verify** `load_strategies_from_db()` is complete (lines 356-400)
+    - **Remove** any JSON-based loading (already removed)
+    - **Ensure** StrategyInstance uses configs from manager only
+    - **Integrate** with StrategyHandler for strategy class loading
     - _Requirements: 7.1, 7.2, 8.1, 8.2, 8.3_
+    - _Current state: DB loading exists (✓), needs StrategyHandler integration_
 
-  - [ ] 4.2 Implement async bot execution with proper isolation
-    - Convert strategy execution to async operations
-    - Add error isolation between bot instances
-    - Implement concurrent bot execution management
+  - [ ] 4.2 Enhance StrategyInstance with LiveTradingBot logic
+    - **Refactor** LiveTradingBot logic into StrategyInstance
+    - Add data feed management (from LiveTradingBot._create_data_feed)
+    - Add Backtrader setup (from LiveTradingBot._setup_backtrader)
+    - Maintain async bot execution with isolation
     - _Requirements: 2.1, 2.2, 2.3, 7.3_
+    - _Current state: Basic StrategyInstance exists, needs LiveTradingBot integration_
 
-  - [ ] 4.3 Add database status updates and monitoring integration
-    - Implement bot status updates to trading_bots table
-    - Add performance metrics recording
-    - Create heartbeat and health monitoring system
+  - [ ] 4.3 Enhance database status updates and monitoring
+    - **Improve** bot status updates in DB polling (lines 471-477)
+    - Add performance metrics recording to trading_performance_metrics
+    - Enhance heartbeat system (framework exists)
+    - Add trade recording via trading_service
     - _Requirements: 7.4, 9.1, 9.2, 9.3, 9.5, 10.1, 10.2_
+    - _Current state: Basic status updates exist, needs enhancement_
 
 - [ ] 5. Implement notification integration for trade events
   - [ ] 5.1 Create notification service integration layer
@@ -139,23 +185,29 @@
     - Create log aggregation and analysis capabilities
     - _Requirements: 10.4, 10.5_
 
-- [ ] 9. Replace existing trading_bot.py with enhanced service integration
-  - [ ] 9.1 Create service entry point and configuration
-    - Implement main service entry point
-    - Add command-line interface for service management
-    - Create configuration file handling for service settings
+- [ ] 9. Deprecate trading_bot.py and refactor live_trading_bot.py
+  - [ ] 9.1 Deprecate trading_bot.py (single-bot runner)
+    - **Mark** trading_bot.py as deprecated
+    - **Document** that trading_runner.py is the new service entry point
+    - **Optionally** keep for backward compatibility or single-bot scenarios
+    - Create migration guide from trading_bot.py to trading_runner.py
     - _Requirements: 5.1, 5.2, 6.1_
+    - _Current state: trading_bot.py exists, runs single LiveTradingBot_
 
-  - [ ] 9.2 Add system service installation and management
-    - Create systemd service configuration for Linux
-    - Add Windows service integration
-    - Implement service installation and removal scripts
-    - _Requirements: 5.1, 5.5_
+  - [ ] 9.2 Refactor LiveTradingBot logic into StrategyInstance
+    - **Extract** Backtrader setup logic from LiveTradingBot
+    - **Extract** data feed management from LiveTradingBot
+    - **Extract** trading loop execution from LiveTradingBot
+    - **Integrate** into StrategyInstance.start()
+    - **Optionally** keep LiveTradingBot for reference or deprecate
+    - _Requirements: 2.1, 2.2, 7.1_
+    - _Current state: LiveTradingBot has needed logic, needs extraction_
 
   - [ ] 9.3 Add service integration testing
     - Create service startup and shutdown tests
     - Add multi-bot execution testing
     - Implement service recovery testing
+    - Test DB polling and hot-reload
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
 - [ ] 10. Integration testing and system validation

@@ -17,14 +17,19 @@ Features:
 import asyncio
 import json
 import uuid
+import threading
+import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
+import backtrader as bt
+
 from src.trading.base_trading_bot import BaseTradingBot
 from src.trading.broker.broker_factory import get_broker
 from src.trading.broker.broker_manager import BrokerManager
-from src.strategy.custom_strategy import CustomStrategy
+from src.trading.strategy_handler import strategy_handler
+from src.data.feed.data_feed_factory import DataFeedFactory
 from src.notification.logger import setup_logger
 from src.data.db.services.trading_service import trading_service
 
@@ -39,45 +44,87 @@ class StrategyInstance:
         self.instance_id = instance_id
         self.config = config
         self.name = config.get('name', f'Strategy_{instance_id}')
+
+        # Core components
         self.broker = None
         self.trading_bot = None
+        self.data_feed = None
+        self.cerebro = None
+
+        # Status tracking
         self.status = 'stopped'
         self.start_time = None
         self.error_count = 0
         self.last_error = None
+        self.is_running = False
+        self.should_stop = False
+
+        # Threading for monitoring
+        self.monitor_thread = None
 
     async def start(self) -> bool:
-        """Start the strategy instance."""
+        """
+        Start the strategy instance with full Backtrader integration.
+
+        Refactored from LiveTradingBot.start() to include:
+        - Data feed creation
+        - Backtrader setup
+        - Trading loop execution
+        """
         try:
             _logger.info("Starting strategy instance: %s", self.name)
 
             # Create broker
             broker_config = self.config['broker']
             self.broker = get_broker(broker_config)
-
             if not self.broker:
                 raise Exception("Failed to create broker")
 
-            # Create strategy class instance
+            _logger.info("Created broker for %s: %s (mode: %s)",
+                        self.name,
+                        broker_config.get('type'),
+                        broker_config.get('trading_mode'))
+
+            # Get strategy class using StrategyHandler
             strategy_config = self.config['strategy']
             strategy_class = self._get_strategy_class(strategy_config['type'])
+            _logger.info("Loaded strategy class: %s", strategy_class.__name__)
 
-            # Create trading bot with strategy
-            bot_config = self._build_bot_config()
-            self.trading_bot = BaseTradingBot(
-                config=bot_config,
-                strategy_class=strategy_class,
-                parameters=strategy_config.get('parameters', {}),
-                broker=self.broker,
-                paper_trading=broker_config.get('trading_mode') == 'paper',
-                bot_id=self.instance_id
+            # Create data feed (from LiveTradingBot._create_data_feed)
+            if not self._create_data_feed():
+                raise RuntimeError("Failed to create data feed")
+
+            # Setup Backtrader (from LiveTradingBot._setup_backtrader)
+            if not self._setup_backtrader(strategy_class):
+                raise RuntimeError("Failed to setup Backtrader")
+
+            # Start monitoring thread for data feed health
+            self.monitor_thread = threading.Thread(
+                target=self._monitor_data_feed,
+                daemon=True,
+                name=f"Monitor-{self.name}"
             )
+            self.monitor_thread.start()
+            _logger.info("Started data feed monitor thread for %s", self.name)
 
-            # Start the trading bot
-            await self._start_trading_bot()
-
+            # Set status
             self.status = 'running'
             self.start_time = datetime.now(timezone.utc)
+            self.is_running = True
+
+            # Update database status
+            try:
+                trading_service.update_bot_status(
+                    int(self.instance_id),
+                    "running",
+                    started_at=self.start_time
+                )
+            except Exception as e:
+                _logger.warning("Failed to update bot status in DB: %s", e)
+
+            # Start Backtrader in background task
+            asyncio.create_task(self._run_backtrader_async())
+
             _logger.info("✅ Strategy instance %s started successfully", self.name)
             return True
 
@@ -85,23 +132,71 @@ class StrategyInstance:
             self.status = 'error'
             self.error_count += 1
             self.last_error = str(e)
-            _logger.exception("❌ Failed to start strategy instance:", self.name)
+            _logger.exception("❌ Failed to start strategy instance %s:", self.name)
+
+            # Update database with error status
+            try:
+                trading_service.update_bot_status(
+                    int(self.instance_id),
+                    "error",
+                    error_message=str(e)
+                )
+            except Exception:
+                pass
+
             return False
 
     async def stop(self) -> bool:
-        """Stop the strategy instance."""
+        """
+        Stop the strategy instance gracefully.
+
+        Refactored from LiveTradingBot.stop() to include:
+        - Data feed shutdown
+        - Backtrader cleanup
+        - State persistence
+        """
         try:
             _logger.info("Stopping strategy instance: %s", self.name)
 
-            if self.trading_bot:
-                await self._stop_trading_bot()
-                self.trading_bot = None
+            self.should_stop = True
+            self.is_running = False
 
+            # Stop data feed
+            if self.data_feed:
+                try:
+                    self.data_feed.stop()
+                    _logger.info("Stopped data feed for %s", self.name)
+                except Exception as e:
+                    _logger.warning("Error stopping data feed: %s", e)
+
+            # Stop Cerebro if running
+            if self.cerebro:
+                try:
+                    # Backtrader doesn't have explicit stop, it completes when data ends
+                    _logger.info("Backtrader will complete naturally for %s", self.name)
+                except Exception as e:
+                    _logger.warning("Error with Backtrader cleanup: %s", e)
+
+            # Stop broker connection
             if self.broker:
-                await self.broker.disconnect()
-                self.broker = None
+                try:
+                    await self.broker.disconnect()
+                    _logger.info("Disconnected broker for %s", self.name)
+                except Exception as e:
+                    _logger.warning("Error disconnecting broker: %s", e)
 
+            # Update status
             self.status = 'stopped'
+
+            # Update database status
+            try:
+                trading_service.update_bot_status(
+                    int(self.instance_id),
+                    "stopped"
+                )
+            except Exception as e:
+                _logger.warning("Failed to update bot status in DB: %s", e)
+
             _logger.info("✅ Strategy instance %s stopped successfully", self.name)
             return True
 
@@ -109,7 +204,7 @@ class StrategyInstance:
             self.status = 'error'
             self.error_count += 1
             self.last_error = str(e)
-            _logger.exception("❌ Failed to stop strategy instance:", self.name)
+            _logger.exception("❌ Failed to stop strategy instance %s:", self.name)
             return False
 
     async def restart(self) -> bool:
@@ -139,15 +234,22 @@ class StrategyInstance:
         }
 
     def _get_strategy_class(self, strategy_type: str):
-        """Get strategy class based on type."""
-        # For now, we'll use CustomStrategy as the base
-        # This can be extended to support other strategy types
-        if strategy_type.lower() in ['custom', 'customstrategy']:
-            return CustomStrategy
-        else:
-            # Default to CustomStrategy
-            _logger.warning("Unknown strategy type %s, using CustomStrategy", strategy_type)
-            return CustomStrategy
+        """
+        Get strategy class based on type using StrategyHandler.
+
+        Args:
+            strategy_type: Strategy type from configuration
+
+        Returns:
+            Strategy class to instantiate
+        """
+        try:
+            # Use StrategyHandler for dynamic strategy loading
+            return strategy_handler.get_strategy_class(strategy_type)
+        except Exception as e:
+            _logger.exception("Error getting strategy class for %s:", strategy_type)
+            # StrategyHandler already handles fallback to CustomStrategy
+            raise
 
     def _build_bot_config(self) -> Dict[str, Any]:
         """Build configuration for BaseTradingBot."""
@@ -174,9 +276,206 @@ class StrategyInstance:
         _logger.info("Trading bot for %s would stop here", self.name)
         # self.trading_bot.stop()  # Uncomment when ready
 
+    def _create_data_feed(self) -> bool:
+        """
+        Create and initialize the data feed.
+
+        Refactored from LiveTradingBot._create_data_feed()
+        """
+        try:
+            data_config = self.config.get('data', {})
+
+            # Ensure required fields
+            if 'data_source' not in data_config:
+                data_config['data_source'] = self.config['broker'].get('type', 'binance')
+            if 'symbol' not in data_config:
+                data_config['symbol'] = self.config.get('symbol', 'BTCUSDT')
+            if 'interval' not in data_config:
+                data_config['interval'] = '1h'
+            if 'lookback_bars' not in data_config:
+                data_config['lookback_bars'] = 500
+
+            # Add callback for new data notifications (optional)
+            def on_new_bar(symbol, timestamp, data):
+                self._notify_new_bar(symbol, timestamp, data)
+            data_config["on_new_bar"] = on_new_bar
+
+            self.data_feed = DataFeedFactory.create_data_feed(data_config)
+
+            if self.data_feed is None:
+                raise ValueError("Failed to create data feed")
+
+            _logger.info("Created data feed for %s: %s (%s)",
+                        self.name,
+                        data_config.get('symbol'),
+                        data_config.get('interval'))
+            return True
+
+        except Exception as e:
+            _logger.exception("Error creating data feed for %s:", self.name)
+            return False
+
+    def _setup_backtrader(self, strategy_class) -> bool:
+        """
+        Setup Backtrader engine.
+
+        Refactored from LiveTradingBot._setup_backtrader()
+        """
+        try:
+            self.cerebro = bt.Cerebro()
+
+            # Add data feed
+            self.cerebro.adddata(self.data_feed)
+            _logger.info("Added data feed to Cerebro for %s", self.name)
+
+            # Add strategy with parameters
+            strategy_params = self.config['strategy'].get('parameters', {})
+            self.cerebro.addstrategy(strategy_class, **strategy_params)
+            _logger.info("Added strategy %s to Cerebro", strategy_class.__name__)
+
+            # Setup broker
+            if self.broker:
+                self.cerebro.broker = self.broker
+                _logger.info("Assigned broker to Cerebro")
+
+            # Setup initial cash
+            initial_balance = self.config['broker'].get('cash', 10000.0)
+            self.cerebro.broker.setcash(initial_balance)
+            _logger.info("Set initial cash: $%.2f", initial_balance)
+
+            # Setup commission
+            commission = self.config.get('commission', 0.001)  # 0.1% default
+            self.cerebro.broker.setcommission(commission=commission)
+            _logger.info("Set commission: %.4f", commission)
+
+            _logger.info("✅ Backtrader setup complete for %s", self.name)
+            return True
+
+        except Exception as e:
+            _logger.exception("Error setting up Backtrader for %s:", self.name)
+            return False
+
+    async def _run_backtrader_async(self):
+        """
+        Run Backtrader engine in async context.
+
+        Refactored from LiveTradingBot._run_backtrader()
+        """
+        try:
+            _logger.info("Starting Backtrader engine for %s...", self.name)
+
+            # Run Backtrader (blocking call, but in separate task)
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                self._run_backtrader_sync
+            )
+
+            _logger.info("Backtrader engine completed for %s", self.name)
+
+        except Exception as e:
+            _logger.exception("Error in Backtrader engine for %s:", self.name)
+            self.status = 'error'
+            self.error_count += 1
+            self.last_error = str(e)
+
+            # Update database with error
+            try:
+                trading_service.update_bot_status(
+                    int(self.instance_id),
+                    "error",
+                    error_message=f"Backtrader error: {str(e)}"
+                )
+            except Exception:
+                pass
+
+    def _run_backtrader_sync(self):
+        """Synchronous Backtrader execution."""
+        results = self.cerebro.run()
+        return results
+
+    def _notify_new_bar(self, symbol: str, timestamp, data: Dict[str, Any]):
+        """
+        Notify about new data bar.
+
+        Refactored from LiveTradingBot._notify_new_bar()
+        """
+        try:
+            _logger.debug(
+                "New %s bar: O=%.4f H=%.4f L=%.4f C=%.4f",
+                symbol,
+                data.get('open', 0),
+                data.get('high', 0),
+                data.get('low', 0),
+                data.get('close', 0)
+            )
+        except Exception as e:
+            _logger.debug("Error notifying new bar: %s", e)
+
+    def _monitor_data_feed(self):
+        """
+        Monitor data feed health and reconnect if needed.
+
+        Refactored from LiveTradingBot._monitor_data_feed()
+        """
+        _logger.info("Data feed monitor started for %s", self.name)
+
+        while self.is_running and not self.should_stop:
+            try:
+                if self.data_feed:
+                    status = self.data_feed.get_status()
+                    if not status.get("is_connected", False):
+                        _logger.warning(
+                            "Data feed disconnected for %s, attempting reconnect...",
+                            self.name
+                        )
+                        self._reconnect_data_feed()
+
+                time.sleep(30)  # Check every 30 seconds
+
+            except Exception as e:
+                _logger.exception("Error in data feed monitor for %s:", self.name)
+                time.sleep(60)
+
+        _logger.info("Data feed monitor stopped for %s", self.name)
+
+    def _reconnect_data_feed(self):
+        """
+        Reconnect data feed.
+
+        Refactored from LiveTradingBot._reconnect_data_feed()
+        """
+        try:
+            if self.data_feed:
+                self.data_feed.stop()
+                time.sleep(5)
+
+            if self._create_data_feed():
+                _logger.info("Data feed reconnected successfully for %s", self.name)
+                # Note: Backtrader reconnection would require strategy restart
+                # For now, just log the reconnection
+            else:
+                _logger.error("Failed to reconnect data feed for %s", self.name)
+                self.error_count += 1
+
+        except Exception as e:
+            _logger.exception("Error reconnecting data feed for %s:", self.name)
+
 
 class StrategyManager:
-    """Manages multiple strategy instances in a single service."""
+    """
+    Bot manager and SOLE CONFIGURATION LOADER.
+
+    This is the ONLY component that loads configurations from the database.
+    All other components receive configs through this manager.
+
+    Responsibilities:
+    - Load ALL bot configurations from database (ONLY place this happens)
+    - Create and manage StrategyInstance objects
+    - Handle bot lifecycle (start/stop/restart)
+    - Monitor bot health and performance
+    - Update database with bot status and metrics
+    - DB polling for hot-reload
+    """
 
     def __init__(self):
         """Initialize the strategy manager."""
@@ -354,22 +653,42 @@ class StrategyManager:
 
     # -------------------- DB-backed loading and polling --------------------
     async def load_strategies_from_db(self, user_id: Optional[int] = None) -> bool:
-        """Load strategy configurations from the database trading_bots table.
+        """
+        Load strategy configurations from the database - ONLY PLACE THIS HAPPENS.
+
+        This is the SOLE configuration loader. No other component should load from DB.
 
         Behavior:
-        - Reads all bots where status != 'disabled'.
-        - Validates each bot config; invalid ones are skipped and marked error.
-        - Builds or updates StrategyInstance entries keyed by bot id.
+        - Reads all bots where status != 'disabled'
+        - Validates each bot config using trading_service AND StrategyHandler
+        - Builds or updates StrategyInstance entries keyed by bot id
+        - Invalid configs are skipped and marked as 'error' in DB
+
+        Args:
+            user_id: Optional user ID to filter bots
+
+        Returns:
+            True if successfully loaded at least one bot, False otherwise
         """
         try:
+            _logger.info("=" * 80)
+            _logger.info("LOADING BOT CONFIGURATIONS FROM DATABASE (SOLE CONFIG LOADER)")
+            _logger.info("=" * 80)
+
             bots = trading_service.get_enabled_bots(user_id)
             if not bots:
                 _logger.warning("No enabled bots found in DB%s",
                                 f" for user_id={user_id}" if user_id else "")
+                return False
+
+            _logger.info("Found %d enabled bot(s) in database", len(bots))
 
             loaded = 0
             for bot in bots:
-                instance_id = str(bot["id"])  # Use DB id as instance id
+                instance_id = str(bot["id"])
+                bot_name = bot.get("description") or f"Bot {bot['id']}"
+
+                _logger.info("Processing bot: %s (ID: %s)", bot_name, instance_id)
 
                 # Validate database record/config
                 is_valid, errors, warnings = trading_service.validate_bot_configuration(bot["id"])
@@ -381,19 +700,56 @@ class StrategyManager:
                         pass
                     continue
 
+                # Log warnings
+                for warning in warnings:
+                    _logger.warning("Bot %s: %s", bot["id"], warning)
+
                 # Map db record to StrategyInstance config
                 si_config = self._db_bot_to_strategy_config(bot)
 
+                # Additional validation using StrategyHandler
+                strategy_type = si_config.get("strategy", {}).get("type", "CustomStrategy")
+                strategy_config = si_config.get("strategy", {})
+
+                is_strategy_valid, strategy_errors, strategy_warnings = strategy_handler.validate_strategy_config(
+                    strategy_type,
+                    strategy_config
+                )
+
+                if not is_strategy_valid:
+                    _logger.error("Bot %s strategy config invalid: %s", bot["id"], strategy_errors)
+                    try:
+                        trading_service.update_bot_status(
+                            bot["id"],
+                            "error",
+                            error_message="Strategy validation failed: " + "; ".join(strategy_errors)
+                        )
+                    except Exception:
+                        pass
+                    continue
+
+                # Log strategy warnings
+                for warning in strategy_warnings:
+                    _logger.warning("Bot %s strategy: %s", bot["id"], warning)
+
+                # Create or update instance
                 if instance_id in self.strategy_instances:
                     # Update existing config
+                    _logger.info("Updating existing bot instance: %s", bot_name)
                     self.strategy_instances[instance_id].config = si_config
                 else:
                     # Create new instance
+                    _logger.info("Creating new bot instance: %s", bot_name)
                     self.strategy_instances[instance_id] = StrategyInstance(instance_id, si_config)
-                loaded += 1
 
-            _logger.info("Loaded %d strategy configs from DB", loaded)
-            return True
+                loaded += 1
+                _logger.info("✅ Successfully loaded bot: %s", bot_name)
+
+            _logger.info("=" * 80)
+            _logger.info("CONFIGURATION LOADING COMPLETE: %d/%d bots loaded", loaded, len(bots))
+            _logger.info("=" * 80)
+
+            return loaded > 0
 
         except Exception:
             _logger.exception("Failed to load strategies from DB:")

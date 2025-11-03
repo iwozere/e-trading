@@ -79,27 +79,31 @@ The system will run as a system service that can be started at system startup, p
 
 ### Requirement 6: Enhanced Trading Runner Integration
 
-**User Story:** As a developer, I want to enhance the existing trading_runner.py to support database-driven configuration and multi-bot management, so that the system builds upon proven architecture while adding new capabilities.
+**User Story:** As a developer, I want to enhance the existing trading_runner.py to act as a service orchestrator that delegates to StrategyManager, so that configuration loading is centralized and responsibilities are clearly separated.
 
 #### Acceptance Criteria
 
-1. WHEN trading_runner.py is enhanced THEN it SHALL maintain backward compatibility with existing broker management while adding database configuration loading
-2. WHEN the enhanced runner starts THEN it SHALL replace JSON file loading with database queries to the trading_bots table
-3. WHEN the enhanced runner manages bots THEN it SHALL use the existing BrokerManager and ConfigManager with database-sourced configurations
-4. WHEN the enhanced runner monitors bots THEN it SHALL extend existing monitoring capabilities with database status updates
-5. WHEN the enhanced runner shuts down THEN it SHALL use existing graceful shutdown procedures while updating bot status in the database
+1. WHEN trading_runner.py is enhanced THEN it SHALL act as a service orchestrator WITHOUT loading configurations itself
+2. WHEN the enhanced runner starts THEN it SHALL delegate all configuration loading to StrategyManager
+3. WHEN the enhanced runner manages bots THEN it SHALL delegate all bot lifecycle operations to StrategyManager
+4. WHEN the enhanced runner monitors bots THEN it SHALL provide service-level health monitoring while StrategyManager handles bot-level monitoring
+5. WHEN the enhanced runner shuts down THEN it SHALL coordinate graceful shutdown by calling StrategyManager.shutdown()
+
+**Clarification**: Trading runner does NOT load configs, does NOT create bots - it only orchestrates.
 
 ### Requirement 7: Enhanced Strategy Manager Integration
 
-**User Story:** As a developer, I want to enhance the existing strategy_manager.py to support database configurations and async bot management, so that strategy management is unified and efficient.
+**User Story:** As a developer, I want strategy_manager.py to be the SOLE configuration loader from the database, so that there is a single source of truth for bot configurations and no redundant loading.
 
 #### Acceptance Criteria
 
-1. WHEN strategy_manager.py is enhanced THEN it SHALL load strategy configurations from database records instead of JSON files
-2. WHEN the enhanced manager creates strategy instances THEN it SHALL use async operations for concurrent bot execution
+1. WHEN strategy_manager.py is enhanced THEN it SHALL be the ONLY component that loads configurations from the database
+2. WHEN the enhanced manager creates strategy instances THEN it SHALL use StrategyHandler for dynamic strategy type loading
 3. WHEN the enhanced manager handles strategy failures THEN it SHALL implement automatic recovery and error isolation between bots
 4. WHEN the enhanced manager monitors strategies THEN it SHALL update bot status and performance metrics in the database
-5. WHEN the enhanced manager receives configuration updates THEN it SHALL support hot-reloading of bot configurations without service restart
+5. WHEN the enhanced manager receives configuration updates THEN it SHALL support hot-reloading of bot configurations via DB polling without service restart
+
+**Clarification**: StrategyManager is the SOLE config loader. All other components get configs through it.
 
 ### Requirement 8: Configuration Validation and Error Handling
 

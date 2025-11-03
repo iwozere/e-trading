@@ -8,132 +8,183 @@ This design document outlines the architecture for an enhanced database-driven t
 
 ### High-Level Architecture
 
-The system follows a service-oriented architecture with async task-based bot management:
+The system follows a service-oriented architecture with async task-based bot management. **Key principle: Single source of configuration from database via strategy_manager.py only.**
 
 ```mermaid
 graph TB
-    subgraph "System Service Layer"
-        TS[Trading Service]
-        SR[Service Runner]
-        SM[Service Manager]
+    subgraph "Service Layer (Entry Point)"
+        TR[trading_runner.py<br/>Service Orchestrator<br/>NO CONFIG LOADING]
     end
-    
-    subgraph "Enhanced Components"
-        ETR[Enhanced Trading Runner]
-        ESM[Enhanced Strategy Manager]
-        SH[Strategy Handler]
+
+    subgraph "Management Layer"
+        SM[strategy_manager.py<br/>Bot Manager<br/>SOLE CONFIG LOADER]
+        SH[strategy_handler.py<br/>Strategy Factory<br/>NEW COMPONENT]
     end
-    
-    subgraph "Bot Management"
-        BI1[Bot Instance 1]
-        BI2[Bot Instance 2]
-        BIN[Bot Instance N]
+
+    subgraph "Execution Layer"
+        SI1[StrategyInstance #1<br/>Bot Wrapper]
+        SI2[StrategyInstance #2<br/>Bot Wrapper]
+        SIN[StrategyInstance #N<br/>Bot Wrapper]
     end
-    
-    subgraph "External Systems"
-        DB[(Database)]
-        NS[Notification Service]
-        BM[Broker Manager]
+
+    subgraph "Core Components"
+        BTB[BaseTradingBot<br/>Trading Logic]
+        BM[BrokerManager<br/>Existing]
     end
-    
-    SR --> ETR
-    ETR --> ESM
-    ESM --> SH
-    SH --> BI1
-    SH --> BI2
-    SH --> BIN
-    
-    ETR <--> DB
-    ESM <--> DB
-    BI1 --> NS
-    BI2 --> NS
-    BIN --> NS
-    
-    BI1 <--> BM
-    BI2 <--> BM
-    BIN <--> BM
+
+    subgraph "Data Layer"
+        DB[(Database<br/>trading_bots)]
+        TS[trading_service.py<br/>DB Operations]
+    end
+
+    TR -->|delegates lifecycle| SM
+    SM -->|queries ONCE| TS
+    TS -->|reads configs| DB
+    SM -->|uses for strategies| SH
+    SM -->|creates & manages| SI1
+    SM -->|creates & manages| SI2
+    SM -->|creates & manages| SIN
+
+    SH -->|instantiates| SI1
+    SH -->|instantiates| SI2
+    SH -->|instantiates| SIN
+
+    SI1 -->|uses| BTB
+    SI2 -->|uses| BTB
+    SIN -->|uses| BTB
+
+    SI1 -->|uses| BM
+    SI2 -->|uses| BM
+    SIN -->|uses| BM
+
+    SI1 -.->|updates status| TS
+    SI2 -.->|updates status| TS
+    SIN -.->|updates status| TS
+
+    style DB fill:#e1f5ff
+    style SM fill:#fff4e1
+    style TR fill:#e8f5e8
+    style SH fill:#ffe8e8
 ```
+
+**Deprecated Components:**
+- `trading_bot.py` - Replaced by `trading_runner.py` as service entry point
+- `live_trading_bot.py` - Logic refactored into `StrategyInstance`
 
 ### Component Architecture
 
-#### 1. Enhanced Trading Runner (`trading_runner.py`)
+#### 1. Trading Runner (`trading_runner.py`)
 
-**Purpose**: Main service orchestrator that manages the lifecycle of multiple trading bot instances.
+**Purpose**: Service orchestrator that manages service lifecycle. **DOES NOT LOAD CONFIGURATIONS.**
 
 **Key Responsibilities**:
-- Load bot configurations from database
-- Initialize and manage async bot instances
-- Provide system-level monitoring and health checks
-- Handle graceful shutdown and recovery
+- Delegate to StrategyManager for all bot operations
+- Handle system-level signals (SIGINT, SIGTERM)
+- Coordinate service startup and shutdown
+- Provide service-level health monitoring wrapper
+- Implement system service integration
 
 **Enhanced Features**:
-- Database-only configuration loading
-- Async task management for concurrent bot execution
 - System service integration (systemd/Windows service)
-- Comprehensive error handling and recovery
+- Graceful shutdown coordination
+- Service-level error handling
+- Health check endpoint for external monitoring
 
-#### 2. Enhanced Strategy Manager (`strategy_manager.py`)
+**What it DOES NOT do**:
+- ❌ Load configurations from database (delegated to StrategyManager)
+- ❌ Create bot instances (delegated to StrategyManager)
+- ❌ Manage individual bots (delegated to StrategyManager)
 
-**Purpose**: Manages individual bot instances with their specific strategies and configurations.
+#### 2. Strategy Manager (`strategy_manager.py`)
 
-**Key Responsibilities**:
+**Purpose**: Bot manager and **SOLE CONFIGURATION LOADER**. Central point for all bot configuration and lifecycle management.
+
+**Key Responsibilities** (PRIMARY):
+- **Load ALL bot configurations from database** (ONLY place this happens)
+- Query `trading_service.get_enabled_bots()` and parse configs
 - Create and manage StrategyInstance objects
 - Handle bot lifecycle (start/stop/restart)
 - Monitor bot health and performance
 - Update database with bot status and metrics
+- Implement DB polling for hot-reload
 
 **Enhanced Features**:
-- Database-driven strategy configuration
-- Dynamic strategy type loading
+- Database-driven strategy configuration (SOLE SOURCE)
+- Integration with StrategyHandler for dynamic loading
 - Async bot execution with isolation
 - Real-time status updates to database
+- Configuration hot-reload via DB polling
 
-#### 3. Strategy Handler (New Component)
+#### 3. Strategy Handler (`strategy_handler.py`) - NEW COMPONENT
 
-**Purpose**: Dynamic strategy loader that instantiates different strategy types based on configuration.
+**Purpose**: Dynamic strategy factory that instantiates different strategy types. **Strategy type resolution and validation.**
 
 **Key Responsibilities**:
-- Parse strategy configuration from database
-- Dynamically import and instantiate strategy classes
-- Validate strategy parameters
+- Maintain strategy registry (CustomStrategy, ML strategies, etc.)
+- Dynamically import and instantiate strategy classes based on type
+- Validate strategy-specific parameters (entry/exit mixins, etc.)
 - Support plugin-style architecture for new strategy types
+- Provide fallback to CustomStrategy for unknown types
 
-#### 4. Bot Instance Management
+**Enhanced Features**:
+- Strategy type discovery and registration
+- Parameter validation framework
+- Mixin loading for CustomStrategy (entry_logic, exit_logic)
+- Extensible plugin architecture
 
-**Purpose**: Individual bot execution with proper isolation and monitoring.
+#### 4. Strategy Instance (Enhanced `StrategyInstance` class)
+
+**Purpose**: Individual bot wrapper with trading logic execution. **Refactored from `live_trading_bot.py`.**
 
 **Key Responsibilities**:
-- Execute trading strategy with configured parameters
+- Wrap BaseTradingBot with async execution
+- Manage broker connection for the bot
+- Execute trading loop with configured strategy
 - Send notifications for trade events
 - Update database with trade and performance data
-- Handle errors and recovery at instance level
+- Handle bot-level errors and recovery
+- Implement heartbeat mechanism
+
+**Refactoring Notes**:
+- Absorbs logic from `LiveTradingBot` (Backtrader setup, data feeds)
+- Uses BaseTradingBot for core trading functionality
+- Maintains bot-level state and isolation
 
 ## Data Flow
 
-### 1. Service Startup Flow
+### 1. Service Startup Flow (CORRECTED)
 
 ```mermaid
 sequenceDiagram
-    participant SS as System Service
-    participant ETR as Enhanced Trading Runner
+    participant SYS as System Service
+    participant TR as Trading Runner
+    participant SM as Strategy Manager
+    participant TS as trading_service
     participant DB as Database
-    participant ESM as Enhanced Strategy Manager
     participant SH as Strategy Handler
-    participant BI as Bot Instance
-    
-    SS->>ETR: Start Service
-    ETR->>DB: Query enabled bot configurations
-    DB-->>ETR: Return bot configs
-    ETR->>ESM: Initialize Strategy Manager
-    
+    participant SI as StrategyInstance
+
+    SYS->>TR: Start Service
+    TR->>SM: initialize()
+    SM->>TS: get_enabled_bots()
+    TS->>DB: SELECT * FROM trading_bots WHERE status!='disabled'
+    DB-->>TS: Return bot records
+    TS-->>SM: Return bot configs
+
     loop For each bot config
-        ESM->>SH: Create strategy instance
-        SH->>SH: Validate configuration
-        SH->>BI: Spawn async bot instance
-        BI->>DB: Update status to 'running'
+        SM->>SM: Validate config
+        SM->>SM: Create StrategyInstance object
+        SM->>SH: get_strategy_class(config.strategy.type)
+        SH-->>SM: Return strategy class
+        SM->>SI: start()
+        SI->>SI: Initialize broker & strategy
+        SI->>TS: update_bot_status(bot_id, 'running')
+        TS->>DB: UPDATE trading_bots SET status='running'
     end
-    
-    ETR->>ETR: Start monitoring loop
+
+    SM->>SM: Start DB polling task
+    SM->>SM: Start monitoring task
+    TR->>TR: Wait for signals
 ```
 
 ### 2. Bot Execution Flow
@@ -181,54 +232,98 @@ sequenceDiagram
 
 ## Component Design
 
-### Enhanced Trading Runner
+### Trading Runner (SIMPLIFIED - NO CONFIG LOADING)
 
 ```python
-class EnhancedTradingRunner:
-    """Enhanced multi-bot trading service runner with database integration."""
-    
+class TradingRunner:
+    """Service orchestrator - delegates all bot management to StrategyManager."""
+
     def __init__(self):
         self.strategy_manager = StrategyManager()
-        self.db_connection = DatabaseConnection()
-        self.running_bots = {}
         self.is_running = False
-        self.monitoring_task = None
-    
-    async def load_bot_configurations(self) -> List[Dict]:
-        """Load enabled bot configurations from database."""
-        
+
     async def start_service(self):
-        """Start the trading service with all enabled bots."""
-        
+        """Start the trading service - DELEGATES to StrategyManager."""
+        self.is_running = True
+
+        # StrategyManager handles ALL config loading
+        await self.strategy_manager.load_strategies_from_db()
+        await self.strategy_manager.start_all_strategies()
+        await self.strategy_manager.start_monitoring()
+
+        # Optional: Start DB polling for hot-reload
+        await self.strategy_manager.start_db_polling()
+
     async def stop_service(self):
-        """Gracefully stop all bots and clean up resources."""
-        
-    async def monitor_bots(self):
-        """Monitor bot health and handle recovery."""
+        """Gracefully stop all bots - DELEGATES to StrategyManager."""
+        self.is_running = False
+        await self.strategy_manager.shutdown()
+
+    async def run(self):
+        """Main service loop - just coordinates startup/shutdown."""
+        await self.start_service()
+
+        # Wait for shutdown signal
+        while self.is_running:
+            await asyncio.sleep(1)
 ```
 
-### Enhanced Strategy Manager
+### Strategy Manager (SOLE CONFIG LOADER)
 
 ```python
 class StrategyManager:
-    """Enhanced strategy manager with database integration and async bot management."""
-    
+    """Bot manager - SOLE CONFIGURATION LOADER from database."""
+
     def __init__(self):
-        self.bot_instances = {}
+        self.strategy_instances: Dict[str, StrategyInstance] = {}
         self.strategy_handler = StrategyHandler()
-        self.db_connection = DatabaseConnection()
-    
-    async def create_bot_instance(self, config: Dict) -> str:
-        """Create and start a new bot instance from database configuration."""
-        
-    async def stop_bot_instance(self, bot_id: str):
-        """Stop a specific bot instance gracefully."""
-        
-    async def restart_bot_instance(self, bot_id: str):
-        """Restart a bot instance with current configuration."""
-        
-    async def update_bot_status(self, bot_id: str, status: str, metadata: Dict = None):
-        """Update bot status in database."""
+        self.is_running = False
+        self.monitoring_task = None
+        self.db_poll_task = None
+
+    async def load_strategies_from_db(self, user_id: Optional[int] = None) -> bool:
+        """Load bot configurations from database - ONLY PLACE THIS HAPPENS."""
+        try:
+            # Query database via trading_service
+            bots = trading_service.get_enabled_bots(user_id)
+
+            for bot in bots:
+                # Validate config
+                is_valid, errors, _ = trading_service.validate_bot_configuration(bot["id"])
+                if not is_valid:
+                    logger.error(f"Bot {bot['id']} invalid: {errors}")
+                    trading_service.update_bot_status(bot["id"], "error", error_message="; ".join(errors))
+                    continue
+
+                # Create StrategyInstance
+                instance_id = str(bot["id"])
+                config = self._db_bot_to_strategy_config(bot)
+                self.strategy_instances[instance_id] = StrategyInstance(instance_id, config)
+
+            return True
+        except Exception as e:
+            logger.exception("Failed to load from DB")
+            return False
+
+    async def start_all_strategies(self) -> int:
+        """Start all loaded strategy instances."""
+        started = 0
+        for instance in self.strategy_instances.values():
+            if await instance.start():
+                started += 1
+                # Update DB status
+                trading_service.update_bot_status(int(instance.instance_id), "running")
+        return started
+
+    async def start_db_polling(self, user_id: Optional[int] = None, interval: int = 60):
+        """Poll DB for config changes and hot-reload bots."""
+        # Implemented in existing code (lines 427-508)
+        pass
+
+    async def shutdown(self):
+        """Stop all bots and cleanup."""
+        await self.stop_monitoring()
+        await self.stop_all_strategies()
 ```
 
 ### Strategy Handler
@@ -251,31 +346,79 @@ class StrategyHandler:
         """Create and configure strategy instance."""
 ```
 
-### Bot Instance
+### Strategy Instance (Refactored from LiveTradingBot)
 
 ```python
-class BotInstance:
-    """Individual bot instance with async execution and monitoring."""
-    
-    def __init__(self, bot_id: str, config: Dict, strategy_handler: StrategyHandler):
-        self.bot_id = bot_id
+class StrategyInstance:
+    """Bot wrapper - refactored from LiveTradingBot with async execution."""
+
+    def __init__(self, instance_id: str, config: Dict[str, Any]):
+        self.instance_id = instance_id
         self.config = config
-        self.strategy = None
+        self.name = config.get('name', f'Strategy_{instance_id}')
         self.broker = None
-        self.is_running = False
-        self.last_heartbeat = None
-    
-    async def start(self):
-        """Start the bot instance with configured strategy."""
-        
-    async def stop(self):
+        self.trading_bot = None  # BaseTradingBot instance
+        self.data_feed = None
+        self.cerebro = None
+        self.status = 'stopped'
+        self.start_time = None
+        self.error_count = 0
+        self.last_error = None
+
+    async def start(self) -> bool:
+        """Start the bot instance - integrates LiveTradingBot logic."""
+        try:
+            # Create broker
+            broker_config = self.config['broker']
+            self.broker = get_broker(broker_config)
+
+            # Get strategy class from StrategyHandler
+            strategy_config = self.config['strategy']
+            strategy_class = strategy_handler.get_strategy_class(strategy_config['type'])
+
+            # Create BaseTradingBot with strategy
+            bot_config = self._build_bot_config()
+            self.trading_bot = BaseTradingBot(
+                config=bot_config,
+                strategy_class=strategy_class,
+                parameters=strategy_config.get('parameters', {}),
+                broker=self.broker,
+                paper_trading=broker_config.get('trading_mode') == 'paper',
+                bot_id=self.instance_id
+            )
+
+            # Setup data feed (from LiveTradingBot)
+            await self._create_data_feed()
+
+            # Setup Backtrader (from LiveTradingBot)
+            await self._setup_backtrader()
+
+            # Start trading bot
+            await self._start_trading_bot()
+
+            self.status = 'running'
+            self.start_time = datetime.now(timezone.utc)
+            return True
+
+        except Exception as e:
+            self.status = 'error'
+            self.error_count += 1
+            self.last_error = str(e)
+            logger.exception(f"Failed to start {self.name}")
+            return False
+
+    async def stop(self) -> bool:
         """Stop the bot instance gracefully."""
-        
-    async def execute_trading_loop(self):
-        """Main trading execution loop."""
-        
-    async def send_notification(self, event_type: str, data: Dict):
-        """Send notification through notification service."""
+        # Implementation from existing StrategyInstance + LiveTradingBot
+        pass
+
+    async def _create_data_feed(self):
+        """Create data feed - from LiveTradingBot."""
+        pass
+
+    async def _setup_backtrader(self):
+        """Setup Backtrader - from LiveTradingBot."""
+        pass
 ```
 
 ## Database Integration
@@ -640,5 +783,71 @@ Each bot can configure notifications independently:
    - Database connection parameters
    - Notification service integration settings
    - Performance tuning parameters
+
+---
+
+## Architectural Clarifications (IMPORTANT)
+
+### Configuration Loading: Single Source of Truth
+
+**Critical Design Principle**: Configuration is loaded from database **EXACTLY ONCE** by `strategy_manager.py` only.
+
+#### What Changed from Original Design
+
+**ORIGINAL (Redundant):**
+```
+trading_runner.py → loads configs from DB
+    ↓
+strategy_manager.py → loads configs from DB AGAIN (redundant!)
+    ↓
+Creates bots
+```
+
+**NEW (Correct):**
+```
+trading_runner.py → orchestrates only, NO config loading
+    ↓
+strategy_manager.py → SOLE config loader from DB
+    ↓
+Creates bots
+```
+
+### Component Responsibility Matrix
+
+| Component | Config Loading | Bot Creation | Bot Lifecycle | Service Lifecycle | Status |
+|-----------|---------------|--------------|---------------|-------------------|--------|
+| `trading_runner.py` | ❌ NO | ❌ NO | ❌ NO | ✅ YES | Simplify |
+| `strategy_manager.py` | ✅ YES (ONLY) | ✅ YES | ✅ YES | ❌ NO | Enhance |
+| `strategy_handler.py` | ❌ NO | ❌ NO | ❌ NO | ❌ NO | Create NEW |
+| `StrategyInstance` | ❌ NO | ❌ NO | ✅ YES (self) | ❌ NO | Refactor |
+| `trading_bot.py` | N/A | N/A | N/A | N/A | DEPRECATE |
+| `live_trading_bot.py` | N/A | N/A | N/A | N/A | REFACTOR |
+
+### Deprecated Components
+
+1. **`trading_bot.py`** - Single-bot JSON-based runner
+   - **Reason**: Replaced by `trading_runner.py` as multi-bot service entry point
+   - **Migration**: Use `trading_runner.py` instead
+   - **Status**: Mark as deprecated, optionally keep for backward compatibility
+
+2. **`live_trading_bot.py`** - Old bot implementation
+   - **Reason**: Logic absorbed into `StrategyInstance` for consistency
+   - **Migration**: Refactor into `StrategyInstance.start()` and related methods
+   - **Status**: Extract logic, then deprecate or keep as reference
+
+### Key Implementation Notes
+
+1. **No Double Loading**: `trading_runner.py` must NOT load configs. It only orchestrates.
+
+2. **StrategyManager Owns Everything**: All bot operations go through `strategy_manager.py`:
+   - Loading configs from DB
+   - Creating bot instances
+   - Starting/stopping bots
+   - Monitoring bot health
+   - DB polling for hot-reload
+
+3. **StrategyHandler is Pure Factory**: Only creates strategy class instances, doesn't manage state.
+
+4. **StrategyInstance Absorbs LiveTradingBot**: Backtrader setup, data feeds, trading loop all move into `StrategyInstance`.
 
 This design provides a comprehensive foundation for implementing the enhanced database-driven trading bot service system while maintaining compatibility with existing components and providing robust monitoring, error handling, and scalability features.
