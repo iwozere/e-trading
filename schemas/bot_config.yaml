@@ -1,0 +1,296 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: "Trading Bot Configuration Schema"
+description: "Root schema for trading bot configuration stored in database config JSONB field"
+type: object
+
+required:
+  - symbol
+  - broker
+  - strategy
+
+properties:
+  symbol:
+    type: string
+    pattern: "^[A-Z0-9]{3,20}$"
+    description: "Trading pair symbol (e.g., BTCUSDT, ETHUSDT)"
+    examples:
+      - "BTCUSDT"
+      - "ETHUSDT"
+      - "SPY"
+
+  broker:
+    type: object
+    required:
+      - type
+      - trading_mode
+    properties:
+      type:
+        type: string
+        enum:
+          - "binance"
+          - "backtrader"
+          - "paper"
+          - "alpaca"
+          - "interactive_brokers"
+        description: "Broker type for execution"
+
+      trading_mode:
+        type: string
+        enum:
+          - "paper"
+          - "live"
+        description: "Trading mode (paper trading or live trading)"
+
+      name:
+        type: string
+        description: "Human-readable broker name (optional)"
+
+      cash:
+        type: number
+        minimum: 0
+        exclusiveMinimum: true
+        description: "Initial cash balance (required for paper trading)"
+
+      commission:
+        type: number
+        minimum: 0
+        maximum: 1
+        description: "Commission rate (e.g., 0.001 for 0.1%)"
+
+      # Binance-specific
+      api_key:
+        type: string
+        description: "API key for broker (live trading)"
+
+      api_secret:
+        type: string
+        description: "API secret for broker (live trading)"
+
+      testnet:
+        type: boolean
+        description: "Use testnet for live trading"
+
+    additionalProperties: true  # Allow broker-specific fields
+
+  data:
+    type: object
+    required:
+      - data_source
+    properties:
+      data_source:
+        type: string
+        enum:
+          - "file"
+          - "binance"
+          - "alpaca"
+          - "yahoo"
+          - "websocket"
+        description: "Data source type"
+
+      # File-based data source
+      file_path:
+        type: string
+        description: "Path to CSV file (for file data source)"
+
+      # Symbol and interval
+      symbol:
+        type: string
+        description: "Symbol for data feed (can differ from trading symbol)"
+
+      interval:
+        type: string
+        pattern: "^(\\d+[smhd]|1M|1W)$"
+        description: "Data interval (e.g., 1h, 5m, 1d)"
+        examples:
+          - "1h"
+          - "5m"
+          - "1d"
+          - "4h"
+
+      # CSV column mappings
+      datetime_col:
+        type: string
+        default: "datetime"
+
+      open_col:
+        type: string
+        default: "open"
+
+      high_col:
+        type: string
+        default: "high"
+
+      low_col:
+        type: string
+        default: "low"
+
+      close_col:
+        type: string
+        default: "close"
+
+      volume_col:
+        type: string
+        default: "volume"
+
+      # Realtime simulation
+      simulate_realtime:
+        type: boolean
+        default: false
+        description: "Simulate realtime data feed from file"
+
+    additionalProperties: true
+
+  strategy:
+    type: object
+    required:
+      - type
+    properties:
+      type:
+        type: string
+        description: "Strategy class name (e.g., CustomStrategy, SMACrossoverStrategy)"
+        minLength: 1
+
+      parameters:
+        type: object
+        description: "Strategy-specific parameters"
+        additionalProperties: true
+
+        # CustomStrategy structure
+        properties:
+          entry_logic:
+            type: object
+            properties:
+              name:
+                type: string
+                description: "Entry logic mixin name"
+              params:
+                type: object
+                description: "Entry logic parameters"
+                additionalProperties: true
+
+          exit_logic:
+            type: object
+            properties:
+              name:
+                type: string
+                description: "Exit logic mixin name"
+              params:
+                type: object
+                description: "Exit logic parameters"
+                additionalProperties: true
+
+          position_size:
+            type: number
+            minimum: 0
+            maximum: 1
+            description: "Position size as fraction of capital"
+
+    additionalProperties: false
+
+  trading:
+    type: object
+    description: "Trading execution settings"
+    properties:
+      position_size:
+        type: number
+        minimum: 0
+        maximum: 1
+        description: "Default position size (0-1)"
+
+      max_positions:
+        type: integer
+        minimum: 1
+        maximum: 100
+        description: "Maximum concurrent positions"
+
+      order_type:
+        type: string
+        enum:
+          - "market"
+          - "limit"
+        default: "market"
+
+    additionalProperties: true
+
+  risk_management:
+    type: object
+    description: "Risk management rules"
+    properties:
+      max_position_size:
+        type: number
+        minimum: 0
+        description: "Maximum position size in base currency"
+
+      stop_loss_pct:
+        type: number
+        minimum: 0
+        maximum: 100
+        description: "Stop loss percentage"
+
+      take_profit_pct:
+        type: number
+        minimum: 0
+        maximum: 1000
+        description: "Take profit percentage"
+
+      max_daily_loss:
+        type: number
+        minimum: 0
+        description: "Maximum daily loss in base currency"
+
+      max_daily_trades:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        description: "Maximum trades per day"
+
+      trailing_stop:
+        type: boolean
+        description: "Enable trailing stop"
+
+      trailing_stop_pct:
+        type: number
+        minimum: 0
+        maximum: 100
+        description: "Trailing stop percentage"
+
+    additionalProperties: true
+
+  notifications:
+    type: object
+    description: "Notification settings"
+    properties:
+      position_opened:
+        type: boolean
+        default: false
+        description: "Notify when position is opened"
+
+      position_closed:
+        type: boolean
+        default: false
+        description: "Notify when position is closed"
+
+      email_enabled:
+        type: boolean
+        default: false
+        description: "Enable email notifications"
+
+      telegram_enabled:
+        type: boolean
+        default: false
+        description: "Enable Telegram notifications"
+
+      error_notifications:
+        type: boolean
+        default: true
+        description: "Notify on errors"
+
+      daily_summary:
+        type: boolean
+        default: false
+        description: "Send daily performance summary"
+
+    additionalProperties: true
+
+# Allow additional top-level fields for metadata/extensions
+additionalProperties: true

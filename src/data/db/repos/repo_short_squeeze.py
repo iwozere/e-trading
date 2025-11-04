@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from src.data.db.models.model_short_squeeze import (
-    ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, AdHocCandidateModel, FINRAShortInterest,
+    ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, AdHocCandidateModel,
     AlertLevel, CandidateSource
 )
 from src.notification.logger import setup_logger

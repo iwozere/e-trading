@@ -19,7 +19,7 @@ from src.trading.services.bot_config_validator import (
     validate_bot_config_json,
     validate_database_bot_record
 )
-from src.data.db.services import trading_service
+from src.data.db.services.trading_service import trading_service, get_bot_configuration_schema
 
 
 class TestBotConfigValidator:
@@ -80,18 +80,17 @@ class TestBotConfigValidator:
         config = {
             "name": "Test Bot",
             "enabled": True
-            # Missing: id, symbol, broker, strategy
+            # Missing: symbol, broker, strategy (id, name, enabled are database fields, not config fields)
         }
 
         validator = BotConfigValidator()
         is_valid, errors, warnings = validator.validate_bot_config(config)
 
         assert not is_valid, "Configuration should be invalid"
-        assert len(errors) >= 4, f"Should have at least 4 errors for missing fields: {errors}"
+        assert len(errors) >= 3, f"Should have at least 3 errors for missing fields: {errors}"
 
-        # Check for specific missing fields
+        # Check for specific missing fields (config fields only, not database fields)
         error_text = " ".join(errors)
-        assert "id" in error_text
         assert "symbol" in error_text
         assert "broker" in error_text
         assert "strategy" in error_text
@@ -106,7 +105,7 @@ class TestBotConfigValidator:
             "broker": {
                 "type": "invalid_broker",
                 "trading_mode": "invalid_mode"
-                # Missing: name
+                # Note: 'name' is optional in schema, not required
             },
             "strategy": {
                 "type": "CustomStrategy",
@@ -119,7 +118,7 @@ class TestBotConfigValidator:
 
         assert not is_valid, "Configuration should be invalid"
         assert any("trading_mode" in error for error in errors), f"Should have trading_mode error: {errors}"
-        assert any("name" in error for error in errors), f"Should have missing name error: {errors}"
+        assert any("type" in error or "broker" in error for error in errors), f"Should have broker type error: {errors}"
 
     def test_invalid_strategy_config(self):
         """Test validation with invalid strategy configuration."""
@@ -137,8 +136,8 @@ class TestBotConfigValidator:
             "strategy": {
                 "type": "CustomStrategy",
                 "parameters": {
-                    # Missing entry_logic and exit_logic
-                    "position_size": 1.5  # Invalid: > 1
+                    # Missing entry_logic and exit_logic (reported as warnings in semantic validation)
+                    "position_size": 1.5  # Invalid: > 1 (reported as error)
                 }
             }
         }
@@ -147,10 +146,15 @@ class TestBotConfigValidator:
         is_valid, errors, warnings = validator.validate_bot_config(config)
 
         assert not is_valid, "Configuration should be invalid"
+
+        # position_size violation should be an error
         error_text = " ".join(errors)
-        assert "entry_logic" in error_text
-        assert "exit_logic" in error_text
         assert "position_size" in error_text
+
+        # entry_logic and exit_logic missing are reported as warnings
+        warning_text = " ".join(warnings)
+        assert "entry_logic" in warning_text
+        assert "exit_logic" in warning_text
 
     def test_validate_json_string(self):
         """Test validation from JSON string."""
@@ -253,32 +257,34 @@ class TestTradingServiceIntegration:
 
     def test_get_bot_configuration_schema(self):
         """Test getting the bot configuration schema."""
-        schema = trading_service.get_bot_configuration_schema()
+        schema = get_bot_configuration_schema()
 
         assert isinstance(schema, dict)
         assert "type" in schema
         assert "required" in schema
         assert "properties" in schema
 
-        # Check required fields are present
+        # Check required fields are present (config fields only, not database fields)
         required_fields = schema["required"]
-        assert "id" in required_fields
-        assert "name" in required_fields
-        assert "enabled" in required_fields
         assert "symbol" in required_fields
         assert "broker" in required_fields
         assert "strategy" in required_fields
 
+        # Database fields (id, name, enabled) should NOT be in config schema
+        assert "id" not in required_fields
+        assert "name" not in required_fields
+        assert "enabled" not in required_fields
+
     def test_configuration_validation_functions_exist(self):
         """Test that configuration validation functions are available."""
-        # These functions should exist and be callable
+        # Test trading_service instance methods
         assert hasattr(trading_service, 'validate_bot_configuration')
         assert hasattr(trading_service, 'validate_all_bot_configurations')
-        assert hasattr(trading_service, 'get_bot_configuration_schema')
-
         assert callable(trading_service.validate_bot_configuration)
         assert callable(trading_service.validate_all_bot_configurations)
-        assert callable(trading_service.get_bot_configuration_schema)
+
+        # Test module-level function (not an instance method)
+        assert callable(get_bot_configuration_schema)
 
 
 if __name__ == "__main__":

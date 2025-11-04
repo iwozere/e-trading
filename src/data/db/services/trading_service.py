@@ -409,71 +409,10 @@ def get_bot_configuration_schema() -> Dict[str, Any]:
     """
     Get the expected configuration schema for bot configurations.
 
+    Returns the JSON Schema loaded from the YAML schema file.
+
     Returns:
         Dictionary describing the expected configuration structure
     """
-    return {
-        "type": "object",
-        "required": ["id", "name", "enabled", "symbol", "broker", "strategy"],
-        "properties": {
-            "id": {"type": "string", "description": "Unique bot identifier"},
-            "name": {"type": "string", "description": "Human-readable bot name"},
-            "enabled": {"type": "boolean", "description": "Whether the bot is enabled"},
-            "symbol": {"type": "string", "description": "Trading symbol (e.g., BTCUSDT)"},
-            "broker": {
-                "type": "object",
-                "required": ["type", "trading_mode", "name"],
-                "properties": {
-                    "type": {"type": "string", "enum": ["binance", "paper", "alpaca", "interactive_brokers"]},
-                    "trading_mode": {"type": "string", "enum": ["paper", "live"]},
-                    "name": {"type": "string", "description": "Broker instance name"},
-                    "cash": {"type": "number", "description": "Initial cash for paper trading"}
-                }
-            },
-            "strategy": {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                    "type": {"type": "string", "description": "Strategy type (e.g., CustomStrategy)"},
-                    "parameters": {"type": "object", "description": "Strategy-specific parameters"}
-                }
-            },
-            "data": {
-                "type": "object",
-                "properties": {
-                    "data_source": {"type": "string", "description": "Data source provider"},
-                    "interval": {"type": "string", "enum": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]},
-                    "lookback_bars": {"type": "integer", "minimum": 1, "maximum": 5000}
-                }
-            },
-            "trading": {
-                "type": "object",
-                "properties": {
-                    "position_size": {"type": "number", "minimum": 0, "maximum": 1},
-                    "max_positions": {"type": "integer", "minimum": 1}
-                }
-            },
-            "risk_management": {
-                "type": "object",
-                "properties": {
-                    "max_position_size": {"type": "number", "minimum": 0},
-                    "stop_loss_pct": {"type": "number", "minimum": 0},
-                    "take_profit_pct": {"type": "number", "minimum": 0},
-                    "max_daily_loss": {"type": "number", "minimum": 0},
-                    "max_daily_trades": {"type": "integer", "minimum": 1}
-                }
-            },
-            "notifications": {
-                "type": "object",
-                "properties": {
-                    "position_opened": {"type": "boolean"},
-                    "position_closed": {"type": "boolean"},
-                    "email_enabled": {"type": "boolean"},
-                    "telegram_enabled": {"type": "boolean"},
-                    "error_notifications": {"type": "boolean"},
-                    "performance_summaries": {"type": "string", "enum": ["none", "daily", "weekly", "monthly"]},
-                    "risk_alerts": {"type": "boolean"}
-                }
-            }
-        }
-    }
+    from src.trading.services.schema_validator import _schema_validator
+    return _schema_validator.load_schema("bot_config.yaml")

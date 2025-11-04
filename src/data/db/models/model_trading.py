@@ -28,7 +28,6 @@ class BotInstance(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("usr_users.id", ondelete="CASCADE"), nullable=False)
-    type = Column(String(20), nullable=False)  # 'paper' or 'live'
     status = Column(String(20), nullable=False)  # 'running', 'stopped', etc.
     started_at = Column(DateTime, nullable=True)
     last_heartbeat = Column(DateTime, nullable=True)

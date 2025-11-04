@@ -4,12 +4,15 @@ Bot Configuration Validator
 
 Validates trading bot configurations stored in the database.
 Ensures all required fields are present and valid before bot startup.
+
+This module now delegates to schema_validator.py for JSON Schema-based validation.
 """
 
 from typing import Dict, Any, List, Tuple, Optional
 import json
 from decimal import Decimal
 from src.notification.logger import setup_logger
+from src.trading.services.schema_validator import validate_bot_configuration
 
 _logger = setup_logger(__name__)
 
@@ -29,7 +32,7 @@ class BotConfigValidator:
 
     def validate_bot_config(self, config: Dict[str, Any]) -> Tuple[bool, List[str], List[str]]:
         """
-        Validate a complete bot configuration.
+        Validate a complete bot configuration using JSON Schema.
 
         Args:
             config: Bot configuration dictionary from database
@@ -37,42 +40,8 @@ class BotConfigValidator:
         Returns:
             Tuple of (is_valid, errors, warnings)
         """
-        self.errors = []
-        self.warnings = []
-
-        try:
-            # Validate required top-level fields
-            self._validate_required_fields(config)
-
-            # Validate broker configuration
-            if "broker" in config:
-                self._validate_broker_config(config["broker"])
-
-            # Validate strategy configuration
-            if "strategy" in config:
-                self._validate_strategy_config(config["strategy"])
-
-            # Validate data configuration
-            if "data" in config:
-                self._validate_data_config(config["data"])
-
-            # Validate trading configuration
-            if "trading" in config:
-                self._validate_trading_config(config["trading"])
-
-            # Validate risk management
-            if "risk_management" in config:
-                self._validate_risk_management(config["risk_management"])
-
-            # Validate notifications
-            if "notifications" in config:
-                self._validate_notifications_config(config["notifications"])
-
-            return len(self.errors) == 0, self.errors, self.warnings
-
-        except Exception as e:
-            self.errors.append(f"Configuration validation error: {str(e)}")
-            return False, self.errors, self.warnings
+        # Delegate to schema-based validator
+        return validate_bot_configuration(config)
 
     def _validate_required_fields(self, config: Dict[str, Any]) -> None:
         """Validate required top-level configuration fields."""
@@ -261,7 +230,7 @@ class BotConfigValidator:
 
 def validate_bot_config_json(config_json: str) -> Tuple[bool, List[str], List[str]]:
     """
-    Validate bot configuration from JSON string.
+    Validate bot configuration from JSON string using JSON Schema.
 
     Args:
         config_json: JSON string containing bot configuration
@@ -271,8 +240,7 @@ def validate_bot_config_json(config_json: str) -> Tuple[bool, List[str], List[st
     """
     try:
         config = json.loads(config_json)
-        validator = BotConfigValidator()
-        return validator.validate_bot_config(config)
+        return validate_bot_configuration(config)
     except json.JSONDecodeError as e:
         return False, [f"Invalid JSON: {str(e)}"], []
     except Exception as e:
@@ -289,19 +257,14 @@ def validate_database_bot_record(bot_record: Dict[str, Any]) -> Tuple[bool, List
     Returns:
         Tuple of (is_valid, errors, warnings)
     """
-    validator = BotConfigValidator()
     errors = []
     warnings = []
 
-    # Validate database record fields
-    required_db_fields = ["id", "user_id", "type", "status", "config"]
+    # Validate database record fields (excluding 'type' as per user directive)
+    required_db_fields = ["id", "user_id", "status", "config"]
     for field in required_db_fields:
         if field not in bot_record or bot_record[field] is None:
             errors.append(f"Missing required database field: {field}")
-
-    # Validate bot type
-    if "type" in bot_record and bot_record["type"] not in ["paper", "live"]:
-        errors.append(f"Invalid bot type: {bot_record['type']}. Must be 'paper' or 'live'")
 
     # Validate status
     if "status" in bot_record:
@@ -313,13 +276,14 @@ def validate_database_bot_record(bot_record: Dict[str, Any]) -> Tuple[bool, List
     if errors:
         return False, errors, warnings
 
-    # Validate the configuration JSON
+    # Validate the configuration JSON using schema validator
     try:
         config = bot_record["config"]
         if isinstance(config, str):
             config = json.loads(config)
 
-        config_valid, config_errors, config_warnings = validator.validate_bot_config(config)
+        # Use schema-based validator directly
+        config_valid, config_errors, config_warnings = validate_bot_configuration(config)
         errors.extend(config_errors)
         warnings.extend(config_warnings)
 

@@ -76,6 +76,8 @@ class TradingServiceRunner:
 - **Multi-Bot Management**: Run multiple strategies simultaneously with isolation
 - **Heartbeat Monitoring**: Automatic health checks and recovery for unhealthy bots
 
+**Detailed Architecture**: See Section 1.3 below for comprehensive StrategyManager internal architecture.
+
 #### 1.2 Telegram Bot Service (`src/telegram/bot.py`)
 **Purpose**: Handles Telegram bot operations and user interactions
 
@@ -105,6 +107,585 @@ class TelegramBot:
     async def process_command(self, message: Message):
         # Handle incoming commands
 ```
+
+#### 1.3 StrategyManager Internal Architecture
+
+The `StrategyManager` is the core orchestration layer for multi-bot trading operations. It serves as the **SOLE CONFIGURATION LOADER** and manages the complete lifecycle of trading bot instances.
+
+##### 1.3.1 Component Responsibilities
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    StrategyManager                               │
+│  - SOLE CONFIG LOADER from database                             │
+│  - Bot lifecycle management (start/stop/restart)                │
+│  - Health monitoring and auto-recovery                          │
+│  - Database polling for hot-reload                              │
+│  - Notification orchestration                                   │
+└─────────────────────────────────────────────────────────────────┘
+                             │
+                             │ manages
+                             ▼
+        ┌────────────────────────────────────────────┐
+        │        StrategyInstance (Bot Wrapper)       │
+        │  - Individual bot execution                 │
+        │  - Backtrader integration                   │
+        │  - Data feed management                     │
+        │  - Heartbeat updates                        │
+        │  - Trade recording                          │
+        │  - Performance tracking                     │
+        └────────────────────────────────────────────┘
+                             │
+                             │ uses
+                             ▼
+        ┌────────────────────────────────────────────┐
+        │         BaseTradingBot + Strategy           │
+        │  - Trading logic execution                  │
+        │  - Order management                         │
+        │  - Position tracking                        │
+        └────────────────────────────────────────────┘
+```
+
+##### 1.3.2 StrategyManager Core Features
+
+**Configuration Loading** (`load_strategies_from_db`):
+```python
+async def load_strategies_from_db(self, user_id: Optional[int] = None,
+                                 resume_mode: bool = True) -> bool:
+    """
+    SOLE CONFIGURATION LOADER - only place configs are loaded from database.
+
+    Features:
+    - Crash detection and smart resume
+    - State recovery (positions, trades)
+    - Configuration validation
+    - StrategyHandler integration
+    """
+    # 1. Detect crash vs normal startup
+    was_crashed = self._detect_crash_recovery() if resume_mode else False
+
+    # 2. Load appropriate bots
+    if was_crashed:
+        bots = trading_service.get_bots_by_status("running", user_id)  # Resume only running
+    else:
+        bots = trading_service.get_enabled_bots(user_id)  # Start all enabled
+
+    # 3. Create marker file
+    self._mark_service_running()
+
+    # 4. Process each bot
+    for bot in bots:
+        # Validate config
+        is_valid, errors, warnings = trading_service.validate_bot_config(bot["config"])
+
+        # Recover state if crashed
+        if was_crashed:
+            config = self._recover_bot_state(bot["id"], config)
+
+        # Create StrategyInstance
+        self.strategy_instances[bot_id] = StrategyInstance(bot_id, config, notification_client)
+```
+
+**Bot Lifecycle Management**:
+```python
+# Start all loaded bots
+async def start_all_strategies(self) -> Dict[str, bool]:
+    results = {}
+    for instance_id, instance in self.strategy_instances.items():
+        success = await instance.start()
+        results[instance_id] = success
+    return results
+
+# Stop single bot
+async def stop_strategy(self, instance_id: str) -> bool:
+    instance = self.strategy_instances.get(instance_id)
+    if instance:
+        return await instance.stop()
+    return False
+
+# Restart bot (used for recovery)
+async def restart_strategy(self, instance_id: str) -> bool:
+    instance = self.strategy_instances.get(instance_id)
+    if instance:
+        return await instance.restart()
+    return False
+```
+
+**Health Monitoring** (`_monitor_strategies`):
+```python
+async def _monitor_strategies(self):
+    """
+    Continuous monitoring loop that:
+    - Checks heartbeat health (3x interval threshold)
+    - Auto-restarts unhealthy bots (max 3 attempts)
+    - Logs detailed metrics every minute
+    """
+    while self.is_running:
+        current_time = datetime.now(timezone.utc)
+
+        for instance_id, instance in self.strategy_instances.items():
+            if instance.status == 'running':
+                # Check heartbeat age
+                if instance.last_heartbeat:
+                    heartbeat_age = (current_time - instance.last_heartbeat).total_seconds()
+                    max_age = instance.heartbeat_interval * 3
+
+                    if heartbeat_age > max_age:
+                        _logger.warning("Bot %s heartbeat stale, attempting recovery...", instance.name)
+                        if instance.error_count < 3:
+                            await instance.restart()
+                        else:
+                            instance.status = 'error'
+                            trading_service.update_bot_status(int(instance_id), "error")
+
+        await asyncio.sleep(60)  # Check every minute
+```
+
+**Database Polling** (`start_db_polling`):
+```python
+async def start_db_polling(self, user_id: Optional[int] = None, interval: int = 60):
+    """
+    Hot-reload mechanism that polls database for config changes:
+    - New bots are created and started
+    - Stopped bots are terminated
+    - Config changes trigger bot restart
+    """
+    async def _poll_loop():
+        while self._db_poll_running:
+            try:
+                bots = trading_service.get_all_bots(user_id)
+
+                for bot in bots:
+                    bot_id = str(bot["id"])
+                    desired_status = bot.get("status", "enabled")
+
+                    if bot_id not in self.strategy_instances:
+                        # New bot - create and start
+                        config = self._db_bot_to_strategy_config(bot)
+                        self.strategy_instances[bot_id] = StrategyInstance(bot_id, config, self.notification_client)
+                        await self.strategy_instances[bot_id].start()
+                    else:
+                        instance = self.strategy_instances[bot_id]
+                        # Start or stop based on desired status
+                        if desired_status in ("enabled", "starting") and instance.status != "running":
+                            await instance.start()
+                        elif desired_status == "stopped" and instance.status == "running":
+                            await instance.stop()
+
+                await asyncio.sleep(interval)
+            except Exception as e:
+                _logger.exception("Error in DB polling:")
+                await asyncio.sleep(interval)
+
+    self.db_poll_task = asyncio.create_task(_poll_loop())
+```
+
+##### 1.3.3 StrategyInstance Architecture
+
+Each `StrategyInstance` represents a single trading bot with complete isolation:
+
+**Core Components**:
+```python
+class StrategyInstance:
+    def __init__(self, instance_id: str, config: Dict[str, Any], notification_client):
+        # Identity
+        self.instance_id = instance_id
+        self.name = config.get('name', f'Strategy_{instance_id}')
+        self.config = config
+
+        # Trading components
+        self.broker = None          # Broker connection (paper/live)
+        self.trading_bot = None     # BaseTradingBot instance
+        self.data_feed = None       # Real-time data feed
+        self.cerebro = None         # Backtrader engine
+
+        # Status tracking
+        self.status = 'stopped'
+        self.is_running = False
+        self.error_count = 0
+        self.last_error = None
+
+        # Heartbeat
+        self.last_heartbeat = None
+        self.heartbeat_interval = 60
+
+        # Threads
+        self.monitor_thread = None    # Data feed monitoring
+        self.heartbeat_thread = None  # Heartbeat updates
+
+        # Notifications
+        self.notification_client = notification_client
+```
+
+**Bot Startup** (`start` method):
+```python
+async def start(self) -> bool:
+    """
+    Complete bot startup with Backtrader integration:
+    1. Create data feed (WebSocket/REST)
+    2. Setup Backtrader Cerebro engine
+    3. Load strategy class via StrategyHandler
+    4. Start data feed monitoring thread
+    5. Start heartbeat thread
+    6. Update database status
+    """
+    try:
+        # 1. Create data feed
+        self.data_feed = self._create_data_feed()
+
+        # 2. Setup Backtrader
+        self.cerebro = self._setup_backtrader()
+
+        # 3. Start threads
+        self.monitor_thread = threading.Thread(target=self._monitor_data_feed, daemon=True)
+        self.monitor_thread.start()
+
+        self.heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
+        self.heartbeat_thread.start()
+
+        # 4. Update status
+        self.status = 'running'
+        self.is_running = True
+        self.error_count = 0
+
+        # 5. Persist to database
+        trading_service.update_bot_status(
+            int(self.instance_id),
+            "running",
+            started_at=datetime.now(timezone.utc)
+        )
+
+        return True
+    except Exception as e:
+        _logger.exception("Failed to start bot %s:", self.name)
+        self.status = 'error'
+        trading_service.update_bot_status(int(self.instance_id), "error", error_message=str(e))
+        return False
+```
+
+**Heartbeat System** (`_heartbeat_loop`):
+```python
+def _heartbeat_loop(self):
+    """
+    Periodic heartbeat updates to database:
+    - Updates last_heartbeat timestamp every 60s
+    - Updates performance metrics every 5 heartbeats (5 minutes)
+    - Enables health monitoring by StrategyManager
+    """
+    heartbeat_count = 0
+
+    while self.is_running and not self.should_stop:
+        try:
+            # Update heartbeat
+            self.last_heartbeat = datetime.now(timezone.utc)
+            trading_service.heartbeat(self.instance_id)
+
+            # Periodic performance updates
+            heartbeat_count += 1
+            if heartbeat_count % 5 == 0:
+                self.update_performance_metrics()
+
+            time.sleep(self.heartbeat_interval)
+        except Exception as e:
+            _logger.exception("Error in heartbeat loop:")
+            time.sleep(self.heartbeat_interval)
+```
+
+**Trade Recording** (`record_trade`):
+```python
+def record_trade(self, trade_data: Dict[str, Any]):
+    """
+    Record trade execution to database:
+    - Enriches with bot context (bot_id, symbol, strategy)
+    - Persists to trading_trades table
+    - Updates performance metrics
+    - Triggers trade notification
+    """
+    full_trade_data = {
+        'bot_id': int(self.instance_id),
+        'trade_type': self.config['broker'].get('trading_mode', 'paper'),
+        'symbol': self.config.get('symbol', 'UNKNOWN'),
+        'interval': self.config.get('data', {}).get('interval', '1h'),
+        'strategy_name': self.config['strategy'].get('type', 'CustomStrategy'),
+        **trade_data
+    }
+
+    # Record in database
+    trading_service.add_trade(full_trade_data)
+
+    # Update performance metrics
+    self.update_performance_metrics()
+
+    # Send notification
+    asyncio.create_task(self._send_trade_notification(...))
+```
+
+**Order Execution Callback** (`on_order_executed`):
+```python
+def on_order_executed(self, order_type: str, price: float, size: float, timestamp: Optional[datetime] = None):
+    """
+    Callback invoked when an order executes:
+    - Records trade details
+    - Calculates P&L for sell orders
+    - Sends trade notification
+    - Updates performance metrics
+
+    This integrates with BaseTradingBot's notify_order method.
+    """
+    if timestamp is None:
+        timestamp = datetime.now(timezone.utc)
+
+    trade_data = {}
+
+    if order_type.lower() == 'buy':
+        trade_data.update({
+            'entry_time': timestamp,
+            'entry_price': price,
+            'entry_value': price * size,
+        })
+    elif order_type.lower() == 'sell':
+        # Calculate P&L
+        pnl = trading_service.get_pnl_summary(self.instance_id).get('net_pnl', 0)
+        trade_data.update({
+            'exit_time': timestamp,
+            'exit_price': price,
+            'exit_value': price * size,
+            'pnl': pnl
+        })
+
+    self.record_trade(trade_data)
+```
+
+**Performance Tracking** (`update_performance_metrics`):
+```python
+def update_performance_metrics(self):
+    """
+    Update performance metrics in database:
+    - Current balance from broker
+    - Total P&L calculation
+    - Persists to trading_bots table
+
+    Called:
+    - Every 5 heartbeats (5 minutes)
+    - After each trade execution
+    """
+    if not self.broker:
+        return
+
+    # Get broker balance
+    current_balance = self.broker.get_value()
+
+    # Calculate P&L
+    initial_balance = self.config['broker'].get('cash')
+    total_pnl = current_balance - initial_balance if current_balance and initial_balance else None
+
+    # Update database
+    trading_service.update_bot_performance(
+        int(self.instance_id),
+        current_balance=current_balance,
+        total_pnl=total_pnl
+    )
+```
+
+##### 1.3.4 Notification Integration
+
+**Trade Notifications** (`_send_trade_notification`):
+```python
+async def _send_trade_notification(self, order_type: str, price: float, size: float, pnl: Optional[float] = None):
+    """
+    Send trade execution notifications via NotificationServiceClient:
+    - Checks bot notification config
+    - Fetches user notification preferences
+    - Formats message with bot context
+    - Supports email and Telegram channels
+    """
+    if not self.notification_client:
+        return
+
+    # Get user details
+    user_details = self._get_user_notification_details()
+    if not user_details:
+        return
+
+    # Check if notification type enabled
+    notif_config = self.config.get('notifications', {})
+    if order_type.lower() == 'buy' and not notif_config.get('position_opened', False):
+        return
+    if order_type.lower() == 'sell' and not notif_config.get('position_closed', False):
+        return
+
+    # Format message
+    symbol = self.config.get('symbol', 'UNKNOWN')
+    trading_mode = self.config['broker'].get('trading_mode', 'paper')
+
+    if order_type.lower() == 'buy':
+        title = f"Position Opened: {symbol}"
+        message = f"[{self.name}] BUY {size:.4f} {symbol} @ ${price:,.2f}"
+        notification_type = MessageType.TRADE_ENTRY
+    else:
+        title = f"Position Closed: {symbol}"
+        message = f"[{self.name}] SELL {size:.4f} {symbol} @ ${price:,.2f}"
+        if pnl is not None:
+            pnl_pct = (pnl / (price * size)) * 100 if (price * size) > 0 else 0
+            message += f" (P&L: ${pnl:,.2f} / {pnl_pct:+.2f}%)"
+        notification_type = MessageType.TRADE_EXIT
+
+    if trading_mode == 'paper':
+        message += " (Paper Trading)"
+
+    # Send notification
+    await self.notification_client.send_notification(
+        notification_type=notification_type,
+        title=title,
+        message=message,
+        priority=MessagePriority.HIGH,
+        channels=user_details['channels'],
+        recipient_id=user_details['recipient_id'],
+        email_receiver=user_details['email'],
+        telegram_chat_id=user_details.get('telegram_user_id'),
+        data={
+            'bot_id': self.instance_id,
+            'symbol': symbol,
+            'order_type': order_type.upper(),
+            'price': price,
+            'size': size,
+            'pnl': pnl,
+            'trading_mode': trading_mode
+        }
+    )
+```
+
+**Error Notifications** (`_send_error_notification`):
+```python
+async def _send_error_notification(self, error_message: str, error_type: str = "ERROR"):
+    """
+    Send bot error notifications:
+    - Checks error_notifications config
+    - Critical priority for visibility
+    - Includes bot context and error details
+    """
+    notif_config = self.config.get('notifications', {})
+    if not notif_config.get('error_notifications', False):
+        return
+
+    user_details = self._get_user_notification_details()
+    if not user_details:
+        return
+
+    title = f"Bot Error: {self.name}"
+    message = f"[{self.name}] {error_type}: {error_message}"
+
+    await self.notification_client.send_notification(
+        notification_type=MessageType.ERROR,
+        title=title,
+        message=message,
+        priority=MessagePriority.CRITICAL,
+        channels=user_details['channels'],
+        recipient_id=user_details['recipient_id'],
+        email_receiver=user_details['email'],
+        telegram_chat_id=user_details.get('telegram_user_id'),
+        data={
+            'bot_id': self.instance_id,
+            'error_type': error_type,
+            'error_message': error_message
+        }
+    )
+```
+
+##### 1.3.5 Integration with StrategyHandler
+
+The `StrategyManager` uses `StrategyHandler` for dynamic strategy loading:
+
+```python
+# In StrategyInstance._get_strategy_class()
+def _get_strategy_class(self, strategy_type: str):
+    """
+    Get strategy class via StrategyHandler plugin system.
+
+    Supports:
+    - Built-in strategies (SMACrossoverStrategy, RSIStrategy, etc.)
+    - CustomStrategy with entry/exit mixins
+    - Future plugin strategies
+    """
+    from src.trading.strategy_handler import strategy_handler
+
+    strategy_class = strategy_handler.get_strategy_class(strategy_type)
+    if not strategy_class:
+        _logger.error("Unknown strategy type: %s", strategy_type)
+        raise ValueError(f"Unknown strategy type: {strategy_type}")
+
+    return strategy_class
+
+# In StrategyManager.load_strategies_from_db()
+# Validate strategy config before creating instance
+is_valid, errors, warnings = strategy_handler.validate_strategy_config(
+    strategy_type,
+    strategy_config
+)
+
+if not is_valid:
+    _logger.error("Bot %s: Invalid strategy config: %s", bot["id"], errors)
+    trading_service.update_bot_status(bot["id"], "error", error_message=f"Invalid config: {errors}")
+    continue
+```
+
+##### 1.3.6 Configuration Mapping
+
+**Database to StrategyInstance Config** (`_db_bot_to_strategy_config`):
+```python
+def _db_bot_to_strategy_config(self, bot: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Transform database bot record to StrategyInstance config format.
+
+    Maps:
+    - bot.config (JSONB) → StrategyInstance config
+    - bot.user_id → config.user_id
+    - bot.id → instance_id
+    - bot.description → config.name
+    """
+    db_config = bot.get("config", {})
+
+    return {
+        'user_id': bot['user_id'],
+        'name': bot.get('description', f"Bot {bot['id']}"),
+        'symbol': db_config.get('symbol'),
+        'broker': db_config.get('broker', {}),
+        'strategy': db_config.get('strategy', {}),
+        'data': db_config.get('data', {}),
+        'notifications': db_config.get('notifications', {}),
+        'extra_metadata': bot.get('extra_metadata', {})
+    }
+```
+
+##### 1.3.7 Key Design Principles
+
+**Single Source of Truth**:
+- `StrategyManager` is the ONLY component that loads configurations from database
+- All other components receive configs through `StrategyManager`
+- No JSON file loading in production (deprecated)
+
+**Isolation**:
+- Each `StrategyInstance` runs independently
+- Separate broker connections, data feeds, Backtrader engines
+- Failure of one bot doesn't affect others
+
+**Observability**:
+- Heartbeat-based health monitoring
+- Detailed structured logging
+- Performance metrics tracking
+- Trade recording for analysis
+
+**Reliability**:
+- Crash detection and smart resume
+- State recovery (positions, trades)
+- Auto-recovery for unhealthy bots (max 3 attempts)
+- Graceful shutdown with status persistence
+
+**Flexibility**:
+- Hot-reload via database polling
+- Dynamic strategy loading via StrategyHandler
+- Multi-user support with user_id filtering
+- Paper and live trading modes
 
 ### 2. Scheduled Job Services Layer
 

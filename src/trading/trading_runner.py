@@ -35,7 +35,7 @@ from typing import Optional
 from datetime import datetime, timezone
 import argparse
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.trading.strategy_manager import StrategyManager

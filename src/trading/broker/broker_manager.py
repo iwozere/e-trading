@@ -371,6 +371,39 @@ class BrokerManager:
             _logger.exception("Failed to remove broker %s:", broker_id)
             return False
 
+    async def shutdown(self) -> None:
+        """
+        Shutdown all managed brokers gracefully.
+
+        This method stops all brokers and cleans up resources.
+        Called during service shutdown.
+        """
+        try:
+            _logger.info("Shutting down Broker Manager...")
+
+            # Stop all brokers
+            broker_ids = list(self.brokers.keys())
+            for broker_id in broker_ids:
+                try:
+                    await self.stop_broker(broker_id)
+                except Exception as e:
+                    _logger.warning("Error stopping broker %s during shutdown: %s", broker_id, e)
+
+            # Stop health monitoring
+            self.health_monitor.stop_monitoring()
+
+            # Clear broker registry
+            self.brokers.clear()
+            self.broker_configs.clear()
+            self.broker_start_times.clear()
+
+            self.manager_active = False
+
+            _logger.info("Broker Manager shutdown complete")
+
+        except Exception as e:
+            _logger.exception("Error during Broker Manager shutdown:")
+
     async def start_broker(self, broker_id: str) -> bool:
         """
         Start a broker.

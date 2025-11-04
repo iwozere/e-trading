@@ -1,8 +1,8 @@
-"""initial_schema
+"""initial
 
-Revision ID: 7248560962fe
+Revision ID: 4b09a309e9ac
 Revises: 
-Create Date: 2025-11-02 21:47:31.575013
+Create Date: 2025-11-04 18:16:02.150394
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '7248560962fe'
+revision = '4b09a309e9ac'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -265,15 +265,15 @@ def upgrade() -> None:
     op.create_index(op.f('ix_ss_deep_metrics_id'), 'ss_deep_metrics', ['id'], unique=False)
     op.create_index(op.f('ix_ss_deep_metrics_ticker'), 'ss_deep_metrics', ['ticker'], unique=False)
     op.create_unique_constraint('unique_ticker_date', 'ss_deep_metrics', ['ticker', 'date'])
-    op.drop_column('ss_deep_metrics', 'virality_index')
-    op.drop_column('ss_deep_metrics', 'sentiment_score_24h')
-    op.drop_column('ss_deep_metrics', 'mentions_growth_7d')
-    op.drop_column('ss_deep_metrics', 'sentiment_data_quality')
     op.drop_column('ss_deep_metrics', 'bot_pct')
-    op.drop_column('ss_deep_metrics', 'mentions_24h')
-    op.drop_column('ss_deep_metrics', 'positive_ratio_24h')
     op.drop_column('ss_deep_metrics', 'sentiment_raw_payload')
+    op.drop_column('ss_deep_metrics', 'mentions_24h')
+    op.drop_column('ss_deep_metrics', 'mentions_growth_7d')
+    op.drop_column('ss_deep_metrics', 'virality_index')
     op.drop_column('ss_deep_metrics', 'unique_authors_24h')
+    op.drop_column('ss_deep_metrics', 'sentiment_data_quality')
+    op.drop_column('ss_deep_metrics', 'positive_ratio_24h')
+    op.drop_column('ss_deep_metrics', 'sentiment_score_24h')
     op.alter_column('ss_snapshot', 'created_at',
                existing_type=postgresql.TIMESTAMP(timezone=True),
                server_default=None,
@@ -630,15 +630,15 @@ def downgrade() -> None:
                existing_type=postgresql.TIMESTAMP(timezone=True),
                server_default=sa.text('CURRENT_TIMESTAMP'),
                existing_nullable=False)
-    op.add_column('ss_deep_metrics', sa.Column('unique_authors_24h', sa.INTEGER(), autoincrement=False, nullable=True))
-    op.add_column('ss_deep_metrics', sa.Column('sentiment_raw_payload', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
-    op.add_column('ss_deep_metrics', sa.Column('positive_ratio_24h', sa.REAL(), autoincrement=False, nullable=True))
-    op.add_column('ss_deep_metrics', sa.Column('mentions_24h', sa.INTEGER(), autoincrement=False, nullable=True))
-    op.add_column('ss_deep_metrics', sa.Column('bot_pct', sa.REAL(), autoincrement=False, nullable=True))
-    op.add_column('ss_deep_metrics', sa.Column('sentiment_data_quality', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
-    op.add_column('ss_deep_metrics', sa.Column('mentions_growth_7d', sa.REAL(), autoincrement=False, nullable=True))
     op.add_column('ss_deep_metrics', sa.Column('sentiment_score_24h', sa.REAL(), autoincrement=False, nullable=True))
+    op.add_column('ss_deep_metrics', sa.Column('positive_ratio_24h', sa.REAL(), autoincrement=False, nullable=True))
+    op.add_column('ss_deep_metrics', sa.Column('sentiment_data_quality', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('ss_deep_metrics', sa.Column('unique_authors_24h', sa.INTEGER(), autoincrement=False, nullable=True))
     op.add_column('ss_deep_metrics', sa.Column('virality_index', sa.REAL(), autoincrement=False, nullable=True))
+    op.add_column('ss_deep_metrics', sa.Column('mentions_growth_7d', sa.REAL(), autoincrement=False, nullable=True))
+    op.add_column('ss_deep_metrics', sa.Column('mentions_24h', sa.INTEGER(), autoincrement=False, nullable=True))
+    op.add_column('ss_deep_metrics', sa.Column('sentiment_raw_payload', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('ss_deep_metrics', sa.Column('bot_pct', sa.REAL(), autoincrement=False, nullable=True))
     op.drop_constraint('unique_ticker_date', 'ss_deep_metrics', type_='unique')
     op.drop_index(op.f('ix_ss_deep_metrics_ticker'), table_name='ss_deep_metrics')
     op.drop_index(op.f('ix_ss_deep_metrics_id'), table_name='ss_deep_metrics')
