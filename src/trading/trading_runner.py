@@ -59,17 +59,19 @@ class TradingServiceRunner:
     - Coordinates startup/shutdown
     """
 
-    def __init__(self, user_id: Optional[int] = None, db_poll_interval: int = 60):
+    def __init__(self, user_id: Optional[int] = None, db_poll_interval: int = 60, resume_mode: bool = True):
         """
         Initialize the trading service runner.
 
         Args:
             user_id: Optional user ID to filter bots
             db_poll_interval: Database polling interval in seconds for hot-reload
+            resume_mode: If True, use smart resume logic (crash recovery) (default: True)
         """
         self.strategy_manager = StrategyManager()
         self.user_id = user_id
         self.db_poll_interval = db_poll_interval
+        self.resume_mode = resume_mode
         self.is_running = False
         self.start_time = None
 
@@ -87,9 +89,9 @@ class TradingServiceRunner:
             self.is_running = True
             self.start_time = datetime.now(timezone.utc)
 
-            # StrategyManager handles ALL config loading
+            # StrategyManager handles ALL config loading (with crash recovery if enabled)
             _logger.info("Loading bot configurations from database...")
-            if not await self.strategy_manager.load_strategies_from_db(self.user_id):
+            if not await self.strategy_manager.load_strategies_from_db(self.user_id, self.resume_mode):
                 _logger.error("Failed to load bot configurations from database")
                 return False
 
@@ -184,13 +186,19 @@ async def main():
         default=60,
         help='Database polling interval in seconds for config hot-reload (default: 60)'
     )
+    parser.add_argument(
+        '--no-resume',
+        action='store_true',
+        help='Disable smart resume mode (start all enabled bots instead of only resuming crashed ones)'
+    )
 
     args = parser.parse_args()
 
     # Create and run the service
     runner = TradingServiceRunner(
         user_id=args.user_id,
-        db_poll_interval=args.poll_interval
+        db_poll_interval=args.poll_interval,
+        resume_mode=not args.no_resume  # Invert --no-resume flag
     )
     setup_signal_handlers(runner)
 

@@ -32,18 +32,22 @@ from src.trading.strategy_handler import strategy_handler
 from src.data.feed.data_feed_factory import DataFeedFactory
 from src.notification.logger import setup_logger
 from src.data.db.services.trading_service import trading_service
+from src.data.db.services.users_service import UsersService
+from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
 
 _logger = setup_logger(__name__)
+_users_service = UsersService()
 
 
 class StrategyInstance:
     """Represents a single strategy instance with its own configuration and broker."""
 
-    def __init__(self, instance_id: str, config: Dict[str, Any]):
+    def __init__(self, instance_id: str, config: Dict[str, Any], notification_client: Optional[NotificationServiceClient] = None):
         """Initialize strategy instance."""
         self.instance_id = instance_id
         self.config = config
         self.name = config.get('name', f'Strategy_{instance_id}')
+        self.notification_client = notification_client
 
         # Core components
         self.broker = None
@@ -59,8 +63,13 @@ class StrategyInstance:
         self.is_running = False
         self.should_stop = False
 
+        # Heartbeat tracking
+        self.last_heartbeat = None
+        self.heartbeat_interval = 60  # seconds
+
         # Threading for monitoring
         self.monitor_thread = None
+        self.heartbeat_thread = None
 
     async def start(self) -> bool:
         """
@@ -107,10 +116,23 @@ class StrategyInstance:
             self.monitor_thread.start()
             _logger.info("Started data feed monitor thread for %s", self.name)
 
+            # Start heartbeat thread
+            self.heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop,
+                daemon=True,
+                name=f"Heartbeat-{self.name}"
+            )
+            self.heartbeat_thread.start()
+            _logger.info("Started heartbeat thread for %s", self.name)
+
             # Set status
             self.status = 'running'
             self.start_time = datetime.now(timezone.utc)
             self.is_running = True
+
+            # Reset error count on successful start
+            self.error_count = 0
+            self.last_error = None
 
             # Update database status
             try:
@@ -143,6 +165,15 @@ class StrategyInstance:
                 )
             except Exception:
                 pass
+
+            # Send error notification
+            try:
+                await self._send_error_notification(
+                    f"Failed to start bot: {str(e)}",
+                    error_type="START_ERROR"
+                )
+            except Exception:
+                _logger.debug("Failed to send error notification")
 
             return False
 
@@ -220,6 +251,11 @@ class StrategyInstance:
         if self.start_time:
             uptime = (datetime.now(timezone.utc) - self.start_time).total_seconds()
 
+        # Calculate time since last heartbeat
+        heartbeat_age = None
+        if self.last_heartbeat:
+            heartbeat_age = (datetime.now(timezone.utc) - self.last_heartbeat).total_seconds()
+
         return {
             'instance_id': self.instance_id,
             'name': self.name,
@@ -230,7 +266,10 @@ class StrategyInstance:
             'broker_type': self.config['broker'].get('type'),
             'trading_mode': self.config['broker'].get('trading_mode'),
             'symbol': self.config.get('symbol'),
-            'strategy_type': self.config['strategy'].get('type')
+            'strategy_type': self.config['strategy'].get('type'),
+            'last_heartbeat': self.last_heartbeat.isoformat() if self.last_heartbeat else None,
+            'heartbeat_age_seconds': heartbeat_age,
+            'is_healthy': heartbeat_age < (self.heartbeat_interval * 2) if heartbeat_age else False
         }
 
     def _get_strategy_class(self, strategy_type: str):
@@ -457,8 +496,429 @@ class StrategyInstance:
                 _logger.error("Failed to reconnect data feed for %s", self.name)
                 self.error_count += 1
 
+                # Send error notification if failures exceed threshold
+                if self.error_count >= 3 and self.notification_client:
+                    try:
+                        asyncio.create_task(
+                            self._send_error_notification(
+                                f"Data feed connection failed {self.error_count} times",
+                                error_type="DATA_FEED_ERROR"
+                            )
+                        )
+                    except RuntimeError:
+                        pass
+
         except Exception as e:
             _logger.exception("Error reconnecting data feed for %s:", self.name)
+
+    def _heartbeat_loop(self):
+        """
+        Send periodic heartbeat updates to the database.
+
+        This runs in a separate thread and updates the last_heartbeat field
+        in the database to indicate the bot is still alive.
+
+        Also updates performance metrics every 5 heartbeats (5 minutes by default).
+        """
+        _logger.info("Heartbeat loop started for %s", self.name)
+
+        heartbeat_count = 0
+        performance_update_interval = 5  # Update performance every 5 heartbeats
+
+        while self.is_running and not self.should_stop:
+            try:
+                # Update heartbeat timestamp
+                self.last_heartbeat = datetime.now(timezone.utc)
+
+                # Update database heartbeat
+                try:
+                    trading_service.heartbeat(self.instance_id)
+                    _logger.debug("Heartbeat sent for bot %s", self.instance_id)
+                except Exception as e:
+                    _logger.warning("Failed to send heartbeat for bot %s: %s", self.instance_id, e)
+
+                # Periodically update performance metrics
+                heartbeat_count += 1
+                if heartbeat_count % performance_update_interval == 0:
+                    self.update_performance_metrics()
+
+                # Sleep for heartbeat interval
+                time.sleep(self.heartbeat_interval)
+
+            except Exception as e:
+                _logger.exception("Error in heartbeat loop for %s:", self.name)
+                time.sleep(self.heartbeat_interval)
+
+        _logger.info("Heartbeat loop stopped for %s", self.name)
+
+    def update_performance_metrics(self):
+        """
+        Update performance metrics in the database.
+
+        This should be called periodically and after significant trading events.
+        """
+        try:
+            if not self.broker:
+                return
+
+            # Get current balance from broker
+            current_balance = self.broker.get_value() if hasattr(self.broker, 'get_value') else None
+
+            # Calculate P&L if we have initial balance
+            total_pnl = None
+            initial_balance = self.config['broker'].get('cash')
+            if current_balance and initial_balance:
+                total_pnl = current_balance - initial_balance
+
+            # Update database
+            if current_balance or total_pnl:
+                try:
+                    trading_service.update_bot_performance(
+                        int(self.instance_id),
+                        current_balance=current_balance,
+                        total_pnl=total_pnl
+                    )
+                    _logger.debug(
+                        "Updated performance for bot %s: balance=%.2f, pnl=%.2f",
+                        self.instance_id,
+                        current_balance or 0,
+                        total_pnl or 0
+                    )
+                except Exception as e:
+                    _logger.warning("Failed to update performance metrics: %s", e)
+
+        except Exception as e:
+            _logger.exception("Error updating performance metrics for %s:", self.name)
+
+    def record_trade(self, trade_data: Dict[str, Any]):
+        """
+        Record a trade execution in the database.
+
+        This should be called when a trade is executed (buy or sell).
+
+        Args:
+            trade_data: Dictionary containing trade information
+                - trade_type: 'paper' or 'live'
+                - symbol: Trading symbol
+                - entry_price: Entry price (for buy orders)
+                - exit_price: Exit price (for sell orders)
+                - entry_value: Position size value
+                - exit_value: Exit value (for sell orders)
+                - pnl: Profit/loss (for sell orders)
+                - entry_logic_name: Name of entry logic used
+                - exit_logic_name: Name of exit logic used
+                - entry_time: Timestamp of entry
+                - exit_time: Timestamp of exit (for sell orders)
+        """
+        try:
+            # Enrich trade data with bot information
+            full_trade_data = {
+                'bot_id': int(self.instance_id),
+                'trade_type': self.config['broker'].get('trading_mode', 'paper'),
+                'symbol': self.config.get('symbol', 'UNKNOWN'),
+                'interval': self.config.get('data', {}).get('interval', '1h'),
+                'strategy_name': self.config['strategy'].get('type', 'CustomStrategy'),
+                **trade_data
+            }
+
+            # Ensure entry/exit logic names are present
+            if 'entry_logic_name' not in full_trade_data:
+                strategy_params = self.config['strategy'].get('parameters', {})
+                entry_logic = strategy_params.get('entry_logic', {})
+                full_trade_data['entry_logic_name'] = entry_logic.get('name', 'Unknown')
+
+            if 'exit_logic_name' not in full_trade_data:
+                strategy_params = self.config['strategy'].get('parameters', {})
+                exit_logic = strategy_params.get('exit_logic', {})
+                full_trade_data['exit_logic_name'] = exit_logic.get('name', 'Unknown')
+
+            # Record trade in database
+            try:
+                result = trading_service.add_trade(full_trade_data)
+                _logger.info(
+                    "Recorded trade for bot %s: %s %s @ %.4f",
+                    self.instance_id,
+                    'BUY' if trade_data.get('entry_price') else 'SELL',
+                    full_trade_data['symbol'],
+                    trade_data.get('entry_price') or trade_data.get('exit_price', 0)
+                )
+
+                # Update performance metrics after trade
+                self.update_performance_metrics()
+
+                return result
+            except Exception as e:
+                _logger.error("Failed to record trade in database: %s", e)
+
+        except Exception as e:
+            _logger.exception("Error recording trade for %s:", self.name)
+
+    def on_order_executed(self, order_type: str, price: float, size: float, timestamp: Optional[datetime] = None):
+        """
+        Callback for when an order is executed.
+
+        This can be called from the trading strategy or broker to record trades.
+
+        Args:
+            order_type: 'buy' or 'sell'
+            price: Execution price
+            size: Order size
+            timestamp: Execution timestamp (defaults to now)
+        """
+        try:
+            if timestamp is None:
+                timestamp = datetime.now(timezone.utc)
+
+            trade_data = {}
+            pnl = None
+
+            if order_type.lower() == 'buy':
+                trade_data.update({
+                    'entry_time': timestamp,
+                    'entry_price': price,
+                    'entry_value': price * size,
+                    'buy_order_created': timestamp,
+                    'buy_order_closed': timestamp,
+                })
+            elif order_type.lower() == 'sell':
+                # Try to calculate PnL from last trade
+                try:
+                    result = trading_service.get_pnl_summary(self.instance_id)
+                    if result:
+                        pnl = result.get('net_pnl', 0)
+                except Exception:
+                    pass
+
+                trade_data.update({
+                    'exit_time': timestamp,
+                    'exit_price': price,
+                    'exit_value': price * size,
+                    'sell_order_created': timestamp,
+                    'sell_order_closed': timestamp,
+                    'pnl': pnl
+                })
+
+            self.record_trade(trade_data)
+
+            _logger.info(
+                "Order executed for %s: %s %.4f @ %.4f",
+                self.name, order_type.upper(), size, price
+            )
+
+            # Send notification (fire-and-forget)
+            if self.notification_client:
+                try:
+                    asyncio.create_task(
+                        self._send_trade_notification(order_type, price, size, pnl)
+                    )
+                except RuntimeError:
+                    # No event loop running, schedule it differently
+                    _logger.debug("No event loop for notification, skipping")
+
+        except Exception as e:
+            _logger.exception("Error in order execution callback for %s:", self.name)
+
+    async def _send_trade_notification(self, order_type: str, price: float, size: float, pnl: Optional[float] = None):
+        """
+        Send notification for trade execution (async fire-and-forget).
+
+        Args:
+            order_type: 'buy' or 'sell'
+            price: Execution price
+            size: Order size
+            pnl: Profit/loss for sell orders (optional)
+        """
+        try:
+            if not self.notification_client:
+                return
+
+            # Get user notification details
+            user_details = self._get_user_notification_details()
+            if not user_details:
+                return
+
+            # Check if this notification type is enabled
+            notif_config = self.config.get('notifications', {})
+            if order_type.lower() == 'buy' and not notif_config.get('position_opened', False):
+                return
+            if order_type.lower() == 'sell' and not notif_config.get('position_closed', False):
+                return
+
+            # Get symbol and trading mode
+            symbol = self.config.get('symbol', 'UNKNOWN')
+            trading_mode = self.config['broker'].get('trading_mode', 'paper')
+
+            # Format message
+            if order_type.lower() == 'buy':
+                title = f"Position Opened: {symbol}"
+                message = f"BUY {size:.4f} {symbol} @ ${price:,.2f}"
+                if trading_mode == 'paper':
+                    message += " (Paper Trading)"
+                notification_type = MessageType.TRADE_ENTRY
+            else:
+                title = f"Position Closed: {symbol}"
+                message = f"SELL {size:.4f} {symbol} @ ${price:,.2f}"
+                if pnl is not None:
+                    pnl_pct = (pnl / (price * size)) * 100 if (price * size) > 0 else 0
+                    message += f" (P&L: ${pnl:,.2f} / {pnl_pct:+.2f}%)"
+                if trading_mode == 'paper':
+                    message += " (Paper Trading)"
+                notification_type = MessageType.TRADE_EXIT
+
+            # Add bot name to message
+            message = f"[{self.name}] {message}"
+
+            # Send notification (fire-and-forget)
+            await self.notification_client.send_notification(
+                notification_type=notification_type,
+                title=title,
+                message=message,
+                priority=MessagePriority.HIGH,
+                channels=user_details['channels'],
+                recipient_id=user_details['recipient_id'],
+                email_receiver=user_details['email'],
+                telegram_chat_id=user_details.get('telegram_user_id'),
+                data={
+                    'bot_id': self.instance_id,
+                    'bot_name': self.name,
+                    'symbol': symbol,
+                    'order_type': order_type.upper(),
+                    'price': price,
+                    'size': size,
+                    'pnl': pnl,
+                    'trading_mode': trading_mode,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                },
+                source="trading_bot"
+            )
+
+            _logger.info("Sent %s notification for %s", order_type.upper(), self.name)
+
+        except Exception as e:
+            _logger.exception("Error sending trade notification for %s:", self.name)
+
+    async def _send_error_notification(self, error_message: str, error_type: str = "ERROR"):
+        """
+        Send notification for bot errors (async fire-and-forget).
+
+        Args:
+            error_message: Error message to send
+            error_type: Type of error (ERROR, WARNING, etc.)
+        """
+        try:
+            if not self.notification_client:
+                return
+
+            # Get user notification details
+            user_details = self._get_user_notification_details()
+            if not user_details:
+                return
+
+            # Check if error notifications are enabled
+            notif_config = self.config.get('notifications', {})
+            if not notif_config.get('error_notifications', False):
+                return
+
+            # Format message
+            symbol = self.config.get('symbol', 'UNKNOWN')
+            trading_mode = self.config['broker'].get('trading_mode', 'paper')
+
+            title = f"Bot Error: {self.name}"
+            message = f"[{self.name}] {error_type}: {error_message}"
+            if trading_mode == 'paper':
+                message += " (Paper Trading)"
+
+            # Send notification (fire-and-forget)
+            await self.notification_client.send_notification(
+                notification_type=MessageType.ERROR,
+                title=title,
+                message=message,
+                priority=MessagePriority.CRITICAL,
+                channels=user_details['channels'],
+                recipient_id=user_details['recipient_id'],
+                email_receiver=user_details['email'],
+                telegram_chat_id=user_details.get('telegram_user_id'),
+                data={
+                    'bot_id': self.instance_id,
+                    'bot_name': self.name,
+                    'symbol': symbol,
+                    'error_type': error_type,
+                    'error_message': error_message,
+                    'trading_mode': trading_mode,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                },
+                source="trading_bot"
+            )
+
+            _logger.info("Sent error notification for %s", self.name)
+
+        except Exception as e:
+            _logger.exception("Error sending error notification for %s:", self.name)
+
+    def _get_user_notification_details(self) -> Optional[Dict[str, Any]]:
+        """
+        Fetch user notification details (email, telegram_user_id) from database.
+
+        Returns:
+            Dict with 'user_id', 'email', 'telegram_user_id', 'recipient_id', 'channels'
+            None if user not found or notifications disabled
+        """
+        try:
+            # Get user_id from bot config
+            user_id = self.config.get('user_id')
+            if not user_id:
+                _logger.debug("No user_id in bot config for %s, skipping notification", self.name)
+                return None
+
+            # Check if notifications are enabled for this bot
+            notif_config = self.config.get('notifications', {})
+            if not (notif_config.get('position_opened') or notif_config.get('position_closed') or notif_config.get('error_notifications')):
+                _logger.debug("Notifications disabled for bot %s", self.name)
+                return None
+
+            # Get user from database by user_id
+            # We need to query usr_users table and usr_auth_identities table
+            from src.data.db.services.database_service import get_database_service
+            from src.data.db.models.model_users import User, AuthIdentity
+
+            db_service = get_database_service()
+            with db_service.uow() as uow:
+                # Get user by ID
+                user = uow.s.get(User, user_id)
+                if not user:
+                    _logger.warning("User %s not found for bot %s", user_id, self.name)
+                    return None
+
+                # Get telegram identity
+                from sqlalchemy import select
+                telegram_identity = uow.s.execute(
+                    select(AuthIdentity)
+                    .where(AuthIdentity.user_id == user_id)
+                    .where(AuthIdentity.provider == 'telegram')
+                ).scalar_one_or_none()
+
+                # Determine channels to use
+                channels = []
+                if notif_config.get('email_enabled') and user.email:
+                    channels.append('email')
+                if notif_config.get('telegram_enabled') and telegram_identity:
+                    channels.append('telegram')
+
+                if not channels:
+                    _logger.debug("No notification channels enabled for bot %s", self.name)
+                    return None
+
+                return {
+                    'user_id': user_id,
+                    'email': user.email,
+                    'telegram_user_id': telegram_identity.external_id if telegram_identity else None,
+                    'recipient_id': str(user_id),
+                    'channels': channels
+                }
+
+        except Exception as e:
+            _logger.exception("Error fetching user notification details for bot %s:", self.name)
+            return None
 
 
 class StrategyManager:
@@ -481,12 +941,20 @@ class StrategyManager:
         """Initialize the strategy manager."""
         self.strategy_instances: Dict[str, StrategyInstance] = {}
         self.broker_manager = BrokerManager()
+
+        # Global notification client (database-only mode for reliability)
+        self.notification_client = NotificationServiceClient(service_url="database://")
+        _logger.info("Initialized global notification client in database-only mode")
+
         self.is_running = False
         self.monitoring_task = None
         self.db_poll_task = None
         self._db_poll_running = False
         self._db_poll_user_id: Optional[int] = None
         self._db_poll_interval: int = 60
+
+        # Crash recovery marker
+        self._marker_path = Path(".trading_service_running")
 
     async def load_strategies_from_config(self, config_file: str) -> bool:
         """Load strategy configurations from JSON file."""
@@ -518,7 +986,7 @@ class StrategyManager:
                     continue
 
                 # Create strategy instance
-                instance = StrategyInstance(instance_id, strategy_config)
+                instance = StrategyInstance(instance_id, strategy_config, self.notification_client)
                 self.strategy_instances[instance_id] = instance
 
                 _logger.info("Loaded strategy: %s (%s)", instance.name, instance_id)
@@ -630,20 +1098,55 @@ class StrategyManager:
         """Monitor strategy instances and handle auto-recovery."""
         while self.is_running:
             try:
+                current_time = datetime.now(timezone.utc)
+                running_count = 0
+                unhealthy_count = 0
+
                 # Check health of all running strategies
                 for instance_id, instance in self.strategy_instances.items():
                     if instance.status == 'running':
-                        # Here you could add health checks
-                        # For now, we'll just log status
-                        pass
+                        running_count += 1
+
+                        # Check heartbeat health
+                        if instance.last_heartbeat:
+                            heartbeat_age = (current_time - instance.last_heartbeat).total_seconds()
+                            max_heartbeat_age = instance.heartbeat_interval * 3  # 3x normal interval
+
+                            if heartbeat_age > max_heartbeat_age:
+                                unhealthy_count += 1
+                                _logger.warning(
+                                    "Bot %s heartbeat stale (%.1fs old, max %.1fs). Attempting recovery...",
+                                    instance.name, heartbeat_age, max_heartbeat_age
+                                )
+                                # Try to restart unhealthy bot
+                                if instance.error_count < 3:
+                                    await instance.restart()
+                                else:
+                                    _logger.error(
+                                        "Bot %s exceeded max restart attempts (%d), marking as error",
+                                        instance.name, instance.error_count
+                                    )
+                                    instance.status = 'error'
+                                    try:
+                                        trading_service.update_bot_status(
+                                            int(instance_id),
+                                            "error",
+                                            error_message=f"Exceeded max restart attempts ({instance.error_count})"
+                                        )
+                                    except Exception:
+                                        pass
+
                     elif instance.status == 'error' and instance.error_count < 3:
                         # Auto-recovery for failed strategies (max 3 attempts)
-                        _logger.warning("Attempting auto-recovery for %s", instance.name)
+                        _logger.warning("Attempting auto-recovery for %s (attempt %d/3)",
+                                      instance.name, instance.error_count + 1)
                         await instance.restart()
 
-                # Log periodic status
-                running_count = sum(1 for i in self.strategy_instances.values() if i.status == 'running')
-                _logger.info("📊 Strategy Monitor: %d/%d running", running_count, len(self.strategy_instances))
+                # Log periodic status with detailed metrics
+                _logger.info(
+                    "📊 Strategy Monitor: %d/%d running, %d unhealthy, %d total",
+                    running_count, len(self.strategy_instances), unhealthy_count, len(self.strategy_instances)
+                )
 
                 await asyncio.sleep(60)  # Monitor every minute
 
@@ -651,21 +1154,127 @@ class StrategyManager:
                 _logger.exception("Error in strategy monitoring:")
                 await asyncio.sleep(10)
 
+    # -------------------- Crash Detection and Recovery --------------------
+    def _detect_crash_recovery(self) -> bool:
+        """
+        Detect if this is a crash recovery (unclean shutdown).
+
+        Uses a marker file that's created on startup and deleted on clean shutdown.
+        If marker exists on startup, previous shutdown was unclean.
+
+        Returns:
+            True if previous shutdown was unclean (crash detected), False otherwise
+        """
+        if self._marker_path.exists():
+            _logger.warning("⚠️ Found running marker from previous session - UNCLEAN SHUTDOWN detected")
+            _logger.warning("This indicates the service crashed or was forcefully terminated")
+            self._marker_path.unlink()  # Remove stale marker
+            return True
+
+        _logger.info("Clean startup detected - no previous running marker found")
+        return False
+
+    def _mark_service_running(self):
+        """Mark that service is now running by creating marker file."""
+        try:
+            self._marker_path.touch()
+            _logger.info("Created session marker file: %s", self._marker_path)
+        except Exception as e:
+            _logger.warning("Failed to create session marker: %s", e)
+
+    def _mark_clean_shutdown(self):
+        """Mark that service is shutting down cleanly by removing marker file."""
+        try:
+            if self._marker_path.exists():
+                self._marker_path.unlink()
+                _logger.info("Removed session marker - CLEAN SHUTDOWN")
+            else:
+                _logger.debug("Session marker already removed")
+        except Exception as e:
+            _logger.warning("Failed to remove session marker: %s", e)
+
+    def _recover_bot_state(self, bot_id: int, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recover bot state from database on restart.
+
+        Queries open positions and pending trades to reconstruct state context
+        that can be used by the strategy on restart.
+
+        Args:
+            bot_id: Bot ID to recover state for
+            config: Bot configuration dictionary
+
+        Returns:
+            Enhanced config with recovered state in '_recovered_positions' and '_recovered_trades'
+        """
+        try:
+            # Get open positions
+            open_positions = trading_service.get_open_positions(bot_id=str(bot_id))
+
+            if open_positions:
+                _logger.info(
+                    "🔄 Recovered %d open position(s) for bot %d",
+                    len(open_positions), bot_id
+                )
+                # Store positions in config for strategy to access
+                config['_recovered_positions'] = open_positions
+
+                # Log position details
+                for pos in open_positions:
+                    _logger.info(
+                        "  Position: %s %s qty=%.8f avg_price=%.8f status=%s",
+                        pos.get('symbol'),
+                        pos.get('direction'),
+                        pos.get('qty_open', 0),
+                        pos.get('avg_price', 0),
+                        pos.get('status')
+                    )
+
+            # Get open trades
+            open_trades = trading_service.get_open_trades()
+            bot_trades = [t for t in open_trades if t['bot_id'] == bot_id]
+
+            if bot_trades:
+                _logger.info(
+                    "🔄 Recovered %d open trade(s) for bot %d",
+                    len(bot_trades), bot_id
+                )
+                config['_recovered_trades'] = bot_trades
+
+                # Log trade details
+                for trade in bot_trades:
+                    _logger.info(
+                        "  Trade: %s entry=%.8f @ %s status=%s",
+                        trade.get('symbol'),
+                        trade.get('entry_price', 0),
+                        trade.get('entry_time'),
+                        trade.get('status')
+                    )
+
+            return config
+
+        except Exception as e:
+            _logger.exception("Error recovering state for bot %d:", bot_id)
+            return config
+
     # -------------------- DB-backed loading and polling --------------------
-    async def load_strategies_from_db(self, user_id: Optional[int] = None) -> bool:
+    async def load_strategies_from_db(self, user_id: Optional[int] = None, resume_mode: bool = True) -> bool:
         """
         Load strategy configurations from the database - ONLY PLACE THIS HAPPENS.
 
         This is the SOLE configuration loader. No other component should load from DB.
 
         Behavior:
-        - Reads all bots where status != 'disabled'
+        - In resume_mode: Detects crash recovery and resumes only previously running bots
+        - In normal mode: Loads all enabled bots
         - Validates each bot config using trading_service AND StrategyHandler
+        - Recovers bot state (positions, trades) for crash recovery
         - Builds or updates StrategyInstance entries keyed by bot id
         - Invalid configs are skipped and marked as 'error' in DB
 
         Args:
             user_id: Optional user ID to filter bots
+            resume_mode: If True, use smart resume logic (default: True)
 
         Returns:
             True if successfully loaded at least one bot, False otherwise
@@ -675,13 +1284,32 @@ class StrategyManager:
             _logger.info("LOADING BOT CONFIGURATIONS FROM DATABASE (SOLE CONFIG LOADER)")
             _logger.info("=" * 80)
 
-            bots = trading_service.get_enabled_bots(user_id)
+            # Check for crash recovery
+            was_crashed = False
+            if resume_mode:
+                was_crashed = self._detect_crash_recovery()
+
+                if was_crashed:
+                    _logger.warning("🔄 CRASH RECOVERY MODE: Resuming previously running bots")
+                    # Load only bots that were running before crash
+                    bots = trading_service.get_bots_by_status("running", user_id)
+                    _logger.info("Found %d bot(s) that were running before crash", len(bots))
+                else:
+                    _logger.info("🚀 NORMAL STARTUP: Loading all enabled bots")
+                    bots = trading_service.get_enabled_bots(user_id)
+                    _logger.info("Found %d enabled bot(s) in database", len(bots))
+            else:
+                _logger.info("🚀 NORMAL STARTUP (resume_mode=False): Loading all enabled bots")
+                bots = trading_service.get_enabled_bots(user_id)
+                _logger.info("Found %d enabled bot(s) in database", len(bots))
+
+            # Create marker file to track this session
+            self._mark_service_running()
+
             if not bots:
-                _logger.warning("No enabled bots found in DB%s",
+                _logger.warning("No bots to load%s",
                                 f" for user_id={user_id}" if user_id else "")
                 return False
-
-            _logger.info("Found %d enabled bot(s) in database", len(bots))
 
             loaded = 0
             for bot in bots:
@@ -706,6 +1334,11 @@ class StrategyManager:
 
                 # Map db record to StrategyInstance config
                 si_config = self._db_bot_to_strategy_config(bot)
+
+                # Recover state if this is a crash recovery
+                if was_crashed:
+                    _logger.info("Recovering state for bot %s...", bot["id"])
+                    si_config = self._recover_bot_state(bot["id"], si_config)
 
                 # Additional validation using StrategyHandler
                 strategy_type = si_config.get("strategy", {}).get("type", "CustomStrategy")
@@ -740,7 +1373,7 @@ class StrategyManager:
                 else:
                     # Create new instance
                     _logger.info("Creating new bot instance: %s", bot_name)
-                    self.strategy_instances[instance_id] = StrategyInstance(instance_id, si_config)
+                    self.strategy_instances[instance_id] = StrategyInstance(instance_id, si_config, self.notification_client)
 
                 loaded += 1
                 _logger.info("✅ Successfully loaded bot: %s", bot_name)
@@ -818,7 +1451,7 @@ class StrategyManager:
                         if not exists:
                             # Create instance
                             si_config = self._db_bot_to_strategy_config(bot)
-                            self.strategy_instances[bot_id] = StrategyInstance(bot_id, si_config)
+                            self.strategy_instances[bot_id] = StrategyInstance(bot_id, si_config, self.notification_client)
 
                         instance = self.strategy_instances[bot_id]
                         # If bot should be running and isn't, start it
@@ -864,11 +1497,56 @@ class StrategyManager:
         self.db_poll_task = asyncio.create_task(_poll_loop())
 
     async def shutdown(self):
-        """Shutdown the strategy manager."""
-        _logger.info("Shutting down Enhanced Strategy Manager...")
+        """
+        Gracefully shutdown the strategy manager with state persistence.
 
-        await self.stop_monitoring()
-        await self.stop_all_strategies()
-        await self.broker_manager.shutdown()
+        This method ensures:
+        - All running bots are stopped cleanly
+        - Bot statuses are persisted to database
+        - Resources are properly released
+        - Clean shutdown is marked (no crash marker on restart)
+        """
+        _logger.info("🛑 Shutting down Enhanced Strategy Manager...")
 
-        _logger.info("✅ Enhanced Strategy Manager shutdown complete")
+        try:
+            # Stop monitoring first
+            await self.stop_monitoring()
+
+            # Stop all strategy instances and persist their status
+            _logger.info("Stopping all strategy instances and persisting statuses...")
+            for instance_id, instance in self.strategy_instances.items():
+                if instance.status == 'running':
+                    _logger.info("Stopping bot %s (%s)", instance.name, instance_id)
+
+                    # Stop the bot
+                    await instance.stop()
+
+                    # Persist stopped status to database
+                    try:
+                        trading_service.update_bot_status(
+                            int(instance_id),
+                            "stopped",
+                            error_message=None  # Clear any error on clean shutdown
+                        )
+                        _logger.debug("Persisted stopped status for bot %s", instance_id)
+                    except Exception as e:
+                        _logger.warning("Failed to persist status for bot %s: %s", instance_id, e)
+
+            # Close broker manager
+            _logger.info("Closing broker manager...")
+            await self.broker_manager.shutdown()
+
+            # Close notification client
+            if self.notification_client:
+                _logger.info("Closing notification client...")
+                await self.notification_client.close()
+
+            # Mark clean shutdown (remove crash marker)
+            self._mark_clean_shutdown()
+
+            _logger.info("✅ Enhanced Strategy Manager shutdown complete")
+
+        except Exception as e:
+            _logger.exception("Error during shutdown:")
+            # Don't mark clean shutdown if errors occurred
+            _logger.warning("⚠️ Shutdown completed with errors - crash marker not removed")

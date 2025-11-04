@@ -145,14 +145,157 @@ Bot execution with BaseTradingBot
 
 ---
 
-### 🔲 Task 4.3: Enhance database status updates
-**Priority**: MEDIUM
+### ✅ Task 4.3: Enhance database status updates - **COMPLETED**
+**Priority**: MEDIUM → **DONE**
 
-**What needs to be done**:
-1. Improve bot status updates in DB polling
-2. Add performance metrics recording
-3. Enhance heartbeat system
-4. Add trade recording via trading_service
+**What was done**:
+1. ✅ Added heartbeat tracking system to StrategyInstance
+   - Added `last_heartbeat` and `heartbeat_interval` fields
+   - Created `_heartbeat_loop()` thread that updates DB every 60 seconds
+   - Updates `last_heartbeat` timestamp in database via `trading_service.heartbeat()`
+2. ✅ Enhanced bot status monitoring in StrategyManager
+   - Monitor loop now checks heartbeat health
+   - Detects unhealthy bots (heartbeat > 3x interval)
+   - Automatic restart for unhealthy bots (max 3 attempts)
+   - Detailed logging with running/unhealthy/total counts
+3. ✅ Added performance metrics recording
+   - Created `update_performance_metrics()` method
+   - Updates `current_balance` and `total_pnl` in database
+   - Integrated into heartbeat loop (updates every 5 heartbeats = 5 minutes)
+   - Called after trade execution for real-time updates
+4. ✅ Integrated trade recording via trading_service
+   - Created `record_trade()` method with full trade data enrichment
+   - Added `on_order_executed()` callback for buy/sell orders
+   - Automatically extracts entry/exit logic names from config
+   - Updates performance metrics after each trade
+5. ✅ Enhanced `get_status()` with health information
+   - Added `last_heartbeat`, `heartbeat_age_seconds`, `is_healthy` fields
+   - Health check based on heartbeat freshness
+
+**Files modified**:
+- ✅ `src/trading/strategy_manager.py` - **+200 lines**
+  - StrategyInstance: Added heartbeat tracking, performance updates, trade recording
+  - StrategyManager: Enhanced monitoring with heartbeat health checks
+
+---
+
+### ✅ Task 5.1: Create notification service integration layer - **COMPLETED**
+**Priority**: MEDIUM → **DONE**
+
+**What was done**:
+1. ✅ Added global NotificationServiceClient to StrategyManager
+   - Initialized in database-only mode (`service_url="database://"`)
+   - Shared across all strategy instances for efficiency
+   - Properly closed during shutdown
+2. ✅ Created helper method to fetch user notification details
+   - `_get_user_notification_details()` queries user email and telegram_user_id from database
+   - Checks notification config to determine enabled channels
+   - Respects per-bot notification preferences
+3. ✅ Implemented trade notification methods
+   - `_send_trade_notification()` for BUY/SELL orders
+   - Includes price, quantity, P&L, bot name, trading mode
+   - Respects `position_opened` and `position_closed` config flags
+   - Uses `MessageType.TRADE_ENTRY` / `TRADE_EXIT` and `MessagePriority.HIGH`
+4. ✅ Implemented error notification methods
+   - `_send_error_notification()` for bot errors
+   - Respects `error_notifications` config flag
+   - Uses `MessageType.ERROR` and `MessagePriority.CRITICAL`
+5. ✅ Integrated notifications into trading flow
+   - Trade notifications triggered from `on_order_executed()`
+   - Error notifications sent on start failure
+   - Error notifications sent on data feed failures (after 3 attempts)
+   - All notifications are fire-and-forget using `asyncio.create_task()`
+6. ✅ Simple message formatting for trading
+   - BUY: `"[Bot Name] BUY 0.0100 BTCUSDT @ $45,000.50 (Paper Trading)"`
+   - SELL: `"[Bot Name] SELL 0.0100 BTCUSDT @ $47,200.30 (P&L: $220.00 / +4.89%) (Paper Trading)"`
+   - ERROR: `"[Bot Name] START_ERROR: Failed to start bot: Connection refused"`
+
+**Files modified**:
+- ✅ `src/trading/strategy_manager.py` - **+200 lines**
+  - Added imports: `UsersService`, `NotificationServiceClient`, `MessageType`, `MessagePriority`
+  - StrategyManager: Added global `notification_client`, passed to all instances
+  - StrategyInstance: Added notification methods and integration
+  - New methods: `_send_trade_notification()`, `_send_error_notification()`, `_get_user_notification_details()`
+  - Enhanced: `on_order_executed()`, `start()`, `_reconnect_data_feed()`
+
+**Integration details**:
+- Notifications stored directly in database via `NotificationServiceClient`
+- Notification service processes queued messages asynchronously
+- Supports both Telegram and Email channels based on user config
+- No HTTP dependency - uses direct database insertion for reliability
+
+---
+
+### ✅ Task 7.3: Service Restart Recovery - **COMPLETED**
+**Priority**: HIGH → **DONE**
+
+**What was done**:
+1. ✅ Implemented crash detection marker system
+   - Added `.trading_service_running` marker file to detect unclean shutdowns
+   - `_detect_crash_recovery()` checks for marker on startup
+   - `_mark_service_running()` creates marker when service starts
+   - `_mark_clean_shutdown()` removes marker on graceful shutdown
+2. ✅ Implemented smart resume logic in `load_strategies_from_db()`
+   - Added `resume_mode` parameter (default: True)
+   - In crash recovery: loads only bots with status='running'
+   - In normal startup: loads all enabled bots
+   - Detailed logging shows startup mode (crash recovery vs normal)
+3. ✅ Implemented bot state recovery
+   - Created `_recover_bot_state()` method to query open positions and trades
+   - Recovers positions from `trading_positions` table
+   - Recovers trades from `trading_trades` table
+   - Stores recovered state in config (`_recovered_positions`, `_recovered_trades`)
+   - Detailed logging of recovered positions and trades
+4. ✅ Enhanced graceful shutdown protocol
+   - Updated `shutdown()` to persist all bot statuses to 'stopped'
+   - Ensures clean shutdown marker is removed
+   - Comprehensive error handling (marker not removed on error)
+   - Sequential shutdown: monitoring → bots → broker → notifications → marker
+5. ✅ Added resume_mode to trading_runner.py
+   - New CLI argument `--no-resume` to disable smart resume
+   - Passes resume_mode to StrategyManager
+   - Default behavior is smart resume (crash recovery enabled)
+6. ✅ Enhanced trading_service.update_bot_status()
+   - Added `started_at` parameter to record bot start timestamp
+   - Updates `started_at` field in database when status='running'
+7. ✅ Added error count reset on successful start
+   - `error_count` and `last_error` reset to 0/None when bot starts successfully
+   - Allows clean recovery after resolved issues
+
+**Files modified**:
+- ✅ `src/trading/strategy_manager.py` - **+150 lines**
+  - Added marker file path (`_marker_path`) to `__init__`
+  - New methods: `_detect_crash_recovery()`, `_mark_service_running()`, `_mark_clean_shutdown()`, `_recover_bot_state()`
+  - Enhanced `load_strategies_from_db()` with resume_mode logic and state recovery
+  - Enhanced `shutdown()` with status persistence and clean shutdown marking
+  - Enhanced StrategyInstance.start() to reset error count
+- ✅ `src/trading/trading_runner.py` - **+10 lines**
+  - Added `resume_mode` parameter to `__init__`
+  - Added `--no-resume` CLI argument
+  - Passes resume_mode to `load_strategies_from_db()`
+- ✅ `src/data/db/services/trading_service.py` - **+15 lines**
+  - Enhanced `update_bot_status()` with `started_at` parameter
+  - Sets `started_at` timestamp when status='running'
+
+**Integration details**:
+- Crash recovery is automatic by default (can be disabled with `--no-resume`)
+- Service detects crash via presence of `.trading_service_running` marker file
+- On crash recovery: resumes only previously running bots with full state
+- On normal startup: loads all enabled bots
+- Clean shutdown removes marker, ensuring next startup is normal (not crash recovery)
+- Bot statuses properly persisted on clean shutdown for accurate state tracking
+
+**CLI Usage**:
+```bash
+# Normal startup with crash recovery (default)
+python src/trading/trading_runner.py
+
+# Disable crash recovery (start all enabled bots)
+python src/trading/trading_runner.py --no-resume
+
+# With user filter and crash recovery
+python src/trading/trading_runner.py --user-id 1
+```
 
 ---
 
@@ -180,7 +323,7 @@ Bot execution with BaseTradingBot
 ### Manual Test Commands
 
 ```bash
-# Test trading runner with database loading
+# Test trading runner with database loading (with crash recovery)
 python src/trading/trading_runner.py
 
 # Test with specific user
@@ -188,6 +331,9 @@ python src/trading/trading_runner.py --user-id 1
 
 # Test with custom poll interval
 python src/trading/trading_runner.py --poll-interval 30
+
+# Test without crash recovery (force load all enabled bots)
+python src/trading/trading_runner.py --no-resume
 ```
 
 ### Expected Behavior
@@ -237,20 +383,41 @@ python src/trading/trading_runner.py --poll-interval 30
 - ✅ Added comprehensive logging
 
 ### Completed Recently
-- ✅ StrategyInstance enhancement with LiveTradingBot logic (Task 4.2) - **JUST COMPLETED**
+- ✅ StrategyInstance enhancement with LiveTradingBot logic (Task 4.2)
   - Refactored all Backtrader setup logic from LiveTradingBot
   - Integrated data feed management
   - Added async Backtrader execution
   - Implemented data feed health monitoring with reconnection
   - Added database status updates during start/stop
+- ✅ Database status updates enhancement (Task 4.3)
+  - Added heartbeat tracking system with periodic DB updates
+  - Enhanced monitoring with heartbeat health checks
+  - Integrated performance metrics recording
+  - Added trade recording hooks with automatic enrichment
+  - Enhanced status reporting with health indicators
+- ✅ Notification service integration layer (Task 5.1)
+  - Integrated NotificationServiceClient with database-only mode
+  - Trade notifications for BUY/SELL with P&L tracking
+  - Error notifications for bot failures
+  - Fetches user email/telegram from database
+  - Fire-and-forget async notifications
+- ✅ Service restart recovery (Task 7.3) - **JUST COMPLETED**
+  - Crash detection with marker file system
+  - Smart resume logic: crash recovery vs normal startup
+  - Bot state recovery from database (positions, trades)
+  - Enhanced graceful shutdown with status persistence
+  - Resume mode CLI parameter with `--no-resume` option
+  - Error count reset on successful restart
 
 ### In Progress
-- ⚠️ Database status updates enhancement (Task 4.3)
+- None currently
 
 ### Not Started
-- 🔲 Notification integration (Task 5)
+- 🔲 Task 7.1 & 7.2 enhancements (LOW priority - core functionality complete)
+  - stopped_at timestamp tracking
+  - Status transition audit logging
+  - Historical metrics snapshots
 - 🔲 Error handling enhancement (Task 6)
-- 🔲 Database state management (Task 7)
 - 🔲 Monitoring and health management (Task 8)
 - 🔲 Service integration and testing (Task 9.3, 10)
 

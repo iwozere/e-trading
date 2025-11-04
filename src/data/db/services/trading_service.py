@@ -161,12 +161,25 @@ class TradingService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def update_bot_status(self, bot_id: int, status: str, error_message: Optional[str] = None) -> bool:
-        """Update bot status and optionally increment error count."""
+    def update_bot_status(self, bot_id: int, status: str, error_message: Optional[str] = None,
+                         started_at: Optional[datetime] = None) -> bool:
+        """
+        Update bot status and optionally increment error count.
+
+        Args:
+            bot_id: Bot ID to update
+            status: New status ('running', 'stopped', 'error', etc.)
+            error_message: Optional error message (used with 'error' status)
+            started_at: Optional timestamp when bot was started (used with 'running' status)
+        """
         from sqlalchemy import update
         from src.data.db.models.model_trading import BotInstance
 
         update_data = {"status": status, "updated_at": datetime.now()}
+
+        # Set started_at timestamp when bot starts running
+        if status == "running" and started_at:
+            update_data["started_at"] = started_at
 
         if status == "error" and error_message:
             # Increment error count and store error in extra_metadata

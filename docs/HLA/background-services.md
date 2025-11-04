@@ -13,34 +13,68 @@ This architecture separates long-running system services from scheduled job exec
 
 ### 1. System Services Layer
 
-#### 1.1 Trading Bot Service (`src/trading/live_trading_bot.py`)
-**Purpose**: Manages live trading operations and strategy execution
+#### 1.1 Trading Bot Service (`src/trading/trading_runner.py`, `src/trading/strategy_manager.py`)
+**Purpose**: Manages multi-bot trading operations and strategy execution with crash recovery
 
 **Service Characteristics**:
 - Runs as independent system process
-- Not APScheduler-based
-- Handles real-time trading operations
+- Database-driven configuration (no JSON files)
+- Supports multiple concurrent trading bots
 - Manages broker connections and data feeds
+- **Production-grade crash recovery and automatic resume**
+- Heartbeat-based health monitoring
+
+**Architecture**:
+```
+trading_runner.py (Service Orchestrator)
+    ↓
+strategy_manager.py (SOLE Config Loader)
+    ↓
+StrategyInstance objects (Individual Bots)
+    ↓
+BaseTradingBot + Backtrader Integration
+```
 
 **Responsibilities**:
 - Execute trading strategies with real-time data
-- Manage positions and orders
-- Handle broker communication
+- Manage positions and orders across multiple bots
+- Handle broker communication for each bot instance
 - Process market events and signals
-- Maintain trading state persistence
+- Maintain trading state persistence in database
+- **Crash detection and automatic bot recovery**
+- **State recovery (positions, trades) on service restart**
+- Performance metrics and trade recording
 
 **Service Pattern**:
 ```python
-class LiveTradingBot(BaseTradingBot):
-    def __init__(self, config: TradingBotConfig):
-        # Initialize broker, data feeds, strategies
-        
-    def start(self):
-        # Start trading operations
-        
-    def stop(self):
-        # Graceful shutdown
+# Trading Runner (Service Orchestrator)
+class TradingServiceRunner:
+    def __init__(self, user_id=None, resume_mode=True):
+        self.strategy_manager = StrategyManager()
+        self.resume_mode = resume_mode  # Enables crash recovery
+
+    async def start_service(self):
+        # Delegates to StrategyManager with crash recovery
+        await self.strategy_manager.load_strategies_from_db(
+            user_id=self.user_id,
+            resume_mode=self.resume_mode
+        )
+        await self.strategy_manager.start_all_strategies()
+        await self.strategy_manager.start_monitoring()
+        await self.strategy_manager.start_db_polling()
+
+    async def stop_service(self):
+        # Graceful shutdown with status persistence
+        await self.strategy_manager.shutdown()
 ```
+
+**Key Features**:
+- **Smart Resume**: Automatically detects crashes and resumes only previously running bots
+- **State Recovery**: Recovers open positions and trades from database after crash
+- **Graceful Shutdown**: Persists all bot statuses to database on clean shutdown
+- **Hot Reload**: Database polling for configuration changes without restart
+- **Multi-Bot Management**: Run multiple strategies simultaneously with isolation
+- **Heartbeat Monitoring**: Automatic health checks and recovery for unhealthy bots
 
 #### 1.2 Telegram Bot Service (`src/telegram/bot.py`)
 **Purpose**: Handles Telegram bot operations and user interactions
@@ -204,9 +238,447 @@ CREATE TABLE job_schedule_runs (
 );
 ```
 
-### 3. Service Communication Architecture
+### 3. Trading Service Crash Recovery Architecture
 
-#### 3.1 System Service Independence
+#### 3.1 Overview
+
+The Trading Service implements a production-grade crash recovery system that ensures **24/7 reliable bot operation** even after system crashes, power failures, or forced terminations. The system automatically detects unclean shutdowns and intelligently resumes trading bots with full state recovery.
+
+**Key Capabilities**:
+- **Crash Detection**: Automatic detection of unclean shutdowns using marker files
+- **Smart Resume Logic**: Selective bot restart (crash recovery vs normal startup)
+- **State Recovery**: Complete restoration of open positions and trades
+- **Graceful Shutdown**: Proper status persistence on clean shutdowns
+- **Zero Data Loss**: All critical state persisted in database
+
+#### 3.2 Crash Detection System
+
+**Marker File Approach**:
+The system uses a `.trading_service_running` marker file to track service lifecycle:
+
+```python
+class StrategyManager:
+    def __init__(self):
+        self._marker_path = Path(".trading_service_running")
+
+    def _detect_crash_recovery(self) -> bool:
+        """
+        Detect if this is a crash recovery (unclean shutdown).
+
+        - If marker exists → Previous shutdown was unclean (CRASH)
+        - If marker missing → Clean startup
+        """
+        if self._marker_path.exists():
+            _logger.warning("⚠️ UNCLEAN SHUTDOWN detected - entering crash recovery mode")
+            self._marker_path.unlink()  # Remove stale marker
+            return True
+
+        _logger.info("Clean startup detected")
+        return False
+
+    def _mark_service_running(self):
+        """Create marker when service starts."""
+        self._marker_path.touch()
+
+    def _mark_clean_shutdown(self):
+        """Remove marker on graceful shutdown."""
+        if self._marker_path.exists():
+            self._marker_path.unlink()
+```
+
+**Crash Detection Flow**:
+```mermaid
+graph TD
+    A[Service Starts] --> B{Marker File Exists?}
+    B -->|YES| C[🚨 CRASH DETECTED]
+    B -->|NO| D[✅ Clean Startup]
+    C --> E[Enter Crash Recovery Mode]
+    D --> F[Normal Startup Mode]
+    E --> G[Resume Only Running Bots]
+    F --> H[Load All Enabled Bots]
+    G --> I[Create New Marker]
+    H --> I
+```
+
+#### 3.3 Smart Resume Logic
+
+The system implements intelligent bot selection based on startup mode:
+
+```python
+async def load_strategies_from_db(self, user_id: Optional[int] = None,
+                                 resume_mode: bool = True) -> bool:
+    """
+    Load bot configurations with smart resume logic.
+
+    Behavior:
+    - Crash Recovery: Load only bots with status='running'
+    - Normal Startup: Load all enabled bots
+    """
+    was_crashed = False
+
+    if resume_mode:
+        was_crashed = self._detect_crash_recovery()
+
+        if was_crashed:
+            _logger.warning("🔄 CRASH RECOVERY MODE: Resuming previously running bots")
+            # Load ONLY bots that were running before crash
+            bots = trading_service.get_bots_by_status("running", user_id)
+            _logger.info("Found %d bot(s) that were running before crash", len(bots))
+        else:
+            _logger.info("🚀 NORMAL STARTUP: Loading all enabled bots")
+            bots = trading_service.get_enabled_bots(user_id)
+
+    # Create marker file to track this session
+    self._mark_service_running()
+
+    # ... continue loading
+```
+
+**Startup Mode Comparison**:
+
+| Mode | Trigger | Bots Loaded | Use Case |
+|------|---------|-------------|----------|
+| **Crash Recovery** | Marker file exists | Only `status='running'` | Automatic after crash |
+| **Normal Startup** | No marker file | All `status != 'disabled'` | Clean start or manual restart |
+| **Force Normal** | `--no-resume` flag | All `status != 'disabled'` | Admin override |
+
+#### 3.4 State Recovery System
+
+After a crash, the system recovers full bot state from the database:
+
+```python
+def _recover_bot_state(self, bot_id: int, config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Recover complete bot state from database.
+
+    Recovers:
+    - Open positions (qty, avg_price, direction)
+    - Pending trades (entry_price, entry_time, status)
+    - Account state (balance, P&L)
+    """
+    try:
+        # Recover open positions
+        open_positions = trading_service.get_open_positions(bot_id=str(bot_id))
+
+        if open_positions:
+            _logger.info("🔄 Recovered %d open position(s) for bot %d",
+                        len(open_positions), bot_id)
+            config['_recovered_positions'] = open_positions
+
+            # Log position details
+            for pos in open_positions:
+                _logger.info("  Position: %s %s qty=%.8f avg_price=%.8f status=%s",
+                           pos.get('symbol'), pos.get('direction'),
+                           pos.get('qty_open', 0), pos.get('avg_price', 0),
+                           pos.get('status'))
+
+        # Recover open trades
+        open_trades = trading_service.get_open_trades()
+        bot_trades = [t for t in open_trades if t['bot_id'] == bot_id]
+
+        if bot_trades:
+            _logger.info("🔄 Recovered %d open trade(s) for bot %d",
+                        len(bot_trades), bot_id)
+            config['_recovered_trades'] = bot_trades
+
+        return config
+    except Exception as e:
+        _logger.exception("Error recovering state for bot %d:", bot_id)
+        return config
+```
+
+**Recovered State Structure**:
+```json
+{
+  "config": {
+    "symbol": "BTCUSDT",
+    "broker": {...},
+    "strategy": {...},
+    "_recovered_positions": [
+      {
+        "id": 123,
+        "symbol": "BTCUSDT",
+        "direction": "LONG",
+        "qty_open": 0.01,
+        "avg_price": 45000.0,
+        "status": "open",
+        "realized_pnl": 0.0
+      }
+    ],
+    "_recovered_trades": [
+      {
+        "id": 456,
+        "symbol": "BTCUSDT",
+        "entry_price": 45000.0,
+        "entry_time": "2025-10-22T10:30:00Z",
+        "status": "open",
+        "size": 0.01
+      }
+    ]
+  }
+}
+```
+
+#### 3.5 Graceful Shutdown Protocol
+
+On clean shutdown, the system persists all bot statuses to ensure accurate crash detection:
+
+```python
+async def shutdown(self):
+    """
+    Gracefully shutdown with complete state persistence.
+
+    Ensures:
+    - All bots are stopped cleanly
+    - Bot statuses persisted to database
+    - Resources properly released
+    - Clean shutdown marked (no crash on next startup)
+    """
+    _logger.info("🛑 Shutting down Enhanced Strategy Manager...")
+
+    try:
+        # Stop monitoring first
+        await self.stop_monitoring()
+
+        # Stop all strategy instances and persist their status
+        _logger.info("Stopping all strategy instances and persisting statuses...")
+        for instance_id, instance in self.strategy_instances.items():
+            if instance.status == 'running':
+                _logger.info("Stopping bot %s (%s)", instance.name, instance_id)
+
+                # Stop the bot
+                await instance.stop()
+
+                # Persist stopped status to database
+                try:
+                    trading_service.update_bot_status(
+                        int(instance_id),
+                        "stopped",
+                        error_message=None  # Clear any error
+                    )
+                    _logger.debug("Persisted stopped status for bot %s", instance_id)
+                except Exception as e:
+                    _logger.warning("Failed to persist status for bot %s: %s",
+                                  instance_id, e)
+
+        # Close resources
+        await self.broker_manager.shutdown()
+        await self.notification_client.close()
+
+        # Mark clean shutdown (remove crash marker)
+        self._mark_clean_shutdown()
+
+        _logger.info("✅ Enhanced Strategy Manager shutdown complete")
+
+    except Exception as e:
+        _logger.exception("Error during shutdown:")
+        # Don't mark clean shutdown if errors occurred
+        _logger.warning("⚠️ Shutdown completed with errors - crash marker not removed")
+```
+
+**Shutdown Flow**:
+```mermaid
+sequenceDiagram
+    participant User as User/Signal
+    participant Runner as TradingRunner
+    participant Manager as StrategyManager
+    participant DB as Database
+    participant FS as File System
+
+    User->>Runner: Ctrl+C / SIGTERM
+    Runner->>Manager: shutdown()
+
+    loop For each running bot
+        Manager->>Manager: Stop bot instance
+        Manager->>DB: Update status to 'stopped'
+    end
+
+    Manager->>Manager: Close broker manager
+    Manager->>Manager: Close notification client
+    Manager->>FS: Remove marker file
+    Manager-->>Runner: Shutdown complete
+    Runner-->>User: Service stopped
+```
+
+#### 3.6 Operational Scenarios
+
+**Scenario 1: Service Crash**
+```
+1. Bot A, B, C running normally
+2. Service crashes (power loss, kill -9, system failure)
+3. Marker file remains on disk
+4. Bot statuses remain 'running' in database
+
+Next Startup:
+1. ✅ Marker detected → Crash recovery mode
+2. ✅ Query bots with status='running'
+3. ✅ Find bots A, B, C
+4. ✅ Recover positions and trades for each
+5. ✅ Resume A, B, C with full state
+6. ✅ Bots D, E (disabled/stopped) are NOT started
+```
+
+**Scenario 2: Clean Shutdown**
+```
+1. Bot A, B, C running normally
+2. User presses Ctrl+C
+3. Service stops all bots gracefully
+4. Updates A, B, C status to 'stopped'
+5. Removes marker file
+
+Next Startup:
+1. ✅ No marker → Normal startup mode
+2. ✅ Query all enabled bots
+3. ✅ Find bots A, B, C, D, E (all enabled)
+4. ✅ Start all 5 bots normally
+5. ✅ No state recovery (clean start)
+```
+
+**Scenario 3: Manual Restart**
+```
+1. Admin wants to restart service
+2. systemctl stop trading-service (clean)
+3. systemctl start trading-service
+
+Behavior:
+1. ✅ No marker → Normal startup
+2. ✅ All enabled bots start
+```
+
+**Scenario 4: Force Normal Startup**
+```
+# Admin wants to override crash recovery
+python src/trading/trading_runner.py --no-resume
+
+Behavior:
+1. ✅ resume_mode=False
+2. ✅ Crash detection skipped
+3. ✅ All enabled bots loaded
+4. ✅ No state recovery
+```
+
+#### 3.7 CLI Usage
+
+```bash
+# Normal startup with crash recovery (default)
+python src/trading/trading_runner.py
+
+# Disable crash recovery (force normal startup)
+python src/trading/trading_runner.py --no-resume
+
+# With user filter and crash recovery
+python src/trading/trading_runner.py --user-id 1
+
+# Full example with all options
+python src/trading/trading_runner.py \
+    --user-id 1 \
+    --poll-interval 30 \
+    --no-resume
+```
+
+#### 3.8 Database Schema Support
+
+**Bot Status Tracking** (`trading_bots` table):
+```sql
+CREATE TABLE trading_bots (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    status VARCHAR(20) NOT NULL,  -- 'running', 'stopped', 'error', 'disabled'
+    started_at TIMESTAMP WITH TIME ZONE,
+    last_heartbeat TIMESTAMP WITH TIME ZONE,
+    error_count INTEGER DEFAULT 0,
+    current_balance NUMERIC(20, 8),
+    total_pnl NUMERIC(20, 8),
+    config JSONB NOT NULL,
+    extra_metadata JSONB,
+    ...
+);
+
+-- Crash recovery queries
+SELECT * FROM trading_bots WHERE status = 'running';  -- Crashed bots
+SELECT * FROM trading_bots WHERE status != 'disabled';  -- Normal startup
+```
+
+**Position Recovery** (`trading_positions` table):
+```sql
+CREATE TABLE trading_positions (
+    id SERIAL PRIMARY KEY,
+    bot_id INTEGER NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    direction VARCHAR(10) NOT NULL,  -- 'LONG', 'SHORT'
+    qty_open NUMERIC(20, 8) NOT NULL DEFAULT 0,
+    avg_price NUMERIC(20, 8),
+    realized_pnl NUMERIC(20, 8) DEFAULT 0,
+    status VARCHAR(12) NOT NULL,  -- 'open', 'closed'
+    ...
+);
+
+-- State recovery queries
+SELECT * FROM trading_positions WHERE bot_id = ? AND status = 'open';
+SELECT * FROM trading_trades WHERE bot_id = ? AND status = 'open';
+```
+
+#### 3.9 Reliability Features
+
+**Error Count Reset**:
+```python
+# On successful bot start, reset error count
+self.error_count = 0
+self.last_error = None
+```
+
+**Heartbeat-Based Health Monitoring**:
+- Every 60 seconds, bot sends heartbeat to database
+- Monitor loop detects stale heartbeats (>3x interval)
+- Automatic restart for unhealthy bots (max 3 attempts)
+
+**Auto-Recovery**:
+```python
+# Monitor loop in StrategyManager
+if heartbeat_age > max_heartbeat_age:
+    _logger.warning("Bot %s heartbeat stale, attempting recovery...", bot.name)
+    if bot.error_count < 3:
+        await bot.restart()
+    else:
+        _logger.error("Bot %s exceeded max restart attempts", bot.name)
+        bot.status = 'error'
+```
+
+#### 3.10 Integration with Health Monitoring
+
+The crash recovery system integrates with the platform-wide health monitoring:
+
+```python
+# Each bot reports its health via HeartbeatManager
+from src.common.heartbeat_manager import HeartbeatManager
+
+heartbeat_manager = HeartbeatManager(
+    system='trading_bot',
+    interval_seconds=60
+)
+
+def trading_bot_health_check():
+    return {
+        'status': 'HEALTHY' if is_running else 'DOWN',
+        'metadata': {
+            'bot_count': len(strategy_instances),
+            'running_bots': running_count,
+            'unhealthy_bots': unhealthy_count,
+            'crash_recovery_enabled': resume_mode
+        }
+    }
+
+heartbeat_manager.set_health_check_function(trading_bot_health_check)
+heartbeat_manager.start_heartbeat()
+```
+
+For comprehensive health monitoring documentation, see [System Health Monitoring](system-health-monitoring.md).
+
+---
+
+### 4. Service Communication Architecture
+
+#### 4.1 System Service Independence
 - **TradingBot** and **TelegramBot** run as separate **systemd services** (Linux deployment)
 - Each service manages its own lifecycle and error handling
 - Services communicate through PostgreSQL database and FastAPI endpoints (src/api/)
