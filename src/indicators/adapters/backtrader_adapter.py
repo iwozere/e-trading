@@ -118,6 +118,76 @@ class BacktraderIndicatorWrapper(bt.Indicator):
             logger.exception("Error building DataFrame from Backtrader data:")
             return None
 
+    def _normalize_params(self, indicator_name: str, params: dict) -> dict:
+        """
+        Normalize parameter names for unified indicator service.
+
+        Args:
+            indicator_name: Name of the indicator
+            params: Original parameters from strategy
+
+        Returns:
+            Normalized parameters
+        """
+        normalized = params.copy()
+        indicator_lower = indicator_name.lower()
+
+        # RSI parameter normalization
+        if 'rsi' in indicator_lower:
+            if 'period' in normalized and 'timeperiod' not in normalized:
+                normalized['timeperiod'] = normalized.pop('period')
+            if 'length' in normalized and 'timeperiod' not in normalized:
+                normalized['timeperiod'] = normalized.pop('length')
+
+        # Bollinger Bands normalization
+        if 'bollinger' in indicator_lower or 'bb' in indicator_lower:
+            if 'period' in normalized and 'timeperiod' not in normalized:
+                normalized['timeperiod'] = normalized.pop('period')
+            # Handle both 'dev' and 'devfactor' parameter names
+            if 'dev' in normalized and 'nbdevup' not in normalized:
+                dev = normalized.pop('dev')
+                normalized['nbdevup'] = dev
+                normalized['nbdevdn'] = dev
+            if 'devfactor' in normalized and 'nbdevup' not in normalized:
+                dev = normalized.pop('devfactor')
+                normalized['nbdevup'] = dev
+                normalized['nbdevdn'] = dev
+
+        # ATR parameter normalization
+        if 'atr' in indicator_lower:
+            if 'period' in normalized and 'timeperiod' not in normalized:
+                normalized['timeperiod'] = normalized.pop('period')
+
+        # Volume normalization
+        if 'volume' in indicator_lower:
+            if 'period' in normalized and 'timeperiod' not in normalized:
+                normalized['timeperiod'] = normalized.pop('period')
+
+        return normalized
+
+    def _normalize_indicator_name(self, name: str) -> str:
+        """
+        Normalize indicator names to match registry.
+
+        Args:
+            name: Original indicator name
+
+        Returns:
+            Normalized indicator name
+        """
+        name_lower = name.lower()
+
+        # Common name mappings
+        name_map = {
+            'bollinger_bands': 'bbands',
+            'bollinger': 'bbands',
+            'moving_average': 'sma',
+            'simple_moving_average': 'sma',
+            'exponential_moving_average': 'ema',
+        }
+
+        return name_map.get(name_lower, name_lower)
+
     def next(self):
         """Called for each new bar"""
         if self._use_unified and self._unified_service:
@@ -128,6 +198,10 @@ class BacktraderIndicatorWrapper(bt.Indicator):
                     # Compute indicator using unified service
                     indicator_name = self._get_indicator_name()
                     params = self._get_indicator_params()
+
+                    # Normalize indicator name and parameters
+                    normalized_name = self._normalize_indicator_name(indicator_name)
+                    normalized_params = self._normalize_params(normalized_name, params)
 
                     # Create inputs dict
                     inputs = {
@@ -146,12 +220,15 @@ class BacktraderIndicatorWrapper(bt.Indicator):
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
 
+                    # Get the appropriate adapter from the service
+                    adapter = self._unified_service._select_provider(normalized_name)
+
                     results = loop.run_until_complete(
-                        self._unified_service.compute(
-                            indicator_name,
+                        adapter.compute(
+                            normalized_name,
                             df,
                             inputs,
-                            params
+                            normalized_params
                         )
                     )
 
@@ -162,11 +239,15 @@ class BacktraderIndicatorWrapper(bt.Indicator):
 
             except Exception as e:
                 logger.warning("Unified service computation failed, falling back to native implementation: %s", e)
+                logger.exception("Full error details:")
                 self._use_unified = False
 
         # Use fallback implementation
         if self._fallback_impl:
+            logger.debug("Using fallback Backtrader implementation for %s", self._get_indicator_name())
             self._use_fallback()
+        else:
+            logger.warning("No fallback implementation available for %s", self._get_indicator_name())
 
     def _use_fallback(self):
         """Use the fallback implementation to set line values"""

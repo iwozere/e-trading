@@ -473,11 +473,33 @@ class UnifiedIndicatorService:
     """
 
     def __init__(self, prefer: Dict[str, int] | None = None, batch_config: BatchProcessingConfig = None):
-        self.adapters = {
-            "ta-lib": TaLibAdapter(),
-            "pandas-ta": PandasTaAdapter(),
-            "fundamentals": FundamentalsAdapter(),
-        }
+        # Initialize adapters with graceful handling of missing dependencies
+        self.adapters = {}
+
+        # Try to initialize ta-lib adapter
+        try:
+            self.adapters["ta-lib"] = TaLibAdapter()
+            _logger.info("Initialized ta-lib adapter")
+        except ImportError as e:
+            _logger.warning("Failed to initialize ta-lib adapter: %s", e)
+
+        # Try to initialize pandas-ta adapter
+        try:
+            self.adapters["pandas-ta"] = PandasTaAdapter()
+            _logger.info("Initialized pandas-ta adapter")
+        except ImportError as e:
+            _logger.warning("Failed to initialize pandas-ta adapter: %s", e)
+
+        # Try to initialize fundamentals adapter
+        try:
+            self.adapters["fundamentals"] = FundamentalsAdapter()
+            _logger.info("Initialized fundamentals adapter")
+        except ImportError as e:
+            _logger.warning("Failed to initialize fundamentals adapter: %s", e)
+
+        if not self.adapters:
+            raise RuntimeError("No indicator adapters available. Install at least one: talib, pandas_ta")
+
         self.prefer = prefer or {}
         self.config_manager = get_config_manager()
         self.recommendation_engine = RecommendationEngine()

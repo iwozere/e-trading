@@ -1,0 +1,75 @@
+{
+  "test_name": "CustomStrategy RSI+Volume+Supertrend with ATR Exit",
+  "description": "Backtester test using RSI+Volume+Supertrend entry and ATR-based exit",
+
+  "strategy": {
+    "type": "CustomStrategy",
+    "parameters": {
+      "entry_logic": {
+        "name": "RSIVolumeSuperTrendMixin",
+        "params": {
+          "rsi_period": 14,
+          "rsi_threshold": 40,
+          "volume_ma_period": 20,
+          "volume_threshold": 1.5,
+          "supertrend_period": 10,
+          "supertrend_multiplier": 3.0
+        }
+      },
+      "exit_logic": {
+        "name": "ATRExitMixin",
+        "params": {
+          "atr_period": 14,
+          "stop_loss_multiplier": 2.0,
+          "take_profit_multiplier": 3.0
+        }
+      },
+      "position_size": 0.15
+    }
+  },
+
+  "data": {
+    "file_path": "data/BTCUSDT_1h.csv",
+    "symbol": "BTCUSDT",
+    "datetime_col": "timestamp",
+    "open_col": "open",
+    "high_col": "high",
+    "low_col": "low",
+    "close_col": "close",
+    "volume_col": "volume",
+    "fromdate": "2023-01-01",
+    "todate": "2023-12-31"
+  },
+
+  "broker": {
+    "cash": 50000.0,
+    "commission": 0.0015,
+    "slippage": 0.001
+  },
+
+  "analyzers": {
+    "sharpe_ratio": {
+      "enabled": true,
+      "params": {
+        "timeframe": "annual",
+        "riskfreerate": 0.02
+      }
+    },
+    "drawdown": {
+      "enabled": true
+    },
+    "trades": {
+      "enabled": true
+    },
+    "returns": {
+      "enabled": true
+    }
+  },
+
+  "assertions": {
+    "min_trades": 5,
+    "max_drawdown_pct": 30.0,
+    "min_sharpe_ratio": -1.0,
+    "final_value_greater_than_initial": false
+  }
+}

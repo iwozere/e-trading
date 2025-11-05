@@ -1,0 +1,74 @@
+{
+  "test_name": "Simple Test - Guaranteed Trades",
+  "description": "A simple configuration with relaxed parameters guaranteed to generate trades for testing",
+
+  "strategy": {
+    "type": "CustomStrategy",
+    "parameters": {
+      "entry_logic": {
+        "name": "RSIBBEntryMixin",
+        "params": {
+          "e_rsi_period": 14,
+          "e_rsi_oversold": 50,
+          "e_rsi_overbought": 70,
+          "e_bb_period": 20,
+          "e_bb_dev": 2.0,
+          "e_use_bb_touch": false
+        }
+      },
+      "exit_logic": {
+        "name": "FixedRatioExitMixin",
+        "params": {
+          "profit_ratio": 1.2,
+          "stop_loss_ratio": 0.8
+        }
+      },
+      "position_size": 0.1
+    }
+  },
+
+  "data": {
+    "file_path": "data/_full/BTCUSDT_1h_20220101_20250707.csv",
+    "symbol": "BTCUSDT",
+    "datetime_col": "timestamp",
+    "open_col": "open",
+    "high_col": "high",
+    "low_col": "low",
+    "close_col": "close",
+    "volume_col": "volume",
+    "fromdate": null,
+    "todate": null
+  },
+
+  "broker": {
+    "cash": 10000.0,
+    "commission": 0.001,
+    "slippage": 0.0005
+  },
+
+  "analyzers": {
+    "sharpe_ratio": {
+      "enabled": true,
+      "params": {
+        "timeframe": "annual",
+        "riskfreerate": 0.02
+      }
+    },
+    "drawdown": {
+      "enabled": true
+    },
+    "trades": {
+      "enabled": true
+    },
+    "returns": {
+      "enabled": true
+    }
+  },
+
+  "assertions": {
+    "min_trades": 1,
+    "max_drawdown_pct": null,
+    "min_sharpe_ratio": null,
+    "final_value_greater_than_initial": false
+  }
+}

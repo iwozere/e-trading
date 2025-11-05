@@ -72,7 +72,7 @@ class BotConfigValidator:
 
         # Validate broker type
         if "type" in broker_config:
-            valid_types = ["binance", "paper", "alpaca", "interactive_brokers"]
+            valid_types = ["binance", "paper", "alpaca", "ibkr"]
             if broker_config["type"] not in valid_types:
                 self.warnings.append(f"Unknown broker type: {broker_config['type']}")
 

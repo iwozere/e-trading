@@ -84,7 +84,7 @@ class PaperTradingMixin:
             initial_balance=config.initial_balance
         )
 
-        _logger.info("Initialized paper trading portfolio with $%,.2f", config.initial_balance)
+        _logger.info("Initialized paper trading portfolio with $%.2f", config.initial_balance)
 
     async def simulate_realistic_execution(self, order: Order, market_price: float) -> Tuple[bool, float, float, str]:
         """

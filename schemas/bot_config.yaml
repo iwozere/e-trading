@@ -31,7 +31,7 @@ properties:
           - "backtrader"
           - "paper"
           - "alpaca"
-          - "interactive_brokers"
+          - "ibkr"
         description: "Broker type for execution"
 
       trading_mode:

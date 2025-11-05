@@ -152,7 +152,8 @@ class SchemaValidator:
 
         elif error.validator == "enum":
             valid_values = ", ".join(f"'{v}'" for v in error.validator_value)
-            return f"Invalid value for '{field_path}': must be one of [{valid_values}]"
+            actual_value = error.instance
+            return f"Invalid value '{actual_value}' for '{field_path}': must be one of [{valid_values}]"
 
         elif error.validator == "pattern":
             return f"Invalid format for '{field_path}': {error.message}"
@@ -187,7 +188,7 @@ class SchemaValidator:
         # Check live trading has credentials
         if broker.get("trading_mode") == "live":
             broker_type = broker.get("type")
-            if broker_type in ("binance", "alpaca", "interactive_brokers"):
+            if broker_type in ("binance", "alpaca", "ibkr"):
                 if not broker.get("api_key") or not broker.get("api_secret"):
                     warnings.append(f"Live trading with {broker_type} requires 'api_key' and 'api_secret'")
 

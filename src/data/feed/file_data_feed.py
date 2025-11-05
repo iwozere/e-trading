@@ -18,6 +18,7 @@ Classes:
 """
 
 import os
+import sys
 import time
 import threading
 from typing import Optional, Dict, Any, Callable
@@ -26,6 +27,10 @@ from pathlib import Path
 
 import pandas as pd
 import backtrader as bt
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.append(str(PROJECT_ROOT))
+
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

@@ -121,7 +121,7 @@ class MockFileTradingDemo:
             broker = get_broker(broker_config)
             _logger.info("Created broker: %s", broker.__class__.__name__)
             _logger.info("Trading mode: %s", broker_config['trading_mode'])
-            _logger.info("Initial cash: $%,.2f", broker_config['cash'])
+            _logger.info("Initial cash: $%.2f", broker_config['cash'])
             return broker
         except Exception as e:
             _logger.exception("Failed to create broker:")

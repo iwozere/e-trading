@@ -83,16 +83,22 @@ class StrategyInstance:
         try:
             _logger.info("Starting strategy instance: %s", self.name)
 
-            # Create broker
+            # Create broker (skip for backtrader type - use Cerebro's built-in broker)
             broker_config = self.config['broker']
-            self.broker = get_broker(broker_config)
-            if not self.broker:
-                raise Exception("Failed to create broker")
+            broker_type = broker_config.get('type', '').lower()
 
-            _logger.info("Created broker for %s: %s (mode: %s)",
-                        self.name,
-                        broker_config.get('type'),
-                        broker_config.get('trading_mode'))
+            if broker_type == 'backtrader':
+                _logger.info("Using Backtrader's built-in broker (no custom broker needed)")
+                self.broker = None
+            else:
+                self.broker = get_broker(broker_config)
+                if not self.broker:
+                    raise Exception("Failed to create broker")
+
+                _logger.info("Created broker for %s: %s (mode: %s)",
+                            self.name,
+                            broker_config.get('type'),
+                            broker_config.get('trading_mode'))
 
             # Get strategy class using StrategyHandler
             strategy_config = self.config['strategy']
@@ -368,24 +374,34 @@ class StrategyInstance:
             _logger.info("Added data feed to Cerebro for %s", self.name)
 
             # Add strategy with parameters
+            # Wrap parameters in strategy_config for BaseStrategy compatibility
             strategy_params = self.config['strategy'].get('parameters', {})
-            self.cerebro.addstrategy(strategy_class, **strategy_params)
-            _logger.info("Added strategy %s to Cerebro", strategy_class.__name__)
+            self.cerebro.addstrategy(strategy_class, strategy_config=strategy_params)
+            _logger.info("Added strategy %s to Cerebro with config", strategy_class.__name__)
 
             # Setup broker
-            if self.broker:
-                self.cerebro.broker = self.broker
-                _logger.info("Assigned broker to Cerebro")
+            broker_type = self.config['broker'].get('type', '').lower()
 
-            # Setup initial cash
-            initial_balance = self.config['broker'].get('cash', 10000.0)
-            self.cerebro.broker.setcash(initial_balance)
-            _logger.info("Set initial cash: $%.2f", initial_balance)
+            if broker_type == 'backtrader':
+                # Use Cerebro's built-in broker (default) for backtesting
+                _logger.info("Using Backtrader's built-in broker")
 
-            # Setup commission
-            commission = self.config.get('commission', 0.001)  # 0.1% default
-            self.cerebro.broker.setcommission(commission=commission)
-            _logger.info("Set commission: %.4f", commission)
+                # Setup initial cash
+                initial_balance = self.config['broker'].get('cash', 10000.0)
+                self.cerebro.broker.setcash(initial_balance)
+                _logger.info("Set initial cash: $%.2f", initial_balance)
+
+                # Setup commission
+                commission = self.config['broker'].get('commission', 0.001)  # 0.1% default
+                self.cerebro.broker.setcommission(commission=commission)
+                _logger.info("Set commission: %.4f", commission)
+            else:
+                # Use custom broker (Binance, IBKR, etc.)
+                if self.broker:
+                    self.cerebro.broker = self.broker
+                    _logger.info("Assigned custom %s broker to Cerebro", broker_type)
+                else:
+                    _logger.warning("No broker created for type: %s", broker_type)
 
             _logger.info("✅ Backtrader setup complete for %s", self.name)
             return True

@@ -1,0 +1,73 @@
+{
+  "test_name": "CustomStrategy RSI+BB with ATR based Exit",
+  "description": "Backtester test for CustomStrategy using RSI+BB entry and ATR based exit",
+
+  "strategy": {
+    "type": "CustomStrategy",
+    "parameters": {
+      "entry_logic": {
+        "name": "RSIBBEntryMixin",
+        "params": {
+          "e_rsi_period": 22,
+          "e_rsi_oversold": 34,
+          "e_bb_period": 20,
+          "e_bb_dev": 2.08
+        }
+      },
+      "exit_logic": {
+        "name": "ATRExitMixin",
+        "params": {
+          "x_atr_period": 17,
+          "x_tp_multiplier": 2.9,
+          "x_sl_multiplier": 2.9
+        }
+      },
+      "position_size": 0.1
+    }
+  },
+
+  "data": {
+    "file_path": "data/_full/BTCUSDT_1h_20220101_20250707.csv",
+    "symbol": "BTCUSDT",
+    "datetime_col": "timestamp",
+    "open_col": "open",
+    "high_col": "high",
+    "low_col": "low",
+    "close_col": "close",
+    "volume_col": "volume",
+    "fromdate": null,
+    "todate": null
+  },
+
+  "broker": {
+    "cash": 10000.0,
+    "commission": 0.001,
+    "slippage": 0.0005
+  },
+
+  "analyzers": {
+    "sharpe_ratio": {
+      "enabled": true,
+      "params": {
+        "timeframe": "annual",
+        "riskfreerate": 0.02
+      }
+    },
+    "drawdown": {
+      "enabled": true
+    },
+    "trades": {
+      "enabled": true
+    },
+    "returns": {
+      "enabled": true
+    }
+  },
+
+  "assertions": {
+    "min_trades": 1,
+    "max_drawdown_pct": null,
+    "min_sharpe_ratio": null,
+    "final_value_greater_than_initial": false
+  }
+}

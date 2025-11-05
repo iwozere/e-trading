@@ -1,0 +1,74 @@
+{
+  "test_name": "CustomStrategy BB+Volume+Supertrend with Trailing Stop",
+  "description": "Test using BB+Volume+Supertrend entry and TrailingStop exit",
+
+  "strategy": {
+    "type": "CustomStrategy",
+    "parameters": {
+      "entry_logic": {
+        "name": "BBVolumeSuperTrendMixin",
+        "params": {
+          "bb_period": 20,
+          "bb_dev": 2.0,
+          "volume_ma_period": 20,
+          "volume_threshold": 1.5,
+          "supertrend_period": 10,
+          "supertrend_multiplier": 3.0
+        }
+      },
+      "exit_logic": {
+        "name": "TrailingStopExitMixin",
+        "params": {
+          "trail_percent": 5.0,
+          "min_profit_percent": 2.0
+        }
+      },
+      "position_size": 0.12
+    }
+  },
+
+  "data": {
+    "file_path": "data/BTCUSDT_1h.csv",
+    "symbol": "BTCUSDT",
+    "datetime_col": "timestamp",
+    "open_col": "open",
+    "high_col": "high",
+    "low_col": "low",
+    "close_col": "close",
+    "volume_col": "volume",
+    "fromdate": null,
+    "todate": null
+  },
+
+  "broker": {
+    "cash": 20000.0,
+    "commission": 0.001,
+    "slippage": 0.0008
+  },
+
+  "analyzers": {
+    "sharpe_ratio": {
+      "enabled": true,
+      "params": {
+        "timeframe": "annual",
+        "riskfreerate": 0.02
+      }
+    },
+    "drawdown": {
+      "enabled": true
+    },
+    "trades": {
+      "enabled": true
+    },
+    "returns": {
+      "enabled": true
+    }
+  },
+
+  "assertions": {
+    "min_trades": 3,
+    "max_drawdown_pct": 40.0,
+    "min_sharpe_ratio": null,
+    "final_value_greater_than_initial": false
+  }
+}
