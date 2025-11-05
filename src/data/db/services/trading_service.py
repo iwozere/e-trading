@@ -26,7 +26,7 @@ def _bot_to_dict(b) -> Dict[str, Any]:
     return {
         "id": b.id,
         "user_id": b.user_id,
-        "type": b.type,
+        # "type" field removed - all config is in the JSON config field
         "config": b.config,
         "description": b.description,
         "status": b.status,

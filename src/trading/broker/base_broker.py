@@ -778,7 +778,7 @@ class BaseBroker(BaseBrokerClass):
             initial_balance=config.initial_balance
         )
 
-        self._logger.info("Initialized paper trading portfolio with $%,.2f", config.initial_balance)
+        self._logger.info("Initialized paper trading portfolio with $%.2f", config.initial_balance)
 
     # Abstract methods that must be implemented by subclasses
 

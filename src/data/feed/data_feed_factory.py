@@ -16,6 +16,7 @@ from src.data.feed.binance_live_feed import BinanceLiveDataFeed
 from src.data.feed.coingecko_live_feed import CoinGeckoLiveDataFeed
 from src.data.feed.ibkr_live_feed import IBKRLiveDataFeed
 from src.data.feed.yahoo_live_feed import YahooLiveDataFeed
+from src.data.feed.file_data_feed import FileDataFeed
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -42,7 +43,7 @@ class DataFeedFactory:
 
         Configuration format:
         {
-            "data_source": "binance|yahoo|ibkr|coingecko",
+            "data_source": "binance|yahoo|ibkr|coingecko|file",
             "symbol": "BTCUSDT",
             "interval": "1m",
             "lookback_bars": 1000,
@@ -63,7 +64,17 @@ class DataFeedFactory:
             "client_id": 1,
 
             # CoinGecko specific
-            "polling_interval": 60
+            "polling_interval": 60,
+
+            # File specific
+            "file_path": "/path/to/data.csv",
+            "datetime_col": "datetime",
+            "open_col": "open",
+            "high_col": "high",
+            "low_col": "low",
+            "close_col": "close",
+            "volume_col": "volume",
+            "simulate_realtime": false
         }
         """
         try:
@@ -77,6 +88,8 @@ class DataFeedFactory:
                 return DataFeedFactory._create_ibkr_feed(config)
             elif data_source == "coingecko":
                 return DataFeedFactory._create_coingecko_feed(config)
+            elif data_source == "file":
+                return DataFeedFactory._create_file_feed(config)
             else:
                 _logger.error("Unknown data source: %s", data_source)
                 return None
@@ -138,6 +151,21 @@ class DataFeedFactory:
         )
 
     @staticmethod
+    def _create_file_feed(config: Dict[str, Any]) -> FileDataFeed:
+        """Create a file-based data feed from CSV."""
+        return FileDataFeed(
+            dataname=config.get("file_path"),
+            symbol=config.get("symbol"),
+            datetime_col=config.get("datetime_col", "datetime"),
+            open_col=config.get("open_col", "open"),
+            high_col=config.get("high_col", "high"),
+            low_col=config.get("low_col", "low"),
+            close_col=config.get("close_col", "close"),
+            volume_col=config.get("volume_col", "volume"),
+            simulate_realtime=config.get("simulate_realtime", False)
+        )
+
+    @staticmethod
     def get_supported_sources() -> list:
         """
         Get list of supported data sources.
@@ -145,7 +173,7 @@ class DataFeedFactory:
         Returns:
             List of supported data source names
         """
-        return ["binance", "yahoo", "ibkr", "coingecko"]
+        return ["binance", "yahoo", "ibkr", "coingecko", "file"]
 
     @staticmethod
     def get_source_info() -> Dict[str, Dict[str, Any]]:
@@ -194,6 +222,16 @@ class DataFeedFactory:
                 "real_time": "Polling",
                 "requires_auth": False,
                 "rate_limits": "50 calls/minute",
+                "cost": "Free"
+            },
+            "file": {
+                "name": "File (CSV)",
+                "description": "Historical data from CSV files for backtesting",
+                "symbols": "Any symbol (for identification only)",
+                "intervals": "Any (based on CSV data)",
+                "real_time": "Optional simulation mode",
+                "requires_auth": False,
+                "rate_limits": "N/A",
                 "cost": "Free"
             }
         }
