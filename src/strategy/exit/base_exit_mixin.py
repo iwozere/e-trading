@@ -94,6 +94,59 @@ class BaseExitMixin(ABC):
     def get_param(self, key: str, default=None):
         return self.params.get(key, default)
 
+    def get_indicator(self, alias: str) -> Any:
+        """
+        Get indicator value by alias (for new TALib-based architecture).
+
+        Args:
+            alias: Field alias from fields_mapping
+
+        Returns:
+            Current indicator value (for current bar)
+
+        Raises:
+            RuntimeError: If mixin not attached to strategy
+            KeyError: If indicator not found
+
+        Example:
+            atr_value = self.get_indicator('exit_atr')  # Current bar value
+        """
+        if self.strategy is None:
+            raise RuntimeError("Mixin not attached to strategy")
+
+        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+            raise KeyError(
+                f"Indicator '{alias}' not found in strategy. "
+                f"Available indicators: {list(getattr(self.strategy, 'indicators', {}).keys())}"
+            )
+
+        indicator = self.strategy.indicators[alias]
+        return indicator[0]  # Current bar value
+
+    def get_indicator_prev(self, alias: str, offset: int = 1) -> Any:
+        """
+        Get previous indicator value by offset.
+
+        Args:
+            alias: Field alias from fields_mapping
+            offset: Number of bars back (default: 1)
+
+        Returns:
+            Previous indicator value
+
+        Example:
+            atr_prev = self.get_indicator_prev('exit_atr')  # Previous bar
+            atr_prev2 = self.get_indicator_prev('exit_atr', 2)  # 2 bars back
+        """
+        if self.strategy is None:
+            raise RuntimeError("Mixin not attached to strategy")
+
+        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+            raise KeyError(f"Indicator '{alias}' not found in strategy")
+
+        indicator = self.strategy.indicators[alias]
+        return indicator[-offset]
+
     def register_indicator(self, name: str, indicator: Any):
         """
         Register an indicator in the indicators dictionary and set it as a strategy attribute

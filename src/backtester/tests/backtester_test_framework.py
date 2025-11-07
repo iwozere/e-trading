@@ -471,11 +471,24 @@ class BacktesterTestFramework:
             params = strategy_config['parameters']
             if 'entry_logic' in params:
                 report_lines.append(f"  Entry Logic: {params['entry_logic']['name']}")
-                report_lines.append(f"    Params: {params['entry_logic']['params']}")
+                # Support both new (logic_params) and legacy (params) formats
+                if 'logic_params' in params['entry_logic']:
+                    report_lines.append(f"    Logic Params: {params['entry_logic']['logic_params']}")
+                    if 'indicators' in params['entry_logic']:
+                        report_lines.append(f"    Indicators: {len(params['entry_logic']['indicators'])} configured")
+                elif 'params' in params['entry_logic']:
+                    report_lines.append(f"    Params: {params['entry_logic']['params']}")
             if 'exit_logic' in params:
                 report_lines.append(f"  Exit Logic: {params['exit_logic']['name']}")
-                report_lines.append(f"    Params: {params['exit_logic']['params']}")
+                # Support both new (logic_params) and legacy (params) formats
+                if 'logic_params' in params['exit_logic']:
+                    report_lines.append(f"    Logic Params: {params['exit_logic']['logic_params']}")
+                    if 'indicators' in params['exit_logic']:
+                        report_lines.append(f"    Indicators: {len(params['exit_logic']['indicators'])} configured")
+                elif 'params' in params['exit_logic']:
+                    report_lines.append(f"    Params: {params['exit_logic']['params']}")
             report_lines.append(f"  Position Size: {params.get('position_size', 'N/A')}")
+            report_lines.append(f"  Use TALib: {params.get('use_talib', 'N/A')}")
         report_lines.append("")
 
         # Performance metrics

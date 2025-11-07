@@ -20,6 +20,8 @@ from src.notification.logger import setup_logger
 from src.data.data_manager import ProviderSelector
 
 _logger = setup_logger(__name__)
+_order_logger = setup_logger('orders')
+_trade_logger = setup_logger('trades')
 
 
 class BaseStrategy(bt.Strategy):
@@ -63,10 +65,15 @@ class BaseStrategy(bt.Strategy):
         # Position and trade tracking
         self.current_trade = None
         self.current_exit_reason = None
+        self.current_entry_reason = None  # Track entry reason for order logging
         self.entry_price = None
         self.current_position_size = None  # Track current position size (handles partial exits)
         self.exit_size = None  # Track the size being exited for accurate trade notifications
         self.highest_profit = 0.0
+
+        # Order tracking
+        self.order_refs = {}  # Map order ref to order metadata
+        self.executed_exit_price = None  # Track actual executed exit price from broker
 
         # Database integration
         self.trade_repository = None
@@ -92,6 +99,10 @@ class BaseStrategy(bt.Strategy):
         self.base_position_size = self.config.get('position_size', self.p.position_size)
         self.max_position_size = self.config.get('max_position_size', 0.2)
         self.min_position_size = self.config.get('min_position_size', 0.05)
+
+        # Indicator management (for new TALib-based architecture)
+        self.indicators = {}  # Dict[str, bt.Indicator] - stores indicator line objects by alias
+        self.indicator_configs = []  # Store indicator configurations
 
         _logger.debug("BaseBacktraderStrategy initialized")
 
@@ -163,6 +174,100 @@ class BaseStrategy(bt.Strategy):
     def _initialize_strategy(self):
         """Initialize strategy-specific components. Override in subclasses."""
         pass
+
+    def _create_indicators_from_config(self, strategy_config: Dict[str, Any]):
+        """
+        Create all indicators from strategy configuration.
+
+        This method extracts indicator configs from entry_logic and exit_logic,
+        creates them via IndicatorFactory, and stores in self.indicators.
+
+        Args:
+            strategy_config: Full strategy configuration dict
+
+        Raises:
+            ValueError: If indicator configuration is invalid
+        """
+        from src.strategy.indicator_factory import IndicatorFactory
+
+        # Extract indicator configs from entry and exit logic
+        all_indicator_configs = []
+
+        strategy_params = strategy_config.get('parameters', {})
+
+        # Get entry logic indicators
+        entry_logic = strategy_params.get('entry_logic', {})
+        if 'indicators' in entry_logic:
+            all_indicator_configs.extend(entry_logic['indicators'])
+            _logger.debug(f"Found {len(entry_logic['indicators'])} indicators in entry_logic")
+
+        # Get exit logic indicators
+        exit_logic = strategy_params.get('exit_logic', {})
+        if 'indicators' in exit_logic:
+            all_indicator_configs.extend(exit_logic['indicators'])
+            _logger.debug(f"Found {len(exit_logic['indicators'])} indicators in exit_logic")
+
+        if not all_indicator_configs:
+            _logger.warning("No indicators found in strategy config")
+            return
+
+        # Store configs
+        self.indicator_configs = all_indicator_configs
+
+        # Create indicators using factory
+        try:
+            self.indicators = IndicatorFactory.create_indicators(
+                self.data,
+                all_indicator_configs
+            )
+            _logger.info(f"Successfully created {len(self.indicators)} indicator outputs")
+        except Exception as e:
+            _logger.error(f"Failed to create indicators: {e}")
+            raise
+
+    def get_indicator(self, alias: str) -> Any:
+        """
+        Get indicator by alias.
+
+        Args:
+            alias: Field alias from fields_mapping
+
+        Returns:
+            Backtrader indicator line object
+
+        Raises:
+            KeyError: If indicator not found
+
+        Example:
+            rsi_value = self.get_indicator('entry_rsi')[0]  # Current bar
+            rsi_prev = self.get_indicator('entry_rsi')[-1]  # Previous bar
+        """
+        if alias not in self.indicators:
+            raise KeyError(
+                f"Indicator '{alias}' not found. "
+                f"Available indicators: {list(self.indicators.keys())}"
+            )
+
+        return self.indicators[alias]
+
+    def _validate_indicators_ready(self) -> bool:
+        """
+        Check if all indicators have valid values (not NaN).
+
+        Returns:
+            True if all indicators have valid current values, False otherwise
+        """
+        import math
+
+        for alias, indicator in self.indicators.items():
+            try:
+                value = indicator[0]
+                if math.isnan(value):
+                    return False
+            except (IndexError, TypeError):
+                return False
+
+        return True
 
     def prenext(self):
         """Skip bars until we have enough data."""
@@ -366,14 +471,17 @@ class BaseStrategy(bt.Strategy):
             if not self._validate_position_size(shares):
                 return
 
+            # Store entry reason for order logging
+            self.current_entry_reason = reason
+
             if direction.lower() == 'long':
                 order = self.buy(size=shares)
-                _logger.info("LONG entry - Size: %.3f, Price: %.4f, Reason: %s",
-                                position_size, self.data.close[0], reason)
+                _logger.info("POSITION_ENTRY - %s | Direction: LONG | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
+                            self.symbol, shares, position_size * 100, self.data.close[0], confidence, risk_multiplier, reason)
             elif direction.lower() == 'short':
                 order = self.sell(size=shares)
-                _logger.info("SHORT entry - Size: %.3f, Price: %.4f, Reason: %s",
-                                position_size, self.data.close[0], reason)
+                _logger.info("POSITION_ENTRY - %s | Direction: SHORT | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
+                            self.symbol, shares, position_size * 100, self.data.close[0], confidence, risk_multiplier, reason)
             else:
                 _logger.error("Invalid direction: %s", direction)
                 return
@@ -447,11 +555,20 @@ class BaseStrategy(bt.Strategy):
             # Store the size being exited BEFORE closing
             self.exit_size = abs(self.position.size)
 
-            # Store the exit reason for trade recording
+            # Store the exit reason for trade recording and order logging
             self.current_exit_reason = reason
 
+            # Calculate current unrealized P&L
+            if self.entry_price:
+                current_pnl = (self.data.close[0] - self.entry_price) * self.exit_size
+                current_pnl_pct = (current_pnl / (self.entry_price * self.exit_size)) * 100
+            else:
+                current_pnl = 0.0
+                current_pnl_pct = 0.0
+
             self.close()
-            _logger.info("Position exit - Size: %.6f, Reason: %s", self.exit_size, reason)
+            _logger.info("POSITION_EXIT - %s | Size: %.6f | Exit Price: %.4f | Unrealized PnL: %.4f (%.2f%%) | Reason: %s",
+                        self.symbol, self.exit_size, self.data.close[0], current_pnl, current_pnl_pct, reason)
 
             # Note: Don't reset entry_price here - it will be reset in notify_trade after the trade is actually closed
 
@@ -655,6 +772,108 @@ class BaseStrategy(bt.Strategy):
         except Exception as e:
             _logger.exception("Error updating trade tracking")
 
+    def notify_order(self, order):
+        """
+        Handle order notifications and log all order status changes.
+
+        This method is called by Backtrader for every order status change.
+        Logs to both console and orders.log file.
+        """
+        try:
+            # Get order direction
+            order_type = "BUY" if order.isbuy() else "SELL"
+
+            # Order submitted
+            if order.status in [order.Submitted]:
+                # Store order metadata for later reference
+                self.order_refs[order.ref] = {
+                    'type': order_type,
+                    'size': order.size,
+                    'price': order.price or self.data.close[0],
+                    'reason': self.current_entry_reason if order.isbuy() else self.current_exit_reason
+                }
+
+                _order_logger.info(
+                    "ORDER - %s | Type: %s | Status: Submitted | Size: %.6f | Price: %.4f | Order ID: %d | Reason: %s",
+                    self.symbol,
+                    order_type,
+                    order.size,
+                    order.price or self.data.close[0],
+                    order.ref,
+                    self.current_entry_reason if order.isbuy() else (self.current_exit_reason or "unknown")
+                )
+
+            # Order accepted by broker
+            elif order.status in [order.Accepted]:
+                _order_logger.info(
+                    "ORDER - %s | Type: %s | Status: Accepted | Order ID: %d",
+                    self.symbol,
+                    order_type,
+                    order.ref
+                )
+
+            # Order completed (filled)
+            elif order.status in [order.Completed]:
+                _order_logger.info(
+                    "ORDER - %s | Type: %s | Status: Completed | Size: %.6f | Executed Price: %.4f | Order ID: %d | Commission: %.4f",
+                    self.symbol,
+                    order_type,
+                    order.executed.size,
+                    order.executed.price,
+                    order.ref,
+                    order.executed.comm or 0.0
+                )
+
+                # Store executed exit price for SELL orders (will be used in notify_trade)
+                if not order.isbuy():
+                    self.executed_exit_price = order.executed.price
+
+                # Clean up order metadata
+                if order.ref in self.order_refs:
+                    del self.order_refs[order.ref]
+
+            # Order canceled
+            elif order.status in [order.Canceled]:
+                _order_logger.warning(
+                    "ORDER - %s | Type: %s | Status: Canceled | Order ID: %d",
+                    self.symbol,
+                    order_type,
+                    order.ref
+                )
+
+                # Clean up order metadata
+                if order.ref in self.order_refs:
+                    del self.order_refs[order.ref]
+
+            # Order rejected
+            elif order.status in [order.Rejected]:
+                _order_logger.error(
+                    "ORDER - %s | Type: %s | Status: Rejected | Order ID: %d | Reason: Insufficient margin or invalid parameters",
+                    self.symbol,
+                    order_type,
+                    order.ref
+                )
+
+                # Clean up order metadata
+                if order.ref in self.order_refs:
+                    del self.order_refs[order.ref]
+
+            # Order margin (not enough cash)
+            elif order.status in [order.Margin]:
+                _order_logger.error(
+                    "ORDER - %s | Type: %s | Status: Margin | Order ID: %d | Reason: Insufficient cash/margin",
+                    self.symbol,
+                    order_type,
+                    order.ref
+                )
+
+                # Clean up order metadata
+                if order.ref in self.order_refs:
+                    del self.order_refs[order.ref]
+
+        except Exception as e:
+            _logger.exception("Error in notify_order")
+
     def notify_trade(self, trade):
         """Handle trade notifications and update metrics."""
         try:
@@ -674,17 +893,17 @@ class BaseStrategy(bt.Strategy):
                 # Determine if this is a partial exit
                 is_partial_exit = self.position.size != 0
 
-                # Debug: Log trade details for investigation
-                _logger.debug("Trade closed details - Size: %.6f, PnL: %s, Entry Price: %s, Exit Price: %s",
-                             actual_size, trade_pnl, self.entry_price, self.data.close[0])
-
                 # Calculate trade metrics
                 duration_days = trade.dtclose - trade.dtopen
                 duration_minutes = duration_days * 24 * 60
+                duration_bars = len(self.data) - trade.baropen if hasattr(trade, 'baropen') else 0
+
+                # Use executed exit price from broker if available, otherwise fallback to current close
+                actual_exit_price = self.executed_exit_price if self.executed_exit_price is not None else self.data.close[0]
 
                 # Calculate PnL
                 entry_value = self.entry_price * actual_size if self.entry_price else 0
-                exit_value = self.data.close[0] * actual_size
+                exit_value = actual_exit_price * actual_size
 
                 # Determine position direction for PnL calculation
                 # For closed trades, we need to determine if it was a long or short position
@@ -704,7 +923,7 @@ class BaseStrategy(bt.Strategy):
                     "entry_time": self.data.num2date(trade.dtopen),
                     "exit_time": self.data.num2date(trade.dtclose),
                     "entry_price": self.entry_price,
-                    "exit_price": self.data.close[0],
+                    "exit_price": actual_exit_price,
                     "size": actual_size,  # Use corrected size
                     "symbol": self.symbol,
                     "commission": trade.commission,
@@ -731,12 +950,42 @@ class BaseStrategy(bt.Strategy):
                 else:
                     self.losing_trades += 1
 
+                # Enhanced trade logging with full context
+                pnl_pct = trade_record["pnl_percentage"]
+                exit_reason = self.current_exit_reason or "unknown"
+
                 _logger.info(
-                    "Trade closed - Entry: %.4f, Exit: %.4f, Size: %.6f, PnL: %.2f (%.2f%%), Duration: %.1f min",
+                    "TRADE - %s | Status: CLOSED | Direction: %s | Entry: %.4f | Exit: %.4f | Size: %.6f | PnL: %.4f | PnL%%: %.2f%% | Duration: %d bars (%.1f min) | Reason: %s",
+                    self.symbol,
+                    trade_record["direction"].upper(),
                     self.entry_price if self.entry_price is not None else 0.0,
-                    self.data.close[0], actual_size, net_pnl,
-                    trade_record["pnl_percentage"], duration_minutes
+                    actual_exit_price,
+                    actual_size,
+                    net_pnl,
+                    pnl_pct,
+                    duration_bars,
+                    duration_minutes,
+                    exit_reason
                 )
+
+                # Also log detailed trade record to trades.log
+                try:
+                    entry_time = self.data.num2date(trade.dtopen)
+                    exit_time = self.data.num2date(trade.dtclose)
+                    _trade_logger.info(
+                        "TRADE_RECORD | Symbol: %s | Entry_Time: %s | Exit_Time: %s | Entry_Price: %.4f | Exit_Price: %.4f | Size: %.6f | PnL: %.4f | Commission: %.4f | Exit_Reason: %s",
+                        self.symbol,
+                        entry_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(entry_time, 'strftime') else str(entry_time),
+                        exit_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(exit_time, 'strftime') else str(exit_time),
+                        self.entry_price if self.entry_price is not None else 0.0,
+                        actual_exit_price,
+                        actual_size,
+                        net_pnl,
+                        trade.commission or 0.0,
+                        exit_reason
+                    )
+                except Exception as log_err:
+                    _logger.warning("Error logging detailed trade record: %s", log_err)
 
                 # Reset trade tracking only if entire position is closed
                 if self.position.size == 0:
@@ -746,6 +995,7 @@ class BaseStrategy(bt.Strategy):
                     self.current_position_size = None
                     self.current_position_id = None  # Reset position ID
                     self.exit_size = None  # Reset exit size
+                    self.executed_exit_price = None  # Reset executed exit price
                     self.highest_profit = 0.0
                 else:
                     # Partial exit - update remaining position size
@@ -766,8 +1016,33 @@ class BaseStrategy(bt.Strategy):
                     "direction": "long" if actual_size > 0 else "short"
                 }
 
-                _logger.info("Trade opened - Price: %.4f, Size: %.6f, Position ID: %s",
-                           trade_price, actual_size, self.current_position_id)
+                # Enhanced trade open logging
+                direction = "LONG" if actual_size > 0 else "SHORT"
+                entry_reason = self.current_entry_reason or "unknown"
+
+                _logger.info(
+                    "TRADE - %s | Status: OPEN | Direction: %s | Entry: %.4f | Size: %.6f | Reason: %s",
+                    self.symbol,
+                    direction,
+                    trade_price,
+                    actual_size,
+                    entry_reason
+                )
+
+                # Log to trades.log as well
+                try:
+                    entry_time = self.data.num2date(trade.dtopen)
+                    _trade_logger.info(
+                        "TRADE_OPEN | Symbol: %s | Entry_Time: %s | Entry_Price: %.4f | Size: %.6f | Direction: %s | Reason: %s",
+                        self.symbol,
+                        entry_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(entry_time, 'strftime') else str(entry_time),
+                        trade_price,
+                        actual_size,
+                        direction,
+                        entry_reason
+                    )
+                except Exception as log_err:
+                    _logger.warning("Error logging trade open record: %s", log_err)
 
         except Exception as e:
             _logger.exception("Error in notify_trade")

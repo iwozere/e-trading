@@ -79,6 +79,14 @@ LOG_CONFIG = {
             "level": "DEBUG",
             "formatter": "detailed",
         },
+        "order_file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(PROJECT_ROOT / "logs" / "log" / "orders.log"),
+            "maxBytes": MAX_BYTES,
+            "backupCount": BACKUP_COUNT,
+            "level": "DEBUG",
+            "formatter": "detailed",
+        },
 
         "telegram_screener_bot_file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -159,12 +167,23 @@ LOG_CONFIG = {
             "level": "DEBUG",
             "propagate": True,  # Allow propagation to parent loggers
         },
+        # Trading-specific loggers
+        "orders": {
+            "handlers": ["console", "order_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "trades": {
+            "handlers": ["console", "trade_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
     "root": {"handlers": ["console", "file"], "level": "DEBUG"},
 }
 
 # --- PATCH LOG_CONFIG for UTF-8 encoding on all file handlers ---
-for handler_name in ["file", "trade_file", "telegram_screener_bot_file",
+for handler_name in ["file", "trade_file", "order_file", "telegram_screener_bot_file",
                     "telegram_background_services_file", "telegram_alert_monitor_file",
                     "telegram_schedule_processor_file", "error_file"]:
     if handler_name in LOG_CONFIG["handlers"]:

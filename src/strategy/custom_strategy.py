@@ -32,42 +32,70 @@ class CustomStrategy(BaseStrategy):
     - Strategy-specific logic in _execute_strategy_logic
     """
 
+    def __init__(self):
+        super().__init__()
+        # Initialize mixin attributes to None
+        self.entry_mixin = None
+        self.exit_mixin = None
+        self.entry_logic = None
+        self.exit_logic = None
+
     def _initialize_strategy(self):
-        """Initialize entry and exit mixins."""
+        """Initialize indicators and entry/exit mixins."""
         try:
-            _logger.debug("Initializing CustomStrategy mixins...")
+            _logger.debug("Initializing CustomStrategy...")
 
             # Set configuration from params
+            # Note: self.p.strategy_config is already the 'parameters' dict from config['strategy']['parameters']
             if self.p.strategy_config:
                 self.use_talib = self.p.strategy_config.get("use_talib", False)
                 self.entry_logic = self.p.strategy_config.get("entry_logic")
                 self.exit_logic = self.p.strategy_config.get("exit_logic")
-                _logger.debug(
-                    f"Strategy config loaded - Entry: {self.entry_logic['name']}, Exit: {self.exit_logic['name']}"
-                )
 
-            # Create entry mixin
+                if self.entry_logic and self.exit_logic:
+                    _logger.debug(
+                        f"Strategy config loaded - Entry: {self.entry_logic['name']}, Exit: {self.exit_logic['name']}"
+                    )
+
+                # Check if using new indicator architecture
+                if self.entry_logic and 'indicators' in self.entry_logic:
+                    _logger.debug("Using new TALib-based indicator architecture")
+
+                    # Create indicators FIRST (before mixins)
+                    # Wrap self.p.strategy_config in expected format for base method
+                    config_for_indicators = {'parameters': self.p.strategy_config}
+                    self._create_indicators_from_config(config_for_indicators)
+                else:
+                    _logger.debug("Using legacy indicator architecture")
+
+            # Create entry mixin (with indicators already available)
             if self.entry_logic:
                 entry_mixin_class = ENTRY_MIXIN_REGISTRY[self.entry_logic["name"]]
                 if entry_mixin_class:
                     _logger.debug("Creating entry mixin: %s", self.entry_logic['name'])
-                    self.entry_mixin = entry_mixin_class(
-                        params=self.entry_logic["params"]
-                    )
+
+                    # Get logic_params for new architecture, or params for legacy
+                    mixin_params = self.entry_logic.get("logic_params") or self.entry_logic.get("params", {})
+
+                    self.entry_mixin = entry_mixin_class(params=mixin_params)
                     self.entry_mixin.init_entry(self)
                     _logger.debug(
-                        f"Entry mixin created with params: {self.entry_logic['params']}"
+                        f"Entry mixin created with params: {mixin_params}"
                     )
 
-            # Create exit mixin
+            # Create exit mixin (with indicators already available)
             if self.exit_logic:
                 exit_mixin_class = EXIT_MIXIN_REGISTRY[self.exit_logic["name"]]
                 if exit_mixin_class:
                     _logger.debug("Creating exit mixin: %s", self.exit_logic['name'])
-                    self.exit_mixin = exit_mixin_class(params=self.exit_logic["params"])
+
+                    # Get logic_params for new architecture, or params for legacy
+                    mixin_params = self.exit_logic.get("logic_params") or self.exit_logic.get("params", {})
+
+                    self.exit_mixin = exit_mixin_class(params=mixin_params)
                     self.exit_mixin.init_exit(self)
                     _logger.debug(
-                        f"Exit mixin created with params: {self.exit_logic['params']}"
+                        f"Exit mixin created with params: {mixin_params}"
                     )
 
         except Exception as e:

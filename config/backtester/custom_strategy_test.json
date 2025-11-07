@@ -7,27 +7,63 @@
     "parameters": {
       "entry_logic": {
         "name": "RSIBBEntryMixin",
-        "params": {
-          "e_rsi_period": 22,
-          "e_rsi_oversold": 34,
-          "e_bb_period": 20,
-          "e_bb_dev": 2.08
+        "indicators": [
+          {
+            "type": "RSI",
+            "params": {
+              "timeperiod": 22
+            },
+            "fields_mapping": {
+              "rsi": "entry_rsi"
+            }
+          },
+          {
+            "type": "BBANDS",
+            "params": {
+              "timeperiod": 20,
+              "nbdevup": 2.08,
+              "nbdevdn": 2.08,
+              "matype": 0
+            },
+            "fields_mapping": {
+              "upperband": "entry_bb_upper",
+              "middleband": "entry_bb_middle",
+              "lowerband": "entry_bb_lower"
+            }
+          }
+        ],
+        "logic_params": {
+          "oversold": 34,
+          "use_bb_touch": true,
+          "rsi_cross": false,
+          "bb_reentry": false,
+          "cooldown_bars": 0
         }
       },
       "exit_logic": {
         "name": "ATRExitMixin",
-        "params": {
-          "x_atr_period": 17,
-          "x_tp_multiplier": 2.9,
-          "x_sl_multiplier": 2.9
+        "indicators": [
+          {
+            "type": "ATR",
+            "params": {
+              "timeperiod": 17
+            },
+            "fields_mapping": {
+              "atr": "exit_atr"
+            }
+          }
+        ],
+        "logic_params": {
+          "sl_multiplier": 2.9
         }
       },
-      "position_size": 0.1
+      "position_size": 0.1,
+      "use_talib": true
     }
   },
 
   "data": {
-    "file_path": "data/_full/BTCUSDT_1h_20220101_20250707.csv",
+    "file_path": "data/BTCUSDT_1h_20240101_20241231.csv",
     "symbol": "BTCUSDT",
     "datetime_col": "timestamp",
     "open_col": "open",

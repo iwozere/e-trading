@@ -261,6 +261,59 @@ class BaseEntryMixin(ABC):
         """Safe parameter retrieval"""
         return self.params.get(key, default)
 
+    def get_indicator(self, alias: str) -> Any:
+        """
+        Get indicator value by alias (for new TALib-based architecture).
+
+        Args:
+            alias: Field alias from fields_mapping
+
+        Returns:
+            Current indicator value (for current bar)
+
+        Raises:
+            RuntimeError: If mixin not attached to strategy
+            KeyError: If indicator not found
+
+        Example:
+            rsi_value = self.get_indicator('entry_rsi')  # Current bar value
+        """
+        if self.strategy is None:
+            raise RuntimeError("Mixin not attached to strategy")
+
+        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+            raise KeyError(
+                f"Indicator '{alias}' not found in strategy. "
+                f"Available indicators: {list(getattr(self.strategy, 'indicators', {}).keys())}"
+            )
+
+        indicator = self.strategy.indicators[alias]
+        return indicator[0]  # Current bar value
+
+    def get_indicator_prev(self, alias: str, offset: int = 1) -> Any:
+        """
+        Get previous indicator value by offset.
+
+        Args:
+            alias: Field alias from fields_mapping
+            offset: Number of bars back (default: 1)
+
+        Returns:
+            Previous indicator value
+
+        Example:
+            rsi_prev = self.get_indicator_prev('entry_rsi')  # Previous bar
+            rsi_prev2 = self.get_indicator_prev('entry_rsi', 2)  # 2 bars back
+        """
+        if self.strategy is None:
+            raise RuntimeError("Mixin not attached to strategy")
+
+        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+            raise KeyError(f"Indicator '{alias}' not found in strategy")
+
+        indicator = self.strategy.indicators[alias]
+        return indicator[-offset]
+
     @classmethod
     def from_config(cls, config: Dict[str, Any]):
         """
