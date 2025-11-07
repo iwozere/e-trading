@@ -39,6 +39,9 @@ class MACrossoverExitMixin(BaseExitMixin):
         self.fast_ma = None
         self.slow_ma = None
 
+        # Detect architecture mode
+        self.use_new_architecture = False  # Will be set in init_exit()
+
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
         return []
@@ -54,9 +57,31 @@ class MACrossoverExitMixin(BaseExitMixin):
             "x_use_talib": True,
         }
 
+    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+        """Override to detect architecture mode before calling parent."""
+        # Detect architecture: new if strategy has indicators dict with entries
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+            logger.debug("Using new TALib-based architecture")
+        else:
+            self.use_new_architecture = False
+            logger.debug("Using legacy architecture")
+
+        # Call parent init_exit which will call _init_indicators
+        super().init_exit(strategy, additional_params)
+
     def _init_indicators(self):
-        """Initialize indicators"""
-        logger.debug("MACrossoverExitMixin._init_indicators called")
+        """Initialize indicators (legacy architecture only).
+
+        In new architecture, indicators are created by the strategy
+        and accessed via get_indicator().
+        """
+        if self.use_new_architecture:
+            # New architecture: indicators already created by strategy
+            return
+
+        # Legacy architecture: create indicators in mixin
+        logger.debug("MACrossoverExitMixin._init_indicators called (legacy architecture)")
         if not hasattr(self, "strategy"):
             logger.error("No strategy available in _init_indicators")
             return
@@ -66,44 +91,81 @@ class MACrossoverExitMixin(BaseExitMixin):
             slow_period = self.get_param("x_slow_period")
 
             if self.strategy.use_talib:
-                self.fast_ma = bt.talib.SMA(self.strategy.data.volume, fast_period)
-                self.slow_ma = bt.talib.SMA(self.strategy.data.volume, slow_period)
+                self.fast_ma = bt.talib.SMA(self.strategy.data.close, fast_period)
+                self.slow_ma = bt.talib.SMA(self.strategy.data.close, slow_period)
             else:
                 self.fast_ma = bt.indicators.SMA(
-                    self.strategy.data.volume, period=fast_period
+                    self.strategy.data.close, period=fast_period
                 )
                 self.slow_ma = bt.indicators.SMA(
-                    self.strategy.data.volume, period=slow_period
+                    self.strategy.data.close, period=slow_period
                 )
 
             self.register_indicator(self.fast_ma_name, self.fast_ma)
             self.register_indicator(self.slow_ma_name, self.slow_ma)
 
+            logger.debug("Legacy indicators initialized: Fast MA(period=%d), Slow MA(period=%d)",
+                        fast_period, slow_period)
+
         except Exception as e:
             logger.exception("Error initializing indicators: ")
             raise
 
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are ready to be used"""
+        if self.use_new_architecture:
+            # New architecture: check strategy's indicators
+            if not hasattr(self.strategy, 'indicators') or not self.strategy.indicators:
+                return False
+
+            # Check if required indicators exist
+            required_indicators = ['exit_fast_ma', 'exit_slow_ma']
+            for ind_alias in required_indicators:
+                if ind_alias not in self.strategy.indicators:
+                    return False
+
+            # Check if we can access values
+            try:
+                _ = self.get_indicator('exit_fast_ma')
+                _ = self.get_indicator('exit_slow_ma')
+                return True
+            except (IndexError, KeyError, AttributeError):
+                return False
+
+        else:
+            # Legacy architecture: check mixin's indicators
+            return super().are_indicators_ready()
+
     def should_exit(self) -> bool:
-        """Check if we should exit a position"""
+        """Check if we should exit a position.
+
+        Works with both new and legacy architectures.
+        """
         if not self.strategy.position:
             return False
 
-        if (
-            self.fast_ma_name not in self.indicators
-            or self.slow_ma_name not in self.indicators
-        ):
+        if not self.are_indicators_ready():
             return False
 
         try:
-            # Get indicators from mixin's indicators dictionary
-            fast_ma = self.indicators[self.fast_ma_name]
-            slow_ma = self.indicators[self.slow_ma_name]
+            # Get indicator values based on architecture
+            if self.use_new_architecture:
+                # New architecture: access via get_indicator()
+                fast_ma_current = self.get_indicator('exit_fast_ma')
+                slow_ma_current = self.get_indicator('exit_slow_ma')
+                fast_ma_prev = self.get_indicator_prev('exit_fast_ma', 1)
+                slow_ma_prev = self.get_indicator_prev('exit_slow_ma', 1)
 
-            # Get current and previous values
-            fast_ma_current = fast_ma[0]
-            slow_ma_current = slow_ma[0]
-            fast_ma_prev = fast_ma[-1]
-            slow_ma_prev = slow_ma[-1]
+            else:
+                # Legacy architecture: access via mixin's indicators dict
+                fast_ma = self.indicators[self.fast_ma_name]
+                slow_ma = self.indicators[self.slow_ma_name]
+
+                # Get current and previous values
+                fast_ma_current = fast_ma[0]
+                slow_ma_current = slow_ma[0]
+                fast_ma_prev = fast_ma[-1]
+                slow_ma_prev = slow_ma[-1]
 
             # Check for crossover based on position
             if self.strategy.position.size > 0:  # Long position

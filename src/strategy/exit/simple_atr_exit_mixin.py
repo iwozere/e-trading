@@ -38,6 +38,9 @@ class SimpleATRExitMixin(BaseExitMixin):
         self.current_stop = None
         self.breakeven_triggered = False
 
+        # Detect architecture mode
+        self.use_new_architecture = False  # Will be set in init_exit()
+
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
         return []
@@ -52,9 +55,31 @@ class SimpleATRExitMixin(BaseExitMixin):
             "x_use_breakeven": True,
         }
 
+    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+        """Override to detect architecture mode before calling parent."""
+        # Detect architecture: new if strategy has indicators dict with entries
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+            logger.debug("Using new TALib-based architecture")
+        else:
+            self.use_new_architecture = False
+            logger.debug("Using legacy architecture")
+
+        # Call parent init_exit which will call _init_indicators
+        super().init_exit(strategy, additional_params)
+
     def _init_indicators(self):
-        """Initialize indicators"""
-        logger.debug("SimpleATRExitMixin._init_indicators called")
+        """Initialize indicators (legacy architecture only).
+
+        In new architecture, indicators are created by the strategy
+        and accessed via get_indicator().
+        """
+        if self.use_new_architecture:
+            # New architecture: indicators already created by strategy
+            return
+
+        # Legacy architecture: create indicators in mixin
+        logger.debug("SimpleATRExitMixin._init_indicators called (legacy architecture)")
         if not hasattr(self, "strategy"):
             logger.error("No strategy available in _init_indicators")
             return
@@ -72,9 +97,34 @@ class SimpleATRExitMixin(BaseExitMixin):
             )
             self.register_indicator(self.atr_name, self.atr)
 
+            logger.debug("Legacy indicators initialized: exit_atr")
         except Exception as e:
             logger.exception("Error initializing indicators: ")
             raise
+
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are ready to be used"""
+        if self.use_new_architecture:
+            # New architecture: check strategy's indicators
+            if not hasattr(self.strategy, 'indicators') or not self.strategy.indicators:
+                return False
+
+            # Check if required indicators exist
+            required_indicators = ['exit_atr']
+            for ind_alias in required_indicators:
+                if ind_alias not in self.strategy.indicators:
+                    return False
+
+            # Check if we can access values
+            try:
+                _ = self.get_indicator('exit_atr')
+                return True
+            except (IndexError, KeyError, AttributeError):
+                return False
+
+        else:
+            # Legacy architecture: check mixin's indicators
+            return self.atr_name in self.indicators
 
     def on_entry(self, entry_price: float, direction: str, size: float, entry_reason: str):
         """Called when a position is entered"""
@@ -89,11 +139,16 @@ class SimpleATRExitMixin(BaseExitMixin):
         self.breakeven_triggered = False
 
         # Calculate initial stop based on ATR
-        if self.atr_name in self.indicators:
-            atr_value = self.atr.atr[0]
-            if atr_value is not None and atr_value > 0:
-                atr_multiplier = self.get_param("x_atr_multiplier")
+        if self.are_indicators_ready():
+            # Get ATR value based on architecture
+            if self.use_new_architecture:
+                atr_value = self.get_indicator('exit_atr')
+                atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
+            else:
+                atr_value = self.atr.atr[0]
+                atr_multiplier = self.get_param("x_atr_multiplier", 2.0)
 
+            if atr_value is not None and atr_value > 0:
                 if direction.lower() == "long":
                     self.initial_stop = entry_price - (atr_value * atr_multiplier)
                     self.current_stop = self.initial_stop
@@ -108,28 +163,41 @@ class SimpleATRExitMixin(BaseExitMixin):
             logger.warning("ATR indicator not available for stop calculation")
 
     def should_exit(self) -> bool:
-        """Check if we should exit a position"""
+        """Check if we should exit a position.
+
+        Works with both new and legacy architectures.
+        """
         if not self.strategy.position:
             return False
 
-        if self.atr_name not in self.indicators:
+        if not self.are_indicators_ready():
             return False
 
         try:
             current_price = self.strategy.data.close[0]
-            atr_value = self.atr.atr[0]
+
+            # Get ATR value and params based on architecture
+            if self.use_new_architecture:
+                atr_value = self.get_indicator('exit_atr')
+                use_breakeven = self.get_param("use_breakeven") or self.get_param("x_use_breakeven", True)
+                breakeven_atr = self.get_param("breakeven_atr") or self.get_param("x_breakeven_atr", 1.0)
+                atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
+            else:
+                atr_value = self.atr.atr[0]
+                use_breakeven = self.get_param("x_use_breakeven", True)
+                breakeven_atr = self.get_param("x_breakeven_atr", 1.0)
+                atr_multiplier = self.get_param("x_atr_multiplier", 2.0)
 
             if current_price is None or atr_value is None or atr_value <= 0:
                 return False
 
             # Check if we should move to breakeven
-            if (self.get_param("x_use_breakeven") and
+            if (use_breakeven and
                 not self.breakeven_triggered and
                 self.initial_stop is not None):
 
                 entry_price = getattr(self.strategy, 'entry_price', None)
                 if entry_price is not None:
-                    breakeven_atr = self.get_param("x_breakeven_atr")
                     profit_threshold = atr_value * breakeven_atr
 
                     if self.strategy.position.size > 0:  # long position
@@ -145,8 +213,6 @@ class SimpleATRExitMixin(BaseExitMixin):
 
             # Update trailing stop
             if self.current_stop is not None:
-                atr_multiplier = self.get_param("x_atr_multiplier")
-
                 if self.strategy.position.size > 0:  # long position
                     new_stop = current_price - (atr_value * atr_multiplier)
                     if new_stop > self.current_stop:

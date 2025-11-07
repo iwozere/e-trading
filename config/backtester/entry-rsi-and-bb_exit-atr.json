@@ -6,7 +6,7 @@
     "type": "CustomStrategy",
     "parameters": {
       "entry_logic": {
-        "name": "RSIOrBBEntryMixin",
+        "name": "RSIBBEntryMixin",
         "indicators": [
           {
             "type": "RSI",

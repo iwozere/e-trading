@@ -51,6 +51,9 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
         self.sma = None
         self.super_trend = None
 
+        # Detect architecture mode
+        self.use_new_architecture = False  # Will be set in init_entry()
+
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
         return []
@@ -68,9 +71,31 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
             "e_use_bb_touch": True,
         }
 
+    def init_entry(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+        """Override to detect architecture mode before calling parent."""
+        # Detect architecture: new if strategy has indicators dict with entries
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+            logger.debug("Using new TALib-based architecture")
+        else:
+            self.use_new_architecture = False
+            logger.debug("Using legacy architecture")
+
+        # Call parent init_entry which will call _init_indicators
+        super().init_entry(strategy, additional_params)
+
     def _init_indicators(self):
-        """Initialize indicators"""
-        logger.debug("BBVolumeSupertrendEntryMixin._init_indicators called")
+        """Initialize indicators (legacy architecture only).
+
+        In new architecture, indicators are created by the strategy
+        and accessed via get_indicator().
+        """
+        if self.use_new_architecture:
+            # New architecture: indicators already created by strategy
+            return
+
+        # Legacy architecture: create indicators in mixin
+        logger.debug("BBVolumeSupertrendEntryMixin._init_indicators called (legacy architecture)")
         if not hasattr(self, "strategy"):
             logger.error("No strategy available in _init_indicators")
             return
@@ -114,53 +139,99 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
                 multiplier=self.get_param("e_st_multiplier"),
             )
             self.register_indicator(self.supertrend_name, supertrend)
+
+            logger.debug("Legacy indicators initialized: entry_bb, entry_volume_ma, entry_supertrend")
         except Exception as e:
             logger.exception("Error initializing indicators: ")
             raise
 
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are ready to be used"""
+        if self.use_new_architecture:
+            # New architecture: check strategy's indicators
+            if not hasattr(self.strategy, 'indicators') or not self.strategy.indicators:
+                return False
+
+            # Check if required indicators exist
+            required_indicators = ['entry_bb_lower', 'entry_volume_ma', 'entry_supertrend_direction']
+            for ind_alias in required_indicators:
+                if ind_alias not in self.strategy.indicators:
+                    return False
+
+            # Check if we can access values
+            try:
+                _ = self.get_indicator('entry_bb_lower')
+                _ = self.get_indicator('entry_volume_ma')
+                _ = self.get_indicator('entry_supertrend_direction')
+                return True
+            except (IndexError, KeyError, AttributeError):
+                return False
+
+        else:
+            # Legacy architecture: check mixin's indicators
+            return (self.bb_name in self.indicators and
+                    self.volume_ma_name in self.indicators and
+                    self.supertrend_name in self.indicators)
+
     def should_enter(self) -> bool:
-        """Check if we should enter a position"""
-        if (
-            self.bb_name not in self.indicators
-            or self.volume_ma_name not in self.indicators
-            or self.supertrend_name not in self.indicators
-        ):
+        """Check if we should enter a position.
+
+        Works with both new and legacy architectures.
+        """
+        if not self.are_indicators_ready():
             return False
 
         try:
-            # Get indicators from mixin's indicators dictionary
-            bb = self.indicators[self.bb_name]
-            vol_ma = self.indicators[self.volume_ma_name]
-            supertrend = self.indicators[self.supertrend_name]
             current_price = self.strategy.data.close[0]
             current_volume = self.strategy.data.volume[0]
 
-            # Check Bollinger Bands
-            if self.strategy.use_talib:
-                # For TA-Lib BB, use bb_lower
-                if self.get_param("e_use_bb_touch"):
-                    bb_condition = current_price <= bb.bb_lower[0]
-                else:
-                    bb_condition = current_price < bb.bb_lower[0]
+            # Get indicator values and params based on architecture
+            if self.use_new_architecture:
+                # New architecture: access via get_indicator()
+                bb_lower = self.get_indicator('entry_bb_lower')
+                vol_ma = self.get_indicator('entry_volume_ma')
+                supertrend_direction = self.get_indicator('entry_supertrend_direction')
+
+                # Get params from logic_params (new) or fallback to legacy params
+                use_bb_touch = self.get_param("use_bb_touch") or self.get_param("e_use_bb_touch", True)
+                min_volume_ratio = self.get_param("min_volume_ratio") or self.get_param("e_min_volume_ratio", 1.1)
             else:
-                # For Backtrader's native BB, use lines.bot
-                if self.get_param("e_use_bb_touch"):
-                    bb_condition = current_price <= bb.lines.bot[0]
+                # Legacy architecture: access via mixin's indicators dict
+                bb = self.indicators[self.bb_name]
+                vol_ma_ind = self.indicators[self.volume_ma_name]
+                supertrend = self.indicators[self.supertrend_name]
+
+                # Get BB lower value based on talib/bt
+                if self.strategy.use_talib:
+                    bb_lower = bb.bb_lower[0]
                 else:
-                    bb_condition = current_price < bb.lines.bot[0]
+                    bb_lower = bb.lines.bot[0]
+
+                vol_ma = vol_ma_ind[0]
+                supertrend_direction = supertrend.direction[0]
+
+                # Get params from legacy params
+                use_bb_touch = self.get_param("e_use_bb_touch", True)
+                min_volume_ratio = self.get_param("e_min_volume_ratio", 1.1)
+
+            # Check Bollinger Bands
+            if use_bb_touch:
+                bb_condition = current_price <= bb_lower
+            else:
+                bb_condition = current_price < bb_lower
 
             # Check Volume
-            volume_condition = current_volume > vol_ma[0] * self.get_param(
-                "e_min_volume_ratio"
-            )
+            volume_condition = current_volume > vol_ma * min_volume_ratio
 
             # Check Supertrend
-            supertrend_condition = supertrend.direction[0] == 1  # 1 means uptrend
+            supertrend_condition = supertrend_direction == 1  # 1 means uptrend
 
             return_value = bb_condition and volume_condition and supertrend_condition
             if return_value:
                 logger.debug(
-                    f"ENTRY: Price: {current_price}, BB Lower: {bb.bb_lower[0] if self.strategy.use_talib else bb.lines.bot[0]}, Volume: {current_volume}, Volume MA: {vol_ma[0]}, Supertrend Direction: {supertrend.direction[0]}"
+                    f"ENTRY: Price: {current_price}, BB Lower: {bb_lower}, "
+                    f"Volume: {current_volume}, Volume MA: {vol_ma}, "
+                    f"Supertrend Direction: {supertrend_direction}"
                 )
             return return_value
         except Exception as e:

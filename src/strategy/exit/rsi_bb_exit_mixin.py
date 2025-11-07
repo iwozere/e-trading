@@ -43,6 +43,9 @@ class RSIBBExitMixin(BaseExitMixin):
         self.bb_mid = None
         self.bb_top = None
 
+        # Detect architecture mode
+        self.use_new_architecture = False  # Will be set in init_exit()
+
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
         return []
@@ -57,9 +60,31 @@ class RSIBBExitMixin(BaseExitMixin):
             "x_bb_dev": 2.0,
         }
 
+    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+        """Override to detect architecture mode before calling parent."""
+        # Detect architecture: new if strategy has indicators dict with entries
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+            logger.debug("Using new TALib-based architecture")
+        else:
+            self.use_new_architecture = False
+            logger.debug("Using legacy architecture")
+
+        # Call parent init_exit which will call _init_indicators
+        super().init_exit(strategy, additional_params)
+
     def _init_indicators(self):
-        """Initialize indicators"""
-        logger.debug("RSIBBExitMixin._init_indicators called")
+        """Initialize indicators (legacy architecture only).
+
+        In new architecture, indicators are created by the strategy
+        and accessed via get_indicator().
+        """
+        if self.use_new_architecture:
+            # New architecture: indicators already created by strategy
+            return
+
+        # Legacy architecture: create indicators in mixin
+        logger.debug("RSIBBExitMixin._init_indicators called (legacy architecture)")
         if not hasattr(self, "strategy"):
             logger.error("No strategy available in _init_indicators")
             return
@@ -93,26 +118,72 @@ class RSIBBExitMixin(BaseExitMixin):
 
             self.register_indicator(self.rsi_name, self.rsi)
             self.register_indicator(self.bb_name, self.bb)
+
+            logger.debug("Legacy indicators initialized: exit_rsi, exit_bb")
         except Exception as e:
             logger.exception("Error initializing indicators: ")
             raise
 
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are ready to be used"""
+        if self.use_new_architecture:
+            # New architecture: check strategy's indicators
+            if not hasattr(self.strategy, 'indicators') or not self.strategy.indicators:
+                return False
+
+            # Check if required indicators exist
+            required_indicators = ['exit_rsi', 'exit_bb_upper']
+            for ind_alias in required_indicators:
+                if ind_alias not in self.strategy.indicators:
+                    return False
+
+            # Check if we can access values
+            try:
+                _ = self.get_indicator('exit_rsi')
+                _ = self.get_indicator('exit_bb_upper')
+                return True
+            except (IndexError, KeyError, AttributeError):
+                return False
+
+        else:
+            # Legacy architecture: check mixin's indicators
+            return self.rsi_name in self.indicators and self.bb_name in self.indicators
+
     def should_exit(self) -> bool:
-        """Check if we should exit a position"""
+        """Check if we should exit a position.
+
+        Works with both new and legacy architectures.
+        """
         if not self.strategy.position:
             return False
 
-        if self.rsi_name not in self.indicators or self.bb_name not in self.indicators:
+        if not self.are_indicators_ready():
             return False
 
         try:
-            # Get current and previous values
+            # Get indicator values based on architecture
+            if self.use_new_architecture:
+                # New architecture: access via get_indicator()
+                current_rsi = self.get_indicator('exit_rsi')
+                previous_rsi = self.get_indicator('exit_rsi', -1)
+                current_bb_top = self.get_indicator('exit_bb_upper')
+                previous_bb_top = self.get_indicator('exit_bb_upper', -1)
+
+                # Get params from logic_params (new) or fallback to legacy params
+                rsi_overbought = self.get_param("rsi_overbought") or self.get_param("x_rsi_overbought", 70)
+            else:
+                # Legacy architecture: access via mixin's indicators dict
+                current_rsi = self.rsi[0]
+                previous_rsi = self.rsi[-1]
+                current_bb_top = self.bb_top[0]
+                previous_bb_top = self.bb_top[-1]
+
+                # Get params from legacy params
+                rsi_overbought = self.get_param("x_rsi_overbought", 70)
+
+            # Get current and previous prices
             current_price = self.strategy.data.close[0]
             previous_price = self.strategy.data.close[-1]
-            current_rsi = self.rsi[0]
-            previous_rsi = self.rsi[-1]
-            current_bb_top = self.bb_top[0]
-            previous_bb_top = self.bb_top[-1]
 
             # Check if we have enough data
             if (current_rsi is None or previous_rsi is None or
@@ -121,8 +192,8 @@ class RSIBBExitMixin(BaseExitMixin):
                 return False
 
             # RSI cross condition: previous RSI above overbought, current RSI below overbought
-            rsi_cross_condition = (previous_rsi >= self.get_param("x_rsi_overbought") and
-                                 current_rsi < self.get_param("x_rsi_overbought"))
+            rsi_cross_condition = (previous_rsi >= rsi_overbought and
+                                 current_rsi < rsi_overbought)
 
             # BB cross condition: previous price above BB top, current price below BB top
             bb_cross_condition = (previous_price >= previous_bb_top and
@@ -133,7 +204,7 @@ class RSIBBExitMixin(BaseExitMixin):
 
             if should_exit:
                 logger.debug(
-                    f"EXIT: RSI cross from {previous_rsi:.2f} to {current_rsi:.2f} (overbought: {self.get_param('x_rsi_overbought')}), "
+                    f"EXIT: RSI cross from {previous_rsi:.2f} to {current_rsi:.2f} (overbought: {rsi_overbought}), "
                     f"Price cross from {previous_price:.2f} to {current_price:.2f} (BB top: {current_bb_top:.2f})"
                 )
                 self.strategy.current_exit_reason = "rsi_bb_cross_exit"

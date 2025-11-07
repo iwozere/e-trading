@@ -136,10 +136,25 @@ class HMMLSTMEntryMixin:
         self.current_prediction = 0.0
         self.strategy = None
 
+        # Architecture detection
+        self.use_new_architecture = False  # Will be set in init_entry()
+
         _logger.info("Initialized HMM-LSTM Entry Mixin for %s %s", self.symbol, self.timeframe)
 
-    def init_entry(self, strategy):
-        """Initialize the entry mixin with strategy reference."""
+    def init_entry(self, strategy, additional_params=None):
+        """Initialize the entry mixin with strategy reference.
+
+        Detects architecture mode (new vs legacy) before initialization.
+        HMM-LSTM mixin calculates its own indicators regardless of architecture.
+        """
+        # Detect architecture: new if strategy has indicators dict with entries
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+            _logger.debug("Using new TALib-based architecture")
+        else:
+            self.use_new_architecture = False
+            _logger.debug("Using legacy architecture")
+
         self.strategy = strategy
 
         try:
@@ -383,20 +398,46 @@ class HMMLSTMEntryMixin:
             _logger.exception("Error predicting price")
             return 0.0
 
+    def are_indicators_ready(self) -> bool:
+        """Check if models and data are ready for predictions.
+
+        HMM-LSTM mixin doesn't rely on strategy indicators,
+        it calculates its own technical indicators using TALib.
+        This method checks if models are loaded and there's sufficient data.
+        """
+        try:
+            # Check if models are loaded
+            if not self.hmm_model or not self.lstm_model:
+                return False
+
+            # Check if we have sufficient data
+            if not self.strategy or len(self.strategy.data) < 100:
+                return False
+
+            # Check if feature buffers have minimum required data
+            if self.lstm_sequence_buffer and len(self.lstm_sequence_buffer) < self.sequence_length:
+                return False
+
+            return True
+
+        except Exception as e:
+            _logger.exception("Error checking indicators readiness")
+            return False
+
     def next(self):
         """Called on each bar to update internal state."""
         # This method is called by the strategy framework
         pass
 
     def should_enter(self) -> bool:
-        """Determine if entry signal is present."""
-        try:
-            # Return False if models are not loaded
-            if not self.hmm_model or not self.lstm_model:
-                return False
+        """Determine if entry signal is present.
 
-            # Need sufficient data
-            if len(self.strategy.data) < 100:
+        Works with both new and legacy architectures.
+        HMM-LSTM mixin calculates its own indicators using TALib directly.
+        """
+        try:
+            # Check if models and data are ready
+            if not self.are_indicators_ready():
                 return False
 
             # Calculate current features
