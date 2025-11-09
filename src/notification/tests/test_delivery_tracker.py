@@ -9,7 +9,7 @@ import asyncio
 import sys
 from pathlib import Path
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -17,7 +17,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.delivery_tracker import (
     delivery_tracker, DeliveryStatus, DeliveryResult,
-    ChannelDeliveryAttempt, MessageDeliveryStatus
+    MessageDeliveryStatus
 )
 from src.notification.service.message_queue import QueuedMessage
 from src.data.db.models.model_notification import MessagePriority
@@ -153,7 +153,7 @@ async def test_multi_channel_success():
         assert total_time == sum(response_times)
         assert abs(avg_time - (sum(response_times) / len(response_times))) < 0.1
 
-        print(f"✓ All channels delivered successfully")
+        print("✓ All channels delivered successfully")
         print(f"✓ Total response time: {total_time}ms, Average: {avg_time:.1f}ms")
 
         return True
@@ -319,7 +319,7 @@ async def test_delivery_statistics():
         # Get statistics
         stats = delivery_tracker.get_statistics()
 
-        print(f"✓ Statistics calculated:")
+        print("✓ Statistics calculated:")
         print(f"  Total messages: {stats['total_messages']}")
         print(f"  Successful deliveries: {stats['successful_deliveries']}")
         print(f"  Failed deliveries: {stats['failed_deliveries']}")
@@ -378,7 +378,7 @@ async def test_delivery_history():
         success_history = await delivery_tracker.get_delivery_history(status=DeliveryResult.SUCCESS)
         assert len(success_history) >= 3
 
-        print(f"✓ Delivery history queries working")
+        print("✓ Delivery history queries working")
         print(f"  User1 deliveries: {len(user1_history)}")
         print(f"  Telegram deliveries: {len(telegram_history)}")
         print(f"  Successful deliveries: {len(success_history)}")

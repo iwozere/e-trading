@@ -6,12 +6,10 @@ API performance, error rates, and response times to optimize throughput
 while respecting API constraints.
 """
 
-import asyncio
-import time
 import statistics
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import deque
 from pathlib import Path
 import sys

@@ -18,7 +18,7 @@ Classes:
 """
 
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import List, Dict
 import pandas as pd
 import requests
 from src.data.downloader.base_data_downloader import BaseDataDownloader

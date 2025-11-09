@@ -1,5 +1,4 @@
 """This module runs the live trading bot."""
-import os
 import sys
 from pathlib import Path
 
@@ -120,7 +119,7 @@ def main(config_name: Optional[str] = None):
 
             _logger.info("Heartbeat manager started for trading bot")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize heartbeat manager:")
 
         # Update signal handler to stop heartbeat
@@ -145,7 +144,7 @@ def main(config_name: Optional[str] = None):
             heartbeat_manager.stop_heartbeat()
         if 'bot' in locals():
             bot.stop()
-    except Exception as e:
+    except Exception:
         _logger.exception("Error running live trading bot:")
         if heartbeat_manager:
             heartbeat_manager.stop_heartbeat()

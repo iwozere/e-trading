@@ -11,10 +11,9 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 import asyncio
-import json
 import traceback
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -22,11 +21,9 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.events import (
-    JobExecutionEvent, JobSubmissionEvent, SchedulerEvent,
-    EVENT_JOB_SUBMITTED, EVENT_JOB_EXECUTED, EVENT_JOB_ERROR,
-    EVENT_JOB_MISSED, EVENT_SCHEDULER_STARTED, EVENT_SCHEDULER_SHUTDOWN
+    JobExecutionEvent, JobSubmissionEvent, EVENT_JOB_SUBMITTED, EVENT_JOB_EXECUTED, EVENT_JOB_ERROR,
+    EVENT_JOB_MISSED
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType
@@ -158,7 +155,7 @@ class SchedulerService:
             self.is_running = False
             _logger.info("Scheduler service stopped successfully")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error stopping scheduler service:")
             raise
 
@@ -192,7 +189,7 @@ class SchedulerService:
             _logger.info("Successfully reloaded %d schedules", count)
             return count
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error reloading schedules:")
             raise
 
@@ -297,7 +294,7 @@ class SchedulerService:
 
             _logger.debug("APScheduler initialized successfully")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize APScheduler:")
             raise
 
@@ -333,7 +330,7 @@ class SchedulerService:
 
             return registered_count
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load schedules from database:")
             raise
 
@@ -491,7 +488,7 @@ class SchedulerService:
                 "notification_sent": notification_sent
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error executing alert job:")
             raise
 
@@ -619,7 +616,7 @@ class SchedulerService:
             # state_json = json.dumps(state_updates, ensure_ascii=False, default=str)
             # self.jobs_service.update_schedule_state(schedule_id, state_json)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating schedule state for %d:", schedule_id)
 
     async def _send_notification(self, notification_data: Dict[str, Any]) -> bool:
@@ -839,7 +836,7 @@ class SchedulerService:
                          ticker, max_notification_retries)
             return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Unexpected error sending enhanced notification:")
             _logger.debug("Notification error traceback: %s", traceback.format_exc())
             # Don't raise - notification failures shouldn't stop job execution
@@ -867,7 +864,7 @@ class SchedulerService:
 
             _logger.debug("Scheduler cleanup completed")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error during scheduler cleanup:")
 
     # Event handlers for job execution tracking

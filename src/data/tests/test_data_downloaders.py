@@ -25,7 +25,7 @@ import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Import all data downloaders
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader

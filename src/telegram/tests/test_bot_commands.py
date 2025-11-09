@@ -1,12 +1,8 @@
 import pytest
 from aiogram.types import Message
-from aiogram.filters import Command
-from aiogram import Dispatcher
-from aiogram.fsm.context import FSMContext
 from unittest.mock import AsyncMock, MagicMock
 import pandas as pd
 import src.telegram.bot as bot_module
-from src.telegram.screener.business_logic import analyze_ticker_business
 from src.model.telegram_bot import TickerAnalysis, Fundamentals, Technicals
 
 @pytest.mark.asyncio

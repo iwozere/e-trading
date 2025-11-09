@@ -8,13 +8,11 @@ service behavior under failure scenarios, and service lifecycle.
 
 import asyncio
 import sys
-import json
-import time
 import pytest
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timezone
+from typing import Dict, Any
+from unittest.mock import patch
 import httpx
 
 # Add project root to path
@@ -24,10 +22,8 @@ sys.path.append(str(PROJECT_ROOT))
 from src.notification.service.config import config
 from src.data.db.services.database_service import get_database_service
 from src.notification.service.main import app
-from src.notification.service.processor import message_processor
-from src.notification.service.health_monitor import health_monitor
 from src.data.db.models.model_notification import (
-    MessagePriority, MessageStatus, DeliveryStatus
+    MessageStatus, DeliveryStatus
 )
 from src.notification.logger import setup_logger
 

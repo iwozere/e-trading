@@ -6,13 +6,13 @@ responses and error simulation for comprehensive testing.
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from unittest.mock import Mock
 import time
 
 from src.indicators.models import (
     IndicatorBatchConfig, IndicatorResultSet,
-    IndicatorSpec, IndicatorValue, TickerIndicatorsRequest
+    IndicatorValue, TickerIndicatorsRequest
 )
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)

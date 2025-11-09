@@ -14,7 +14,6 @@ Examples:
     python src/web_ui/run_web_ui.py --port 8080   # Production mode on port 8080
 """
 
-import asyncio
 import argparse
 import subprocess
 import sys
@@ -23,7 +22,6 @@ import signal
 from pathlib import Path
 from typing import Optional, List
 import uvicorn
-import threading
 import time
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -91,7 +89,7 @@ class WebUIRunner:
 
             return True
 
-        except ImportError as e:
+        except ImportError:
             _logger.exception("❌ Missing Python dependency:")
             return False
 
@@ -214,7 +212,7 @@ class WebUIRunner:
             self.processes.append(self.frontend_process)
             _logger.info("✅ Frontend development server started")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("❌ Failed to start frontend development server:")
 
     def setup_signal_handlers(self):
@@ -236,7 +234,7 @@ class WebUIRunner:
             if hasattr(self, 'heartbeat_manager') and self.heartbeat_manager:
                 self.heartbeat_manager.stop_heartbeat()
                 _logger.info("Stopped web UI heartbeat")
-        except Exception as e:
+        except Exception:
             _logger.exception("Error stopping heartbeat:")
 
         for process in self.processes:
@@ -246,7 +244,7 @@ class WebUIRunner:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     process.kill()
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error terminating process:")
 
         _logger.info("✅ Web UI shutdown complete")
@@ -355,7 +353,7 @@ class WebUIRunner:
 
                 _logger.info("Heartbeat manager started for web UI")
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Failed to initialize heartbeat manager:")
                 self.heartbeat_manager = None
 
@@ -364,7 +362,7 @@ class WebUIRunner:
 
         except KeyboardInterrupt:
             _logger.info("Received keyboard interrupt")
-        except Exception as e:
+        except Exception:
             _logger.exception("Error running web UI:")
             return False
         finally:

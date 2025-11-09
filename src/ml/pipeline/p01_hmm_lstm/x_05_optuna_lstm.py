@@ -27,7 +27,7 @@ import optuna
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
 import sys
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 import talib
 
 # Add project root to path
@@ -868,7 +868,7 @@ def main():
 
         _logger.info("LSTM optimization completed!")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("LSTM optimization failed: ")
         raise
 

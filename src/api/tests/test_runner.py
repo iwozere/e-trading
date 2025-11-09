@@ -9,7 +9,7 @@ Provides options for running specific test modules or all tests.
 
 import pytest
 import sys
-import os
+import importlib.util
 from pathlib import Path
 
 # Add project root to path
@@ -32,8 +32,7 @@ def run_all_tests():
     ]
 
     # Add coverage if available
-    try:
-        import coverage
+    if importlib.util.find_spec("coverage") is not None:
         args.extend([
             "--cov=src.api",
             "--cov-report=term-missing",
@@ -41,7 +40,7 @@ def run_all_tests():
             "--cov-fail-under=80"  # Require 80% coverage
         ])
         print("Running tests with coverage reporting...")
-    except ImportError:
+    else:
         print("Coverage not available. Install with: pip install pytest-cov")
         print("Running tests without coverage...")
 

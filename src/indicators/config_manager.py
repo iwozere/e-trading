@@ -6,9 +6,8 @@ and provides a unified interface for managing indicator parameters, presets, and
 """
 
 import json
-import os
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 
 from src.indicators.registry import INDICATOR_META, get_canonical_name, get_indicator_meta
@@ -54,7 +53,7 @@ class UnifiedConfigManager:
             else:
                 _logger.warning("Configuration file %s not found, using defaults", self.config_path)
                 return self._get_default_config()
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading indicator configuration:")
             return self._get_default_config()
 
@@ -323,7 +322,7 @@ class UnifiedConfigManager:
 
             _logger.info("Saved configuration to: %s", save_path)
             return True
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving configuration:")
             return False
 

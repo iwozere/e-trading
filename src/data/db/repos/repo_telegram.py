@@ -2,10 +2,9 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional, Sequence, List, Dict, Any
-from sqlalchemy import select, update, delete, func
+from sqlalchemy import select, update, func
 from sqlalchemy.orm import Session
 
-from src.data.db.models.model_users import User, AuthIdentity
 from src.data.db.models.model_telegram import (
     TelegramSetting,
     TelegramFeedback,

@@ -6,7 +6,6 @@ with configurable responses and behavior tracking.
 """
 
 from typing import Any, Dict, List, Optional
-from unittest.mock import Mock
 import time
 import json
 

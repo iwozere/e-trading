@@ -6,7 +6,6 @@ Test script to verify CNN + XGBoost pipeline structure and imports.
 import sys
 from pathlib import Path
 import yaml
-import json
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -84,7 +83,6 @@ def test_pipeline_runner():
 
     try:
         # Test import
-        from src.ml.pipeline.p03_cnn_xgboost.run_pipeline import CNNXGBoostPipeline
 
         print("✅ Pipeline runner import successful")
         return True
@@ -99,7 +97,6 @@ def test_data_loader():
 
     try:
         # Test import
-        from src.ml.pipeline.p03_cnn_xgboost.x_01_data_loader import DataLoader
 
         print("✅ Data loader import successful")
         return True

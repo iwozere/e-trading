@@ -26,7 +26,6 @@ Usage:
     python src/data/cache/pipeline/step01_download_alpaca_1m.py --force-refresh
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -34,7 +33,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 import argparse
-import gzip
 import time
 from datetime import datetime, timedelta
 from typing import List, Set, Optional, Tuple, Dict, Any
@@ -90,7 +88,7 @@ class AlpacaPipelineDownloader:
         try:
             self.downloader = AlpacaDataDownloader()
             _logger.info("Alpaca downloader initialized successfully")
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize Alpaca downloader:")
             raise
 
@@ -340,7 +338,7 @@ class AlpacaPipelineDownloader:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving data for %s:", ticker)
             return False
 
@@ -652,7 +650,7 @@ Environment Variables Required:
     except KeyboardInterrupt:
         _logger.info("Pipeline Step 1 cancelled by user")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         _logger.exception("Pipeline Step 1 fatal error:")
         sys.exit(1)
 

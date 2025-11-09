@@ -1,7 +1,7 @@
 """
 BaseDBService: Provides UoW pattern and error handling for DB services.
 """
-from typing import Callable, TypeVar, Any, Optional
+from typing import Callable, TypeVar
 from functools import wraps
 from src.data.db.services.database_service import get_database_service, ReposBundle
 from src.notification.logger import setup_logger
@@ -38,7 +38,7 @@ def handle_db_error(func: Callable[..., T]) -> Callable[..., T]:
     def wrapper(self, *args, **kwargs) -> T:
         try:
             return func(self, *args, **kwargs)
-        except Exception as e:
+        except Exception:
             self._logger.exception(f"Database error in {func.__name__}")
             raise
     return wrapper

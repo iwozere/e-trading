@@ -11,15 +11,13 @@ This script tests the fundamentals cache functionality including:
 import sys
 import os
 import tempfile
-import shutil
 from datetime import datetime, timedelta
-from pathlib import Path
 
 # Add project root to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from src.data.cache.fundamentals_cache import FundamentalsCache, get_fundamentals_cache
-from src.data.cache.fundamentals_combiner import FundamentalsCombiner, get_fundamentals_combiner
+from src.data.cache.fundamentals_cache import FundamentalsCache
+from src.data.cache.fundamentals_combiner import FundamentalsCombiner
 from src.data.data_manager import DataManager
 
 def test_fundamentals_cache():

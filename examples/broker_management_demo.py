@@ -20,8 +20,7 @@ Usage:
 import asyncio
 import argparse
 import json
-import time
-from datetime import datetime, timezone
+from datetime import datetime
 import sys
 from pathlib import Path
 
@@ -30,10 +29,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.trading.broker.broker_factory import (
-    get_broker, list_available_brokers, get_broker_capabilities,
-    create_sample_config, validate_broker_config
+    get_broker, list_available_brokers, create_sample_config, validate_broker_config
 )
-from src.trading.broker.broker_manager import BrokerManager, BrokerStatus
+from src.trading.broker.broker_manager import BrokerManager
 from src.trading.broker.config_manager import ConfigManager, Environment
 
 
@@ -54,7 +52,7 @@ async def demo_broker_factory():
 
         # Show capabilities
         capabilities = broker['capabilities']
-        print(f"     Capabilities:")
+        print("     Capabilities:")
         print(f"       Paper Trading: {capabilities['paper_trading']}")
         print(f"       Live Trading: {capabilities['live_trading']}")
         print(f"       Asset Classes: {', '.join(capabilities['asset_classes'])}")
@@ -83,7 +81,7 @@ async def demo_broker_factory():
         # Validate configuration
         try:
             validated = validate_broker_config(config)
-            print(f"     ✅ Configuration valid")
+            print("     ✅ Configuration valid")
         except Exception as e:
             print(f"     ❌ Configuration invalid: {e}")
         print()
@@ -194,14 +192,14 @@ async def demo_broker_manager():
         print(f"   Total Brokers: {status['total_managed_brokers']}")
 
         health_summary = status['health_summary']
-        print(f"   Health Summary:")
+        print("   Health Summary:")
         print(f"     Running: {health_summary['running_brokers']}/{health_summary['total_brokers']}")
         print(f"     Health: {health_summary['health_percentage']:.1f}%")
         print(f"     Errors: {health_summary['error_brokers']}")
 
         # Connection pool stats
         pool_stats = status['connection_pool_stats']
-        print(f"   Connection Pool:")
+        print("   Connection Pool:")
         print(f"     Active Connections: {pool_stats['total_active_connections']}")
         print(f"     Max Per Type: {pool_stats['max_connections_per_type']}")
 
@@ -252,7 +250,7 @@ async def demo_config_manager():
             print(f"     - {template}")
 
         # Create configuration from template
-        print(f"\n🔧 Creating Configuration from Template:")
+        print("\n🔧 Creating Configuration from Template:")
 
         result = config_manager.create_from_template(
             'demo_binance',

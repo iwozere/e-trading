@@ -13,7 +13,6 @@ Example:
     python src/util/create_admin.py 123456789 admin@example.com
 """
 
-import os
 import sys
 import time
 from pathlib import Path
@@ -88,7 +87,7 @@ def create_admin(telegram_user_id: str, email: str):
         logger.info("Successfully created admin user %s with email %s", telegram_user_id, email)
         return True
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error creating admin user: ")
         return False
 
@@ -111,7 +110,7 @@ def main():
         print("Error: email must be a valid email address")
         sys.exit(1)
 
-    print(f"Setting up admin user:")
+    print("Setting up admin user:")
     print(f"  Telegram User ID: {telegram_user_id}")
     print(f"  Email: {email}")
     print()

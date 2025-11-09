@@ -6,14 +6,12 @@ must implement, providing consistency and reducing code duplication.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import pandas as pd
 import logging
-from pathlib import Path
 
 from src.data.utils import get_data_handler, get_provider_limiter
-from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
 
 _logger = logging.getLogger(__name__)
 
@@ -421,7 +419,7 @@ class BaseDataSource(ABC):
             self._is_connected = False
             _logger.info("Cleaned up %s data source", self.provider_name)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error during cleanup of %s:", self.provider_name)
 
     def __enter__(self):

@@ -7,7 +7,7 @@ to calculate comprehensive squeeze probability scores.
 
 from pathlib import Path
 import sys
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any
 import math
 
 # Add project root to path
@@ -109,7 +109,7 @@ class ScoringEngine:
 
             return final_score
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error calculating squeeze score:")
             # Return minimum score on error
             return self.config.score_bounds[0]

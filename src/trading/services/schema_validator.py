@@ -7,11 +7,9 @@ Provides structured error reporting and human-readable messages.
 """
 
 import yaml
-import json
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 from functools import lru_cache
-import jsonschema
 from jsonschema import Draft7Validator, ValidationError
 
 from src.notification.logger import setup_logger

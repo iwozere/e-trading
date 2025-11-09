@@ -11,7 +11,7 @@ import functools
 from typing import Dict, List, Any, Optional, Callable, NamedTuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from collections import defaultdict, deque
+from collections import deque
 from pathlib import Path
 import sys
 import threading
@@ -154,7 +154,7 @@ class PerformanceProfiler:
             result = await func(*args, **kwargs)
             return result
 
-        except Exception as e:
+        except Exception:
             error_occurred = True
             raise
 
@@ -180,7 +180,7 @@ class PerformanceProfiler:
             result = func(*args, **kwargs)
             return result
 
-        except Exception as e:
+        except Exception:
             error_occurred = True
             raise
 

@@ -139,7 +139,7 @@ class AlertRunner:
             else:
                 _logger.error("Failed to send alert notification for job %s", alert_result["job_id"])
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error sending alert notification")
             raise
 
@@ -164,7 +164,7 @@ async def main():
     results = await runner.run_evaluation(user_id=args.user_id, limit=args.limit)
 
     # Print summary
-    print(f"Alert Evaluation Summary:")
+    print("Alert Evaluation Summary:")
     print(f"  Evaluated: {results['total_evaluated']}")
     print(f"  Triggered: {results['triggered']}")
     print(f"  Rearmed: {results['rearmed']}")

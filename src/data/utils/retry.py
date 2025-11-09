@@ -7,7 +7,7 @@ handling transient failures in data requests.
 
 import time
 import random
-from typing import Callable, Any, Optional, TypeVar, Union
+from typing import Callable, Optional, TypeVar
 from functools import wraps
 import logging
 

@@ -10,7 +10,7 @@ import tempfile
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import pytest
 
 from src.notification.service.archival_service import (

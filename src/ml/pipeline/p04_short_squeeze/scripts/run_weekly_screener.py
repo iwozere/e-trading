@@ -28,7 +28,6 @@ Examples:
 
 import argparse
 import sys
-import time
 from pathlib import Path
 from datetime import datetime, date
 from typing import Optional, Dict, Any, List
@@ -159,7 +158,7 @@ class WeeklyUniverseLoader:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load configuration:")
             return False
 
@@ -184,7 +183,7 @@ class WeeklyUniverseLoader:
             _logger.info("FMP API connection successful")
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize data providers:")
             return False
 
@@ -226,7 +225,7 @@ class WeeklyUniverseLoader:
             _logger.info("Successfully loaded universe of %d stocks", len(universe))
             return universe
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load universe:")
             return None
 
@@ -303,7 +302,7 @@ class WeeklyUniverseLoader:
             _logger.info("Strategy breakdown: %s", strategy_breakdown)
             return results_dict
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Universe storage failed:")
             return None
 

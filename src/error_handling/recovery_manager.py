@@ -14,7 +14,6 @@ Features:
 """
 
 import time
-import logging
 from typing import Callable, Optional, Dict, Any
 from functools import wraps
 
@@ -101,7 +100,7 @@ class ErrorRecoveryManager:
 
             return result
 
-        except Exception as recovery_error:
+        except Exception:
             self.metrics['failed_recoveries'] += 1
             self.metrics['recovery_time'] += time.time() - start_time
 

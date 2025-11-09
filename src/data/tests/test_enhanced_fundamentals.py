@@ -6,7 +6,7 @@ This test validates the enhanced DataManager fundamentals integration.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime
 import sys
 from pathlib import Path

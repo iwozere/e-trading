@@ -12,7 +12,7 @@ Tests for the Telegram bot management endpoints including:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from pathlib import Path
 import sys
@@ -23,7 +23,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.api.main import app
 from src.api.models import User
-from src.api.auth import require_admin, get_current_user
+from src.api.auth import require_admin
 
 # Create test client
 client = TestClient(app)

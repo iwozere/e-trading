@@ -23,7 +23,7 @@ Classes:
 import os
 import time
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 import pandas as pd
 
@@ -124,7 +124,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 api_version='v2'
             )
             _logger.info("Alpaca API initialized with base URL: %s", self.base_url)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize Alpaca API:")
             raise
 
@@ -193,7 +193,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 return self._download_with_chunking(symbol, timeframe, start_date, end_date,
                                                   adjustment, user_limit)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error downloading data for %s:", symbol)
             raise
 
@@ -491,7 +491,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
             _logger.debug("Retrieved basic fundamentals for %s", symbol)
             return fundamentals
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting fundamentals for %s:", symbol)
             return None
 

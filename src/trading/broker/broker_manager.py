@@ -22,14 +22,13 @@ Classes:
 
 import asyncio
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
-import json
 
-from src.trading.broker.broker_factory import get_broker, BrokerConfigurationError
+from src.trading.broker.broker_factory import get_broker
 from src.trading.broker.base_broker import BaseBroker
 
 from src.notification.logger import setup_logger
@@ -129,7 +128,7 @@ class BrokerHealthMonitor:
             for callback in self.health_callbacks:
                 try:
                     callback(broker_id, metrics)
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error in health callback:")
 
     def add_health_callback(self, callback: Callable[[str, BrokerHealthMetrics], None]):
@@ -169,7 +168,7 @@ class BrokerHealthMonitor:
 
                 time.sleep(self.check_interval)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in health monitoring loop:")
                 time.sleep(5)
 
@@ -219,7 +218,7 @@ class BrokerConnectionPool:
                 _logger.debug("Created new broker connection: %s", pool_key)
                 return broker
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Failed to create broker connection:")
                 raise
 
@@ -249,7 +248,7 @@ class BrokerConnectionPool:
                 for broker in brokers:
                     try:
                         await broker.disconnect()
-                    except Exception as e:
+                    except Exception:
                         _logger.exception("Error disconnecting broker in cleanup:")
                 brokers.clear()
 
@@ -334,7 +333,7 @@ class BrokerManager:
             _logger.info("Added broker %s (%s)", broker_id, broker_config.get('type', 'unknown'))
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to add broker %s:", broker_id)
             return False
 
@@ -367,7 +366,7 @@ class BrokerManager:
 
             return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to remove broker %s:", broker_id)
             return False
 
@@ -401,7 +400,7 @@ class BrokerManager:
 
             _logger.info("Broker Manager shutdown complete")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error during Broker Manager shutdown:")
 
     async def start_broker(self, broker_id: str) -> bool:

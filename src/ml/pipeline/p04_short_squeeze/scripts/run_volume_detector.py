@@ -38,7 +38,7 @@ import sys
 import time
 import threading
 from pathlib import Path
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from typing import Optional, Dict, Any, List
 
 # Add project root to path for imports
@@ -46,10 +46,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.data.db.core.database import session_scope
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.ml.pipeline.p04_short_squeeze.config.config_manager import ConfigManager
-from src.ml.pipeline.p04_short_squeeze.core.universe_loader import create_universe_loader
 from src.ml.pipeline.p04_short_squeeze.core.volume_squeeze_detector_yf import create_volume_squeeze_detector_yf
 
 _logger = setup_logger(__name__)
@@ -251,7 +249,7 @@ class VolumeDetectorRunner:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load configuration:")
             return False
 
@@ -268,7 +266,7 @@ class VolumeDetectorRunner:
             _logger.info("yfinance ready for data fetching")
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize data providers:")
             return False
 
@@ -341,7 +339,7 @@ class VolumeDetectorRunner:
 
             return universe
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load universe:")
             return None
 
@@ -451,7 +449,7 @@ class VolumeDetectorRunner:
             _logger.info("Volume detection completed successfully")
             return results_dict
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Volume detection run failed:")
             return None
 
@@ -467,7 +465,6 @@ class VolumeDetectorRunner:
             Number of candidates stored
         """
         try:
-            from src.data.db.core.database import session_scope
             snapshots_data = []
 
             # Prepare all snapshot data first
@@ -495,7 +492,7 @@ class VolumeDetectorRunner:
 
             return stored_count
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error storing volume candidates:")
             return 0
 

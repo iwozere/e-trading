@@ -18,22 +18,16 @@ Features:
 - Consistent results format with custom_optimizer.py
 """
 
-import os
 import sys
-import json
 import yaml
 import pickle
-import numpy as np
 import pandas as pd
 import torch
-import torch.nn as nn
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
-import optuna
 import backtrader as bt
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -41,10 +35,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.backtester.optimizer.base_optimizer import BaseOptimizer
 from src.strategy.hmm_lstm_strategy import HMMLSTMStrategy
-from src.backtester.analyzer.bt_analyzers import (CAGR, CalmarRatio,
-                                       ConsecutiveWinsLosses,
-                                       PortfolioVolatility, ProfitFactor,
-                                       SortinoRatio, WinRate)
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -207,7 +197,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
 
             return model
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error reconstructing LSTM model:")
             raise
 
@@ -380,7 +370,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
 
             return backtest_results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in backtest for %s %s %s:",
                          combination['provider'], combination['symbol'], combination['timeframe'])
 
@@ -467,7 +457,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
 
             return optimization_results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in parameter optimization:")
             raise
 
@@ -613,7 +603,7 @@ class HMMLSTMOptimizer(BaseOptimizer):
                     'results': results
                 })
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error processing combination %s %s %s:",
                              combination['provider'], combination['symbol'], combination['timeframe'])
                 continue

@@ -7,9 +7,7 @@ with existing Backtrader indicators, and tests all backend combinations.
 
 import unittest
 import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import sys
 from pathlib import Path
 
@@ -471,7 +469,6 @@ class TestBacktraderPerformanceIntegration(unittest.TestCase):
     def test_concurrent_indicator_access(self):
         """Test concurrent access to indicators in multi-threaded strategies."""
         import threading
-        import time
 
         mock_data = Mock()
         mock_data.close = Mock()

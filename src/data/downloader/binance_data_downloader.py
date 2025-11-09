@@ -18,10 +18,8 @@ Classes:
 - BinanceDataDownloader: Main class for interacting with the Binance API and managing data downloads
 """
 
-import os
-import time
 from datetime import datetime, timedelta
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import pandas as pd
 

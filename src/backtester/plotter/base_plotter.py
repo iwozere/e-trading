@@ -70,7 +70,7 @@ class BasePlotter:
                             RSIPlotter(self.data, indicators, self.vis_settings)
                         )
                         _logger.debug("RSI plotter created successfully")
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error creating RSI plotter: %s")
 
             # Ichimoku
@@ -95,7 +95,7 @@ class BasePlotter:
                             IchimokuPlotter(self.data, indicators, self.vis_settings)
                         )
                         _logger.debug("Ichimoku plotter created successfully")
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error creating Ichimoku plotter: %s")
 
             # Bollinger Bands
@@ -114,7 +114,7 @@ class BasePlotter:
                             )
                         )
                         _logger.debug("Bollinger Bands plotter created successfully")
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error creating Bollinger Bands plotter: %s")
 
             # Volume
@@ -131,7 +131,7 @@ class BasePlotter:
                             VolumePlotter(self.data, indicators, self.vis_settings)
                         )
                         _logger.debug("Volume plotter created successfully")
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error creating Volume plotter: %s")
 
             # SuperTrend
@@ -150,7 +150,7 @@ class BasePlotter:
                             SuperTrendPlotter(self.data, indicators, self.vis_settings)
                         )
                         _logger.debug("SuperTrend plotter created successfully")
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error creating SuperTrend plotter: %s")
 
             _logger.info("Created %d indicator plotters", len(plotters))
@@ -227,7 +227,7 @@ class BasePlotter:
                         f"Error accessing data at index {i}: {str(e)}", exc_info=False
                     )
                     break  # Stop if we hit an error
-        except Exception as e:
+        except Exception:
             _logger.exception("Error accessing data: ")
             return
 
@@ -280,7 +280,7 @@ class BasePlotter:
                         f"Plotting {plotter.__class__.__name__} on separate axis {current_ax}"
                     )
                     plotter.plot(self.axes[current_ax])
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error plotting %s: %s")
                 continue
 
@@ -320,7 +320,7 @@ class BasePlotter:
                         s=100,
                         label="Sell" if trade == self.trades[0] else "",
                     )
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error plotting trade: %s")
                 continue
 

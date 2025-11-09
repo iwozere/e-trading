@@ -7,15 +7,13 @@ Provides CRUD operations for all short squeeze related tables.
 
 from datetime import datetime, date, timedelta
 from typing import List, Optional, Dict, Any, Sequence
-from decimal import Decimal
 
-from sqlalchemy import and_, or_, desc, func, select, update, delete
+from sqlalchemy import and_, desc, func, select, update, delete
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 
 from src.data.db.models.model_short_squeeze import (
     ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, AdHocCandidateModel,
-    AlertLevel, CandidateSource
+    AlertLevel
 )
 from src.notification.logger import setup_logger
 

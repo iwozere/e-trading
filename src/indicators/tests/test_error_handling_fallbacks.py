@@ -7,7 +7,7 @@ Tests adapter failures, data quality issues, and recovery strategies.
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import patch, Mock, side_effect
+from unittest.mock import patch
 from datetime import datetime
 import sys
 from pathlib import Path
@@ -16,8 +16,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.indicators.service import IndicatorService, IndicatorServiceError, DataError
-from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
-from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
 from src.indicators.models import IndicatorBatchConfig, IndicatorSpec
 
 

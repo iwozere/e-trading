@@ -18,7 +18,6 @@ Classes:
 """
 
 import time
-import json
 import requests
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -142,7 +141,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading historical data for %s: %s")
             return None
 
@@ -184,7 +183,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
 
             return ohlcv
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing CoinGecko data: %s")
             return None
 
@@ -260,10 +259,10 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
 
             return response
 
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             _logger.exception("Request error: %s")
             return None
-        except Exception as e:
+        except Exception:
             _logger.exception("Unexpected error in API call: %s")
             return None
 
@@ -286,7 +285,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
                 _logger.error("Failed to connect to CoinGecko API")
                 return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error connecting to CoinGecko: %s")
             return False
 
@@ -348,7 +347,7 @@ class CoinGeckoLiveDataFeed(BaseLiveDataFeed):
             self.last_poll_time = current_time
             return new_bar
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting latest data for %s: %s")
             return None
 

@@ -12,7 +12,6 @@ This module provides improved HuggingFace integration with:
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Optional, Any, Union
-import os
 from pathlib import Path
 import sys
 import time
@@ -29,7 +28,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 try:
-    from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+    from transformers import pipeline
     import torch
     HF_AVAILABLE = True
 except Exception:

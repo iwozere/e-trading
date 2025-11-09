@@ -9,7 +9,6 @@ import asyncio
 import sys
 import argparse
 from pathlib import Path
-from typing import Optional
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -28,7 +27,7 @@ async def start_service(config: SchedulerServiceConfig) -> None:
 
     try:
         await app.start()
-        print(f"Scheduler service started successfully")
+        print("Scheduler service started successfully")
         print(f"Environment: {config.service.environment}")
         print(f"Max workers: {config.scheduler.max_workers}")
         print(f"Database: {config.database.url.split('@')[1] if '@' in config.database.url else 'local'}")

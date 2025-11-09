@@ -2,7 +2,7 @@
 # registry.py — catalog of indicators and provider priority
 # ---------------------------------------------------------------------------
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union, Literal, Any
+from typing import Dict, List, Optional, Literal
 from src.indicators.constants import (
     DEFAULT_PARAMETERS,
     INDICATOR_INPUTS,

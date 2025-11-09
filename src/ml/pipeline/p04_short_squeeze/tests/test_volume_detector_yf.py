@@ -51,7 +51,7 @@ def test_volume_detector():
             candidate, indicators = result
             print(f"  ✓ CANDIDATE: Score={indicators.combined_score:.3f}, Probability={indicators.squeeze_probability}")
         else:
-            print(f"  ✗ Not a candidate")
+            print("  ✗ Not a candidate")
     
     print("\n" + "="*50)
     print("Test completed successfully!")

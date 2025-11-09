@@ -6,7 +6,6 @@ Handles environment variables, database settings, and service configuration.
 """
 
 from typing import Dict, Any, List, Optional
-from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator, ConfigDict
 import os

@@ -23,7 +23,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import os
 import argparse
 
 from src.notification.logger import setup_logger

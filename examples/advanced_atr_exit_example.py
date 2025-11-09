@@ -7,7 +7,6 @@ It shows the configuration, initialization, and usage of the sophisticated exit 
 
 import backtrader as bt
 import pandas as pd
-from datetime import datetime
 
 # Import the exit mixin and factory
 from src.strategy.exit.exit_mixin_factory import get_exit_mixin, get_exit_mixin_from_config
@@ -183,7 +182,7 @@ def run_example():
     strategy = results[0]
     exit_mixin = strategy.exit_mixin
 
-    print(f"\n🎯 Exit Strategy Details:")
+    print("\n🎯 Exit Strategy Details:")
     print(f"Current State: {exit_mixin.get_state()}")
     print(f"Current Stop: ${exit_mixin.get_current_stop():.2f}")
     print(f"Exit Events Logged: {len(exit_mixin.get_exit_log())}")
@@ -191,7 +190,7 @@ def run_example():
     # Show some exit log events
     exit_log = exit_mixin.get_exit_log()
     if exit_log:
-        print(f"\n📝 Recent Exit Events:")
+        print("\n📝 Recent Exit Events:")
         for event in exit_log[-3:]:  # Show last 3 events
             print(f"  - {event['event_type']}: {event.get('details', 'N/A')}")
 

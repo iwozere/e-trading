@@ -13,15 +13,12 @@ The strategy integrates these predictions to make trading decisions with proper 
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List
 import warnings
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
-import xgboost as xgb
-from sklearn.preprocessing import StandardScaler
 import backtrader as bt
 import json
 import pickle
@@ -222,7 +219,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             _logger.info("Models loaded successfully")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading models:")
             raise
 
@@ -256,7 +253,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
                 _logger.info("CNN model loaded from %s", model_path)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading CNN model:")
             raise
 
@@ -279,7 +276,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
                     _logger.info("XGBoost model loaded for %s", target)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading XGBoost models:")
             raise
 
@@ -334,7 +331,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             _logger.debug("Technical indicators initialized")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error initializing indicators:")
             raise
 
@@ -362,7 +359,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             return ohlcv_array
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error preparing OHLCV data:")
             return None
 
@@ -384,7 +381,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             return features.flatten()
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error extracting CNN features:")
             return None
 
@@ -451,7 +448,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             return np.array(features, dtype=np.float32).reshape(1, -1)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error preparing XGB features:")
             return None
 
@@ -489,7 +486,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             return predictions
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting predictions:")
             return {}
 
@@ -524,7 +521,7 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             return signal_strength
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating signal strength:")
             return 0.0
 
@@ -567,7 +564,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                 # Set stop loss and take profit
                 self._set_exit_orders(position_size, 'short')
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in entry signal check:")
 
     def _check_exit_signals(self, predictions: Dict[str, float], signal_strength: float):
@@ -620,7 +617,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                             exit_reason, signal_strength, self.data.close[0])
                 self.close()
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in exit signal check:")
 
     def next(self):
@@ -648,7 +645,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                 # Check for entry signals
                 self._check_entry_signals(predictions, signal_strength)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in strategy next():")
 
     def _set_exit_orders(self, position_size: float, position_type: str):
@@ -674,7 +671,7 @@ class CNNXGBoostStrategy(BaseStrategy):
                 profit_price = current_price * (1 - self.profit_target)
                 self.buy(exectype=bt.Order.Limit, price=profit_price, size=position_size)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error setting exit orders:")
 
     def _calculate_position_size(self, confidence: float, risk_multiplier: float) -> float:
@@ -692,6 +689,6 @@ class CNNXGBoostStrategy(BaseStrategy):
 
             return max(min_size, min(max_size, adjusted_size))
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating position size:")
             return self.config.get('base_position_size', 0.1)

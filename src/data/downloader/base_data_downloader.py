@@ -18,16 +18,13 @@ Classes:
 - BaseDataDownloader: Abstract base class for data downloaders
 """
 
-import time
 from abc import ABC, abstractmethod
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List
 
 import pandas as pd
 
-from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
-from src.model.schemas import OptionalFundamentals, Fundamentals
+from src.model.schemas import OptionalFundamentals
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

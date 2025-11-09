@@ -7,7 +7,7 @@ work correctly without requiring a full database setup.
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -236,7 +236,7 @@ def test_index_definitions():
     try:
         from sqlalchemy import Index
         from src.data.db.models.model_notification import (
-            Message, MessageDeliveryStatus, ChannelHealth, RateLimit, ChannelConfig
+            Message, MessageDeliveryStatus, RateLimit
         )
 
         # Test that we can create index definitions

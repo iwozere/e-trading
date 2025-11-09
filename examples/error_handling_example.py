@@ -31,24 +31,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from src.error_handling import (
     # Exceptions
-    TradingException, DataFeedException, BrokerException, NetworkException,
+    DataFeedException, BrokerException, NetworkException,
     InsufficientFundsException, RateLimitException,
 
     # Retry Management
-    RetryManager, RetryConfig, retry_on_failure,
-
-    # Circuit Breaker
-    CircuitBreaker, CircuitBreakerConfig, circuit_breaker,
-
-    # Recovery Management
-    ErrorRecoveryManager, RecoveryStrategy, with_fallback,
-
-    # Error Monitoring
-    ErrorMonitor, ErrorSeverity, monitor_errors,
+    RetryManager, RetryConfig, CircuitBreaker, CircuitBreakerConfig, ErrorRecoveryManager, RecoveryStrategy, ErrorMonitor, ErrorSeverity, monitor_errors,
 
     # Resilience Decorators
-    resilient, retry_on_failure, circuit_breaker, fallback, timeout,
-    resilient_api_call, resilient_database_call
+    retry_on_failure, circuit_breaker, timeout,
+    resilient_api_call
 )
 
 
@@ -79,7 +70,7 @@ def example_custom_exceptions():
             }
         )
     except InsufficientFundsException as e:
-        print(f"Caught insufficient funds error:")
+        print("Caught insufficient funds error:")
         print(f"  Message: {e.message}")
         print(f"  Error Code: {e.error_code}")
         print(f"  Context: {e.context}")
@@ -94,7 +85,7 @@ def example_custom_exceptions():
             retry_after=60
         )
     except RateLimitException as e:
-        print(f"\nCaught rate limit error:")
+        print("\nCaught rate limit error:")
         print(f"  Message: {e.message}")
         print(f"  Retry After: {e.retry_after} seconds")
         print(f"  Should Retry: {e.should_retry()}")

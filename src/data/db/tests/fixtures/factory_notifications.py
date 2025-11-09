@@ -6,7 +6,7 @@ Provides factory functions to create test data for Message and MessageDeliverySt
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, List
 
-from src.data.db.models.model_notification import MessagePriority, MessageStatus, DeliveryStatus
+from src.data.db.models.model_notification import DeliveryStatus
 
 
 class MessageFactory:

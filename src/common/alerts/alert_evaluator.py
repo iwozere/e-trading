@@ -16,12 +16,11 @@ import math
 import hashlib
 
 import pandas as pd
-import yaml
 
 from src.data.data_manager import DataManager
 from src.indicators.service import IndicatorService
 from src.data.db.services.jobs_service import JobsService
-from src.common.alerts.schema_validator import AlertSchemaValidator, ValidationResult
+from src.common.alerts.schema_validator import AlertSchemaValidator
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -248,7 +247,7 @@ class AlertEvaluator:
                 notify=notify
             )
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error parsing alert configuration:")
             return None
 
@@ -593,7 +592,7 @@ class AlertEvaluator:
             # This can be enhanced later to use the full IndicatorService interface
             indicators = self._calculate_basic_indicators(market_data, indicator_specs)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating indicators:")
 
         return indicators
@@ -662,7 +661,7 @@ class AlertEvaluator:
 
                 _logger.debug("Calculated basic indicator %s", output_key)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error calculating basic indicator %s:", spec.get("type"))
 
         return indicators
@@ -1242,7 +1241,7 @@ class AlertEvaluator:
             else:  # "below"
                 return threshold + hysteresis_amount
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating hysteresis level:")
             return None
 
@@ -1281,7 +1280,7 @@ class AlertEvaluator:
 
             return float(atr.iloc[-1])
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating ATR:")
             return None
 
@@ -1309,7 +1308,7 @@ class AlertEvaluator:
             # Serialize to JSON with proper error handling
             try:
                 state_json = json.dumps(sanitized_state, ensure_ascii=False, default=str)
-            except (TypeError, ValueError) as e:
+            except (TypeError, ValueError):
                 _logger.exception("Error serializing state for job %s:", job_id)
                 # Try with a minimal state
                 minimal_state = {
@@ -1349,7 +1348,7 @@ class AlertEvaluator:
 
             return success
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Unexpected error updating alert state for job %s:", job_id)
             return False
 
@@ -1518,7 +1517,7 @@ class AlertEvaluator:
         except json.JSONDecodeError as e:
             _logger.warning("Failed to parse state JSON: %s, using default state", str(e))
             return default_state
-        except Exception as e:
+        except Exception:
             _logger.exception("Unexpected error loading state, using default state")
             return default_state
 
@@ -1552,7 +1551,7 @@ class AlertEvaluator:
             state["migrated_from"] = from_version
             state["migration_timestamp"] = utcnow().isoformat()
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error during state migration:")
 
         return state

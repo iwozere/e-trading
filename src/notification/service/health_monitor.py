@@ -6,12 +6,11 @@ recovery mechanisms, and health metrics tracking.
 import asyncio
 import time
 import statistics
-from typing import Dict, Any, List, Optional, Set, Callable, Union
+from typing import Dict, Any, List, Optional, Set, Callable
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
-import json
 from collections import defaultdict, deque
 from src.notification.logger import setup_logger
 
@@ -708,7 +707,7 @@ class HealthMonitor:
                     await callback(channel, old_status, new_status)
                 else:
                     callback(channel, old_status, new_status)
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Status change callback error:")
 
     async def _trigger_health_alert_callbacks(self, channel: str, alert_type: str, message: str):
@@ -719,7 +718,7 @@ class HealthMonitor:
                     await callback(channel, alert_type, message)
                 else:
                     callback(channel, alert_type, message)
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Health alert callback error:")
 
     def add_status_change_callback(self, callback: Callable):

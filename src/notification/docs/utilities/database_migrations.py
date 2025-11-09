@@ -6,13 +6,10 @@ for better query performance in the notification service.
 """
 
 from typing import List, Dict, Any
-from sqlalchemy import text, Index, MetaData, Table
+from sqlalchemy import text, MetaData
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import ProgrammingError
 
-from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, ChannelHealth, RateLimit, ChannelConfig
-)
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

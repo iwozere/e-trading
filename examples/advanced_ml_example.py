@@ -9,19 +9,17 @@ This example demonstrates the comprehensive ML capabilities:
 
 import pandas as pd
 import numpy as np
-import json
 import yaml
-from datetime import datetime, timedelta
-from typing import Dict, Any
+from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
 # Import ML modules
-from src.ml.future.mlflow_integration import MLflowManager, ModelDeployer, ExperimentManager
+from src.ml.future.mlflow_integration import MLflowManager, ExperimentManager
 from src.ml.future.feature_engineering_pipeline import FeatureEngineeringPipeline
 from src.ml.future.automated_training_pipeline import (
     AutomatedTrainingPipeline, TrainingConfig, ModelType,
-    TrainingTrigger, PerformanceMetrics
+    TrainingTrigger
 )
 from src.notification.logger import setup_logger
 
@@ -585,7 +583,7 @@ def main():
         logger.info("✓ Drift Detection - Data and concept drift monitoring")
         logger.info("✓ Performance Monitoring - Real-time performance tracking")
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error in demonstration: ")
         raise
 

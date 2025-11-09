@@ -10,7 +10,6 @@ Tests the API endpoints and configuration validation.
 import sys
 from pathlib import Path
 import json
-import asyncio
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -20,7 +19,6 @@ from src.web_ui.config.trading_bot_config import (
     get_available_entry_mixins,
     get_available_exit_mixins,
     get_entry_mixin_parameters,
-    get_exit_mixin_parameters,
     parameter_definition_to_dict,
     BROKER_TYPES,
     SYMBOLS
@@ -144,7 +142,7 @@ def test_bot_configuration_validation():
     validator = BotConfigValidator()
     is_valid, errors, warnings = validator.validate_bot_config(valid_config)
 
-    print(f"✅ Valid configuration test:")
+    print("✅ Valid configuration test:")
     print(f"  - Valid: {is_valid}")
     print(f"  - Errors: {len(errors)}")
     print(f"  - Warnings: {len(warnings)}")
@@ -175,7 +173,7 @@ def test_bot_configuration_validation():
 
     is_valid, errors, warnings = validator.validate_bot_config(invalid_config)
 
-    print(f"✅ Invalid configuration test:")
+    print("✅ Invalid configuration test:")
     print(f"  - Valid: {is_valid}")
     print(f"  - Errors: {len(errors)}")
     print(f"  - Warnings: {len(warnings)}")
@@ -202,7 +200,7 @@ def test_json_serialization():
         if params:
             param_dict = parameter_definition_to_dict(params[0])
             json_str = json.dumps(param_dict, indent=2)
-            print(f"✅ Parameter definition JSON serialization:")
+            print("✅ Parameter definition JSON serialization:")
             print(f"  - Mixin: {first_mixin}")
             print(f"  - Parameter: {param_dict['name']}")
             print(f"  - JSON length: {len(json_str)} characters")
@@ -216,7 +214,7 @@ def test_json_serialization():
     }
 
     json_str = json.dumps(config_options, indent=2)
-    print(f"✅ Configuration options JSON serialization:")
+    print("✅ Configuration options JSON serialization:")
     print(f"  - JSON length: {len(json_str)} characters")
     print(f"  - Broker types: {len(config_options['broker_types'])}")
     print(f"  - Symbols: {len(config_options['symbols'])}")

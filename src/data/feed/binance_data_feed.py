@@ -2,7 +2,6 @@ import json
 import threading
 import queue
 import requests
-import time
 import pandas as pd
 from datetime import datetime, timezone
 import asyncio
@@ -10,7 +9,6 @@ import websockets
 import backtrader as bt
 from src.notification.logger import setup_logger
 from src.data.utils.retry import retry_on_exception
-from src.data.utils.rate_limiting import get_provider_limiter
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 
 """

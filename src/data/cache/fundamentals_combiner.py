@@ -15,7 +15,7 @@ Configuration is loaded from config/data/fundamentals.json and provides:
 import logging
 import json
 import os
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -101,10 +101,10 @@ class FundamentalsCombiner:
         except FileNotFoundError:
             _logger.warning("Fundamentals configuration file not found at %s, using defaults", config_path)
             return self._get_default_config()
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             _logger.exception("Invalid JSON in fundamentals configuration file %s:", config_path)
             return self._get_default_config()
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading fundamentals configuration from %s", config_path)
             return self._get_default_config()
 

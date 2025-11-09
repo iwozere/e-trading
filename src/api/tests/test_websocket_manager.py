@@ -10,8 +10,8 @@ and message broadcasting functionality.
 import pytest
 import asyncio
 import json
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import Mock, AsyncMock, patch
+from datetime import datetime
 from pathlib import Path
 import sys
 

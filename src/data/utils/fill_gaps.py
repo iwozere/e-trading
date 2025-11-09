@@ -293,7 +293,7 @@ def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str
     if not provider:
         print(f"  ❌ No suitable provider for {symbol} {interval}")
         results['gaps_failed'] = 1
-        results['details'].append(f"No suitable provider available")
+        results['details'].append("No suitable provider available")
         return results
 
     print(f"  📡 Using provider: {provider}")
@@ -356,7 +356,7 @@ def fill_gaps_for_symbol_interval(symbol: str, interval: str, metadata: Dict[str
                     results['gaps_filled'] += 1
                     results['details'].append(f"{year}: Filled {len(gap_data)} rows")
                 else:
-                    print(f"        ❌ Failed to download gap data")
+                    print("        ❌ Failed to download gap data")
                     results['gaps_failed'] += 1
                     results['details'].append(f"{year}: Failed to download gap data")
 

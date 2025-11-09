@@ -8,11 +8,8 @@ matplotlib.use('Agg')
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Tuple
 from src.notification.logger import setup_logger
-from src.model.telegram_bot import TickerAnalysis
-from datetime import datetime
-from pathlib import Path
 
 _logger = setup_logger(__name__)
 

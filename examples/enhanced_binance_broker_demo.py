@@ -17,9 +17,7 @@ Usage:
 
 import asyncio
 import argparse
-import json
-import time
-from datetime import datetime, timezone
+from datetime import datetime
 import sys
 from pathlib import Path
 
@@ -43,7 +41,7 @@ async def demo_paper_trading():
     config['notifications']['email_enabled'] = False  # Disable for demo
     config['notifications']['telegram_enabled'] = False
 
-    print(f"📋 Configuration:")
+    print("📋 Configuration:")
     print(f"   Trading Mode: {config['trading_mode']}")
     print(f"   Initial Balance: ${config['cash']:,.2f}")
     print(f"   Commission Rate: {config['paper_trading_config']['commission_rate']:.3f}")
@@ -71,7 +69,7 @@ async def demo_paper_trading():
 
             # Get account info
             account_info = await broker.get_account_info()
-            print(f"📊 Account Info:")
+            print("📊 Account Info:")
             for key, value in account_info.items():
                 if key != 'paper_trading_config':
                     print(f"   {key}: {value}")
@@ -185,7 +183,7 @@ async def demo_paper_trading():
                 print(f"   Total Executions: {report['total_executions']}")
                 print(f"   Average Slippage: {report['average_slippage_bps']:.2f} bps")
                 print(f"   Average Latency: {report['average_latency_ms']:.1f} ms")
-                print(f"   Quality Distribution:")
+                print("   Quality Distribution:")
                 for quality, percentage in report['quality_distribution'].items():
                     print(f"     {quality}: {percentage:.1f}%")
             else:
@@ -236,7 +234,7 @@ async def demo_live_trading():
     config['notifications']['email_enabled'] = False  # Disable for demo
     config['notifications']['telegram_enabled'] = False
 
-    print(f"📋 Configuration:")
+    print("📋 Configuration:")
     print(f"   Trading Mode: {config['trading_mode']}")
     print(f"   Initial Balance: ${config['cash']:,.2f}")
     print(f"   Max Position Size: ${config['risk_management']['max_position_size']:,.2f}")
@@ -264,7 +262,7 @@ async def demo_live_trading():
 
             # Get account info
             account_info = await broker.get_account_info()
-            print(f"📊 Account Info:")
+            print("📊 Account Info:")
             for key, value in account_info.items():
                 print(f"   {key}: {value}")
             print()
@@ -293,7 +291,7 @@ async def demo_live_trading():
     # Get Binance-specific info
     try:
         binance_info = await broker.get_binance_specific_info()
-        print(f"🔧 Binance-specific info:")
+        print("🔧 Binance-specific info:")
         print(f"   Supported Order Types: {len(binance_info['supported_order_types'])}")
         print(f"   Supported Symbols: {binance_info['supported_symbols_count']}")
         print(f"   Exchange Info Loaded: {binance_info['exchange_info_loaded']}")

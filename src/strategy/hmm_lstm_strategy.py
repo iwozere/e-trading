@@ -20,7 +20,7 @@ import json
 import talib
 from pathlib import Path
 from collections import deque
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple
 import sys
 
 # Add project root to path
@@ -204,7 +204,7 @@ class HMMLSTMStrategy(BaseStrategy):
             # Trade tracking
             self.current_trade_regime = None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in _initialize_strategy")
             raise
 
@@ -273,7 +273,7 @@ class HMMLSTMStrategy(BaseStrategy):
                 self._logger.warning("No optimized indicators found for %s %s", self.symbol, self.timeframe)
                 self.optimized_indicators = {}
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error loading models")
             raise
 
@@ -321,7 +321,7 @@ class HMMLSTMStrategy(BaseStrategy):
 
             self._logger.info("Initialized indicators with optimized parameters: %s", params)
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error initializing indicators")
             raise
 
@@ -415,7 +415,7 @@ class HMMLSTMStrategy(BaseStrategy):
 
             return indicators
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error calculating indicators")
             return {}
 
@@ -462,7 +462,7 @@ class HMMLSTMStrategy(BaseStrategy):
 
             return int(regime[0]), float(confidence)
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error predicting regime")
             return 1, 0.5  # Default to neutral regime
 
@@ -519,7 +519,7 @@ class HMMLSTMStrategy(BaseStrategy):
 
             return float(prediction)
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error predicting price")
             return 0.0
 
@@ -577,7 +577,7 @@ class HMMLSTMStrategy(BaseStrategy):
             elif current_position != 0:
                 self._check_exit_signals(prediction, regime, regime_confidence)
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error in _execute_strategy_logic")
 
     def _log_return_to_percentage(self, log_return: float) -> float:
@@ -642,7 +642,7 @@ class HMMLSTMStrategy(BaseStrategy):
                     reason=f"HMM-LSTM prediction: {prediction:.6f}"
                 )
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error checking entry signals")
 
     def _check_exit_signals(self, prediction: float, regime: int, regime_confidence: float):
@@ -711,7 +711,7 @@ class HMMLSTMStrategy(BaseStrategy):
                 # Reset trade tracking
                 self.current_trade_regime = None
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error checking exit signals")
 
     def stop(self):
@@ -732,5 +732,5 @@ class HMMLSTMStrategy(BaseStrategy):
             # Call base class stop method
             super().stop()
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error in stop")

@@ -5,11 +5,10 @@ Repository layer for job scheduling and execution operations.
 Provides data access methods for schedules and runs tables.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
-from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc, func
+from sqlalchemy import and_, or_, desc, asc
 from sqlalchemy.exc import IntegrityError
 
 from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType
@@ -51,7 +50,7 @@ class JobsRepository:
             self.session.flush()  # Get the ID without committing
             _logger.info("Created schedule: %s (ID: %s)", schedule.name, schedule.id)
             return schedule
-        except IntegrityError as e:
+        except IntegrityError:
             self.session.rollback()
             _logger.exception("Failed to create schedule:")
             raise
@@ -140,7 +139,7 @@ class JobsRepository:
             self.session.flush()
             _logger.info("Updated schedule: %s (ID: %s)", schedule.name, schedule.id)
             return schedule
-        except Exception as e:
+        except Exception:
             self.session.rollback()
             _logger.exception("Failed to update schedule %s:", schedule_id)
             raise
@@ -163,7 +162,7 @@ class JobsRepository:
             self.session.delete(schedule)
             _logger.info("Deleted schedule: %s (ID: %s)", schedule.name, schedule.id)
             return True
-        except Exception as e:
+        except Exception:
             self.session.rollback()
             _logger.exception("Failed to delete schedule %s:", schedule_id)
             raise
@@ -225,7 +224,7 @@ class JobsRepository:
             self.session.flush()  # Get the run_id without committing
             _logger.info("Created run: %s (%s:%s)", run.id, run.job_type, run.job_id)
             return run
-        except IntegrityError as e:
+        except IntegrityError:
             self.session.rollback()
             _logger.exception("Failed to create run:")
             raise
@@ -310,7 +309,7 @@ class JobsRepository:
             self.session.flush()
             _logger.info("Updated run: %s (status: %s)", run.id, run.status)
             return run
-        except Exception as e:
+        except Exception:
             self.session.rollback()
             _logger.exception("Failed to update run %s:", run_id)
             raise
@@ -349,7 +348,7 @@ class JobsRepository:
             _logger.info("Claimed run: %s by worker: %s", run.id, worker_id)
             return run
 
-        except Exception as e:
+        except Exception:
             self.session.rollback()
             _logger.exception("Failed to claim run %s:", run_id)
             raise

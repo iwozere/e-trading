@@ -14,12 +14,11 @@ Test Coverage:
 """
 
 import sys
-import os
 import tempfile
 import shutil
 from pathlib import Path
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from datetime import datetime
+from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
@@ -28,9 +27,6 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.data.data_manager import DataManager, ProviderSelector
-from src.data.cache.unified_cache import UnifiedCache
-from src.data.downloader.binance_data_downloader import BinanceDataDownloader
-from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
 

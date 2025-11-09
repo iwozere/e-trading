@@ -24,19 +24,18 @@ Classes:
 
 import asyncio
 import time
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Union
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Any, Tuple
 import threading
-from decimal import Decimal
 
 from ib_insync import IB, Stock, Option, Future, Forex, Contract, Order as IBOrder
-from ib_insync import MarketOrder, LimitOrder, StopOrder, StopLimitOrder, BracketOrder
+from ib_insync import MarketOrder, LimitOrder, StopOrder, StopLimitOrder
 from ib_insync import Trade, Position as IBPosition, PortfolioItem, AccountValue
-from ib_insync import util, BarData, Ticker
+from ib_insync import Ticker
 
 from src.trading.broker.base_broker import (
     BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
-    OrderType, TradingMode, PaperTradingMode, ExecutionMetrics
+    OrderType, TradingMode
 )
 from src.trading.broker.paper_trading_mixin import PaperTradingMixin
 
@@ -158,7 +157,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             _logger.info("Disconnected from IBKR")
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error disconnecting from IBKR:")
             return False
 
@@ -188,7 +187,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
             _logger.info("Loaded IBKR account info - Portfolio items: %d, Positions: %d",
                         len(self.portfolio_items), len(self.ibkr_positions))
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load IBKR account info:")
 
     def _get_symbol_from_contract(self, contract: Contract) -> str:
@@ -257,7 +256,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
                         time.sleep(1)  # Update every second
 
-                    except Exception as e:
+                    except Exception:
                         _logger.exception("Error in market data worker:")
                         time.sleep(5)
 
@@ -267,7 +266,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
             _logger.info("Started IBKR market data updates")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to start market data updates:")
 
     def _subscribe_market_data(self, symbol: str, asset_class: str = 'STK') -> bool:
@@ -290,7 +289,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
             return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to subscribe to market data for %s:", symbol)
             return False
 
@@ -474,7 +473,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                     _logger.warning("Order %s not found for cancellation", order_id)
                     return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error cancelling order %s:", order_id)
             return False
 
@@ -494,7 +493,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 else:
                     return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting order status for %s:", order_id)
             return None
 
@@ -529,7 +528,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
                 return positions
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting positions:")
             return {}
 
@@ -570,7 +569,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
                 return portfolio
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting portfolio:")
             return Portfolio(
                 total_value=0.0,
@@ -669,7 +668,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
             return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting contract details for %s:", symbol)
             return None
 
@@ -700,7 +699,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 'timestamp': datetime.now(timezone.utc)
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting market data for %s:", symbol)
             return None
 
@@ -749,7 +748,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
 
             return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting historical data for %s:", symbol)
             return None
 

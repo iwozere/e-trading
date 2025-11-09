@@ -13,14 +13,13 @@ import os
 import pandas as pd
 import numpy as np
 import backtrader as bt
-from datetime import datetime, timedelta
 from src.notification.logger import setup_logger
 
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from src.strategy.future.advanced_backtrader_strategy import AdvancedBacktraderStrategy
-from src.strategy.future.composite_strategy_manager import AdvancedStrategyFramework, CompositeSignal
+from src.strategy.future.composite_strategy_manager import AdvancedStrategyFramework
 
 # Set up logging
 logger = setup_logger(__name__)
@@ -122,7 +121,7 @@ def run_composite_strategy_example():
             logger.info("Contributing strategies: %s", signal.contributing_strategies)
             logger.info("Metadata: %s", signal.metadata)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error testing strategy %s: ", strategy_name)
 
 
@@ -174,7 +173,7 @@ def run_multi_timeframe_example():
             logger.info("Confidence: %.3f", signal.confidence)
             logger.info("Contributing strategies: %s", signal.contributing_strategies)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error testing MTF strategy %s: ", strategy_name)
 
 
@@ -215,7 +214,7 @@ def run_dynamic_switching_example():
         logger.info("Signal type: %s", signal.signal_type)
         logger.info("Confidence: %.3f", signal.confidence)
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error in dynamic switching: ")
 
 
@@ -349,7 +348,7 @@ def main():
         logger.info("\n" + "=" * 50)
         logger.info("All examples completed successfully!")
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error running examples: ")
 
 

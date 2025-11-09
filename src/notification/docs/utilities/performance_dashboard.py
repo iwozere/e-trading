@@ -9,7 +9,7 @@ import sys
 import time
 import json
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 
 # Add project root to path
@@ -20,11 +20,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from src.data.db.core.database import get_database_url
 from src.notification.docs.utilities.query_analyzer import (
-    QueryPerformanceMonitor,
     DatabaseHealthChecker,
     get_query_monitor
 )
-from src.notification.service.database_optimization import analyze_query_performance
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -57,7 +55,7 @@ class PerformanceDashboard:
             _logger.info("Performance dashboard initialized")
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize dashboard:")
             return False
 
@@ -219,7 +217,7 @@ class PerformanceDashboard:
         # Slow queries
         slow_queries = perf_data.get("slow_queries", [])
         if slow_queries:
-            print(f"\n   🐌 Top Slow Queries:")
+            print("\n   🐌 Top Slow Queries:")
             for i, query in enumerate(slow_queries[:3], 1):
                 print(f"      {i}. {query['avg_time']:.4f}s - {query['query_text'][:60]}...")
 
@@ -305,7 +303,7 @@ class PerformanceDashboard:
             _logger.info("Metrics exported to %s", filename)
             return filename
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to export metrics:")
             raise
 

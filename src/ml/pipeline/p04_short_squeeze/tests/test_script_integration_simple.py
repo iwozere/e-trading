@@ -7,10 +7,8 @@ arguments correctly. More comprehensive tests with mocking are in test_script_in
 """
 
 import unittest
-import subprocess
 import sys
 import tempfile
-import os
 from pathlib import Path
 
 # Add project root to path

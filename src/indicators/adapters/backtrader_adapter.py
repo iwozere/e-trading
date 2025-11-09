@@ -8,8 +8,7 @@ leveraging the unified service's capabilities.
 
 import backtrader as bt
 import pandas as pd
-import numpy as np
-from typing import Dict, Any, Optional, Union, Type, List
+from typing import Dict, Any, Optional, List
 
 
 from src.indicators.adapters.base import BaseAdapter
@@ -114,7 +113,7 @@ class BacktraderIndicatorWrapper(bt.Indicator):
 
             return df
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error building DataFrame from Backtrader data:")
             return None
 

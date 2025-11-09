@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import shutil
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pandas as pd
 from src.data.downloader.base_data_downloader import BaseDataDownloader
@@ -79,7 +79,6 @@ def test_download_multiple_symbols():
 
 
 # Mock BinanceDataDownloader and YahooDataDownloader for isolated tests
-import types
 
 
 def test_binance_data_downloader_integration(monkeypatch):

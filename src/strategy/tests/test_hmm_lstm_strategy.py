@@ -182,7 +182,7 @@ def run_backtest(strategy_config: dict, data_path: str, variant: str = "default"
 
         return results_summary
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error running backtest")
         raise
 
@@ -200,7 +200,7 @@ def compare_variants(strategy_config: dict, data_path: str) -> dict:
                 _logger.info("\nRunning %s variant...")
                 variant_results = run_backtest(strategy_config, data_path, variant)
                 results[variant] = variant_results
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error running %s variant", variant)
                 results[variant] = None
 
@@ -271,7 +271,7 @@ def main():
             # Run single variant
             run_backtest(strategy_config, args.data, args.variant)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error")
         raise
 

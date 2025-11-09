@@ -88,8 +88,8 @@ def list_available_configs():
             print(f"   (Error reading config: {e})")
 
     print("\n" + "=" * 80)
-    print(f"\nTo run a test:")
-    print(f"  python run_backtest.py config/backtester/<config_name>.json")
+    print("\nTo run a test:")
+    print("  python run_backtest.py config/backtester/<config_name>.json")
     print()
 
 

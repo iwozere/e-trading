@@ -9,7 +9,6 @@ sys.path.append(os.path.abspath('.'))
 
 import yfinance as yf
 import numpy as np
-import pandas as pd
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -23,17 +22,17 @@ def test_yq_ticker():
         df = yf.download("YQ", period="2y", interval="1d")
         print(f"Downloaded data shape: {df.shape}")
         print(f"Columns: {df.columns.tolist()}")
-        print(f"First few rows:")
+        print("First few rows:")
         print(df.head())
-        print(f"Last few rows:")
+        print("Last few rows:")
         print(df.tail())
 
         # Check for NaN values
-        print(f"NaN counts per column:")
+        print("NaN counts per column:")
         print(df.isna().sum())
 
         # Check data types
-        print(f"Data types:")
+        print("Data types:")
         print(df.dtypes)
 
         # Clean data

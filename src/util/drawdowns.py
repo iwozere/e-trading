@@ -1,6 +1,4 @@
 import yfinance as yf
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
@@ -120,7 +118,7 @@ def print_results(results):
     print(f"Maximum drawdown date: {results['max_drawdown_date'].strftime('%Y-%m-%d')}")
 
     if results['drawdown_events']:
-        print(f"\nDRAWDOWN EVENT DETAILS:")
+        print("\nDRAWDOWN EVENT DETAILS:")
         print(f"{'#':<3} {'Start Date':<12} {'End Date':<12} {'Start Price':<12} {'Min Price':<12} {'Peak Price':<12} {'Price Delta':<12} {'Max Drawdown':<15} {'Days':<8}")
         print("-" * 115)
 
@@ -250,7 +248,7 @@ def print_swing_results(results):
     print(f"Total swing events: {results['total_swing_events']}")
 
     if results['swing_events']:
-        print(f"\nINTRADAY SWING DETAILS:")
+        print("\nINTRADAY SWING DETAILS:")
         print(f"{'#':<3} {'Date':<12} {'High Price':<12} {'Low Price':<12} {'Swing %':<10} {'Swing $':<10}")
         print("-" * 70)
 

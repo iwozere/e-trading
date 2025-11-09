@@ -8,7 +8,7 @@ error handling, and fallback mechanisms.
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch, Mock
 import sys
 from pathlib import Path
@@ -19,7 +19,6 @@ sys.path.append(str(PROJECT_ROOT))
 from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
 from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
 from src.indicators.adapters.fundamentals_adapter import FundamentalsAdapter
-from src.indicators.adapters.base import BaseAdapter
 
 
 class TestAdapterIntegration:

@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
-import logging
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -90,7 +89,7 @@ class FundamentalScreener:
             else:
                 _logger.error("Unknown list type: %s", list_type)
                 return []
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading ticker list %s:", list_type)
             return []
 
@@ -141,7 +140,7 @@ class FundamentalScreener:
                 # Rate limiting - sleep between requests
                 time.sleep(0.1)  # 100ms delay between requests
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error collecting data for %s:", ticker)
                 continue
 
@@ -161,7 +160,7 @@ class FundamentalScreener:
             result_set = await self.indicator_service.compute_for_ticker(request)
             return self._convert_indicator_result_to_fundamentals(ticker, result_set)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting fundamentals from service for %s:", ticker)
             return None
 
@@ -249,7 +248,7 @@ class FundamentalScreener:
 
             return fundamentals
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error converting indicator result to fundamentals for %s:", ticker)
             return None
 
@@ -313,7 +312,7 @@ class FundamentalScreener:
 
             return fundamentals
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting fundamentals for %s:", ticker)
             return None
 
@@ -520,7 +519,7 @@ class FundamentalScreener:
                 confidence_level=confidence_level
             )
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating DCF for %s", fundamentals.ticker)
             return None
 
@@ -645,7 +644,7 @@ class FundamentalScreener:
             return "📊 No undervalued stocks found in the screening criteria."
 
         # Header
-        message = f"📊 **Fundamental Screener Report**\n"
+        message = "📊 **Fundamental Screener Report**\n"
         message += f"🔍 **List Type**: {report.list_type.replace('_', ' ').title()}\n"
         message += f"📈 **Processed**: {report.total_tickers_processed} tickers\n"
         message += f"✅ **With Data**: {report.total_tickers_with_data} tickers\n"

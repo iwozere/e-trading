@@ -10,7 +10,7 @@ import importlib.util
 import inspect
 import pkgutil
 import sys
-from typing import Dict, Any, List, Optional, Type
+from typing import Dict, List, Optional, Type
 from pathlib import Path
 
 from src.notification.channels.base import NotificationChannel, channel_registry
@@ -65,7 +65,7 @@ class PluginLoader:
 
                 plugins.append(f"src.notification.channels.{module_name}")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error discovering built-in plugins:")
 
         return plugins

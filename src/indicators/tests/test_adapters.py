@@ -5,8 +5,6 @@
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-from typing import Dict, Any
 
 from pathlib import Path
 import sys
@@ -15,7 +13,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 # Assuming your project structure - adjust imports as needed
-from src.indicators.adapters.base import BaseAdapter
 from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
 from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
 from src.indicators.adapters.fundamentals_adapter import FundamentalsAdapter
@@ -399,7 +396,7 @@ class TestEdgeCases:
         try:
             result = adapter.compute('rsi', empty_df, empty_inputs, {'timeperiod': 14})
             assert 'value' in result
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError):
             # Acceptable to raise error on empty data
             pass
 

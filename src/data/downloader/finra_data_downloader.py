@@ -13,19 +13,14 @@ import pandas as pd
 import io
 import time
 from datetime import datetime, timedelta, date
-from typing import Optional, Dict, Any, List, Tuple, Union
-import logging
+from typing import Optional, Dict, Any, List, Union
 from pathlib import Path
 import sys
-import zipfile
-import tempfile
-import os
 
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.notification.logger import setup_logger
-from src.data.downloader.base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
 
@@ -99,7 +94,7 @@ class FINRADataDownloader:
             _logger.info("Found %d available FINRA report dates", len(available_dates))
             return sorted(available_dates)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting available dates:")
             return []
 
@@ -290,7 +285,7 @@ class FINRADataDownloader:
             _logger.info("Found FINRA data for %d/%d requested symbols", len(result), len(symbols))
             return result
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting bulk FINRA data:")
             return {}
 
@@ -333,7 +328,7 @@ class FINRADataDownloader:
 
             return metrics
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating short interest metrics:")
             return {}
 
@@ -398,7 +393,7 @@ class FINRADataDownloader:
                 _logger.warning("FINRA connection test failed - no available dates found")
                 return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("FINRA connection test failed:")
             return False
 

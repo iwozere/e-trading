@@ -42,7 +42,6 @@ Usage:
     python src/data/cache/pipeline/step02_calculate_timeframes.py --force-refresh
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -51,12 +50,10 @@ sys.path.append(str(PROJECT_ROOT))
 
 import argparse
 import json
-import gzip
 import time
 from datetime import datetime, timedelta
-from typing import List, Set, Optional, Tuple, Dict, Any
+from typing import List, Set, Optional, Dict, Any
 import pandas as pd
-import numpy as np
 
 from src.notification.logger import setup_logger
 
@@ -177,7 +174,7 @@ class TimeframeCalculator:
 
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading 1m data for %s:", ticker)
             return None
 
@@ -416,7 +413,7 @@ class TimeframeCalculator:
                         ticker, timeframe, len(df), len(yearly_data))
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving %s %s data:", ticker, timeframe)
             return False
 
@@ -541,7 +538,7 @@ class TimeframeCalculator:
                     else:
                         _logger.error("Failed to save %s %s data", ticker, timeframe)
 
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error processing %s %s:", ticker, timeframe)
 
             # Success if we processed timeframes OR if everything was up to date
@@ -768,7 +765,7 @@ Output Structure:
     except KeyboardInterrupt:
         _logger.info("Pipeline Step 2 cancelled by user")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         _logger.exception("Pipeline Step 2 fatal error:")
         sys.exit(1)
 

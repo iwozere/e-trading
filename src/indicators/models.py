@@ -386,8 +386,8 @@ FUNDAMENTAL_INDICATORS = {
 }
 
 # Legacy indicator names for backward compatibility
-LEGACY_INDICATOR_NAMES = {
     # Technical indicators - legacy uppercase names
+LEGACY_INDICATOR_NAMES = {
     "RSI": "rsi",
     "MACD": "macd",
     "MACD_SIGNAL": "macd",  # Multi-output indicator

@@ -158,7 +158,7 @@ def example_3_custom_config():
         # Run backtest
         results = run_backtest_from_config(temp_config_path, generate_report=False)
 
-        print(f"\nResults:")
+        print("\nResults:")
         print(f"  Total Return: {results['results']['total_return']*100:.2f}%")
         print(f"  Total Trades: {results['results'].get('total_trades', 0)}")
         print(f"  Test Status: {'PASSED' if results['success'] else 'FAILED'}")
@@ -169,7 +169,7 @@ def example_3_custom_config():
         # Clean up
         import os
         os.unlink(temp_config_path)
-        print(f"\nCleaned up temporary config")
+        print("\nCleaned up temporary config")
 
 
 def example_4_batch_testing():

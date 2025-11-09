@@ -1,7 +1,6 @@
 import pytest
 import time
-from unittest.mock import Mock, patch
-from datetime import datetime
+from unittest.mock import Mock
 
 @pytest.fixture
 def mock_telegram_service():

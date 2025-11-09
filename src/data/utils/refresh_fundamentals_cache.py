@@ -27,8 +27,7 @@ import argparse
 import sys
 import os
 from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import time
 
 # Add project root to path
@@ -80,7 +79,7 @@ def get_cached_symbols(cache_dir: str) -> List[str]:
                     total_dirs, len(symbols))
         return symbols
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error scanning fundamentals directory:")
         return []
 
@@ -326,7 +325,7 @@ Examples:
             _logger.info("Post-refresh cleanup: %d files removed",
                         cleanup_results['total_removed_files'])
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error during cache refresh:")
         sys.exit(1)
 

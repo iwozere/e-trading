@@ -22,17 +22,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from src.data import (
     # Core components
-    BaseDataSource, DataSourceFactory, DataAggregator,
+    BaseDataSource, DataAggregator,
     get_data_source_factory, register_data_source, create_data_source,
 
     # Utilities
     get_data_handler, validate_ohlcv_data, get_data_quality_score,
-    RateLimiter, DataCache,
-
-    # Phase 3: Advanced Features
-    # StreamMultiplexer, get_stream_multiplexer, create_stream_config,  # Not implemented yet
-    LazyDataLoader, ParallelProcessor, MemoryOptimizer, PerformanceMonitor,
-    get_performance_monitor, get_memory_optimizer, get_data_compressor,
+    LazyDataLoader, ParallelProcessor, get_performance_monitor, get_memory_optimizer, get_data_compressor,
     optimize_dataframe_performance
 )
 

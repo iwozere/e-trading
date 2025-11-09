@@ -123,7 +123,7 @@ class TradingServiceRunner:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error starting trading service:")
             return False
 
@@ -152,7 +152,7 @@ class TradingServiceRunner:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in main run loop:")
             return False
         finally:
@@ -209,7 +209,7 @@ async def main():
         _logger.info("Received keyboard interrupt")
         await runner.stop_service()
         sys.exit(0)
-    except Exception as e:
+    except Exception:
         _logger.exception("Unexpected error:")
         await runner.stop_service()
         sys.exit(1)

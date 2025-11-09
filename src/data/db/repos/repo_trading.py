@@ -135,7 +135,7 @@ class PositionsRepo:
             status="open",
             extra_metadata=(metadata or None),
         )
-        self.s.add(p);
+        self.s.add(p)
         self.s.flush()
         return p
 

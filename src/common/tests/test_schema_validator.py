@@ -8,7 +8,6 @@ with various valid and invalid configurations.
 import unittest
 import json
 import tempfile
-import os
 from pathlib import Path
 import sys
 

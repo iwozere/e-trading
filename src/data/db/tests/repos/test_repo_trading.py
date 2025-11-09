@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from src.data.db.repos.repo_trading import BotsRepo, MetricsRepo, TradesRepo, PositionsRepo
+from src.data.db.repos.repo_trading import BotsRepo, MetricsRepo, PositionsRepo
 from src.data.db.repos.repo_users import UsersRepo
 
 

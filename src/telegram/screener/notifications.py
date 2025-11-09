@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 
@@ -90,7 +89,7 @@ async def process_report_notifications(result, notification_client, message, use
                         data={"reply_to_message_id": message.message_id}
                     )
                     _logger.info("Successfully sent Telegram notification for %s", report['ticker'])
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error sending notification for %s", report['ticker'])
                 # Try fallback without attachment
                 try:
@@ -105,7 +104,7 @@ async def process_report_notifications(result, notification_client, message, use
                         data={"reply_to_message_id": message.message_id}
                     )
                     _logger.info("Successfully sent fallback Telegram notification for %s", report['ticker'])
-                except Exception as e2:
+                except Exception:
                     _logger.exception("Error sending fallback notification for %s", report['ticker'])
 
 
@@ -434,7 +433,7 @@ def send_screener_email(email: str, report, config):
 
         _logger.info("Screener results sent via email to %s", email)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error sending screener email to %s", email)
         raise
 
@@ -833,7 +832,7 @@ async def process_verify_command(message, telegram_user_id, args, notification_c
             recipient_id=user_email if "email" in channels else str(message.chat.id),
             data={"reply_to_message_id": message.message_id}
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in verify command: ")
         await notification_client.send_notification(
             notification_type=MessageType.ERROR,
@@ -889,7 +888,7 @@ async def process_request_approval_command(message, telegram_user_id, args, noti
                 data={"reply_to_message_id": message.message_id}
             )
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error processing approval request: ")
         await notification_client.send_notification(
             notification_type=MessageType.ERROR,
@@ -918,7 +917,7 @@ async def process_language_command(message, telegram_user_id, args, notification
             recipient_id=user_email if "email" in channels else str(message.chat.id),
             data={"reply_to_message_id": message.message_id}
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in language command: ")
         await notification_client.send_notification(
             notification_type=MessageType.ERROR,
@@ -969,10 +968,10 @@ async def process_admin_command(message, telegram_user_id, args, notification_cl
                         channels=["telegram"],
                         recipient_id=str(user_id)
                     )
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error sending broadcast to user %s:", user_id)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in admin command: ")
         await notification_client.send_notification(
             notification_type=MessageType.ERROR,
@@ -1003,7 +1002,7 @@ async def process_alerts_command(message, telegram_user_id, args, notification_c
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in alerts command: ")
         await notification_client.send_notification(
             notification_type=MessageType.ERROR,
@@ -1034,7 +1033,7 @@ async def process_schedules_command(message, telegram_user_id, args, notificatio
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in schedules command: ")
         await notification_client.send_notification(
             notification_type=MessageType.ERROR,
@@ -1063,7 +1062,7 @@ async def process_feedback_command(message, telegram_user_id, args, notification
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in feedback command: ")
         await notification_client.send_notification(
             notification_type=MessageType.ERROR,
@@ -1091,7 +1090,7 @@ async def process_feature_command(message, telegram_user_id, args, notification_
         else:
             await message.answer(f"❌ {result['message']}")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error processing feature command")
         await message.answer("❌ Error processing feature request. Please try again.")
 
@@ -1120,7 +1119,7 @@ async def process_screener_command(message, telegram_user_id, args, notification
         else:
             await message.answer(f"❌ {result['message']}")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error processing screener command")
         await message.answer("❌ Error processing screener request. Please try again.")
 
@@ -1142,7 +1141,7 @@ async def process_unknown_command(message, telegram_user_id, notification_client
             telegram_chat_id=message.chat.id,
             reply_to_message_id=message.message_id
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in unknown command handler: ")
         await notification_client.send_notification(
             notification_type=MessageType.ERROR,

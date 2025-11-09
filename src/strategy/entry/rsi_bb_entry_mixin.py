@@ -58,7 +58,6 @@ This strategy combines mean reversion (RSI + BB) to identify potential reversal 
 
 from typing import Any, Dict, Optional
 
-import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
 
@@ -185,7 +184,7 @@ class RSIBBEntryMixin(BaseEntryMixin):
             logger.debug("Legacy indicators initialized: RSI(period=%d), BB(period=%d, dev=%s)",
                         rsi_period, bb_period, bb_dev_factor)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -333,6 +332,6 @@ class RSIBBEntryMixin(BaseEntryMixin):
 
             return entry_signal
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_enter: ")
             return False

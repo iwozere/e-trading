@@ -25,7 +25,6 @@ from pathlib import Path
 
 import backtrader as bt
 
-from src.trading.base_trading_bot import BaseTradingBot
 from src.trading.broker.broker_factory import get_broker
 from src.trading.broker.broker_manager import BrokerManager
 from src.trading.strategy_handler import strategy_handler
@@ -291,7 +290,7 @@ class StrategyInstance:
         try:
             # Use StrategyHandler for dynamic strategy loading
             return strategy_handler.get_strategy_class(strategy_type)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting strategy class for %s:", strategy_type)
             # StrategyHandler already handles fallback to CustomStrategy
             raise
@@ -356,7 +355,7 @@ class StrategyInstance:
                         data_config.get('interval'))
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating data feed for %s:", self.name)
             return False
 
@@ -406,7 +405,7 @@ class StrategyInstance:
             _logger.info("✅ Backtrader setup complete for %s", self.name)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error setting up Backtrader for %s:", self.name)
             return False
 
@@ -487,7 +486,7 @@ class StrategyInstance:
 
                 time.sleep(30)  # Check every 30 seconds
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in data feed monitor for %s:", self.name)
                 time.sleep(60)
 
@@ -524,7 +523,7 @@ class StrategyInstance:
                     except RuntimeError:
                         pass
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error reconnecting data feed for %s:", self.name)
 
     def _heartbeat_loop(self):
@@ -561,7 +560,7 @@ class StrategyInstance:
                 # Sleep for heartbeat interval
                 time.sleep(self.heartbeat_interval)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in heartbeat loop for %s:", self.name)
                 time.sleep(self.heartbeat_interval)
 
@@ -603,7 +602,7 @@ class StrategyInstance:
                 except Exception as e:
                     _logger.warning("Failed to update performance metrics: %s", e)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating performance metrics for %s:", self.name)
 
     def record_trade(self, trade_data: Dict[str, Any]):
@@ -666,7 +665,7 @@ class StrategyInstance:
             except Exception as e:
                 _logger.error("Failed to record trade in database: %s", e)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error recording trade for %s:", self.name)
 
     def on_order_executed(self, order_type: str, price: float, size: float, timestamp: Optional[datetime] = None):
@@ -731,7 +730,7 @@ class StrategyInstance:
                     # No event loop running, schedule it differently
                     _logger.debug("No event loop for notification, skipping")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in order execution callback for %s:", self.name)
 
     async def _send_trade_notification(self, order_type: str, price: float, size: float, pnl: Optional[float] = None):
@@ -810,7 +809,7 @@ class StrategyInstance:
 
             _logger.info("Sent %s notification for %s", order_type.upper(), self.name)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error sending trade notification for %s:", self.name)
 
     async def _send_error_notification(self, error_message: str, error_type: str = "ERROR"):
@@ -868,7 +867,7 @@ class StrategyInstance:
 
             _logger.info("Sent error notification for %s", self.name)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error sending error notification for %s:", self.name)
 
     def _get_user_notification_details(self) -> Optional[Dict[str, Any]]:
@@ -932,7 +931,7 @@ class StrategyInstance:
                     'channels': channels
                 }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error fetching user notification details for bot %s:", self.name)
             return None
 
@@ -1010,7 +1009,7 @@ class StrategyManager:
             _logger.info("Successfully loaded %d strategies", len(self.strategy_instances))
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load strategies from config:")
             return False
 
@@ -1166,7 +1165,7 @@ class StrategyManager:
 
                 await asyncio.sleep(60)  # Monitor every minute
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in strategy monitoring:")
                 await asyncio.sleep(10)
 
@@ -1269,7 +1268,7 @@ class StrategyManager:
 
             return config
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error recovering state for bot %d:", bot_id)
             return config
 
@@ -1562,7 +1561,7 @@ class StrategyManager:
 
             _logger.info("✅ Enhanced Strategy Manager shutdown complete")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error during shutdown:")
             # Don't mark clean shutdown if errors occurred
             _logger.warning("⚠️ Shutdown completed with errors - crash marker not removed")

@@ -4,7 +4,6 @@ Test script for FMP Integration with Enhanced Screener.
 This script tests the FMP-based screening functionality.
 """
 
-import os
 import sys
 import json
 from pathlib import Path
@@ -108,7 +107,7 @@ def test_fmp_integration():
 
         # Parse config
         config = parse_screener_config(fmp_config_json)
-        print(f"✅ FMP screener config parsed successfully")
+        print("✅ FMP screener config parsed successfully")
         print(f"   Screener type: {config.screener_type}")
         print(f"   List type: {config.list_type}")
         print(f"   FMP criteria: {len(config.fmp_criteria) if config.fmp_criteria else 0} criteria")
@@ -154,17 +153,17 @@ def test_fmp_integration():
         if report.error:
             print(f"⚠️  Enhanced screener with FMP returned error: {report.error}")
         else:
-            print(f"✅ Enhanced screener with FMP completed successfully")
+            print("✅ Enhanced screener with FMP completed successfully")
             print(f"   Total processed: {report.total_tickers_processed}")
             print(f"   Results found: {len(report.top_results)}")
 
             # Check if FMP results are included
             if hasattr(report, 'fmp_results') and report.fmp_results:
-                print(f"   FMP results included: Yes")
+                print("   FMP results included: Yes")
                 fmp_criteria = report.fmp_results.get('fmp_criteria', {})
                 print(f"   FMP criteria used: {list(fmp_criteria.keys())}")
             else:
-                print(f"   FMP results included: No (fallback to traditional screening)")
+                print("   FMP results included: No (fallback to traditional screening)")
 
     except Exception as e:
         print(f"❌ Enhanced screener with FMP test failed: {e}")
@@ -308,11 +307,11 @@ def test_fmp_config_examples():
             # Validate config
             is_valid, errors = validate_screener_config(config_json)
             if is_valid:
-                print(f"✅ Validation passed")
+                print("✅ Validation passed")
 
                 # Parse config
                 config = parse_screener_config(config_json)
-                print(f"✅ Parsing successful")
+                print("✅ Parsing successful")
                 print(f"   FMP criteria: {len(config.fmp_criteria) if config.fmp_criteria else 0}")
                 print(f"   FMP strategy: {config.fmp_strategy or 'None'}")
 

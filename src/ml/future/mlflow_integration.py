@@ -67,7 +67,7 @@ class MLflowManager:
             else:
                 mlflow.set_experiment(self.experiment_name)
                 logger.info("Using existing experiment: %s", self.experiment_name)
-        except Exception as e:
+        except Exception:
             logger.exception("Error setting up experiment: ")
             raise
 
@@ -89,7 +89,7 @@ class MLflowManager:
             logger.info("Started MLflow run: %s", run_id)
             return run_id
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error starting MLflow run: ")
             raise
 
@@ -98,7 +98,7 @@ class MLflowManager:
         try:
             mlflow.end_run()
             logger.info("Ended MLflow run")
-        except Exception as e:
+        except Exception:
             logger.exception("Error ending MLflow run: ")
             raise
 
@@ -107,7 +107,7 @@ class MLflowManager:
         try:
             mlflow.log_params(params)
             logger.info("Logged %d parameters", len(params))
-        except Exception as e:
+        except Exception:
             logger.exception("Error logging parameters: ")
             raise
 
@@ -116,7 +116,7 @@ class MLflowManager:
         try:
             mlflow.log_metrics(metrics, step=step)
             logger.info("Logged %d metrics", len(metrics))
-        except Exception as e:
+        except Exception:
             logger.exception("Error logging metrics: ")
             raise
 
@@ -152,7 +152,7 @@ class MLflowManager:
 
             logger.info("Logged model: %s (type: %s)", model_name, model_type)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error logging model: ")
             raise
 
@@ -186,7 +186,7 @@ class MLflowManager:
             logger.info("Registered model: %s v%s -> %s", model_name, model_version.version, stage)
             return model_version.version
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error registering model: ")
             raise
 
@@ -233,7 +233,7 @@ class MLflowManager:
 
             raise ValueError(f"Could not load model: {model_name}")
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error loading model: ")
             raise
 
@@ -259,7 +259,7 @@ class MLflowManager:
                 }
                 for model in models
             ]
-        except Exception as e:
+        except Exception:
             logger.exception("Error listing models: ")
             return []
 
@@ -277,7 +277,7 @@ class MLflowManager:
                 }
                 for v in versions
             ]
-        except Exception as e:
+        except Exception:
             logger.exception("Error getting model versions: ")
             return []
 
@@ -290,7 +290,7 @@ class MLflowManager:
                 stage=stage
             )
             logger.info("Promoted model %s v%s to %s", model_name, version, stage)
-        except Exception as e:
+        except Exception:
             logger.exception("Error promoting model: ")
             raise
 
@@ -303,7 +303,7 @@ class MLflowManager:
                 stage="Archived"
             )
             logger.info("Archived model %s v%s", model_name, version)
-        except Exception as e:
+        except Exception:
             logger.exception("Error archiving model: ")
             raise
 
@@ -312,7 +312,7 @@ class MLflowManager:
         try:
             self.client.delete_registered_model(model_name)
             logger.info("Deleted model: %s", model_name)
-        except Exception as e:
+        except Exception:
             logger.exception("Error deleting model: ")
             raise
 
@@ -343,7 +343,7 @@ class ModelDeployer:
             else:
                 raise ValueError(f"Unsupported deployment type: {deployment_type}")
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error deploying model: ")
             return False
 
@@ -378,7 +378,7 @@ class ModelDeployer:
             logger.info("Successfully deployed %s v%s", model_name, model_version)
             return True
 
-        except Exception as e:
+        except Exception:
             logger.exception("Rolling deployment failed: ")
             # Rollback
             self._rollback_deployment(model_name)
@@ -418,7 +418,7 @@ class ModelDeployer:
             logger.info("Successfully deployed %s v%s to %s", model_name, model_version, new_env)
             return True
 
-        except Exception as e:
+        except Exception:
             logger.exception("Blue-green deployment failed: ")
             return False
 
@@ -485,7 +485,7 @@ class ModelDeployer:
             else:
                 return False
 
-        except Exception as e:
+        except Exception:
             logger.exception("Deployment test failed: ")
             return False
 
@@ -556,7 +556,7 @@ class ExperimentManager:
             logger.info("Created experiment: %s (ID: %s)", experiment_name, experiment_id)
             return experiment_id
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error creating experiment: ")
             raise
 
@@ -593,7 +593,7 @@ class ExperimentManager:
 
             return pd.DataFrame(comparison_data)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error comparing runs: ")
             return pd.DataFrame()
 
@@ -615,7 +615,7 @@ class ExperimentManager:
                 "parameters": best_run["parameters"]
             }
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error getting best run: ")
             return {}
 
@@ -634,6 +634,6 @@ class ExperimentManager:
                 logger.warning("No runs found for experiment: %s", experiment_name)
                 return False
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error exporting experiment: ")
             return False

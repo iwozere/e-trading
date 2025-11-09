@@ -6,7 +6,6 @@ Enhanced Trading System Setup
 This script sets up the enhanced multi-strategy trading system.
 """
 
-import os
 import sys
 from pathlib import Path
 import json

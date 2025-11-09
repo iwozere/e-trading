@@ -6,9 +6,8 @@ channel fallback routing, dead letter queue, and retry mechanisms.
 """
 
 import pytest
-import asyncio
 from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock
 
 from src.notification.service.fallback_manager import (
     FallbackManager, FallbackRule, FallbackStrategy, MessageFailureReason, FailedMessage

@@ -105,7 +105,6 @@ class Config:
 ## IMPROVEMENT ##: Using pathlib for cleaner path management
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
-from src.indicators.service import get_unified_indicator_service
 from src.notification.logger import setup_logger
 
 # Helper function to replace calculate_technicals_from_df for ML pipeline
@@ -125,7 +124,6 @@ def calculate_technicals_for_ml(df: pd.DataFrame, indicators: list, indicator_pa
     try:
         # Use TA-Lib directly for ML pipeline since we need the full DataFrame with indicators
         import talib
-        import numpy as np
 
         high = df_copy['high'].values.astype(float)
         low = df_copy['low'].values.astype(float)
@@ -151,7 +149,7 @@ def calculate_technicals_for_ml(df: pd.DataFrame, indicators: list, indicator_pa
 
         return df_copy, None
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error calculating technical indicators for ML: ")
         return None, None
 
@@ -437,7 +435,7 @@ def run_all_csvs_in_data():
         _logger.info("\n%s Processing %s %s")
         try:
             run_experiment(csv_file)
-        except Exception as e:
+        except Exception:
             _logger.exception("ERROR processing %s", csv_file.name)
 
 if __name__ == "__main__":

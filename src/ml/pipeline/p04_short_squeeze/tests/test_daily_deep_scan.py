@@ -8,9 +8,8 @@ scoring, and data storage.
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timedelta, date
-from dataclasses import dataclass
+from unittest.mock import Mock, patch
+from datetime import datetime, date
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]

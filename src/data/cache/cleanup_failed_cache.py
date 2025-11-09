@@ -15,17 +15,15 @@ Usage:
 
 import argparse
 import sys
-import os
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 import pandas as pd
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.data.utils.file_based_cache import configure_file_cache
 from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score
 
 # Import cache directory setting
@@ -140,7 +138,7 @@ def cleanup_invalid_files(cache_dir: str, dry_run: bool = True) -> Dict[str, Any
         print("✅ No invalid files found. Cache is clean!")
         return scan_results
 
-    print(f"📊 Cleanup Summary:")
+    print("📊 Cleanup Summary:")
     print(f"  📁 Total files: {scan_results['total_files']}")
     print(f"  ✅ Valid files: {scan_results['valid_files']}")
     print(f"  ❌ Invalid files: {scan_results['invalid_files']}")
@@ -179,7 +177,7 @@ def cleanup_invalid_files(cache_dir: str, dry_run: bool = True) -> Dict[str, Any
                 print(f"  ❌ Error removing {invalid_file['file_path']}: {str(e)}")
 
         print()
-        print(f"🎉 Cleanup completed!")
+        print("🎉 Cleanup completed!")
         print(f"  📁 Files removed: {removed_count}")
         print(f"  💾 Space freed: {removed_size / (1024*1024):.2f} MB")
 

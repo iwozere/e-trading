@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 # Add the project root to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from src.data import DataManager, get_data_manager
+from src.data import get_data_manager
 
 # Import cache directory setting
 from config.donotshare.donotshare import DATA_CACHE_DIR
@@ -55,7 +55,7 @@ def main():
         print(f"✅ Retrieved {len(btc_data)} rows of BTCUSDT data")
         print(f"   Date range: {btc_data.index[0]} to {btc_data.index[-1]}")
         print(f"   Columns: {list(btc_data.columns)}")
-        print(f"   Sample data:")
+        print("   Sample data:")
         print(btc_data.head(3))
 
     except Exception as e:
@@ -73,7 +73,7 @@ def main():
 
         print(f"✅ Retrieved {len(aapl_data)} rows of AAPL data")
         print(f"   Date range: {aapl_data.index[0]} to {aapl_data.index[-1]}")
-        print(f"   Sample data:")
+        print("   Sample data:")
         print(aapl_data.head(3))
 
     except Exception as e:
@@ -109,9 +109,9 @@ def main():
         )
 
         if live_feed:
-            print(f"✅ Created live feed for BTCUSDT 1m")
+            print("✅ Created live feed for BTCUSDT 1m")
             print(f"   Feed type: {type(live_feed).__name__}")
-            print(f"   Lookback bars: 100")
+            print("   Lookback bars: 100")
         else:
             print("❌ Failed to create live feed")
 
@@ -122,7 +122,7 @@ def main():
     print("\n6. Cache statistics...")
     try:
         cache_stats = dm.get_cache_stats()
-        print(f"✅ Cache statistics:")
+        print("✅ Cache statistics:")
         for key, value in cache_stats.items():
             print(f"   {key}: {value}")
 

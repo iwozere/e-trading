@@ -29,7 +29,7 @@ def run_unit_tests():
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
-    print(f"\nUnit Tests Results:")
+    print("\nUnit Tests Results:")
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
@@ -50,7 +50,7 @@ def run_integration_tests():
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
-    print(f"\nIntegration Tests Results:")
+    print("\nIntegration Tests Results:")
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
@@ -71,7 +71,7 @@ def run_performance_tests():
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
-    print(f"\nPerformance Tests Results:")
+    print("\nPerformance Tests Results:")
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
     print(f"Errors: {len(result.errors)}")
@@ -119,79 +119,79 @@ def generate_test_report(unit_result, integration_result, performance_result):
     # Overall success rate
     success_rate = (total_success / total_tests * 100) if total_tests > 0 else 0
 
-    print(f"Overall Results:")
+    print("Overall Results:")
     print(f"  Total Tests: {total_tests}")
     print(f"  Successful: {total_success}")
     print(f"  Failures: {total_failures}")
     print(f"  Errors: {total_errors}")
     print(f"  Success Rate: {success_rate:.1f}%")
 
-    print(f"\nBreakdown by Test Type:")
+    print("\nBreakdown by Test Type:")
     print(f"  Unit Tests: {unit_result.testsRun} run, {len(unit_result.failures)} failures, {len(unit_result.errors)} errors")
     print(f"  Integration Tests: {integration_result.testsRun} run, {len(integration_result.failures)} failures, {len(integration_result.errors)} errors")
     print(f"  Performance Tests: {performance_result.testsRun} run, {len(performance_result.failures)} failures, {len(performance_result.errors)} errors")
 
     # Detailed failure/error reporting
     if total_failures > 0 or total_errors > 0:
-        print(f"\nDetailed Issues:")
+        print("\nDetailed Issues:")
 
         if unit_result.failures:
-            print(f"  Unit Test Failures:")
+            print("  Unit Test Failures:")
             for test, traceback in unit_result.failures:
                 print(f"    - {test}: {traceback.split('AssertionError:')[-1].strip()}")
 
         if unit_result.errors:
-            print(f"  Unit Test Errors:")
+            print("  Unit Test Errors:")
             for test, traceback in unit_result.errors:
                 print(f"    - {test}: {traceback.split('Exception:')[-1].strip()}")
 
         if integration_result.failures:
-            print(f"  Integration Test Failures:")
+            print("  Integration Test Failures:")
             for test, traceback in integration_result.failures:
                 print(f"    - {test}: {traceback.split('AssertionError:')[-1].strip()}")
 
         if integration_result.errors:
-            print(f"  Integration Test Errors:")
+            print("  Integration Test Errors:")
             for test, traceback in integration_result.errors:
                 print(f"    - {test}: {traceback.split('Exception:')[-1].strip()}")
 
         if performance_result.failures:
-            print(f"  Performance Test Failures:")
+            print("  Performance Test Failures:")
             for test, traceback in performance_result.failures:
                 print(f"    - {test}: {traceback.split('AssertionError:')[-1].strip()}")
 
         if performance_result.errors:
-            print(f"  Performance Test Errors:")
+            print("  Performance Test Errors:")
             for test, traceback in performance_result.errors:
                 print(f"    - {test}: {traceback.split('Exception:')[-1].strip()}")
 
     # Phase 4 specific checks
-    print(f"\nPhase 4 Specific Checks:")
+    print("\nPhase 4 Specific Checks:")
 
     # Check if file-based cache is working
     try:
         from src.data import FileBasedCache, get_file_cache
-        print(f"  ✓ File-based cache system: Available")
+        print("  ✓ File-based cache system: Available")
     except ImportError as e:
         print(f"  ✗ File-based cache system: Import error - {e}")
 
     # Check if Redis dependency is removed
     try:
         from src.data import RedisCache
-        print(f"  ✗ Redis dependency: Still present (should be removed)")
+        print("  ✗ Redis dependency: Still present (should be removed)")
     except ImportError:
-        print(f"  ✓ Redis dependency: Successfully removed")
+        print("  ✓ Redis dependency: Successfully removed")
 
     # Test enhanced CSV cache functionality
-    print(f"\nEnhanced CSV Cache Functionality:")
+    print("\nEnhanced CSV Cache Functionality:")
     try:
         from src.data.utils.file_based_cache import (
             CSVFormatConventions, SafeCSVAppender, SmartDataAppender, CacheMetadata
         )
-        print(f"  ✓ CSV Format Conventions: Available")
-        print(f"  ✓ Safe CSV Appender: Available")
-        print(f"  ✓ Smart Data Appender: Available")
-        print(f"  ✓ Enhanced Cache Metadata: Available")
+        print("  ✓ CSV Format Conventions: Available")
+        print("  ✓ Safe CSV Appender: Available")
+        print("  ✓ Smart Data Appender: Available")
+        print("  ✓ Enhanced Cache Metadata: Available")
 
         # Test basic functionality
         test_df = pd.DataFrame({
@@ -231,20 +231,20 @@ def generate_test_report(unit_result, integration_result, performance_result):
                 if enhanced_csv_tests:
                     print(f"    - Enhanced CSV Cache tests: {len(enhanced_csv_tests)} files found")
                 else:
-                    print(f"    - Enhanced CSV Cache tests: Not found")
+                    print("    - Enhanced CSV Cache tests: Not found")
         else:
             print(f"  ✗ {test_dir.capitalize()} tests: Directory not found")
 
     # Final verdict
-    print(f"\nFinal Verdict:")
+    print("\nFinal Verdict:")
     if success_rate >= 95:
-        print(f"  🟢 EXCELLENT: Phase 4 implementation is ready for production")
+        print("  🟢 EXCELLENT: Phase 4 implementation is ready for production")
     elif success_rate >= 80:
-        print(f"  🟡 GOOD: Phase 4 implementation needs minor fixes")
+        print("  🟡 GOOD: Phase 4 implementation needs minor fixes")
     elif success_rate >= 60:
-        print(f"  🟠 FAIR: Phase 4 implementation needs significant work")
+        print("  🟠 FAIR: Phase 4 implementation needs significant work")
     else:
-        print(f"  🔴 POOR: Phase 4 implementation needs major fixes")
+        print("  🔴 POOR: Phase 4 implementation needs major fixes")
 
     return total_failures == 0 and total_errors == 0
 

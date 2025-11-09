@@ -10,32 +10,23 @@ import os
 import tempfile
 import shutil
 import time
-import cProfile
-import pstats
 from pathlib import Path
-from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 import unittest
-import threading
 import concurrent.futures
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from src.data import (
-    get_data_handler, validate_ohlcv_data, get_data_quality_score,
-    optimize_dataframe_performance, compress_dataframe_efficiently,
-    get_performance_monitor, get_memory_optimizer, get_data_compressor,
-    ParallelProcessor
+    validate_ohlcv_data, optimize_dataframe_performance, compress_dataframe_efficiently,
+    get_performance_monitor, ParallelProcessor
 )
 
 # Import new unified cache system
-from src.data.cache.unified_cache import UnifiedCache, configure_unified_cache
+from src.data.cache.unified_cache import configure_unified_cache
 
-from src.data.utils.file_based_cache import (
-    TimeBasedInvalidation, VersionBasedInvalidation
-)
 
 
 class PerformanceBenchmarks(unittest.TestCase):

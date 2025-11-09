@@ -10,18 +10,16 @@ import tempfile
 import shutil
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 import pandas as pd
-import numpy as np
 
 # Add src to path for imports
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
 from src.data.utils.file_based_cache import (
-    FileBasedCache, FileCacheCompressor, FileCacheInvalidationStrategy,
-    TimeBasedInvalidation, VersionBasedInvalidation,
+    FileBasedCache, FileCacheCompressor, TimeBasedInvalidation, VersionBasedInvalidation,
     FileCacheMetrics
 )
 

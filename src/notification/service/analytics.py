@@ -5,16 +5,12 @@ Comprehensive analytics system for tracking delivery performance, success rates,
 response times, and trends across channels, users, and time periods.
 """
 
-import asyncio
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
-from collections import defaultdict
 
-from src.data.db.models.model_notification import MessageStatus, MessagePriority
-from src.notification.service.delivery_tracker import DeliveryResult, DeliveryStatus
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 
@@ -293,7 +289,7 @@ class NotificationAnalytics:
                     }
                 }
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get delivery rates:")
             raise
 
@@ -378,7 +374,7 @@ class NotificationAnalytics:
                     "channel_breakdown": channel_breakdown
                 }
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get response time analysis:")
             raise
 
@@ -426,7 +422,7 @@ class NotificationAnalytics:
                     }
                 }
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get aggregated statistics:")
             raise
 
@@ -507,7 +503,7 @@ class NotificationAnalytics:
                     max_value=max_value
                 )
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to perform trend analysis:")
             raise
 
@@ -591,7 +587,7 @@ class NotificationAnalytics:
                     }
                 }
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get channel performance comparison:")
             raise
 
@@ -612,7 +608,7 @@ class NotificationAnalytics:
                 "total_messages": delivery_stats.get("total_deliveries", 0),
                 "by_status": delivery_stats.get("status_counts", {})
             }
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get message statistics:")
             # Return default values on error
             return {
@@ -645,7 +641,7 @@ class NotificationAnalytics:
 
             return result
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to calculate channel rates:")
             return {}
 
@@ -660,7 +656,7 @@ class NotificationAnalytics:
             )
             return user_rates
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to calculate user rates:")
             return {
                 "user_id": user_id,
@@ -682,7 +678,7 @@ class NotificationAnalytics:
             )
             return response_times
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get response time data:")
             return []
 
@@ -732,7 +728,7 @@ class NotificationAnalytics:
 
             return result
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get time series data:")
             return []
 
@@ -826,7 +822,7 @@ class NotificationAnalytics:
             channels = repo.delivery_status.get_active_channels(cutoff_date=cutoff_date)
             return channels
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get active channels:")
             return []
 

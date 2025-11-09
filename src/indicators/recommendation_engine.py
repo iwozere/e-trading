@@ -19,7 +19,7 @@ Public API:
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Any, Optional
+from typing import Dict, Tuple, Any
 from dataclasses import dataclass
 
 from src.indicators.models import (

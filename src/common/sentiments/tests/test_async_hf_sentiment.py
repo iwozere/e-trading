@@ -11,8 +11,7 @@ Tests cover:
 import pytest
 import pytest_asyncio
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import Mock, AsyncMock, patch
 from pathlib import Path
 import sys
 

@@ -3,9 +3,8 @@ Tests for notification routes
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from fastapi.testclient import TestClient
-from datetime import datetime, timezone
 
 # Mock the notification service calls for testing
 @pytest.fixture

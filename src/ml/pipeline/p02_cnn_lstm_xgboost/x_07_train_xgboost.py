@@ -80,7 +80,7 @@ class XGBoostTrainer:
         try:
             with open(best_params_path, 'r') as f:
                 return json.load(f)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load best parameters:")
             raise
 
@@ -353,7 +353,7 @@ def main():
         print(f"Test R-squared: {metrics['test']['r_squared']:.4f}")
         print("="*50)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error during XGBoost training:")
         sys.exit(1)
 

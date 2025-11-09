@@ -8,9 +8,8 @@ Ensures all required fields are present and valid before bot startup.
 This module now delegates to schema_validator.py for JSON Schema-based validation.
 """
 
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 import json
-from decimal import Decimal
 from src.notification.logger import setup_logger
 from src.trading.services.schema_validator import validate_bot_configuration
 

@@ -10,7 +10,6 @@ import aiohttp
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime, timezone
 from enum import Enum
-import json
 from pathlib import Path
 import sys
 
@@ -81,7 +80,7 @@ class CircuitBreaker:
             result = func(*args, **kwargs)
             self._on_success()
             return result
-        except Exception as e:
+        except Exception:
             self._on_failure()
             raise
 
@@ -337,7 +336,7 @@ class NotificationServiceClient:
                     _logger.error("Database fallback failed: %s", db_error)
                 return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to send notification:")
             return False
 
@@ -421,7 +420,7 @@ class NotificationServiceClient:
                 _logger.info("Created notification message %s directly in database via fallback", message.id)
                 # Commit is handled automatically by the UOW context manager
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to insert notification directly to database:")
             raise
 
@@ -527,7 +526,7 @@ class NotificationServiceClient:
             return response
         except ValueError:
             return None
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get message status:")
             return None
 
@@ -544,7 +543,7 @@ class NotificationServiceClient:
         try:
             response = await self._make_request("GET", f"/api/notifications/{message_id}/delivery")
             return response
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get delivery status:")
             return []
 
@@ -586,7 +585,7 @@ class NotificationServiceClient:
 
             response = await self._make_request("GET", "/api/notifications", params=params)
             return response
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to list messages:")
             return []
 
@@ -614,7 +613,7 @@ class NotificationServiceClient:
         try:
             response = await self._make_request("GET", "/api/notifications/channels/health")
             return response
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get channels health:")
             return []
 

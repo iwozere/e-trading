@@ -8,15 +8,12 @@ Includes Schedule and Run models with proper relationships and validation.
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any
-from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, BigInteger,
     CheckConstraint, UniqueConstraint, Index, func
 )
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 from src.data.db.core.json_types import JsonType
-from sqlalchemy.dialects import postgresql, sqlite
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from src.data.db.core.base import Base

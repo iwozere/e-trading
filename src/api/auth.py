@@ -21,7 +21,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.api.services.webui_app_service import webui_app_service
 from src.data.db.models.model_users import User
-from src.data.db.models.model_webui import WebUIAuditLog
 from src.data.db.services.database_service import get_database_service
 from src.data.db.services import users_service
 from src.notification.logger import setup_logger
@@ -228,7 +227,7 @@ def get_current_user(
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Authentication error:")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -300,5 +299,5 @@ def log_user_action(
             user_agent=user_agent
         )
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Failed to log user action:")

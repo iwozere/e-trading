@@ -6,7 +6,7 @@ Provides the interface that all channel implementations must follow.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -381,7 +381,7 @@ class ChannelRegistry:
             ValueError: If channel class is invalid
         """
         if not issubclass(channel_class, NotificationChannel):
-            raise ValueError(f"Channel class must inherit from NotificationChannel")
+            raise ValueError("Channel class must inherit from NotificationChannel")
 
         self._channels[channel_name] = channel_class
         self._logger.info("Registered channel plugin: %s", channel_name)

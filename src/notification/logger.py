@@ -5,12 +5,10 @@ This module sets up application-wide logging configuration and exposes a logger 
 """
 
 import logging
-import os
 import sys
 import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-import threading
 from contextvars import ContextVar
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

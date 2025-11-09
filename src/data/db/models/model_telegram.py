@@ -1,9 +1,9 @@
 # model_telegram.py  (aligned to DB)
 
 from __future__ import annotations
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import (
-    String, Integer, Boolean, DateTime, Text, ForeignKey, Numeric, Float, Index, func
+    String, Integer, Boolean, DateTime, Text, ForeignKey, Index, func
 )
 from src.data.db.core.base import Base
 

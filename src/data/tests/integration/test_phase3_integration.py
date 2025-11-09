@@ -8,13 +8,11 @@ This script tests the advanced features implemented in Phase 3:
 """
 
 import sys
-import os
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import numpy as np
 import time
-import threading
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -26,8 +24,6 @@ from src.data import (
     # create_stream_config,    # Not implemented yet
     LazyDataLoader,
     ParallelProcessor,
-    MemoryOptimizer,
-    PerformanceMonitor,
     get_performance_monitor,
     get_memory_optimizer,
     get_data_compressor,
@@ -288,7 +284,7 @@ def test_integration_features():
 
         # Get performance summary
         summary = monitor.get_summary()
-        print(f"✓ Integration workflow completed:")
+        print("✓ Integration workflow completed:")
         for operation, stats in summary.items():
             print(f"  - {operation}: {stats['avg_duration_ms']:.1f}ms avg")
 

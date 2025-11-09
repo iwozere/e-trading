@@ -1,9 +1,8 @@
 # model_users.py  (patched)
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Integer, String, DateTime, ForeignKey, text, UniqueConstraint, Index, CheckConstraint
 from src.data.db.core.json_types import JsonType
 from typing import Dict, Any, Optional
-from datetime import datetime
 
 from src.data.db.core.base import Base
 

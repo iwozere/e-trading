@@ -23,8 +23,7 @@ from datetime import datetime
 import optuna
 import talib
 import sys
-from typing import Dict, List, Optional, Tuple
-from concurrent.futures import ProcessPoolExecutor
+from typing import Dict
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]
@@ -509,7 +508,7 @@ def main():
 
         _logger.info("Indicator optimization completed!")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Indicator optimization failed: ")
         raise
 

@@ -4,7 +4,6 @@ Demo script for FMP Data Downloader functionality.
 This script demonstrates how to use the FMP API for stock screening.
 """
 
-import os
 import sys
 import json
 from pathlib import Path

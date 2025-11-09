@@ -10,7 +10,6 @@ import time
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from collections import defaultdict
 from pathlib import Path
 import sys
 import threading
@@ -21,7 +20,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from .adaptive_limiter import AdaptiveRateLimiter, AdaptiveConfig
-from .rate_limiter import RateLimitConfig
 
 _logger = setup_logger(__name__)
 

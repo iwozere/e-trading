@@ -5,10 +5,10 @@ Repository layer for notification service operations.
 Provides data access methods for messages, delivery status, channel health, rate limits, and channel configs.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc, func, text
+from sqlalchemy import and_, or_, desc, asc, text
 from sqlalchemy.exc import IntegrityError
 
 from src.data.db.models.model_notification import (
@@ -56,7 +56,7 @@ class MessageRepository:
             self.session.flush()  # Get the ID without committing
             _logger.info("Created message %s with type %s", message.id, message.message_type)
             return message
-        except IntegrityError as e:
+        except IntegrityError:
             self.session.rollback()
             _logger.exception("Failed to create message:")
             raise
@@ -317,7 +317,7 @@ class MessageRepository:
 
             return messages
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error claiming messages with lock:")
             self.session.rollback()
             return []
@@ -383,7 +383,7 @@ class MessageRepository:
 
             return updated_rows
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error cleaning up stale locks:")
             return 0
 
@@ -416,7 +416,7 @@ class DeliveryStatusRepository:
             self.session.flush()
             _logger.info("Created delivery status %s for message %s", delivery_status.id, delivery_status.message_id)
             return delivery_status
-        except IntegrityError as e:
+        except IntegrityError:
             self.session.rollback()
             _logger.exception("Failed to create delivery status:")
             raise
@@ -665,7 +665,7 @@ class DeliveryStatusRepository:
         Returns:
             List of time series data points
         """
-        from sqlalchemy import func, extract
+        from sqlalchemy import func
 
         # Determine date truncation based on granularity
         if granularity == "hourly":
@@ -864,7 +864,7 @@ class ChannelConfigRepository:
             self.session.flush()
             _logger.info("Created channel config for %s", config.channel)
             return config
-        except IntegrityError as e:
+        except IntegrityError:
             self.session.rollback()
             _logger.exception("Failed to create channel config:")
             raise

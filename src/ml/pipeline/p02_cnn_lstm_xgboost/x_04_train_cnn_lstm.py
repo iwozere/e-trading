@@ -19,12 +19,10 @@ import torch.optim as optim
 import numpy as np
 import yaml
 import json
-import pickle
 from pathlib import Path
 import sys
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Tuple, Any
 import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
@@ -157,7 +155,7 @@ class CNNLSTMTrainer:
         try:
             with open(best_params_path, 'r') as f:
                 return json.load(f)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load best parameters:")
             raise
 

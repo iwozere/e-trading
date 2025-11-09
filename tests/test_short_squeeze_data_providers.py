@@ -8,9 +8,7 @@ Tests include mock API responses, rate limiting, and error handling scenarios.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
-import json
-from datetime import datetime, timedelta
+from unittest.mock import Mock, patch
 from pathlib import Path
 import sys
 
@@ -522,7 +520,7 @@ def run_tests():
 
     # Print summary
     print("\n" + "=" * 60)
-    print(f"📊 Test Results:")
+    print("📊 Test Results:")
     print(f"   Tests run: {result.testsRun}")
     print(f"   Failures: {len(result.failures)}")
     print(f"   Errors: {len(result.errors)}")

@@ -8,19 +8,18 @@ through appropriate channels.
 
 import asyncio
 from typing import List, Dict, Any, Optional, Set
-from datetime import datetime, timedelta, timezone
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import signal
-import threading
 import time
 
-from src.notification.service.message_queue import MessageQueue, QueuedMessage, message_queue
+from src.notification.service.message_queue import QueuedMessage, message_queue
 from src.notification.service.config import config
 from src.notification.service.fallback_manager import FallbackManager
 from src.notification.service.health_monitor import health_monitor
 from src.notification.channels.base import channel_registry, MessageContent
-from src.data.db.models.model_notification import MessagePriority, MessageStatus, Message
+from src.data.db.models.model_notification import MessageStatus, Message
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
@@ -169,7 +168,7 @@ class MessageProcessor:
             # Configure default fallback rules
             await self._configure_default_fallback_rules()
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error initializing channel instances:")
 
     async def _configure_default_fallback_rules(self):
@@ -202,7 +201,7 @@ class MessageProcessor:
             available_channels = list(self._channel_instances.keys())
             self.fallback_manager.set_global_fallback_channels(available_channels)
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error configuring fallback rules:")
 
     async def shutdown(self, timeout: int = 30):
@@ -256,7 +255,7 @@ class MessageProcessor:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 self._logger.exception("High priority worker error:")
                 self._stats['processing_errors'] += 1
                 await asyncio.sleep(5)  # Back off on error
@@ -281,7 +280,7 @@ class MessageProcessor:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Normal priority worker error:")
                 self._stats['processing_errors'] += 1
                 await asyncio.sleep(10)  # Back off on error
@@ -309,7 +308,7 @@ class MessageProcessor:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Retry worker error:")
                 self._stats['processing_errors'] += 1
                 await asyncio.sleep(30)  # Back off on error
@@ -341,7 +340,7 @@ class MessageProcessor:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Fallback retry worker error:")
                 await asyncio.sleep(30)
 
@@ -367,7 +366,7 @@ class MessageProcessor:
                         cleaned_count = await self.fallback_manager.cleanup_old_dead_letters()
                         if cleaned_count > 0:
                             self._logger.info("Cleaned up %s old dead letter messages", cleaned_count)
-                    except Exception as e:
+                    except Exception:
                         self._logger.exception("Error cleaning up dead letters:")
 
                     # TODO: Implement additional cleanup tasks
@@ -383,7 +382,7 @@ class MessageProcessor:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Cleanup worker error:")
                 await asyncio.sleep(3600)  # Continue on error
 

@@ -17,10 +17,8 @@ Valid values:
 Classes:
 - YahooDataDownloader: Main class for interacting with Yahoo Finance and managing data downloads
 """
-import os
-import time
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 
 import pandas as pd
 import yfinance as yf
@@ -99,7 +97,7 @@ class YahooDataDownloader(BaseDataDownloader):
                 _logger.info("Date range %s exceeds yfinance limit for %s interval. Using batching.", date_range, interval)
                 return self._download_ohlcv_batched(symbol, interval, start_date, end_date, max_period)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error downloading OHLCV data for %s:", symbol)
             raise
 
@@ -173,7 +171,7 @@ class YahooDataDownloader(BaseDataDownloader):
                 batch_df = self._download_ohlcv_single(symbol, interval, batch_start, batch_end)
                 if not batch_df.empty:
                     all_data.append(batch_df)
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error downloading batch %d for %s:", i + 1, symbol)
                 continue
 
@@ -281,7 +279,7 @@ class YahooDataDownloader(BaseDataDownloader):
                         else:
                             _logger.warning("No data found for %s in batch download", symbol)
                             results[symbol] = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                    except Exception as e:
+                    except Exception:
                         _logger.exception("Error processing %s from batch download:", symbol)
                         results[symbol] = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
@@ -289,7 +287,7 @@ class YahooDataDownloader(BaseDataDownloader):
                         len([df for df in results.values() if not df.empty]), len(symbols))
             return results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in batch OHLCV download:")
             # Fallback to individual downloads
             _logger.info("Falling back to individual downloads")
@@ -301,7 +299,7 @@ class YahooDataDownloader(BaseDataDownloader):
         for symbol in symbols:
             try:
                 results[symbol] = self.get_ohlcv(symbol, interval, start_date, end_date)
-            except Exception as e:
+            except Exception:
                 _logger.exception("Fallback download failed for %s:", symbol)
                 results[symbol] = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         return results
@@ -380,7 +378,7 @@ class YahooDataDownloader(BaseDataDownloader):
 
             return fundamentals
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting fundamentals for %s:", symbol)
             raise
 
@@ -470,7 +468,7 @@ class YahooDataDownloader(BaseDataDownloader):
                         _logger.warning("Symbol %s not found in batch response", symbol)
                         results[symbol] = self._create_default_fundamentals(symbol)
 
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error processing fundamentals for %s:", symbol)
                     results[symbol] = self._create_default_fundamentals(symbol)
 
@@ -478,7 +476,7 @@ class YahooDataDownloader(BaseDataDownloader):
                         len([f for f in results.values() if f.company_name != "Unknown"]), len(symbols))
             return results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in batch fundamentals download:")
             # Fallback to individual downloads
             _logger.info("Falling back to individual fundamental downloads")
@@ -591,7 +589,7 @@ class YahooDataDownloader(BaseDataDownloader):
                         _logger.warning("Symbol %s not found in batch response", symbol)
                         results[symbol] = self._create_default_fundamentals(symbol)
 
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error processing fundamentals for %s:", symbol)
                     results[symbol] = self._create_default_fundamentals(symbol)
 
@@ -599,7 +597,7 @@ class YahooDataDownloader(BaseDataDownloader):
                         len([f for f in results.values() if f.company_name != "Unknown"]), len(symbols))
             return results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in optimized batch fundamentals download:")
             # Fallback to regular batch method
             _logger.info("Falling back to regular batch method")
@@ -626,7 +624,7 @@ class YahooDataDownloader(BaseDataDownloader):
         for symbol in symbols:
             try:
                 results[symbol] = self.get_fundamentals(symbol)
-            except Exception as e:
+            except Exception:
                 _logger.exception("Fallback fundamental download failed for %s:", symbol)
                 results[symbol] = self._create_default_fundamentals(symbol)
         return results
@@ -661,7 +659,7 @@ class YahooDataDownloader(BaseDataDownloader):
 
                 # Process next symbol
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error processing %s:", symbol)
                 continue
         return results
@@ -692,14 +690,14 @@ class YahooDataDownloader(BaseDataDownloader):
                 try:
                     filepath = self.save_data(df, symbol, interval, start_date, end_date)
                     results[symbol] = filepath
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error saving data for %s:", symbol)
                     continue
 
             _logger.info("Batch download completed. %d/%d symbols saved successfully", len(results), len(symbols))
             return results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in batch download:")
             # Fallback to individual downloads
             return self.download_multiple_symbols(symbols, interval, start_date, end_date)
@@ -762,7 +760,6 @@ class YahooDataDownloader(BaseDataDownloader):
         # The batching logic will handle the actual limits during download
         try:
             # Try to parse the period to see if it's valid
-            from datetime import datetime, timedelta
 
             if period.endswith("y"):
                 years = int(period[:-1])

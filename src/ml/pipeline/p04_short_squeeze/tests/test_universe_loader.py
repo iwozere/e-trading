@@ -7,7 +7,7 @@ Tests the universe loading functionality including filtering, caching, and valid
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 import tempfile
 import json
 from datetime import datetime, timedelta

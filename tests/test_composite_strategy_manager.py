@@ -7,7 +7,7 @@ import unittest
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 import tempfile
 import json
 import os
@@ -18,8 +18,7 @@ from src.strategy.future.composite_strategy_manager import (
 )
 from src.strategy.future.strategy_core import (
     BaseStrategy,
-    StrategySignal,
-    AggregationMethod
+    StrategySignal
 )
 
 

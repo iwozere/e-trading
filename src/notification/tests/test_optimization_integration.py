@@ -7,7 +7,7 @@ work correctly with real database operations.
 
 import pytest
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.data.db.core.base import Base

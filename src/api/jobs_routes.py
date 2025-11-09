@@ -5,8 +5,7 @@ FastAPI routes for job scheduling and execution operations.
 Provides endpoints for managing schedules and runs.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime
+from typing import List, Optional
 # UUID import removed - using integer IDs
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -15,7 +14,7 @@ from src.api.auth import get_current_user, require_trader_or_admin
 from src.api.services.webui_app_service import webui_app_service
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.models.model_jobs import (
-    Schedule, ScheduleRun, JobType, RunStatus,
+    JobType, RunStatus,
     ScheduleCreate, ScheduleUpdate, ScheduleResponse,
     ScheduleRunResponse, ReportRequest, ScreenerRequest, ScreenerSetInfo
 )
@@ -483,7 +482,7 @@ async def get_screener_set(
             categories=set_info.get("categories", [])
         )
 
-    except KeyError as e:
+    except KeyError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Screener set not found: {set_name}"

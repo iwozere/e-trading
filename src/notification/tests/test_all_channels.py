@@ -112,7 +112,7 @@ async def test_email_channel():
         )
 
         formatted = channel.format_message(content)
-        print(f"✓ Message formatting: HTML generated")
+        print("✓ Message formatting: HTML generated")
         print(f"  HTML preview: {formatted.html[:100]}...")
 
         # Test rate limit

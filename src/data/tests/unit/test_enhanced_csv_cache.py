@@ -6,10 +6,8 @@ Unit tests for enhanced CSV cache functionality.
 import unittest
 import tempfile
 import pandas as pd
-from datetime import datetime, timedelta
 from pathlib import Path
 import sys
-import os
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))

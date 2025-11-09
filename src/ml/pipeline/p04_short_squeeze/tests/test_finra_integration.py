@@ -7,7 +7,6 @@ This script tests the complete pipeline with FINRA data and volume analysis.
 
 import sys
 from pathlib import Path
-from datetime import datetime
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -97,7 +96,7 @@ def test_volume_detection():
                 print(f"❌ {ticker}: Analysis failed")
 
         if results:
-            print(f"\n📊 Volume Detection Summary:")
+            print("\n📊 Volume Detection Summary:")
             results.sort(key=lambda x: x[1].combined_score, reverse=True)
             for ticker, indicators in results[:3]:
                 print(f"   Top: {ticker} - Score: {indicators.combined_score:.3f}, "
@@ -135,7 +134,7 @@ def test_database_integration():
 
             # Get data freshness report
             report = service.get_finra_data_freshness_report()
-        print(f"📊 Data Freshness Report:")
+        print("📊 Data Freshness Report:")
         print(f"   Unique symbols: {report.get('unique_symbols', 0)}")
         print(f"   Total records: {report.get('total_records', 0)}")
         print(f"   Latest report: {report.get('latest_report_date', 'None')}")
@@ -189,7 +188,7 @@ def test_hybrid_screening():
         print("Running hybrid screening...")
         results = screener.run_screener(test_universe)
 
-        print(f"📊 Hybrid Screening Results:")
+        print("📊 Hybrid Screening Results:")
         print(f"   Universe size: {results.total_universe}")
         print(f"   Candidates found: {results.candidates_found}")
         print(f"   Top candidates: {len(results.top_candidates)}")
@@ -197,7 +196,7 @@ def test_hybrid_screening():
 
         # Show top candidates
         if results.top_candidates:
-            print(f"\n🎯 Top Candidates:")
+            print("\n🎯 Top Candidates:")
             for i, candidate in enumerate(results.top_candidates[:5], 1):
                 print(f"   {i}. {candidate.ticker}: "
                       f"Score={candidate.screener_score:.3f}, "

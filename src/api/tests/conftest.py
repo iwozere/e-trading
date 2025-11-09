@@ -8,13 +8,11 @@ Provides database setup, authentication mocking, and common test data.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 from fastapi.testclient import TestClient
 from pathlib import Path
 import sys
-import tempfile
-import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]

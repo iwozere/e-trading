@@ -7,9 +7,8 @@ for the notification service to improve performance under high load.
 
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_, desc, asc, func, text, Index
-from sqlalchemy.sql import select
 from sqlalchemy.dialects.postgresql import insert
 
 from src.data.db.models.model_notification import (
@@ -53,7 +52,7 @@ class OptimizedMessageRepository:
             self.session.flush()  # Get the ID without committing
             _logger.info("Created message %s with type %s", message.id, message.message_type)
             return message
-        except IntegrityError as e:
+        except IntegrityError:
             self.session.rollback()
             _logger.exception("Failed to create message:")
             raise
@@ -196,7 +195,7 @@ class OptimizedMessageRepository:
 
             return messages
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error claiming messages with lock:")
             self.session.rollback()
             return []
@@ -390,7 +389,7 @@ class OptimizedMessageRepository:
 
             self.session.flush()
             return message
-        except Exception as e:
+        except Exception:
             self.session.rollback()
             raise
 

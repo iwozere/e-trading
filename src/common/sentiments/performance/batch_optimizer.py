@@ -7,8 +7,7 @@ and adaptive performance optimization based on system resources and API constrai
 
 import asyncio
 import time
-import math
-from typing import List, Dict, Any, Optional, Callable, TypeVar, Tuple
+from typing import List, Dict, Any, Optional, Callable, TypeVar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path

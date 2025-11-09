@@ -8,7 +8,7 @@ and memory usage monitoring to handle large datasets efficiently.
 import gc
 import sys
 import weakref
-from typing import Any, Dict, List, Optional, Iterator, Tuple, Union
+from typing import Any, Dict, List, Optional, Iterator
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime

@@ -10,7 +10,6 @@ Tests cover:
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import sys

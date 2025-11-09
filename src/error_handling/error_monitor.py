@@ -183,7 +183,7 @@ class ErrorMonitor:
         for alert_func in self.alert_config.alert_functions:
             try:
                 alert_func(alert_data)
-            except Exception as e:
+            except Exception:
                 _logger.exception("Failed to send alert: %s")
 
         self.alert_count += 1
@@ -197,7 +197,7 @@ class ErrorMonitor:
                 time.sleep(self.alert_config.time_window)
                 self.alert_count = 0
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in monitor loop: %s")
 
     def get_error_stats(self,

@@ -7,12 +7,11 @@ Used as the default cache tier and fallback when Redis is unavailable.
 
 import time
 import threading
-from typing import Any, Optional, Dict, Tuple
+from typing import Any, Optional, Dict
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 import sys
-import json
 import pickle
 
 # Add project root to path for imports

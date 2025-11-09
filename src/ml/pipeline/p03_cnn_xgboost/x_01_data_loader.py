@@ -110,7 +110,7 @@ class DataLoader:
                 "download_summary": download_results
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Data loading failed")
             raise
 
@@ -302,7 +302,7 @@ def main():
             _logger.info("Provider %s: Successful: %d, Failed: %d",
                         provider, len(provider_results['successful']), len(provider_results['failed']))
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Data loading failed")
         raise
 

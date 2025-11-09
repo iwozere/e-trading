@@ -4,7 +4,6 @@ Test script for YFinance batch download functionality.
 This script demonstrates how to use batch operations for better performance.
 """
 
-import os
 import sys
 import time
 from pathlib import Path
@@ -64,13 +63,13 @@ def test_batch_ohlcv_download():
         print(f"Batch download completed in {batch_time:.2f} seconds")
 
         # Compare results
-        print(f"\n📈 Performance Comparison:")
+        print("\n📈 Performance Comparison:")
         print(f"  Individual: {individual_time:.2f} seconds")
         print(f"  Batch:      {batch_time:.2f} seconds")
         print(f"  Speedup:    {individual_time/batch_time:.1f}x faster")
 
         # Verify data consistency
-        print(f"\n🔍 Data Verification:")
+        print("\n🔍 Data Verification:")
         for ticker in test_tickers:
             if ticker in individual_results and ticker in batch_results:
                 ind_df = individual_results[ticker]
@@ -126,13 +125,13 @@ def test_batch_fundamentals_download():
         print(f"Batch download completed in {batch_time:.2f} seconds")
 
         # Compare results
-        print(f"\n📈 Performance Comparison:")
+        print("\n📈 Performance Comparison:")
         print(f"  Individual: {individual_time:.2f} seconds")
         print(f"  Batch:      {batch_time:.2f} seconds")
         print(f"  Speedup:    {individual_time/batch_time:.1f}x faster")
 
         # Verify data consistency
-        print(f"\n🔍 Data Verification:")
+        print("\n🔍 Data Verification:")
         for ticker in test_tickers:
             if ticker in individual_results and ticker in batch_results:
                 ind_fund = individual_results[ticker]
@@ -207,7 +206,7 @@ def test_enhanced_screener_batch():
         if report.error:
             print(f"❌ Screener error: {report.error}")
         else:
-            print(f"✅ Screener completed successfully!")
+            print("✅ Screener completed successfully!")
             print(f"   Processed: {report.total_tickers_processed} tickers")
             print(f"   Found: {len(report.top_results)} matching stocks")
 

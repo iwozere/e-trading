@@ -7,7 +7,7 @@ thresholds and manages alert generation with cooldown logic.
 
 from pathlib import Path
 import sys
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
 # Add project root to path

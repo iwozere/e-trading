@@ -8,15 +8,11 @@ and configuration management system.
 """
 
 import pytest
-import asyncio
-import json
 import tempfile
 from unittest.mock import Mock, patch, AsyncMock
 from pathlib import Path
-from datetime import datetime, timezone
 
 import sys
-from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
@@ -27,7 +23,7 @@ from src.trading.broker.broker_factory import (
 )
 from src.trading.broker.broker_manager import (
     BrokerManager, BrokerHealthMonitor, BrokerConnectionPool,
-    BrokerStatus, BrokerHealthMetrics
+    BrokerStatus
 )
 from src.trading.broker.config_manager import (
     ConfigManager, ConfigTemplate, EnvironmentManager, Environment

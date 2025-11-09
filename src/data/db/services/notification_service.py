@@ -15,14 +15,12 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.models.model_notification import (
     Message, MessageDeliveryStatus, MessageStatus
 )
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.notification.channels.base import (
-    NotificationChannel, DeliveryResult, ChannelHealth, MessageContent,
-    DeliveryStatus, ChannelHealthStatus
+    ChannelHealth, DeliveryStatus
 )
 
 from src.notification.logger import setup_logger

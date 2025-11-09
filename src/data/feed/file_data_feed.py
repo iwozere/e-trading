@@ -21,7 +21,7 @@ import os
 import sys
 import time
 import threading
-from typing import Optional, Dict, Any, Callable
+from typing import Dict, Any
 from datetime import datetime, timedelta
 from pathlib import Path
 

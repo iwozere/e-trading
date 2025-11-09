@@ -7,7 +7,6 @@ and tests configuration changes and interface updates.
 
 import pytest
 import pandas as pd
-import numpy as np
 from unittest.mock import patch, Mock
 from datetime import datetime
 import sys

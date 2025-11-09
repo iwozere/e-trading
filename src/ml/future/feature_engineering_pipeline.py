@@ -465,7 +465,7 @@ class FeatureSelector:
             else:
                 raise ValueError(f"Unknown selection method: {method}")
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in feature selection: ")
             return X
 
@@ -663,7 +663,7 @@ class FeatureEngineeringPipeline:
             logger.info("Generated %d features", len(self.feature_names))
             return features_df
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in feature generation: ")
             return data
 
@@ -683,7 +683,7 @@ class FeatureEngineeringPipeline:
             logger.info("Selected %d features", len(selected_X.columns))
             return selected_X
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in feature selection: ")
             return X
 
@@ -713,7 +713,7 @@ class FeatureEngineeringPipeline:
 
             return pd.DataFrame(scaled_X, columns=X.columns, index=X.index)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in feature scaling: ")
             return X
 

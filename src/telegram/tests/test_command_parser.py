@@ -1,5 +1,5 @@
 import pytest
-from src.telegram.command_parser import parse_command, EnterpriseCommandParser, CommandSpec, ParsedCommand
+from src.telegram.command_parser import parse_command
 
 @pytest.mark.parametrize("text,expected", [
     ("/report AAPL", dict(command="report", args={"tickers": "AAPL", "email": False, "indicators": None, "period": None, "interval": None, "provider": None})),

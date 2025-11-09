@@ -13,7 +13,6 @@ Features demonstrated:
 - Converting old configurations to new format
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -50,7 +49,7 @@ def example_basic_usage():
 
     # Save the configuration
     save_config(trading_config, "config/trading/example_bot_001.json")
-    print(f"Saved to: config/trading/example_bot_001.json")
+    print("Saved to: config/trading/example_bot_001.json")
 
     # Load the configuration back
     loaded_config = load_config("config/trading/example_bot_001.json")

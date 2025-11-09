@@ -136,7 +136,7 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             logger.debug("Legacy indicators initialized: RSI(period=%d), BB(period=%d, dev=%s), Volume MA(period=%d)",
                         rsi_period, bb_period, bb_dev_factor, sma_period)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -260,6 +260,6 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
                     f"(Ratio: {current_volume/vol_ma:.2f} > {min_volume_ratio})"
                 )
             return return_value
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_enter: ")
             return False

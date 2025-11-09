@@ -10,7 +10,7 @@ This module provides sophisticated keyword-based sentiment detection with:
 """
 
 import re
-from typing import Dict, List, Optional, Tuple, Set
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from pathlib import Path
 import sys

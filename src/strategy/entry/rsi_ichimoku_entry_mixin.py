@@ -118,7 +118,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             self.cross_below_kijun = bt.indicators.CrossDown(self.strategy.data.close, self.kijun_sen)
 
             logger.debug("Legacy indicators initialized: entry_rsi, entry_ichimoku")
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -210,6 +210,6 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
                 )
 
             return return_value
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_enter: ")
             return False

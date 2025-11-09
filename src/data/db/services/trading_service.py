@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
-from src.trading.services.bot_config_validator import validate_database_bot_record, BotConfigValidator
+from src.trading.services.bot_config_validator import validate_database_bot_record
 
 # ---------- DTO helpers ----------
 def _bot_to_dict(b) -> Dict[str, Any]:

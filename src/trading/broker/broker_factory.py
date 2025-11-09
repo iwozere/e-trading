@@ -19,7 +19,7 @@ Functions:
 - get_broker_capabilities: Broker capability detection
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from src.trading.broker.binance_broker import BinanceBroker
 from src.trading.broker.ibkr_broker import IBKRBroker

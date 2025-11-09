@@ -4,7 +4,6 @@ Report Configuration Parser
 Parses and validates JSON configurations for report commands.
 """
 
-import os
 import sys
 from pathlib import Path
 

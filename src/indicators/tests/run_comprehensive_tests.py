@@ -174,12 +174,12 @@ def main():
         else:
             categories[category]['failed'] += 1
 
-    print(f"\nResults by category:")
+    print("\nResults by category:")
     for category, stats in categories.items():
         print(f"  {category:12s}: {stats['passed']}/{stats['total']} passed")
 
     # Detailed results
-    print(f"\nDetailed Results:")
+    print("\nDetailed Results:")
     print(f"{'Test Suite':<40} {'Status':<10} {'Duration':<10}")
     print("-" * 60)
 
@@ -191,7 +191,7 @@ def main():
 
     # Failed test details
     if failed_tests:
-        print(f"\nFailed Test Details:")
+        print("\nFailed Test Details:")
         print("-" * 60)
         for result in failed_tests:
             print(f"\nTest: {result['name']}")
@@ -203,7 +203,7 @@ def main():
     # Performance summary (if performance tests were run)
     perf_results = [r for r in results if r['category'] == 'performance' and r['success']]
     if perf_results:
-        print(f"\nPerformance Test Summary:")
+        print("\nPerformance Test Summary:")
         print("-" * 30)
         for result in perf_results:
             print(f"Performance benchmarks completed in {result['duration']:.2f}s")

@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from src.data.db.repos.repo_notification import (
-    NotificationRepository,
     ChannelConfigRepository,
     RateLimitRepository,
     MessageRepository,

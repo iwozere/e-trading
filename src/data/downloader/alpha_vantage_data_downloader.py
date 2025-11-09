@@ -1,5 +1,4 @@
-import os
-from typing import Dict, List, Optional
+from typing import List, Optional
 from datetime import datetime
 import pandas as pd
 import requests

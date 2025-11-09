@@ -118,7 +118,7 @@ class LiveTradingBot(BaseTradingBot):
             config = load_config(config_path)
             _logger.info("Loaded and validated configuration from %s", config_path)
             return config
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load configuration: %s")
             raise
 
@@ -147,7 +147,7 @@ class LiveTradingBot(BaseTradingBot):
             broker = get_broker(broker_config)
             _logger.info("Created broker: %s", self.config.broker_type)
             return broker
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating broker: %s")
             raise
 
@@ -173,7 +173,7 @@ class LiveTradingBot(BaseTradingBot):
             _logger.info("Created strategy parameters for: %s", self.config.strategy_type)
             return parameters
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating strategy parameters: %s")
             raise
 
@@ -195,7 +195,7 @@ class LiveTradingBot(BaseTradingBot):
             _logger.info("Created data feed for %s", self.config.symbol)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating data feed: %s")
             return False
 
@@ -225,7 +225,7 @@ class LiveTradingBot(BaseTradingBot):
             _logger.info("Setup Backtrader with initial balance: %s", initial_balance)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error setting up Backtrader: %s")
             return False
 
@@ -237,7 +237,7 @@ class LiveTradingBot(BaseTradingBot):
             _logger.info("Loaded %d open positions", len(self.active_positions))
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading open positions: %s")
             return False
 
@@ -248,7 +248,7 @@ class LiveTradingBot(BaseTradingBot):
                 message = f"📊 New {symbol} bar: O={data['open']:.4f} H={data['high']:.4f} L={data['low']:.4f} C={data['close']:.4f}"
                 # Use BaseTradingBot's notification method
                 _logger.debug(message)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error notifying new bar: %s")
 
     def _monitor_data_feed(self):
@@ -263,7 +263,7 @@ class LiveTradingBot(BaseTradingBot):
 
                 time.sleep(30)  # Check every 30 seconds
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in data feed monitor: %s")
                 time.sleep(60)
 
@@ -283,7 +283,7 @@ class LiveTradingBot(BaseTradingBot):
                 _logger.exception("Failed to reconnect data feed")
                 self.notify_error("Failed to reconnect data feed")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error reconnecting data feed: %s")
 
     def _run_backtrader(self):
@@ -353,7 +353,7 @@ class LiveTradingBot(BaseTradingBot):
             _logger.info("Live trading bot stopped")
             self.notify_bot_event("stopped", "🛑")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error stopping bot: %s")
 
     def get_status(self) -> Dict[str, Any]:
@@ -462,7 +462,7 @@ def main():
     except KeyboardInterrupt:
         _logger.info("Received keyboard interrupt, shutting down...")
         bot.stop()
-    except Exception as e:
+    except Exception:
         _logger.exception("Unexpected error: %s")
         bot.stop()
         sys.exit(1)

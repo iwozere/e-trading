@@ -4,7 +4,7 @@ from src.common.common import get_ohlcv, determine_provider
 from src.model.telegram_bot import TickerAnalysis
 from src.common.technicals import format_technical_analysis
 from src.indicators.service import get_unified_indicator_service
-from src.indicators.models import IndicatorCalculationRequest, IndicatorCategory
+from src.indicators.models import IndicatorCalculationRequest
 from src.model.telegram_bot import Technicals
 import numpy as np
 import talib
@@ -126,7 +126,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                         # For now, we'll add the current value to all rows (simplified approach)
                         # In a more sophisticated implementation, we'd calculate the full time series
                         df_with_indicators[field_name] = indicator.value
-        except Exception as e:
+        except Exception:
             _logger.exception("Error adding indicators to DataFrame:")
             _logger.error("Indicator set: %s", indicator_set)
             _logger.error("Indicator mapping: %s", indicator_mapping)
@@ -477,7 +477,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
         # Generate chart
         try:
             chart_bytes = generate_chart(temp_analysis.ticker, temp_analysis.ohlcv)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error generating chart:")
             chart_bytes = None
 
@@ -492,7 +492,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
             ohlcv=df_with_indicators,
             current_price=current_price
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in analyze_ticker:")
         raise
 
@@ -516,7 +516,7 @@ def format_ticker_report(analysis: TickerAnalysis) -> dict:
         try:
             chart_bytes = generate_chart(analysis.ticker, analysis.ohlcv)
             analysis.chart_image = chart_bytes
-        except Exception as e:
+        except Exception:
             _logger.exception("Error generating chart:")
             chart_bytes = None
             analysis.chart_image = None

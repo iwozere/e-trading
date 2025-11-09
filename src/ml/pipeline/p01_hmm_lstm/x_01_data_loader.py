@@ -17,10 +17,9 @@ import pandas as pd
 import numpy as np
 import yaml
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
-import os
 
 # Add project root to path to import common utilities
 project_root = Path(__file__).resolve().parents[4]
@@ -476,7 +475,7 @@ def main():
 
         _logger.info("Data loading completed!")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Data loading failed")
         raise
 

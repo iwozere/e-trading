@@ -5,16 +5,12 @@ SQLAlchemy models for the short squeeze detection pipeline.
 Includes ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, and AdHocCandidateModel models.
 """
 
-from datetime import datetime, date
-from decimal import Decimal
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import (
     Column, BigInteger, String, Date, DateTime, Numeric, Boolean, Text,
     CheckConstraint, UniqueConstraint, Index, func
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from src.data.db.core.json_types import JsonType
 
 from src.data.db.core.base import Base

@@ -8,9 +8,6 @@ Tests cover:
 - Channel health monitoring (backward compatibility)
 - Utility methods
 """
-import pytest
-from datetime import datetime, timezone
-from sqlalchemy.orm import Session
 
 from src.data.db.services.system_health_service import SystemHealthService
 from src.data.db.models.model_system_health import SystemHealthStatus

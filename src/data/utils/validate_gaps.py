@@ -82,7 +82,7 @@ def validate_cached_data(
 
                 if not available_years:
                     results['missing'].append(f"{symbol}_{interval}")
-                    print(f"  ❌ No cached data found")
+                    print("  ❌ No cached data found")
                     _logger.warning("No cached data found for %s_%s", symbol, interval)
                     continue
 
@@ -147,7 +147,7 @@ def validate_cached_data(
                     print(f"  ✅ All years valid: {total_rows} total rows")
                 else:
                     results['invalid'].append(f"{symbol}_{interval}")
-                    print(f"  ❌ Some years have issues")
+                    print("  ❌ Some years have issues")
 
                 # Store detailed analysis
                 results['yearly_analysis'] = results.get('yearly_analysis', {})
@@ -340,12 +340,12 @@ def main():
     print(f"  ❓ Missing: {len(validation_results['missing'])}")
 
     if validation_results['invalid']:
-        print(f"\n❌ Invalid data:")
+        print("\n❌ Invalid data:")
         for item in validation_results['invalid']:
             print(f"  - {item}")
 
     if validation_results['missing']:
-        print(f"\n❓ Missing data:")
+        print("\n❓ Missing data:")
         for item in validation_results['missing']:
             print(f"  - {item}")
 

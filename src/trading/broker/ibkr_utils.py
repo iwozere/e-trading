@@ -23,10 +23,8 @@ Functions:
 - calculate_margin_requirements: Calculate margin requirements
 """
 
-import math
 from typing import Dict, List, Optional, Any, Tuple
-from decimal import Decimal, ROUND_DOWN
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from ib_insync import Stock, Option, Future, Forex, Contract
 
 from src.notification.logger import setup_logger
@@ -153,7 +151,7 @@ class IBKRContractManager:
             self.contract_cache[cache_key] = contract
             return contract
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating contract for %s:", symbol)
             return None
 

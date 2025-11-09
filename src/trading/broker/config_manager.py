@@ -22,11 +22,10 @@ Classes:
 """
 
 import json
-import os
 import yaml
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import hashlib
@@ -206,7 +205,7 @@ class EnvironmentManager:
                     with open(config_file, 'r') as f:
                         self.environments[env] = json.load(f)
                     _logger.info("Loaded %s environment configuration", env.value)
-                except Exception as e:
+                except Exception:
                     _logger.exception("Failed to load %s config:", env.value)
 
     def set_environment(self, environment: Environment):
@@ -230,7 +229,7 @@ class EnvironmentManager:
             self.environments[environment] = config
             _logger.info("Saved %s environment configuration", environment.value)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to save %s config:", environment.value)
             raise
 
@@ -303,10 +302,10 @@ class ConfigManager:
                     self.configurations[config_name] = config
                     _logger.debug("Loaded configuration: %s", config_name)
 
-                except Exception as e:
+                except Exception:
                     _logger.exception("Failed to load config %s:", config_file)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading configurations:")
 
     def create_configuration(self, name: str, config: Dict[str, Any],
@@ -341,7 +340,7 @@ class ConfigManager:
             _logger.info("Created configuration: %s", name)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to create configuration %s:", name)
             return False
 
@@ -374,7 +373,7 @@ class ConfigManager:
             _logger.info("Updated configuration: %s", name)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to update configuration %s:", name)
             return False
 
@@ -425,7 +424,7 @@ class ConfigManager:
             _logger.info("Deleted configuration: %s", name)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to delete configuration %s:", name)
             return False
 
@@ -467,7 +466,7 @@ class ConfigManager:
             config = self.template_manager.create_from_template(template_name, overrides)
             return self.create_configuration(name, config)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to create configuration from template:")
             return False
 
@@ -511,7 +510,7 @@ class ConfigManager:
             # Update current configuration
             return self.update_configuration(name, config, f"Rollback to version {version}")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to rollback configuration %s to %s:", name, version)
             return False
 
@@ -605,7 +604,7 @@ class ConfigManager:
 
             return self.create_configuration(name, config)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to import configuration:")
             return False
 

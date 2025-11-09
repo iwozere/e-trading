@@ -7,9 +7,8 @@ alert evaluator and provides a clean API for telegram and other consumers.
 """
 
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
-from src.common.alerts.alert_evaluator import AlertEvaluator, AlertConfig, AlertEvaluationResult
+from src.common.alerts.alert_evaluator import AlertEvaluator
 from src.data.db.services.jobs_service import JobsService
 from src.data.data_manager import DataManager
 from src.indicators.service import IndicatorService
@@ -148,7 +147,7 @@ class AlertsService(BaseDBService):
         """Update an alert."""
         try:
             return self.jobs_service.update_job(job_id, updates)
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error updating alert %s", job_id)
             return False
 
@@ -157,7 +156,7 @@ class AlertsService(BaseDBService):
         """Delete an alert."""
         try:
             return self.jobs_service.delete_job(job_id)
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error deleting alert %s", job_id)
             return False
 

@@ -17,7 +17,6 @@ Features demonstrated:
 
 import time
 import signal
-import sys
 from datetime import datetime
 from src.data.feed.coingecko_live_feed import CoinGeckoLiveDataFeed
 from src.notification.logger import setup_logger
@@ -73,9 +72,9 @@ def main():
             on_new_bar=on_new_bar
         )
 
-        print(f"Created CoinGecko live feed for bitcoin (1h interval)")
-        print(f"Polling interval: 60 seconds")
-        print(f"Rate limit: 50 calls/minute")
+        print("Created CoinGecko live feed for bitcoin (1h interval)")
+        print("Polling interval: 60 seconds")
+        print("Rate limit: 50 calls/minute")
         print()
 
         # Start the feed
@@ -99,7 +98,7 @@ def main():
 
     except KeyboardInterrupt:
         print("\nReceived interrupt signal")
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in main loop")
     finally:
         # Clean up

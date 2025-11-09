@@ -6,10 +6,9 @@ This script tests the Financial Modeling Prep API integration.
 
 import os
 import sys
-import time
 from pathlib import Path
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
+from datetime import datetime
+from unittest.mock import patch
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -289,11 +288,11 @@ def test_ohlcv_retrieval_mock():
         mock_get.return_value.raise_for_status.return_value = None
         try:
             df = downloader.get_ohlcv("AAPL", "1d", start_date, end_date)
-            print(f"✅ OHLCV data retrieved for AAPL")
+            print("✅ OHLCV data retrieved for AAPL")
             print(f"   Shape: {df.shape}")
             print(f"   Columns: {list(df.columns)}")
             print(f"   Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
-            print(f"   Sample data:")
+            print("   Sample data:")
             print(df.head())
 
         except Exception as e:

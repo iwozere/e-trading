@@ -7,7 +7,6 @@ with the DataManager to retrieve and cache fundamentals data.
 
 import sys
 import os
-from datetime import datetime
 
 # Add project root to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))

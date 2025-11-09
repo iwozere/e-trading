@@ -1,6 +1,6 @@
 # model_webui.py  (aligned to DB)
 
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, Integer, DateTime, ForeignKey, Index, text, Boolean
 from src.data.db.core.base import Base
 from src.data.db.core.json_types import JsonType

@@ -105,7 +105,7 @@ def test_data_feed(data_source: str, symbol: str, interval: str, duration: int =
 
         # Get initial status
         status = data_feed.get_status()
-        print(f"\nInitial Status:")
+        print("\nInitial Status:")
         for key, value in status.items():
             print(f"  {key}: {value}")
 
@@ -152,19 +152,19 @@ def test_data_feed(data_source: str, symbol: str, interval: str, duration: int =
                 print(f"  Last update: {status['last_update']}")
 
         # Stop data feed
-        print(f"\nStopping data feed...")
+        print("\nStopping data feed...")
         data_feed.stop()
 
         # Final status
         final_status = data_feed.get_status()
-        print(f"\nFinal Status:")
+        print("\nFinal Status:")
         for key, value in final_status.items():
             print(f"  {key}: {value}")
 
-        print(f"\nTest completed successfully!")
+        print("\nTest completed successfully!")
 
     except KeyboardInterrupt:
-        print(f"\nTest interrupted by user")
+        print("\nTest interrupted by user")
         if 'data_feed' in locals():
             data_feed.stop()
     except Exception as e:

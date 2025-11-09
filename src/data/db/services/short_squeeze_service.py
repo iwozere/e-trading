@@ -6,14 +6,11 @@ Provides high-level operations and coordinates between repositories.
 """
 
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Dict, Any, Tuple
-from decimal import Decimal
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 
-from sqlalchemy.orm import Session
 
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
-from src.data.db.repos.repo_short_squeeze import ShortSqueezeRepo
 from src.data.db.models.model_short_squeeze import AlertLevel, CandidateSource
 from src.notification.logger import setup_logger
 
@@ -475,7 +472,7 @@ class ShortSqueezeService(BaseDBService):
                     'promoted_by_screener': candidate.promoted_by_screener
                 })
             return result
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error getting active adhoc candidates:")
             return []
 
@@ -500,7 +497,7 @@ class ShortSqueezeService(BaseDBService):
                     'data_quality': float(snapshot.data_quality) if snapshot.data_quality else None
                 })
             return result
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error getting candidates for deep scan:")
             return []
 

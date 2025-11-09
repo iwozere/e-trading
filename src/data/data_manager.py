@@ -94,16 +94,13 @@ from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloa
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
 from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
-from src.data.downloader.finra_data_downloader import FINRADataDownloader
 
 
 # Import live feeds
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.data.feed.binance_live_feed import BinanceLiveDataFeed
 from src.data.feed.yahoo_live_feed import YahooLiveDataFeed
-from src.data.feed.ibkr_live_feed import IBKRLiveDataFeed
 from src.data.feed.coingecko_live_feed import CoinGeckoLiveDataFeed
-from src.data.feed.file_data_feed import FileDataFeed
 
 _logger = setup_logger(__name__)
 
@@ -412,7 +409,7 @@ class ProviderSelector:
 
             return classification
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error classifying symbol %s for fundamentals:", symbol)
             return {
                 'symbol': symbol,
@@ -1104,7 +1101,7 @@ class DataManager:
             else:
                 _logger.warning("Failed to cache data for %s %s", symbol, timeframe)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error caching data:")
 
     def get_live_feed(self, symbol: str, timeframe: str,
@@ -1155,7 +1152,7 @@ class DataManager:
             _logger.info("Created live feed for %s %s using %s", symbol, timeframe, provider)
             return feed
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to create live feed for %s %s:", symbol, timeframe)
             return None
 
@@ -1235,7 +1232,7 @@ class DataManager:
 
             return combined_data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error retrieving fundamentals for %s:", symbol)
             return {}
 
@@ -1297,7 +1294,7 @@ class DataManager:
                         datetime.now() - cached_metadata.timestamp)
             return cached_data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error accessing cached fundamentals for %s:", symbol)
             return None
 
@@ -1380,7 +1377,7 @@ class DataManager:
             _logger.error("No suitable providers found for %s", symbol)
             return []
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error selecting providers for %s:", symbol)
             return []
 
@@ -1491,7 +1488,7 @@ class DataManager:
             _logger.error("No providers available for data type %s", data_type)
             return []
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading provider sequence for %s:", data_type)
             # Return safe default with availability check (using implementation names)
             safe_default = ['yahoo', 'fmp', 'alpha_vantage']
@@ -2330,7 +2327,7 @@ class DataManager:
             else:
                 # Try to convert using vars()
                 return vars(fundamentals) if hasattr(fundamentals, '__dict__') else None
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to normalize fundamentals data:")
             return None
 
@@ -2366,7 +2363,7 @@ class DataManager:
 
             return combined_data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error combining fundamentals data:")
             return {}
 
@@ -2389,7 +2386,7 @@ class DataManager:
             # This could be enhanced with more sophisticated validation
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error validating fundamentals data:")
             return False
 
@@ -2416,13 +2413,13 @@ class DataManager:
                 if removed_files:
                     _logger.debug("Cleaned up %d stale files for %s %s", len(removed_files), symbol, provider_name)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Failed to cache data for %s %s:", symbol, provider_name)
 
         # Cache combined data
         try:
             fundamentals_cache.write_json(symbol, 'combined', combined_data, timestamp)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to cache combined data for %s:", symbol)
 
     def get_cache_stats(self) -> Dict[str, Any]:

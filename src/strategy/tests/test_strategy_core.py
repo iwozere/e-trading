@@ -2,7 +2,6 @@
 """
 Unit tests for strategy_core module
 """
-import os
 import sys
 from pathlib import Path
 
@@ -18,7 +17,6 @@ from unittest.mock import Mock
 from src.strategy.future.strategy_core import (
     BaseStrategy,
     StrategySignal,
-    CompositeSignal,
     SignalAggregator,
     AggregationMethod,
     MarketRegimeDetector,

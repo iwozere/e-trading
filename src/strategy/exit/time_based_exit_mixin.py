@@ -99,7 +99,7 @@ class TimeBasedExitMixin(BaseExitMixin):
 
             return return_value
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_exit: ")
             return False
 

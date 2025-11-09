@@ -16,18 +16,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 import pytest
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date
 from decimal import Decimal
-from typing import List, Dict, Any
 
 from src.data.db.core.database import session_scope, create_all_tables
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.data.db.models.model_short_squeeze import (
     ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, AdHocCandidateModel,
-    AlertLevel, CandidateSource
+    AlertLevel
 )
 from src.ml.pipeline.p04_short_squeeze.core.models import (
-    StructuralMetrics, TransientMetrics, Candidate, ScoredCandidate, Alert, AdHocCandidate
+    StructuralMetrics, TransientMetrics, Candidate, Alert, AdHocCandidate
 )
 from src.notification.logger import setup_logger
 

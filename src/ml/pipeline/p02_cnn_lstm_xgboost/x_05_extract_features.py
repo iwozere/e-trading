@@ -5,16 +5,13 @@ This module extracts features from the trained CNN-LSTM model for use with XGBoo
 """
 
 import torch
-import torch.nn as nn
 import numpy as np
 import pandas as pd
 import yaml
 import json
 from pathlib import Path
 import sys
-from typing import Dict, List, Optional, Tuple, Any
-import matplotlib.pyplot as plt
-import seaborn as sns
+from typing import Dict, Any
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')

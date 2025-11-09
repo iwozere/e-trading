@@ -7,7 +7,7 @@ of the BaseBroker class.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 import sys
 from pathlib import Path
 

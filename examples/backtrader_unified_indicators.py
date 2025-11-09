@@ -8,7 +8,6 @@ that leverage the unified indicator service without backward compatibility.
 import backtrader as bt
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
 
 # Import the unified indicators directly from backtrader wrappers
 from src.indicators.adapters.backtrader_wrappers import (
@@ -126,7 +125,7 @@ def main():
 
         # Print some indicator values from the last strategy instance
         strategy = results[0]
-        print(f"\nFinal indicator values:")
+        print("\nFinal indicator values:")
         print(f"RSI: {strategy.rsi.rsi[0]:.2f}")
         print(f"Bollinger Upper: {strategy.bb.upper[0]:.2f}")
         print(f"Bollinger Lower: {strategy.bb.lower[0]:.2f}")

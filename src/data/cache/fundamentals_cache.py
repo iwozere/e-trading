@@ -16,11 +16,10 @@ Features:
 """
 
 import json
-import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 # Import cache directory setting
@@ -176,7 +175,7 @@ class FundamentalsCache:
 
             return str(file_path)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to write cache file %s:", file_path)
             raise
 
@@ -201,7 +200,7 @@ class FundamentalsCache:
 
             return cache_data["fundamentals"]
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to read cache file %s:", file_path)
             return None
 

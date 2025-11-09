@@ -5,7 +5,6 @@ Centralized heartbeat management for all subsystems.
 Each process can use this to regularly update their health status.
 """
 
-import asyncio
 import time
 import threading
 from datetime import datetime, timezone
@@ -17,7 +16,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.data.db.services.database_service import DatabaseService
-from src.data.db.repos.repo_system_health import SystemHealthRepository
 from src.data.db.services.system_health_service import SystemHealthService
 from src.data.db.models.model_system_health import SystemHealthStatus
 from src.notification.logger import setup_logger
@@ -123,7 +121,7 @@ class HeartbeatManager:
             self._update_health_status(status, response_time_ms, error_message, metadata)
             _logger.debug("Sent immediate heartbeat for %s.%s: %s",
                          self.system, self.component or 'main', status.value)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to send immediate heartbeat for %s.%s:",
                          self.system, self.component or 'main')
 
@@ -165,7 +163,7 @@ class HeartbeatManager:
                         SystemHealthStatus.DOWN,
                         error_message=f"Heartbeat error: {str(e)}"
                     )
-                except Exception as update_error:
+                except Exception:
                     _logger.exception("Failed to update DOWN status:")
 
             # Wait for next heartbeat
@@ -192,7 +190,7 @@ class HeartbeatManager:
                 metadata=metadata
             )
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to update health status for %s.%s:",
                          self.system, self.component or 'main')
             # Don't re-raise - heartbeat should continue even if health update fails

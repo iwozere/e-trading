@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
+from sklearn.metrics import roc_curve, auc
 from sklearn.model_selection import TimeSeriesSplit
 
 from src.notification.logger import setup_logger

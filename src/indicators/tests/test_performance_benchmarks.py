@@ -12,7 +12,6 @@ import time
 import asyncio
 import psutil
 import os
-from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import patch
 import sys
@@ -411,7 +410,7 @@ class TestPerformanceBenchmarks:
             overhead = time_with_rec - time_without_rec
             assert overhead < 0.1, f"Recommendation overhead too high: {overhead:.3f}s"
 
-            print(f"\n=== Recommendation Engine Performance ===")
+            print("\n=== Recommendation Engine Performance ===")
             print(f"Without recommendations: {time_without_rec:.3f}s")
             print(f"With recommendations:    {time_with_rec:.3f}s")
             print(f"Overhead:                {overhead:.3f}s ({overhead/time_without_rec*100:.1f}%)")
@@ -438,7 +437,7 @@ class TestPerformanceBenchmarks:
         assert init_time < 0.1, f"Config initialization too slow: {init_time:.3f}s"
         assert retrieval_time < 0.01, f"Parameter retrieval too slow: {retrieval_time:.3f}s"
 
-        print(f"\n=== Configuration Performance ===")
+        print("\n=== Configuration Performance ===")
         print(f"Initialization: {init_time:.3f}s")
         print(f"Parameter retrieval: {retrieval_time:.3f}s ({len(indicators)} indicators)")
 

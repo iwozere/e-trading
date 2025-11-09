@@ -11,16 +11,13 @@ This script tests the database integration by:
 
 import os
 import sys
-import uuid
 from datetime import datetime, timedelta, timezone
 
 # Add src to path
 sys.path.append('src')
 
 from src.data.db.services import database_service as ds
-from src.data.db.models.model_trading import Trade, BotInstance, PerformanceMetrics
 from src.data.db.repos.repo_trading import TradeRepository
-from src.trading.services.trading_bot_service import trading_bot_service
 
 
 def test_database_connection():

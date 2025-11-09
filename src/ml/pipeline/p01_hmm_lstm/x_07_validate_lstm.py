@@ -31,7 +31,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import sys
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple
 import talib # Added for technical indicators
 import re # Added for regex
 
@@ -189,7 +189,7 @@ class LSTMValidator:
 
             return model_package
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load model from %s: ", model_path)
             raise
 
@@ -1027,7 +1027,7 @@ def main():
 
         _logger.info("LSTM validation completed!")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("LSTM validation failed: ")
         raise
 

@@ -12,7 +12,7 @@ Tests for the application service layer including:
 
 import pytest
 from unittest.mock import patch, Mock, MagicMock
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
@@ -20,7 +20,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.api.services.webui_app_service import WebUIAppService, webui_app_service
+from src.api.services.webui_app_service import WebUIAppService
 from src.api.services.telegram_app_service import TelegramAppService
 from src.api.services.monitoring_service import SystemMonitoringService
 from src.api.services.strategy_service import StrategyManagementService, StrategyValidationError, StrategyOperationError

@@ -12,15 +12,12 @@ Tests cover:
 """
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, patch
-from sqlalchemy.orm import Session
 
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.models.model_jobs import (
-    Schedule, ScheduleRun, JobType, RunStatus,
+    JobType, RunStatus,
     ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate
 )
-from src.data.db.tests.fixtures.factory_jobs import ScheduleFactory, ScheduleRunFactory
 
 
 class TestJobsServiceSchedules:
@@ -256,7 +253,6 @@ class TestJobsServiceSchedules:
         schedule = service.create_schedule(user_id=1, schedule_data=schedule_data)
 
         # Manually set next_run_at to past
-        from src.data.db.repos.repo_jobs import JobsRepository
         repos_bundle = mock_database_service.uow().__enter__()
         repos_bundle.jobs.update_schedule_next_run(schedule.id, past_time)
         db_session.commit()

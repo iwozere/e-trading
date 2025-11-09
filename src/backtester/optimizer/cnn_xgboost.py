@@ -11,14 +11,8 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 import warnings
 
-import numpy as np
-import pandas as pd
-import backtrader as bt
-import optuna
-from sklearn.model_selection import TimeSeriesSplit
 import json
 import pickle
-from datetime import datetime, timedelta
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[3]
@@ -27,7 +21,6 @@ sys.path.append(str(project_root))
 from src.backtester.optimizer.base_optimizer import BaseOptimizer
 from src.strategy.cnn_xgboost_strategy import CNNXGBoostStrategy
 from src.notification.logger import setup_logger
-from src.util.config import load_config
 
 warnings.filterwarnings('ignore')
 
@@ -99,7 +92,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
                     })
                     _logger.debug("Found combination: %s %s %s", provider, symbol, timeframe)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error discovering combinations:")
 
         return combinations
@@ -131,7 +124,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
             _logger.warning("No CNN model found for %s %s %s", provider, symbol, timeframe)
             return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error finding CNN model:")
             return None
 
@@ -168,7 +161,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
             _logger.warning("Incomplete XGBoost models for %s %s", symbol, timeframe)
             return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error finding XGBoost models:")
             return None
 
@@ -227,7 +220,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
 
             return cnn_data, xgb_data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading models:")
             raise
 
@@ -300,7 +293,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
 
             return backtest_results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in backtest for %s %s %s:",
                          combination['provider'], combination['symbol'], combination['timeframe'])
             raise
@@ -375,7 +368,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
 
             return optimization_results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in parameter optimization:")
             raise
 
@@ -427,7 +420,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
                         'results': results
                     })
 
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error processing combination %s %s %s:",
                                  combination['provider'], combination['symbol'], combination['timeframe'])
                     continue
@@ -443,7 +436,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
 
             return summary
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in main run:")
             raise
 
@@ -467,7 +460,7 @@ def main():
         print(f"Average return: {results.get('average_return', 0):.2%}")
         print(f"Average Sharpe ratio: {results.get('average_sharpe', 0):.3f}")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in main:")
         raise
 

@@ -9,10 +9,7 @@ WebSocket integration, and notification systems.
 """
 
 import pytest
-import asyncio
-import json
-from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime, timezone
+from unittest.mock import patch, AsyncMock
 
 import sys
 from pathlib import Path

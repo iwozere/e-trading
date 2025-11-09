@@ -5,15 +5,11 @@ SQLAlchemy models for the trading system.
 Includes BotInstance, Trade, Position, and PerformanceMetric models.
 """
 
-from datetime import datetime
-from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Text, Numeric, Boolean, ForeignKey, func, Index,
+    Column, Integer, String, DateTime, Text, Numeric, ForeignKey, func, Index,
     event
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from src.data.db.core.json_types import JsonType
 from sqlalchemy.orm import relationship

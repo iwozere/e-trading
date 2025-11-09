@@ -25,8 +25,6 @@ Functions:
 
 import math
 from typing import Dict, List, Optional, Any, Tuple
-from decimal import Decimal, ROUND_DOWN
-import logging
 
 from src.notification.logger import setup_logger
 

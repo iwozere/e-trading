@@ -10,11 +10,10 @@ This module provides enhanced caching capabilities including:
 
 import time
 import hashlib
-import json
 import pickle
 import gzip
-from typing import Any, Optional, Dict, List, Union, Callable
-from datetime import datetime, timedelta
+from typing import Any, Optional, Dict, List, Union
+from datetime import datetime
 from pathlib import Path
 import logging
 import threading
@@ -203,7 +202,7 @@ class RedisCache:
         # Deserialize from pickle
         try:
             result = pickle.loads(data)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to deserialize data:")
             return None
 
@@ -236,7 +235,7 @@ class RedisCache:
 
             return result
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Redis get error:")
             with self._lock:
                 self.metrics.errors += 1
@@ -257,7 +256,7 @@ class RedisCache:
 
             return success
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Redis set error:")
             with self._lock:
                 self.metrics.errors += 1
@@ -275,7 +274,7 @@ class RedisCache:
 
             return deleted > 0
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Redis delete error:")
             with self._lock:
                 self.metrics.errors += 1
@@ -287,7 +286,7 @@ class RedisCache:
             redis_client = self._get_redis()
             cache_key = self._make_key(key)
             return redis_client.exists(cache_key) > 0
-        except Exception as e:
+        except Exception:
             _logger.exception("Redis exists error:")
             return False
 
@@ -314,7 +313,7 @@ class RedisCache:
                 'keyspace_hits': info.get('keyspace_hits'),
                 'keyspace_misses': info.get('keyspace_misses'),
             }
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get Redis info:")
             return {}
 
@@ -498,7 +497,7 @@ class AdvancedDataCache(DataCache):
                 with self._lock:
                     self.metrics.misses += 1
             return result
-        except Exception as e:
+        except Exception:
             _logger.exception("File cache get failed:")
             with self._lock:
                 self.metrics.errors += 1
@@ -535,7 +534,7 @@ class AdvancedDataCache(DataCache):
         # Store in file cache
         try:
             success &= super().put(df, provider, symbol, interval, start_date, end_date, file_format)
-        except Exception as e:
+        except Exception:
             _logger.exception("File cache put failed:")
             success = False
 

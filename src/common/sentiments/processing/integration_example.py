@@ -12,7 +12,6 @@ This example shows how to use the new processing modules together:
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
 from pathlib import Path
 import sys
 
@@ -22,11 +21,10 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from . import (
-    HeuristicSentimentAnalyzer, SentimentResult,
-    EnhancedHFAnalyzer, SentimentPrediction, ContentType,
-    BotDetector, BotDetectionResult, UserProfile, PostMetrics,
-    ViralityCalculator, ViralityResult, PostData, EngagementMetrics, AuthorInfluence, Platform,
-    SentimentAggregator, AggregatedSentiment, SourceSentiment
+    HeuristicSentimentAnalyzer, EnhancedHFAnalyzer, ContentType,
+    BotDetector, UserProfile, PostMetrics,
+    ViralityCalculator, PostData, EngagementMetrics, AuthorInfluence, Platform,
+    SentimentAggregator
 )
 
 _logger = setup_logger(__name__)
@@ -214,7 +212,7 @@ async def demonstrate_enhanced_processing():
         print(f"   Confidence Interval: ({final_result.confidence_interval[0]:.3f}, {final_result.confidence_interval[1]:.3f})")
         print(f"   Temporal Trend: {final_result.temporal_trend}")
         print(f"   Aggregation Method: {final_result.aggregation_method}")
-        print(f"   Source Breakdown:")
+        print("   Source Breakdown:")
         for source, breakdown in final_result.source_breakdown.items():
             print(f"     {source}: Score={breakdown['sentiment_score']:.3f}, Weight={breakdown['weight']:.3f}")
 

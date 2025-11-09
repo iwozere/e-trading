@@ -14,7 +14,6 @@ import pandas as pd
 import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
-import logging
 from pathlib import Path
 import sys
 
@@ -114,10 +113,10 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.info("Successfully fetched %d data points for %s %s", len(df), symbol, interval)
             return df
 
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             _logger.exception("Request failed for %s %s:", symbol, interval)
             return None
-        except Exception as e:
+        except Exception:
             _logger.exception("Error fetching data for %s %s:", symbol, interval)
             return None
 
@@ -178,7 +177,7 @@ class TiingoDataDownloader(BaseDataDownloader):
 
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error standardizing DataFrame for %s %s:", symbol, interval)
             return pd.DataFrame()
 
@@ -208,7 +207,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved metadata for %s", symbol)
             return data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting metadata for %s:", symbol)
             return None
 
@@ -242,7 +241,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved fundamentals for %s", symbol)
             return fundamentals
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting fundamentals for %s:", symbol)
             return None
 
@@ -282,7 +281,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved income statement for %s", symbol)
             return data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting income statement for %s:", symbol)
             return None
 
@@ -322,7 +321,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved balance sheet for %s", symbol)
             return data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting balance sheet for %s:", symbol)
             return None
 
@@ -362,7 +361,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved cash flow for %s", symbol)
             return data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting cash flow for %s:", symbol)
             return None
 
@@ -402,7 +401,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved financial ratios for %s", symbol)
             return data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting financial ratios for %s:", symbol)
             return None
 
@@ -426,7 +425,7 @@ class TiingoDataDownloader(BaseDataDownloader):
                 else:
                     _logger.warning("No fundamental data available for %s", symbol)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error getting fundamentals for %s:", symbol)
                 continue
 
@@ -455,7 +454,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             else:
                 return []
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting available symbols:")
             return []
 
@@ -491,7 +490,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.info("Tiingo API connection test successful")
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Tiingo API connection test failed:")
             return False
 
@@ -524,7 +523,7 @@ if __name__ == "__main__":
         # Test fundamental data
         fundamentals = downloader.get_fundamentals('AAPL')
         if fundamentals:
-            print(f"✅ Downloaded fundamental data for AAPL")
+            print("✅ Downloaded fundamental data for AAPL")
             print(f"Company: {fundamentals.get('name', 'N/A')}")
             print(f"Exchange: {fundamentals.get('exchangeCode', 'N/A')}")
         else:

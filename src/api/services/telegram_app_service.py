@@ -48,7 +48,7 @@ class TelegramAppService:
                 "pending_approvals": pending_approvals,
                 "admin_users": admin_users
             }
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting user stats:")
             raise
 
@@ -81,7 +81,7 @@ class TelegramAppService:
                 }
                 for user in users
             ]
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting users list:")
             raise
 
@@ -91,7 +91,7 @@ class TelegramAppService:
             users_service.update_telegram_profile(telegram_user_id, verified=True)
             _logger.info("Verified Telegram user: %s", telegram_user_id)
             return {"message": f"User {telegram_user_id} verified successfully"}
-        except Exception as e:
+        except Exception:
             _logger.exception("Error verifying user %s:", telegram_user_id)
             raise
 
@@ -109,7 +109,7 @@ class TelegramAppService:
             users_service.update_telegram_profile(telegram_user_id, approved=True)
             _logger.info("Approved Telegram user: %s", telegram_user_id)
             return {"message": f"User {telegram_user_id} approved successfully"}
-        except Exception as e:
+        except Exception:
             _logger.exception("Error approving user %s:", telegram_user_id)
             raise
 
@@ -124,7 +124,7 @@ class TelegramAppService:
             )
             _logger.info("Reset email for Telegram user: %s", telegram_user_id)
             return {"message": f"Email reset for user {telegram_user_id} - user must re-verify"}
-        except Exception as e:
+        except Exception:
             _logger.exception("Error resetting email for user %s:", telegram_user_id)
             raise
 
@@ -141,7 +141,7 @@ class TelegramAppService:
                 "triggered_today": 0,  # Would need additional domain method
                 "rearm_cycles": 0      # Would need additional domain method
             }
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting alert stats:")
             raise
 
@@ -183,7 +183,7 @@ class TelegramAppService:
                 }
                 for alert in paginated_alerts
             ]
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting alerts list:")
             raise
 
@@ -204,7 +204,7 @@ class TelegramAppService:
 
             status_text = "activated" if new_enabled else "deactivated"
             return {"message": f"Alert {alert_id} {status_text} successfully"}
-        except Exception as e:
+        except Exception:
             _logger.exception("Error toggling alert %d:", alert_id)
             raise
 
@@ -220,7 +220,7 @@ class TelegramAppService:
                 raise RuntimeError("Failed to delete alert")
 
             return {"message": f"Alert {alert_id} deleted successfully"}
-        except Exception as e:
+        except Exception:
             _logger.exception("Error deleting alert %d:", alert_id)
             raise
 
@@ -236,7 +236,7 @@ class TelegramAppService:
                 "executed_today": 0,     # Would need additional domain method
                 "failed_executions": 0   # Would need additional domain method
             }
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting schedule stats:")
             raise
 
@@ -275,7 +275,7 @@ class TelegramAppService:
                 }
                 for schedule in schedules
             ]
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting schedules list:")
             raise
 
@@ -310,7 +310,7 @@ class TelegramAppService:
                 "successful_deliveries": successful_deliveries,
                 "failed_deliveries": failed_deliveries
             }
-        except Exception as e:
+        except Exception:
             _logger.exception("Error sending broadcast:")
             raise
 
@@ -320,7 +320,7 @@ class TelegramAppService:
             # Use telegram_service to get broadcast history
             history = telegram_service.get_broadcast_history(limit=limit, offset=offset)
             return history
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting broadcast history:")
             raise
 
@@ -330,7 +330,7 @@ class TelegramAppService:
             # Use telegram_service to get broadcast stats
             stats = telegram_service.get_broadcast_stats()
             return stats
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting broadcast stats:")
             raise
 
@@ -349,7 +349,7 @@ class TelegramAppService:
 
             # Data is already in dictionary format from telegram_service
             return logs
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting audit logs:")
             raise
 
@@ -357,7 +357,7 @@ class TelegramAppService:
         """Get audit statistics."""
         try:
             return telegram_service.get_command_audit_stats()
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting audit stats:")
             raise
 
@@ -382,6 +382,6 @@ class TelegramAppService:
                 }
                 for log in logs
             ]
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting user audit logs:")
             raise

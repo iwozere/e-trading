@@ -10,10 +10,8 @@ Tests the AlertEvaluator service functionality including:
 
 import pytest
 import json
-import asyncio
 from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from typing import Dict, Any, Optional
+from unittest.mock import Mock, AsyncMock
 import pandas as pd
 import numpy as np
 

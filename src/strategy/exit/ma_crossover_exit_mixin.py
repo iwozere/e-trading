@@ -107,7 +107,7 @@ class MACrossoverExitMixin(BaseExitMixin):
             logger.debug("Legacy indicators initialized: Fast MA(period=%d), Slow MA(period=%d)",
                         fast_period, slow_period)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -186,7 +186,7 @@ class MACrossoverExitMixin(BaseExitMixin):
                 ma_type = self.get_param("x_ma_type", "sma").lower()
                 self.strategy.current_exit_reason = f"{ma_type}_crossover"
             return return_value
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_exit: ")
             return False
 

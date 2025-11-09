@@ -7,8 +7,7 @@ from __future__ import annotations
 import sys
 import pathlib
 import pytest
-from unittest.mock import Mock, MagicMock
-from typing import Generator
+from unittest.mock import Mock
 from sqlalchemy.orm import Session
 
 # Ensure repository root is on sys.path

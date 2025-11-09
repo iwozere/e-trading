@@ -8,7 +8,7 @@ and authentication utilities.
 """
 
 import pytest
-from unittest.mock import patch, Mock, MagicMock
+from unittest.mock import patch, Mock
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from pathlib import Path

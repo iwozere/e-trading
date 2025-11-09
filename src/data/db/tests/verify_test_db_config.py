@@ -7,7 +7,6 @@ This script checks:
 2. All conftest.py files use TEST_DB_URL or ALEMBIC_DB_URL
 3. No hardcoded database URLs pointing to production
 """
-import os
 import sys
 import re
 from pathlib import Path
@@ -131,7 +130,7 @@ def main():
     print(f"Files with issues: {files_with_issues}")
 
     if issues:
-        print(f"\nIssues found:")
+        print("\nIssues found:")
         for issue in issues:
             # Remove ANSI codes for Windows compatibility
             clean_issue = issue.replace(RED, '').replace(YELLOW, '').replace(GREEN, '').replace(RESET, '')

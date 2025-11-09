@@ -7,8 +7,7 @@ with API rate limits across different data providers.
 
 import time
 import threading
-from typing import Dict, Optional, Callable, Any
-from datetime import datetime, timedelta
+from typing import Dict, Optional, Any
 import logging
 
 _logger = logging.getLogger(__name__)

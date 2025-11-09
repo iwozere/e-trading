@@ -104,7 +104,7 @@ def update_vix() -> None:
             vix_new.columns = vix_new.columns.droplevel(1)
             _logger.debug("Flattened multi-index columns: %s", list(vix_new.columns))
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Failed to download VIX data from Yahoo Finance")
         return
 

@@ -27,7 +27,7 @@ import yaml
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Any
 from datetime import datetime
 import time
 import traceback
@@ -356,7 +356,7 @@ class PipelineRunner:
             return {
                 'success': True,
                 'results': results,
-                'message': f"Model validation completed successfully"
+                'message': "Model validation completed successfully"
             }
 
         except Exception as e:

@@ -77,7 +77,7 @@ def example_cache_management():
 
     # Show info for specific ticker
     aapl_info = downloader.get_cache_info("AAPL")
-    print(f"\nAAPL Cache Info:")
+    print("\nAAPL Cache Info:")
     print(f"  Files: {aapl_info.get('files', 0)}")
     print(f"  Size: {aapl_info.get('total_size', 0)} bytes")
     print(f"  Providers: {aapl_info.get('providers', [])}")

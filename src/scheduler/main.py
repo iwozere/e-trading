@@ -10,7 +10,6 @@ import signal
 import sys
 from pathlib import Path
 from typing import Optional
-from contextlib import asynccontextmanager
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -19,7 +18,6 @@ sys.path.append(str(PROJECT_ROOT))
 from src.scheduler.scheduler_service import SchedulerService
 from src.scheduler.config import SchedulerServiceConfig
 from src.common.alerts.alert_evaluator import AlertEvaluator
-from src.common.alerts.cron_parser import CronParser
 from src.common.alerts.schema_validator import AlertSchemaValidator
 from src.data.data_manager import DataManager
 from src.indicators.service import IndicatorService

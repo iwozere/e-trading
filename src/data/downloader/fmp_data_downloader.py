@@ -14,7 +14,6 @@ import pandas as pd
 import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
-import logging
 from pathlib import Path
 import sys
 
@@ -133,10 +132,10 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.info("Successfully fetched %d data points for %s %s", len(df), symbol, interval)
             return df
 
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             _logger.exception("Request failed for %s %s:", symbol, interval)
             return None
-        except Exception as e:
+        except Exception:
             _logger.exception("Error fetching data for %s %s:", symbol, interval)
             return None
 
@@ -196,7 +195,7 @@ class FMPDataDownloader(BaseDataDownloader):
 
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error standardizing DataFrame for %s %s:", symbol, interval)
             return pd.DataFrame()
 
@@ -254,7 +253,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 _logger.warning("FMP screener returned unexpected data format")
                 return []
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in FMP stock screener:")
             return []
 
@@ -279,7 +278,7 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved fundamentals for %d tickers", len(fundamentals))
             return fundamentals
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting batch fundamentals:")
             return {}
 
@@ -316,7 +315,7 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved fundamentals for %s", symbol)
             return fundamentals
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting fundamentals for %s:", symbol)
             return None
 
@@ -339,7 +338,7 @@ class FMPDataDownloader(BaseDataDownloader):
             else:
                 return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting company profile for %s:", symbol)
             return None
 
@@ -360,7 +359,7 @@ class FMPDataDownloader(BaseDataDownloader):
             else:
                 return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting key metrics for %s:", symbol)
             return None
 
@@ -381,7 +380,7 @@ class FMPDataDownloader(BaseDataDownloader):
             else:
                 return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting financial ratios for %s:", symbol)
             return None
 
@@ -398,7 +397,7 @@ class FMPDataDownloader(BaseDataDownloader):
             data = response.json()
             return data if isinstance(data, list) else None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting income statement for %s:", symbol)
             return None
 
@@ -415,7 +414,7 @@ class FMPDataDownloader(BaseDataDownloader):
             data = response.json()
             return data if isinstance(data, list) else None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting balance sheet for %s:", symbol)
             return None
 
@@ -432,7 +431,7 @@ class FMPDataDownloader(BaseDataDownloader):
             data = response.json()
             return data if isinstance(data, list) else None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting cash flow for %s:", symbol)
             return None
 
@@ -453,7 +452,7 @@ class FMPDataDownloader(BaseDataDownloader):
             else:
                 return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting enterprise value for %s:", symbol)
             return None
 
@@ -474,7 +473,7 @@ class FMPDataDownloader(BaseDataDownloader):
             else:
                 return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting DCF valuation for %s:", symbol)
             return None
 
@@ -512,7 +511,7 @@ class FMPDataDownloader(BaseDataDownloader):
                 _logger.warning("No short interest data found for %s", symbol)
                 return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting short interest data for %s:", symbol)
             return None
 
@@ -545,7 +544,7 @@ class FMPDataDownloader(BaseDataDownloader):
                         symbol, float_data.get('floatShares', 'N/A'))
             return float_data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting float shares data for %s:", symbol)
             return None
 
@@ -576,7 +575,7 @@ class FMPDataDownloader(BaseDataDownloader):
                         symbol, market_cap_data.get('marketCap', 'N/A'))
             return market_cap_data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting market cap data for %s:", symbol)
             return None
 
@@ -622,7 +621,7 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.info("Loaded universe of %d stocks from FMP screener", len(tickers))
             return tickers
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading universe from screener:")
             return []
 
@@ -674,7 +673,7 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.info("Successfully retrieved data for %d/%d tickers", len(batch_data), total_tickers)
             return batch_data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in batch data retrieval:")
             return {}
 
@@ -691,7 +690,7 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.info("FMP API connection test successful")
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("FMP API connection test failed:")
             return False
 
@@ -724,7 +723,7 @@ if __name__ == "__main__":
         # Test fundamental data download
         fundamentals = downloader.get_fundamentals('AAPL')
         if fundamentals:
-            print(f"✅ Downloaded fundamental data for AAPL")
+            print("✅ Downloaded fundamental data for AAPL")
             print(f"Company: {fundamentals.get('profile', {}).get('companyName', 'N/A')}")
             print(f"Market Cap: {fundamentals.get('metrics', {}).get('marketCapitalization', 'N/A')}")
         else:

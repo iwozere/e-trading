@@ -16,19 +16,15 @@ Features:
 
 import os
 import time
-import hashlib
 import json
-import pickle
 import gzip
-import tempfile
-from typing import Any, Optional, Dict, List, Union, Callable, Tuple
-from datetime import datetime, timedelta
+from typing import Any, Optional, Dict, List, Union
+from datetime import datetime
 from pathlib import Path
 import logging
 import threading
 from dataclasses import dataclass, asdict
 import pandas as pd
-import numpy as np
 from io import StringIO
 
 # Import cache directory setting
@@ -171,7 +167,7 @@ class SafeCSVAppender:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error appending to CSV %s:", file_path)
             # Clean up temp file if it exists
             if temp_path and temp_path.exists():
@@ -225,7 +221,7 @@ class SmartDataAppender:
 
             return False, 0
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in smart data append:")
             return False, 0
 
@@ -375,7 +371,7 @@ class FileCacheCompressor:
             else:
                 df.to_csv(file_path, index=False)
             return True
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving compressed CSV:")
             return False
 
@@ -390,7 +386,7 @@ class FileCacheCompressor:
                 return pd.read_csv(StringIO(csv_content), parse_dates=['timestamp'])
             else:
                 return pd.read_csv(file_path, parse_dates=['timestamp'])
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading compressed CSV:")
             return None
 
@@ -857,7 +853,7 @@ class FileBasedCache:
             _logger.info("Cache migration completed: %d files migrated, %d years created", migration_results['files_migrated'], migration_results['years_created'])
             return migration_results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error during cache migration:")
             migration_results['errors'] += 1
             return migration_results
@@ -926,7 +922,7 @@ class FileBasedCache:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error migrating multi-year file:")
             return False
 
@@ -1062,7 +1058,7 @@ class FileBasedCache:
                             try:
                                 df.index = pd.to_datetime(df.index)
                                 _logger.info("Successfully converted string index to DatetimeIndex")
-                            except Exception as e:
+                            except Exception:
                                 _logger.exception("Failed to convert index to datetime:")
                                 # Skip date filtering if we can't convert
                                 pass
@@ -1082,7 +1078,7 @@ class FileBasedCache:
                 _logger.debug("Cache hit for %s/%s/%s across %d years: %d total rows", provider, symbol, interval, len(all_data), len(df))
                 return df
 
-        except Exception as e:
+        except Exception:
             self.metrics.errors += 1
             _logger.exception("Error reading from cache:")
             return None
@@ -1119,7 +1115,7 @@ class FileBasedCache:
                 if format == "csv":
                     try:
                         df_standardized = CSVFormatConventions.standardize_dataframe(df, provider)
-                    except ValueError as e:
+                    except ValueError:
                         _logger.exception("DataFrame standardization failed:")
                         return False
                 else:
@@ -1223,7 +1219,7 @@ class FileBasedCache:
                 _logger.info("Successfully cached %d total rows across %d year files for %s/%s/%s", total_rows_cached, files_created, provider, symbol, interval)
                 return True
 
-        except Exception as e:
+        except Exception:
             self.metrics.errors += 1
             _logger.exception("Error writing to cache:")
             return False
@@ -1278,7 +1274,7 @@ class FileBasedCache:
 
                 return False
 
-        except Exception as e:
+        except Exception:
             self.metrics.errors += 1
             _logger.exception("Error deleting cache:")
             return False
@@ -1320,7 +1316,7 @@ class FileBasedCache:
 
                 return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error clearing cache:")
             return False
 
@@ -1394,7 +1390,7 @@ class FileBasedCache:
                 _logger.info("Cleaned up %d old cache files", deleted_count)
                 return deleted_count
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error during cleanup:")
             return deleted_count
 
@@ -1460,7 +1456,7 @@ class FileBasedCache:
 
                 info['years_available'].sort()
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting cache info:")
 
         return info

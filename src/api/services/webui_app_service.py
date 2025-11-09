@@ -10,7 +10,6 @@ domain services underneath.
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Generator
 from pathlib import Path
-from datetime import datetime, timezone
 import sys
 
 # Add project root to path
@@ -69,7 +68,7 @@ class WebUIAppService:
             # Create default users if they don't exist
             self.create_default_users()
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize database:")
             raise
 
@@ -113,7 +112,7 @@ class WebUIAppService:
 
             _logger.info("Created default users: admin, trader, viewer")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to create default users:")
             raise
 
@@ -126,7 +125,7 @@ class WebUIAppService:
             # Note: The current users service is Telegram-focused
             # This would need to be extended for web UI users
             return None
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting user by email %s:", email)
             return None
 
@@ -147,11 +146,11 @@ class WebUIAppService:
 
             return result
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error authenticating user %s:", username)
             return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error authenticating user %s:", username)
             return None
 
@@ -178,7 +177,7 @@ class WebUIAppService:
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
-        except Exception as e:
+        except Exception:
             _logger.exception("Error logging user action:")
             return 0
 
@@ -188,7 +187,7 @@ class WebUIAppService:
         """Get system configuration."""
         try:
             return webui_service.get_config(key)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting system config %s:", key)
             return None
 
@@ -196,7 +195,7 @@ class WebUIAppService:
         """Set system configuration."""
         try:
             return webui_service.set_config(key, value, description)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error setting system config %s:", key)
             raise
 
@@ -206,7 +205,7 @@ class WebUIAppService:
         """Create strategy template."""
         try:
             return webui_service.create_template(template_data)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating strategy template:")
             raise
 
@@ -214,7 +213,7 @@ class WebUIAppService:
         """Get strategy templates by author."""
         try:
             return webui_service.get_templates_by_author(user_id)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting strategy templates for user %s:", user_id)
             return []
 
@@ -224,7 +223,7 @@ class WebUIAppService:
         """Add performance snapshot."""
         try:
             return webui_service.add_snapshot(snapshot)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error adding performance snapshot:")
             raise
 
@@ -232,7 +231,7 @@ class WebUIAppService:
         """Get latest performance snapshots."""
         try:
             return webui_service.latest_snapshots(strategy_id, limit)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting performance snapshots for strategy %s:", strategy_id)
             return []
 

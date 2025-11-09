@@ -8,12 +8,10 @@ Tests complete message delivery flows and service behavior.
 
 import asyncio
 import sys
-import json
-import time
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timezone
+from typing import Dict, Any
+from unittest.mock import patch
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -23,7 +21,6 @@ from src.notification.service.config import config
 from src.data.db.services.database_service import get_database_service
 from src.notification.service.message_queue import message_queue, MessagePriority
 from src.notification.service.processor import message_processor
-from src.data.db.models.model_notification import MessageStatus, DeliveryStatus
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

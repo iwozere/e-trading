@@ -5,17 +5,14 @@ Database-backed message queue with priority handling, validation, and scheduling
 Provides reliable message storage and retrieval for the notification service.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-import json
-import logging
 from dataclasses import dataclass
 
 from src.data.db.models.model_notification import (
-    Message, MessagePriority, MessageStatus, MessageCreate
+    Message, MessagePriority, MessageStatus
 )
-from src.data.db.repos.repo_notification import NotificationRepository
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
@@ -171,7 +168,7 @@ class MessageQueue:
 
             return message_id
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to enqueue message:")
             raise
 
@@ -223,7 +220,7 @@ class MessageQueue:
 
                 return queued_messages
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to dequeue messages:")
             raise
 
@@ -282,7 +279,7 @@ class MessageQueue:
 
                 return queued_messages
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to dequeue high priority messages:")
             raise
 
@@ -336,7 +333,7 @@ class MessageQueue:
 
                 return queued_messages
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to dequeue retry messages:")
             raise
 
@@ -446,7 +443,7 @@ class MessageQueue:
 
                 return stats
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get queue stats:")
             raise
 

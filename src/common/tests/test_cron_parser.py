@@ -6,9 +6,8 @@ for both 5-field and 6-field formats.
 """
 
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime
 import pytz
-from unittest.mock import patch
 
 from pathlib import Path
 import sys

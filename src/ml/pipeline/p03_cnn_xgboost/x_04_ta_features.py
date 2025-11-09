@@ -21,7 +21,7 @@ import talib
 
 from src.notification.logger import setup_logger
 from src.util.config import load_config
-from src.ml.pipeline.p03_cnn_xgboost.utils.data_validation import convert_targets_to_numeric, log_data_quality_report
+from src.ml.pipeline.p03_cnn_xgboost.utils.data_validation import convert_targets_to_numeric
 _logger = setup_logger(__name__)
 
 

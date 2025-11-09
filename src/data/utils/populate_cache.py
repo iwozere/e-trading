@@ -30,7 +30,6 @@ Usage:
     python src/data/cache/populate_cache.py --tickers AAPL --intervals 5m,15m,1h --start-date 2022-01-01
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -587,7 +586,7 @@ Examples:
     except KeyboardInterrupt:
         _logger.info("Operation cancelled by user")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         _logger.exception("Fatal error:")
         sys.exit(1)
 

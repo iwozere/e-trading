@@ -21,7 +21,7 @@ import datetime as dt
 import os
 import sqlite3
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 
 # ---------- SQLite helpers ----------

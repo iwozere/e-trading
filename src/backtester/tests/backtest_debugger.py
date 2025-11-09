@@ -14,19 +14,16 @@ Features:
 
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 import json
 
 import pandas as pd
-import numpy as np
 
 project_root = Path(__file__).resolve().parents[3]
 sys.path.append(str(project_root))
 
 from src.notification.logger import setup_logger
-from src.data.feed.file_data_feed import FileDataFeed
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
-from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 
 _logger = setup_logger(__name__)
 
@@ -165,7 +162,7 @@ class BacktestDebugger:
         # Count signals
         oversold_count = (rsi <= rsi_oversold).sum()
 
-        print(f"\nRSI Analysis:")
+        print("\nRSI Analysis:")
         print(f"  Period: {rsi_period}")
         print(f"  Oversold threshold: {rsi_oversold}")
         print(f"  Current RSI range: {rsi.min():.2f} - {rsi.max():.2f}")
@@ -200,7 +197,7 @@ class BacktestDebugger:
         # Count touches
         lower_touches = (df['close'] <= bb_lower).sum()
 
-        print(f"\nBollinger Bands Analysis:")
+        print("\nBollinger Bands Analysis:")
         print(f"  Period: {bb_period}, Deviation: {bb_dev}")
         print(f"  Lower band touches: {lower_touches}")
         print(f"  Percentage of bars: {lower_touches/len(df)*100:.2f}%")
@@ -210,10 +207,10 @@ class BacktestDebugger:
 
         if lower_touches == 0:
             issues.append(f"Price never touched lower BB (dev={bb_dev})")
-            suggestions.append(f"Reduce BB deviation to 1.5 or use different entry logic")
+            suggestions.append("Reduce BB deviation to 1.5 or use different entry logic")
         elif lower_touches < 5:
             issues.append(f"Rare BB lower touches ({lower_touches})")
-            suggestions.append(f"Consider reducing deviation or period")
+            suggestions.append("Consider reducing deviation or period")
 
         return {'issues': issues, 'suggestions': suggestions}
 
@@ -231,7 +228,7 @@ class BacktestDebugger:
         # Count high volume bars
         high_vol_count = (vol_ratio >= vol_threshold).sum()
 
-        print(f"\nVolume Analysis:")
+        print("\nVolume Analysis:")
         print(f"  MA Period: {vol_ma_period}")
         print(f"  Volume threshold: {vol_threshold}x")
         print(f"  High volume bars: {high_vol_count}")
@@ -249,10 +246,10 @@ class BacktestDebugger:
 
     def _analyze_supertrend_conditions(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze SuperTrend conditions."""
-        print(f"\nSuperTrend Analysis:")
+        print("\nSuperTrend Analysis:")
         print(f"  Period: {params.get('supertrend_period', 10)}")
         print(f"  Multiplier: {params.get('supertrend_multiplier', 3.0)}")
-        print(f"  Note: SuperTrend calculation requires ATR - check if trending conditions exist")
+        print("  Note: SuperTrend calculation requires ATR - check if trending conditions exist")
 
         return {'issues': [], 'suggestions': []}
 
@@ -335,7 +332,7 @@ class BacktestDebugger:
         if self.data is None:
             self.load_data()
 
-        report_lines.append(f"Data Summary:")
+        report_lines.append("Data Summary:")
         report_lines.append(f"  Rows: {len(self.data)}")
         report_lines.append(f"  Date Range: {self.data['datetime'].min()} to {self.data['datetime'].max()}")
         report_lines.append(f"  Close Price Range: ${self.data['close'].min():.2f} - ${self.data['close'].max():.2f}")

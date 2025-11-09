@@ -51,7 +51,7 @@ try:
             # Replace cerebro's broker with our enhanced broker
             self.cerebro.broker = self.enhanced_broker
 
-            print(f"Strategy initialized with Enhanced Broker")
+            print("Strategy initialized with Enhanced Broker")
             print(f"Backtrader mode: {self.enhanced_broker.is_backtrader_mode()}")
             print(f"Paper trading: {self.enhanced_broker.is_paper_trading()}")
 
@@ -111,7 +111,7 @@ try:
         }
 
         broker = BaseBroker(broker_config)
-        print(f"\nBroker Features:")
+        print("\nBroker Features:")
         print(f"- Name: {broker.get_name()}")
         print(f"- Trading Mode: {broker.get_trading_mode().value}")
         print(f"- Paper Trading: {broker.is_paper_trading()}")

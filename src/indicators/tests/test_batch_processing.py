@@ -7,8 +7,7 @@ Tests concurrent processing, error handling, and performance characteristics.
 import pytest
 import asyncio
 import pandas as pd
-import numpy as np
-from unittest.mock import patch, Mock, AsyncMock
+from unittest.mock import patch
 from datetime import datetime
 import sys
 from pathlib import Path
@@ -17,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.indicators.service import IndicatorService
-from src.indicators.models import TickerIndicatorsRequest, IndicatorResultSet
+from src.indicators.models import IndicatorResultSet
 
 
 class TestBatchProcessing:

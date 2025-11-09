@@ -118,7 +118,7 @@ class RSIOrBBExitMixin(BaseExitMixin):
             self.register_indicator(self.bb_name, self.bb)
 
             logger.debug("Legacy indicators initialized: exit_rsi, exit_bb")
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -216,7 +216,7 @@ class RSIOrBBExitMixin(BaseExitMixin):
                 )
 
             return should_exit
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_exit: ")
             return False
 

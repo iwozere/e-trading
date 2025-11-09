@@ -21,7 +21,7 @@ import yaml
 import talib
 from pathlib import Path
 import sys
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from sklearn.model_selection import train_test_split
 import warnings
@@ -514,7 +514,7 @@ def main():
             results = feature_engineer.run()
             print("Feature engineering results:", results)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Feature engineering failed:")
         sys.exit(1)
 

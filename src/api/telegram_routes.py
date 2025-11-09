@@ -42,7 +42,6 @@ security = HTTPBearer()
 
 # Pydantic models for API
 from pydantic import BaseModel, Field
-from datetime import datetime
 
 class TelegramUser(BaseModel):
     """Telegram user model."""

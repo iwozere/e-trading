@@ -8,7 +8,6 @@ including indexes, constraints, and performance settings.
 import sys
 import json
 from pathlib import Path
-from datetime import datetime
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -17,7 +16,7 @@ sys.path.append(str(PROJECT_ROOT))
 from sqlalchemy import create_engine
 from src.data.db.core.database import get_database_url
 from src.notification.docs.utilities.database_migrations import run_optimization_migration
-from src.notification.docs.utilities.query_analyzer import QueryPerformanceMonitor, get_query_monitor
+from src.notification.docs.utilities.query_analyzer import get_query_monitor
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

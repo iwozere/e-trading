@@ -5,8 +5,8 @@ Consolidates analytics functionality for both notifications and trading data.
 Provides a unified interface for analytics across all system domains.
 """
 
-from typing import Dict, Any, List, Optional, Union
-from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
@@ -42,7 +42,7 @@ class UnifiedAnalyticsService:
                 from src.notification.service.analytics import notification_analytics
                 self._notification_analytics = notification_analytics
                 self._logger.info("Notification analytics initialized")
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Failed to initialize notification analytics:")
                 raise
 
@@ -83,7 +83,7 @@ class UnifiedAnalyticsService:
                 user_id=user_id,
                 days=days
             )
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get notification delivery rates:")
             raise
 
@@ -108,7 +108,7 @@ class UnifiedAnalyticsService:
                 channel=channel,
                 days=days
             )
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get notification response times:")
             raise
 
@@ -137,7 +137,7 @@ class UnifiedAnalyticsService:
                 channel=channel
             )
             return trend_analysis.to_dict()
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get notification trends:")
             raise
 
@@ -169,7 +169,7 @@ class UnifiedAnalyticsService:
                 days=days,
                 channel=channel
             )
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get notification aggregated stats:")
             raise
 
@@ -188,7 +188,7 @@ class UnifiedAnalyticsService:
         try:
             analytics = self._get_notification_analytics()
             return await analytics.get_channel_performance_comparison(days=days)
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get notification channel comparison:")
             raise
 
@@ -289,7 +289,7 @@ class UnifiedAnalyticsService:
                 }
             }
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Failed to get unified dashboard data:")
             raise
 

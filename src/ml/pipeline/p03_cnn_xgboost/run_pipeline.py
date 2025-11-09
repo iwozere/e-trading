@@ -179,7 +179,7 @@ class CNNXGBoostPipeline:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Pipeline failed with error:")
             self.pipeline_state["overall_status"] = "failed"
             self._save_pipeline_state()

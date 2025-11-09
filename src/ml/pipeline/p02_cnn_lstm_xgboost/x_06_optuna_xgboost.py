@@ -7,15 +7,12 @@ It uses the combined features (CNN-LSTM features + technical indicators)
 extracted in the previous stage.
 """
 
-import os
 import sys
 import yaml
 import numpy as np
 import optuna
 import xgboost as xgb
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-import logging
 from pathlib import Path
 
 # Add src to path for imports
@@ -171,7 +168,6 @@ class XGBoostOptimizer:
 
         # Create optimization plots
         try:
-            import matplotlib.pyplot as plt
 
             # Parameter importance plot
             fig = optuna.visualization.plot_param_importances(study)

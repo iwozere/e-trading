@@ -3,7 +3,6 @@
 # Normal unit tests for registry module (no importlib)
 # ---------------------------------------------------------------------------
 import pytest
-from typing import Dict, List, Optional, Union, Literal, Any
 from pathlib import Path
 import sys
 

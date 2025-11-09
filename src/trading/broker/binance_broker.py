@@ -21,12 +21,9 @@ Classes:
 - BinanceBroker: Enhanced Binance broker with dual-mode support
 """
 
-import asyncio
 import json
-import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
-import logging
 import websocket
 import threading
 
@@ -36,7 +33,7 @@ from binance.exceptions import BinanceAPIException
 
 from src.trading.broker.base_broker import (
     BaseBroker, Order, Position, Portfolio, OrderStatus, OrderSide,
-    OrderType, TradingMode, PaperTradingMode, ExecutionMetrics
+    OrderType, TradingMode
 )
 from src.trading.broker.paper_trading_mixin import PaperTradingMixin
 
@@ -142,7 +139,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
             _logger.info("Disconnected from Binance")
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error disconnecting from Binance:")
             return False
 
@@ -163,7 +160,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
             _logger.info("Loaded exchange info for %d symbols", len(self.symbol_filters))
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load exchange info:")
 
     async def _start_websocket_connection(self):
@@ -176,7 +173,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 try:
                     data = json.loads(message)
                     self._process_websocket_message(data)
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error processing WebSocket message:")
 
             def on_error(ws, error):
@@ -204,7 +201,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
             _logger.info("Started WebSocket connection for market data")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to start WebSocket connection:")
 
     def _process_websocket_message(self, data):
@@ -227,7 +224,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 if symbol and price > 0:
                     self.update_market_data_cache(symbol, price)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing WebSocket data:")
 
     async def place_order(self, order: Order) -> str:
@@ -422,7 +419,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
             return price
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error fetching price for %s:", symbol)
             return None
 
@@ -449,7 +446,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                     _logger.warning("Order %s not found for cancellation", order_id)
                     return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error cancelling order %s:", order_id)
             return False
 
@@ -476,7 +473,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                 else:
                     return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting order status for %s:", order_id)
             return None
 
@@ -510,7 +507,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
                 return positions
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting positions:")
             return {}
 
@@ -539,7 +536,7 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
 
                 return portfolio
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting portfolio:")
             return Portfolio(
                 total_value=0.0,

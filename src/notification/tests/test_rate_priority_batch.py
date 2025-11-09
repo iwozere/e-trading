@@ -16,8 +16,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.rate_limiter import rate_limiter, RateLimitResult, RateLimitConfig
-from src.notification.service.priority_handler import priority_handler, PriorityLevel
-from src.notification.service.batch_processor import batch_processor, BatchConfig, BatchTrigger
+from src.notification.service.priority_handler import priority_handler
+from src.notification.service.batch_processor import batch_processor, BatchConfig
 from src.notification.service.message_queue import QueuedMessage
 from src.data.db.models.model_notification import MessagePriority
 from src.notification.logger import setup_logger
@@ -294,7 +294,7 @@ async def test_integration():
         # Wait for processing
         await asyncio.sleep(2.0)
 
-        print(f"✓ Integration test results:")
+        print("✓ Integration test results:")
         print(f"  Priority messages: {len(priority_messages)}")
         print(f"  Batched messages: {sum(b.size for b in processed_batches)}")
         print(f"  Rate limited messages: {len(rate_limited_messages)}")

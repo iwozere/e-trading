@@ -17,10 +17,8 @@ import backtrader as bt
 from typing import Dict, Any, Optional, List, Tuple
 from enum import Enum
 from collections import deque
-import numpy as np
 
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
-from src.indicators.adapters.backtrader_wrappers import UnifiedATRIndicator
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -213,7 +211,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
 
             logger.debug("ATR indicators initialized successfully")
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing ATR indicators:")
             raise
 
@@ -242,7 +240,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
 
             return True
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error checking indicator readiness:")
             return False
 
@@ -315,7 +313,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
 
             return atr_eff
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error calculating effective ATR:")
             return self.atr_floor
 
@@ -359,7 +357,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
 
             return False
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_exit:")
             return False
 
@@ -381,7 +379,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
 
             return "unknown"
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in get_exit_reason:")
             return "error"
 
@@ -447,7 +445,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
 
                 logger.debug("Stop updated to %s (candidate: %s)", self.current_stop, candidate_stop)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error updating trailing stop:")
 
     def _should_skip_due_to_noise(self, atr_eff: float) -> bool:

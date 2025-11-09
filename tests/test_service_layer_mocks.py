@@ -11,17 +11,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 import pytest
-import asyncio
 from tests.fixtures.service_fixtures import (
-    business_logic_with_mocks, telegram_service_mock, indicator_service_mock,
-    sample_user_data, admin_user_data, unverified_user_data,
-    setup_user_in_mock, setup_indicator_data_in_mock, create_parsed_command,
-    assert_service_called, assert_service_call_count, get_last_service_call,
-    simulate_database_error, simulate_rate_limit_error, simulate_indicator_api_error,
+    setup_indicator_data_in_mock, create_parsed_command,
+    simulate_database_error, simulate_indicator_api_error,
     ServiceTestContext
 )
-from src.telegram.command_parser import ParsedCommand
-from src.indicators.models import IndicatorValue
 
 
 class TestServiceLayerMocks:

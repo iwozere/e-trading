@@ -8,7 +8,6 @@ simultaneously using the enhanced broker system.
 """
 
 import asyncio
-import json
 from pathlib import Path
 import sys
 
@@ -130,7 +129,7 @@ async def main():
             await asyncio.sleep(30)
 
     except KeyboardInterrupt:
-        print(f"\n🛑 Stopping all strategies...")
+        print("\n🛑 Stopping all strategies...")
 
         # Stop all brokers
         for strategy_name, broker_id in brokers.items():

@@ -10,7 +10,7 @@ This module provides comprehensive virality analysis with:
 """
 
 import math
-from typing import Dict, List, Optional, Tuple, Any, Set
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict, Counter

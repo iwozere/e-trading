@@ -9,17 +9,16 @@ Tests cover:
 - Error handling
 """
 
-import asyncio
 import json
 import pytest
 from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock
 import pandas as pd
 
 from src.common.alerts.alert_evaluator import (
-    AlertEvaluator, AlertConfig, AlertEvaluationResult, RearmResult
+    AlertEvaluator, AlertConfig
 )
-from src.common.alerts.schema_validator import AlertSchemaValidator, ValidationResult
+from src.common.alerts.schema_validator import ValidationResult
 
 
 class TestAlertEvaluator:

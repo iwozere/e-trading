@@ -34,7 +34,7 @@ def register_hmm_lstm_mixin():
         ENTRY_MIXIN_REGISTRY["HMMLSTMEntryMixin"] = HMMLSTMEntryMixin
         _logger.info("Successfully registered HMMLSTMEntryMixin")
         return True
-    except Exception as e:
+    except Exception:
         _logger.exception("Failed to register HMMLSTMEntryMixin")
         return False
 

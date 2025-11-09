@@ -14,11 +14,10 @@ using JSON configuration files. It handles:
 import sys
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 import backtrader as bt
-import pandas as pd
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[3]
@@ -453,7 +452,7 @@ class BacktesterTestFramework:
 
         report_lines = []
         report_lines.append("=" * 80)
-        report_lines.append(f"BACKTESTER TEST REPORT")
+        report_lines.append("BACKTESTER TEST REPORT")
         report_lines.append("=" * 80)
         report_lines.append("")
 

@@ -8,9 +8,8 @@ for short squeeze analysis using FMP data provider.
 from pathlib import Path
 import sys
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
-import os
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -79,7 +78,7 @@ class UniverseLoader:
             _logger.info("Successfully loaded universe of %d tickers", len(filtered_universe))
             return filtered_universe
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading universe:")
             return []
 
@@ -147,7 +146,7 @@ class UniverseLoader:
             _logger.info("Combined universe: %d unique tickers", len(final_tickers))
             return final_tickers
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading from screener:")
             # Fallback to original method
             return self._load_from_screener_fallback()
@@ -167,7 +166,7 @@ class UniverseLoader:
             _logger.info("Fallback screener returned %d tickers", len(tickers))
             return tickers
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in fallback screener:")
             return []
 
@@ -242,7 +241,7 @@ class UniverseLoader:
             _logger.info("Final filtered universe: %d tickers", len(filtered_tickers))
             return filtered_tickers
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error applying filters:")
             return tickers  # Return original list on error
 
@@ -455,7 +454,7 @@ class UniverseLoader:
 
             return stats
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting FINRA coverage stats:")
             return {}
 

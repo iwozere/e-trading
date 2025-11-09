@@ -72,7 +72,7 @@ class DataSourceFactory:
             else:
                 _logger.warning("Configuration file not found: %s", self.config_path)
                 return {}
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load configuration:")
             return {}
 
@@ -137,7 +137,7 @@ class DataSourceFactory:
             _logger.info("Created data source for %s", provider_name)
             return data_source
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to create data source for %s:", provider_name)
             return None
 
@@ -266,7 +266,7 @@ class DataSourceFactory:
                 data_source.cleanup()
                 del self._data_sources[provider_name]
                 _logger.info("Cleaned up data source for %s", provider_name)
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error cleaning up data source for %s:", provider_name)
 
     def reload_config(self) -> None:
@@ -314,7 +314,7 @@ class DataSourceFactory:
             _logger.info("Updated configuration for %s", provider_name)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to update configuration for %s:", provider_name)
             return False
 

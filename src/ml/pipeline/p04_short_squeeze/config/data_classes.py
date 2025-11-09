@@ -5,7 +5,7 @@ This module defines type-safe configuration classes for all pipeline components.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import List, Optional
 from datetime import datetime
 
 

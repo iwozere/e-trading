@@ -8,8 +8,8 @@ and integration with deep scan processing.
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, date, timedelta
+from unittest.mock import Mock, patch
+from datetime import datetime, timedelta
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]

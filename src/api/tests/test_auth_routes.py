@@ -11,8 +11,7 @@ Tests for authentication endpoints including:
 """
 
 import pytest
-from unittest.mock import patch, Mock
-from fastapi import status
+from unittest.mock import patch
 from pathlib import Path
 import sys
 

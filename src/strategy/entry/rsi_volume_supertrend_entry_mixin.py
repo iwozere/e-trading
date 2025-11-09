@@ -123,7 +123,7 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
             self.register_indicator(self.supertrend_name, supertrend)
 
             logger.debug("Legacy indicators initialized: entry_rsi, entry_volume_ma, entry_supertrend")
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -207,6 +207,6 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
                     current_price, current_rsi, current_volume, vol_ma, supertrend_direction
                 )
             return return_value
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_enter: ")
             return False

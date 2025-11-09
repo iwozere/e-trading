@@ -16,8 +16,7 @@ import json
 import schedule
 import time
 import threading
-from dataclasses import dataclass, asdict
-from enum import Enum
+from dataclasses import asdict
 import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -118,7 +117,7 @@ class ModelTrainer:
             logger.info("Model training completed. CV MSE: %.4f", -cv_scores.mean())
             return model, metrics
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in model training: ")
             raise
 
@@ -378,7 +377,7 @@ class DriftDetector:
                 'new_performance': mean_squared_error(y_new, y_pred_new)
             }
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in concept drift detection: ")
             return False, {}
 
@@ -593,7 +592,7 @@ class AutomatedTrainingPipeline:
             self.last_training_time = datetime.now()
             logger.info("Scheduled training completed successfully")
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in scheduled training: ")
         finally:
             self.is_training = False
@@ -638,7 +637,7 @@ class AutomatedTrainingPipeline:
             self.last_training_time = datetime.now()
             logger.info("Training completed successfully")
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in training: ")
         finally:
             self.is_training = False
@@ -665,7 +664,7 @@ class AutomatedTrainingPipeline:
             logger.info("A/B test completed: %s", results['recommendation'])
             return results
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in A/B testing: ")
             return {}
 
@@ -695,7 +694,7 @@ class AutomatedTrainingPipeline:
                 'overall_drift_detected': data_drift_detected or concept_drift_detected
             }
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in drift detection: ")
             return {}
 
@@ -722,7 +721,7 @@ class AutomatedTrainingPipeline:
                 'is_training': self.is_training
             }
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error generating performance report: ")
             return {}
 

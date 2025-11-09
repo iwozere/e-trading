@@ -20,7 +20,7 @@ class VolumePlotter(BaseIndicatorPlotter):
                 ax.plot(dates, vol_ma, label="Volume MA", color="blue", alpha=0.7)
 
             self._apply_style(ax)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error plotting Volume: %s")
 
     @property

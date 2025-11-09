@@ -281,7 +281,7 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                 # Sleep before next update
                 time.sleep(self._get_update_interval())
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in update loop for %s: %s")
                 self.is_connected = False
                 time.sleep(self.retry_interval)
@@ -351,12 +351,12 @@ class BaseLiveDataFeed(bt.feed.DataBase):
                 if self.on_new_bar:
                     try:
                         self.on_new_bar(self.symbol, self.df.index[-1], latest.to_dict())
-                    except Exception as e:
+                    except Exception:
                         _logger.exception("Error in on_new_bar callback: %s")
 
                 _logger.debug("Updated %s with new bar at %s", self.symbol, self.df.index[-1])
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing new data for %s: %s")
 
     def _get_update_interval(self) -> int:

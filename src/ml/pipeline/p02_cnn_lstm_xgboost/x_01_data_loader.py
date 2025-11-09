@@ -14,21 +14,19 @@ Features:
 """
 
 import pandas as pd
-import numpy as np
 import yaml
 from pathlib import Path
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
-import os
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 # Add project root to path to import common utilities
 project_root = Path(__file__).resolve().parents[4]
 sys.path.append(str(project_root))
 
-from src.common import get_ohlcv, analyze_period_interval
+from src.common import get_ohlcv
 from src.notification.logger import setup_logger
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 _logger = setup_logger(__name__)
@@ -260,7 +258,7 @@ class DataLoader:
                         failed_downloads.append(filename)
                         _logger.error("Failed to download %s %s %s: %s", provider, symbol, timeframe, error_msg)
 
-                except Exception as e:
+                except Exception:
                     filename = f"{provider}_{symbol}_{timeframe}.csv"
                     failed_downloads.append(filename)
                     _logger.exception("Exception downloading %s %s %s:", provider, symbol, timeframe)
@@ -318,7 +316,7 @@ class DataLoader:
 
                 valid_files.append(filepath.name)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error validating file %s:", filepath.name)
                 invalid_files.append(filepath.name)
 
@@ -354,7 +352,7 @@ def main():
 
         print("Data loading results:", results)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Data loading failed:")
         sys.exit(1)
 

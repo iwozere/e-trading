@@ -10,9 +10,8 @@ Tests the AlertSchemaValidator service functionality including:
 import pytest
 import json
 import tempfile
-import os
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 # Add src to path
 import sys
@@ -512,7 +511,6 @@ class TestAlertSchemaValidator:
     def test_concurrent_schema_loading(self, validator):
         """Test thread safety of schema loading and caching."""
         import threading
-        import time
 
         results = []
         errors = []

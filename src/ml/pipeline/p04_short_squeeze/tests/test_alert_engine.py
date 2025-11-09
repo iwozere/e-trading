@@ -9,7 +9,7 @@ import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 import sys
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, AsyncMock, patch
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]

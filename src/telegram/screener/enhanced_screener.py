@@ -7,7 +7,6 @@ and technical analysis based on JSON configuration.
 """
 
 import sys
-import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
@@ -28,7 +27,6 @@ from src.util.tickers_list import (
 
 # Use optimized batch fundamentals download for maximum performance
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-from src.common import get_ohlcv
 from src.indicators.service import IndicatorService
 from src.indicators.models import TickerIndicatorsRequest
 from src.telegram.screener.screener_config_parser import (ScreenerConfig, FundamentalCriteria, TechnicalCriteria)
@@ -156,7 +154,7 @@ class EnhancedScreener:
 
             return ticker_list, fmp_results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in FMP screening")
             return [], {}
 
@@ -862,9 +860,9 @@ class EnhancedScreener:
             return f"❌ **Screener Error**\n\n{report.error}"
 
         if not report.top_results:
-            return f"📊 **Enhanced Screener Results**\n\nNo stocks found matching your criteria."
+            return "📊 **Enhanced Screener Results**\n\nNo stocks found matching your criteria."
 
-        message = f"📊 **Enhanced Screener Results**\n\n"
+        message = "📊 **Enhanced Screener Results**\n\n"
         message += f"🔍 **List Type**: {config.list_type.replace('_', ' ').title()}\n"
         message += f"📈 **Screener Type**: {config.screener_type.title()}\n"
 

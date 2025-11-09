@@ -219,7 +219,7 @@ def test_sample_configs():
 
         # Load and verify trading config
         trading_config = load_config("test_sample_trading.json")
-        print(f"✅ Sample configs created")
+        print("✅ Sample configs created")
         print(f"   Trading sample: {trading_config.bot_id}")
 
         # Clean up

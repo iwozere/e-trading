@@ -6,13 +6,13 @@ Provides data access methods for monitoring all subsystems including notificatio
 telegram bot, API services, web UI, trading components, and system resources.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc, func, text
+from sqlalchemy import and_, text
 from sqlalchemy.exc import IntegrityError
 
-from src.data.db.models.model_system_health import SystemHealth, SystemType, SystemHealthStatus
+from src.data.db.models.model_system_health import SystemHealth, SystemHealthStatus
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -97,11 +97,11 @@ class SystemHealthRepository:
                 _logger.debug("Created system health record for %s.%s", system, component or 'main')
                 return health_record
 
-        except IntegrityError as e:
+        except IntegrityError:
             _logger.exception("Integrity error creating/updating system health:")
             self.session.rollback()
             raise
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating/updating system health:")
             self.session.rollback()
             raise

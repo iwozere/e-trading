@@ -11,7 +11,6 @@ import signal
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Optional
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -19,7 +18,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.config import config
 from src.data.db.services.database_service import get_database_service
-from src.data.db.services.notification_service import NotificationService
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -84,7 +82,7 @@ class MessagePoller:
                 # Wait before next poll
                 await asyncio.sleep(self.poll_interval_seconds)
 
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Error in polling loop:")
                 # Back off on error
                 await asyncio.sleep(self.poll_interval_seconds * 2)
@@ -109,7 +107,7 @@ class MessagePoller:
                 # No manual commit needed - UoW auto-commits on successful exit
                 return messages
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error polling pending messages:")
             return []
 
@@ -132,7 +130,7 @@ class MessagePoller:
                 else:
                     self._logger.error("Message processor does not support database messages")
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error processing messages:")
 
 
@@ -185,7 +183,7 @@ class HealthReporter:
                 # Wait before next report
                 await asyncio.sleep(self.report_interval_seconds)
 
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Error in health reporting loop:")
                 await asyncio.sleep(self.report_interval_seconds)
 
@@ -221,7 +219,7 @@ class HealthReporter:
                 metadata=metadata
             )
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error reporting service health:")
 
     async def _report_channel_health(self):
@@ -271,7 +269,7 @@ class HealthReporter:
                         error_message=f'Health check failed: {str(e)}'
                     )
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error reporting channel health:")
 
 
@@ -290,7 +288,7 @@ async def _register_channel_plugins():
 
         _logger.info("Registered channel plugins: %s", channel_registry.list_channels())
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error registering channel plugins:")
 
 
@@ -382,7 +380,7 @@ async def main():
 
     except KeyboardInterrupt:
         _logger.info("Received keyboard interrupt")
-    except Exception as e:
+    except Exception:
         _logger.exception("Unexpected error:")
     finally:
         await shutdown()

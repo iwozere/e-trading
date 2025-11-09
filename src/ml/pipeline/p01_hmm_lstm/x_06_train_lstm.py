@@ -28,7 +28,7 @@ from datetime import datetime
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import talib
 import sys
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]
@@ -948,7 +948,7 @@ def main():
 
         _logger.info("LSTM training completed!")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("LSTM training failed: ")
         raise
 

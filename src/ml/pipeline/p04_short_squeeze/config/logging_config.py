@@ -5,7 +5,6 @@ This module extends the existing notification system logging to provide
 pipeline-specific logging with structured context and performance metrics.
 """
 
-import logging
 import time
 from contextlib import contextmanager
 from typing import Dict, Any, Optional

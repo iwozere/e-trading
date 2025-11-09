@@ -77,7 +77,7 @@ class RaspberryPiTradingService:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load configuration:")
             return False
 
@@ -131,7 +131,7 @@ class RaspberryPiTradingService:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to start service:")
             return False
 
@@ -233,7 +233,7 @@ class RaspberryPiTradingService:
 
                 await asyncio.sleep(300)  # Monitor every 5 minutes
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in system monitoring:")
                 await asyncio.sleep(60)
 
@@ -266,7 +266,7 @@ class RaspberryPiTradingService:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Service error:")
             return False
         finally:
@@ -395,7 +395,7 @@ async def main():
         _logger.info("Received keyboard interrupt")
         await service.stop_service()
         sys.exit(0)
-    except Exception as e:
+    except Exception:
         _logger.exception("Service failed:")
         await service.stop_service()
         sys.exit(1)

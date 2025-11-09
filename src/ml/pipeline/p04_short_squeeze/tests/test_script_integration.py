@@ -10,12 +10,11 @@ import unittest
 import subprocess
 import sys
 import tempfile
-import json
 import csv
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
-from datetime import datetime, date
+from unittest.mock import patch, MagicMock
+from datetime import datetime
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -582,7 +581,6 @@ class TestEndToEndScriptExecution(ScriptIntegrationTestBase):
         mock_create_universe.return_value = mock_universe_loader
 
         # Create realistic mock results
-        from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, StructuralMetrics, CandidateSource
 
         mock_candidate = MagicMock()
         mock_candidate.ticker = "GME"

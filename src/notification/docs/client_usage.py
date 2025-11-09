@@ -163,7 +163,7 @@ def sync_example():
         print(f"✓ Sync trade notification sent with ID: {response.message_id}")
 
         # Check status synchronously
-        print(f"\nChecking message status synchronously...")
+        print("\nChecking message status synchronously...")
         status = client.get_message_status(response.message_id)
         print(f"✓ Message status: {status['status']}")
 

@@ -8,7 +8,7 @@ failover to memory cache, and comprehensive error handling.
 import json
 import pickle
 import time
-from typing import Any, Optional, Dict, Union
+from typing import Any, Optional, Dict
 from pathlib import Path
 import sys
 

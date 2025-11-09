@@ -13,9 +13,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.health_monitor import (
-    HealthMonitor, HealthCheckConfig, HealthStatus, HealthCheckType,
-    create_default_health_config, create_strict_health_config,
-    health_monitor
+    HealthMonitor, HealthStatus, HealthCheckType,
+    create_default_health_config, create_strict_health_config
 )
 from src.notification.service.delivery_tracker import MessageDeliveryStatus
 from src.data.db.models.model_notification import MessagePriority
@@ -79,14 +78,14 @@ async def simulate_delivery_integration():
 
     # Get health summary
     summary = monitor.get_health_summary()
-    print(f"\nHealth Summary:")
+    print("\nHealth Summary:")
     print(f"  Total Channels: {summary['total_channels']}")
     print(f"  Healthy: {summary['healthy_percentage']:.1f}%")
     print(f"  Status Distribution: {summary['status_distribution']}")
     print(f"  Total Health Checks: {summary['statistics']['total_checks']}")
 
     # Show individual channel status
-    print(f"\nIndividual Channel Status:")
+    print("\nIndividual Channel Status:")
     for channel in channels.keys():
         status = monitor.get_channel_status(channel)
         if status:
@@ -95,7 +94,7 @@ async def simulate_delivery_integration():
                   f"Avg Response: {status.average_response_time_ms:.1f}ms)")
 
     # Simulate manual channel management
-    print(f"\n--- Manual Channel Management ---")
+    print("\n--- Manual Channel Management ---")
 
     # Manually disable a channel
     result = monitor.manually_disable_channel("sms_channel", "Maintenance window")
@@ -112,7 +111,7 @@ async def simulate_delivery_integration():
         print("✓ Re-enabled SMS channel after maintenance")
 
     # Demonstrate health metrics retrieval
-    print(f"\n--- Health Metrics Analysis ---")
+    print("\n--- Health Metrics Analysis ---")
 
     for channel in ["telegram_channel", "email_channel"]:
         metrics = monitor.get_channel_metrics(channel, HealthCheckType.RESPONSE_TIME)
@@ -126,7 +125,7 @@ async def simulate_delivery_integration():
             print(f"{channel} - Average Connectivity: {avg_connectivity:.1f}% ({len(connectivity_metrics)} samples)")
 
     # Demonstrate integration with delivery status
-    print(f"\n--- Delivery Integration Example ---")
+    print("\n--- Delivery Integration Example ---")
 
     # Create a sample delivery status
     delivery_status = MessageDeliveryStatus(
@@ -160,7 +159,7 @@ async def simulate_delivery_integration():
     print(f"✓ Healthy channels for delivery: {healthy_channels}")
 
     # Demonstrate testing a callback configuration
-    print(f"\n--- Health Check Testing ---")
+    print("\n--- Health Check Testing ---")
 
     # Test each channel's health configuration
     for channel in channels.keys():
@@ -171,13 +170,13 @@ async def simulate_delivery_integration():
               f"Response={status.average_response_time_ms:.1f}ms, "
               f"Metrics collected={len(recent_metrics)}")
 
-    print(f"\n--- Cleanup ---")
+    print("\n--- Cleanup ---")
 
     # Stop health monitoring
     await monitor.stop()
     print("✓ Health monitoring stopped")
 
-    print(f"\n=== Integration Example Complete ===")
+    print("\n=== Integration Example Complete ===")
 
 
 async def main():
@@ -185,7 +184,7 @@ async def main():
     try:
         await simulate_delivery_integration()
         return 0
-    except Exception as e:
+    except Exception:
         _logger.exception("Integration example failed:")
         return 1
 

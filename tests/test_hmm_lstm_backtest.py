@@ -13,7 +13,7 @@ import json
 import yaml
 from pathlib import Path
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[2]

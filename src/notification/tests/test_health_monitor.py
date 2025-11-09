@@ -6,9 +6,7 @@ Tests health checks, status evaluation, auto-disable/enable, and monitoring feat
 import asyncio
 import sys
 from pathlib import Path
-import time
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -16,9 +14,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.service.health_monitor import (
     HealthMonitor, HealthCheckConfig, HealthStatus, HealthCheckType,
-    HealthThreshold, HealthMetric, ChannelHealthStatus,
-    create_default_health_config, create_strict_health_config, create_lenient_health_config,
-    health_monitor
+    HealthThreshold, HealthMetric, create_default_health_config, create_strict_health_config, create_lenient_health_config
 )
 from src.notification.logger import setup_logger
 

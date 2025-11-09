@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from src.data.db.repos.repo_short_squeeze import (
     ScreenerSnapshotRepo, DeepScanMetricsRepo, SqueezeAlertRepo,
-    AdHocCandidateRepo, FINRAShortInterestRepo, ShortSqueezeRepo
+    AdHocCandidateRepo, FINRAShortInterestRepo
 )
 from src.data.db.models.model_short_squeeze import AlertLevel
 

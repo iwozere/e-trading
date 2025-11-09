@@ -9,7 +9,6 @@ from pathlib import Path
 import sys
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
-import statistics
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
@@ -20,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.ml.pipeline.p04_short_squeeze.core.models import StructuralMetrics, Candidate, CandidateSource
+from src.ml.pipeline.p04_short_squeeze.core.models import Candidate, CandidateSource
 
 _logger = setup_logger(__name__)
 

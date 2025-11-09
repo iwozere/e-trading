@@ -13,11 +13,9 @@ import pytest_asyncio
 import asyncio
 import aiohttp
 import os
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import Mock, AsyncMock, patch
 from pathlib import Path
 import sys
-import time
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]

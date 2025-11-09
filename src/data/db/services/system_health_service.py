@@ -6,20 +6,18 @@ Provides high-level business logic for monitoring all subsystems including notif
 telegram bot, API services, web UI, trading components, and system resources.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
 import json
-from functools import wraps
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
-from src.data.db.repos.repo_system_health import SystemHealthRepository
-from src.data.db.models.model_system_health import SystemHealth, SystemType, SystemHealthStatus
+from src.data.db.models.model_system_health import SystemHealth, SystemHealthStatus
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

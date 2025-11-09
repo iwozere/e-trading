@@ -11,11 +11,10 @@ This module provides sophisticated bot detection with:
 
 import re
 import hashlib
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict, Counter
-import math
 from pathlib import Path
 import sys
 

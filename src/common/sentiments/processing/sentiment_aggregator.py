@@ -10,7 +10,7 @@ This module provides sophisticated sentiment aggregation with:
 - Adaptive weighting based on data quality
 """
 
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 import math
@@ -23,10 +23,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from .heuristic_analyzer import SentimentResult
-from .enhanced_hf_analyzer import SentimentPrediction
-from .bot_detector import BotDetectionResult
-from .virality_calculator import ViralityResult
 
 _logger = setup_logger(__name__)
 

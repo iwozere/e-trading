@@ -10,7 +10,7 @@ management of defaults and validation rules.
 from typing import Optional, Dict, Any, List
 from enum import Enum
 from datetime import datetime
-from pydantic import BaseModel, Field, validator, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 class Environment(str, Enum):
     """Environment types"""

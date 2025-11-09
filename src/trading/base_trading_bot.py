@@ -29,7 +29,6 @@ from src.trading.risk.controller import RiskController
 from src.notification.service.client import NotificationServiceClient, NotificationServiceError
 from src.notification.model import NotificationType, NotificationPriority
 from src.trading.broker.base_broker import PositionNotificationManager
-from config.donotshare.donotshare import (TELEGRAM_BOT_TOKEN, SMTP_USER)
 
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
@@ -153,7 +152,7 @@ class BaseTradingBot:
 
             _logger.info("Initialized bot instance: %s", self.bot_id)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error initializing bot instance: %s")
 
     def run(self) -> None:
@@ -170,7 +169,7 @@ class BaseTradingBot:
                 'started_at': datetime.now(timezone.utc),
                 'last_heartbeat': datetime.now(timezone.utc)
             })
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating bot status: %s")
 
         while self.is_running:
@@ -187,7 +186,7 @@ class BaseTradingBot:
                         'current_balance': self.current_balance,
                         'total_pnl': self.total_pnl
                     })
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error updating heartbeat: %s")
 
                 time.sleep(1)
@@ -413,7 +412,7 @@ class BaseTradingBot:
             else:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump([order], f, default=str, indent=2)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to log order: %s")
 
     def log_trade(self, trade: Dict[str, Any]) -> None:
@@ -439,7 +438,7 @@ class BaseTradingBot:
             else:
                 with open(path, "w", encoding="utf-8") as f:
                     json.dump([trade], f, default=str, indent=2)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to log trade: %s")
 
     def save_state(self) -> None:
@@ -457,7 +456,7 @@ class BaseTradingBot:
             }
             with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to save bot state: %s")
 
     def load_state(self) -> None:
@@ -479,7 +478,7 @@ class BaseTradingBot:
                         "current_balance", self.initial_balance
                     )
                     self.total_pnl = state.get("total_pnl", 0.0)
-            except Exception as e:
+            except Exception:
                 _logger.exception("Failed to load legacy bot state: %s")
 
     def _load_open_positions_from_db(self) -> None:
@@ -502,7 +501,7 @@ class BaseTradingBot:
 
             _logger.info("Loaded %d open positions from database for %s", len(open_trades), self.bot_id)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading open positions from database: %s")
             # Fall back to empty active positions
             self.active_positions = {}
@@ -539,7 +538,7 @@ class BaseTradingBot:
                 }
             ))
 
-        except NotificationServiceError as e:
+        except NotificationServiceError:
             _logger.exception("Failed to send error notification via service:")
             # Fallback to legacy method
             try:
@@ -606,7 +605,7 @@ class BaseTradingBot:
                 }
             ))
 
-        except NotificationServiceError as e:
+        except NotificationServiceError:
             _logger.exception("Failed to send trade notification via service:")
             # Fallback to legacy method
             try:
@@ -666,7 +665,7 @@ class BaseTradingBot:
                 'current_balance': self.current_balance,
                 'total_pnl': self.total_pnl
             })
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating bot status on stop: %s")
 
         # Close all open positions
@@ -733,7 +732,7 @@ class BaseTradingBot:
                 }
             ))
 
-        except NotificationServiceError as e:
+        except NotificationServiceError:
             _logger.exception("Failed to send bot event notification via service:")
             # Fallback to legacy method
             try:

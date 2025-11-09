@@ -7,7 +7,6 @@ service mocks and business logic instances for testing.
 
 import pytest
 from typing import Tuple, Dict, Any, List
-from unittest.mock import Mock
 
 from tests.mocks.telegram_service_mock import TelegramServiceMock
 from tests.mocks.indicator_service_mock import IndicatorServiceMock

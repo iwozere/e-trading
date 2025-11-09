@@ -336,7 +336,7 @@ def save_results(result, data_file):
                     f"Processed trade: Entry={serializable_trade['entry_price']} @ {serializable_trade['entry_time']}, "
                     f"Exit={serializable_trade['exit_price']} @ {serializable_trade['exit_time']}"
                 )
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error processing trade:")
                 continue
 
@@ -403,7 +403,7 @@ def save_results(result, data_file):
 
         _logger.info("Results saved to %s", json_file)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error saving results: %s")
         raise
 

@@ -18,7 +18,6 @@ Parameters:
 """
 
 from typing import Any, Dict, Optional
-import backtrader as bt
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.indicators.adapters.backtrader_wrappers import UnifiedATRIndicator
 from src.notification.logger import setup_logger
@@ -98,7 +97,7 @@ class SimpleATRExitMixin(BaseExitMixin):
             self.register_indicator(self.atr_name, self.atr)
 
             logger.debug("Legacy indicators initialized: exit_atr")
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -239,7 +238,7 @@ class SimpleATRExitMixin(BaseExitMixin):
 
             return False
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_exit: ")
             return False
 

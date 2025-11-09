@@ -5,13 +5,11 @@ This module consolidates all recommendation logic from scattered locations
 into a single, consistent recommendation engine for both technical and fundamental indicators.
 """
 
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
-import pandas as pd
+from typing import Dict, Tuple
 
 from src.indicators.models import (
     Recommendation, RecommendationType, IndicatorCategory,
-    IndicatorResult, IndicatorSet, CompositeRecommendation
+    IndicatorSet, CompositeRecommendation
 )
 from src.notification.logger import setup_logger
 

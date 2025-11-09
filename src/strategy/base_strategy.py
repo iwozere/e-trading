@@ -378,7 +378,7 @@ class BaseStrategy(bt.Strategy):
             if current_drawdown > self.max_drawdown:
                 self.max_drawdown = current_drawdown
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating equity curve")
 
     def _calculate_position_size(self, confidence: float = 1.0, risk_multiplier: float = 1.0) -> float:
@@ -401,7 +401,7 @@ class BaseStrategy(bt.Strategy):
 
             return position_size
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating position size")
             return self.min_position_size
 
@@ -444,7 +444,7 @@ class BaseStrategy(bt.Strategy):
 
             return shares
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating shares")
             return 0.0
 
@@ -510,7 +510,7 @@ class BaseStrategy(bt.Strategy):
                     except Exception as e:
                         _logger.warning("Error notifying exit mixin of entry: %s", e)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error entering position")
 
     def _validate_position_size(self, shares: float) -> bool:
@@ -572,7 +572,7 @@ class BaseStrategy(bt.Strategy):
 
             # Note: Don't reset entry_price here - it will be reset in notify_trade after the trade is actually closed
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error exiting position")
 
     def _exit_partial_position(self, exit_size: float, reason: str = ""):
@@ -616,7 +616,7 @@ class BaseStrategy(bt.Strategy):
                 _logger.info("Partial exit - Size: %.6f, Remaining: %.6f, Reason: %s",
                            exit_size, self.current_position_size, reason)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in partial exit")
 
     def _calculate_actual_trade_size(self, trade) -> float:
@@ -676,7 +676,6 @@ class BaseStrategy(bt.Strategy):
             return
 
         try:
-            import uuid
 
             if is_partial_exit:
                 # Store as partial exit
@@ -769,7 +768,7 @@ class BaseStrategy(bt.Strategy):
                 if pnl_pct > self.highest_profit:
                     self.highest_profit = pnl_pct
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating trade tracking")
 
     def notify_order(self, order):
@@ -871,7 +870,7 @@ class BaseStrategy(bt.Strategy):
                 if order.ref in self.order_refs:
                     del self.order_refs[order.ref]
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in notify_order")
 
     def notify_trade(self, trade):
@@ -1044,7 +1043,7 @@ class BaseStrategy(bt.Strategy):
                 except Exception as log_err:
                     _logger.warning("Error logging trade open record: %s", log_err)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in notify_trade")
 
     def get_performance_summary(self) -> Dict[str, Any]:
@@ -1079,7 +1078,7 @@ class BaseStrategy(bt.Strategy):
                 "current_equity": self.broker.getvalue() if hasattr(self, 'broker') else 0
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting performance summary")
             return {}
 
@@ -1089,5 +1088,5 @@ class BaseStrategy(bt.Strategy):
             performance = self.get_performance_summary()
             _logger.info("Strategy stopped - Performance: %s", performance)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in stop")

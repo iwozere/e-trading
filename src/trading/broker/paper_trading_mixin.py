@@ -18,7 +18,6 @@ Classes:
 - PaperTradingMixin: Mixin class for paper trading functionality
 """
 
-import asyncio
 import random
 import math
 from datetime import datetime, timezone
@@ -26,7 +25,7 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from src.trading.broker.base_broker import (
     Order, Position, Portfolio, OrderStatus, OrderSide, OrderType,
-    PaperTradingConfig, PaperTradingMode, ExecutionMetrics, ExecutionQuality
+    ExecutionQuality
 )
 
 from src.notification.logger import setup_logger

@@ -27,8 +27,6 @@ import pandas as pd
 
 from src.data.feed.base_live_data_feed import BaseLiveDataFeed
 from src.notification.logger import setup_logger
-from src.data.utils.retry import retry_on_exception
-from src.data.utils.rate_limiting import get_provider_limiter
 
 _logger = setup_logger(__name__)
 

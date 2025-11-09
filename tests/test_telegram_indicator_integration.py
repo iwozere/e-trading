@@ -11,12 +11,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 import pytest
-import asyncio
 from tests.fixtures.service_fixtures import (
-    business_logic_with_mocks, telegram_service_mock, indicator_service_mock,
-    sample_indicator_result, setup_user_in_mock, setup_indicator_data_in_mock
+    setup_indicator_data_in_mock
 )
-from src.indicators.models import TickerIndicatorsRequest, IndicatorResultSet, IndicatorValue
 
 
 class TestTelegramIndicatorIntegration:

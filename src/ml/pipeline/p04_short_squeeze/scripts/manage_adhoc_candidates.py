@@ -51,8 +51,8 @@ import argparse
 import sys
 import csv
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Tuple
+from datetime import datetime
+from typing import Optional
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -99,7 +99,7 @@ class AdHocCandidateManager:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to setup managers:")
             return False
 
@@ -209,7 +209,7 @@ class AdHocCandidateManager:
                         print(f"    Expires: {candidate.expires_at.strftime('%Y-%m-%d %H:%M:%S')} ({days_left} days left) {status}")
 
                     if candidate.promoted_by_screener:
-                        print(f"    🎯 Promoted by screener")
+                        print("    🎯 Promoted by screener")
 
                     print()
 
@@ -430,7 +430,7 @@ class AdHocCandidateManager:
             # Perform bulk add
             added_count, errors = self.adhoc_manager.bulk_add_candidates(candidates_data)
 
-            print(f"\n📊 Bulk Add Results:")
+            print("\n📊 Bulk Add Results:")
             print(f"✅ Successfully added: {added_count}")
             print(f"❌ Errors: {len(errors)}")
 

@@ -12,8 +12,7 @@ import asyncio
 import os
 import signal
 import sys
-from datetime import datetime, timezone
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, AsyncMock, patch
 from pathlib import Path
 
 # Add src to path

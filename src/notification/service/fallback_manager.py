@@ -6,12 +6,10 @@ for the notification service. Provides automatic failover when primary channels
 are unavailable and recovery mechanisms for failed messages.
 """
 
-import asyncio
 from typing import Dict, Any, List, Optional, Set, Tuple
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from enum import Enum
-import json
 from collections import defaultdict, deque
 
 from src.notification.service.health_monitor import HealthMonitor, HealthStatus

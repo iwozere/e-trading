@@ -17,7 +17,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 # Import your real modules
 import src.indicators.models as models
-import src.indicators.registry as registry
 import src.indicators.service as service
 
 # Try to import real adapters' dependencies to decide whether to run or skip

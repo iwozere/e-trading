@@ -29,7 +29,6 @@ Usage:
     python src/data/cache/pipeline/run_pipeline.py --force-refresh
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -386,7 +385,7 @@ Pipeline Steps:
     except KeyboardInterrupt:
         _logger.info("Pipeline cancelled by user")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         _logger.exception("Pipeline fatal error:")
         sys.exit(1)
 

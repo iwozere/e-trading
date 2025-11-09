@@ -59,7 +59,7 @@ class TelegramServiceExample:
         """
         try:
             return method(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             _logger.exception("Telegram service error:")
             return None
 
@@ -130,7 +130,7 @@ class TelegramServiceExample:
                 "message": "User management completed"
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("User management failed:")
             return {"status": "error", "message": "User management failed"}
 
@@ -186,7 +186,7 @@ class TelegramServiceExample:
                 "message": f"Alert created for {ticker} {condition} {price}"
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Alert management failed:")
             return {"status": "error", "message": "Alert management failed"}
 
@@ -234,7 +234,7 @@ class TelegramServiceExample:
                 "message": f"Calculated {len(technical_data + fundamental_data)} indicators for {ticker}"
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Indicator calculation failed:")
             return {"status": "error", "message": "Indicator calculation failed"}
 
@@ -293,7 +293,7 @@ class TelegramServiceExample:
                 "message": f"Report generated for {ticker}"
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Report generation failed:")
             return {"status": "error", "message": "Report generation failed"}
 
@@ -358,7 +358,7 @@ class TelegramServiceExample:
                 "message": f"Schedule created for {ticker} at {scheduled_time}"
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Schedule management failed:")
             return {"status": "error", "message": "Schedule management failed"}
 

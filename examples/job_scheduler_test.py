@@ -7,10 +7,8 @@ This script tests the basic functionality without requiring a full setup.
 """
 
 import sys
-import os
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
-import asyncio
+from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -90,7 +88,7 @@ def test_database_models():
 
     try:
         from src.data.db.models.model_jobs import (
-            Schedule, ScheduleRun, JobType, RunStatus,
+            JobType, RunStatus,
             ScheduleCreate, ScheduleRunCreate
         )
 
@@ -152,7 +150,7 @@ def test_api_models():
 
     try:
         from src.data.db.models.model_jobs import (
-            ReportRequest, ScreenerRequest, ScreenerSetInfo
+            ReportRequest, ScreenerRequest
         )
 
         # Test request models

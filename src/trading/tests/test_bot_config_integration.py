@@ -13,7 +13,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 import json
-from typing import Dict, Any
 from src.trading.services.bot_config_validator import (
     BotConfigValidator,
     validate_bot_config_json,

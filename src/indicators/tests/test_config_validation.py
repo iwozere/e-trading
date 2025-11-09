@@ -6,7 +6,6 @@ Tests parameter validation, preset management, and configuration loading.
 
 import pytest
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch, mock_open
 import sys
@@ -14,8 +13,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.indicators.config_manager import UnifiedConfigManager, PresetConfig
-from src.indicators.registry import INDICATOR_META
+from src.indicators.config_manager import UnifiedConfigManager
 
 
 class TestConfigurationValidation:

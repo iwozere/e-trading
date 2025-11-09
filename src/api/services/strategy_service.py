@@ -6,11 +6,9 @@ Service layer for managing trading strategies through the web UI.
 Provides a clean interface between the web API and the enhanced trading system.
 """
 
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 import json
-import asyncio
-from datetime import datetime
 import sys
 
 # Add project root to path
@@ -443,7 +441,7 @@ class StrategyManagementService:
 
         try:
             return self.strategy_manager.get_strategy_status(strategy_id)
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get strategy status %s:", strategy_id)
             return None
 
@@ -459,7 +457,7 @@ class StrategyManagementService:
 
         try:
             return self.strategy_manager.get_all_status()
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get all strategies status:")
             return []
 
@@ -535,7 +533,7 @@ class StrategyManagementService:
                 _logger.warning("Strategy templates file not found: %s", templates_file)
                 return {}
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load strategy templates:")
             return {}
 

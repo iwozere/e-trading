@@ -9,8 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, BigInteger, JSON,
-    CheckConstraint, UniqueConstraint, Index, ForeignKey, func
+    Column, Integer, String, Boolean, DateTime, Text, BigInteger, CheckConstraint, UniqueConstraint, ForeignKey, func
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship

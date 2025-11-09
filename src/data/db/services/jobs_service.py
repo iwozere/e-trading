@@ -5,15 +5,11 @@ Service layer for job scheduling and execution operations.
 Provides business logic for managing schedules and runs.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 import croniter
 
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
-from src.data.db.repos.repo_jobs import JobsRepository
 from src.data.db.models.model_jobs import (
     Schedule, ScheduleRun, RunStatus, JobType,
     ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate
@@ -306,7 +302,7 @@ class JobsService(BaseDBService):
         try:
             cron = croniter.croniter(cron_expression, datetime.now(timezone.utc))
             return cron.get_next(datetime)
-        except Exception as e:
+        except Exception:
             self._logger.error("Failed to calculate next run time for cron '%s':", cron_expression)
             # Return a default time (1 hour from now) if calculation fails
             return datetime.now(timezone.utc) + timedelta(hours=1)

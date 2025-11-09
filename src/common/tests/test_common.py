@@ -3,7 +3,6 @@ Tests for the common business logic module.
 
 Tests the fundamentals retrieval and normalization functionality.
 """
-import os
 import sys
 from pathlib import Path
 

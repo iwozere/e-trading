@@ -5,14 +5,12 @@ This module provides standardized naming conventions, constants, and mappings
 for all indicators across the unified indicator system.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 from src.indicators.models import (
     TECHNICAL_INDICATORS,
     FUNDAMENTAL_INDICATORS,
-    ALL_INDICATORS,
     LEGACY_INDICATOR_NAMES,
-    get_canonical_name,
-    get_indicator_description
+    get_canonical_name
 )
 
 # Multi-output indicator mappings

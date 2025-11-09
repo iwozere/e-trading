@@ -9,7 +9,6 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 import asyncio
 import aiohttp
-import json
 
 from src.notification.channels.base import (
     NotificationChannel, DeliveryResult, ChannelHealth, MessageContent,

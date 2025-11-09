@@ -8,8 +8,7 @@ Tests the CronParser service functionality including:
 """
 
 import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch
+from datetime import datetime, timezone
 import pytz
 
 # Add src to path
@@ -341,7 +340,6 @@ class TestCronParser:
     def test_concurrent_parsing(self):
         """Test thread safety of cron parsing operations."""
         import threading
-        import time
 
         expressions = [
             "0 12 * * *",

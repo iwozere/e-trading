@@ -116,7 +116,7 @@ class ConfigManager:
 
             return config
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading config file %s: ", config_path)
             return None
 
@@ -146,7 +146,7 @@ class ConfigManager:
 
             _logger.info("Loaded and validated config: %s", config_id)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Configuration validation failed for %s: ", config_path)
             raise
 
@@ -244,7 +244,7 @@ class ConfigManager:
                 self.registry.unregister_config(config_id)
                 _logger.info("Deleted configuration: %s", config_id)
                 return True
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error deleting config %s: %s")
                 return False
         return False

@@ -6,10 +6,9 @@ FastAPI routes for managing trading bots through the web UI.
 Provides CRUD operations for bot configurations and status management.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
-import json
 from datetime import datetime
 from pathlib import Path
 import sys
@@ -20,8 +19,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.data.db.services import trading_service
 from src.trading.services.bot_config_validator import (
-    validate_database_bot_record,
-    BotConfigValidator
+    validate_database_bot_record
 )
 from src.web_ui.config.trading_bot_config import (
     get_entry_mixin_parameters,
@@ -35,7 +33,7 @@ from src.web_ui.config.trading_bot_config import (
     INTERVALS,
     SYMBOLS
 )
-from src.api.auth import get_current_user, require_trader_or_admin
+from src.api.auth import get_current_user
 from src.data.db.models.model_users import User
 from src.notification.logger import setup_logger
 

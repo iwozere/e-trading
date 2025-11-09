@@ -18,13 +18,11 @@ Features:
 
 import asyncio
 import json
-import logging
 from typing import Dict, List, Set, Any, Optional
 from datetime import datetime, timezone
-import weakref
 from enum import Enum
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -85,7 +83,7 @@ class WebSocketConnection:
         try:
             await self.websocket.send_text(json.dumps(message))
             return True
-        except Exception as e:
+        except Exception:
             _logger.exception("Error sending message to %s:", self.connection_id)
             return False
 
@@ -95,7 +93,7 @@ class WebSocketConnection:
             await self.websocket.send_text(json.dumps({"type": "ping", "timestamp": datetime.now().isoformat()}))
             self.last_ping = datetime.now(timezone.utc)
             return True
-        except Exception as e:
+        except Exception:
             _logger.exception("Error pinging %s:", self.connection_id)
             return False
 
@@ -196,7 +194,7 @@ class WebSocketManager:
 
             return connection_id
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error connecting WebSocket %s:", connection_id)
             return None
 
@@ -271,7 +269,7 @@ class WebSocketManager:
 
         except json.JSONDecodeError:
             _logger.exception("Invalid JSON from %s: %s", connection_id, message)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error handling message from %s", connection_id)
 
     async def _handle_subscription(self, connection_id: str, data: Dict[str, Any]):
@@ -468,7 +466,7 @@ class WebSocketManager:
                 # Wait before next cleanup
                 await asyncio.sleep(60)  # Check every minute
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in connection cleanup:")
                 await asyncio.sleep(10)
 
@@ -495,13 +493,12 @@ class WebSocketManager:
         """Handle a new WebSocket connection with authentication."""
         try:
             # Mock authentication for now - in real implementation this would validate the token
-            from unittest.mock import Mock
 
             # Try to get current user (this will be mocked in tests)
             try:
                 from src.api.websocket_manager import get_current_user
                 user = get_current_user(token)
-            except Exception as e:
+            except Exception:
                 # Authentication failed
                 await websocket.close(code=4001, reason="Authentication failed")
                 return
@@ -527,7 +524,7 @@ class WebSocketManager:
             finally:
                 await self.disconnect(connection_id)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in handle_connection:")
             try:
                 await websocket.close(code=4001, reason="Authentication failed")

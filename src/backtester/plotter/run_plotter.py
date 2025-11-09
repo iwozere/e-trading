@@ -53,7 +53,7 @@ class ResultPlotter:
         try:
             with open(config_path, "r") as f:
                 return json.load(f)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading config from %s: %s")
             return {}
 
@@ -82,7 +82,7 @@ class ResultPlotter:
                 data = json.load(f)
             _logger.debug("Loaded result data from %s", json_file)
             return data
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading JSON file %s: %s")
             return {}
 
@@ -110,7 +110,7 @@ class ResultPlotter:
             _logger.debug("Loaded price data from %s", csv_path)
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading price data from %s: %s")
             return pd.DataFrame()
 
@@ -613,7 +613,7 @@ class ResultPlotter:
                 df, indicators, trades, equity_curve, json_file, result_data
             )
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing %s: %s")
 
     def run(self, results_dir: str = "results") -> None:

@@ -5,7 +5,6 @@ This example demonstrates how to use the archival service for message cleanup an
 """
 
 import asyncio
-from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 import sys
@@ -230,7 +229,7 @@ def main():
         _logger.info("Running async archival daemon example...")
         asyncio.run(example_scheduled_archival_daemon(mock_session))
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in examples:")
         raise
 

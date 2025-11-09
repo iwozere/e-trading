@@ -157,7 +157,7 @@ class DailyDeepScan:
 
             return results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in daily deep scan run:")
             raise
 
@@ -198,7 +198,7 @@ class DailyDeepScan:
 
                 return all_candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading active candidates:")
             return []
 
@@ -387,7 +387,7 @@ class DailyDeepScan:
 
             return scored_candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing batch:")
             return []
 
@@ -717,7 +717,7 @@ class DailyDeepScan:
                 _logger.info("Stored deep scan results in database: %d candidates",
                            len(scored_candidates))
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error storing deep scan results:")
             raise
 
@@ -760,7 +760,7 @@ if __name__ == "__main__":
         # Run deep scan (will load candidates from database)
         results = deep_scan.run_deep_scan()
 
-        print(f"✅ Deep scan completed:")
+        print("✅ Deep scan completed:")
         print(f"  - Candidates processed: {results.candidates_processed}")
         print(f"  - Scored candidates: {len(results.scored_candidates)}")
         print(f"  - Runtime: {results.runtime_metrics.get('duration_seconds', 0):.2f} seconds")

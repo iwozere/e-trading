@@ -7,7 +7,7 @@ Provides endpoints for creating, tracking, and managing notifications
 through the notification service.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -30,11 +30,8 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 # Direct database access for database-centric architecture
 from src.data.db.services.database_service import get_database_service
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus,
-    MessageStatus, DeliveryStatus, MessagePriority
+    Message, MessageStatus, MessagePriority
 )
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
 
 
 # Pydantic models for API
@@ -193,7 +190,7 @@ async def get_channels_health(current_user: User = Depends(get_current_user)):
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting channels health:")
         raise HTTPException(status_code=500, detail="Failed to get channels health")
 
@@ -243,7 +240,7 @@ async def list_notification_channels(current_user: User = Depends(get_current_us
 
             return {"channels": channels}
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error listing channels:")
         raise HTTPException(status_code=500, detail="Failed to list channels")
 
@@ -314,7 +311,7 @@ async def get_notification_statistics(
                 channels_health=channels_health
             )
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting notification statistics:")
         raise HTTPException(status_code=500, detail="Failed to get notification statistics")
 
@@ -356,7 +353,7 @@ async def get_delivery_rates_analytics(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting delivery rates analytics:")
         raise HTTPException(status_code=500, detail="Failed to get delivery rates analytics")
 
@@ -393,7 +390,7 @@ async def get_response_time_analytics(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting response time analytics:")
         raise HTTPException(status_code=500, detail="Failed to get response time analytics")
 
@@ -443,7 +440,7 @@ async def get_trend_analytics(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting trend analytics:")
         raise HTTPException(status_code=500, detail="Failed to get trend analytics")
 
@@ -496,7 +493,7 @@ async def get_aggregated_analytics(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting aggregated analytics:")
         raise HTTPException(status_code=500, detail="Failed to get aggregated analytics")
 
@@ -530,7 +527,7 @@ async def get_channel_performance_comparison(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting channel performance comparison:")
         raise HTTPException(status_code=500, detail="Failed to get channel performance comparison")
 
@@ -579,7 +576,7 @@ async def cleanup_old_notifications(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error during cleanup:")
         raise HTTPException(status_code=500, detail="Failed to cleanup notifications")
 
@@ -627,7 +624,7 @@ async def get_processor_statistics(current_user: User = Depends(require_trader_o
                 "note": "Statistics retrieved from database (database-centric architecture)"
             }
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting processor statistics:")
         raise HTTPException(status_code=500, detail="Failed to get processor statistics")
 
@@ -689,7 +686,7 @@ async def send_alert_notification(
 
         return await create_notification(notification, current_user)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error sending alert notification:")
         raise HTTPException(status_code=500, detail="Failed to send alert notification")
 
@@ -732,7 +729,7 @@ async def send_trade_notification(
 
         return await create_notification(notification, current_user)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error sending trade notification:")
         raise HTTPException(status_code=500, detail="Failed to send trade notification")
 
@@ -805,7 +802,7 @@ async def create_notification(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error creating notification:")
         raise HTTPException(status_code=500, detail="Failed to create notification")
 
@@ -883,7 +880,7 @@ async def list_notifications(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error listing notifications:")
         raise HTTPException(status_code=500, detail="Failed to list notifications")
 
@@ -926,7 +923,7 @@ async def get_notification_status(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting notification status:")
         raise HTTPException(status_code=500, detail="Failed to get notification status")
 
@@ -975,6 +972,6 @@ async def get_notification_delivery_status(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting delivery status:")
         raise HTTPException(status_code=500, detail="Failed to get delivery status")

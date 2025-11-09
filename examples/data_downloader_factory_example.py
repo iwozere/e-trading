@@ -15,7 +15,6 @@ Features demonstrated:
 """
 
 import os
-import sys
 from datetime import datetime, timedelta
 from src.data.data_downloader_factory import DataDownloaderFactory
 from src.notification.logger import setup_logger
@@ -45,7 +44,7 @@ def demonstrate_yahoo_finance():
 
             # Get fundamental data
             fundamentals = downloader.get_fundamentals("AAPL")
-            print(f"✓ Retrieved fundamentals for AAPL:")
+            print("✓ Retrieved fundamentals for AAPL:")
             print(f"  Company: {fundamentals.company_name}")
             print(f"  Current Price: ${fundamentals.current_price:.2f}")
             print(f"  PE Ratio: {fundamentals.pe_ratio:.2f}")
@@ -82,7 +81,7 @@ def demonstrate_alpha_vantage():
 
             # Get fundamental data
             fundamentals = downloader.get_fundamentals("AAPL")
-            print(f"✓ Retrieved fundamentals for AAPL:")
+            print("✓ Retrieved fundamentals for AAPL:")
             print(f"  Company: {fundamentals.company_name}")
             print(f"  Current Price: ${fundamentals.current_price:.2f}")
             print(f"  PE Ratio: {fundamentals.pe_ratio:.2f}")
@@ -124,7 +123,7 @@ def demonstrate_binance():
             start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
 
             df = downloader.get_ohlcv("BTCUSDT", "1d", start_date, end_date)
-            print(f"✓ Retrieved historical data for BTCUSDT:")
+            print("✓ Retrieved historical data for BTCUSDT:")
             print(f"  Data points: {len(df)}")
             print(f"  Date range: {start_date} to {end_date}")
             print(f"  Latest close: ${df.iloc[-1]['close']:.2f}")

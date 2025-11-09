@@ -22,10 +22,10 @@ from dataclasses import dataclass
 from enum import Enum
 
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func, text
+from sqlalchemy import and_, func
 
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, MessageStatus, DeliveryStatus
+    Message, MessageDeliveryStatus, MessageStatus
 )
 from src.data.db.repos.repo_notification import NotificationRepository
 from src.notification.logger import setup_logger
@@ -195,7 +195,7 @@ class MessageArchivalService:
                     _logger.warning("Could not parse archive file date: %s - %s", archive_file, e)
                     continue
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error scanning archive files:")
 
         return sorted(archived_files, key=lambda x: x['archive_date'])
@@ -319,7 +319,7 @@ class MessageArchivalService:
 
             return str(file_path), bytes_written
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving archived messages:")
             raise
 
@@ -576,7 +576,7 @@ class MessageArchivalService:
 
             return messages_deleted
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error deleting messages from database:")
             raise
 
@@ -623,7 +623,7 @@ class MessageArchivalService:
             _logger.info("Full archival cycle completed: %d archived, %d deleted, %d failed cleaned",
                         total_archived, total_deleted, total_failed_cleaned)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in full archival cycle:")
             raise
 
@@ -689,7 +689,7 @@ class MessageArchivalService:
                 'last_checked': current_time.isoformat()
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting archival statistics:")
             raise
 
@@ -721,7 +721,7 @@ class MessageArchivalService:
                 # Wait for next interval
                 await asyncio.sleep(interval_hours * 3600)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in scheduled archival:")
                 # Wait a bit before retrying
                 await asyncio.sleep(300)  # 5 minutes
@@ -984,7 +984,7 @@ class ScheduledCleanupService:
                 # Wait for next check
                 await asyncio.sleep(check_interval_minutes * 60)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error in cleanup daemon:")
                 # Wait a bit before retrying
                 await asyncio.sleep(300)  # 5 minutes

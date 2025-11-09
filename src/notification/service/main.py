@@ -11,7 +11,6 @@ import signal
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Optional
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -83,7 +82,7 @@ class MessagePoller:
                 # Wait before next poll
                 await asyncio.sleep(self.poll_interval_seconds)
 
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Error in polling loop:")
                 # Back off on error
                 await asyncio.sleep(self.poll_interval_seconds * 2)
@@ -110,7 +109,7 @@ class MessagePoller:
 
                 return messages
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error polling pending messages:")
             return []
 
@@ -133,7 +132,7 @@ class MessagePoller:
                 else:
                     self._logger.error("Message processor does not support database messages")
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error processing messages:")
 
 
@@ -186,7 +185,7 @@ class HealthReporter:
                 # Wait before next report
                 await asyncio.sleep(self.report_interval_seconds)
 
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Error in health reporting loop:")
                 await asyncio.sleep(self.report_interval_seconds)
 
@@ -222,7 +221,7 @@ class HealthReporter:
                 metadata=metadata
             )
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error reporting service health:")
 
     async def _report_channel_health(self):
@@ -272,7 +271,7 @@ class HealthReporter:
                         error_message=f'Health check failed: {str(e)}'
                     )
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error reporting channel health:")
 
 
@@ -291,7 +290,7 @@ async def _register_channel_plugins():
 
         _logger.info("Registered channel plugins: %s", channel_registry.list_channels())
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error registering channel plugins:")
 
 
@@ -374,7 +373,7 @@ async def main():
 
     except KeyboardInterrupt:
         _logger.info("Received keyboard interrupt")
-    except Exception as e:
+    except Exception:
         _logger.exception("Unexpected error:")
     finally:
         await shutdown()

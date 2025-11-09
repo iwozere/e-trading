@@ -9,8 +9,6 @@ Usage:
 Supported providers:
     'yf' (Yahoo Finance, default), 'av', 'fh', 'td', 'pg', 'bnc', 'cg'
 """
-import datetime
-from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.data.data_manager import ProviderSelector
 
 PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']

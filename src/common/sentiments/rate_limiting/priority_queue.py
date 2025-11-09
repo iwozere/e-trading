@@ -8,7 +8,7 @@ are processed before normal requests while maintaining fairness.
 import asyncio
 import heapq
 import time
-from typing import Any, Dict, List, Optional, Callable, NamedTuple
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import IntEnum

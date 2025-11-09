@@ -12,9 +12,8 @@ import pytest
 import pandas as pd
 import numpy as np
 import asyncio
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock, AsyncMock
-from typing import Dict, Any, List
+from datetime import datetime
+from unittest.mock import patch
 
 from pathlib import Path
 import sys
@@ -23,17 +22,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.indicators.service import (
-    IndicatorService, IndicatorServiceError, ConfigurationError, DataError
+    IndicatorService, ConfigurationError, DataError
 )
-from src.indicators.config_manager import UnifiedConfigManager, PresetConfig
+from src.indicators.config_manager import UnifiedConfigManager
 from src.indicators.recommendation_engine import RecommendationEngine
 from src.indicators.models import (
     IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest,
-    IndicatorResultSet, IndicatorValue
+    IndicatorResultSet
 )
 from src.indicators.models import (
-    IndicatorResult, IndicatorSet, IndicatorCategory,
-    Recommendation, RecommendationType, CompositeRecommendation
+    IndicatorResult, IndicatorSet, RecommendationType, CompositeRecommendation
 )
 
 

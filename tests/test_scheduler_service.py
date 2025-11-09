@@ -8,11 +8,9 @@ Tests the complete scheduler service functionality including:
 """
 
 import pytest
-import asyncio
-import json
-from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from typing import Dict, Any, List
+from datetime import datetime, timezone
+from unittest.mock import Mock, AsyncMock, patch
+from typing import Dict, Any
 
 # Add src to path
 import sys
@@ -22,7 +20,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.scheduler.scheduler_service import SchedulerService
 from src.data.db.services.jobs_service import JobsService
-from src.data.db.models.model_jobs import Schedule, ScheduleRun, JobType, RunStatus
+from src.data.db.models.model_jobs import RunStatus
 from src.common.alerts.alert_evaluator import AlertEvaluator, AlertEvaluationResult
 from src.common.alerts.cron_parser import CronParser
 

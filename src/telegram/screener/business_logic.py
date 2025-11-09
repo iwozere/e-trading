@@ -8,9 +8,7 @@ import asyncio
 import time
 from typing import Any, Dict, List, Optional
 from src.telegram.command_parser import ParsedCommand
-from src.data.data_manager import ProviderSelector
-from src.common.common import get_ohlcv, determine_provider
-from src.common.fundamentals import get_fundamentals_unified
+from src.common.common import determine_provider
 # Removed calculate_technicals_unified - now using IndicatorService directly
 from src.model.telegram_bot import TickerAnalysis
 from src.common.ticker_analyzer import format_ticker_report, analyze_ticker
@@ -45,7 +43,7 @@ class TelegramBusinessLogic:
         # Initialize indicator service with error handling
         try:
             self.indicator_service = indicator_service or IndicatorService()
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize IndicatorService:")
             self.indicator_service = None
 
@@ -145,7 +143,7 @@ class TelegramBusinessLogic:
             else:
                 return {"status": "error", "message": f"Unknown command: {parsed.command}"}
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Unexpected error in handle_command for %s", parsed.command)
             return {
                 "status": "error",
@@ -905,7 +903,7 @@ class TelegramBusinessLogic:
 
             return formatted_values
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error extracting indicator values:")
             return {}
 
@@ -939,7 +937,7 @@ class TelegramBusinessLogic:
             is_admin = self.is_admin_user(telegram_user_id)
 
             # Import help texts here to avoid circular imports
-            from src.telegram.bot import HELP_TEXT, ADMIN_HELP_TEXT
+            from src.telegram.telegram_bot import HELP_TEXT, ADMIN_HELP_TEXT
 
             # Show regular help text
             help_text = HELP_TEXT
@@ -1029,7 +1027,7 @@ class TelegramBusinessLogic:
                 }
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in register command: ")
             return {"status": "error", "message": "Unable to process registration. Please try again later."}
 
@@ -1097,7 +1095,7 @@ class TelegramBusinessLogic:
                     "message": "Invalid or expired verification code. Please check the code or request a new one with /register."
                 }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in verify command: ")
             return {"status": "error", "message": "Unable to process verification. Please try again later."}
 
@@ -1136,7 +1134,7 @@ class TelegramBusinessLogic:
                     "title": "Your Info",
                     "message": "Email: (not set)\nVerified: No\nApproved: No\nAdmin: No\nLanguage: (not set)"
                 }
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in info command: ")
             return {"status": "error", "message": "Unable to retrieve user information. Please try again later."}
 
@@ -1192,7 +1190,7 @@ class TelegramBusinessLogic:
                 "message": f"Your language preference has been updated to {language.upper()}."
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in language command: ")
             return {"status": "error", "message": "Unable to update language preference. Please try again later."}
 
@@ -1247,7 +1245,7 @@ class TelegramBusinessLogic:
                 }
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing feedback: ")
             return {"status": "error", "message": "Unable to process feedback. Please try again later."}
 
@@ -1302,7 +1300,7 @@ class TelegramBusinessLogic:
                 }
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing feature request: ")
             return {"status": "error", "message": "Unable to process feature request. Please try again later."}
 
@@ -1338,7 +1336,7 @@ class TelegramBusinessLogic:
                 else:
                     return {"status": "error", "message": "Screener temporarily unavailable. Please try again later."}
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in handle_screener: ")
             return {"status": "error", "message": "Unable to process screener request. Please try again later."}
 
@@ -1374,7 +1372,7 @@ class TelegramBusinessLogic:
                 else:
                     return {"status": "error", "message": "Unable to manage alerts. Please try again later."}
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in handle_alerts: ")
             return {"status": "error", "message": "Unable to process alerts request. Please try again later."}
 
@@ -1410,7 +1408,7 @@ class TelegramBusinessLogic:
                 else:
                     return {"status": "error", "message": "Unable to manage schedules. Please try again later."}
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in handle_schedules: ")
             return {"status": "error", "message": "Unable to process schedules request. Please try again later."}
 
@@ -1697,11 +1695,11 @@ class TelegramBusinessLogic:
 
             return {
                 "status": "ok",
-                "message": f"**Users Pending Approval**\n\n" + "\n".join(user_list),
+                "message": "**Users Pending Approval**\n\n" + "\n".join(user_list),
                 "is_admin": True
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error listing pending approvals")
             return {"status": "error", "message": "Unable to retrieve pending approvals. Please try again later."}
 
@@ -2259,7 +2257,7 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
                     "status": "error",
                     "message": f"Alert limit reached ({max_alerts}). Delete some alerts first or contact admin."
                 }
-        except Exception as e:
+        except Exception:
             _logger.exception("Error checking user limits for alerts:")
             return {"status": "error", "message": "Unable to verify alert limits. Please try again later."}
 
@@ -2272,7 +2270,7 @@ def handle_alerts_add(telegram_user_id: str, ticker: str, price_str: str, condit
                 "email": email,
                 "rearm_enabled": True
             }
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating enhanced alert configuration:")
             return {"status": "error", "message": "Unable to create alert configuration. Please try again."}
 
@@ -2703,7 +2701,7 @@ def handle_schedules_add_json(telegram_user_id: str, config_json: str) -> Dict[s
         else:
             # Use existing validation for other schedule types
             try:
-                from src.telegram.screener.schedule_config_parser import validate_schedule_config
+                from src.common.alerts.schema_validator import validate_schedule_config
                 is_valid, errors = validate_schedule_config(config_json)
                 if not is_valid:
                     return {"status": "error", "message": f"Invalid schedule configuration: {'; '.join(errors)}"}
@@ -2768,7 +2766,7 @@ def handle_schedules_add_json(telegram_user_id: str, config_json: str) -> Dict[s
 
         else:
             # Use existing summary for other types
-            from src.telegram.screener.schedule_config_parser import get_schedule_summary
+            from src.common.alerts.schema_validator import get_schedule_summary
             summary = get_schedule_summary(config_json)
 
             if "error" in summary:
@@ -2839,7 +2837,7 @@ def handle_schedules_enhanced_screener(telegram_user_id: str, config_json: str) 
         max_results = summary.get("max_results", 10)
         min_score = summary.get("min_score", 7.0)
 
-        message = f"✅ Enhanced screener scheduled successfully!\n\n"
+        message = "✅ Enhanced screener scheduled successfully!\n\n"
         message += f"📊 **Screener Type**: {screener_type.title()}\n"
         message += f"🔍 **List Type**: {list_type.replace('_', ' ').title()}\n"
 
@@ -2901,7 +2899,7 @@ def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
                 )
             else:
                 # JSON-based schedule
-                from src.telegram.screener.schedule_config_parser import get_schedule_summary
+                from src.common.alerts.schema_validator import get_schedule_summary
                 config_json = schedule.get("config_json")
                 if config_json:
                     summary = get_schedule_summary(config_json)
@@ -3210,7 +3208,7 @@ def handle_schedules_screener(telegram_user_id: str, list_type: str, time: str,
         schedule_id = telegram_svc.add_json_schedule(telegram_user_id, str(schedule_data))
 
         if schedule_id:
-            message = f"✅ Fundamental screener scheduled successfully!\n"
+            message = "✅ Fundamental screener scheduled successfully!\n"
             message += f"📊 **List Type**: {list_type.replace('_', ' ').title()}\n"
             message += f"⏰ **Time**: {time} UTC (daily)\n"
             message += f"📧 **Email**: {'Yes' if email else 'No'}\n"
@@ -3524,8 +3522,23 @@ async def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
             if not screener_config:
                 return {"status": "error", "message": f"Unknown screener: {config_json}. Available screeners: {', '.join(_get_available_screeners())}"}
 
-        # Run enhanced screener immediately
-        enhanced_screener = EnhancedScreener(indicator_service=self.indicator_service)
+        # Acquire service instances (module-level globals set via set_service_instances)
+        telegram_svc, indicator_svc = get_service_instances()
+
+        if not indicator_svc:
+            # Fallback: attempt lazy import/creation of indicator service
+            try:
+                from src.indicators.service import get_unified_indicator_service
+                indicator_svc = get_unified_indicator_service()
+            except Exception:
+                _logger.exception("Indicator service unavailable for screener execution")
+                return {"status": "error", "message": "Indicator service unavailable. Try again later."}
+
+        if not telegram_svc:
+            return {"status": "error", "message": "Telegram service unavailable. Try again later."}
+
+        # Run enhanced screener immediately using resolved indicator service
+        enhanced_screener = EnhancedScreener(indicator_service=indicator_svc)
         report = await enhanced_screener.run_enhanced_screener(screener_config)
 
         if report.error:
@@ -3537,7 +3550,7 @@ async def handle_screener(parsed: ParsedCommand) -> Dict[str, Any]:
         # Send results
         if send_email:
             # Get user email using service layer
-            user_status = self.telegram_service.get_user_status(telegram_user_id)
+            user_status = telegram_svc.get_user_status(telegram_user_id)
             if not user_status or not user_status.get("email"):
                 return {"status": "error", "message": "Email not registered. Please use /register email@example.com first"}
 
@@ -3701,7 +3714,7 @@ def _get_available_screeners():
 
         return list(fmp_config.get("predefined_strategies", {}).keys())
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error loading available screeners:")
         return []
 
@@ -3765,7 +3778,7 @@ def set_service_instances(telegram_service, indicator_service):
         _logger.debug("Telegram service type: %s", type(telegram_service).__name__)
         _logger.debug("Indicator service type: %s", type(indicator_service).__name__)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Failed to set service instances:")
         # Reset instances to None on failure to prevent partial initialization
         _telegram_service_instance = None
@@ -3796,7 +3809,7 @@ def get_service_instances():
 
         return _telegram_service_instance, _indicator_service_instance
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error retrieving service instances:")
         return None, None
 

@@ -9,12 +9,12 @@ import asyncio
 import heapq
 import time
 from typing import Dict, Any, List, Optional, Tuple, Set
-from datetime import datetime, timedelta
-from dataclasses import dataclass, field
+from datetime import datetime
+from dataclasses import dataclass
 from enum import Enum
 import threading
 
-from src.data.db.models.model_notification import MessagePriority, MessageStatus
+from src.data.db.models.model_notification import MessagePriority
 from src.notification.service.message_queue import QueuedMessage
 from src.notification.logger import setup_logger
 
@@ -541,7 +541,7 @@ class PriorityMessageHandler:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Error in SLA monitor loop:")
                 await asyncio.sleep(10)
 

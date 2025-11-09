@@ -6,7 +6,6 @@ ensuring configurations conform to expected schemas before execution.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
@@ -186,13 +185,13 @@ class AlertSchemaValidator:
 
             return schema
 
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             _logger.exception("Invalid JSON in schema file %s:", schema_file)
             return None
-        except jsonschema.SchemaError as e:
+        except jsonschema.SchemaError:
             _logger.exception("Invalid schema in file %s:", schema_file)
             return None
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading schema from %s:", schema_file)
             return None
 

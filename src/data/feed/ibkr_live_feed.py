@@ -117,7 +117,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
 
             return contract
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating contract for %s: %s")
             return None
 
@@ -176,7 +176,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
             _logger.info("Loaded %d historical bars for %s", len(df), self.symbol)
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading historical data for %s: %s")
             return None
 
@@ -249,7 +249,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error connecting to IBKR: %s")
             return False
 
@@ -273,7 +273,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
 
                 _logger.info("Subscribed to real-time data for %s", self.symbol)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error subscribing to real-time data: %s")
 
     def _disconnect_realtime(self):
@@ -288,7 +288,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
 
             _logger.info("Disconnected from IBKR for %s", self.symbol)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error disconnecting from IBKR: %s")
 
     def _on_bar_update(self, bars):
@@ -311,7 +311,7 @@ class IBKRLiveDataFeed(BaseLiveDataFeed):
 
             self._process_new_data(new_data)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing real-time bar update: %s")
 
     def _get_latest_data(self) -> Optional[pd.DataFrame]:

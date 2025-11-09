@@ -6,7 +6,6 @@ This script demonstrates how to use Alpha Vantage for intraday data
 that's not limited by the 60-day restriction of yfinance.
 """
 
-import os
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -46,14 +45,14 @@ def test_alpha_vantage_intraday():
         end_date = datetime.now()
         start_date = end_date - timedelta(days=90)  # 90 days of data
 
-        print(f"\n📊 Test Parameters:")
+        print("\n📊 Test Parameters:")
         print(f"  Symbol: {symbol}")
         print(f"  Interval: {interval}")
         print(f"  Date Range: {start_date.date()} to {end_date.date()}")
-        print(f"  Expected: Full historical data (no 60-day limit like yfinance)")
+        print("  Expected: Full historical data (no 60-day limit like yfinance)")
 
         # Download data
-        print(f"\n📥 Downloading data...")
+        print("\n📥 Downloading data...")
         df = downloader.get_ohlcv(symbol, interval, start_date, end_date)
 
         if df is not None and not df.empty:
@@ -63,7 +62,7 @@ def test_alpha_vantage_intraday():
             print(f"📈 Columns: {list(df.columns)}")
 
             # Show sample data
-            print(f"\n📋 Sample data (first 5 rows):")
+            print("\n📋 Sample data (first 5 rows):")
             print(df.head())
 
             assert True  # Test passed
@@ -97,12 +96,12 @@ def test_alpha_vantage_crypto():
         end_date = datetime.now()
         start_date = end_date - timedelta(days=30)
 
-        print(f"📊 Test Parameters:")
+        print("📊 Test Parameters:")
         print(f"  Symbol: {symbol}")
         print(f"  Interval: {interval}")
         print(f"  Date Range: {start_date.date()} to {end_date.date()}")
 
-        print(f"\n📥 Downloading crypto data...")
+        print("\n📥 Downloading crypto data...")
         df = downloader.get_ohlcv(symbol, interval, start_date, end_date)
 
         if df is not None and not df.empty:
@@ -132,20 +131,20 @@ def main():
     crypto_success = test_alpha_vantage_crypto()
 
     # Summary
-    print(f"\n📊 TEST SUMMARY")
+    print("\n📊 TEST SUMMARY")
     print("=" * 30)
     print(f"📈 Stock Intraday: {'✅ PASS' if stock_success else '❌ FAIL'}")
     print(f"🪙 Crypto Data: {'✅ PASS' if crypto_success else '❌ FAIL'}")
 
     if stock_success and crypto_success:
-        print(f"\n🎉 All tests passed! Alpha Vantage is working correctly.")
-        print(f"💡 You can now use this for full historical intraday data.")
+        print("\n🎉 All tests passed! Alpha Vantage is working correctly.")
+        print("💡 You can now use this for full historical intraday data.")
     else:
-        print(f"\n⚠️  Some tests failed. Check the error messages above.")
+        print("\n⚠️  Some tests failed. Check the error messages above.")
 
-    print(f"\n🔑 To use Alpha Vantage in populate_cache.py:")
-    print(f"   1. Add your API key to config/donotshare/donotshare.py")
-    print(f"   2. Run: python src/data/cache/populate_cache.py --populate --intervals 5m,15m")
+    print("\n🔑 To use Alpha Vantage in populate_cache.py:")
+    print("   1. Add your API key to config/donotshare/donotshare.py")
+    print("   2. Run: python src/data/cache/populate_cache.py --populate --intervals 5m,15m")
 
 
 if __name__ == "__main__":

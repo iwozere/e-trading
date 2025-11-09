@@ -186,7 +186,7 @@ class AdvancedBacktraderStrategy(bt.Strategy):
             # Execute trading logic based on signal
             self._execute_trading_logic(composite_signal)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error generating trading signal: ")
 
         # Update performance metrics

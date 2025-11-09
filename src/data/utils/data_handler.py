@@ -6,7 +6,7 @@ across all data sources in the system.
 """
 
 import pandas as pd
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from pathlib import Path
 import logging
@@ -196,7 +196,7 @@ class DataHandler:
             return self.cache.put(
                 df, self.provider, symbol, interval, start_date, end_date, file_format
             )
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to cache data for %s:", symbol)
             return False
 
@@ -228,7 +228,7 @@ class DataHandler:
             return self.cache.get(
                 self.provider, symbol, interval, start_date, end_date, file_format
             )
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to retrieve cached data for %s:", symbol)
             return None
 
@@ -282,7 +282,7 @@ class DataHandler:
             _logger.info("Saved data to %s", filepath)
             return filepath
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to save data to %s:", filepath)
             raise
 
@@ -309,7 +309,7 @@ class DataHandler:
             _logger.info("Loaded data from %s", filepath)
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load data from %s:", filepath)
             raise
 
@@ -409,7 +409,7 @@ class DataHandler:
 
             return df_resampled
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to resample data for %s:", symbol)
             return df
 

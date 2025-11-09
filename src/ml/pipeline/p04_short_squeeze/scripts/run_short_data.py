@@ -17,7 +17,7 @@ Usage:
 import argparse
 import sys
 import time
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import pandas as pd
@@ -77,7 +77,7 @@ class ShortDataCollector:
             _logger.info("Found %d unique tickers in ss_snapshot table", len(tickers))
             return tickers
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error fetching tickers from ss_snapshot table:")
             return []
 
@@ -186,7 +186,7 @@ class ShortDataCollector:
                 if i + self.batch_size < len(tickers):
                     time.sleep(1)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error processing batch %d:", batch_num)
                 continue
 
@@ -284,7 +284,7 @@ class ShortDataCollector:
             df.to_csv(filepath, index=False)
             _logger.info("Saved %d records to %s", len(records), filepath)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving to CSV:")
             raise
 
@@ -317,7 +317,7 @@ class ShortDataCollector:
             _logger.info("Successfully upserted %d records to ss_finra_short_interest table", count)
             return count
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving to database:")
             return 0
 
@@ -524,7 +524,7 @@ Note: This script fetches all tickers from ss_snapshot table and collects
     except KeyboardInterrupt:
         _logger.warning("Interrupted by user")
         return 130
-    except Exception as e:
+    except Exception:
         _logger.exception("Error during collection:")
         return 1
 

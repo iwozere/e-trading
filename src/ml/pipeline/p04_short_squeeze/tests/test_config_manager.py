@@ -8,7 +8,6 @@ and type-safe configuration object creation.
 import os
 import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from src.ml.pipeline.p04_short_squeeze.config.config_manager import (

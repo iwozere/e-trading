@@ -158,7 +158,7 @@ def main():
             logger.exception("Too many failures (%d > %d), exiting with error", failed, successful)
             sys.exit(1)
 
-    except Exception as e:
+    except Exception:
         logger.exception("Fatal error during refresh:")
         sys.exit(1)
 

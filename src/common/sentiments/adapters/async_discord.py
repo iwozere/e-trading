@@ -15,12 +15,11 @@ Features:
 import asyncio
 import aiohttp
 import os
-from typing import List, Dict, Optional, Any, Set
+from typing import List, Dict, Optional, Any
 from pathlib import Path
 import sys
 import time
-from datetime import datetime, timedelta, timezone
-import json
+from datetime import datetime, timezone
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]

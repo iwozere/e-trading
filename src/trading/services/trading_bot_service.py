@@ -35,7 +35,7 @@ class TradingBotService:
         """Get bot instance by ID."""
         try:
             return trading_service.get_bot_by_id(int(bot_id))
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting bot instance %s:", bot_id)
             return None
 
@@ -43,7 +43,7 @@ class TradingBotService:
         """Create a new bot instance."""
         try:
             return trading_service.upsert_bot(bot_data)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating bot instance:")
             raise
 
@@ -53,7 +53,7 @@ class TradingBotService:
             # Add the bot_id to the update data
             bot_data = {"id": bot_id, **update_data}
             return trading_service.upsert_bot(bot_data)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating bot instance %s:", bot_id)
             raise
 
@@ -61,7 +61,7 @@ class TradingBotService:
         """Update bot heartbeat."""
         try:
             trading_service.heartbeat(bot_id)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating heartbeat for bot %s:", bot_id)
             raise
 
@@ -71,7 +71,7 @@ class TradingBotService:
         """Create a new trade."""
         try:
             return trading_service.add_trade(trade_data)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating trade:")
             raise
 
@@ -79,7 +79,7 @@ class TradingBotService:
         """Update trade."""
         try:
             return trading_service.close_trade(trade_id, **update_data)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating trade %s:", trade_id)
             raise
 
@@ -94,7 +94,7 @@ class TradingBotService:
                 trades = [t for t in trades if t.get('bot_id') == bot_id]
 
             return trades
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting open trades:")
             return []
 
@@ -119,7 +119,7 @@ class TradingBotService:
                 opened_at=opened_at,
                 metadata=metadata,
             )
-        except Exception as e:
+        except Exception:
             _logger.exception("Error ensuring open position:")
             raise
 
@@ -131,7 +131,7 @@ class TradingBotService:
         """Get open positions."""
         try:
             return trading_service.get_open_positions(bot_id=bot_id, symbol=symbol)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting open positions:")
             return []
 
@@ -141,7 +141,7 @@ class TradingBotService:
         """Add performance metric."""
         try:
             return trading_service.add_metric(metric_data)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error adding metric:")
             raise
 
@@ -149,7 +149,7 @@ class TradingBotService:
         """Get latest metrics for bot."""
         try:
             return trading_service.latest_metrics(bot_id, limit=limit)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting latest metrics for bot %s:", bot_id)
             return []
 
@@ -159,7 +159,7 @@ class TradingBotService:
         """Get PnL summary."""
         try:
             return trading_service.get_pnl_summary(bot_id=bot_id)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting PnL summary:")
             return {"net_pnl": 0.0, "n_trades": 0}
 
@@ -173,7 +173,7 @@ class TradingBotService:
             # For now, return None
             _logger.warning("get_trade_by_id not implemented in domain service")
             return None
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting trade by ID %s:", trade_id)
             return None
 
@@ -184,7 +184,7 @@ class TradingBotService:
             trade_data["original_trade_id"] = original_trade_id
             trade_data["is_partial_exit"] = True
             return trading_service.add_trade(trade_data)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating partial exit trade:")
             raise
 

@@ -4,7 +4,6 @@ Test script for the new /screener command functionality.
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to path

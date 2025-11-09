@@ -6,30 +6,25 @@ of the notification service.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 
 from src.notification.service.database_optimization import (
     OptimizedMessageRepository,
     OptimizedDeliveryStatusRepository,
-    OptimizedRateLimitRepository,
     create_optimized_indexes,
     analyze_query_performance
 )
 from src.notification.docs.utilities.query_analyzer import (
     QueryPerformanceMonitor,
-    QueryMetrics,
     DatabaseHealthChecker,
     query_timer
 )
 from src.notification.docs.utilities.database_migrations import (
-    NotificationServiceMigrations,
-    run_optimization_migration
+    NotificationServiceMigrations
 )
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, MessagePriority, MessageStatus, DeliveryStatus
+    MessageStatus
 )
 
 

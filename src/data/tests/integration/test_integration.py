@@ -6,9 +6,7 @@ components work together correctly.
 """
 
 import sys
-import os
 from pathlib import Path
-from datetime import datetime, timedelta
 import pandas as pd
 
 # Add src to path for imports
@@ -17,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.data import (
     get_data_source_factory,
     register_data_source,
-    create_data_source,
     DataAggregator
 )
 from unittest.mock import patch

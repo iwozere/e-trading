@@ -38,7 +38,7 @@ class FMPIntegration:
             else:
                 _logger.warning("FMP configuration file not found, using defaults")
                 return self._get_default_config()
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading FMP configuration:")
             return self._get_default_config()
 
@@ -86,7 +86,7 @@ class FMPIntegration:
 
                 self.fmp_downloader = FMPDataDownloader(api_key=api_key)
                 _logger.info("FMP downloader initialized successfully")
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error initializing FMP downloader:")
                 return None
 
@@ -164,7 +164,7 @@ class FMPIntegration:
                 _logger.warning("FMP screening returned no results")
                 return [], {}
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in FMP screening")
             return [], {}
 
@@ -190,7 +190,7 @@ class FMPIntegration:
 
             return fundamentals
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting FMP fundamentals")
             return {}
 

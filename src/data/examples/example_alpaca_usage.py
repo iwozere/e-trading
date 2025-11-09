@@ -157,7 +157,7 @@ def example_fundamentals():
                 if fundamentals.market_cap:
                     print(f"  Market Cap: ${fundamentals.market_cap:,.0f}")
             else:
-                print(f"  No fundamental data available")
+                print("  No fundamental data available")
 
     except Exception as e:
         print(f"Error: {e}")
@@ -227,7 +227,7 @@ def example_bar_limits():
             print(f"Actual date range: {df.index.min().date()} to {df.index.max().date()}")
 
             # Test with custom limit
-            print(f"\nTesting with custom limit of 100 bars...")
+            print("\nTesting with custom limit of 100 bars...")
             df_limited = downloader.get_ohlcv(symbol, "1d", start_date, end_date, limit=100)
             print(f"✅ Received {len(df_limited)} bars (custom limit: 100)")
         else:

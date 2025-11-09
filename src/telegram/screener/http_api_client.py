@@ -6,8 +6,7 @@ Provides a client interface for background services to send notifications via th
 
 import asyncio
 import aiohttp
-import json
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -67,7 +66,7 @@ class BotHttpApiClient:
                     _logger.error("HTTP API error for user %s: %d - %s", user_id, response.status, error_text)
                     return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error sending message to user %s: ", user_id)
             return False
 
@@ -153,7 +152,7 @@ class BotHttpApiClient:
                     _logger.error("Bot API connection test failed: HTTP %d", response.status)
                     return False
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error testing bot API connection: ")
             return False
 

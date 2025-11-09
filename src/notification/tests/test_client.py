@@ -3,9 +3,7 @@ Unit tests for the notification service client.
 """
 
 import pytest
-import asyncio
 from unittest.mock import Mock, patch, AsyncMock
-import json
 from datetime import datetime
 
 from src.notification.service.client import (

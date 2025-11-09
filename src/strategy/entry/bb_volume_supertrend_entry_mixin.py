@@ -141,7 +141,7 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
             self.register_indicator(self.supertrend_name, supertrend)
 
             logger.debug("Legacy indicators initialized: entry_bb, entry_volume_ma, entry_supertrend")
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -234,6 +234,6 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
                     f"Supertrend Direction: {supertrend_direction}"
                 )
             return return_value
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_enter: ")
             return False

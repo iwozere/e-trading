@@ -8,7 +8,6 @@ Supports message splitting, attachments, health monitoring, and dynamic chat IDs
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 import asyncio
-import aiohttp
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile, FSInputFile

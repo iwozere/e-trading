@@ -1,6 +1,5 @@
 # fundamentals_adapter.py
 import pandas as pd
-from typing import Any, Optional, Dict
 
 from src.common.fundamentals import get_fundamentals_unified
 from src.indicators.adapters.base import BaseAdapter

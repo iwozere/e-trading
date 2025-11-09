@@ -7,23 +7,16 @@ import os
 sys.path.append(os.path.abspath('.'))
 
 import tempfile
-from pprint import pprint
 from datetime import datetime, timedelta, timezone
 import random
-import shutil
 
 # TODO: Update imports after ticker management functions are implemented
 # from src.data.db.services import telegram_service as db
-from src.common.technicals import format_technical_analysis
-from src.common.ticker_chart import generate_chart
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
 from src.common.ticker_analyzer import analyze_ticker, format_comprehensive_analysis
 
-import yfinance as yf
-import pandas as pd
 
 import unittest
-from unittest.mock import patch, MagicMock
 
 # TODO: Implement parse_analyze_parameters function
 # from src.screener.telegram.telegram_screener_bot import parse_analyze_parameters
@@ -87,7 +80,7 @@ def test_my_status(user_id=TEST_USER_ID, provider_filter=None, email=None):
             await notification_manager.send_notification(
                 notification_type=NotificationType.INFO,
                 title=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
-                message=f"<h2>Your Screener Status Report</h2><hr>" + "<br><br>".join(email_body),
+                message="<h2>Your Screener Status Report</h2><hr>" + "<br><br>".join(email_body),
                 priority=NotificationPriority.NORMAL,
                 data={},
                 source="test_screener_bot",
@@ -288,7 +281,7 @@ def test_my_status_and_analyze():
         await notification_manager.send_notification(
             notification_type=NotificationType.INFO,
             title=f"Your Screener Status Report - {len(pairs)} Tickers Analyzed",
-            message=f"<h2>Your Screener Status Report</h2><hr>" + "<br><br>".join(email_body),
+            message="<h2>Your Screener Status Report</h2><hr>" + "<br><br>".join(email_body),
             priority=NotificationPriority.NORMAL,
             data={},
             source="test_screener_bot",

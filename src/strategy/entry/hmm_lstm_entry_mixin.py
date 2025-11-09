@@ -27,7 +27,7 @@ import json
 import talib
 from pathlib import Path
 from collections import deque
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Tuple
 import sys
 
 # Add project root to path
@@ -160,7 +160,7 @@ class HMMLSTMEntryMixin:
         try:
             self._load_models()
             _logger.info("HMM-LSTM models loaded successfully")
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load models")
             # Continue without models - mixin will return False for should_enter()
 
@@ -229,7 +229,7 @@ class HMMLSTMEntryMixin:
                 _logger.warning("No optimized indicators found for %s %s", self.symbol, self.timeframe)
                 self.optimized_indicators = {}
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading models")
             raise
 
@@ -302,7 +302,7 @@ class HMMLSTMEntryMixin:
 
             return indicators
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating indicators")
             return {}
 
@@ -342,7 +342,7 @@ class HMMLSTMEntryMixin:
 
             return int(regime[0]), float(confidence)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error predicting regime")
             return 1, 0.5  # Default to neutral regime
 
@@ -394,7 +394,7 @@ class HMMLSTMEntryMixin:
 
             return float(prediction)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error predicting price")
             return 0.0
 
@@ -420,7 +420,7 @@ class HMMLSTMEntryMixin:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error checking indicators readiness")
             return False
 
@@ -479,7 +479,7 @@ class HMMLSTMEntryMixin:
 
             return entry_signal
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in should_enter")
             return False
 

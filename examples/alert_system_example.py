@@ -107,7 +107,7 @@ async def main():
 
     # Alert statistics
     stats = alert_system.get_alert_statistics()
-    print(f"\nAlert Statistics:")
+    print("\nAlert Statistics:")
     print(f"  • Total Alerts: {stats['total_alerts']}")
     print(f"  • Active Alerts: {stats['active_alerts']}")
     print(f"  • Severity Distribution: {stats['severity_distribution']}")
@@ -144,7 +144,7 @@ async def main():
 
     # Final statistics
     final_stats = alert_system.get_alert_statistics()
-    print(f"\n📊 Final Statistics:")
+    print("\n📊 Final Statistics:")
     print(f"  • Total Alerts: {final_stats['total_alerts']}")
     print(f"  • Active Alerts: {final_stats['active_alerts']}")
 

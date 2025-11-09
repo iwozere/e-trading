@@ -5,7 +5,7 @@ Tests for the delivery history API endpoints.
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 import sys

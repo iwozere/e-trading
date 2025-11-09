@@ -4,11 +4,9 @@ Test script for optimized YFinance batch download functionality.
 This script demonstrates the difference between individual, regular batch, and optimized batch operations.
 """
 
-import os
 import sys
 import time
 from pathlib import Path
-from datetime import datetime, timedelta
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -79,7 +77,7 @@ def test_individual_vs_batch_vs_optimized():
         optimized_time = individual_time  # Use individual time as fallback
 
     # Compare performance
-    print(f"\n📈 Performance Comparison:")
+    print("\n📈 Performance Comparison:")
     print(f"  Individual:  {individual_time:.2f} seconds")
     print(f"  Regular Batch: {batch_time:.2f} seconds")
     print(f"  Optimized Batch: {optimized_time:.2f} seconds")
@@ -97,7 +95,7 @@ def test_individual_vs_batch_vs_optimized():
         print(f"  Optimization Improvement: {optimization_improvement:.1f}x faster than regular batch")
 
     # Verify data consistency
-    print(f"\n🔍 Data Verification:")
+    print("\n🔍 Data Verification:")
     for ticker in test_tickers:
         if ticker in individual_fundamentals and ticker in batch_fundamentals and ticker in optimized_fundamentals:
             ind_fund = individual_fundamentals[ticker]
@@ -141,7 +139,7 @@ def test_large_scale_optimized():
         print(f"  Success rate: {successful_fundamentals}/{len(large_tickers)} ({successful_fundamentals/len(large_tickers)*100:.1f}%)")
 
         # Show some sample results
-        print(f"\n  Sample Results:")
+        print("\n  Sample Results:")
         for i, (ticker, fundamentals) in enumerate(list(fundamentals_results.items())[:5], 1):
             print(f"    {i}. {ticker}: {fundamentals.company_name} - PE: {fundamentals.pe_ratio:.1f}")
 
@@ -207,7 +205,7 @@ def test_enhanced_screener_optimized():
         if report.error:
             print(f"❌ Screener error: {report.error}")
         else:
-            print(f"✅ Screener completed successfully!")
+            print("✅ Screener completed successfully!")
             print(f"   Processed: {report.total_tickers_processed} tickers")
             print(f"   Found: {len(report.top_results)} matching stocks")
 
@@ -258,7 +256,7 @@ def test_api_call_reduction():
         print(f"  Retrieved data for {len(fundamentals_results)} tickers")
 
         # Show what data was retrieved
-        print(f"\n  Retrieved Data:")
+        print("\n  Retrieved Data:")
         for ticker, fundamentals in fundamentals_results.items():
             print(f"    {ticker}: {fundamentals.company_name}")
             print(f"      PE: {fundamentals.pe_ratio:.1f}")

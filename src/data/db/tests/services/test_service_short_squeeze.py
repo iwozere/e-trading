@@ -7,12 +7,10 @@ Tests cover core functionality:
 - Data retrieval
 - Statistics
 """
-import pytest
-from datetime import date, datetime, timedelta
-from sqlalchemy.orm import Session
+from datetime import date
 
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
-from src.data.db.models.model_short_squeeze import AlertLevel, CandidateSource
+from src.data.db.models.model_short_squeeze import AlertLevel
 
 
 class TestShortSqueezeServiceCandidates:

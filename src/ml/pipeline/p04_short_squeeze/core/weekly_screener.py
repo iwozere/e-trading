@@ -7,9 +7,8 @@ based on short interest, days to cover, and other structural metrics.
 
 from pathlib import Path
 import sys
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-import statistics
 from dataclasses import dataclass
 
 # Add project root to path for imports
@@ -134,7 +133,7 @@ class WeeklyScreener:
 
             return results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in weekly screener run:")
             raise
 
@@ -172,7 +171,7 @@ class WeeklyScreener:
                 _logger.warning("No FINRA data available for update")
                 metrics['finra_records_stored'] = 0
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating FINRA data:")
             metrics['finra_records_stored'] = 0
 
@@ -202,7 +201,7 @@ class WeeklyScreener:
             _logger.info("Hybrid screening completed: %d candidates found", len(final_candidates))
             return final_candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in hybrid screening:")
             # Fallback to volume-only screening
             return self._screen_with_volume_analysis(universe, metrics)
@@ -240,7 +239,7 @@ class WeeklyScreener:
             _logger.info("Volume screening found %d candidates", len(candidates))
             return candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in volume screening:")
             metrics['volume_screening_processed'] = 0
             metrics['volume_candidates_found'] = 0
@@ -315,7 +314,7 @@ class WeeklyScreener:
 
             return enhanced_candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error enhancing with FINRA data:")
             return candidates
 
@@ -420,7 +419,7 @@ class WeeklyScreener:
             _logger.info("Re-scoring completed for %d candidates", len(rescored_candidates))
             return rescored_candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in combine and rescore:")
             return candidates
 
@@ -466,7 +465,7 @@ class WeeklyScreener:
 
             return candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in batch screening:")
             # Fallback to individual screening
             return self._screen_universe_individual(universe, metrics)
@@ -921,7 +920,7 @@ class WeeklyScreener:
             _logger.info("After filtering: %d candidates remain", len(filtered_candidates))
             return filtered_candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error filtering candidates:")
             return candidates
 
@@ -951,7 +950,7 @@ class WeeklyScreener:
 
             return top_candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error selecting top candidates:")
             return candidates[:self.config.filters.top_k_candidates]
 
@@ -980,7 +979,7 @@ class WeeklyScreener:
 
                 _logger.info("Stored screener results in database: %d candidates", len(candidates))
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error storing screener results:")
             raise
 
@@ -1032,7 +1031,7 @@ if __name__ == "__main__":
 
             results = screener.run_screener(test_universe)
 
-            print(f"✅ Screener completed:")
+            print("✅ Screener completed:")
             print(f"  - Candidates found: {results.candidates_found}")
             print(f"  - Top candidates: {len(results.top_candidates)}")
             print(f"  - Runtime: {results.runtime_metrics['duration_seconds']:.2f} seconds")

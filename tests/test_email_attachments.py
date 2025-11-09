@@ -1,7 +1,6 @@
 import tempfile
 import os
 import asyncio
-import pytest
 from src.notification.async_notification_manager import initialize_notification_manager, NotificationType, NotificationPriority
 
 def test_email_with_attachment():

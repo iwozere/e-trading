@@ -16,8 +16,6 @@ Examples:
 
 import sys
 import json
-import time
-from typing import Dict, Any
 
 from src.trading.config_validator import validate_config_file, print_validation_results
 from src.data.data_feed_factory import DataFeedFactory
@@ -58,7 +56,7 @@ def test_data_feed_creation(config_file: str) -> bool:
         True if data feed creation succeeded, False otherwise
     """
     print(f"\n{'='*60}")
-    print(f"Testing Data Feed Creation")
+    print("Testing Data Feed Creation")
     print(f"{'='*60}")
 
     try:
@@ -82,7 +80,7 @@ def test_data_feed_creation(config_file: str) -> bool:
 
         # Get status
         status = data_feed.get_status()
-        print(f"✅ Data feed created successfully")
+        print("✅ Data feed created successfully")
         print(f"   Symbol: {status.get('symbol')}")
         print(f"   Interval: {status.get('interval')}")
         print(f"   Connected: {status.get('is_connected')}")
@@ -109,7 +107,7 @@ def test_broker_creation(config_file: str) -> bool:
         True if broker creation succeeded, False otherwise
     """
     print(f"\n{'='*60}")
-    print(f"Testing Broker Creation")
+    print("Testing Broker Creation")
     print(f"{'='*60}")
 
     try:
@@ -131,7 +129,7 @@ def test_broker_creation(config_file: str) -> bool:
             print("❌ Failed to create broker")
             return False
 
-        print(f"✅ Broker created successfully")
+        print("✅ Broker created successfully")
         print(f"   Type: {broker_config.get('type')}")
         print(f"   Initial Balance: {broker_config.get('initial_balance')}")
 
@@ -153,7 +151,7 @@ def test_strategy_configuration(config_file: str) -> bool:
         True if strategy configuration is valid, False otherwise
     """
     print(f"\n{'='*60}")
-    print(f"Testing Strategy Configuration")
+    print("Testing Strategy Configuration")
     print(f"{'='*60}")
 
     try:
@@ -209,7 +207,7 @@ def test_notification_configuration(config_file: str) -> bool:
         True if notification configuration is valid, False otherwise
     """
     print(f"\n{'='*60}")
-    print(f"Testing Notification Configuration")
+    print("Testing Notification Configuration")
     print(f"{'='*60}")
 
     try:
@@ -294,9 +292,9 @@ def main():
     all_tests_passed = all([config_valid, data_feed_ok, broker_ok, strategy_ok, notifications_ok])
 
     if all_tests_passed:
-        print(f"\n🎉 All tests passed! The configuration is ready for live trading.")
+        print("\n🎉 All tests passed! The configuration is ready for live trading.")
     else:
-        print(f"\n⚠️  Some tests failed. Please review the errors above.")
+        print("\n⚠️  Some tests failed. Please review the errors above.")
 
     return all_tests_passed
 

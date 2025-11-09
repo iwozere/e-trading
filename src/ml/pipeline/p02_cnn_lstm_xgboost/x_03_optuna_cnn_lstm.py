@@ -23,9 +23,8 @@ import pickle
 import json
 from pathlib import Path
 import sys
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Tuple
 import matplotlib.pyplot as plt
-import seaborn as sns
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
@@ -401,7 +400,7 @@ class CNNLSTMOptimizer:
 
             return best_val_loss
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in trial:")
             raise optuna.TrialPruned()
 
@@ -524,7 +523,7 @@ def main():
         print(f"Best value: {study.best_trial.value}")
         print(f"Best params: {study.best_trial.params}")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("CNN-LSTM optimization failed:")
         sys.exit(1)
 

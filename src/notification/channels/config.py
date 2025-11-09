@@ -6,8 +6,7 @@ Provides type-safe configuration handling and validation.
 """
 
 from typing import Dict, Any, List, Optional, Union, Type
-from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
+from dataclasses import dataclass
 import re
 
 from src.notification.logger import setup_logger

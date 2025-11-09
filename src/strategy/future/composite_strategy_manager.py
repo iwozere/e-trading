@@ -164,7 +164,7 @@ class AdvancedStrategyFramework:
                     with open(file_path, 'r') as f:
                         configs[config_file.replace('.json', '')] = json.load(f)
                     logger.info("Loaded configuration from %s", config_file)
-                except Exception as e:
+                except Exception:
                     logger.exception("Error loading%s: ", config_file)
             else:
                 logger.warning("Configuration file not found: %s", config_file)
@@ -203,7 +203,7 @@ class AdvancedStrategyFramework:
 
                 logger.info("Initialized composite strategy: %s", strategy_name)
 
-            except Exception as e:
+            except Exception:
                 logger.exception("Error initializing composite strategy %s: ", strategy.name)
 
     def initialize_multi_timeframe_strategies(self):
@@ -234,7 +234,7 @@ class AdvancedStrategyFramework:
 
                 logger.info("Initialized multi-timeframe strategy: %s", strategy_name)
 
-            except Exception as e:
+            except Exception:
                 logger.exception("Error initializing multi-timeframe strategy%s: ", strategy.name)
 
     def initialize_dynamic_switching(self):

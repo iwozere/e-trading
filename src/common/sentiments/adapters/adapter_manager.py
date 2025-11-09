@@ -5,7 +5,7 @@ This module provides centralized management of sentiment adapters including
 registration, health monitoring, and circuit breaker functionality.
 """
 import asyncio
-from typing import Dict, List, Optional, Type, Any, Callable
+from typing import Dict, List, Optional, Type, Any
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import time
@@ -20,7 +20,6 @@ from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter, AdapterStatus, AdapterHealthInfo
 from src.common.sentiments.rate_limiting.global_coordinator import GlobalRateLimitCoordinator, GlobalLimitConfig
 from src.common.sentiments.rate_limiting.adaptive_limiter import AdaptiveConfig
-from src.common.sentiments.rate_limiting.priority_queue import RequestPriority
 
 _logger = setup_logger(__name__)
 

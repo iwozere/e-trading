@@ -98,7 +98,7 @@ class CustomStrategy(BaseStrategy):
                         f"Exit mixin created with params: {mixin_params}"
                     )
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in _initialize_strategy")
             raise
 
@@ -147,7 +147,7 @@ class CustomStrategy(BaseStrategy):
                 # Use base class method for position exit
                 self._exit_position(reason=exit_reason)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in _execute_strategy_logic")
 
     def notify_trade(self, trade):
@@ -161,7 +161,7 @@ class CustomStrategy(BaseStrategy):
                 self.entry_mixin.notify_trade(trade)
             if self.exit_mixin:
                 self.exit_mixin.notify_trade(trade)
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in mixin trade notification")
 
 

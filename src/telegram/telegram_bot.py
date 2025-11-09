@@ -4,18 +4,16 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-import tempfile
 import time
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
-from aiogram.filters import Command, CommandObject
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.filters import Command
 import asyncio
 import random
 from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
-from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN, SMTP_USER, SMTP_PASSWORD
+from config.donotshare.donotshare import TELEGRAM_BOT_TOKEN
 from src.telegram.screener.notifications import (
-    process_report_command, process_help_command, process_screener_command, process_unknown_command
+    process_report_command, process_screener_command
 )
 # Immediate handlers moved inline since immediate_handlers.py was removed
 from src.telegram.screener import business_logic
@@ -71,7 +69,7 @@ Use /register your@email.com to get started."""
 
         await message.reply(info_text, parse_mode="Markdown")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in info command")
         await message.reply("❌ An error occurred while retrieving your information. Please try again.")
 
@@ -191,7 +189,7 @@ async def process_register_command_immediate(user_id: str, args, message):
             _logger.warning("Failed to send verification email: %s", e)
             # Don't fail the registration if email sending fails
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in register command")
         await message.reply("❌ An error occurred during registration. Please try again.")
 
@@ -231,7 +229,7 @@ async def process_verify_command_immediate(user_id: str, args, message):
         else:
             await message.reply("❌ **Invalid or Expired Code**\n\nPlease check the code or request a new one with `/register`", parse_mode="Markdown")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in verify command")
         await message.reply("❌ An error occurred while processing verification. Please try again.")
 
@@ -275,7 +273,7 @@ async def process_language_command_immediate(user_id: str, args, message):
         else:
             await message.reply("❌ Unable to update language preference. Please try again later.")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in language command")
         await message.reply("❌ An error occurred while updating language. Please try again.")
 
@@ -290,7 +288,6 @@ async def process_alerts_command_immediate(user_id: str, args, message):
     try:
         from src.data.db.services.alerts_service import AlertsService
         from src.data.data_manager import DataManager
-        from src.indicators.service import IndicatorService
         from src.data.db.services.jobs_service import JobsService
 
         # Get service instances
@@ -388,14 +385,14 @@ async def process_alerts_command_immediate(user_id: str, args, message):
 
             results = await alerts_service.evaluate_user_alerts(int(user_id))
 
-            response = f"📊 **Alert Evaluation Results:**\n\n"
+            response = "📊 **Alert Evaluation Results:**\n\n"
             response += f"✅ Evaluated: {results['total_evaluated']}\n"
             response += f"🔥 Triggered: {results['triggered']}\n"
             response += f"🔄 Rearmed: {results['rearmed']}\n"
             response += f"❌ Errors: {results['errors']}\n"
 
             if results['triggered'] > 0:
-                response += f"\n🚨 **Triggered Alerts:**\n"
+                response += "\n🚨 **Triggered Alerts:**\n"
                 for result in results['results']:
                     if result['triggered']:
                         response += f"• {result['ticker']}\n"
@@ -415,7 +412,7 @@ async def process_alerts_command_immediate(user_id: str, args, message):
                         "`/alerts delete 123`")
             await message.reply(help_text, parse_mode="Markdown")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error processing alerts command for user %s", user_id)
         await message.reply("❌ An error occurred while processing your alert command. Please try again.")
 
@@ -449,7 +446,7 @@ async def process_feedback_command_immediate(user_id: str, args, message):
             _logger.warning("Failed to store feedback in database: %s", e)
             # Don't fail the command if database storage fails
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in feedback command")
         await message.reply("❌ An error occurred while processing your feedback. Please try again.")
 
@@ -503,7 +500,7 @@ async def process_request_approval_command_immediate(user_id: str, args, message
             _logger.warning("Failed to notify admins about approval request: %s", e)
             # Don't fail the request if admin notification fails
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error in request approval command")
         await message.reply("❌ An error occurred while processing your approval request. Please try again.")
 
@@ -543,8 +540,6 @@ async def get_notification_client():
 
 # HTTP API support
 from aiohttp import web
-import json
-from typing import Dict, Any, Optional
 
 # Service initialization and health check functions
 
@@ -708,7 +703,7 @@ async def extract_attachments_from_telegram_message(message: Message) -> dict:
             filename = f"sticker_{message.sticker.file_id}.webp"
             attachments[filename] = file_data.read()
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error extracting attachments from Telegram message:")
 
     return attachments
@@ -736,7 +731,7 @@ async def initialize_services() -> bool:
                     raise RuntimeError(f"Telegram service missing required method: {method}")
 
             _logger.info("Telegram service initialized and validated successfully")
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize telegram service:")
             return False
 
@@ -753,7 +748,7 @@ async def initialize_services() -> bool:
                 _logger.warning("IndicatorService has no adapters available - some functionality may be limited")
 
             _logger.info("Indicator service initialized and validated successfully")
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize indicator service:")
             # For now, continue without indicator service as some commands don't require it
             indicator_service_instance = None
@@ -763,7 +758,7 @@ async def initialize_services() -> bool:
         try:
             business_logic.set_service_instances(telegram_service_instance, indicator_service_instance)
             _logger.info("Service instances set in business logic layer successfully")
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to set service instances in business logic layer:")
             return False
 
@@ -841,7 +836,7 @@ async def check_telegram_service_health() -> bool:
 
         return True
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Telegram service health check failed:")
         return False
 
@@ -876,7 +871,7 @@ async def check_indicator_service_health() -> bool:
         _logger.debug("Indicator service health check: indicator metadata available")
         return True
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Indicator service health check failed:")
         return False
 
@@ -1353,7 +1348,7 @@ async def cmd_start(message: Message):
             _logger.debug("Audit not available for /start command: %s", audit_error)
 
         _logger.info("Successfully processed /start command for user %s", message.from_user.id)
-    except Exception as e:
+    except Exception:
         _logger.exception("Error processing /start command for user %s", message.from_user.id)
         # Send a simple error message directly
         await message.answer("Sorry, there was an error processing your command. Please try again.")
@@ -1378,7 +1373,7 @@ async def cmd_help(message: Message):
         except Exception as audit_error:
             _logger.debug("Audit not available for /help command: %s", audit_error)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Error processing /help command for user %s", message.from_user.id)
         # Final fallback: send built-in help text directly
         try:
@@ -1480,7 +1475,7 @@ async def unknown_command(message: Message):
         try:
             await command_handlers[command_name](message)
             return
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing case-insensitive command %s for user %s", command_name, message.from_user.id)
             await message.answer("Sorry, there was an error processing your command. Please try again.")
             return
@@ -1488,7 +1483,7 @@ async def unknown_command(message: Message):
     # If not a case variation, process as unknown command
     try:
         await audit_command_wrapper(message, process_unknown_command_immediate, str(message.from_user.id), message, HELP_TEXT)
-    except Exception as e:
+    except Exception:
         _logger.exception("Error processing unknown command for user %s", message.from_user.id)
         await message.answer("Sorry, there was an error processing your command. Please try again.")
 
@@ -1510,7 +1505,7 @@ async def all_messages(message: Message):
 
             await audit_command_wrapper(message, non_command_func, str(message.from_user.id))
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error processing non-command message for user %s", message.from_user.id)
             await message.answer("Please use /help to see available commands.")
 
@@ -1600,7 +1595,7 @@ async def main():
 
         _logger.info("Heartbeat manager started for telegram bot")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Failed to initialize heartbeat manager:")
 
     _logger.info("Starting Telegram Screener Bot with HTTP API...")

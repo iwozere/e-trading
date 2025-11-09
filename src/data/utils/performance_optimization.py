@@ -9,18 +9,16 @@ This module provides advanced performance optimization features including:
 - Performance monitoring
 """
 
-import time
 import threading
 import multiprocessing
 from typing import Any, Optional, Dict, List, Union, Callable, Iterator
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 import logging
 import pickle
 import gzip
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-import queue
 
 try:
     import pandas as pd
@@ -328,7 +326,7 @@ class ParallelProcessor:
                 chunk_index = future_to_chunk[future]
                 try:
                     results[chunk_index] = future.result()
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error processing chunk %s:", chunk_index)
                     results[chunk_index] = chunks[chunk_index]  # Return original chunk
 
@@ -365,7 +363,7 @@ class ParallelProcessor:
             for future in as_completed(future_to_chunk):
                 try:
                     yield future.result()
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error processing chunk:")
 
     def map_reduce(
@@ -408,7 +406,7 @@ class ParallelProcessor:
             for future in as_completed(futures):
                 try:
                     results.append(future.result())
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error in map phase:")
 
         # Reduce phase

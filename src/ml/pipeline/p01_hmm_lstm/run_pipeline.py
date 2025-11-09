@@ -499,7 +499,7 @@ Examples:
     except KeyboardInterrupt:
         _logger.info("Pipeline execution interrupted by user")
         sys.exit(1)
-    except Exception as e:
+    except Exception:
         _logger.exception("Pipeline execution failed")
         sys.exit(1)
 

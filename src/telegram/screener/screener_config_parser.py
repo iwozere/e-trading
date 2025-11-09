@@ -5,7 +5,6 @@ Parses and validates JSON configurations for advanced screeners that combine
 fundamental and technical analysis.
 """
 
-import os
 import sys
 from pathlib import Path
 

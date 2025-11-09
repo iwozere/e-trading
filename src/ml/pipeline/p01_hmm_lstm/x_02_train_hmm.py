@@ -18,13 +18,11 @@ Based on hmm_optimization.py with pipeline integration.
 """
 
 import os
-import glob
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import talib
 from hmmlearn.hmm import GaussianHMM
-from sklearn.cluster import KMeans
 from itertools import product
 import optuna
 import yaml
@@ -33,7 +31,7 @@ import pickle
 import json
 from datetime import datetime
 import sys
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[4]

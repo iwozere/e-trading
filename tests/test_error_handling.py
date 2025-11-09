@@ -11,7 +11,6 @@ import sys
 import time
 import random
 import unittest
-from unittest.mock import Mock, patch
 from pathlib import Path
 
 # Add src to path for imports
@@ -32,11 +31,8 @@ from src.error_handling import (
     ErrorRecoveryManager, RecoveryStrategy, RecoveryConfig,
 
     # Error Monitoring
-    ErrorMonitor, ErrorSeverity, ErrorEvent,
-
-    # Resilience Decorators
-    resilient, retry_on_failure, circuit_breaker, fallback, timeout,
-    resilient_api_call, resilient_database_call
+    ErrorMonitor, ErrorSeverity, resilient, retry_on_failure, circuit_breaker, fallback, timeout,
+    resilient_api_call
 )
 
 
@@ -729,7 +725,7 @@ def run_tests():
 
     # Print summary
     print(f"\n{'='*60}")
-    print(f"Test Results Summary")
+    print("Test Results Summary")
     print(f"{'='*60}")
     print(f"Tests run: {result.testsRun}")
     print(f"Failures: {len(result.failures)}")
@@ -737,12 +733,12 @@ def run_tests():
     print(f"Success rate: {((result.testsRun - len(result.failures) - len(result.errors)) / result.testsRun * 100):.1f}%")
 
     if result.failures:
-        print(f"\nFailures:")
+        print("\nFailures:")
         for test, traceback in result.failures:
             print(f"  {test}: {traceback}")
 
     if result.errors:
-        print(f"\nErrors:")
+        print("\nErrors:")
         for test, traceback in result.errors:
             print(f"  {test}: {traceback}")
 

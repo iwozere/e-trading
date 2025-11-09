@@ -6,9 +6,8 @@ and other data quality checks.
 """
 
 import pandas as pd
-import numpy as np
 from typing import Optional, List, Tuple, Dict, Any, Union
-from datetime import datetime, timedelta
+from datetime import timedelta
 import logging
 
 _logger = logging.getLogger(__name__)

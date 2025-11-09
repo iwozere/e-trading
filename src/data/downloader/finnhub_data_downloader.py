@@ -527,7 +527,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
             return ratio
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error calculating call/put ratio:")
             return None
 
@@ -641,6 +641,6 @@ class FinnhubDataDownloader(BaseDataDownloader):
             _logger.info("Successfully retrieved Finnhub data for %d/%d tickers", len(batch_data), total_tickers)
             return batch_data
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in Finnhub batch data retrieval:")
             return {}

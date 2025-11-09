@@ -12,13 +12,12 @@ Tests cover:
 """
 import pytest
 from datetime import datetime, timezone, timedelta
-from sqlalchemy.orm import Session
 
 from src.data.db.services.notification_service import NotificationService
 from src.data.db.models.model_notification import (
-    Message, MessageDeliveryStatus, MessageStatus, MessagePriority, DeliveryStatus
+    MessageStatus, DeliveryStatus
 )
-from src.data.db.tests.fixtures.factory_notifications import MessageFactory, DeliveryStatusFactory
+from src.data.db.tests.fixtures.factory_notifications import MessageFactory
 
 
 class TestNotificationServiceMessages:

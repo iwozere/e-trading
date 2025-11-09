@@ -42,13 +42,12 @@ except ImportError:
     BaseBrokerClass = ABC
 
 from abc import abstractmethod
-from typing import Dict, List, Optional, Any, Tuple, Union
+from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime, timezone
 import uuid
 import asyncio
-import json
 import random
 import math
 
@@ -664,7 +663,7 @@ class PositionNotificationManager:
                 # No notification client provided - log warning
                 _logger.warning("No notification client provided for trading notifications")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error sending notifications:")
 
 
@@ -1018,7 +1017,7 @@ class BaseBroker(BaseBrokerClass):
             elif event_type == "closed":
                 await self.notification_manager.notify_position_closed(position_data)
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error sending position notification:")
 
     async def notify_error(self, error_message: str, context: Dict[str, Any] = None):
@@ -1034,7 +1033,7 @@ class BaseBroker(BaseBrokerClass):
 
             await self.notification_manager.notify_error(error_data)
 
-        except Exception as e:
+        except Exception:
             self._logger.exception("Error sending error notification:")
 
     def get_status(self) -> Dict[str, Any]:

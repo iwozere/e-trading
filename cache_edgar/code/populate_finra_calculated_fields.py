@@ -13,8 +13,7 @@ import sys
 import time
 from pathlib import Path
 from datetime import datetime, date, timedelta
-from typing import Dict, List, Optional, Tuple
-import logging
+from typing import Dict, List, Optional
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -146,7 +145,7 @@ class FINRAFieldPopulator:
                 _logger.info("Found %d tickers needing volume data", len(tickers))
                 return tickers
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting tickers needing volume data:")
             return []
 
@@ -210,7 +209,7 @@ class FINRAFieldPopulator:
                 if i + self.batch_size < len(tickers):
                     time.sleep(self.api_delay)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error fetching volume data for batch:")
                 continue
 

@@ -8,7 +8,7 @@ and optimization workflows.
 
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Any
 import warnings
 
 import numpy as np
@@ -16,8 +16,7 @@ import pandas as pd
 import backtrader as bt
 import optuna
 import json
-import pickle
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Add project root to path
 project_root = Path(__file__).resolve().parents[3]
@@ -87,7 +86,7 @@ class BaseOptimizer:
             _logger.info("Loaded configuration from %s", self.config_path)
             return config
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error loading configuration:")
             raise
 
@@ -153,7 +152,7 @@ class BaseOptimizer:
 
             return df
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error preparing data:")
             raise
 
@@ -212,7 +211,7 @@ class BaseOptimizer:
 
             return cerebro
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating Backtrader engine:")
             raise
 
@@ -267,7 +266,7 @@ class BaseOptimizer:
 
             return backtest_results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error extracting backtest results:")
             raise
 
@@ -288,7 +287,7 @@ class BaseOptimizer:
             )
             return study
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error creating Optuna study:")
             raise
 
@@ -338,7 +337,7 @@ class BaseOptimizer:
 
             return summary
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error generating summary:")
             return {}
 
@@ -369,7 +368,7 @@ class BaseOptimizer:
 
             _logger.info("Results saved to %s", self.output_dir)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error saving results:")
 
     def _generate_performance_report(self, results: List[Dict[str, Any]], summary: Dict[str, Any],
@@ -417,7 +416,7 @@ class BaseOptimizer:
 
             _logger.info("Performance report generated: %s", report_file)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error generating performance report:")
 
     def discover_available_combinations(self) -> List[Dict[str, str]]:
@@ -507,7 +506,7 @@ class BaseOptimizer:
                         'results': results
                     })
 
-                except Exception as e:
+                except Exception:
                     _logger.exception("Error processing combination:")
                     continue
 
@@ -522,6 +521,6 @@ class BaseOptimizer:
 
             return summary
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in main run:")
             raise

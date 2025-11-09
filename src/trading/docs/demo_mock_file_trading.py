@@ -24,7 +24,6 @@ sys.path.append(str(PROJECT_ROOT))
 from src.trading.broker.broker_factory import get_broker
 from src.data.feed.file_data_feed import FileDataFeed
 from src.trading.services.bot_config_validator import (
-    BotConfigValidator,
     validate_database_bot_record,
     print_validation_results
 )
@@ -105,7 +104,7 @@ class MockFileTradingDemo:
             _logger.info("Columns: %s", list(df.columns))
             _logger.info("Sample data shape: %s", df.shape)
             return True
-        except Exception as e:
+        except Exception:
             _logger.exception("Error reading data file:")
             return False
 
@@ -123,7 +122,7 @@ class MockFileTradingDemo:
             _logger.info("Trading mode: %s", broker_config['trading_mode'])
             _logger.info("Initial cash: $%.2f", broker_config['cash'])
             return broker
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to create broker:")
             raise
 
@@ -160,7 +159,7 @@ class MockFileTradingDemo:
             _logger.info("Real-time simulation: %s", data_config.get('simulate_realtime', False))
 
             return data_feed
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to create data feed:")
             raise
 
@@ -218,7 +217,7 @@ class MockFileTradingDemo:
 
             _logger.info("Trading simulation completed successfully!")
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in trading simulation:")
             raise
 
@@ -262,7 +261,7 @@ class MockFileTradingDemo:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error demonstrating configuration:")
             return False
 
@@ -287,7 +286,7 @@ class MockFileTradingDemo:
                     _logger.info("✅ Demo completed successfully: %s", config_name)
                 else:
                     _logger.exception("❌ Demo failed: %s", config_name)
-            except Exception as e:
+            except Exception:
                 _logger.exception("❌ Demo error for %s:", config_name)
 
         print(f"\n{'='*80}")
@@ -331,7 +330,7 @@ async def main():
 
     except KeyboardInterrupt:
         print("\n\nDemo interrupted by user.")
-    except Exception as e:
+    except Exception:
         _logger.exception("Demo failed:")
 
 

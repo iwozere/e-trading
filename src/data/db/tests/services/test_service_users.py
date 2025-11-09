@@ -12,8 +12,6 @@ Tests cover:
 Note: UsersService works primarily through Telegram integration,
 so tests focus on the actual API methods available.
 """
-import pytest
-from sqlalchemy.orm import Session
 
 from src.data.db.services.users_service import UsersService
 from src.data.db.models.model_users import User, AuthIdentity

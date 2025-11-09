@@ -21,7 +21,6 @@ This strategy combines mean reversion (RSI + BB) to identify potential reversal 
 
 from typing import Any, Dict, Optional
 
-import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.indicators.adapters.backtrader_wrappers import UnifiedRSIIndicator, UnifiedBollingerBandsIndicator
 from src.notification.logger import setup_logger
@@ -142,7 +141,7 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
             self.register_indicator(self.rsi_name, self.rsi)
             self.register_indicator(self.bb_name, self.bb)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -290,6 +289,6 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
 
             return entry_signal
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_enter: ")
             return False

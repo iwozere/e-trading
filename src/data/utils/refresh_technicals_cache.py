@@ -17,7 +17,6 @@ Usage:
 
 import argparse
 import sys
-import os
 from datetime import datetime, timezone, timedelta
 import time
 from pathlib import Path
@@ -28,7 +27,7 @@ import pandas as pd
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.data.cache.unified_cache import configure_unified_cache, get_unified_cache
+from src.data.cache.unified_cache import configure_unified_cache
 from src.data.sources.base_data_source import BaseDataSource
 
 # Import API keys from donotshare
@@ -239,7 +238,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
                                     continue
                                 else:
                                     print(f"     ⚠️  Current year data is outdated (last data: {last_timestamp.strftime('%Y-%m-%d %H:%M')}, current month: {current_month})")
-                                    print(f"     📥 Will download current year data only")
+                                    print("     📥 Will download current year data only")
 
                                     # Download only current year data
                                     current_year_start = datetime(current_year, 1, 1)
@@ -253,7 +252,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
                                 print(f"     ⚠️  Error checking current year data: {e}, will download")
                         else:
                             # Previous years data - keep forever
-                            print(f"     ✅ Historical data, keeping existing data")
+                            print("     ✅ Historical data, keeping existing data")
                             results['success'].append(f"{symbol}_{interval}")
                             continue
                     else:
@@ -270,7 +269,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
                         if missing_years:
                             print(f"     📥 Missing years: {sorted(missing_years)}, will download")
                         else:
-                            print(f"     ✅ All requested years exist, skipping download")
+                            print("     ✅ All requested years exist, skipping download")
                             results['success'].append(f"{symbol}_{interval}")
                             continue
 
@@ -324,7 +323,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
                         print(f"     Symbol: {symbol}, Interval: {interval}")
                         print(f"     Date range: {start_date} to {end_date}")
                         print(f"     Reason: {provider_config.get('reason', 'Stock symbol with intraday interval')}")
-                        print(f"     Note: Alpha Vantage provides full historical intraday data (no 60-day limit)")
+                        print("     Note: Alpha Vantage provides full historical intraday data (no 60-day limit)")
 
                         # Use naive timestamps for Alpha Vantage (it uses market timezone)
                         start_date_naive = start_date.replace(tzinfo=None) if start_date.tzinfo else start_date
@@ -347,7 +346,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
 
                 # Fallback to mock if no real data available
                 if df is None or df.empty:
-                    print(f"  🎭 Using mock data source (fallback)")
+                    print("  🎭 Using mock data source (fallback)")
                     mock_source = MockDataSource("mock")
                     # Ensure naive datetimes for mock data source
                     start_date_naive = start_date.replace(tzinfo=None) if start_date.tzinfo else start_date
@@ -372,7 +371,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
                         # Ensure index is timezone-naive for compatibility
                         if df.index.tz is not None:
                             df.index = df.index.tz_localize(None)
-                        print(f"  🔄 Converted timestamp to index")
+                        print("  🔄 Converted timestamp to index")
 
                     results['data_quality'][f"{symbol}_{interval}"] = {
                         'is_valid': is_valid,
@@ -402,7 +401,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
                                 _logger.info("SUCCESS: %s_%s cached successfully - %d rows", symbol, interval, len(df))
                             else:
                                 results['failed'].append(f"{symbol}_{interval}")
-                                print(f"  ❌ Failed to cache data")
+                                print("  ❌ Failed to cache data")
                                 _logger.error("FAILED: %s_%s - cache.put returned False", symbol, interval)
                         except Exception as cache_error:
                             results['failed'].append(f"{symbol}_{interval}")
@@ -412,11 +411,11 @@ def populate_cache(symbols: List[str], intervals: List[str],
                     # Validation is disabled - this block should never be reached
                     else:
                         results['failed'].append(f"{symbol}_{interval}")
-                        print(f"  ❌ Unexpected validation failure (validation is disabled)")
+                        print("  ❌ Unexpected validation failure (validation is disabled)")
                         _logger.error("UNEXPECTED: %s_%s - validation failed but validation is disabled", symbol, interval)
                 else:
                     results['failed'].append(f"{symbol}_{interval}")
-                    print(f"  ❌ No data available from any source")
+                    print("  ❌ No data available from any source")
                     print(f"  🔍 Best provider: {best_provider}")
                     print(f"  🔍 Available downloaders: {list(downloaders.keys())}")
 
@@ -432,7 +431,7 @@ def populate_cache(symbols: List[str], intervals: List[str],
 
             # Add rate limiting delay to avoid hitting API limits
             if current_operation < total_operations:  # Don't delay after the last operation
-                print(f"  ⏱️  Rate limiting: waiting 0.2 seconds...")
+                print("  ⏱️  Rate limiting: waiting 0.2 seconds...")
                 time.sleep(0.2)
 
             print()
@@ -592,7 +591,7 @@ def main():
             if results['failed']:
                 print(f"\n❌ Failed to cache: {', '.join(results['failed'])}")
 
-            print(f"\n📈 CACHE STATISTICS")
+            print("\n📈 CACHE STATISTICS")
             print("-" * 30)
             for key, value in results['cache_stats'].items():
                 print(f"  {key}: {value}")

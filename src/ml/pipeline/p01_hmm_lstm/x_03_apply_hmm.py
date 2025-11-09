@@ -111,7 +111,7 @@ class HMMApplicator:
 
             return model_package
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load model from %s: ", model_path)
             raise
 
@@ -730,7 +730,7 @@ def main():
         for file in labeled_files[-5:]:  # Show last 5 files
             _logger.info("  %s", file.name)
 
-    except Exception as e:
+    except Exception:
         _logger.exception("HMM application failed: ")
         raise
 

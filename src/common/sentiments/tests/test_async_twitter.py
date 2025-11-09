@@ -14,7 +14,6 @@ import asyncio
 import aiohttp
 import os
 from unittest.mock import Mock, AsyncMock, patch
-from datetime import datetime
 from pathlib import Path
 import sys
 import time
@@ -604,4 +603,3 @@ class TestAsyncTwitterAdapter:
             assert summary["verified_tweets"] == 1
             assert summary["verified_ratio"] == 0.5
 
-import time

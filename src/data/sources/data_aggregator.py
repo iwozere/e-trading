@@ -6,7 +6,7 @@ data from multiple data sources and providers.
 """
 
 import pandas as pd
-from typing import Dict, List, Optional, Union, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
 import numpy as np
 
@@ -95,7 +95,7 @@ class DataAggregator:
                 _logger.error("Unknown aggregation strategy: %s", strategy)
                 return None
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to aggregate data for %s:", symbol)
             return None
 
@@ -421,7 +421,7 @@ class DataAggregator:
                         comparison['data_points'][provider] = 0
                         comparison['quality_scores'][provider] = {'quality_score': 0.0}
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Failed to analyze %s:", provider)
                 comparison['data_points'][provider] = 0
                 comparison['quality_scores'][provider] = {'quality_score': 0.0}

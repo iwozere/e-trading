@@ -4,7 +4,7 @@ import os
 from contextlib import contextmanager
 from typing import Iterable
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
 

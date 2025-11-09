@@ -13,16 +13,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 import pytest
-import asyncio
 import time
 from unittest.mock import Mock, patch, AsyncMock
 from tests.fixtures.service_fixtures import (
-    business_logic_with_mocks, telegram_service_mock, indicator_service_mock,
-    setup_user_in_mock, setup_indicator_data_in_mock, create_parsed_command,
-    ServiceTestContext
+    setup_indicator_data_in_mock, create_parsed_command
 )
 from src.telegram.screener.business_logic import TelegramBusinessLogic
-from src.telegram.command_parser import ParsedCommand
 from src.indicators.models import TickerIndicatorsRequest, IndicatorResultSet, IndicatorValue
 # Skip real service imports due to dependency issues - use mocks only
 # from src.data.db.services import telegram_service

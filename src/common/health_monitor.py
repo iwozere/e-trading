@@ -11,14 +11,12 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
-from enum import Enum
 
-import aiohttp
 import psutil
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.data.db.services.database_service import DatabaseService
-from src.data.db.models.model_system_health import SystemHealth, SystemType, SystemHealthStatus
+from src.data.db.models.model_system_health import SystemHealth, SystemHealthStatus
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -144,7 +142,7 @@ class HealthMonitor:
                         response_time_ms=None,
                         error_message=str(result)
                     )
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to check all systems health:")
 
         return results
@@ -186,7 +184,7 @@ class HealthMonitor:
 
                 uow.commit()
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to update health status for %s:", result.system)
 
     async def get_system_health_summary(self) -> Dict[str, Any]:
@@ -468,7 +466,7 @@ class HealthMonitor:
 
                 _logger.debug("Completed health check cycle for %d systems", len(results))
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error during health monitoring cycle:")
 
             # Wait for next cycle

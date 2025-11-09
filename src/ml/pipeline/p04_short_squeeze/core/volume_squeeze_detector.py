@@ -10,7 +10,6 @@ from pathlib import Path
 import sys
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
-import statistics
 import numpy as np
 from dataclasses import dataclass
 
@@ -450,7 +449,7 @@ class VolumeSqueezeDetector:
             _logger.info("Volume screening completed: %d candidates found", len(results))
             return results
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error in volume screening:")
             return []
 

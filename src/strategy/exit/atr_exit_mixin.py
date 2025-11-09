@@ -159,7 +159,7 @@ class ATRExitMixin(BaseExitMixin):
 
             logger.debug("Legacy indicators initialized: ATR(period=%d)", atr_period)
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
@@ -285,7 +285,7 @@ class ATRExitMixin(BaseExitMixin):
 
             return False
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error in should_exit: ")
             return False
 

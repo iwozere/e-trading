@@ -6,9 +6,8 @@ It recreates the calculation using the same parameters as the optimizer.
 """
 
 import json
-import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 
 def load_json_data(filename):
     """Load JSON data from results file"""
@@ -138,7 +137,7 @@ def test_backtrader_sharpe_calculation():
 
     # Show some trade statistics
     net_pnls = [trade['net_pnl'] for trade in trades]
-    print(f"\nTrade Statistics:")
+    print("\nTrade Statistics:")
     print(f"Average trade P&L: ${np.mean(net_pnls):.2f}")
     print(f"Trade P&L std dev: ${np.std(net_pnls):.2f}")
     print(f"Min trade P&L: ${min(net_pnls):.2f}")

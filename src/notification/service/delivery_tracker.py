@@ -6,17 +6,15 @@ Supports multi-channel delivery tracking with detailed status information.
 """
 
 import asyncio
-import time
-from typing import Dict, Any, List, Optional, Callable, Set, Tuple
+from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
 import uuid
 
-from src.data.db.models.model_notification import MessageStatus, MessagePriority
+from src.data.db.models.model_notification import MessagePriority
 from src.notification.service.message_queue import QueuedMessage
-from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -757,7 +755,7 @@ class DeliveryTracker:
                 await asyncio.sleep(self._cleanup_interval_hours * 3600)  # Convert hours to seconds
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 self._logger.exception("Error in delivery tracker cleanup:")
                 await asyncio.sleep(300)  # Wait 5 minutes before retry
 

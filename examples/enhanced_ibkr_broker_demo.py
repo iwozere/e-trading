@@ -18,9 +18,7 @@ Usage:
 
 import asyncio
 import argparse
-import json
-import time
-from datetime import datetime, timezone
+from datetime import datetime
 import sys
 from pathlib import Path
 
@@ -43,7 +41,7 @@ async def demo_paper_trading():
     config['notifications']['email_enabled'] = False  # Disable for demo
     config['notifications']['telegram_enabled'] = False
 
-    print(f"📋 Configuration:")
+    print("📋 Configuration:")
     print(f"   Trading Mode: {config['trading_mode']}")
     print(f"   Initial Balance: ${config['cash']:,.2f}")
     print(f"   Connection: {config['connection']['host']}:{config['connection']['port']}")
@@ -76,7 +74,7 @@ async def demo_paper_trading():
 
         # Get account info
         account_info = await broker.get_account_info()
-        print(f"📊 Account Info:")
+        print("📊 Account Info:")
         for key, value in account_info.items():
             if key not in ['paper_trading_config', 'connection_info']:
                 print(f"   {key}: {value}")
@@ -233,7 +231,7 @@ async def demo_paper_trading():
                 print(f"   Total Executions: {report['total_executions']}")
                 print(f"   Average Slippage: {report['average_slippage_bps']:.2f} bps")
                 print(f"   Average Latency: {report['average_latency_ms']:.1f} ms")
-                print(f"   Quality Distribution:")
+                print("   Quality Distribution:")
                 for quality, percentage in report['quality_distribution'].items():
                     print(f"     {quality}: {percentage:.1f}%")
             else:
@@ -284,7 +282,7 @@ async def demo_live_trading():
     config['notifications']['email_enabled'] = False  # Disable for demo
     config['notifications']['telegram_enabled'] = False
 
-    print(f"📋 Configuration:")
+    print("📋 Configuration:")
     print(f"   Trading Mode: {config['trading_mode']}")
     print(f"   Initial Balance: ${config['cash']:,.2f}")
     print(f"   Connection: {config['connection']['host']}:{config['connection']['port']}")
@@ -317,7 +315,7 @@ async def demo_live_trading():
 
         # Get account info
         account_info = await broker.get_account_info()
-        print(f"📊 Account Info:")
+        print("📊 Account Info:")
         for key, value in account_info.items():
             if key != 'account_values':
                 print(f"   {key}: {value}")
@@ -368,7 +366,7 @@ async def demo_live_trading():
     # Get IBKR-specific info
     try:
         ibkr_info = await broker.get_ibkr_specific_info()
-        print(f"🔧 IBKR-specific info:")
+        print("🔧 IBKR-specific info:")
         print(f"   Supported Order Types: {len(ibkr_info['supported_order_types'])}")
         print(f"   Supported Asset Classes: {len(ibkr_info['supported_asset_classes'])}")
         print(f"   Connection Status: {ibkr_info['connection_info']['connected']}")
@@ -428,7 +426,7 @@ async def demo_multi_asset_trading():
         future_contract = broker._create_contract('ES', 'FUT', 'GLOBEX')
         print(f"   Future: {future_contract.symbol} ({future_contract.secType})")
     except:
-        print(f"   Future: ES (FUT) - Contract creation demo")
+        print("   Future: ES (FUT) - Contract creation demo")
 
     print()
     print("✅ Multi-asset demo completed!")

@@ -41,7 +41,6 @@ import sys
 from pathlib import Path
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional, Tuple
-import pandas as pd
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -140,7 +139,7 @@ class FINRADataEnrichmentUtility:
 
                 return record_dicts
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting records to enrich:")
             return []
 
@@ -300,7 +299,7 @@ class FINRADataEnrichmentUtility:
                 else:
                     _logger.info("DRY RUN: Would update %d records", stats['records_updated'])
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error updating records:")
             if not dry_run:
                 _logger.error("Rolling back transaction due to error")
@@ -350,7 +349,7 @@ class FINRADataEnrichmentUtility:
                     import time
                     time.sleep(0.5)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error fetching float shares for batch %d:", batch_num)
                 # Mark all tickers in failed batch as None
                 for ticker in batch:
@@ -427,7 +426,7 @@ class FINRADataEnrichmentUtility:
                     import time
                     time.sleep(0.5)
 
-            except Exception as e:
+            except Exception:
                 _logger.exception("Error fetching volume data for batch %d:", batch_num)
                 # Mark all tickers in failed batch as None
                 for ticker in batch:
@@ -681,7 +680,7 @@ def main() -> int:
     except KeyboardInterrupt:
         _logger.warning("Enrichment interrupted by user")
         return 130
-    except Exception as e:
+    except Exception:
         _logger.exception("Unexpected error in enrichment utility:")
         return 1
 

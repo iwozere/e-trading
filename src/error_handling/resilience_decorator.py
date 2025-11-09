@@ -14,7 +14,6 @@ Features:
 """
 
 import time
-import logging
 import functools
 from typing import Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError

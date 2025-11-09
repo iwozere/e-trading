@@ -7,11 +7,8 @@ and token management.
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends, Request
-from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, timedelta
 from pathlib import Path
 import sys
 
@@ -22,14 +19,11 @@ sys.path.append(str(PROJECT_ROOT))
 from src.api.services.webui_app_service import webui_app_service
 from src.data.db.models.model_users import User
 from src.api.auth import (
-    authenticate_user,
     create_access_token,
     create_refresh_token,
     verify_token,
     get_current_user,
-    log_user_action,
-    AuthenticationError,
-    security
+    AuthenticationError
 )
 from src.notification.logger import setup_logger
 
@@ -139,7 +133,7 @@ async def login(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Login error:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -214,7 +208,7 @@ async def refresh_token(
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except Exception as e:
+    except Exception:
         _logger.exception("Token refresh error:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -251,7 +245,7 @@ async def logout(
 
         return {"message": "Successfully logged out"}
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Logout error:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

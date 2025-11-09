@@ -15,14 +15,11 @@ Features:
 - Integration with enhanced trading system
 """
 
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer
 from contextlib import asynccontextmanager
 import asyncio
-import json
-import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import sys
@@ -49,11 +46,11 @@ from src.api.auth_routes import router as auth_router
 from src.api.telegram_routes import router as telegram_router
 from src.api.jobs_routes import router as jobs_router
 from src.api.notification_routes import router as notification_router
-from src.api.auth import get_current_user, require_trader_or_admin, require_admin
+from src.api.auth import get_current_user, require_trader_or_admin
 from src.data.db.models.model_users import User
 from src.api.services import (
     StrategyManagementService, StrategyValidationError, StrategyOperationError,
-    SystemMonitoringService, SystemAlert
+    SystemMonitoringService
 )
 
 # Global strategy manager and service instances
@@ -149,7 +146,7 @@ async def lifespan(app: FastAPI):
 
         _logger.info("Heartbeat manager started for API service")
 
-    except Exception as e:
+    except Exception:
         _logger.exception("Failed to initialize heartbeat manager:")
 
     yield
@@ -210,7 +207,7 @@ async def get_available_analytics(current_user: User = Depends(get_current_user)
     """Get information about available analytics methods."""
     try:
         return unified_analytics_service.get_available_analytics()
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting available analytics:")
         raise HTTPException(status_code=500, detail="Failed to get available analytics")
 
@@ -228,7 +225,7 @@ async def get_unified_dashboard_data(
         return dashboard_data
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting unified dashboard data:")
         raise HTTPException(status_code=500, detail="Failed to get unified dashboard data")
 
@@ -252,7 +249,7 @@ async def get_correlation_analysis(
         return correlation_data
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         _logger.exception("Error getting correlation analysis:")
         raise HTTPException(status_code=500, detail="Failed to get correlation analysis")
 
@@ -261,7 +258,6 @@ security = HTTPBearer()
 
 # Pydantic models for API
 from pydantic import BaseModel, Field
-from typing import Union
 
 class StrategyConfig(BaseModel):
     """Strategy configuration model."""

@@ -230,7 +230,7 @@ class DailyDeepScanRunner:
 
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load configuration:")
             return False
 
@@ -271,7 +271,7 @@ class DailyDeepScanRunner:
                 _logger.warning("Failed to initialize Finnhub downloader: %s", e)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to initialize data providers:")
             return False
 
@@ -370,7 +370,7 @@ class DailyDeepScanRunner:
 
             return candidates
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to load candidates:")
             return None
 
@@ -424,7 +424,7 @@ class DailyDeepScanRunner:
                         result = original_scan(candidate, metrics)
                         self.progress_tracker.update(success=result is not None)
                         return result
-                    except Exception as e:
+                    except Exception:
                         self.progress_tracker.update(success=False)
                         raise
 
@@ -495,7 +495,7 @@ class DailyDeepScanRunner:
 
                     _logger.info("Sentiment collection done; attached to transient_metrics for %d candidates", len(candidates))
 
-                except Exception as e:
+                except Exception:
                     _logger.exception("Sentiment collection failed, continuing without sentiments:")
             # --- SENTIMENT INTEGRATION BLOCK END ---
 
@@ -531,7 +531,7 @@ class DailyDeepScanRunner:
             _logger.info("Daily deep scan completed successfully")
             return results_dict
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Daily deep scan run failed:")
             return None
 

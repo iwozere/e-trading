@@ -5,12 +5,10 @@ This module provides file-based caching functionality for market data,
 supporting multiple formats and configurable cache paths.
 """
 
-import os
 import shutil
-import hashlib
 from typing import Optional, Union, Dict, Any, List
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import logging
 import json
@@ -92,7 +90,7 @@ class DataCache:
         try:
             with open(self.metadata_file, 'w') as f:
                 json.dump(self.metadata, f, indent=2)
-        except IOError as e:
+        except IOError:
             _logger.exception("Failed to save cache metadata:")
 
     def get_cache_path(
@@ -357,7 +355,7 @@ class DataCache:
                 self.metadata = {'files': {}, 'last_cleanup': 0, 'total_size_bytes': 0}
                 self._save_metadata()
                 _logger.info("Cleared entire cache")
-            except Exception as e:
+            except Exception:
                 _logger.exception("Failed to clear cache:")
         else:
             # Clear specific provider/symbol

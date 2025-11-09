@@ -7,8 +7,6 @@ and generating alerts for the web UI.
 """
 
 import psutil
-import asyncio
-import time
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -102,7 +100,7 @@ class SystemMonitoringService:
                 'max_frequency_mhz': round(cpu_freq.max, 2) if cpu_freq else None
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get CPU metrics:")
             return {
                 'usage_percent': 0.0,
@@ -133,7 +131,7 @@ class SystemMonitoringService:
                 'swap_usage_percent': round(swap.percent, 2)
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get memory metrics:")
             return {
                 'total_gb': 0.0,
@@ -185,7 +183,7 @@ class SystemMonitoringService:
                 'io_stats': io_stats
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get disk metrics:")
             return {
                 'partitions': {},
@@ -237,7 +235,7 @@ class SystemMonitoringService:
                 'average_celsius': avg_temp
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get temperature metrics:")
             return {
                 'sensors': {},
@@ -265,7 +263,7 @@ class SystemMonitoringService:
                 'drops_out': net_io.dropout
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get network metrics:")
             return {
                 'bytes_sent': 0,
@@ -319,7 +317,7 @@ class SystemMonitoringService:
                 'related_processes': trading_processes[:10]  # Limit to 10 processes
             }
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to get process metrics:")
             return {
                 'current_process': {},
@@ -396,7 +394,7 @@ class SystemMonitoringService:
                 elif avg_temp >= self.thresholds['temperature_warning']:
                     self._add_alert('temperature', 'warning', f'Temperature high: {avg_temp}°C')
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to check thresholds:")
 
     def _add_alert(self, alert_type: str, severity: str, message: str, details: Optional[Dict[str, Any]] = None):
@@ -464,7 +462,7 @@ class SystemMonitoringService:
                 self.alerts[alert_index].acknowledged = True
                 return True
             return False
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to acknowledge alert:")
             return False
 

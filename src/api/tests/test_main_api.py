@@ -12,17 +12,14 @@ Tests for the core FastAPI application endpoints including:
 """
 
 import pytest
-from unittest.mock import patch, Mock, MagicMock, AsyncMock
-from fastapi import HTTPException, status
+from unittest.mock import patch, AsyncMock
 from pathlib import Path
 import sys
-import asyncio
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.api.main import app
 from src.api.services import StrategyValidationError, StrategyOperationError
 
 

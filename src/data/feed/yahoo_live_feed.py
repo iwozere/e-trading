@@ -158,7 +158,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
             _logger.info("Connected to Yahoo Finance for %s", self.symbol)
             return True
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error connecting to Yahoo Finance for %s: %s")
             return False
 
@@ -227,7 +227,7 @@ class YahooLiveDataFeed(BaseLiveDataFeed):
                 # First time getting data
                 return recent_data.tail(1)
 
-        except Exception as e:
+        except Exception:
             _logger.exception("Error getting latest data for %s: %s")
             return None
 

@@ -9,10 +9,7 @@ Tests the notification integration functionality including:
 
 import pytest
 import asyncio
-import json
-from datetime import datetime, timezone
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from typing import Dict, Any
+from unittest.mock import Mock, AsyncMock, patch
 
 # Add src to path
 import sys
