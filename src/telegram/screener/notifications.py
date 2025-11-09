@@ -8,7 +8,7 @@ from src.telegram.screener.business_logic import handle_command, get_service_ins
 from src.telegram.command_parser import ParsedCommand, parse_command
 from src.notification.logger import setup_logger
 from src.notification.service.client import MessageType, MessagePriority
-from src.common.recommendation_engine import RecommendationEngine
+from src.common.recommendation.engine import RecommendationEngine
 _logger = setup_logger(__name__)
 
 # Initialize unified recommendation engine

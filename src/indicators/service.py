@@ -15,7 +15,7 @@ from src.common.common import get_ohlcv, determine_provider
 from src.indicators.utils import coerce_ohlcv, resample_df, validate_indicator_config
 from src.indicators.registry import INDICATOR_META, get_canonical_name, get_indicator_meta
 from src.indicators.config_manager import get_config_manager
-from src.indicators.recommendation_engine import RecommendationEngine
+from src.common.recommendation.engine import RecommendationEngine
 from src.indicators.adapters.ta_lib_adapter import TaLibAdapter
 from src.indicators.adapters.pandas_ta_adapter import PandasTaAdapter
 from src.indicators.adapters.fundamentals_adapter import FundamentalsAdapter
@@ -465,7 +465,13 @@ class BatchResult:
 
 class UnifiedIndicatorService:
     """
-    Unified indicator service that consolidates all indicator functionality.
+    DEPRECATED: Unified indicator service that consolidates all indicator functionality.
+
+    This service is deprecated and will be removed in a future version.
+    For Backtrader strategies, use the simple TALib-based indicator architecture instead.
+    For direct indicator calculations, use TALib functions directly.
+
+    See: .kiro/specs/refactor-strategies/simple-talib-indicator-architecture.md
 
     This service provides a single interface for calculating technical and fundamental
     indicators, with support for multiple backends, configuration management,
@@ -473,6 +479,13 @@ class UnifiedIndicatorService:
     """
 
     def __init__(self, prefer: Dict[str, int] | None = None, batch_config: BatchProcessingConfig = None):
+        import warnings
+        warnings.warn(
+            "UnifiedIndicatorService is deprecated and will be removed in a future version. "
+            "Use TALib functions directly or the simple TALib-based indicator architecture for Backtrader strategies.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         # Initialize adapters with graceful handling of missing dependencies
         self.adapters = {}
 
@@ -1268,7 +1281,18 @@ class IndicatorService(UnifiedIndicatorService):
 _unified_service = None
 
 def get_unified_indicator_service() -> UnifiedIndicatorService:
-    """Get the global unified indicator service instance."""
+    """
+    Get the global unified indicator service instance.
+
+    DEPRECATED: This function is deprecated and will be removed in a future version.
+    Use TALib functions directly instead.
+    """
+    import warnings
+    warnings.warn(
+        "get_unified_indicator_service() is deprecated. Use TALib functions directly.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     global _unified_service
     if _unified_service is None:
         _unified_service = UnifiedIndicatorService()

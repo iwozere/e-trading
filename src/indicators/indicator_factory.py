@@ -1,8 +1,10 @@
 """
 Indicator Factory
 
-Centralized factory for creating and managing technical indicators using
-the unified indicator service.
+Factory for creating technical indicators for pandas DataFrames and Backtrader strategies.
+This module provides adapter integration for multiple indicator backends (TALib, pandas-ta).
+
+Primary use case: Backtrader strategy indicator creation via BacktraderAdapter.
 """
 
 import pandas as pd
@@ -17,16 +19,16 @@ logger = setup_logger(__name__)
 
 
 class IndicatorFactory:
-    """Factory class for creating and managing technical indicators using unified service."""
+    """Factory class for creating technical indicators for pandas DataFrames and Backtrader strategies."""
 
     def __init__(self, data: Union[pd.DataFrame, Any] = None):
         self.data = data
         self.indicators = {}
 
-        # Initialize unified service components
+        # Initialize adapter components
         self._backtrader_adapter = BacktraderAdapter()
         self._backtrader_factory = BacktraderIndicatorFactory(self._backtrader_adapter)
-        logger.info("IndicatorFactory initialized with unified service")
+        logger.info("IndicatorFactory initialized with adapter integration")
 
     def create_rsi(self, name: str, period: int = 14) -> pd.Series:
         """Create RSI indicator."""

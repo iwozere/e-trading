@@ -617,6 +617,105 @@ class NotificationServiceClient:
             _logger.exception("Failed to get channels health:")
             return []
 
+    async def send_to_admins(self,
+                           title: str,
+                           message: str,
+                           notification_type: Union[str, MessageType] = MessageType.SYSTEM_NOTIFICATION,
+                           priority: Union[str, MessagePriority] = MessagePriority.HIGH,
+                           data: Optional[Dict[str, Any]] = None,
+                           channels: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Send notification to all admin users.
+
+        Args:
+            title: Notification title
+            message: Notification message
+            notification_type: Type of notification
+            priority: Notification priority (default: HIGH)
+            data: Additional data for the notification
+            channels: Specific channels to use (default: ["telegram"])
+
+        Returns:
+            Dict with success status and counts:
+            {
+                "success": bool,
+                "success_count": int,
+                "total_count": int,
+                "message": str
+            }
+        """
+        try:
+            from src.data.db.services import telegram_service as db
+
+            # Get all admin user IDs
+            admin_ids = db.get_admin_user_ids()
+
+            if not admin_ids:
+                _logger.warning("No admin users found for notification")
+                return {
+                    "success": False,
+                    "error": "No admin users found",
+                    "success_count": 0,
+                    "total_count": 0
+                }
+
+            success_count = 0
+            total_count = len(admin_ids)
+            failed_admins = []
+
+            # Use telegram channel by default for admin notifications
+            notification_channels = channels or ["telegram"]
+
+            # Send message to each admin
+            for admin_id in admin_ids:
+                try:
+                    # Prepare notification data
+                    notification_data = data.copy() if data else {}
+                    notification_data["admin_notification"] = True
+                    notification_data["telegram_chat_id"] = admin_id
+
+                    success = await self.send_notification(
+                        notification_type=notification_type,
+                        title=title,
+                        message=message,
+                        priority=priority,
+                        data=notification_data,
+                        channels=notification_channels,
+                        telegram_chat_id=admin_id,
+                        recipient_id=str(admin_id)
+                    )
+
+                    if success:
+                        success_count += 1
+                    else:
+                        failed_admins.append(admin_id)
+
+                except Exception as e:
+                    _logger.error("Failed to send notification to admin %s: %s", admin_id, e)
+                    failed_admins.append(admin_id)
+
+            result = {
+                "success": success_count > 0,
+                "success_count": success_count,
+                "total_count": total_count,
+                "message": f"Notification sent to {success_count}/{total_count} admin users"
+            }
+
+            if failed_admins:
+                result["failed_admins"] = failed_admins
+
+            _logger.info("Admin notification sent: %d/%d successful", success_count, total_count)
+            return result
+
+        except Exception as e:
+            _logger.exception("Error sending notification to admins:")
+            return {
+                "success": False,
+                "error": str(e),
+                "success_count": 0,
+                "total_count": 0
+            }
+
     # Context manager support
     async def __aenter__(self):
         """Async context manager entry."""

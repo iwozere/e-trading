@@ -3,8 +3,6 @@ from src.common.fundamentals import get_fundamentals_unified, format_fundamental
 from src.common.common import get_ohlcv, determine_provider
 from src.model.telegram_bot import TickerAnalysis
 from src.common.technicals import format_technical_analysis
-from src.indicators.service import get_unified_indicator_service
-from src.indicators.models import IndicatorCalculationRequest
 from src.model.telegram_bot import Technicals
 import numpy as np
 import talib
@@ -33,107 +31,8 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                 _logger.exception("Error getting fundamentals using unified function, falling back to traditional function")
                 fundamentals = None
 
-        # Get unified indicator service
-        indicator_service = get_unified_indicator_service()
-
-        # Create indicator calculation request
-        request = IndicatorCalculationRequest(
-            ticker=ticker,
-            indicators=["RSI", "MACD", "BollingerBands", "SMA", "EMA", "ADX", "ATR", "Stochastic", "WilliamsR", "CCI", "ROC", "MFI"],
-            timeframe=interval,
-            period=period,
-            provider=provider
-        )
-
-        # Calculate indicators using unified service
-        indicator_set = await indicator_service.get_indicators(request)
-
-        # Extract technical indicators from unified result
-        # Initialize technical data with default values
-        technical_data = {
-            'rsi': None,
-            'sma_fast': None,
-            'sma_slow': None,
-            'ema_fast': None,
-            'ema_slow': None,
-            'macd': None,
-            'macd_signal': None,
-            'macd_histogram': None,
-            'stoch_k': None,
-            'stoch_d': None,
-            'adx': None,
-            'plus_di': None,
-            'minus_di': None,
-            'obv': None,
-            'adr': None,
-            'avg_adr': None,
-            'trend': 'NEUTRAL',
-            'bb_upper': None,
-            'bb_middle': None,
-            'bb_lower': None,
-            'bb_width': None,
-            'cci': None,
-            'roc': None,
-            'mfi': None,
-            'williams_r': None,
-            'atr': None,
-            'recommendations': None
-        }
-
-        # Map indicator names to Technicals fields
-        indicator_mapping = {
-            'RSI': 'rsi',
-            'SMA_FAST': 'sma_fast',
-            'SMA_SLOW': 'sma_slow',
-            'EMA_FAST': 'ema_fast',
-            'EMA_SLOW': 'ema_slow',
-            'MACD': 'macd',
-            'MACD_SIGNAL': 'macd_signal',
-            'MACD_HISTOGRAM': 'macd_histogram',
-            'STOCH_K': 'stoch_k',
-            'STOCH_D': 'stoch_d',
-            'ADX': 'adx',
-            'PLUS_DI': 'plus_di',
-            'MINUS_DI': 'minus_di',
-            'BB_UPPER': 'bb_upper',
-            'BB_MIDDLE': 'bb_middle',
-            'BB_LOWER': 'bb_lower',
-            'CCI': 'cci',
-            'ROC': 'roc',
-            'MFI': 'mfi',
-            'WILLIAMS_R': 'williams_r',
-            'ATR': 'atr',
-        }
-
-        for name, indicator in indicator_set.technical_indicators.items():
-            if name in indicator_mapping:
-                field_name = indicator_mapping[name]
-                technical_data[field_name] = indicator.value
-
-        # Create initial technicals object (will be updated later)
-        technicals = Technicals(**technical_data)
-
-        # Add calculated indicators to DataFrame for chart generation
-        # This is necessary because the chart generation expects indicators in DataFrame columns
+        # Calculate technical indicators using TA-Lib
         df_with_indicators = df.copy()
-
-        # Add indicators to DataFrame based on the indicator set
-        try:
-            if indicator_set and indicator_set.technical_indicators:
-                for name, indicator in indicator_set.technical_indicators.items():
-                    if name in indicator_mapping:
-                        field_name = indicator_mapping[name]
-                        # For now, we'll add the current value to all rows (simplified approach)
-                        # In a more sophisticated implementation, we'd calculate the full time series
-                        df_with_indicators[field_name] = indicator.value
-        except Exception:
-            _logger.exception("Error adding indicators to DataFrame:")
-            _logger.error("Indicator set: %s", indicator_set)
-            _logger.error("Indicator mapping: %s", indicator_mapping)
-            raise
-
-        # Calculate full time series for key indicators using TA-Lib
-        # This ensures the chart has the complete indicator data
         try:
 
             # Validate data types and quality
@@ -272,13 +171,13 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                 'mfi': last_row.get('mfi'),
                 'williams_r': last_row.get('williams_r'),
                 'atr': last_row.get('atr'),
-                'recommendations': technicals.recommendations if technicals else None
+                'recommendations': None
             }
 
             # Generate recommendations for the technicals using current values
             recommendations = {}
             try:
-                from src.common.recommendation_engine import RecommendationEngine
+                from src.common.recommendation.engine import RecommendationEngine
                 recommendation_engine = RecommendationEngine()
 
                 # Generate recommendations for each indicator
@@ -461,7 +360,14 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
             # Create updated technicals with current values and recommendations
             current_technicals = Technicals(**current_indicators)
         else:
-            current_technicals = technicals
+            # No data available, create empty technicals
+            current_technicals = Technicals(
+                rsi=None, sma_fast=None, sma_slow=None, ema_fast=None, ema_slow=None,
+                macd=None, macd_signal=None, macd_histogram=None, stoch_k=None, stoch_d=None,
+                adx=None, plus_di=None, minus_di=None, obv=None, adr=None, avg_adr=None,
+                trend='NEUTRAL', bb_upper=None, bb_middle=None, bb_lower=None, bb_width=None,
+                cci=None, roc=None, mfi=None, williams_r=None, atr=None, recommendations=None
+            )
 
         # Create a temporary TickerAnalysis for charting, since we need to pass the object
         temp_analysis = TickerAnalysis(

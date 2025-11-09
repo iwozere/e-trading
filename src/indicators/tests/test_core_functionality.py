@@ -25,7 +25,7 @@ from src.indicators.service import (
     IndicatorService, ConfigurationError, DataError
 )
 from src.indicators.config_manager import UnifiedConfigManager
-from src.indicators.recommendation_engine import RecommendationEngine
+from src.common.recommendation.engine import RecommendationEngine
 from src.indicators.models import (
     IndicatorBatchConfig, IndicatorSpec, TickerIndicatorsRequest,
     IndicatorResultSet

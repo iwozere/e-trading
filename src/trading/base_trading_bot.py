@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 from src.trading.services.trading_bot_service import trading_bot_service
 from src.trading.risk.controller import RiskController
-from src.notification.service.client import NotificationServiceClient, NotificationServiceError
+from src.notification.service.client import NotificationServiceClient, NotificationServiceError, MessagePriority
 from src.notification.model import NotificationType, NotificationPriority
 from src.trading.broker.base_broker import PositionNotificationManager
 
@@ -526,29 +526,21 @@ class BaseTradingBot:
                 f"Please check the bot configuration and system logs."
             )
 
-            # Send via notification service
-            asyncio.run(self.notification_client.send_error_notification_async(
-                error_message=error_message,
-                source="trading_bot",
-                channels=["telegram", "email"],
-                metadata={
+            # Send to admins via notification service
+            asyncio.run(self.notification_client.send_to_admins(
+                title="Trading Bot Error",
+                message=error_message,
+                priority=MessagePriority.HIGH,
+                data={
                     "bot_id": self.bot_id,
                     "trading_pair": self.trading_pair,
                     "error_type": "trading_bot_error"
-                }
+                },
+                channels=["telegram", "email"]
             ))
 
         except NotificationServiceError:
             _logger.exception("Failed to send error notification via service:")
-            # Fallback to legacy method
-            try:
-                from src.telegram.screener.http_api_client import send_notification_to_admins
-                asyncio.run(send_notification_to_admins(
-                    message=error_message,
-                    title="Trading Bot Error"
-                ))
-            except Exception as fallback_e:
-                _logger.exception("Fallback error notification also failed: %s", fallback_e)
         except Exception as e:
             _logger.exception("Failed to send error notification: %s", e)
 
@@ -590,32 +582,26 @@ class BaseTradingBot:
                 f"Time: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
             )
 
-            # Send via notification service
-            asyncio.run(self.notification_client.send_trade_notification_async(
-                symbol=self.trading_pair,
-                side=side,
-                price=price,
-                quantity=size,
-                entry_price=entry_price,
-                pnl=pnl,
-                channels=["telegram", "email"],
-                metadata={
+            # Send to admins via notification service
+            asyncio.run(self.notification_client.send_to_admins(
+                title=f"Trading Bot - {side}",
+                message=trade_message,
+                priority=MessagePriority.NORMAL,
+                data={
                     "bot_id": self.bot_id,
+                    "trading_pair": self.trading_pair,
+                    "side": side,
+                    "price": price,
+                    "size": size,
+                    "entry_price": entry_price,
+                    "pnl": pnl,
                     "timestamp": timestamp.isoformat()
-                }
+                },
+                channels=["telegram", "email"]
             ))
 
         except NotificationServiceError:
             _logger.exception("Failed to send trade notification via service:")
-            # Fallback to legacy method
-            try:
-                from src.telegram.screener.http_api_client import send_notification_to_admins
-                asyncio.run(send_notification_to_admins(
-                    message=trade_message,
-                    title=f"Trading Bot - {side}"
-                ))
-            except Exception as fallback_e:
-                _logger.exception("Fallback trade notification also failed: %s", fallback_e)
         except Exception as e:
             _logger.exception("Failed to send trade notification: %s", e)
 
@@ -706,43 +692,30 @@ class BaseTradingBot:
                 _logger.warning("Notification client not available for bot event notification")
                 return
 
-            # Determine notification type based on event
+            # Determine notification priority based on event
             if event.lower() in ["error", "failed", "stopped"]:
-                notification_type = NotificationType.ERROR
-                priority = NotificationPriority.HIGH
+                priority = MessagePriority.HIGH
             elif event.lower() in ["started", "resumed"]:
-                notification_type = NotificationType.INFO
-                priority = NotificationPriority.NORMAL
+                priority = MessagePriority.NORMAL
             else:
-                notification_type = NotificationType.SYSTEM
-                priority = NotificationPriority.NORMAL
+                priority = MessagePriority.NORMAL
 
-            # Send via notification service
-            asyncio.run(self.notification_client.send_notification_async(
-                notification_type=notification_type,
+            # Send to admins via notification service
+            asyncio.run(self.notification_client.send_to_admins(
                 title=f"Trading Bot - {event.title()}",
                 message=msg,
                 priority=priority,
-                channels=["telegram", "email"],
-                metadata={
+                data={
                     "bot_id": self.bot_id,
                     "trading_pair": self.trading_pair,
                     "event": event,
                     "bot_class": self.__class__.__name__
-                }
+                },
+                channels=["telegram", "email"]
             ))
 
         except NotificationServiceError:
             _logger.exception("Failed to send bot event notification via service:")
-            # Fallback to legacy method
-            try:
-                from src.telegram.screener.http_api_client import send_notification_to_admins
-                asyncio.run(send_notification_to_admins(
-                    message=msg,
-                    title=f"Trading Bot - {event.title()}"
-                ))
-            except Exception as fallback_e:
-                _logger.exception("Fallback bot event notification also failed: %s", fallback_e)
         except Exception as e:
             _logger.exception("Failed to send bot event notification: %s", e)
 

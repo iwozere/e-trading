@@ -7,8 +7,6 @@ Usage:
 """
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
-# Removed circular import - fundamentals should not depend on indicators service
-from src.indicators.models import IndicatorCalculationRequest
 from src.data.data_manager import get_data_manager
 
 PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
@@ -108,46 +106,7 @@ async def get_fundamentals_unified(ticker: str, provider: str = None, **kwargs) 
         for src_key, dest_key in mapping.items():
             if src_key in combined and combined[src_key] is not None:
                 fundamental_data[dest_key] = combined[src_key]
-    else:
-        # Fall back to indicator service if DataManager had no data
-        indicator_service = get_unified_indicator_service()
-
-        request = IndicatorCalculationRequest(
-            ticker=ticker,
-            indicators=["PE_RATIO", "PB_RATIO", "PS_RATIO", "PEG_RATIO", "ROE", "ROA", "DEBT_TO_EQUITY", "CURRENT_RATIO", "QUICK_RATIO", "OPERATING_MARGIN", "PROFIT_MARGIN", "REVENUE_GROWTH", "NET_INCOME_GROWTH", "FREE_CASH_FLOW", "DIVIDEND_YIELD", "PAYOUT_RATIO", "MARKET_CAP", "ENTERPRISE_VALUE"],
-            timeframe="1d",
-            period="1y",
-            provider=provider
-        )
-
-        indicator_set = await indicator_service.get_indicators(request)
-
-        indicator_mapping = {
-            'PE_RATIO': 'pe_ratio',
-            'FORWARD_PE': 'forward_pe',
-            'PB_RATIO': 'price_to_book',
-            'PS_RATIO': 'price_to_sales',
-            'PEG_RATIO': 'peg_ratio',
-            'ROE': 'return_on_equity',
-            'ROA': 'return_on_assets',
-            'DEBT_TO_EQUITY': 'debt_to_equity',
-            'CURRENT_RATIO': 'current_ratio',
-            'QUICK_RATIO': 'quick_ratio',
-            'OPERATING_MARGIN': 'operating_margin',
-            'PROFIT_MARGIN': 'profit_margin',
-            'REVENUE_GROWTH': 'revenue_growth',
-            'NET_INCOME_GROWTH': 'net_income_growth',
-            'FREE_CASH_FLOW': 'free_cash_flow',
-            'DIVIDEND_YIELD': 'dividend_yield',
-            'PAYOUT_RATIO': 'payout_ratio',
-            'MARKET_CAP': 'market_cap',
-            'ENTERPRISE_VALUE': 'enterprise_value',
-        }
-
-        for name, indicator in indicator_set.fundamental_indicators.items():
-            if name in indicator_mapping:
-                field_name = indicator_mapping[name]
-                fundamental_data[field_name] = indicator.value
+    # If DataManager had no data, fundamental_data will remain with default None values
 
     # Enrich with traditional fundamentals if still missing key metadata
     try:

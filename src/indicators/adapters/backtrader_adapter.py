@@ -28,7 +28,7 @@ class BacktraderIndicatorWrapper(bt.Indicator):
 
     params = (
         ("backend", "bt"),  # Backend preference: bt, bt-talib, talib
-        ("use_unified_service", True),  # Whether to use unified service
+        ("use_unified_service", False),  # Whether to use unified service (deprecated, defaults to False)
     )
 
     def __init__(self):
@@ -356,7 +356,7 @@ class BacktraderIndicatorFactory:
         data: bt.feeds.DataBase,
         period: int = 14,
         backend: str = "bt",
-        use_unified_service: bool = True
+        use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create RSI indicator"""
         return self._adapter.create_indicator(
@@ -373,7 +373,7 @@ class BacktraderIndicatorFactory:
         period: int = 20,
         devfactor: float = 2.0,
         backend: str = "bt",
-        use_unified_service: bool = True
+        use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create Bollinger Bands indicator"""
         return self._adapter.create_indicator(
@@ -392,7 +392,7 @@ class BacktraderIndicatorFactory:
         slow_period: int = 26,
         signal_period: int = 9,
         backend: str = "bt",
-        use_unified_service: bool = True
+        use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create MACD indicator"""
         return self._adapter.create_indicator(
@@ -410,7 +410,7 @@ class BacktraderIndicatorFactory:
         data: bt.feeds.DataBase,
         period: int = 14,
         backend: str = "bt",
-        use_unified_service: bool = True
+        use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create ATR indicator"""
         return self._adapter.create_indicator(
@@ -426,7 +426,7 @@ class BacktraderIndicatorFactory:
         data: bt.feeds.DataBase,
         period: int = 20,
         backend: str = "bt",
-        use_unified_service: bool = True
+        use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create Simple Moving Average indicator"""
         return self._adapter.create_indicator(
@@ -442,7 +442,7 @@ class BacktraderIndicatorFactory:
         data: bt.feeds.DataBase,
         period: int = 20,
         backend: str = "bt",
-        use_unified_service: bool = True
+        use_unified_service: bool = False
     ) -> bt.Indicator:
         """Create Exponential Moving Average indicator"""
         return self._adapter.create_indicator(
