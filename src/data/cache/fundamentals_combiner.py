@@ -12,14 +12,14 @@ Configuration is loaded from config/data/fundamentals.json and provides:
 - Combination strategies and validation rules
 """
 
-import logging
 import json
 import os
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
-_logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
 
 @dataclass
 class ProviderData:

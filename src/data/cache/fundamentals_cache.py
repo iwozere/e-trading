@@ -16,16 +16,24 @@ Features:
 """
 
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
+import sys
+from datetime import datetime
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.append(str(PROJECT_ROOT))
+
 # Import cache directory setting
 from config.donotshare.donotshare import DATA_CACHE_DIR
 
-_logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+_logger = setup_logger(__name__)
+
 
 @dataclass
 class CacheMetadata:

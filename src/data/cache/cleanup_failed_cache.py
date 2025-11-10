@@ -21,7 +21,7 @@ from typing import Dict, Any
 import pandas as pd
 
 # Add project root to path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent[3]
 sys.path.insert(0, str(project_root))
 
 from src.data.utils.validation import validate_ohlcv_data, get_data_quality_score

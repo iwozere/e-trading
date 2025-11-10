@@ -85,10 +85,10 @@ class BinanceDataDownloader(BaseDataDownloader):
         """
         super().__init__()
         # Get API credentials from parameter or config
-        from config.donotshare.donotshare import BINANCE_KEY, BINANCE_SECRET
+        #from config.donotshare.donotshare import BINANCE_KEY, BINANCE_SECRET
 
-        self.api_key = api_key or BINANCE_KEY
-        self.api_secret = api_secret or BINANCE_SECRET
+        #self.api_key = api_key or BINANCE_KEY
+        #self.api_secret = api_secret or BINANCE_SECRET
         self.client = None  # Lazy initialization
 
     def _get_client(self):
@@ -97,7 +97,8 @@ class BinanceDataDownloader(BaseDataDownloader):
             try:
                 # Lazy import to avoid loading binance package at module import time
                 from binance.client import Client
-                self.client = Client(self.api_key, self.api_secret)
+                #self.client = Client(self.api_key, self.api_secret)
+                self.client = Client()
             except Exception as e:
                 _logger.warning("Failed to initialize Binance client: %s", e)
                 # Create a mock client for testing
