@@ -1,71 +1,30 @@
 {
   "window_type": "rolling",
-  "windows": [
-    {
-      "name": "2022_train_2023_test",
-      "train": [
-        "BTCUSDT_1h_20220101_20221231.csv",
-        "ETHUSDT_1h_20220101_20221231.csv",
-        "LTCUSDT_1h_20220101_20221231.csv",
-        "BTCUSDT_4h_20220101_20221231.csv",
-        "ETHUSDT_4h_20220101_20221231.csv",
-        "LTCUSDT_4h_20220101_20221231.csv"
-      ],
-      "test": [
-        "BTCUSDT_1h_20230101_20231231.csv",
-        "ETHUSDT_1h_20230101_20231231.csv",
-        "LTCUSDT_1h_20230101_20231231.csv",
-        "BTCUSDT_4h_20230101_20231231.csv",
-        "ETHUSDT_4h_20230101_20231231.csv",
-        "LTCUSDT_4h_20230101_20231231.csv"
-      ],
-      "train_year": "2022",
-      "test_year": "2023"
-    },
-    {
-      "name": "2023_train_2024_test",
-      "train": [
-        "BTCUSDT_1h_20230101_20231231.csv",
-        "ETHUSDT_1h_20230101_20231231.csv",
-        "LTCUSDT_1h_20230101_20231231.csv",
-        "BTCUSDT_4h_20230101_20231231.csv",
-        "ETHUSDT_4h_20230101_20231231.csv",
-        "LTCUSDT_4h_20230101_20231231.csv"
-      ],
-      "test": [
-        "BTCUSDT_1h_20240101_20241231.csv",
-        "ETHUSDT_1h_20240101_20241231.csv",
-        "LTCUSDT_1h_20240101_20241231.csv",
-        "BTCUSDT_4h_20240101_20241231.csv",
-        "ETHUSDT_4h_20240101_20241231.csv",
-        "LTCUSDT_4h_20240101_20241231.csv"
-      ],
-      "train_year": "2023",
-      "test_year": "2024"
-    },
-    {
-      "name": "2024_train_2025_test",
-      "train": [
-        "BTCUSDT_1h_20240101_20241231.csv",
-        "ETHUSDT_1h_20240101_20241231.csv",
-        "LTCUSDT_1h_20240101_20241231.csv",
-        "BTCUSDT_4h_20240101_20241231.csv",
-        "ETHUSDT_4h_20240101_20241231.csv",
-        "LTCUSDT_4h_20240101_20241231.csv"
-      ],
-      "test": [
-        "BTCUSDT_1h_20240501_20250501.csv",
-        "ETHUSDT_1h_20240501_20250501.csv",
-        "LTCUSDT_1h_20240501_20250501.csv",
-        "BTCUSDT_4h_20240501_20250501.csv",
-        "ETHUSDT_4h_20240501_20250501.csv",
-        "LTCUSDT_4h_20240501_20250501.csv"
-      ],
-      "train_year": "2024",
-      "test_year": "2025"
-    }
-  ],
+  "auto_discover_data": true,
+  "data_dir": "data",
+
   "symbols": ["BTCUSDT", "ETHUSDT", "LTCUSDT"],
-  "timeframes": ["1h", "4h"],
+  "timeframes": ["4h", "1h"],
+
+  "entry_strategies": [
+    "BBVolumeSuperTrendEntryMixin",
+    "RSIBBEntryMixin",
+    "RSIBBVolumeEntryMixin",
+    "RSIIchimokuEntryMixin",
+    "RSIOrBBEntryMixin",
+    "RSIVolumeSupertrendEntryMixin"
+  ],
+  "exit_strategies": [
+    "ATRExitMixin",
+    "AdvancedATRExitMixin",
+    "FixedRatioExitMixin",
+    "MACrossoverExitMixin",
+    "RSIBBExitMixin",
+    "RSIOrBBExitMixin",
+    "SimpleATRExitMixin",
+    "TimeBasedExitMixin",
+    "TrailingStopExitMixin"
+  ],
+
   "optimizer_config_path": "config/optimizer/optimizer.json"
 }

@@ -76,7 +76,7 @@ class TestBacktraderIndicatorFactory(unittest.TestCase):
             result = self.factory.create_rsi(mock_data, period=14)
 
             mock_create.assert_called_once_with(
-                "rsi", mock_data, backend="bt", period=14, use_unified_service=True
+                "rsi", mock_data, backend="bt", period=14, use_unified_service=False
             )
             self.assertEqual(result, mock_indicator)
 
@@ -91,7 +91,7 @@ class TestBacktraderIndicatorFactory(unittest.TestCase):
 
             mock_create.assert_called_once_with(
                 "bollinger_bands", mock_data, backend="bt",
-                period=20, devfactor=2.0, use_unified_service=True
+                period=20, devfactor=2.0, use_unified_service=False
             )
             self.assertEqual(result, mock_indicator)
 
@@ -375,7 +375,7 @@ class TestBacktraderRealStrategyIntegration(unittest.TestCase):
 
             # Should handle service failures gracefully
             try:
-                rsi = UnifiedRSIIndicator(self.mock_data, period=14, use_unified_service=True)
+                rsi = UnifiedRSIIndicator(self.mock_data, period=14, use_unified_service=False)
                 # If it succeeds, it should fall back to native implementation
                 self.assertIsNotNone(rsi)
             except Exception as e:

@@ -39,9 +39,172 @@ from src.backtester.optimizer.run_optimizer import (
 _logger = setup_logger(__name__)
 
 
+def auto_discover_windows(config: dict, data_dir: str = "data") -> list:
+    """
+    Automatically discover and generate walk-forward windows from data files.
+
+    This function scans the data directory for CSV files matching the pattern:
+    SYMBOL_TIMEFRAME_STARTDATE_ENDDATE.csv
+
+    It then groups files by symbol and timeframe, sorts them chronologically,
+    and generates train/test window pairs based on the window_type.
+
+    Args:
+        config: Configuration dict with symbols, timeframes, and window_type
+        data_dir: Directory containing data files (default: "data")
+
+    Returns:
+        list: List of window definitions with train/test file pairs
+
+    Example:
+        For files like BTCUSDT_4h_20200101_20201231.csv, generates:
+        [
+            {
+                "name": "2020_train_2021_test",
+                "train": ["BTCUSDT_4h_20200101_20201231.csv"],
+                "test": ["BTCUSDT_4h_20210101_20211231.csv"],
+                "train_year": "2020",
+                "test_year": "2021"
+            },
+            ...
+        ]
+    """
+    from collections import defaultdict
+    import glob
+
+    symbols = config.get('symbols', [])
+    timeframes = config.get('timeframes', [])
+    window_type = config.get('window_type', 'rolling')
+
+    _logger.info("=" * 80)
+    _logger.info("AUTO-DISCOVERING DATA FILES")
+    _logger.info("=" * 80)
+    _logger.info("Data directory: %s", data_dir)
+    _logger.info("Symbols filter: %s", symbols)
+    _logger.info("Timeframes filter: %s", timeframes)
+    _logger.info("Window type: %s", window_type)
+
+    # Scan data directory
+    all_files = glob.glob(os.path.join(data_dir, "*.csv"))
+    _logger.info("Found %d CSV files", len(all_files))
+
+    # Group files by symbol and timeframe
+    file_groups = defaultdict(list)
+
+    for file_path in all_files:
+        filename = os.path.basename(file_path)
+
+        try:
+            parts = parse_data_file_name(filename)
+            if len(parts) != 4:
+                continue
+
+            symbol, timeframe, start_date, end_date = parts
+
+            # Filter by configured symbols and timeframes
+            if symbols and symbol not in symbols:
+                continue
+            if timeframes and timeframe not in timeframes:
+                continue
+
+            # Extract year from start_date (YYYYMMDD format)
+            year = start_date[:4]
+
+            key = (symbol, timeframe)
+            file_groups[key].append({
+                'filename': filename,
+                'symbol': symbol,
+                'timeframe': timeframe,
+                'year': year,
+                'start_date': start_date,
+                'end_date': end_date
+            })
+
+        except Exception as e:
+            _logger.warning("Failed to parse filename %s: %s", filename, e)
+            continue
+
+    _logger.info("Grouped files into %d symbol/timeframe combinations", len(file_groups))
+
+    # Generate windows for each symbol/timeframe combination
+    all_windows = []
+
+    for (symbol, timeframe), files in sorted(file_groups.items()):
+        _logger.info("  Processing %s/%s: %d files", symbol, timeframe, len(files))
+
+        # Sort files by year
+        files.sort(key=lambda x: x['year'])
+
+        # Generate train/test pairs based on window_type
+        if window_type == 'rolling':
+            # Rolling window: each year trains on previous year, tests on current
+            for i in range(len(files) - 1):
+                train_file = files[i]
+                test_file = files[i + 1]
+
+                window = {
+                    'name': f"{train_file['year']}_train_{test_file['year']}_test_{symbol}_{timeframe}",
+                    'train': [train_file['filename']],
+                    'test': [test_file['filename']],
+                    'train_year': train_file['year'],
+                    'test_year': test_file['year'],
+                    'symbol': symbol,
+                    'timeframe': timeframe
+                }
+                all_windows.append(window)
+                _logger.debug("    Window: %s -> %s", train_file['year'], test_file['year'])
+
+        elif window_type == 'expanding':
+            # Expanding window: train on all previous years, test on current
+            for i in range(1, len(files)):
+                train_files = [f['filename'] for f in files[:i]]
+                test_file = files[i]
+
+                window = {
+                    'name': f"{files[0]['year']}_to_{files[i-1]['year']}_train_{test_file['year']}_test_{symbol}_{timeframe}",
+                    'train': train_files,
+                    'test': [test_file['filename']],
+                    'train_year': f"{files[0]['year']}-{files[i-1]['year']}",
+                    'test_year': test_file['year'],
+                    'symbol': symbol,
+                    'timeframe': timeframe
+                }
+                all_windows.append(window)
+                _logger.debug("    Window: %s-%s -> %s", files[0]['year'], files[i-1]['year'], test_file['year'])
+
+        elif window_type == 'anchored':
+            # Anchored window: train on first year, test on subsequent years
+            if len(files) < 2:
+                continue
+            train_file = files[0]
+            for i in range(1, len(files)):
+                test_file = files[i]
+
+                window = {
+                    'name': f"{train_file['year']}_anchored_{test_file['year']}_test_{symbol}_{timeframe}",
+                    'train': [train_file['filename']],
+                    'test': [test_file['filename']],
+                    'train_year': train_file['year'],
+                    'test_year': test_file['year'],
+                    'symbol': symbol,
+                    'timeframe': timeframe
+                }
+                all_windows.append(window)
+                _logger.debug("    Window: %s (anchored) -> %s", train_file['year'], test_file['year'])
+
+    _logger.info("Generated %d windows across all symbol/timeframe combinations", len(all_windows))
+    _logger.info("=" * 80)
+
+    return all_windows
+
+
 def load_walk_forward_config(config_path: str) -> dict:
     """
     Load and validate walk-forward configuration.
+
+    Supports two modes:
+    1. Manual mode: 'windows' field contains explicit train/test file definitions
+    2. Auto-discovery mode: 'auto_discover_data' is true, windows are generated automatically
 
     Args:
         config_path: Path to walk_forward_config.json
@@ -59,31 +222,61 @@ def load_walk_forward_config(config_path: str) -> dict:
     with open(config_path, 'r') as f:
         config = json.load(f)
 
-    # Validate required fields
-    required_fields = ['windows', 'symbols', 'timeframes', 'optimizer_config_path']
-    for field in required_fields:
-        if field not in config:
-            raise ValueError(f"Missing required field in config: {field}")
+    # Check if auto-discovery is enabled
+    auto_discover = config.get('auto_discover_data', False)
+    data_dir = config.get('data_dir', 'data')
 
-    # Validate windows
-    if not isinstance(config['windows'], list) or len(config['windows']) == 0:
-        raise ValueError("Configuration must contain at least one window")
+    if auto_discover:
+        _logger.info("Auto-discovery mode enabled")
 
-    for window in config['windows']:
-        required_window_fields = ['name', 'train', 'test', 'train_year', 'test_year']
-        for field in required_window_fields:
-            if field not in window:
-                raise ValueError(f"Missing required field in window: {field}")
+        # Validate required fields for auto-discovery
+        required_fields = ['symbols', 'timeframes', 'optimizer_config_path']
+        for field in required_fields:
+            if field not in config:
+                raise ValueError(f"Missing required field in config: {field}")
+
+        # Auto-generate windows from data files
+        config['windows'] = auto_discover_windows(config, data_dir=data_dir)
+
+        if not config['windows']:
+            raise ValueError(f"No data files found matching symbols {config['symbols']} and timeframes {config['timeframes']} in {data_dir}")
+
+    else:
+        _logger.info("Manual window configuration mode")
+
+        # Validate required fields for manual mode
+        required_fields = ['windows', 'symbols', 'timeframes', 'optimizer_config_path']
+        for field in required_fields:
+            if field not in config:
+                raise ValueError(f"Missing required field in config: {field}")
+
+        # Validate windows
+        if not isinstance(config['windows'], list) or len(config['windows']) == 0:
+            raise ValueError("Configuration must contain at least one window")
+
+        for window in config['windows']:
+            required_window_fields = ['name', 'train', 'test', 'train_year', 'test_year']
+            for field in required_window_fields:
+                if field not in window:
+                    raise ValueError(f"Missing required field in window: {field}")
+
+    # Set default strategy filters (all strategies if not specified)
+    if 'entry_strategies' not in config:
+        config['entry_strategies'] = list(ENTRY_MIXIN_REGISTRY.keys())
+    if 'exit_strategies' not in config:
+        config['exit_strategies'] = list(EXIT_MIXIN_REGISTRY.keys())
 
     _logger.info("Walk-forward configuration loaded successfully")
     _logger.info("  Windows: %d", len(config['windows']))
     _logger.info("  Symbols: %s", config['symbols'])
     _logger.info("  Timeframes: %s", config['timeframes'])
+    _logger.info("  Entry strategies: %s", config['entry_strategies'])
+    _logger.info("  Exit strategies: %s", config['exit_strategies'])
 
     return config
 
 
-def validate_windows(windows: list, data_dir: str = "data/_all") -> bool:
+def validate_windows(windows: list, data_dir: str = "data") -> bool:
     """
     Validate window definitions (temporal ordering and file existence).
 
@@ -165,7 +358,9 @@ def run_window_optimization(
     symbol: str,
     timeframe: str,
     optimizer_config: dict,
-    data_dir: str = "data/_all"
+    entry_strategies: list = None,
+    exit_strategies: list = None,
+    data_dir: str = "data"
 ) -> dict:
     """
     Run optimization for a single window, symbol, and timeframe combination.
@@ -214,12 +409,16 @@ def run_window_optimization(
 
     results = {}
 
-    # Iterate through all entry/exit strategy combinations
-    for entry_logic_name in ENTRY_MIXIN_REGISTRY.keys():
+    # Use filtered strategies or all if not specified
+    entry_strategies_to_test = entry_strategies or list(ENTRY_MIXIN_REGISTRY.keys())
+    exit_strategies_to_test = exit_strategies or list(EXIT_MIXIN_REGISTRY.keys())
+
+    # Iterate through filtered entry/exit strategy combinations
+    for entry_logic_name in entry_strategies_to_test:
         # Load entry logic configuration
         entry_logic_config = load_mixin_config(entry_logic_name, "entry", timeframe)
 
-        for exit_logic_name in EXIT_MIXIN_REGISTRY.keys():
+        for exit_logic_name in exit_strategies_to_test:
             strategy_key = f"{symbol}_{timeframe}_{entry_logic_name}_{exit_logic_name}"
             _logger.info("    Optimizing: %s", strategy_key)
 
@@ -282,6 +481,7 @@ def run_window_optimization(
                 best_result['train_year'] = window['train_year']
                 best_result['symbol'] = symbol
                 best_result['timeframe'] = timeframe
+                best_result['data_file'] = data_file
 
                 results[strategy_key] = best_result
 
@@ -303,7 +503,7 @@ def save_optimization_results(
     results: dict,
     window_name: str,
     train_year: str,
-    output_dir: str = "results/optimization"
+    output_dir: str = "results/walk_forward_reports"
 ):
     """
     Save optimization results to appropriate directory.
@@ -448,13 +648,19 @@ def main():
     total_combinations = total_windows * total_symbols * total_timeframes
     processed_count = 0
 
+    # Get strategy filters
+    entry_strategies = wf_config.get('entry_strategies', list(ENTRY_MIXIN_REGISTRY.keys()))
+    exit_strategies = wf_config.get('exit_strategies', list(EXIT_MIXIN_REGISTRY.keys()))
+
     _logger.info("=" * 80)
     _logger.info("Optimization Plan:")
     _logger.info("  Windows: %d", total_windows)
     _logger.info("  Symbols: %d", total_symbols)
     _logger.info("  Timeframes: %d", total_timeframes)
     _logger.info("  Total window/symbol/timeframe combinations: %d", total_combinations)
-    _logger.info("  Strategy combinations per window: %d", len(ENTRY_MIXIN_REGISTRY) * len(EXIT_MIXIN_REGISTRY))
+    _logger.info("  Entry strategies to test: %d - %s", len(entry_strategies), entry_strategies)
+    _logger.info("  Exit strategies to test: %d - %s", len(exit_strategies), exit_strategies)
+    _logger.info("  Strategy combinations per window: %d", len(entry_strategies) * len(exit_strategies))
     _logger.info("=" * 80)
 
     # Process each window
@@ -482,7 +688,9 @@ def main():
 
                 # Run optimization for this combination
                 results = run_window_optimization(
-                    window, symbol, timeframe, optimizer_config
+                    window, symbol, timeframe, optimizer_config,
+                    entry_strategies=entry_strategies,
+                    exit_strategies=exit_strategies
                 )
 
                 # Save results
@@ -513,7 +721,7 @@ def main():
     _logger.info("End time: %s", end_time)
     _logger.info("Total duration: %s", duration)
     _logger.info("Processed: %d/%d window/symbol/timeframe combinations", processed_count, total_combinations)
-    _logger.info("Results saved to: results/optimization/")
+    _logger.info("Results saved to: results/walk_forward_reports/")
     _logger.info("=" * 80)
 
 

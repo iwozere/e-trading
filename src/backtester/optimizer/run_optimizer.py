@@ -89,7 +89,8 @@ def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
 def prepare_data_frame(data_file) -> pd.DataFrame:
     """Load and prepare data from CSV file"""
     # Load and prepare data
-    df = pd.read_csv(os.path.join("data", data_file))
+    #df = pd.read_csv(os.path.join("data", data_file))
+    df = pd.read_csv(data_file)
     print("Available columns:", df.columns.tolist())
 
     # Find datetime column and convert properly

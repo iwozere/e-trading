@@ -125,9 +125,9 @@ class SimpleATRExitMixin(BaseExitMixin):
             # Legacy architecture: check mixin's indicators
             return self.atr_name in self.indicators
 
-    def on_entry(self, entry_price: float, direction: str, size: float, entry_reason: str):
+    def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered"""
-        logger.debug("SimpleATRExitMixin.on_entry: price=%s, direction=%s, size=%s", entry_price, direction, size)
+        logger.debug("SimpleATRExitMixin.on_entry: price=%s, direction=%s, size=%s", entry_price, direction, position_size)
 
         # Validate entry price
         import math

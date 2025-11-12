@@ -22,7 +22,7 @@ class UnifiedRSIIndicator(BacktraderIndicatorWrapper):
     params = (
         ("period", 14),
         ("backend", "bt"),
-        ("use_unified_service", True),
+        ("use_unified_service", False),  # Deprecated - use fallback implementation
     )
 
     def _init_fallback(self):
@@ -96,7 +96,7 @@ class UnifiedBollingerBandsIndicator(BacktraderIndicatorWrapper):
         ("period", 20),
         ("devfactor", 2.0),
         ("backend", "bt"),
-        ("use_unified_service", True),
+        ("use_unified_service", False),  # Deprecated - use fallback implementation
     )
 
     def _init_fallback(self):
@@ -168,7 +168,7 @@ class UnifiedMACDIndicator(BacktraderIndicatorWrapper):
         ("slow_period", 26),
         ("signal_period", 9),
         ("backend", "bt"),
-        ("use_unified_service", True),
+        ("use_unified_service", False),  # Deprecated - use fallback implementation
     )
 
     def _init_fallback(self):
@@ -245,7 +245,7 @@ class UnifiedATRIndicator(BacktraderIndicatorWrapper):
     params = (
         ("period", 14),
         ("backend", "bt"),
-        ("use_unified_service", True),
+        ("use_unified_service", False),  # Deprecated - use fallback implementation
     )
 
     def _init_fallback(self):
@@ -307,7 +307,7 @@ class UnifiedSMAIndicator(BacktraderIndicatorWrapper):
     params = (
         ("period", 20),
         ("backend", "bt"),
-        ("use_unified_service", True),
+        ("use_unified_service", False),
     )
 
     def _init_fallback(self):
@@ -357,7 +357,7 @@ class UnifiedEMAIndicator(BacktraderIndicatorWrapper):
     params = (
         ("period", 20),
         ("backend", "bt"),
-        ("use_unified_service", True),
+        ("use_unified_service", False),
     )
 
     def _init_fallback(self):
@@ -415,7 +415,7 @@ class UnifiedSuperTrendIndicator(BacktraderIndicatorWrapper):
         ("length", 10),
         ("multiplier", 3.0),
         ("backend", "bt"),
-        ("use_unified_service", True),
+        ("use_unified_service", False),
     )
 
     def _init_fallback(self):

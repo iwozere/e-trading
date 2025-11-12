@@ -33,21 +33,22 @@ class BacktraderIndicatorWrapper(bt.Indicator):
 
     def __init__(self):
         super().__init__()
-        self._backend = self.p.backend
-        self._use_unified = self.p.use_unified_service
-        self._unified_service = None
-        self._fallback_impl = None
-        self._data_cache = []
-        self._last_computed_len = 0
+        # Use object.__setattr__ to bypass Backtrader's attribute access mechanism
+        object.__setattr__(self, '_backend', self.p.backend)
+        object.__setattr__(self, '_use_unified', self.p.use_unified_service)
+        object.__setattr__(self, '_unified_service', None)
+        object.__setattr__(self, '_fallback_impl', None)
+        object.__setattr__(self, '_data_cache', [])
+        object.__setattr__(self, '_last_computed_len', 0)
 
-        # Initialize unified service if requested
-        if self._use_unified:
+        # Initialize unified service if requested (deprecated)
+        if object.__getattribute__(self, '_use_unified'):
             try:
                 from src.indicators.service import UnifiedIndicatorService
-                self._unified_service = UnifiedIndicatorService()
+                object.__setattr__(self, '_unified_service', UnifiedIndicatorService())
             except ImportError as e:
                 logger.warning("Failed to import UnifiedIndicatorService, falling back to native implementation: %s", e)
-                self._use_unified = False
+                object.__setattr__(self, '_use_unified', False)
 
         # Initialize fallback implementation
         self._init_fallback()
@@ -73,7 +74,8 @@ class BacktraderIndicatorWrapper(bt.Indicator):
         current_len = len(self.data)
 
         # Only rebuild if we have new data
-        if current_len <= self._last_computed_len:
+        last_computed_len = object.__getattribute__(self, '_last_computed_len')
+        if current_len <= last_computed_len:
             return None
 
         # Get the data arrays
@@ -189,7 +191,11 @@ class BacktraderIndicatorWrapper(bt.Indicator):
 
     def next(self):
         """Called for each new bar"""
-        if self._use_unified and self._unified_service:
+        # Use object.__getattribute__ to bypass Backtrader's attribute access
+        use_unified = object.__getattribute__(self, '_use_unified')
+        unified_service = object.__getattribute__(self, '_unified_service')
+
+        if use_unified and unified_service:
             try:
                 # Build DataFrame for unified service
                 df = self._build_dataframe()
@@ -220,7 +226,7 @@ class BacktraderIndicatorWrapper(bt.Indicator):
                         asyncio.set_event_loop(loop)
 
                     # Get the appropriate adapter from the service
-                    adapter = self._unified_service._select_provider(normalized_name)
+                    adapter = unified_service._select_provider(normalized_name)
 
                     results = loop.run_until_complete(
                         adapter.compute(
@@ -233,17 +239,18 @@ class BacktraderIndicatorWrapper(bt.Indicator):
 
                     # Map results to Backtrader lines
                     self._map_unified_results(results)
-                    self._last_computed_len = len(df)
+                    object.__setattr__(self, '_last_computed_len', len(df))
                     return
 
             except Exception as e:
                 logger.warning("Unified service computation failed, falling back to native implementation: %s", e)
                 logger.exception("Full error details:")
-                self._use_unified = False
+                object.__setattr__(self, '_use_unified', False)
 
         # Use fallback implementation
-        if self._fallback_impl:
-            logger.debug("Using fallback Backtrader implementation for %s", self._get_indicator_name())
+        fallback_impl = object.__getattribute__(self, '_fallback_impl')
+        if fallback_impl:
+            #logger.debug("Using fallback Backtrader implementation for %s", self._get_indicator_name())
             self._use_fallback()
         else:
             logger.warning("No fallback implementation available for %s", self._get_indicator_name())
