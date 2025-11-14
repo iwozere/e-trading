@@ -1,0 +1,54 @@
+{
+    "name": "RSIVolumeSupertrendEntryMixin",
+    "timeframe": "5m",
+    "trading_style": "scalping",
+    "params": {
+        "e_rsi_period": {
+            "type": "int",
+            "low": 10,
+            "high": 18,
+            "default": 14
+        },
+        "e_rsi_oversold": {
+            "type": "int",
+            "low": 20,
+            "high": 35,
+            "default": 30
+        },
+        "e_vol_ma_period": {
+            "type": "int",
+            "low": 10,
+            "high": 30,
+            "default": 20
+        },
+        "e_min_volume_ratio": {
+            "type": "float",
+            "low": 1.2,
+            "high": 2.0,
+            "default": 1.5
+        },
+        "e_st_period": {
+            "type": "int",
+            "low": 7,
+            "high": 20,
+            "default": 10
+        },
+        "e_st_multiplier": {
+            "type": "float",
+            "low": 2.0,
+            "high": 4.0,
+            "default": 3.0
+        },
+        "e_rsi_cross": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        },
+        "e_cooldown_bars": {
+            "type": "int",
+            "low": 3,
+            "high": 12,
+            "default": 5
+        }
+    }
+}

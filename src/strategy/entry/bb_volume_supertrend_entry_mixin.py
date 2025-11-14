@@ -203,7 +203,7 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
 
                 # Get BB lower value based on talib/bt
                 if self.strategy.use_talib:
-                    bb_lower = bb.bb_lower[0]
+                    bb_lower = bb.lowerband[0]  # TALib BBANDS uses: upperband, middleband, lowerband
                 else:
                     bb_lower = bb.lines.bot[0]
 

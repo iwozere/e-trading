@@ -353,6 +353,56 @@ def filter_data_files(data_files: list, symbol: str, timeframe: str) -> list:
     return filtered
 
 
+def check_result_exists(
+    data_file: str,
+    entry_logic_name: str,
+    exit_logic_name: str,
+    train_year: str,
+    output_dir: str = "results/walk_forward_reports"
+) -> bool:
+    """
+    Check if a result file already exists for a given strategy combination.
+
+    Args:
+        data_file: Data file name
+        entry_logic_name: Entry strategy name
+        exit_logic_name: Exit strategy name
+        train_year: Training year for directory organization
+        output_dir: Base output directory
+
+    Returns:
+        bool: True if result file exists, False otherwise
+    """
+    import glob
+
+    # Create year-specific directory path
+    year_dir = os.path.join(output_dir, train_year)
+
+    if not os.path.exists(year_dir):
+        return False
+
+    # Parse data file to extract symbol, timeframe, dates
+    parts = parse_data_file_name(data_file)
+    if len(parts) != 4:
+        return False
+
+    symbol, timeframe, start_date, end_date = parts
+
+    # Create pattern to match existing result files
+    # Pattern: SYMBOL_TIMEFRAME_STARTDATE_ENDDATE_ENTRYNAME_EXITNAME_*.json
+    pattern = f"{symbol}_{timeframe}_{start_date}_{end_date}_{entry_logic_name}_{exit_logic_name}_*.json"
+
+    # Search for matching files
+    search_pattern = os.path.join(year_dir, pattern)
+    matching_files = glob.glob(search_pattern)
+
+    if matching_files:
+        _logger.debug("Found existing result file: %s", matching_files[0])
+        return True
+
+    return False
+
+
 def run_window_optimization(
     window: dict,
     symbol: str,
@@ -361,7 +411,7 @@ def run_window_optimization(
     entry_strategies: list = None,
     exit_strategies: list = None,
     data_dir: str = "data"
-) -> dict:
+) -> tuple:
     """
     Run optimization for a single window, symbol, and timeframe combination.
 
@@ -370,10 +420,15 @@ def run_window_optimization(
         symbol: Trading symbol
         timeframe: Trading timeframe
         optimizer_config: Optimizer configuration from optimizer.json
+        entry_strategies: List of entry strategies to test
+        exit_strategies: List of exit strategies to test
         data_dir: Directory containing data files
 
     Returns:
-        dict: Results dictionary with optimization outcomes for all strategy combinations
+        tuple: (results dict, skipped_count, processed_count)
+            - results: Dictionary with optimization outcomes for all strategy combinations
+            - skipped_count: Number of strategies skipped (already completed)
+            - processed_count: Number of strategies processed (newly optimized)
     """
     _logger.info(
         "Running window optimization: %s | %s | %s",
@@ -388,7 +443,7 @@ def run_window_optimization(
             "No training data files found for %s/%s in window %s",
             symbol, timeframe, window['name']
         )
-        return {}
+        return {}, 0, 0
 
     if len(train_files) > 1:
         _logger.warning(
@@ -408,6 +463,8 @@ def run_window_optimization(
     symbol_from_file, interval, start_date, end_date = parse_data_file_name(data_file)
 
     results = {}
+    skipped_count = 0
+    processed_count = 0
 
     # Use filtered strategies or all if not specified
     entry_strategies_to_test = entry_strategies or list(ENTRY_MIXIN_REGISTRY.keys())
@@ -420,7 +477,15 @@ def run_window_optimization(
 
         for exit_logic_name in exit_strategies_to_test:
             strategy_key = f"{symbol}_{timeframe}_{entry_logic_name}_{exit_logic_name}"
+
+            # Check if result already exists (resume functionality)
+            if check_result_exists(data_file, entry_logic_name, exit_logic_name, window['train_year']):
+                _logger.info("    ✓ Skipping (already completed): %s", strategy_key)
+                skipped_count += 1
+                continue
+
             _logger.info("    Optimizing: %s", strategy_key)
+            processed_count += 1
 
             # Load exit logic configuration
             exit_logic_config = load_mixin_config(exit_logic_name, "exit", timeframe)
@@ -483,20 +548,160 @@ def run_window_optimization(
                 best_result['timeframe'] = timeframe
                 best_result['data_file'] = data_file
 
-                results[strategy_key] = best_result
-
-                _logger.info(
-                    "    Completed: %s | Profit: %.2f | Trades: %d",
-                    strategy_key,
-                    best_result['total_profit_with_commission'],
-                    best_result.get('total_trades', 0)
+                # Save result immediately to disk
+                save_success = save_single_strategy_result(
+                    best_result,
+                    window['name'],
+                    window['train_year']
                 )
+
+                if save_success:
+                    results[strategy_key] = best_result
+
+                    # Log completion with correct trade count from trades list
+                    _logger.info(
+                        "    ✓ Completed & Saved: %s | Profit: %.2f | Trades: %d",
+                        strategy_key,
+                        best_result['total_profit_with_commission'],
+                        len(best_result.get('trades', []))  # Count trades from the list
+                    )
+                else:
+                    _logger.error(
+                        "    ✗ Failed to save: %s (optimization completed but save failed)",
+                        strategy_key
+                    )
 
             except Exception as e:
                 _logger.exception("Error optimizing %s: %s", strategy_key, e)
                 continue
 
-    return results
+    return results, skipped_count, processed_count
+
+
+def save_single_strategy_result(
+    result: dict,
+    window_name: str,
+    train_year: str,
+    output_dir: str = "results/walk_forward_reports"
+) -> bool:
+    """
+    Save a single strategy optimization result to disk immediately.
+
+    Args:
+        result: Single strategy optimization result
+        window_name: Name of the window
+        train_year: Training year for directory organization
+        output_dir: Base output directory
+
+    Returns:
+        bool: True if saved successfully, False otherwise
+    """
+    # Create year-specific directory
+    year_dir = os.path.join(output_dir, train_year)
+    os.makedirs(year_dir, exist_ok=True)
+
+    try:
+        # Generate filename
+        data_file = result.get('data_file', 'unknown.csv')
+        entry_name = result.get('best_params', {}).get('entry_logic', {}).get('name', '')
+        exit_name = result.get('best_params', {}).get('exit_logic', {}).get('name', '')
+
+        filename = get_result_filename(
+            data_file,
+            entry_logic_name=entry_name,
+            exit_logic_name=exit_name,
+            suffix="",
+            include_timestamp=True
+        )
+
+        # Convert trades to serializable format
+        trades = []
+        for trade in result.get("trades", []):
+            try:
+                if not all(k in trade for k in ["entry_time", "exit_time", "entry_price", "exit_price"]):
+                    continue
+
+                # Convert datetime objects
+                entry_time = trade["entry_time"]
+                exit_time = trade["exit_time"]
+
+                if isinstance(entry_time, pd.Timestamp):
+                    entry_time = entry_time.isoformat()
+                elif isinstance(entry_time, dt):
+                    entry_time = entry_time.isoformat()
+
+                if isinstance(exit_time, pd.Timestamp):
+                    exit_time = exit_time.isoformat()
+                elif isinstance(exit_time, dt):
+                    exit_time = exit_time.isoformat()
+
+                serializable_trade = {
+                    "entry_time": entry_time,
+                    "exit_time": exit_time,
+                    "entry_price": float(trade["entry_price"]),
+                    "exit_price": float(trade["exit_price"]),
+                    "entry_value": float(trade.get("entry_value", 0.0)),
+                    "exit_value": float(trade.get("exit_value", 0.0)),
+                    "size": float(trade["size"]),
+                    "symbol": str(trade["symbol"]),
+                    "direction": str(trade["direction"]),
+                    "commission": float(trade["commission"]),
+                    "gross_pnl": float(trade["gross_pnl"]),
+                    "net_pnl": float(trade["net_pnl"]),
+                    "pnl_percentage": float(trade["pnl_percentage"]),
+                    "exit_reason": str(trade["exit_reason"]),
+                    "status": str(trade["status"]),
+                }
+                trades.append(serializable_trade)
+            except Exception:
+                _logger.exception("Error processing trade")
+                continue
+
+        # Process analyzers
+        analyzers = {}
+        for name, analyzer in result.get("analyzers", {}).items():
+            try:
+                if isinstance(analyzer, dict):
+                    processed_analysis = {}
+                    for k, v in analyzer.items():
+                        if isinstance(v, (int, float)):
+                            processed_analysis[str(k)] = float(v)
+                        elif isinstance(v, dt):
+                            processed_analysis[str(k)] = v.isoformat()
+                        else:
+                            processed_analysis[str(k)] = str(v)
+                    analyzers[name] = processed_analysis
+            except Exception as e:
+                _logger.warning("Could not process analyzer %s: %s", name, e)
+                analyzers[name] = str(analyzer)
+
+        # Create final result dictionary
+        result_dict = {
+            "data_file": str(data_file),
+            "window_name": window_name,
+            "train_year": train_year,
+            "symbol": result.get('symbol', ''),
+            "timeframe": result.get('timeframe', ''),
+            "total_trades": len(trades),
+            "total_profit": float(result.get("total_profit", 0)),
+            "total_profit_with_commission": float(result.get("total_profit_with_commission", 0)),
+            "total_commission": float(result.get("total_commission", 0)),
+            "best_params": result.get("best_params", {}),
+            "analyzers": analyzers,
+            "trades": trades,
+        }
+
+        # Save to JSON file
+        json_file = os.path.join(year_dir, f"{filename}.json")
+        with open(json_file, "w") as f:
+            json.dump(result_dict, f, indent=4)
+
+        _logger.debug("Saved result to %s", json_file)
+        return True
+
+    except Exception:
+        _logger.exception("Error saving result")
+        return False
 
 
 def save_optimization_results(
@@ -507,6 +712,9 @@ def save_optimization_results(
 ):
     """
     Save optimization results to appropriate directory.
+
+    NOTE: This function is kept for backwards compatibility but is deprecated.
+    Use save_single_strategy_result() instead to save results immediately after optimization.
 
     Args:
         results: Dictionary of optimization results
@@ -647,6 +855,8 @@ def main():
     total_timeframes = len(wf_config['timeframes'])
     total_combinations = total_windows * total_symbols * total_timeframes
     processed_count = 0
+    total_strategies_skipped = 0
+    total_strategies_processed = 0
 
     # Get strategy filters
     entry_strategies = wf_config.get('entry_strategies', list(ENTRY_MIXIN_REGISTRY.keys()))
@@ -687,32 +897,34 @@ def main():
                 _logger.info("-" * 80)
 
                 # Run optimization for this combination
-                results = run_window_optimization(
+                # Results are now saved immediately during optimization
+                _, skipped, processed = run_window_optimization(
                     window, symbol, timeframe, optimizer_config,
                     entry_strategies=entry_strategies,
                     exit_strategies=exit_strategies
                 )
 
-                # Save results
-                if results:
-                    save_optimization_results(
-                        results,
-                        window['name'],
-                        window['train_year']
-                    )
+                # Update global statistics
+                total_strategies_skipped += skipped
+                total_strategies_processed += processed
+
+                # Log summary for this combination
+                total_for_combo = skipped + processed
+                if total_for_combo > 0:
                     _logger.info(
-                        "  Saved %d strategy results for %s/%s",
-                        len(results), symbol, timeframe
+                        "  Summary for %s/%s: Total=%d, Completed=%d, Skipped=%d",
+                        symbol, timeframe, total_for_combo, processed, skipped
                     )
                 else:
                     _logger.warning(
-                        "  No results to save for %s/%s",
+                        "  No strategies to process for %s/%s",
                         symbol, timeframe
                     )
 
     # Summary
     end_time = dt.now()
     duration = end_time - start_time
+    total_strategies = total_strategies_skipped + total_strategies_processed
 
     _logger.info("")
     _logger.info("=" * 80)
@@ -721,6 +933,14 @@ def main():
     _logger.info("End time: %s", end_time)
     _logger.info("Total duration: %s", duration)
     _logger.info("Processed: %d/%d window/symbol/timeframe combinations", processed_count, total_combinations)
+    _logger.info("")
+    _logger.info("Strategy Statistics:")
+    _logger.info("  Total strategies: %d", total_strategies)
+    _logger.info("  Newly optimized: %d (%.1f%%)", total_strategies_processed,
+                 (total_strategies_processed / total_strategies * 100) if total_strategies > 0 else 0)
+    _logger.info("  Skipped (already completed): %d (%.1f%%)", total_strategies_skipped,
+                 (total_strategies_skipped / total_strategies * 100) if total_strategies > 0 else 0)
+    _logger.info("")
     _logger.info("Results saved to: results/walk_forward_reports/")
     _logger.info("=" * 80)
 

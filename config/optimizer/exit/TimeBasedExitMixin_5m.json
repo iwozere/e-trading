@@ -1,0 +1,23 @@
+{
+    "name": "TimeBasedExitMixin",
+    "timeframe": "5m",
+    "trading_style": "scalping",
+    "params": {
+        "x_max_bars": {
+            "type": "int",
+            "low": 6,
+            "high": 48,
+            "default": 12
+        },
+        "x_max_minutes": {
+            "type": "int",
+            "low": 30,
+            "high": 240,
+            "default": 60
+        },
+        "x_use_time": {
+            "type": "bool",
+            "default": true
+        }
+    }
+}

@@ -1,0 +1,48 @@
+{
+    "name": "RSIIchimokuEntryMixin",
+    "timeframe": "5m",
+    "trading_style": "scalping",
+    "params": {
+        "e_rsi_period": {
+            "type": "int",
+            "low": 10,
+            "high": 18,
+            "default": 14
+        },
+        "e_rsi_oversold": {
+            "type": "int",
+            "low": 20,
+            "high": 35,
+            "default": 30
+        },
+        "e_tenkan": {
+            "type": "int",
+            "low": 7,
+            "high": 12,
+            "default": 9
+        },
+        "e_kijun": {
+            "type": "int",
+            "low": 20,
+            "high": 32,
+            "default": 26
+        },
+        "e_senkou": {
+            "type": "int",
+            "low": 40,
+            "high": 60,
+            "default": 52
+        },
+        "e_rsi_cross": {
+            "type": "categorical",
+            "choices": [true, false],
+            "default": true
+        },
+        "e_cooldown_bars": {
+            "type": "int",
+            "low": 3,
+            "high": 12,
+            "default": 5
+        }
+    }
+}

@@ -1,0 +1,19 @@
+{
+    "name": "FixedRatioExitMixin",
+    "timeframe": "5m",
+    "trading_style": "scalping",
+    "params": {
+        "x_take_profit": {
+            "type": "float",
+            "low": 0.005,
+            "high": 0.03,
+            "default": 0.015
+        },
+        "x_stop_loss": {
+            "type": "float",
+            "low": 0.003,
+            "high": 0.02,
+            "default": 0.01
+        }
+    }
+}
