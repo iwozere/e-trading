@@ -18,9 +18,10 @@ from src.data.db.models.model_jobs import (
     ScheduleCreate, ScheduleUpdate, ScheduleResponse,
     ScheduleRunResponse, ReportRequest, ScreenerRequest, ScreenerSetInfo
 )
+from src.common.config.screener_config_loader import get_screener_config
 from src.notification.logger import setup_logger
 
-logger = setup_logger(__name__)
+_logger = setup_logger(__name__)
 
 # Create router
 router = APIRouter(prefix="/api", tags=["jobs"])

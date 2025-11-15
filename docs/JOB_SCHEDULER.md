@@ -48,7 +48,7 @@ The job scheduler system provides:
 
 ### 2. Screener Sets Configuration
 
-**File:** `config/screener_sets.yml`
+**File:** `config/schemas/screener_sets.yml`
 
 Predefined sets of tickers for screening:
 - `us_large_caps`: S&P 500 constituents
@@ -215,7 +215,7 @@ for screener_set in sets:
 
 ### Screener Sets
 
-Edit `config/screener_sets.yml` to:
+Edit `config/schemas/screener_sets.yml` to:
 - Add new screener sets
 - Modify existing ticker lists
 - Update filter criteria
@@ -289,7 +289,7 @@ logging.getLogger("src.backend").setLevel(logging.DEBUG)
 
 ### Custom Screener Sets
 
-1. Add new set to `config/screener_sets.yml`
+1. Add new set to `config/schemas/screener_sets.yml`
 2. Define tickers and metadata
 3. Test with the API endpoints
 

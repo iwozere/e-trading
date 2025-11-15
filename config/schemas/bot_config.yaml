@@ -29,7 +29,6 @@ properties:
         enum:
           - "binance"
           - "backtrader"
-          - "paper"
           - "alpaca"
           - "ibkr"
         description: "Broker type for execution"

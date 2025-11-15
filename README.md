@@ -320,7 +320,7 @@ The project includes comprehensive documentation organized in the `docs/` folder
 ### **Project Information**
 - **[Roadmap](docs/ROADMAP.md)** - Project roadmap, future plans, and development milestones
 - **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
-- **[OpenAPI Specification](docs/openapi.yaml)** - OpenAPI/Swagger specification for API endpoints
+- **[API Operations](src/api/api_operations.yaml)** - Comprehensive API operations documentation for Trading Web UI
 
 ### **Issue Tracking**
 - **[Issues Directory](docs/issues/)** - Contains open and closed issue tracking files
