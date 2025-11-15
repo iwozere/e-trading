@@ -13,7 +13,7 @@ How to run:
 from unittest.mock import MagicMock, patch
 
 import pytest
-import src.management.bot_manager as bot_manager
+import src.trading.trading_bot as bot_manager
 
 
 @pytest.fixture(autouse=True)

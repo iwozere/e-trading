@@ -1,8 +1,8 @@
 # Advanced Trading Framework
 
-A comprehensive, production-ready framework for developing, testing, and optimizing trading strategies across multiple asset classes (cryptocurrencies, stocks, forex, commodities) using Backtrader, with advanced machine learning capabilities and sophisticated strategy framework.
+A comprehensive, production-ready framework for developing, testing, and optimizing trading strategies across multiple asset classes (cryptocurrencies, stocks, forex, commodities) using Backtrader, with advanced machine learning capabilities, modern web UI, and sophisticated strategy framework.
 
-## 🚀 Recent Updates (December 2024)
+## 🚀 Recent Updates (November 2024)
 
 ### ✅ **Major New Features Implemented:**
 
