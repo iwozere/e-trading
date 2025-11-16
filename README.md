@@ -33,97 +33,126 @@ A comprehensive, production-ready framework for developing, testing, and optimiz
 
 ```
 e-trading/
-├── config/                 # Configuration files
-│   ├── donotshare/        # Sensitive configuration files (API keys, etc.)
-│   ├── optimizer/         # Optimization configuration
-│   ├── strategy/          # Advanced strategy configurations
-│   │   ├── composite_strategies.json
-│   │   ├── multi_timeframe.json
-│   │   ├── dynamic_switching.json
-│   │   └── portfolio_optimization.json
-│   └── trading/          # Trading strategy configurations
+├── config/                    # Configuration files
+│   ├── backtester/           # Backtester configurations
+│   ├── data/                 # Data source configurations
+│   ├── donotshare/           # Sensitive configuration files (API keys, etc.)
+│   ├── optimizer/            # Optimization configurations (entry/exit mixins)
+│   ├── pipeline/             # ML pipeline configurations
+│   ├── risk/                 # Risk management configurations
+│   ├── schemas/              # JSON schemas for validation
+│   │   ├── bot_config.yaml
+│   │   └── screener_sets.yml
+│   ├── screener/             # Screener configurations
+│   ├── strategy/             # Strategy configurations
+│   └── trading/              # Live/paper trading configurations
 │
-├── data/                  # Data storage directory
+├── data/                      # Market data storage
 │
-├── db/                    # Database files
-│
-├── docs/                  # Documentation
-│   ├── ADVANCED_ML_FEATURES.md
-│   ├── ADVANCED_STRATEGY_FRAMEWORK.md
-│   ├── ROADMAP.md
+├── docs/                      # Comprehensive documentation
+│   ├── HLA/                  # High-level architecture documentation
+│   ├── issues/               # Issue tracking
 │   └── ... (comprehensive documentation)
 │
-├── examples/              # Working examples
-│   ├── advanced_ml_example.py
-│   ├── advanced_strategy_example.py
-│   └── ... (other examples)
+├── src/                       # Source code (593 Python files)
+│   ├── analytics/            # Performance analytics and metrics
+│   ├── api/                  # FastAPI REST API backend
+│   ├── backtester/           # Backtrader-based backtesting engine
+│   │   ├── analyzer/         # Custom analyzers
+│   │   ├── optimizer/        # Strategy optimization (Optuna)
+│   │   ├── plotter/          # Results visualization
+│   │   └── validator/        # Configuration validation
+│   ├── common/               # Shared utilities
+│   │   ├── alerts/           # Alert system
+│   │   ├── config/           # Configuration loaders
+│   │   └── health/           # Health monitoring
+│   ├── data/                 # Data management
+│   │   ├── db/               # PostgreSQL/SQLite database layer
+│   │   ├── downloader/       # 13+ data provider integrations
+│   │   └── feed/             # Live data feeds
+│   ├── error_handling/       # Circuit breakers, retry logic
+│   ├── ml/                   # Machine learning pipelines
+│   │   ├── pipeline/         # 5 ML pipelines (HMM, LSTM, CNN, XGBoost)
+│   │   │   ├── p00_hmm_3lstm/
+│   │   │   ├── p01_hmm_lstm/
+│   │   │   ├── p02_cnn_lstm_xgboost/
+│   │   │   ├── p03_cnn_xgboost/
+│   │   │   └── p04_short_squeeze/
+│   │   └── ... (model training and evaluation)
+│   ├── notification/         # Multi-channel notifications
+│   ├── scheduler/            # Job scheduling system
+│   ├── strategy/             # Trading strategy framework
+│   │   ├── entry/            # Entry logic mixins
+│   │   ├── exit/             # Exit logic mixins
+│   │   ├── base_strategy.py  # Base strategy class
+│   │   └── custom_strategy.py # Modular strategy implementation
+│   ├── telegram/             # Telegram bot integration
+│   ├── trading/              # Live trading engine
+│   │   └── broker/           # Broker integrations (Binance, IBKR)
+│   └── web_ui/               # React + Vite web interface
+│       └── frontend/         # Modern React frontend
 │
-├── logs/                  # Log files
+├── tests/                     # Comprehensive test suite
 │
-├── results/              # Backtesting and optimization results
-│
-├── src/                  # Source code
-│   ├── analytics/        # Analysis tools and metrics
-│   ├── backtester/       # Backtesting engine
-│   ├── common/           # Common utilities and base classes
-│   ├── config/           # Configuration management
-│   ├── data/             # Data handling and processing
-│   ├── error_handling/   # Error handling and resilience
-│   ├── frontend/         # Web GUI and API
-│   ├── management/       # Position and risk management
-│   ├── ml/               # Machine learning models
-│   │   ├── mlflow_integration.py
-│   │   ├── feature_engineering_pipeline.py
-│   │   ├── automated_training_pipeline.py
-│   │   └── helformer_optuna_train.py
-│   ├── models/           # Data models and schemas
-│   ├── notification/     # Notification systems
-│   ├── strategy/         # Trading strategies
-│   │   ├── advanced_strategy_framework.py
-│   │   ├── advanced_backtrader_strategy.py
-│   │   └── custom_strategy.py
-│   ├── trading/          # Core trading functionality
-│   ├── util/             # Utility functions
-│   └── utils/            # Additional utilities
-│
-├── tests/               # Test suite
-│
-├── .gitignore          # Git ignore file
-├── requirements.txt    # Python dependencies
-├── requirements-full.txt # Full dependency list
-├── requirements-test.txt # Test dependencies
-├── requirements-dev.txt # Development dependencies
-├── docker-compose.yml  # Docker configuration
-├── Dockerfile          # Docker image definition
-└── TODO.txt           # Project roadmap and tasks
+├── .gitignore
+├── requirements.txt           # Python dependencies
+├── docker-compose.yml         # PostgreSQL + Redis + WebUI
+├── Dockerfile
+└── alembic.ini               # Database migrations
 ```
 
 ## 🎯 Core Features
 
+### **Modern Web Architecture**
+- **Frontend**: React 18 + TypeScript + Vite
+  - Material-UI components with modern design
+  - Real-time updates via WebSocket
+  - State management with Zustand
+  - Form validation with React Hook Form + Zod
+- **Backend**: FastAPI with async support
+  - REST API with OpenAPI documentation
+  - JWT authentication and role-based access
+  - WebSocket for real-time data
+- **Database**: PostgreSQL with SQLAlchemy ORM
+  - Alembic migrations for schema management
+  - SQLite fallback for development
+  - Connection pooling and health checks
+
 ### **Multi-Asset Class Support**
-- **Cryptocurrencies**: Binance, CoinGecko integration
-- **Stocks**: Yahoo Finance, Interactive Brokers integration
-- **Forex**: Multiple broker support
-- **Commodities**: Futures and options trading
-- **Unified Interface**: Consistent API across all asset classes
+- **Cryptocurrencies**: Binance (spot & futures), CoinGecko
+- **Stocks**: Yahoo Finance, Interactive Brokers, Alpaca, Polygon
+- **Market Data**: 13+ data provider integrations
+  - Alpha Vantage, TwelveData, Finnhub, FMP, Tiingo, FINRA
+- **Live Trading**: Binance & IBKR with paper trading support
+- **Unified Interface**: Factory pattern for consistent data access
 
 ### **Advanced Machine Learning**
-- **MLflow Integration**: Model versioning, tracking, registry, and automated deployment
-- **Feature Engineering**: 50+ technical indicators, market microstructure features, automated selection
-- **Automated Training**: Scheduled retraining, A/B testing, drift detection, performance monitoring
-- **Model Management**: Hyperparameter optimization, model comparison, production deployment
+- **5 Production ML Pipelines**:
+  - HMM + 3 LSTM Ensemble (p00)
+  - HMM + LSTM Regime Detection (p01)
+  - CNN + LSTM + XGBoost Hybrid (p02)
+  - CNN + XGBoost Simplified (p03)
+  - Short Squeeze Detection Pipeline (p04)
+- **MLflow Integration**: Model versioning, tracking, registry, deployment
+- **Hyperparameter Optimization**: Optuna integration for automated tuning
+- **Libraries**: PyTorch, XGBoost, LightGBM, scikit-learn, hmmlearn
 
-### **Advanced Strategy Framework**
-- **Composite Strategies**: Combine multiple strategies with weighted voting, consensus, majority voting
-- **Multi-timeframe Support**: Higher timeframe trend analysis, lower timeframe entry/exit
-- **Dynamic Strategy Switching**: Market regime detection and adaptive strategy selection
-- **Portfolio Optimization**: Modern Portfolio Theory, risk parity, dynamic allocation
-
-### **Modular Strategy Design**
-- Separate entry and exit logic
-- Mixin-based architecture for easy strategy composition
-- Support for multiple entry and exit strategies
-- Advanced signal aggregation and validation
+### **Modular Strategy Framework**
+- **CustomStrategy**: Production-ready modular strategy system
+  - Separate entry and exit logic mixins
+  - Support for multiple entry/exit combinations
+  - TALib-based indicator architecture
+- **Entry Mixins**: RSI+BB, RSI+Ichimoku, Volume-weighted, etc.
+- **Exit Mixins**:
+  - Fixed ratio take-profit/stop-loss
+  - Trailing stop with ATR
+  - Advanced ATR with volatility adaptation
+  - Multi-timeframe exit logic
+- **Legacy Support**: Backward compatible with old configurations
+- **Future/Experimental**:
+  - Composite strategies (multiple strategy aggregation)
+  - Dynamic strategy switching (regime-based)
+  - Multi-timeframe strategies
 
 ### **Optimization Framework**
 - Parameter optimization using Optuna
@@ -191,10 +220,16 @@ python examples/live_trading_example.py
 
 ### 5. **Web Interface**
 ```bash
-# Start the web GUI
-python src/frontend/app.py
+# Start the FastAPI backend
+cd src/api
+uvicorn main:app --reload --port 8080
 
-# Access the interface at http://localhost:5000
+# In another terminal, start the React frontend
+cd src/web_ui/frontend
+npm install
+npm run dev
+
+# Access the interface at http://localhost:5173
 ```
 
 ## 📊 Advanced ML Capabilities
@@ -329,37 +364,70 @@ The project includes comprehensive documentation organized in the `docs/` folder
 
 ## 🛠️ Dependencies
 
-### **Core Dependencies**
-- backtrader==1.9.78.123
-- pandas==2.3.1
-- numpy==2.3.2
-- optuna>=4.4.0
-- ta_lib>=0.6.4
+### **Backend (Python)**
 
-### **ML Dependencies**
-- mlflow>=3.1.1
-- scikit_learn==1.7.1
-- xgboost==3.0.4
-- lightgbm==4.6.0
-- torch>=2.7.1
+#### **Core Trading & Backtesting**
+- backtrader==1.9.78.123 - Backtesting engine
+- pandas==2.3.1 - Data manipulation
+- numpy==2.3.2 - Numerical computing
+- ta_lib>=0.6.4 - Technical indicators (150+ functions)
 
-### **Trading & Data**
-- python_binance>=1.0.29
-- yfinance>=0.2.64
-- ib_insync==0.9.86
-- websocket_client==0.40.0
+#### **Machine Learning**
+- torch>=2.7.1 - Deep learning framework
+- xgboost==3.0.4 - Gradient boosting
+- lightgbm==4.6.0 - Fast gradient boosting
+- scikit_learn==1.7.1 - ML algorithms
+- hmmlearn==0.3.3 - Hidden Markov Models
+- statsmodels==0.14.4 - Statistical models
+- optuna>=4.4.0 - Hyperparameter optimization
+- mlflow>=3.1.1 - ML experiment tracking
 
-### **Web & API**
-- Flask==3.1.1
-- aiogram==3.21.0
-- SQLAlchemy==2.0.43
+#### **Web Framework & API**
+- fastapi==0.115.6 - Modern async web framework
+- uvicorn==0.34.0 - ASGI server
+- pydantic==2.11.7 - Data validation
+- SQLAlchemy==2.0.43 - ORM for PostgreSQL/SQLite
+- alembic==1.14.0 - Database migrations
+- python-jose==3.3.0 - JWT authentication
 
-### **Additional Dependencies**
-- schedule==1.2.2
-- scipy==1.16.1
-- statsmodels==0.14.4
-- hmmlearn==0.3.3
-- pydantic==2.11.7
+#### **Data Providers & Brokers**
+- python_binance>=1.0.29 - Binance API
+- yfinance>=0.2.64 - Yahoo Finance
+- ib_insync==0.9.86 - Interactive Brokers
+- alpaca-py>=0.35.3 - Alpaca trading
+- websocket_client==0.40.0 - WebSocket support
+
+#### **Telegram Bot**
+- aiogram==3.21.0 - Telegram bot framework
+- dramatiq==1.18.0 - Task queue for async jobs
+
+#### **Utilities**
+- schedule==1.2.2 - Job scheduling
+- scipy==1.16.1 - Scientific computing
+- psycopg2-binary==2.9.10 - PostgreSQL driver
+- redis==5.2.1 - Redis client
+
+### **Frontend (Node.js/React)**
+
+#### **Core Framework**
+- react==18.2.0 - UI framework
+- typescript==5.2.2 - Type safety
+- vite==5.0.0 - Build tool
+
+#### **UI Components & Styling**
+- @mui/material==5.14.18 - Material-UI components
+- @emotion/react==11.11.1 - CSS-in-JS
+- recharts==2.8.0 - Charts and visualizations
+
+#### **State & Data**
+- zustand==4.4.7 - State management
+- @tanstack/react-query==5.8.4 - Server state management
+- axios==1.6.2 - HTTP client
+- socket.io-client==4.7.4 - Real-time communication
+
+#### **Forms & Validation**
+- react-hook-form==7.48.2 - Form handling
+- zod==3.22.4 - Schema validation
 
 ## 📈 Performance Metrics
 
@@ -372,83 +440,52 @@ The framework provides comprehensive performance analysis:
 
 ## 🔧 Architecture
 
-### **Unified Indicator Service**
+### **Indicator System**
 
-The system uses a unified indicator service architecture that consolidates all indicator functionality into a single, comprehensive service supporting multiple calculation backends (TA-Lib, pandas-ta, Backtrader).
+The framework uses **TA-Lib** directly for technical indicator calculations within Backtrader strategies. The previous UnifiedIndicatorService has been deprecated in favor of a simpler, more performant approach.
 
-#### **Unified Service Architecture**
+#### **TALib Integration**
 
-The `UnifiedIndicatorService` (`src/indicators/service.py`) is the central component for all indicator operations:
-
-```python
-from src.indicators.service import UnifiedIndicatorService
-
-# Create service instance
-service = UnifiedIndicatorService()
-
-# Calculate indicators for a ticker
-request = IndicatorRequest(
-    ticker="BTCUSDT",
-    indicators=["rsi", "macd", "bbands"],
-    timeframe="1d",
-    period="1y"
-)
-
-result = await service.calculate(request)
-```
-
-**Key features:**
-- **Unified API**: Single interface for all technical and fundamental indicators
-- **Multiple Backends**: Support for TA-Lib, pandas-ta, and Backtrader calculation engines
-- **Batch Processing**: Efficient calculation for multiple tickers simultaneously
-- **Configuration Management**: Centralized parameter management with presets
-- **Recommendation Engine**: Intelligent trading recommendations based on indicator values
-- **Error Handling**: Comprehensive error handling with graceful fallbacks
-
-**Available indicators:**
-- **Technical**: RSI, MACD, Bollinger Bands, Stochastic, ADX, ATR, Williams %R, CCI, ROC, MFI, OBV, SuperTrend, Ichimoku, and more
-- **Fundamental**: P/E Ratio, Forward P/E, PEG Ratio, Price-to-Book, ROE, ROA, Debt-to-Equity, and more
-- **50+ total indicators** across both categories
-
-#### **Backtrader Integration**
-
-The unified service provides seamless Backtrader integration through specialized adapters:
+Strategies use TA-Lib functions directly via Backtrader's built-in wrapper:
 
 ```python
-from src.indicators.adapters.backtrader_wrappers import UnifiedRSI, UnifiedMACD
+import backtrader as bt
 
 class MyStrategy(bt.Strategy):
     def __init__(self):
-        # Use unified service indicators in Backtrader
-        self.rsi = UnifiedRSI(self.data, timeperiod=14)
-        self.macd = UnifiedMACD(self.data, fastperiod=12, slowperiod=26)
-    
+        # Use TALib indicators directly
+        self.rsi = bt.talib.RSI(self.data.close, timeperiod=14)
+        self.macd = bt.talib.MACD(
+            self.data.close,
+            fastperiod=12,
+            slowperiod=26,
+            signalperiod=9
+        )
+        self.bbands = bt.talib.BBANDS(
+            self.data.close,
+            timeperiod=20,
+            nbdevup=2,
+            nbdevdn=2
+        )
+
     def next(self):
-        # Access indicator values as usual
+        # Access indicator values
         if self.rsi[0] < 30:
             self.buy()
 ```
 
 **Benefits:**
-1. **Unified Interface**
-   - Single API for all indicator types
-   - Consistent parameter naming and validation
-   - Simplified configuration management
+- **Performance**: Direct TA-Lib C library calls for maximum speed
+- **Simplicity**: No abstraction layers, straightforward implementation
+- **Reliability**: Well-tested industry-standard library
+- **Flexibility**: Full access to 150+ TA-Lib functions
 
-2. **Enhanced Performance**
-   - Optimized batch processing
-   - Intelligent caching strategies
-   - Concurrent calculation support
-
-3. **Better Maintainability**
-   - Consolidated codebase
-   - Standardized error handling
-   - Comprehensive testing coverage
-
-4. **Advanced Features**
-   - Intelligent recommendations
-   - Multi-backend fallbacks
-   - Configuration presets for different trading styles
+**Available Indicators**: 150+ technical indicators including:
+- Trend: SMA, EMA, DEMA, TEMA, WMA, TRIMA, KAMA, MAMA, T3
+- Momentum: RSI, MACD, Stochastic, Williams %R, ROC, MOM, CMO, ADX
+- Volatility: ATR, NATR, TRANGE, Bollinger Bands
+- Volume: OBV, AD, ADOSC
+- Pattern Recognition: 60+ candlestick patterns
 
 ## 🤝 Contributing
 
@@ -460,36 +497,66 @@ class MyStrategy(bt.Strategy):
 
 ## 📊 Project Status
 
-### **Current State (December 2024):**
+### **Current State (November 2024):**
 - ✅ **Core Infrastructure**: 100% Complete
-- ✅ **Performance & Analytics**: 100% Complete
-- ✅ **Advanced ML Features**: 100% Complete
-- ✅ **Advanced Strategy Framework**: 100% Complete
+  - Backtrader integration with 593 Python files
+  - PostgreSQL database with Alembic migrations
+  - Configuration management system
+- ✅ **Web Interface**: 100% Complete
+  - React 18 + TypeScript + Vite frontend
+  - FastAPI backend with async support
+  - Material-UI components
+  - Real-time WebSocket updates
+- ✅ **ML Pipelines**: 100% Complete
+  - 5 production ML pipelines (HMM, LSTM, CNN, XGBoost)
+  - MLflow integration
+  - Optuna hyperparameter optimization
+- ✅ **Strategy Framework**: 100% Complete
+  - CustomStrategy with modular entry/exit mixins
+  - Multiple entry logic (RSI+BB, RSI+Ichimoku, Volume-weighted)
+  - Multiple exit logic (Fixed ratio, Trailing stop, ATR-based)
+  - TALib indicator integration
+- ✅ **Data Providers**: 100% Complete
+  - 13+ data provider integrations
+  - Binance & IBKR live trading support
+  - Factory pattern for unified access
 - ✅ **Error Handling & Resilience**: 100% Complete
-- ✅ **Live Data Feeds**: 100% Complete
+  - Circuit breakers and retry logic
+  - Health monitoring system
+  - Comprehensive error handling
 - ✅ **Notification System**: 100% Complete
-- ✅ **Web Interface & API**: 100% Complete
-- 🎯 **Real-time Dashboard**: 60% Complete
-- 🎯 **Enhanced Backtesting**: 40% Complete
-- 🎯 **Production Deployment**: 20% Complete
+  - Telegram bot integration
+  - Multi-channel alerts
+  - Job scheduling system
+- ✅ **Performance Analytics**: 100% Complete
+  - Comprehensive metrics (Sharpe, Sortino, Calmar)
+  - Risk analysis tools
+  - Trade statistics
+- 🎯 **Advanced Features** (Experimental):
+  - Composite strategies (in future/)
+  - Dynamic strategy switching (in future/)
+  - Multi-timeframe strategies (in future/)
 
 ### **Code Base Size:**
-- **Total Lines**: ~15,000+ lines of production code
-- **Documentation**: ~5,000+ lines of comprehensive guides
-- **Examples**: ~2,000+ lines of working demonstrations
-- **Tests**: ~1,500+ lines of test coverage
+- **Python Files**: 593 files
+- **Source Code**: ~50,000+ lines of production Python code
+- **Frontend Code**: React + TypeScript with Material-UI
+- **Documentation**: Comprehensive guides in docs/
+- **Tests**: Comprehensive test coverage
 
-### **Overall Progress:**
-- **Completed**: 8 out of 13 major features (62%)
-- **In Progress**: 3 features (23%)
-- **Planned**: 2 features (15%)
+### **Technology Stack:**
+- **Backend**: Python 3.11+, FastAPI, PostgreSQL, SQLAlchemy, Redis
+- **Frontend**: React 18, TypeScript, Vite, Material-UI, Zustand
+- **ML**: PyTorch, XGBoost, LightGBM, scikit-learn, Optuna, MLflow
+- **Trading**: Backtrader, TA-Lib, Binance, IBKR
+- **Infrastructure**: Docker, Alembic, Dramatiq
 
-The Advanced Trading Framework has evolved into a **comprehensive, production-ready system** with advanced ML capabilities and sophisticated strategy framework, supporting multiple asset classes and bringing the platform to the forefront of algorithmic trading technology.
+The Advanced Trading Framework is a **mature, production-ready system** with 593 Python files implementing comprehensive trading functionality, modern web interface, advanced ML capabilities, and support for multiple asset classes.
 
 ---
 
-*Last Updated: December 2024*
-*For detailed roadmap and future plans, see [docs/ROADMAP.md](docs/ROADMAP.md)*
+*Last Updated: November 2024*
+*For detailed documentation, see the [docs/](docs/) directory*
 
 ## Telegram Screener Bot
 
