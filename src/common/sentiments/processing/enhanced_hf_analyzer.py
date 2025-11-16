@@ -15,7 +15,7 @@ from typing import List, Dict, Optional, Any, Union
 from pathlib import Path
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from enum import Enum
 

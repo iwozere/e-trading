@@ -9,7 +9,7 @@ while respecting API constraints.
 import statistics
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import deque
 from pathlib import Path
 import sys

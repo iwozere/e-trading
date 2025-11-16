@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional, Callable, Any, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import math
 import json
 from pathlib import Path

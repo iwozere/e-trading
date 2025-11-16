@@ -11,7 +11,7 @@ This example shows how to use the new processing modules together:
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 

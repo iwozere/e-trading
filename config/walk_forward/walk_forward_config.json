@@ -4,7 +4,7 @@
   "data_dir": "data",
 
   "symbols": ["BTCUSDT", "ETHUSDT", "LTCUSDT"],
-  "timeframes": ["4h", "1h"],
+  "timeframes": ["30m"],
 
   "entry_strategies": [
     "BBVolumeSuperTrendEntryMixin",
