@@ -10,7 +10,7 @@ import heapq
 import time
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import IntEnum
 from pathlib import Path
 import sys
