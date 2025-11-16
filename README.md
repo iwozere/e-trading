@@ -1,8 +1,8 @@
 # Advanced Trading Framework
 
-A comprehensive, production-ready framework for developing, testing, and optimizing trading strategies across multiple asset classes (cryptocurrencies, stocks, forex, commodities) using Backtrader, with advanced machine learning capabilities and sophisticated strategy framework.
+A comprehensive, production-ready framework for developing, testing, and optimizing trading strategies across multiple asset classes (cryptocurrencies, stocks, forex, commodities) using Backtrader, with advanced machine learning capabilities, modern web UI, and sophisticated strategy framework.
 
-## 🚀 Recent Updates (December 2024)
+## 🚀 Recent Updates (November 2024)
 
 ### ✅ **Major New Features Implemented:**
 
@@ -320,7 +320,7 @@ The project includes comprehensive documentation organized in the `docs/` folder
 ### **Project Information**
 - **[Roadmap](docs/ROADMAP.md)** - Project roadmap, future plans, and development milestones
 - **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
-- **[OpenAPI Specification](docs/openapi.yaml)** - OpenAPI/Swagger specification for API endpoints
+- **[API Operations](src/api/api_operations.yaml)** - Comprehensive API operations documentation for Trading Web UI
 
 ### **Issue Tracking**
 - **[Issues Directory](docs/issues/)** - Contains open and closed issue tracking files

@@ -29,7 +29,7 @@ class SchemaValidator:
     - Schema caching for performance
     """
 
-    SCHEMA_DIR = Path(__file__).parent.parent.parent.parent / "schemas"
+    SCHEMA_DIR = Path(__file__).parent.parent.parent.parent / "config" / "schemas"
 
     def __init__(self):
         """Initialize the schema validator."""
