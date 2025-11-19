@@ -119,12 +119,13 @@ class AlertsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_user_alerts(self, repos, user_id: int, active_only: bool = True) -> List[Dict[str, Any]]:
+    def get_user_alerts(self, user_id: int, active_only: bool = True) -> List[Dict[str, Any]]:
         """Get all alerts for a user."""
-        jobs = repos.jobs.get_user_jobs(
+        from src.data.db.models.model_jobs import JobType
+        jobs = self.uow.jobs.list_schedules(
             user_id=user_id,
-            job_type="alert",
-            enabled_only=active_only
+            job_type=JobType.ALERT,
+            enabled=active_only if active_only else None
         )
 
         alerts = []

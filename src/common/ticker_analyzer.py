@@ -184,7 +184,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                 if current_indicators.get('rsi') is not None:
                     rec = recommendation_engine.get_recommendation('RSI', current_indicators['rsi'])
                     recommendations['rsi'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -196,7 +196,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     }
                     rec = recommendation_engine.get_recommendation('MACD', current_indicators['macd'], context)
                     recommendations['macd'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -208,7 +208,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     }
                     rec = recommendation_engine.get_recommendation('ADX', current_indicators['adx'], context)
                     recommendations['adx'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -217,7 +217,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     context = {'stoch_d': current_indicators.get('stoch_d')}
                     rec = recommendation_engine.get_recommendation('STOCH_K', current_indicators['stoch_k'], context)
                     recommendations['stoch_k'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -230,7 +230,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     }
                     rec = recommendation_engine.get_recommendation('BB_MIDDLE', current_indicators['bb_middle'], context)
                     recommendations['bb_middle'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -239,7 +239,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     context = {'current_price': current_price}
                     rec = recommendation_engine.get_recommendation('OBV', current_indicators['obv'], context)
                     recommendations['obv'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -248,7 +248,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     context = {'current_price': current_price}
                     rec = recommendation_engine.get_recommendation('ADR', current_indicators['adr'], context)
                     recommendations['adr'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -273,7 +273,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     }
                     rec = recommendation_engine.get_recommendation('SMA_FAST', current_indicators['sma_fast'], context)
                     recommendations['sma_fast'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -297,7 +297,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     }
                     rec = recommendation_engine.get_recommendation('SMA_SLOW', current_indicators['sma_slow'], context)
                     recommendations['sma_slow'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -321,7 +321,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     }
                     rec = recommendation_engine.get_recommendation('EMA_FAST', current_indicators['ema_fast'], context)
                     recommendations['ema_fast'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }
@@ -345,7 +345,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
                     }
                     rec = recommendation_engine.get_recommendation('EMA_SLOW', current_indicators['ema_slow'], context)
                     recommendations['ema_slow'] = {
-                        'signal': rec.recommendation.value,
+                        'signal': rec.recommendation,
                         'confidence': rec.confidence,
                         'reason': rec.reason
                     }

@@ -649,8 +649,18 @@ class MessageProcessor:
                 }
             )
 
-            # Get recipient
-            recipient = db_message.recipient_id
+            # Get recipient - check metadata for email_receiver first (for email channels)
+            # This allows different recipients for different channels (e.g., email vs Telegram)
+            recipient = db_message.message_metadata.get('email_receiver') if db_message.message_metadata else None
+            if not recipient:
+                recipient = db_message.recipient_id
+
+            self._logger.debug(
+                "Message %s: recipient=%s, email_receiver=%s, recipient_id=%s, channels=%s",
+                db_message.id, recipient,
+                db_message.message_metadata.get('email_receiver') if db_message.message_metadata else None,
+                db_message.recipient_id, db_message.channels
+            )
 
             # Attempt delivery with fallback
             success, delivery_results, failed_message = await self.fallback_manager.attempt_delivery_with_fallback(

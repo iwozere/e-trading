@@ -1415,7 +1415,7 @@ async def cmd_report(message: Message):
     args = message.text.split()
     # Report command still uses notification service for heavy processing and email support
     client = await get_notification_client()
-    await audit_command_wrapper(message, process_report_command, str(message.from_user.id), args, client)
+    await audit_command_wrapper(message, process_report_command, message, str(message.from_user.id), args, client)
 
 @dp.message(Command("alerts"))
 async def cmd_alerts(message: Message):
@@ -1432,7 +1432,7 @@ async def cmd_screener(message: Message):
     args = message.text.split()
     # Screener command still uses notification service for heavy processing and email support
     client = await get_notification_client()
-    await audit_command_wrapper(message, process_screener_command, str(message.from_user.id), args, client)
+    await audit_command_wrapper(message, process_screener_command, message, str(message.from_user.id), args, client)
 
 @dp.message(Command("feedback"))
 async def cmd_feedback(message: Message):

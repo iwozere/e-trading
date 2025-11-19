@@ -395,6 +395,12 @@ class NotificationServiceClient:
                 # Convert priority to uppercase to match database constraints
                 priority = message_data["priority"].upper() if message_data["priority"] else "NORMAL"
 
+                # Prepare metadata without attachments (they're moved to content)
+                metadata_copy = {**message_data.get("message_metadata", {})}
+                metadata_copy.pop("attachments", None)  # Remove attachments from metadata
+                metadata_copy["fallback_method"] = "direct_db"
+                metadata_copy["fallback_timestamp"] = datetime.now(timezone.utc).isoformat()
+
                 db_message_data = {
                     "message_type": message_data["message_type"],
                     "priority": priority,
@@ -405,11 +411,7 @@ class NotificationServiceClient:
                         **message_data["content"],
                         "attachments": processed_attachments
                     } if processed_attachments else message_data["content"],
-                    "message_metadata": {
-                        **message_data.get("message_metadata", {}),
-                        "fallback_method": "direct_db",
-                        "fallback_timestamp": datetime.now(timezone.utc).isoformat()
-                    },
+                    "message_metadata": metadata_copy,
                     "scheduled_for": datetime.now(timezone.utc),
                     "max_retries": 3,
                     "retry_count": 0

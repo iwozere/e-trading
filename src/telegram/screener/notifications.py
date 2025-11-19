@@ -24,8 +24,6 @@ async def process_report_notifications(result, notification_client, message, use
 
     # Email notifications
     if "email" in channels:
-        from src.notification.service.client import MessageType, MessagePriority
-
         for report in result["reports"]:
             attachments = None
             if report.get("chart_bytes"):
@@ -37,7 +35,7 @@ async def process_report_notifications(result, notification_client, message, use
                     message=f"No data for {report['ticker']}: {report['error']}",
                     priority=MessagePriority.NORMAL,
                     channels=["email"],
-                    recipient_id=user_email,
+                    email_receiver=user_email,
                     attachments=attachments
                 )
             else:
@@ -48,7 +46,7 @@ async def process_report_notifications(result, notification_client, message, use
                     attachments=attachments,
                     priority=MessagePriority.NORMAL,
                     channels=["email"],
-                    recipient_id=user_email
+                    email_receiver=user_email
                 )
 
     # Telegram notifications - Send directly to avoid queue issues
@@ -496,7 +494,8 @@ async def process_report_command(message, telegram_user_id, args, notification_c
                 message=result.get("message", "No message"),
                 priority=MessagePriority.NORMAL,
                 channels=channels,
-                recipient_id=user_email if "email" in channels else str(message.chat.id),
+                recipient_id=str(message.chat.id),
+                email_receiver=user_email if "email" in channels else None,
                 data={"reply_to_message_id": message.message_id}
             )
     except Exception as e:
@@ -564,7 +563,7 @@ async def process_help_command(message, telegram_user_id, message_text=None, not
                 message=help_content,
                 priority=MessagePriority.NORMAL,
                 channels=["email"],
-                recipient_id=user_email
+                email_receiver=user_email
             )
 
     except Exception as e:
@@ -767,7 +766,7 @@ async def process_info_command(message, telegram_user_id, notification_client):
                 message=result.get("message", "No message"),
                 priority=MessagePriority.NORMAL,
                 channels=["email"],
-                recipient_id=user_email
+                email_receiver=user_email
             )
 
     except Exception as e:
@@ -805,7 +804,7 @@ async def process_register_command(message, telegram_user_id, args, notification
                 message=f"Hello,\n\nThank you for registering your email with the Alkotrader Telegram bot.\n\nYour verification code is: {verification_info['code']}\n\nThis code is valid for 1 hour. If you did not request this, please ignore this email.\n\nBest regards,\nAlkotrader Team",
                 priority=MessagePriority.NORMAL,
                 channels=["email"],
-                recipient_id=verification_info["email"]
+                email_receiver=verification_info["email"]
             )
 
     except Exception as e:
@@ -829,7 +828,8 @@ async def process_verify_command(message, telegram_user_id, args, notification_c
             message=result.get("message", "No message"),
             priority=MessagePriority.NORMAL,
             channels=channels,
-            recipient_id=user_email if "email" in channels else str(message.chat.id),
+            recipient_id=str(message.chat.id),
+            email_receiver=user_email if "email" in channels else None,
             data={"reply_to_message_id": message.message_id}
         )
     except Exception:
@@ -914,7 +914,8 @@ async def process_language_command(message, telegram_user_id, args, notification
             message=result.get("message", "No message"),
             priority=MessagePriority.NORMAL,
             channels=channels,
-            recipient_id=user_email if "email" in channels else str(message.chat.id),
+            recipient_id=str(message.chat.id),
+            email_receiver=user_email if "email" in channels else None,
             data={"reply_to_message_id": message.message_id}
         )
     except Exception:

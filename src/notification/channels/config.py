@@ -310,7 +310,7 @@ def validate_email(email: str) -> None:
     """Validate email format."""
     email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     if not re.match(email_pattern, email):
-        raise ValueError("Invalid email format")
+        raise ValueError(f"Invalid email format: {email}")
 
 
 def validate_phone(phone: str) -> None:

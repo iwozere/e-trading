@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator, ConfigDict
 import os
 
-from config.donotshare.donotshare import SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USER
+from config.donotshare.donotshare import SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USER, TELEGRAM_BOT_TOKEN
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
@@ -138,23 +138,14 @@ class ChannelConfig(BaseSettings):
 
     telegram: Dict[str, Any] = Field(
         default_factory=lambda: {
-            "enabled": True,
-            "plugin": "telegram_plugin",
-            "timeout": 30,
+            "bot_token": os.getenv("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN),
             "rate_limit_per_minute": 30,
-            "max_retries": 3,
-            "bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
-            "default_chat_id": os.getenv("TELEGRAM_DEFAULT_CHAT_ID", "")
+            "max_retries": 3
         },
         description="Telegram channel configuration"
     )
     email: Dict[str, Any] = Field(
         default_factory=lambda: {
-            "enabled": True,
-            "plugin": "email_plugin",
-            "timeout": 30,
-            "rate_limit_per_minute": 10,
-            "max_retries": 3,
             # SMTP configuration from environment variables
             "smtp_host": os.getenv("SMTP_SERVER", SMTP_SERVER),
             "smtp_port": int(os.getenv("SMTP_PORT", SMTP_PORT)),
@@ -163,7 +154,9 @@ class ChannelConfig(BaseSettings):
             "from_email": os.getenv("SMTP_USER", SMTP_USER),
             "from_name": "Alkotrader Bot",
             "use_tls": True,
-            "use_ssl": False
+            "use_ssl": False,
+            "rate_limit_per_minute": 10,
+            "max_retries": 3
         },
         description="Email channel configuration"
     )

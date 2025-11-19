@@ -190,8 +190,12 @@ class EmailChannel(NotificationChannel):
         start_time = datetime.now(timezone.utc)
 
         try:
-            # Use recipient or fall back to default
-            to_email = recipient or self.config.get("default_recipient")
+            # Extract metadata for email-specific options
+            metadata = content.metadata or {}
+
+            # Check for email_receiver in metadata first (for multi-channel messages)
+            # This allows different recipients for different channels (e.g., email vs Telegram)
+            to_email = metadata.get("email_receiver") or recipient or self.config.get("default_recipient")
             if not to_email:
                 raise ValueError("No recipient email address provided")
 
@@ -201,9 +205,6 @@ class EmailChannel(NotificationChannel):
             # Validate all recipients
             for email_addr in recipients:
                 validate_email(email_addr)
-
-            # Extract metadata for email-specific options
-            metadata = content.metadata or {}
             cc_emails = metadata.get("cc", [])
             bcc_emails = metadata.get("bcc", [])
             reply_to = metadata.get("reply_to")
