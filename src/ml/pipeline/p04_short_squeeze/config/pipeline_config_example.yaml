@@ -1,0 +1,183 @@
+# Short Squeeze Detection Pipeline Configuration
+# Example configuration file showing all available options
+
+# Pipeline Scheduling
+scheduling:
+  screener_frequency: "weekly"        # How often to run the screener
+  screener_day: "monday"              # Day of week for screener
+  screener_time: "08:00"              # Time to run screener (24h format)
+  deep_scan_frequency: "daily"        # How often to run deep scan
+  deep_scan_time: "10:00"             # Time to run deep scan
+  timezone: "Europe/Zurich"           # Timezone for scheduling
+
+# Universe Configuration
+screener:
+  universe:
+    min_market_cap: 100000000         # $100M minimum
+    max_market_cap: 10000000000       # $10B maximum
+    min_avg_volume: 200000            # Minimum daily volume
+    exchanges:
+      - "NYSE"
+      - "NASDAQ"
+    use_multi_strategy_loading: true  # Use multiple loading strategies
+    prioritize_known_candidates: true # Prioritize known squeeze candidates
+    max_universe_size: 1000           # Maximum universe size
+    use_finra_filtering: true         # Filter using FINRA data
+
+  # Screener Filters
+  filters:
+    si_percent_min: 0.15              # 15% minimum short interest
+    days_to_cover_min: 5.0            # 5 days minimum
+    float_max: 100000000              # 100M shares maximum float
+    top_k_candidates: 50              # Select top 50 candidates
+
+  # Screener Scoring Weights (must sum to 1.0)
+  scoring:
+    short_interest_pct: 0.4           # 40% weight
+    days_to_cover: 0.3                # 30% weight
+    float_ratio: 0.2                  # 20% weight
+    volume_consistency: 0.1           # 10% weight
+
+# Daily Deep Scan Configuration
+deep_scan:
+  batch_size: 10                      # Process 10 candidates per batch
+  api_delay_seconds: 0.2              # Delay between batches (rate limiting)
+
+  # Deep Scan Metrics
+  metrics:
+    volume_lookback_days: 14          # Days for volume average
+    sentiment_lookback_hours: 24      # Hours for sentiment analysis
+    options_min_volume: 100           # Minimum options volume
+
+  # Deep Scan Scoring Weights (must sum to 1.0)
+  scoring:
+    volume_spike: 0.35                # 35% weight on volume spike
+    sentiment_24h: 0.25               # 25% weight on sentiment
+    call_put_ratio: 0.20              # 20% weight on options
+    borrow_fee: 0.20                  # 20% weight on borrow fee
+
+# Enhanced Sentiment Configuration (NEW)
+sentiment:
+  # Provider Toggles
+  providers:
+    stocktwits: true                  # StockTwits sentiment (trading-focused)
+    reddit_pushshift: true            # Reddit sentiment (community discussion)
+    news: true                        # News sentiment (credible sources)
+    google_trends: false              # Google Trends (optional, rate-limited)
+    twitter: false                    # Twitter sentiment (requires API access)
+    discord: false                    # Discord sentiment (requires channel access)
+    hf_enabled: false                 # HuggingFace ML enhancement (CPU intensive)
+
+  # Batch Processing Settings
+  batching:
+    concurrency: 8                    # Parallel requests (adjust based on resources)
+    rate_limit_delay_sec: 0.3         # Delay between requests (seconds)
+    batch_size: 50                    # Tickers per batch
+
+  # Source Weighting (should sum to 1.0 for active providers)
+  weights:
+    stocktwits: 0.4                   # 40% - high quality, trading-focused
+    reddit: 0.3                       # 30% - good coverage, some noise
+    news: 0.2                         # 20% - credible but lagging
+    google_trends: 0.1                # 10% - supplementary
+    heuristic_vs_hf: 0.5              # 50/50 mix if HF enabled
+
+  # Quality Thresholds
+  thresholds:
+    min_mentions_for_hf: 20           # Only use ML if >= 20 mentions
+    bot_pct_warning: 0.5              # Warn if bot activity > 50%
+    min_data_quality_sources: 1       # Require at least 1 successful source
+
+  # Caching Configuration
+  cache:
+    enabled: true                     # Enable caching
+    ttl_seconds: 1800                 # 30 minutes cache TTL
+    redis_enabled: false              # Use in-memory cache (set true for Redis)
+
+  # Monitoring
+  monitoring:
+    log_failures: true                # Log provider failures
+    alert_on_all_providers_down: true # Alert if all providers fail
+    performance_profiling: false      # Enable detailed performance profiling
+
+# Alerting Configuration
+alerting:
+  # Alert Thresholds
+  thresholds:
+    high:
+      squeeze_score: 0.8              # >= 0.8 for high alert
+      min_si_percent: 0.25            # >= 25% short interest
+      min_volume_spike: 3.0           # >= 3x volume spike
+      min_sentiment: 0.6              # >= 0.6 sentiment (if available)
+    medium:
+      squeeze_score: 0.6              # >= 0.6 for medium alert
+      min_si_percent: 0.15            # >= 15% short interest
+      min_volume_spike: 2.0           # >= 2x volume spike
+      min_sentiment: 0.4              # >= 0.4 sentiment
+    low:
+      squeeze_score: 0.4              # >= 0.4 for low alert
+      min_si_percent: 0.10            # >= 10% short interest
+      min_volume_spike: 1.5           # >= 1.5x volume spike
+      min_sentiment: 0.3              # >= 0.3 sentiment
+
+  # Cooldown Periods (in hours)
+  cooldown:
+    high_alert: 24                    # 24 hours for high alerts
+    medium_alert: 48                  # 48 hours for medium alerts
+    low_alert: 72                     # 72 hours for low alerts
+
+  # Notification Channels
+  channels:
+    telegram_enabled: true            # Send Telegram notifications
+    email_enabled: false              # Send email notifications
+    webhook_enabled: false            # Send webhook notifications
+
+# Ad-hoc Candidate Management
+adhoc:
+  max_active_candidates: 20           # Maximum concurrent ad-hoc candidates
+  default_expiry_days: 30             # Default expiry for ad-hoc candidates
+  allow_auto_promotion: true          # Auto-promote to screener if scores well
+
+# Reporting Configuration
+reporting:
+  # Weekly Summary Report
+  weekly_summary:
+    enabled: true                     # Generate weekly summary
+    day_of_week: "sunday"             # Day to generate report
+    top_performers: 10                # Show top 10 performers
+    include_charts: true              # Include performance charts
+    formats:
+      - "html"                        # HTML format
+      - "csv"                         # CSV format
+
+  # Daily Report
+  daily_report:
+    top_scores: 10                    # Show top 10 by score
+    include_trends: true              # Include trend analysis
+    formats:
+      - "html"                        # HTML format only
+
+# Performance & API Settings
+performance:
+  # API Rate Limits
+  api_rate_limits:
+    fmp_calls_per_minute: 250         # FMP: 250/min (buffer from 300 limit)
+    finnhub_calls_per_minute: 50      # Finnhub: 50/min (buffer from 60 limit)
+
+  # Database Settings
+  database:
+    batch_size: 100                   # Batch size for DB operations
+    connection_timeout: 30            # Connection timeout (seconds)
+    query_timeout: 60                 # Query timeout (seconds)
+
+  # Error Handling
+  error_handling:
+    max_retries: 3                    # Maximum retry attempts
+    backoff_factor: 2.0               # Exponential backoff factor
+    circuit_breaker_threshold: 0.5    # Circuit breaker threshold (50% failure rate)
+
+# Scoring Engine Configuration
+scoring:
+  normalization_method: "minmax"      # Normalization method: "minmax" or "sigmoid"
+  score_bounds: [0.0, 1.0]            # Score bounds (min, max)
+  weight_validation: true             # Validate that weights sum to 1.0

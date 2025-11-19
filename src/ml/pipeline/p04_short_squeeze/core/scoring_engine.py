@@ -166,7 +166,10 @@ class ScoringEngine:
             'volume_spike': transient.volume_spike,
             'sentiment_24h': transient.sentiment_24h,
             'call_put_ratio': transient.call_put_ratio or 0.0,  # Default to 0 if None
-            'borrow_fee': transient.borrow_fee_pct or 0.0  # Default to 0 if None
+            'borrow_fee': transient.borrow_fee_pct or 0.0,  # Default to 0 if None
+            'virality_index': transient.virality_index,
+            'mentions_growth_7d': transient.mentions_growth_7d or 0.0,  # Default to 0 if None
+            'bot_pct': transient.bot_pct
         }
 
         return metrics
@@ -221,7 +224,10 @@ class ScoringEngine:
             'volume_spike': (1.0, 10.0),  # 1x to 10x volume spike
             'sentiment_24h': (-1.0, 1.0),  # Already normalized
             'call_put_ratio': (0.0, 5.0),  # 0 to 5 call/put ratio
-            'borrow_fee': (0.0, 50.0)  # 0% to 50% borrow fee
+            'borrow_fee': (0.0, 50.0),  # 0% to 50% borrow fee
+            'virality_index': (0.0, 1.0),  # Already normalized
+            'mentions_growth_7d': (-1.0, 10.0),  # -100% to +1000% growth
+            'bot_pct': (0.0, 1.0)  # Already normalized (inverse)
         }
 
         if metric_name not in ranges:
@@ -230,10 +236,18 @@ class ScoringEngine:
 
         min_val, max_val = ranges[metric_name]
 
-        # Handle sentiment which is already normalized
+        # Handle already normalized metrics
         if metric_name == 'sentiment_24h':
             # Convert from [-1, 1] to [0, 1]
             return (value + 1.0) / 2.0
+        elif metric_name in ['virality_index', 'bot_pct']:
+            # Already in [0, 1] range
+            return value
+        elif metric_name == 'mentions_growth_7d':
+            # Growth metric: 0 = no change, positive = growth, negative = decline
+            # Normalize so 0 growth = 0.5, 10x growth = 1.0, -100% = 0.0
+            normalized = (value - min_val) / (max_val - min_val)
+            return max(0.0, min(1.0, normalized))
 
         # Standard min-max normalization
         normalized = (value - min_val) / (max_val - min_val)
@@ -403,3 +417,56 @@ class ScoringEngine:
                 'final_score': self.config.score_bounds[0],
                 'error': str(e)
             }
+
+    def calculate_virality_score_with_bot_penalty(self, virality_index: float, bot_pct: float) -> float:
+        """
+        Calculate virality score with bot activity penalty.
+
+        Higher bot percentage reduces the effective virality score.
+
+        Args:
+            virality_index: Raw virality index (0-1)
+            bot_pct: Bot percentage (0-1)
+
+        Returns:
+            Adjusted virality score (0-1)
+        """
+        # Apply bot penalty: reduce score proportionally to bot activity
+        # Max 60% penalty for 100% bot activity
+        bot_penalty = 1.0 - (bot_pct * 0.6)
+
+        adjusted_score = virality_index * bot_penalty
+
+        return max(0.0, min(1.0, adjusted_score))
+
+    def apply_mentions_growth_boost(self, base_score: float, mentions_growth_7d: float) -> float:
+        """
+        Apply boost to final score based on mention growth.
+
+        Rapid mention growth is a strong early indicator of squeeze activity.
+
+        Args:
+            base_score: Base calculated score (0-1)
+            mentions_growth_7d: 7-day mention growth ratio (e.g., 3.0 = 300% growth)
+
+        Returns:
+            Boosted score (0-1)
+        """
+        if mentions_growth_7d <= 1.0:
+            # No boost for growth <= 100%
+            return base_score
+
+        # Apply progressive boost for high growth
+        # 2x growth = +5% boost, 5x = +10%, 10x+ = +15%
+        if mentions_growth_7d >= 10.0:
+            boost = 0.15
+        elif mentions_growth_7d >= 5.0:
+            boost = 0.10
+        elif mentions_growth_7d >= 3.0:
+            boost = 0.07
+        else:  # 1x - 3x
+            boost = 0.05
+
+        boosted_score = base_score * (1.0 + boost)
+
+        return min(1.0, boosted_score)  # Cap at 1.0

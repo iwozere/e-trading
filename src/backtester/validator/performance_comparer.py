@@ -96,6 +96,46 @@ def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> f
     return numerator / denominator
 
 
+def safe_float(value, default: float = 0.0) -> float:
+    """
+    Safely convert a value to float, handling None, 'None', empty strings, and other edge cases.
+
+    Args:
+        value: Value to convert to float
+        default: Default value if conversion fails
+
+    Returns:
+        Float value or default
+    """
+    if value is None or value == '' or value == 'None' or value == 'null':
+        return default
+
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_int(value, default: int = 0) -> int:
+    """
+    Safely convert a value to int, handling None, 'None', empty strings, and other edge cases.
+
+    Args:
+        value: Value to convert to int
+        default: Default value if conversion fails
+
+    Returns:
+        Int value or default
+    """
+    if value is None or value == '' or value == 'None' or value == 'null':
+        return default
+
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def calculate_degradation_metrics(is_result: dict, oos_result: dict) -> dict:
     """
     Calculate degradation and robustness metrics between IS and OOS results.
@@ -108,13 +148,13 @@ def calculate_degradation_metrics(is_result: dict, oos_result: dict) -> dict:
         dict: Calculated metrics
     """
     # Extract IS metrics
-    is_profit = is_result.get('total_profit_with_commission', 0.0)
-    is_trades = is_result.get('total_trades', 0)
+    is_profit = safe_float(is_result.get('total_profit_with_commission'))
+    is_trades = safe_int(is_result.get('total_trades'))
     is_analyzers = is_result.get('analyzers', {})
 
     # Extract OOS metrics
-    oos_profit = oos_result.get('total_profit_with_commission', 0.0)
-    oos_trades = oos_result.get('total_trades', 0)
+    oos_profit = safe_float(oos_result.get('total_profit_with_commission'))
+    oos_trades = safe_int(oos_result.get('total_trades'))
     oos_analyzers = oos_result.get('analyzers', {})
 
     # Profit degradation
@@ -122,23 +162,40 @@ def calculate_degradation_metrics(is_result: dict, oos_result: dict) -> dict:
     profit_degradation_pct = ((is_profit - oos_profit) / abs(is_profit) * 100) if is_profit != 0 else 0.0
 
     # Win rate
-    is_win_rate = is_analyzers.get('winrate', {}).get('winrate', 0.0)
-    oos_win_rate = oos_analyzers.get('winrate', {}).get('winrate', 0.0)
+    is_winrate_data = is_analyzers.get('winrate', {})
+    is_win_rate = safe_float(is_winrate_data.get('winrate') if isinstance(is_winrate_data, dict) else is_winrate_data)
+
+    oos_winrate_data = oos_analyzers.get('winrate', {})
+    oos_win_rate = safe_float(oos_winrate_data.get('winrate') if isinstance(oos_winrate_data, dict) else oos_winrate_data)
+
     win_rate_degradation = abs(is_win_rate - oos_win_rate)
 
     # Sharpe ratio
-    is_sharpe = is_analyzers.get('sharpe', {}).get('sharperatio', 0.0)
-    oos_sharpe = oos_analyzers.get('sharpe', {}).get('sharperatio', 0.0)
+    is_sharpe_data = is_analyzers.get('sharpe', {})
+    is_sharpe = safe_float(is_sharpe_data.get('sharperatio') if isinstance(is_sharpe_data, dict) else is_sharpe_data)
+
+    oos_sharpe_data = oos_analyzers.get('sharpe', {})
+    oos_sharpe = safe_float(oos_sharpe_data.get('sharperatio') if isinstance(oos_sharpe_data, dict) else oos_sharpe_data)
+
     sharpe_degradation = safe_divide(is_sharpe - oos_sharpe, abs(is_sharpe), default=0.0) if is_sharpe != 0 else 0.0
 
     # Drawdown
-    is_max_dd = is_analyzers.get('drawdown', {}).get('max', {}).get('drawdown', 0.0)
-    oos_max_dd = oos_analyzers.get('drawdown', {}).get('max', {}).get('drawdown', 0.0)
+    is_drawdown_data = is_analyzers.get('drawdown', {})
+    is_max_data = is_drawdown_data.get('max', {}) if isinstance(is_drawdown_data, dict) else {}
+    is_max_dd = safe_float(is_max_data.get('drawdown') if isinstance(is_max_data, dict) else is_max_data)
+
+    oos_drawdown_data = oos_analyzers.get('drawdown', {})
+    oos_max_data = oos_drawdown_data.get('max', {}) if isinstance(oos_drawdown_data, dict) else {}
+    oos_max_dd = safe_float(oos_max_data.get('drawdown') if isinstance(oos_max_data, dict) else oos_max_data)
+
     drawdown_increase = oos_max_dd - is_max_dd
 
     # Profit factor
-    is_profit_factor = is_analyzers.get('profit_factor', {}).get('profit_factor', 0.0)
-    oos_profit_factor = oos_analyzers.get('profit_factor', {}).get('profit_factor', 0.0)
+    is_pf_data = is_analyzers.get('profit_factor', {})
+    is_profit_factor = safe_float(is_pf_data.get('profit_factor') if isinstance(is_pf_data, dict) else is_pf_data)
+
+    oos_pf_data = oos_analyzers.get('profit_factor', {})
+    oos_profit_factor = safe_float(oos_pf_data.get('profit_factor') if isinstance(oos_pf_data, dict) else oos_pf_data)
 
     # Trade count consistency
     trade_count_ratio = safe_divide(oos_trades, is_trades, default=0.0)
@@ -160,8 +217,8 @@ def calculate_degradation_metrics(is_result: dict, oos_result: dict) -> dict:
     robustness_score = 1.0 - overfitting_score
 
     return {
-        'is_profit': is_profit,
-        'oos_profit': oos_profit,
+        'is_total_profit': is_profit,
+        'oos_total_profit': oos_profit,
         'profit_degradation_ratio': profit_degradation_ratio,
         'profit_degradation_pct': profit_degradation_pct,
         'is_trade_count': is_trades,
@@ -493,7 +550,7 @@ def main():
 
     # Load IS and OOS results
     _logger.info("Loading in-sample (IS) results...")
-    is_results_by_year = load_all_results("results/optimization")
+    is_results_by_year = load_all_results("results/walk_forward_reports")
 
     _logger.info("Loading out-of-sample (OOS) results...")
     oos_results_by_year = load_all_results("results/validation")
@@ -547,8 +604,8 @@ def main():
             _logger.debug(
                 "  Compared: %s | IS Profit: %.2f | OOS Profit: %.2f | Degradation: %.2f%%",
                 strategy_key,
-                metrics['is_profit'],
-                metrics['oos_profit'],
+                metrics['is_total_profit'],
+                metrics['oos_total_profit'],
                 metrics['profit_degradation_pct']
             )
 

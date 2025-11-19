@@ -5,7 +5,7 @@ This module defines type-safe configuration classes for all pipeline components.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
@@ -205,6 +205,71 @@ class ScoringConfig:
 
 
 @dataclass
+class SentimentProviders:
+    """Configuration for sentiment data providers."""
+    stocktwits: bool = True
+    reddit_pushshift: bool = True
+    news: bool = True
+    google_trends: bool = False  # Optional, conservative rate limit
+    twitter: bool = False  # Requires API access
+    discord: bool = False  # Requires channel access
+    hf_enabled: bool = False  # ML enhancement (CPU intensive)
+
+
+@dataclass
+class SentimentBatching:
+    """Configuration for sentiment batch processing."""
+    concurrency: int = 8  # Parallel requests
+    rate_limit_delay_sec: float = 0.3
+    batch_size: int = 50  # Tickers per batch
+
+
+@dataclass
+class SentimentWeights:
+    """Configuration for sentiment source weighting."""
+    stocktwits: float = 0.4  # High quality, trading-focused
+    reddit: float = 0.3  # Good coverage, some noise
+    news: float = 0.2  # Credible but lagging
+    google_trends: float = 0.1  # Supplementary
+    heuristic_vs_hf: float = 0.5  # 50/50 if HF enabled
+
+
+@dataclass
+class SentimentThresholds:
+    """Configuration for sentiment quality thresholds."""
+    min_mentions_for_hf: int = 20  # Only use ML if sufficient data
+    bot_pct_warning: float = 0.5  # Warn if >50% bot activity
+    min_data_quality_sources: int = 1  # Require at least 1 source
+
+
+@dataclass
+class SentimentCache:
+    """Configuration for sentiment caching."""
+    enabled: bool = True
+    ttl_seconds: int = 1800  # 30 minutes
+    redis_enabled: bool = False  # Use in-memory cache by default
+
+
+@dataclass
+class SentimentMonitoring:
+    """Configuration for sentiment monitoring."""
+    log_failures: bool = True
+    alert_on_all_providers_down: bool = True
+    performance_profiling: bool = False
+
+
+@dataclass
+class SentimentConfig:
+    """Configuration for sentiment module integration."""
+    providers: SentimentProviders = field(default_factory=SentimentProviders)
+    batching: SentimentBatching = field(default_factory=SentimentBatching)
+    weights: SentimentWeights = field(default_factory=SentimentWeights)
+    thresholds: SentimentThresholds = field(default_factory=SentimentThresholds)
+    cache: SentimentCache = field(default_factory=SentimentCache)
+    monitoring: SentimentMonitoring = field(default_factory=SentimentMonitoring)
+
+
+@dataclass
 class PipelineConfig:
     """Main configuration class for the Short Squeeze Detection Pipeline."""
     scheduling: SchedulingConfig = field(default_factory=SchedulingConfig)
@@ -215,6 +280,7 @@ class PipelineConfig:
     reporting: ReportConfig = field(default_factory=ReportConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
+    sentiment: SentimentConfig = field(default_factory=SentimentConfig)
 
     # Runtime configuration
     run_id: Optional[str] = None

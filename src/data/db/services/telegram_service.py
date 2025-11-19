@@ -85,6 +85,7 @@ class TelegramService(BaseDBService):
 
         return {
             "telegram_user_id": telegram_user_id,
+            "email": profile.get("email"),
             "approved": profile.get("approved", False),
             "verified": profile.get("verified", False),
             "max_alerts": profile.get("max_alerts"),

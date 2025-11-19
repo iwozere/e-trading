@@ -7,7 +7,7 @@ These models are used for data validation and business logic, separate from data
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -50,6 +50,13 @@ class TransientMetrics:
     sentiment_24h: float
     borrow_fee_pct: Optional[float]
 
+    # Enhanced sentiment metrics (multi-source)
+    mentions_24h: int = 0
+    mentions_growth_7d: Optional[float] = None
+    virality_index: float = 0.0
+    bot_pct: float = 0.0
+    sentiment_data_quality: Dict[str, Any] = field(default_factory=dict)
+
     def __post_init__(self):
         """Validate transient metrics after initialization."""
         if self.volume_spike < 0:
@@ -60,6 +67,16 @@ class TransientMetrics:
             raise ValueError("Sentiment must be between -1 and 1")
         if self.borrow_fee_pct is not None and self.borrow_fee_pct < 0:
             raise ValueError("Borrow fee percentage must be non-negative")
+
+        # Validate new sentiment metrics
+        if self.mentions_24h < 0:
+            raise ValueError("Mentions count must be non-negative")
+        if self.virality_index < 0 or self.virality_index > 1:
+            raise ValueError("Virality index must be between 0 and 1")
+        if self.bot_pct < 0 or self.bot_pct > 1:
+            raise ValueError("Bot percentage must be between 0 and 1")
+        if self.mentions_growth_7d is not None and self.mentions_growth_7d < -1:
+            raise ValueError("Mentions growth must be >= -1 (cannot shrink more than 100%)")
 
 
 @dataclass
@@ -148,6 +165,13 @@ class TransientMetricsCreate(BaseModel):
     call_put_ratio: Optional[float] = Field(None, ge=0)
     sentiment_24h: float = Field(..., ge=-1, le=1)
     borrow_fee_pct: Optional[float] = Field(None, ge=0)
+
+    # Enhanced sentiment metrics
+    mentions_24h: int = Field(default=0, ge=0)
+    mentions_growth_7d: Optional[float] = Field(default=None, ge=-1)
+    virality_index: float = Field(default=0.0, ge=0, le=1)
+    bot_pct: float = Field(default=0.0, ge=0, le=1)
+    sentiment_data_quality: Dict[str, Any] = Field(default_factory=dict)
 
 
 class CandidateCreate(BaseModel):

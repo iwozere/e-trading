@@ -189,13 +189,13 @@ walk_forward_optimizer.py
 
 walk_forward_validator.py
     │
-    ├─> Reads: results/optimization/{year}/*.json
+    ├─> Reads: results/walk_forward_reports/{year}/*.json
     ├─> Uses: custom_optimizer.py (for backtesting)
     └─> Writes: results/validation/{year}/*.json
 
 performance_comparer.py
     │
-    ├─> Reads: results/optimization/{year}/*.json
+    ├─> Reads: results/walk_forward_reports/{year}/*.json
     ├─> Reads: results/validation/{year}/*.json
     └─> Writes: results/walk_forward_reports/*.{csv,json}
 ```

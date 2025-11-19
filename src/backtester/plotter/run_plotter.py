@@ -170,12 +170,13 @@ class ResultPlotter:
                         df["close"], period
                     )
 
-                elif indicator == "bollinger_bands":
+                elif indicator in ("bollinger_bands", "bbands"):
                     period = self._get_param_value(strategy_params, "bb_period", 20)
                     std_dev = self._get_param_value(strategy_params, "bb_std", 2)
-                    calculated_indicators["bollinger_bands"] = (
-                        self._calculate_bollinger_bands(df["close"], period, std_dev)
-                    )
+                    # Store with both names for compatibility
+                    bb_data = self._calculate_bollinger_bands(df["close"], period, std_dev)
+                    calculated_indicators["bollinger_bands"] = bb_data
+                    calculated_indicators["bbands"] = bb_data
 
                 elif indicator == "ichimoku":
                     tenkan_period = self._get_param_value(
@@ -418,7 +419,7 @@ class ResultPlotter:
         # Plot overlay indicators on price chart
         for indicator_name, indicator_data in indicators.items():
             if subplot_layout.get(indicator_name) == "overlay":
-                if indicator_name == "bollinger_bands":
+                if indicator_name in ("bollinger_bands", "bbands"):
                     ax_price.plot(
                         df.index,
                         indicator_data["upper"],

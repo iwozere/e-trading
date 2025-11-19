@@ -41,11 +41,13 @@ results/
 
 src/backtester/
 ├── optimizer/
-│   ├── walk_forward_optimizer.py    # Step 1: IS optimization
-│   └── walk_forward_analyzer.py     # (Future: Report generator)
-└── validator/
-    ├── walk_forward_validator.py    # Step 2: OOS validation
-    └── performance_comparer.py       # Step 3: Comparison & reports
+│   └── walk_forward_optimizer.py    # Step 1: IS optimization
+├── validator/
+│   ├── walk_forward_validator.py    # Step 2: OOS validation
+│   └── performance_comparer.py      # Step 3: Comparison & reports
+└── plotter/
+    ├── run_plotter.py               # Plot all strategies (use sparingly)
+    └── plot_top_strategies.py       # Step 4: Plot top performers (recommended)
 ```
 
 ## Quick Start
@@ -129,6 +131,48 @@ results/walk_forward_reports/
 ├── degradation_analysis.json       # Summary statistics
 └── robustness_summary.csv          # Aggregated metrics
 ```
+
+### Step 5: Visualize Top Strategies (Optional)
+
+After generating comparison reports, you can create plots for the best performing strategies.
+
+#### Option A: Plot Top Strategies Automatically
+
+```bash
+python src/backtester/plotter/plot_top_strategies.py
+```
+
+This will:
+- Read `performance_comparison.csv`
+- Select top 5 strategies by IS profit
+- Select top 5 strategies by robustness score
+- Create plots for each strategy with indicators, trades, and equity curve
+- Generate a summary report
+
+**Expected Output:**
+```
+results/plots/top_strategies/
+├── top_is_profit/                  # Top 5 by in-sample profit
+│   ├── BTCUSDT_4h_RSI_ATR_2021.png
+│   ├── ETHUSDT_1h_BB_MACross_2020.png
+│   └── ...
+├── top_robustness/                 # Top 5 by robustness score
+│   ├── LTCUSDT_4h_RSIVolume_FixedRatio_2022.png
+│   └── ...
+└── selection_summary.txt           # Details of selected strategies
+```
+
+#### Option B: Plot All Optimization Results
+
+If you want to plot ALL optimization results (not just top performers):
+
+```bash
+python src/backtester/plotter/run_plotter.py
+```
+
+**Note:** This will create plots for EVERY strategy result, which can be hundreds of files. Use this only if you need comprehensive visualization.
+
+**Recommended:** Use **Option A** (`plot_top_strategies.py`) to focus on the most promising strategies.
 
 ## Understanding the Reports
 
@@ -282,11 +326,15 @@ nano config/walk_forward/walk_forward_config.json
 python src/backtester/optimizer/walk_forward_optimizer.py
 python src/backtester/validator/walk_forward_validator.py
 python src/backtester/validator/performance_comparer.py
+python src/backtester/plotter/plot_top_strategies.py
 
 # 3. Review top strategies
 cat results/walk_forward_reports/degradation_analysis.json | grep -A 5 "top_strategies"
+cat results/plots/top_strategies/selection_summary.txt
 
 # 4. Open CSV in Excel and filter for robustness_score > 0.6
+
+# 5. View plots in results/plots/top_strategies/
 ```
 
 ### Example 2: Test Single Strategy
@@ -428,14 +476,71 @@ For questions or issues:
 ## Summary Commands
 
 ```bash
-# Full pipeline (runs all 3 steps sequentially)
+# Full pipeline (runs all steps sequentially)
 python src/backtester/optimizer/walk_forward_optimizer.py && \
 python src/backtester/validator/walk_forward_validator.py && \
-python src/backtester/validator/performance_comparer.py
+python src/backtester/validator/performance_comparer.py && \
+python src/backtester/plotter/plot_top_strategies.py
 
 # Review results
 cat results/walk_forward_reports/degradation_analysis.json
 head -20 results/walk_forward_reports/robustness_summary.csv
+cat results/plots/top_strategies/selection_summary.txt
+```
+
+## Plotter Scripts Guide
+
+### When to Use Each Plotter
+
+#### 1. `plot_top_strategies.py` ⭐ **RECOMMENDED**
+
+**Use when:** You want to visualize only the best performing strategies
+
+**Pros:**
+- Automatically selects top performers
+- Fast (plots only 5-10 strategies)
+- Creates organized output with categories
+- Generates summary report
+- Perfect for decision-making
+
+**Example:**
+```bash
+python src/backtester/plotter/plot_top_strategies.py
+```
+
+#### 2. `run_plotter.py` ⚠️ **USE WITH CAUTION**
+
+**Use when:** You need to plot ALL optimization results
+
+**Pros:**
+- Comprehensive visualization
+- Useful for debugging or detailed analysis
+
+**Cons:**
+- Very slow (can take hours for 100+ strategies)
+- Creates hundreds of PNG files
+- Requires significant disk space
+- Overwhelms with too much data
+
+**Example:**
+```bash
+# Plot all results from a specific directory
+python src/backtester/plotter/run_plotter.py
+```
+
+**⚠️ Warning:** Only use this for small datasets or when you need complete visualization.
+
+### Customizing Top Strategies Selection
+
+Edit `plot_top_strategies.py` to change selection criteria:
+
+```python
+# Change number of top strategies (default: 5)
+selections = select_top_strategies(df, n=10)
+
+# Add custom selection criteria
+# For example, top by OOS profit instead of IS profit:
+top_by_oos_profit = df.nlargest(n, 'oos_total_profit')
 ```
 
 ---

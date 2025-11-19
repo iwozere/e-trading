@@ -18,12 +18,20 @@ sys.path.append(str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
-from src.ml.pipeline.p04_short_squeeze.config.data_classes import DeepScanConfig
+from src.ml.pipeline.p04_short_squeeze.config.data_classes import DeepScanConfig, SentimentConfig
 from src.ml.pipeline.p04_short_squeeze.core.models import (
     Candidate, TransientMetrics, ScoredCandidate, CandidateSource
 )
 from src.data.db.core.database import session_scope
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
+
+# Sentiment module import (with feature flag)
+try:
+    from src.common.sentiments.collect_sentiment_async import collect_sentiment_batch
+    SENTIMENT_MODULE_AVAILABLE = True
+except ImportError:
+    _logger.warning("Sentiment module not available, will use legacy Finnhub sentiment")
+    SENTIMENT_MODULE_AVAILABLE = False
 
 _logger = setup_logger(__name__)
 
@@ -49,7 +57,8 @@ class DailyDeepScan:
 
     def __init__(self, fmp_downloader: FMPDataDownloader,
                  finnhub_downloader: FinnhubDataDownloader,
-                 config: DeepScanConfig):
+                 config: DeepScanConfig,
+                 sentiment_config: Optional[SentimentConfig] = None):
         """
         Initialize Daily Deep Scan.
 
@@ -57,13 +66,24 @@ class DailyDeepScan:
             fmp_downloader: FMP data downloader instance
             finnhub_downloader: Finnhub data downloader instance
             config: Deep scan configuration with metrics and scoring weights
+            sentiment_config: Optional sentiment module configuration
         """
         self.fmp_downloader = fmp_downloader
         self.finnhub_downloader = finnhub_downloader
         self.config = config
+        self.sentiment_config = sentiment_config
         self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        _logger.info("Daily Deep Scan initialized with run_id=%s", self.run_id)
+        # Feature flag for enhanced sentiment
+        self.use_enhanced_sentiment = (
+            SENTIMENT_MODULE_AVAILABLE and
+            sentiment_config is not None
+        )
+
+        if self.use_enhanced_sentiment:
+            _logger.info("Daily Deep Scan initialized with enhanced multi-source sentiment (run_id=%s)", self.run_id)
+        else:
+            _logger.info("Daily Deep Scan initialized with legacy Finnhub sentiment (run_id=%s)", self.run_id)
 
     def run_deep_scan(self, candidates: Optional[List[Candidate]] = None) -> DeepScanResults:
         """
@@ -356,6 +376,132 @@ class DailyDeepScan:
                           candidate.ticker, e)
             return candidate
 
+    async def _get_historical_mentions_async(self, ticker: str) -> Optional[float]:
+        """
+        Get 7-day average mention count for growth calculation.
+
+        Args:
+            ticker: Stock ticker symbol
+
+        Returns:
+            Average mentions over past 7 days, or None if insufficient data
+        """
+        try:
+            with session_scope() as session:
+                service = ShortSqueezeService(session)
+
+                # Query ss_sentiment_history for 7-day average
+                query = """
+                    SELECT AVG(mentions_count) as avg_mentions
+                    FROM ss_sentiment_history
+                    WHERE ticker = :ticker
+                    AND date >= CURRENT_DATE - INTERVAL '7 days'
+                    AND date < CURRENT_DATE
+                    HAVING COUNT(*) >= 3
+                """
+
+                from sqlalchemy import text
+                result = session.execute(text(query), {'ticker': ticker}).fetchone()
+
+                if result and result.avg_mentions:
+                    return float(result.avg_mentions)
+                return None
+
+        except Exception as e:
+            _logger.warning("Failed to get historical mentions for %s: %s", ticker, e)
+            return None
+
+    def _collect_batch_sentiment(self, candidates: List[Candidate],
+                                 metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Collect sentiment data for a batch of candidates using multi-source sentiment module.
+
+        Args:
+            candidates: List of candidates to collect sentiment for
+            metrics: Data quality metrics dictionary to update
+
+        Returns:
+            Dictionary mapping ticker -> SentimentFeatures
+        """
+        try:
+            import asyncio
+
+            ticker_list = [c.ticker for c in candidates]
+            _logger.info("Collecting batch sentiment for %d tickers...", len(ticker_list))
+
+            # Build sentiment config from dataclass
+            sentiment_config_dict = None
+            if self.sentiment_config:
+                sentiment_config_dict = {
+                    'providers': {
+                        'stocktwits': self.sentiment_config.providers.stocktwits,
+                        'reddit_pushshift': self.sentiment_config.providers.reddit_pushshift,
+                        'news': self.sentiment_config.providers.news,
+                        'google_trends': self.sentiment_config.providers.google_trends,
+                        'twitter': self.sentiment_config.providers.twitter,
+                        'discord': self.sentiment_config.providers.discord,
+                        'hf_enabled': self.sentiment_config.providers.hf_enabled
+                    },
+                    'batching': {
+                        'concurrency': self.sentiment_config.batching.concurrency,
+                        'rate_limit_delay_sec': self.sentiment_config.batching.rate_limit_delay_sec
+                    },
+                    'weights': {
+                        'stocktwits': self.sentiment_config.weights.stocktwits,
+                        'reddit': self.sentiment_config.weights.reddit,
+                        'news': self.sentiment_config.weights.news,
+                        'google_trends': self.sentiment_config.weights.google_trends,
+                        'heuristic_vs_hf': self.sentiment_config.weights.heuristic_vs_hf
+                    },
+                    'cache': {
+                        'enabled': self.sentiment_config.cache.enabled,
+                        'ttl_seconds': self.sentiment_config.cache.ttl_seconds,
+                        'redis_enabled': self.sentiment_config.cache.redis_enabled
+                    }
+                }
+
+            # Run async sentiment collection
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                sentiment_map = loop.run_until_complete(
+                    collect_sentiment_batch(
+                        tickers=ticker_list,
+                        lookback_hours=24,
+                        config=sentiment_config_dict,
+                        history_lookup=self._get_historical_mentions_async,
+                        output_format="dataclass"
+                    )
+                )
+            finally:
+                loop.close()
+
+            # Count successes and update metrics
+            success_count = sum(1 for v in sentiment_map.values() if v)
+            _logger.info("Batch sentiment collection complete: %d/%d successful",
+                        success_count, len(ticker_list))
+
+            # Log notable signals
+            for ticker, features in sentiment_map.items():
+                if features:
+                    if features.virality_index > 0.7:
+                        _logger.info("  %s: HIGH VIRALITY detected (%.2f)", ticker, features.virality_index)
+                    if features.mentions_growth_7d and features.mentions_growth_7d > 2.0:
+                        _logger.info("  %s: MENTION SURGE detected (+%.0f%%)",
+                                   ticker, features.mentions_growth_7d * 100)
+                    if features.bot_pct > 0.5:
+                        _logger.warning("  %s: High bot activity detected (%.0f%%)",
+                                      ticker, features.bot_pct * 100)
+
+            # Update metrics (API calls are harder to track in batch, use estimate)
+            metrics['api_calls_sentiment_batch'] = metrics.get('api_calls_sentiment_batch', 0) + 1
+
+            return sentiment_map
+
+        except Exception as e:
+            _logger.exception("Batch sentiment collection failed: %s", e)
+            return {}  # Return empty map, will use fallback
+
     def _process_batch(self, candidates: List[Candidate],
                       metrics: Dict[str, Any]) -> List[ScoredCandidate]:
         """
@@ -371,9 +517,18 @@ class DailyDeepScan:
         try:
             scored_candidates = []
 
+            # BATCH SENTIMENT COLLECTION (if enhanced sentiment enabled)
+            sentiment_map = {}
+            if self.use_enhanced_sentiment:
+                sentiment_map = self._collect_batch_sentiment(candidates, metrics)
+
+            # Process each candidate with pre-fetched sentiment data
             for candidate in candidates:
                 try:
-                    scored_candidate = self._scan_candidate(candidate, metrics)
+                    # Pass sentiment data to scanner
+                    scored_candidate = self._scan_candidate(
+                        candidate, metrics, sentiment_map.get(candidate.ticker)
+                    )
                     if scored_candidate:
                         scored_candidates.append(scored_candidate)
                         metrics['successful_scans'] += 1
@@ -392,13 +547,15 @@ class DailyDeepScan:
             return []
 
     def _scan_candidate(self, candidate: Candidate,
-                       metrics: Dict[str, Any]) -> Optional[ScoredCandidate]:
+                       metrics: Dict[str, Any],
+                       sentiment_features: Optional[Any] = None) -> Optional[ScoredCandidate]:
         """
         Perform deep scan on a single candidate.
 
         Args:
             candidate: Candidate to scan
             metrics: Data quality metrics dictionary to update
+            sentiment_features: Optional pre-fetched sentiment features from batch collection
 
         Returns:
             ScoredCandidate if successful, None otherwise
@@ -410,8 +567,8 @@ class DailyDeepScan:
             # Enhance candidate with latest FINRA data from database
             enhanced_candidate = self._enhance_candidate_with_finra_data(candidate, metrics)
 
-            # Calculate transient metrics
-            transient_metrics = self.calculate_transient_metrics(ticker, metrics)
+            # Calculate transient metrics (with pre-fetched sentiment if available)
+            transient_metrics = self.calculate_transient_metrics(ticker, metrics, sentiment_features)
 
             if not transient_metrics:
                 _logger.warning("Failed to calculate transient metrics for %s", ticker)
@@ -430,9 +587,9 @@ class DailyDeepScan:
                 alert_level=None  # Will be determined by alert engine
             )
 
-            _logger.debug("Scanned %s: squeeze_score=%.3f, volume_spike=%.2f, sentiment=%.2f, SI=%.1f%%, DTC=%.1f",
+            _logger.debug("Scanned %s: squeeze_score=%.3f, volume=%.2f, sentiment=%.2f, virality=%.2f, SI=%.1f%%, DTC=%.1f",
                          ticker, squeeze_score, transient_metrics.volume_spike,
-                         transient_metrics.sentiment_24h,
+                         transient_metrics.sentiment_24h, transient_metrics.virality_index,
                          enhanced_candidate.structural_metrics.short_interest_pct * 100,
                          enhanced_candidate.structural_metrics.days_to_cover)
 
@@ -443,13 +600,15 @@ class DailyDeepScan:
             return None
 
     def calculate_transient_metrics(self, ticker: str,
-                                   metrics: Dict[str, Any]) -> Optional[TransientMetrics]:
+                                   metrics: Dict[str, Any],
+                                   sentiment_features: Optional[Any] = None) -> Optional[TransientMetrics]:
         """
         Calculate transient metrics for a ticker.
 
         Args:
             ticker: Ticker symbol
             metrics: Data quality metrics dictionary to update
+            sentiment_features: Optional pre-fetched sentiment features from batch collection
 
         Returns:
             TransientMetrics if successful, None otherwise
@@ -461,11 +620,29 @@ class DailyDeepScan:
                 metrics['valid_volume_data'] += 1
                 metrics['api_calls_fmp'] += 1
 
-            # Get sentiment score
-            sentiment_24h = self._get_sentiment_score(ticker)
-            if sentiment_24h is not None:
+            # Enhanced sentiment metrics (if available from batch collection)
+            if sentiment_features:
+                sentiment_24h = sentiment_features.sentiment_normalized
+                mentions_24h = sentiment_features.mentions_24h
+                mentions_growth_7d = sentiment_features.mentions_growth_7d
+                virality_index = sentiment_features.virality_index
+                bot_pct = sentiment_features.bot_pct
+                sentiment_data_quality = sentiment_features.data_quality
+
                 metrics['valid_sentiment_data'] += 1
-                metrics['api_calls_finnhub'] += 1
+                # API calls already counted in batch collection
+            else:
+                # Fallback to legacy Finnhub sentiment
+                sentiment_24h = self._get_sentiment_score(ticker)
+                mentions_24h = 0
+                mentions_growth_7d = None
+                virality_index = 0.0
+                bot_pct = 0.0
+                sentiment_data_quality = {}
+
+                if sentiment_24h is not None:
+                    metrics['valid_sentiment_data'] += 1
+                    metrics['api_calls_finnhub'] += 1
 
             # Get call/put ratio
             call_put_ratio = self._get_call_put_ratio(ticker)
@@ -479,12 +656,18 @@ class DailyDeepScan:
                 metrics['valid_borrow_rates'] += 1
                 metrics['api_calls_finnhub'] += 1
 
-            # Create transient metrics (use defaults for missing data)
+            # Create transient metrics with enhanced sentiment fields
             transient_metrics = TransientMetrics(
                 volume_spike=volume_spike or 1.0,  # Default to 1.0 (no spike)
                 call_put_ratio=call_put_ratio,
                 sentiment_24h=sentiment_24h or 0.0,  # Default to neutral
-                borrow_fee_pct=borrow_fee_pct
+                borrow_fee_pct=borrow_fee_pct,
+                # Enhanced sentiment metrics
+                mentions_24h=mentions_24h,
+                mentions_growth_7d=mentions_growth_7d,
+                virality_index=virality_index,
+                bot_pct=bot_pct,
+                sentiment_data_quality=sentiment_data_quality
             )
 
             return transient_metrics

@@ -107,7 +107,7 @@ def run_oos_backtest(
     data_file: str,
     best_params: dict,
     optimizer_config: dict,
-    data_dir: str = "data/_all"
+    data_dir: str = "data"
 ) -> dict:
     """
     Run backtest on OOS data with fixed parameters (no optimization).
@@ -334,7 +334,7 @@ def main():
         _logger.info("=" * 80)
 
         # Load IS optimization results for this window
-        optimization_dir = os.path.join("results", "optimization", window['train_year'])
+        optimization_dir = os.path.join("results", "walk_forward_reports", window['train_year'])
         is_results = load_optimization_results(optimization_dir)
 
         if not is_results:

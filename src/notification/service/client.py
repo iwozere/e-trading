@@ -620,7 +620,7 @@ class NotificationServiceClient:
     async def send_to_admins(self,
                            title: str,
                            message: str,
-                           notification_type: Union[str, MessageType] = MessageType.SYSTEM_NOTIFICATION,
+                           notification_type: Union[str, MessageType] = MessageType.SYSTEM,
                            priority: Union[str, MessagePriority] = MessagePriority.HIGH,
                            data: Optional[Dict[str, Any]] = None,
                            channels: Optional[List[str]] = None) -> Dict[str, Any]:
