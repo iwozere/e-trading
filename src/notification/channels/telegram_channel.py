@@ -111,7 +111,11 @@ class TelegramChannel(NotificationChannel):
         self.config.update(validated_config)
 
         # Initialize bot instance
-        self.bot = Bot(token=self.config["bot_token"])
+        bot_token = self.config["bot_token"]
+        # Log first and last 4 chars of token for verification (mask middle part)
+        token_preview = f"{bot_token[:4]}...{bot_token[-4:]}" if len(bot_token) > 8 else "****"
+        _logger.info("Initializing Telegram bot with token: %s", token_preview)
+        self.bot = Bot(token=bot_token)
 
     async def send_message(
         self,
@@ -136,7 +140,22 @@ class TelegramChannel(NotificationChannel):
 
         try:
             # Use recipient as chat_id, or fall back to default
-            chat_id = recipient or self.config["default_chat_id"]
+            chat_id = recipient or self.config.get("default_chat_id")
+
+            _logger.info("Telegram send_message called - recipient: %s, chat_id: %s, message_id: %s",
+                        recipient, chat_id, message_id)
+            _logger.debug("Message content: text_length=%d, has_attachments=%s",
+                         len(content.text) if content.text else 0, content.has_attachments)
+
+            if not chat_id:
+                error_msg = "No chat_id provided and no default_chat_id configured"
+                _logger.error("Telegram send failed: %s", error_msg)
+                return DeliveryResult(
+                    success=False,
+                    status=DeliveryStatus.FAILED,
+                    error_message=error_msg,
+                    response_time_ms=0
+                )
 
             # Extract metadata for Telegram-specific options
             metadata = content.metadata or {}
@@ -150,6 +169,8 @@ class TelegramChannel(NotificationChannel):
                 )
 
             # Send text message with splitting if needed
+            _logger.info("Sending text message to chat_id=%s, text_length=%d",
+                        chat_id, len(content.text) if content.text else 0)
             telegram_message = await self._send_text_message_with_splitting(
                 chat_id=chat_id,
                 text=content.text,
@@ -158,6 +179,9 @@ class TelegramChannel(NotificationChannel):
             )
 
             response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+
+            _logger.info("Telegram message sent successfully - chat_id=%s, message_id=%s, response_time=%dms",
+                        chat_id, telegram_message.message_id, response_time)
 
             return DeliveryResult(
                 success=True,
@@ -226,25 +250,65 @@ class TelegramChannel(NotificationChannel):
     ) -> DeliveryResult:
         """Send message with attachments."""
         try:
+            _logger.info("Sending message with %d attachments to chat_id=%s",
+                        len(content.attachments) if content.attachments else 0, chat_id)
+            _logger.debug("Attachment types: %s",
+                         {k: type(v).__name__ for k, v in content.attachments.items()} if content.attachments else {})
+
             for filename, attachment_data in content.attachments.items():
-                if isinstance(attachment_data, bytes):
+                _logger.debug("Processing attachment: filename=%s, type=%s",
+                             filename, type(attachment_data).__name__)
+
+                # Handle different attachment formats
+                actual_data = None
+
+                if isinstance(attachment_data, dict):
+                    # Attachment stored as base64 in database
+                    if attachment_data.get("type") == "base64":
+                        import base64
+                        actual_data = base64.b64decode(attachment_data["data"])
+                        _logger.debug("Decoded base64 attachment: %s (size: %d bytes)",
+                                     filename, len(actual_data))
+                    elif attachment_data.get("type") == "file_path":
+                        # File path stored in database
+                        actual_data = attachment_data.get("path")
+                        _logger.debug("Using file path attachment: %s", actual_data)
+                elif isinstance(attachment_data, bytes):
+                    # Raw bytes (direct usage)
+                    actual_data = attachment_data
+                    _logger.debug("Using raw bytes attachment: %s (size: %d bytes)",
+                                 filename, len(actual_data))
+                elif isinstance(attachment_data, str):
+                    # File path as string
+                    actual_data = attachment_data
+                    _logger.debug("Using file path attachment: %s", actual_data)
+                else:
+                    _logger.warning("Unknown attachment format for %s: %s",
+                                   filename, type(attachment_data).__name__)
+                    continue
+
+                # Send the attachment
+                if isinstance(actual_data, bytes):
                     # Send as photo if it looks like an image
                     if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                        _logger.debug("Sending photo: %s", filename)
                         await self._send_photo_with_caption(
-                            chat_id, attachment_data, filename, content.text,
+                            chat_id, actual_data, filename, content.text,
                             reply_to_message_id, message_thread_id
                         )
                     else:
                         # Send as document
+                        _logger.debug("Sending document: %s", filename)
                         await self._send_document_with_caption(
-                            chat_id, attachment_data, filename, content.text,
+                            chat_id, actual_data, filename, content.text,
                             reply_to_message_id, message_thread_id
                         )
 
-                elif isinstance(attachment_data, str):
+                elif isinstance(actual_data, str):
                     # File path - send as document
+                    _logger.debug("Sending file from path: %s", actual_data)
                     await self._send_file_with_caption(
-                        chat_id, attachment_data, filename, content.text,
+                        chat_id, actual_data, filename, content.text,
                         reply_to_message_id, message_thread_id
                     )
 
@@ -283,6 +347,9 @@ class TelegramChannel(NotificationChannel):
         message_thread_id: Optional[int]
     ):
         """Send photo with caption, handling long captions."""
+        _logger.info("Sending photo to chat_id=%s: %s (size=%d bytes, caption_length=%d)",
+                    chat_id, filename, len(photo_data), len(caption) if caption else 0)
+
         if len(caption) > self.MAX_CAPTION_LENGTH:
             # Send text first, then photo with short caption
             await self._send_text_message_with_splitting(
@@ -413,7 +480,10 @@ class TelegramChannel(NotificationChannel):
         """Send text message with automatic splitting for long messages."""
         if len(text) <= self.MAX_MESSAGE_LENGTH:
             # Message is short enough, send normally
-            return await self.bot.send_message(
+            _logger.debug("Sending message to Telegram API - chat_id=%s, text_preview='%s...'",
+                         chat_id, text[:50] if text else '')
+
+            result = await self.bot.send_message(
                 chat_id=chat_id,
                 text=text,
                 reply_to_message_id=reply_to_message_id,
@@ -423,6 +493,10 @@ class TelegramChannel(NotificationChannel):
                 disable_notification=self.config.get("disable_notification", False),
                 protect_content=self.config.get("protect_content", False)
             )
+
+            _logger.debug("Telegram API returned message_id=%s for chat_id=%s",
+                         result.message_id, chat_id)
+            return result
 
         # Split long message into parts
         parts = self._split_message(text, self.MAX_MESSAGE_LENGTH)

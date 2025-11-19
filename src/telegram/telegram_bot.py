@@ -1033,6 +1033,7 @@ async def api_notify(request: web.Request) -> web.Response:
             message=message,
             priority=priority,
             channels=["telegram"],
+            telegram_chat_id=int(telegram_chat_id),
             recipient_id=str(telegram_chat_id),
             data=data.get('data', {})
         )

@@ -67,6 +67,7 @@ async def process_report_notifications(result, notification_client, message, use
                         message=f"No data for {report['ticker']}: {report['error']}",
                         priority=MessagePriority.NORMAL,
                         channels=["telegram"],
+                        telegram_chat_id=int(message.chat.id),
                         recipient_id=str(message.chat.id),
                         data={"reply_to_message_id": message.message_id}
                     )
@@ -82,6 +83,7 @@ async def process_report_notifications(result, notification_client, message, use
                         message=telegram_message,
                         priority=MessagePriority.NORMAL,
                         channels=["telegram"],
+                        telegram_chat_id=int(message.chat.id),
                         recipient_id=str(message.chat.id),
                         attachments=attachments,
                         data={"reply_to_message_id": message.message_id}
@@ -98,6 +100,7 @@ async def process_report_notifications(result, notification_client, message, use
                         message=telegram_message + "\n\n[Chart could not be sent due to an error.]",
                         priority=MessagePriority.NORMAL,
                         channels=["telegram"],
+                        telegram_chat_id=int(message.chat.id),
                         recipient_id=str(message.chat.id),
                         data={"reply_to_message_id": message.message_id}
                     )

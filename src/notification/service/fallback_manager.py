@@ -274,6 +274,14 @@ class FallbackManager:
                         self._logger.error(
                             "Channel instance not available: %s", channel_name
                         )
+                        # Create failed result for unavailable channel
+                        failed_result = DeliveryResult(
+                            success=False,
+                            status=DeliveryStatus.FAILED,
+                            error_message=f"Channel instance not available: {channel_name}"
+                        )
+                        delivery_results.append(failed_result)
+                        self._update_channel_stats(channel_name, False)
                         continue
 
                     channel_instance = channel_instances[channel_name]

@@ -154,10 +154,9 @@ class MessageProcessor:
                         health_config = HealthCheckConfig(
                             channel=channel_name,
                             check_interval_seconds=60,  # Check every minute
-                            failure_threshold=3,
-                            recovery_threshold=2,
-                            timeout_seconds=30,
-                            enabled_checks=[HealthCheckType.CONNECTIVITY, HealthCheckType.AUTHENTICATION]
+                            auto_disable_threshold=3,  # Disable after 3 consecutive failures
+                            auto_enable_threshold=2,   # Re-enable after 2 consecutive successes
+                            enabled_checks={HealthCheckType.CONNECTIVITY, HealthCheckType.RESPONSE_TIME}
                         )
                         health_monitor.configure_channel(health_config)
 
@@ -496,7 +495,23 @@ class MessageProcessor:
             )
 
             # Get recipient from metadata or use default
-            recipient = message.metadata.get('recipient_id', message.recipient_id)
+            # For Telegram messages, check telegram_chat_id in metadata first
+            recipient = None
+            if 'telegram' in message.channels:
+                recipient = message.metadata.get('telegram_chat_id') if message.metadata else None
+                self._logger.debug(
+                    "Message %s: Telegram channel - telegram_chat_id from metadata: %s",
+                    message.id, recipient
+                )
+
+            # Fall back to recipient_id in metadata, then message.recipient_id
+            if not recipient:
+                recipient = message.metadata.get('recipient_id', message.recipient_id) if message.metadata else message.recipient_id
+
+            self._logger.info(
+                "Message %s: Using recipient=%s (message.recipient_id=%s, channels=%s)",
+                message.id, recipient, message.recipient_id, message.channels
+            )
 
             # Attempt delivery with fallback
             success, delivery_results, failed_message = await self.fallback_manager.attempt_delivery_with_fallback(
