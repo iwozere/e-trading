@@ -135,6 +135,16 @@ class MessageProcessor:
             # Get channel configurations from config
             channels_config = config.channels
 
+            # PHASE 1 FIX: Only enable email channel
+            # Telegram channel is handled by telegram bot to avoid duplicates
+            # See MIGRATION_PLAN.md Phase 1 for details
+            enabled_channels = ['email']  # Telegram bot handles telegram, notification service handles email only
+
+            self._logger.info(
+                "Notification Service - Enabled channels: %s (Telegram handled by telegram bot)",
+                enabled_channels
+            )
+
             # Access channel configs as attributes
             channel_configs = {
                 'telegram': channels_config.telegram,
@@ -143,7 +153,8 @@ class MessageProcessor:
             }
 
             for channel_name, channel_config in channel_configs.items():
-                if channel_config.get('enabled', True):
+                # Only initialize channels that are in the enabled list
+                if channel_name in enabled_channels and channel_config.get('enabled', True):
                     try:
                         # Get channel instance from registry
                         channel_instance = channel_registry.get_channel(channel_name, channel_config)

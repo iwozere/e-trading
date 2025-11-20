@@ -42,6 +42,7 @@ class FMPDataDownloader(BaseDataDownloader):
         self.api_key = api_key or FMP_API_KEY
         self.rate_limit_delay = rate_limit_delay
         self.base_url = "https://financialmodelingprep.com/api/v3"
+        self.stable_url = "https://financialmodelingprep.com/stable"
 
         if not self.api_key:
             raise ValueError("FMP API key is required. Get one at: https://site.financialmodelingprep.com/developer/docs")
@@ -320,10 +321,14 @@ class FMPDataDownloader(BaseDataDownloader):
             return None
 
     def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get company profile information."""
+        """Get company profile information using the stable endpoint."""
         try:
-            url = f"{self.base_url}/profile/{symbol}"
-            params = {'apikey': self.api_key}
+            # Use the new stable endpoint instead of the deprecated /api/v3/profile/
+            url = f"{self.stable_url}/profile"
+            params = {
+                'symbol': symbol,
+                'apikey': self.api_key
+            }
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -343,10 +348,15 @@ class FMPDataDownloader(BaseDataDownloader):
             return None
 
     def get_key_metrics(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get key financial metrics."""
+        """Get key financial metrics using the stable endpoint."""
         try:
-            url = f"{self.base_url}/key-metrics/{symbol}"
-            params = {'apikey': self.api_key, 'limit': 1}
+            # Use the new stable endpoint instead of the deprecated /api/v3/key-metrics/
+            url = f"{self.stable_url}/key-metrics"
+            params = {
+                'symbol': symbol,
+                'apikey': self.api_key,
+                'limit': 1
+            }
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -364,10 +374,15 @@ class FMPDataDownloader(BaseDataDownloader):
             return None
 
     def get_financial_ratios(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get financial ratios."""
+        """Get financial ratios using the stable endpoint."""
         try:
-            url = f"{self.base_url}/ratios/{symbol}"
-            params = {'apikey': self.api_key, 'limit': 1}
+            # Use the new stable endpoint instead of the deprecated /api/v3/ratios/
+            url = f"{self.stable_url}/ratios"
+            params = {
+                'symbol': symbol,
+                'apikey': self.api_key,
+                'limit': 1
+            }
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)

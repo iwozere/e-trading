@@ -1599,6 +1599,23 @@ async def main():
     except Exception:
         _logger.exception("Failed to initialize heartbeat manager:")
 
+    # Initialize telegram queue processor for queued messages
+    _logger.info("Initializing telegram queue processor...")
+    try:
+        from src.telegram.services.telegram_queue_processor import TelegramQueueProcessor
+
+        # Create and start queue processor
+        queue_processor = TelegramQueueProcessor(
+            bot=bot,
+            poll_interval=5  # Poll every 5 seconds
+        )
+        await queue_processor.start()
+
+        _logger.info("Telegram queue processor started (polls database every 5 seconds)")
+
+    except Exception:
+        _logger.exception("Failed to initialize telegram queue processor:")
+
     _logger.info("Starting Telegram Screener Bot with HTTP API...")
 
     # Start both bot polling and HTTP API server

@@ -30,12 +30,16 @@ class FundamentalsConfigValidator:
         ]
 
         self.valid_data_types = [
-            'statements', 'ratios', 'profile', 'calendar', 'dividends',
+            'statements', 'ratios', 'profile', 'profiles', 'calendar', 'dividends',
             'splits', 'insider_trading', 'analyst_estimates'
         ]
 
+        # Support both full names and shorthand codes
         self.valid_providers = [
-            'fmp', 'yfinance', 'alpha_vantage', 'twelvedata', 'ibkr',
+            # Shorthand codes (preferred)
+            'fmp', 'yf', 'av', 'td', 'fh', 'pg', 'bnc', 'cg',
+            # Full names (legacy support)
+            'yfinance', 'alpha_vantage', 'twelvedata', 'ibkr',
             'polygon', 'finnhub', 'tiingo', 'binance', 'coingecko'
         ]
 

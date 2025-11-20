@@ -7,9 +7,10 @@ Usage:
 """
 from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.model.telegram_bot import Fundamentals
+from src.model.schemas import Fundamentals as SchemasFundamentals
 from src.data.data_manager import get_data_manager
 
-PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
+PROVIDER_CODES = ['fmp', 'yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
 
 
 async def get_fundamentals_unified(ticker: str, provider: str = None, **kwargs) -> Fundamentals:
@@ -136,8 +137,11 @@ def get_fundamentals(ticker: str, provider: str = None, **kwargs) -> Fundamental
         if downloader is None:
             raise ValueError(f"Unknown or unsupported provider: {prov}")
         result = downloader.get_fundamentals(ticker)
-        # If result is already Fundamentals, return as is
-        if isinstance(result, Fundamentals):
+        # If result is already Fundamentals (either type), convert to telegram_bot.Fundamentals if needed
+        if isinstance(result, (Fundamentals, SchemasFundamentals)):
+            # Convert schemas.Fundamentals to telegram_bot.Fundamentals if needed
+            if isinstance(result, SchemasFundamentals):
+                return Fundamentals(**result.__dict__)
             return result
         # Otherwise, try to normalize
         return normalize_fundamentals({prov: result})
@@ -172,6 +176,7 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
     def get_first_with_source(field_name, *provider_fields):
         """
         Get the first non-None value from providers, recording the source.
+        Supports nested paths using dot notation (e.g., "profile.companyName").
 
         Args:
             field_name: Name of the field being populated
@@ -180,8 +185,22 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
         for provider_code, field_key in provider_fields:
             if provider_code in sources:
                 data = sources[provider_code]
-                if isinstance(data, dict) and field_key in data:
-                    value = data[field_key]
+                if isinstance(data, dict):
+                    # Support nested paths (e.g., "profile.companyName")
+                    if '.' in field_key:
+                        keys = field_key.split('.')
+                        value = data
+                        for key in keys:
+                            if isinstance(value, dict) and key in value:
+                                value = value[key]
+                            else:
+                                value = None
+                                break
+                    elif field_key in data:
+                        value = data[field_key]
+                    else:
+                        value = None
+
                     if value is not None and value != '':
                         field_sources[field_name] = provider_code
                         return value
@@ -190,6 +209,7 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
     fundamentals = Fundamentals(
         ticker=get_first_with_source(
             "ticker",
+            ("fmp", "symbol"),
             ("yf", "ticker"),
             ("av", "Symbol"),
             ("fh", "ticker"),
@@ -198,12 +218,14 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
         ),
         company_name=get_first_with_source(
             "company_name",
+            ("fmp", "profile.companyName"),  # FMP returns companyName in profile object
             ("yf", "company_name"),
             ("av", "Name"),
             ("pg", "name"),
         ),
         current_price=get_first_with_source(
             "current_price",
+            ("fmp", "profile.price"),
             ("yf", "current_price"),
             ("av", "current_price"),
             ("fh", "current_price"),
@@ -212,6 +234,7 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
         ),
         market_cap=get_first_with_source(
             "market_cap",
+            ("fmp", "profile.marketCap"),
             ("yf", "market_cap"),
             ("av", "MarketCapitalization"),
             ("fh", "market_cap"),
@@ -315,16 +338,19 @@ def normalize_fundamentals(sources: dict) -> Fundamentals:
         ),
         beta=get_first_with_source(
             "beta",
+            ("fmp", "profile.beta"),
             ("yf", "beta"),
             ("av", "Beta"),
         ),
         sector=get_first_with_source(
             "sector",
+            ("fmp", "profile.sector"),
             ("yf", "sector"),
             ("av", "Sector"),
         ),
         industry=get_first_with_source(
             "industry",
+            ("fmp", "profile.industry"),
             ("yf", "industry"),
             ("av", "Industry"),
         ),

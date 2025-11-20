@@ -24,7 +24,7 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
 
         # Get fundamentals using unified function with traditional fallback (only for stock providers)
         fundamentals = None
-        if provider.lower() in ["yf", "av", "fh", "td", "pg"]:
+        if provider.lower() in ["fmp", "yf", "av", "fh", "td", "pg"]:
             try:
                 fundamentals = await get_fundamentals_unified(ticker, provider)
             except Exception:
@@ -428,10 +428,22 @@ def format_ticker_report(analysis: TickerAnalysis) -> dict:
             analysis.chart_image = None
 
     # Compose full message
-    company_name = "Unknown"
+    # Try to get company name from fundamentals, fall back to ticker if unavailable
+    company_name = None
     if analysis.fundamentals:
-        company_name = analysis.fundamentals.company_name or "Unknown"
-    full_msg = f"{analysis.ticker} - {company_name}\n\n{fundamentals_msg}\n{technicals_msg}"
+        # Try multiple field names for company name
+        company_name = (
+            getattr(analysis.fundamentals, 'company_name', None) or
+            getattr(analysis.fundamentals, 'longName', None) or
+            getattr(analysis.fundamentals, 'name', None) or
+            getattr(analysis.fundamentals, 'shortName', None)
+        )
+
+    # If no company name found, just use the ticker (don't show "Unknown")
+    if company_name:
+        full_msg = f"{analysis.ticker} - {company_name}\n\n{fundamentals_msg}\n{technicals_msg}"
+    else:
+        full_msg = f"{analysis.ticker}\n\n{fundamentals_msg}\n{technicals_msg}"
     return {
         "message": full_msg.strip(),
         "chart_bytes": chart_bytes
