@@ -321,9 +321,9 @@ class FMPDataDownloader(BaseDataDownloader):
             return None
 
     def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get company profile information using the stable endpoint."""
+        """Get company profile information using the /stable endpoint."""
         try:
-            # Use the new stable endpoint instead of the deprecated /api/v3/profile/
+            # Use /stable endpoint (v3 endpoints deprecated as of August 31, 2025)
             url = f"{self.stable_url}/profile"
             params = {
                 'symbol': symbol,
@@ -348,53 +348,81 @@ class FMPDataDownloader(BaseDataDownloader):
             return None
 
     def get_key_metrics(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get key financial metrics using the stable endpoint."""
+        """Get key financial metrics using the /stable endpoint (requires paid subscription)."""
         try:
-            # Use the new stable endpoint instead of the deprecated /api/v3/key-metrics/
+            # Use /stable endpoint (v3 endpoints deprecated as of August 31, 2025)
+            # Note: /stable/key-metrics requires paid subscription
             url = f"{self.stable_url}/key-metrics"
             params = {
                 'symbol': symbol,
-                'apikey': self.api_key,
-                'limit': 1
+                'apikey': self.api_key
             }
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
+
+            # Gracefully handle 402 Payment Required (premium feature)
+            if response.status_code == 402:
+                _logger.debug("Key metrics for %s requires premium subscription (402 Payment Required)", symbol)
+                return None
+
             response.raise_for_status()
 
             data = response.json()
 
             if isinstance(data, list) and len(data) > 0:
                 return data[0]
+            elif isinstance(data, dict):
+                return data
             else:
                 return None
 
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 402:
+                _logger.debug("Key metrics for %s requires premium subscription", symbol)
+            else:
+                _logger.exception("HTTP error getting key metrics for %s:", symbol)
+            return None
         except Exception:
             _logger.exception("Error getting key metrics for %s:", symbol)
             return None
 
     def get_financial_ratios(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get financial ratios using the stable endpoint."""
+        """Get financial ratios using the /stable endpoint (requires paid subscription)."""
         try:
-            # Use the new stable endpoint instead of the deprecated /api/v3/ratios/
+            # Use /stable endpoint (v3 endpoints deprecated as of August 31, 2025)
+            # Note: /stable/ratios requires paid subscription
             url = f"{self.stable_url}/ratios"
             params = {
                 'symbol': symbol,
-                'apikey': self.api_key,
-                'limit': 1
+                'apikey': self.api_key
             }
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
+
+            # Gracefully handle 402 Payment Required (premium feature)
+            if response.status_code == 402:
+                _logger.debug("Financial ratios for %s requires premium subscription (402 Payment Required)", symbol)
+                return None
+
             response.raise_for_status()
 
             data = response.json()
 
             if isinstance(data, list) and len(data) > 0:
                 return data[0]
+            elif isinstance(data, dict):
+                return data
             else:
                 return None
 
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 402:
+                _logger.debug("Financial ratios for %s requires premium subscription", symbol)
+            else:
+                _logger.exception("HTTP error getting financial ratios for %s:", symbol)
+            return None
         except Exception:
             _logger.exception("Error getting financial ratios for %s:", symbol)
             return None

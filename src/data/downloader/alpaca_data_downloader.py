@@ -33,13 +33,16 @@ from src.model.schemas import Fundamentals, OptionalFundamentals
 
 _logger = setup_logger(__name__)
 
-# Try to import Alpaca API
+# Try to import Alpaca API (alpaca-py is the modern SDK)
 try:
-    import alpaca_trade_api as tradeapi
+    from alpaca.data.historical import StockHistoricalDataClient
+    from alpaca.data.requests import StockBarsRequest
+    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+    from alpaca.trading.client import TradingClient
     ALPACA_AVAILABLE = True
 except ImportError:
     ALPACA_AVAILABLE = False
-    _logger.warning("alpaca-trade-api not installed. Install with: pip install alpaca-trade-api")
+    _logger.warning("alpaca-py not installed. Install with: pip install alpaca-py")
 
 
 class AlpacaDataDownloader(BaseDataDownloader):
@@ -99,7 +102,7 @@ class AlpacaDataDownloader(BaseDataDownloader):
 
         if not ALPACA_AVAILABLE:
             raise ImportError(
-                "alpaca-trade-api package is required. Install with: pip install alpaca-trade-api"
+                "alpaca-py package is required. Install with: pip install alpaca-py"
             )
 
         # Get API credentials from parameter or config
@@ -115,27 +118,35 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 "environment variables or pass them as parameters."
             )
 
-        # Initialize Alpaca API
+        # Initialize Alpaca API clients
+        # Note: alpaca-py separates data and trading clients
         try:
-            self.api = tradeapi.REST(
-                key_id=self.api_key,
-                secret_key=self.secret_key,
-                base_url=self.base_url,
-                api_version='v2'
+            # Data client for historical market data (no base_url needed)
+            self.data_client = StockHistoricalDataClient(
+                api_key=self.api_key,
+                secret_key=self.secret_key
             )
-            _logger.info("Alpaca API initialized with base URL: %s", self.base_url)
+
+            # Trading client for account/asset information
+            self.trading_client = TradingClient(
+                api_key=self.api_key,
+                secret_key=self.secret_key,
+                paper=True  # Default to paper trading for safety
+            )
+
+            _logger.info("Alpaca API clients initialized successfully")
         except Exception:
-            _logger.exception("Failed to initialize Alpaca API:")
+            _logger.exception("Failed to initialize Alpaca API clients:")
             raise
 
-        # Interval mapping from standard to Alpaca format
+        # Interval mapping from standard to Alpaca format (alpaca-py)
         self.interval_mapping = {
-            '1m': tradeapi.TimeFrame.Minute,
-            '5m': tradeapi.TimeFrame(5, tradeapi.TimeFrameUnit.Minute),
-            '15m': tradeapi.TimeFrame(15, tradeapi.TimeFrameUnit.Minute),
-            '30m': tradeapi.TimeFrame(30, tradeapi.TimeFrameUnit.Minute),
-            '1h': tradeapi.TimeFrame.Hour,
-            '1d': tradeapi.TimeFrame.Day
+            '1m': TimeFrame.Minute,
+            '5m': TimeFrame(5, TimeFrameUnit.Minute),
+            '15m': TimeFrame(15, TimeFrameUnit.Minute),
+            '30m': TimeFrame(30, TimeFrameUnit.Minute),
+            '1h': TimeFrame.Hour,
+            '1d': TimeFrame.Day
         }
 
     def get_supported_intervals(self) -> List[str]:
@@ -207,24 +218,27 @@ class AlpacaDataDownloader(BaseDataDownloader):
             timeframe: Alpaca timeframe object
             start_date: Start date
             end_date: End date
-            adjustment: Price adjustment type
+            adjustment: Price adjustment type (raw, split, dividend, all)
             limit: Maximum bars to download
 
         Returns:
             DataFrame with OHLCV data
         """
-        # Format dates as RFC3339 (Alpaca requirement)
-        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-
-        bars = self.api.get_bars(
-            symbol=symbol,
+        # Create request using alpaca-py
+        request = StockBarsRequest(
+            symbol_or_symbols=symbol,
             timeframe=timeframe,
-            start=start_str,
-            end=end_str,
-            adjustment=adjustment,
-            limit=limit
+            start=start_date,
+            end=end_date,
+            limit=limit,
+            adjustment=adjustment
         )
+
+        # Get bars using the new data client
+        bars_response = self.data_client.get_stock_bars(request)
+
+        # Extract bars for the symbol (response is a dict with symbol as key)
+        bars = bars_response.get(symbol, None)
 
         return self._convert_bars_to_dataframe(bars, symbol, start_date, end_date)
 
@@ -264,42 +278,46 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 remaining = user_limit - total_downloaded
                 current_limit = min(chunk_limit, remaining)
 
-            # Format dates as RFC3339
-            start_str = current_start.strftime('%Y-%m-%dT%H:%M:%SZ')
-            end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-
             _logger.debug("Downloading chunk for %s: %s to %s (limit: %d)",
                          symbol, current_start.date(), end_date.date(), current_limit)
 
             try:
-                bars = self.api.get_bars(
-                    symbol=symbol,
+                # Create request using alpaca-py
+                request = StockBarsRequest(
+                    symbol_or_symbols=symbol,
                     timeframe=timeframe,
-                    start=start_str,
-                    end=end_str,
-                    adjustment=adjustment,
-                    limit=current_limit
+                    start=current_start,
+                    end=end_date,
+                    limit=current_limit,
+                    adjustment=adjustment
                 )
 
-                if not bars:
+                # Get bars using the new data client
+                bars_response = self.data_client.get_stock_bars(request)
+
+                # Extract bars for the symbol
+                bars_dict = bars_response.get(symbol, None)
+
+                if not bars_dict or len(bars_dict) == 0:
                     _logger.debug("No more data available for %s from %s", symbol, current_start.date())
                     break
 
                 # Convert bars to list of dictionaries
+                # In alpaca-py, bars_dict is a BarSet with bars as a list
                 chunk_data = []
                 last_timestamp = None
 
-                for bar in bars:
+                for bar in bars_dict:
                     bar_data = {
-                        'timestamp': bar.t,
-                        'open': float(bar.o),
-                        'high': float(bar.h),
-                        'low': float(bar.l),
-                        'close': float(bar.c),
-                        'volume': int(bar.v)
+                        'timestamp': bar.timestamp,
+                        'open': float(bar.open),
+                        'high': float(bar.high),
+                        'low': float(bar.low),
+                        'close': float(bar.close),
+                        'volume': int(bar.volume)
                     }
                     chunk_data.append(bar_data)
-                    last_timestamp = bar.t
+                    last_timestamp = bar.timestamp
 
                 if not chunk_data:
                     _logger.debug("No data in chunk for %s", symbol)
@@ -369,10 +387,10 @@ class AlpacaDataDownloader(BaseDataDownloader):
     def _convert_bars_to_dataframe(self, bars, symbol: str, start_date: datetime,
                                   end_date: datetime) -> pd.DataFrame:
         """
-        Convert Alpaca bars to DataFrame.
+        Convert Alpaca bars to DataFrame (alpaca-py format).
 
         Args:
-            bars: Alpaca bars object
+            bars: Alpaca bars object (BarSet from alpaca-py)
             symbol: Trading symbol
             start_date: Start date for filtering
             end_date: End date for filtering
@@ -385,15 +403,16 @@ class AlpacaDataDownloader(BaseDataDownloader):
             return pd.DataFrame()
 
         # Convert to DataFrame
+        # In alpaca-py, bar attributes are: timestamp, open, high, low, close, volume
         data = []
         for bar in bars:
             data.append({
-                'timestamp': bar.t,
-                'open': float(bar.o),
-                'high': float(bar.h),
-                'low': float(bar.l),
-                'close': float(bar.c),
-                'volume': int(bar.v)
+                'timestamp': bar.timestamp,
+                'open': float(bar.open),
+                'high': float(bar.high),
+                'low': float(bar.low),
+                'close': float(bar.close),
+                'volume': int(bar.volume)
             })
 
         if not data:
@@ -434,9 +453,9 @@ class AlpacaDataDownloader(BaseDataDownloader):
         try:
             _logger.debug("Fetching fundamentals for %s", symbol)
 
-            # Get asset information
+            # Get asset information using trading client (alpaca-py)
             try:
-                asset = self.api.get_asset(symbol)
+                asset = self.trading_client.get_asset(symbol)
                 if not asset:
                     _logger.warning("Asset not found: %s", symbol)
                     return None

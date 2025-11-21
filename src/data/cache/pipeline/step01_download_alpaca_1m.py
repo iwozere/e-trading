@@ -17,7 +17,7 @@ Pipeline Features:
 
 Requirements:
 - Alpaca API key and secret in config/donotshare/donotshare.py
-- alpaca-trade-api package
+- alpaca-py package (replaces deprecated alpaca-trade-api)
 
 Usage:
     python src/data/cache/pipeline/step01_download_alpaca_1m.py
