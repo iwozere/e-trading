@@ -126,12 +126,16 @@ def _convert_priority(priority_str: str) -> MessagePriority:
     return priority_map.get(priority_str.lower(), MessagePriority.NORMAL)
 
 
-# Health check endpoint (must be before parameterized routes)
+# Health check endpoint (deprecated - moved to unified health_routes.py)
+# Kept for backward compatibility but redirects to new endpoint
 
 @router.get("/health")
 async def notification_routes_health():
     """
     Health check for notification routes and database connectivity.
+
+    DEPRECATED: This endpoint has been moved to /api/health/notification
+    Use the unified health check system at /api/health/channels for comprehensive monitoring.
 
     Returns:
         Health status of notification routes and database
@@ -149,7 +153,8 @@ async def notification_routes_health():
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "database": "connected",
             "routes": "operational",
-            "total_messages": message_count
+            "total_messages": message_count,
+            "note": "This endpoint is deprecated. Use /api/health/notification for service health or /api/health/channels for comprehensive monitoring."
         }
 
     except Exception as e:
@@ -170,11 +175,14 @@ async def get_channels_health(current_user: User = Depends(get_current_user)):
     """
     Get health status for all notification channels.
 
+    DEPRECATED: This endpoint has been moved to /api/health/channels
+    Use the unified health check system for comprehensive channel ownership and queue monitoring.
+
     Args:
         current_user: Current authenticated user
 
     Returns:
-        Channel health information
+        Channel health information with deprecation notice
     """
     try:
         from src.data.db.services.system_health_service import SystemHealthService
@@ -187,7 +195,8 @@ async def get_channels_health(current_user: User = Depends(get_current_user)):
 
         return {
             "channels_health": channels_health,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "note": "This endpoint is deprecated. Use /api/health/channels for comprehensive channel ownership and queue monitoring (Telegram Bot + Notification Service)."
         }
 
     except Exception:

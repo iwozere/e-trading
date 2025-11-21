@@ -242,6 +242,81 @@ class MessageRepository:
         _logger.info("Cleaned up %s old messages", deleted_count)
         return deleted_count
 
+    def get_queue_health_for_channels(self, channels: List[str]) -> Dict[str, Any]:
+        """
+        Get queue health metrics for specific channels.
+
+        Args:
+            channels: List of channel names to monitor (e.g., ["telegram"], ["email", "sms"])
+
+        Returns:
+            Dictionary with queue health metrics:
+            - pending: Count of pending messages
+            - processing: Count of messages currently processing
+            - failed_last_hour: Count of failures in last hour
+            - delivered_last_hour: Count of deliveries in last hour
+            - stuck_messages: Count of messages stuck in processing
+        """
+        from sqlalchemy import func
+
+        current_time = datetime.now(timezone.utc)
+        one_hour_ago = current_time - timedelta(hours=1)
+        five_min_ago = current_time - timedelta(minutes=5)
+
+        # Build channel filters (messages where ANY of the specified channels are present)
+        channel_filters = [Message.channels.contains([ch]) for ch in channels]
+
+        if not channel_filters:
+            # No channels specified, return empty metrics
+            return {
+                "pending": 0,
+                "processing": 0,
+                "failed_last_hour": 0,
+                "delivered_last_hour": 0,
+                "stuck_messages": 0
+            }
+
+        # Pending count
+        pending_count = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.PENDING.value,
+            or_(*channel_filters)
+        ).scalar() or 0
+
+        # Processing count
+        processing_count = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.PROCESSING.value,
+            or_(*channel_filters)
+        ).scalar() or 0
+
+        # Failed in last hour
+        failed_last_hour = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.FAILED.value,
+            Message.updated_at >= one_hour_ago,
+            or_(*channel_filters)
+        ).scalar() or 0
+
+        # Delivered in last hour
+        delivered_last_hour = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.DELIVERED.value,
+            Message.delivered_at >= one_hour_ago,
+            or_(*channel_filters)
+        ).scalar() or 0
+
+        # Stuck messages (processing for > 5 minutes)
+        stuck_messages = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.PROCESSING.value,
+            Message.updated_at < five_min_ago,
+            or_(*channel_filters)
+        ).scalar() or 0
+
+        return {
+            "pending": pending_count,
+            "processing": processing_count,
+            "failed_last_hour": failed_last_hour,
+            "delivered_last_hour": delivered_last_hour,
+            "stuck_messages": stuck_messages
+        }
+
     def get_pending_messages_with_lock(
         self,
         limit: int = 10,

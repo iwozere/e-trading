@@ -22,7 +22,6 @@ from src.common.alerts.schema_validator import AlertSchemaValidator
 from src.data.data_manager import DataManager
 from src.indicators.service import IndicatorService
 from src.data.db.services.jobs_service import JobsService
-from src.data.db.core.database import session_scope
 from src.notification.service.client import NotificationServiceClient
 from src.notification.logger import setup_logger
 
@@ -79,10 +78,9 @@ class SchedulerApplication:
             )
             _logger.debug("Notification client initialized")
 
-            # Initialize jobs service with database session
-            with session_scope() as session:
-                self.jobs_service = JobsService(session)
-                _logger.debug("Jobs service initialized")
+            # Initialize jobs service (uses modern UoW pattern)
+            self.jobs_service = JobsService()
+            _logger.debug("Jobs service initialized")
 
             # Initialize alert evaluator with dependencies
             self.alert_evaluator = AlertEvaluator(

@@ -134,7 +134,14 @@ class RateLimitConfig(BaseSettings):
 
 
 class ChannelConfig(BaseSettings):
-    """Channel configuration."""
+    """Channel configuration.
+
+    IMPORTANT - Channel Ownership:
+    - Telegram channel is configured here for potential future use, but currently
+      ONLY the Telegram Bot should send Telegram messages.
+    - The Notification Service uses ONLY email/SMS channels.
+    - See docs/CHANNEL_OWNERSHIP.md for architecture details.
+    """
 
     telegram: Dict[str, Any] = Field(
         default_factory=lambda: {
@@ -142,7 +149,7 @@ class ChannelConfig(BaseSettings):
             "rate_limit_per_minute": 30,
             "max_retries": 3
         },
-        description="Telegram channel configuration"
+        description="Telegram channel configuration (NOT USED - Telegram Bot owns Telegram)"
     )
     email: Dict[str, Any] = Field(
         default_factory=lambda: {
@@ -189,6 +196,13 @@ class NotificationServiceConfig(BaseSettings):
         default=False,
         env="DEBUG",
         description="Enable debug mode"
+    )
+
+    # Channel ownership configuration
+    enabled_channels: List[str] = Field(
+        default_factory=lambda: ["email"],  # Telegram bot handles telegram
+        env="NOTIFICATION_ENABLED_CHANNELS",
+        description="Channels enabled for this notification service instance (telegram handled by telegram bot)"
     )
 
     # Sub-configurations

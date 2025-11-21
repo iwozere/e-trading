@@ -21,7 +21,6 @@ from src.ml.pipeline.p04_short_squeeze.config.data_classes import ScreenerConfig
 from src.ml.pipeline.p04_short_squeeze.core.models import StructuralMetrics, Candidate, CandidateSource
 from src.ml.pipeline.p04_short_squeeze.core.volume_squeeze_detector import create_volume_squeeze_detector
 from src.data.downloader.finra_data_downloader import create_finra_downloader
-from src.data.db.core.database import session_scope
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 # FINRA service functionality is now part of ShortSqueezeService
 
@@ -152,18 +151,17 @@ class WeeklyScreener:
 
             if finra_df is not None and not finra_df.empty:
                 # Store in database using ShortSqueezeService
-                with session_scope() as session:
-                    service = ShortSqueezeService(session)
-                    # Convert DataFrame to list of dictionaries for the service
-                    finra_data_list = []
-                    for _, row in finra_df.iterrows():
-                        finra_data_list.append({
-                            'ticker': row.get('Symbol', '').strip().upper(),
-                            'settlement_date': row.get('report_date'),
-                            'short_interest_shares': int(row.get('ShortVolume', 0)),
-                            'raw_data': row.to_dict()
-                        })
-                    records_stored = service.store_finra_data(finra_data_list)
+                service = ShortSqueezeService()
+                # Convert DataFrame to list of dictionaries for the service
+                finra_data_list = []
+                for _, row in finra_df.iterrows():
+                    finra_data_list.append({
+                        'ticker': row.get('Symbol', '').strip().upper(),
+                        'settlement_date': row.get('report_date'),
+                        'short_interest_shares': int(row.get('ShortVolume', 0)),
+                        'raw_data': row.to_dict()
+                    })
+                records_stored = service.store_finra_data(finra_data_list)
 
                 metrics['finra_records_stored'] = records_stored
                 _logger.info("Updated FINRA data: %d records stored", records_stored)
@@ -266,9 +264,8 @@ class WeeklyScreener:
             symbols = [c.ticker for c in candidates]
 
             # Get FINRA data for all symbols using ShortSqueezeService
-            with session_scope() as session:
-                service = ShortSqueezeService(session)
-                finra_data = service.get_bulk_finra_short_interest(symbols)
+            service = ShortSqueezeService()
+            finra_data = service.get_bulk_finra_short_interest(symbols)
 
             enhanced_candidates = []
             finra_enhanced_count = 0
@@ -965,19 +962,26 @@ class WeeklyScreener:
             runtime_metrics: Runtime performance metrics
         """
         try:
-            with session_scope() as session:
-                service = ShortSqueezeService(session)
+            service = ShortSqueezeService()
 
-                # Store screener snapshot
-                service.save_screener_results(
-                    candidates=candidates,
-                    run_date=datetime.now().date(),
-                    run_id=self.run_id,
-                    data_quality_metrics=data_quality_metrics,
-                    runtime_metrics=runtime_metrics
-                )
+            # Convert candidates to dict format
+            results = []
+            for candidate in candidates:
+                results.append({
+                    'ticker': candidate.ticker,
+                    'screener_score': candidate.screener_score,
+                    'short_interest_pct': candidate.structural_metrics.short_interest_pct,
+                    'days_to_cover': candidate.structural_metrics.days_to_cover,
+                    'market_cap': candidate.structural_metrics.market_cap,
+                    'float_shares': candidate.structural_metrics.float_shares,
+                    'avg_volume_14d': candidate.structural_metrics.avg_volume_14d,
+                    'data_quality': data_quality_metrics.get('successful_fetches', 0) / max(data_quality_metrics.get('total_tickers', 1), 1)
+                })
 
-                _logger.info("Stored screener results in database: %d candidates", len(candidates))
+            # Store screener snapshot
+            service.save_screener_results(results=results, run_date=datetime.now().date())
+
+            _logger.info("Stored screener results in database: %d candidates", len(candidates))
 
         except Exception:
             _logger.exception("Error storing screener results:")

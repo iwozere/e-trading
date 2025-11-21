@@ -46,6 +46,7 @@ from src.api.auth_routes import router as auth_router
 from src.api.telegram_routes import router as telegram_router
 from src.api.jobs_routes import router as jobs_router
 from src.api.notification_routes import router as notification_router
+from src.api.health_routes import router as health_router
 from src.api.auth import get_current_user, require_trader_or_admin
 from src.data.db.models.model_users import User
 from src.api.services import (
@@ -184,6 +185,9 @@ app.add_middleware(
 # Include authentication routes
 app.include_router(auth_router)
 
+# Include health check routes (unified system health monitoring)
+app.include_router(health_router)
+
 # Include Telegram bot management routes
 app.include_router(telegram_router)
 
@@ -309,13 +313,18 @@ async def root():
     """Root endpoint."""
     return {"message": "Trading Web UI API", "version": "1.0.0"}
 
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint."""
+@app.get("/api/health/legacy")
+async def health_check_legacy():
+    """
+    Legacy health check endpoint (deprecated).
+
+    Use /api/health instead for unified health monitoring.
+    """
     return {
         "status": "healthy",
         "timestamp": asyncio.get_event_loop().time(),
-        "trading_system_available": TRADING_SYSTEM_AVAILABLE
+        "trading_system_available": TRADING_SYSTEM_AVAILABLE,
+        "note": "This endpoint is deprecated. Use /api/health for unified health monitoring."
     }
 
 @app.get("/api/test-auth")
