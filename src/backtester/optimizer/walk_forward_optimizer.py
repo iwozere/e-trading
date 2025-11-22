@@ -494,6 +494,7 @@ def run_window_optimization(
                 # Define objective function for this strategy combination
                 def objective(trial):
                     """Objective function for optimization"""
+                    # optuna.pruners.MedianPruner(n_warmup_steps=10)
                     # Create a new data feed for each trial
                     data = prepare_data_feed(df, symbol_from_file)
 
