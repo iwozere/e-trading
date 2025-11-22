@@ -78,19 +78,21 @@ class FMPDataDownloader(BaseDataDownloader):
             # Build URL
             if fmp_interval == '1day':
                 # Daily data endpoint
-                url = f"{self.stable_url}/historical-price-full/{symbol}"
+                url = f"{self.stable_url}/historical-price-full"
                 params = {
                     'apikey': self.api_key,
                     'from': start_str,
-                    'to': end_str
+                    'to': end_str,
+                    'symbol': symbol
                 }
             else:
                 # Intraday data endpoint
-                url = f"{self.stable_url}/historical-chart/{fmp_interval}/{symbol}"
+                url = f"{self.stable_url}/historical-chart/{fmp_interval}"
                 params = {
                     'apikey': self.api_key,
                     'from': start_str,
-                    'to': end_str
+                    'to': end_str,
+                    'symbol': symbol
                 }
 
             # Add limit if specified
@@ -430,8 +432,8 @@ class FMPDataDownloader(BaseDataDownloader):
     def get_income_statement(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
         """Get income statement data."""
         try:
-            url = f"{self.stable_url}/income-statement/{symbol}"
-            params = {'apikey': self.api_key, 'limit': limit}
+            url = f"{self.stable_url}/income-statement"
+            params = {'apikey': self.api_key, 'limit': limit, 'symbol': symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -447,8 +449,8 @@ class FMPDataDownloader(BaseDataDownloader):
     def get_balance_sheet(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
         """Get balance sheet data."""
         try:
-            url = f"{self.stable_url}/balance-sheet-statement/{symbol}"
-            params = {'apikey': self.api_key, 'limit': limit}
+            url = f"{self.stable_url}/balance-sheet-statement"
+            params = {'apikey': self.api_key, 'limit': limit, 'symbol': symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -464,8 +466,8 @@ class FMPDataDownloader(BaseDataDownloader):
     def get_cash_flow(self, symbol: str, limit: int = 1) -> Optional[List[Dict[str, Any]]]:
         """Get cash flow statement data."""
         try:
-            url = f"{self.stable_url}/cash-flow-statement/{symbol}"
-            params = {'apikey': self.api_key, 'limit': limit}
+            url = f"{self.stable_url}/cash-flow-statement"
+            params = {'apikey': self.api_key, 'limit': limit, 'symbol': symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -481,8 +483,8 @@ class FMPDataDownloader(BaseDataDownloader):
     def get_enterprise_value(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get enterprise value data."""
         try:
-            url = f"{self.stable_url}/enterprise-values/{symbol}"
-            params = {'apikey': self.api_key, 'limit': 1}
+            url = f"{self.stable_url}/enterprise-values"
+            params = {'apikey': self.api_key, 'limit': 1, 'symbol': symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -502,8 +504,8 @@ class FMPDataDownloader(BaseDataDownloader):
     def get_dcf_valuation(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get DCF valuation data."""
         try:
-            url = f"{self.stable_url}/dcf/{symbol}"
-            params = {'apikey': self.api_key, 'limit': 1}
+            url = f"{self.stable_url}/dcf"
+            params = {'apikey': self.api_key, 'limit': 1, 'symbol': symbol}
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
@@ -533,8 +535,8 @@ class FMPDataDownloader(BaseDataDownloader):
             Dictionary with short interest data or None if failed
         """
         try:
-            url = f"{self.stable_url}/short-interest/{symbol}"
-            params = {'apikey': self.api_key}
+            url = f"{self.stable_url}/short-interest"
+            params = {'apikey': self.api_key, 'symbol': symbol}
 
             _logger.debug("Fetching short interest data for %s", symbol)
 
@@ -721,17 +723,25 @@ class FMPDataDownloader(BaseDataDownloader):
             return {}
 
     def test_connection(self) -> bool:
-        """Test API connection."""
+        """Test API connection using stable API."""
         try:
-            # Test with a simple request
-            url = f"{self.stable_url}/profile/AAPL"
-            params = {'apikey': self.api_key}
+            # Test with stable API format: /stable/profile?symbol=AAPL&apikey=xxx
+            url = f"{self.stable_url}/profile"
+            params = {
+                'symbol': 'AAPL',
+                'apikey': self.api_key
+            }
 
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
 
-            _logger.info("FMP API connection test successful")
-            return True
+            data = response.json()
+            if isinstance(data, list) and len(data) > 0:
+                _logger.info("FMP API connection test successful")
+                return True
+            else:
+                _logger.error("FMP API returned unexpected format: %s", data)
+                return False
 
         except Exception:
             _logger.exception("FMP API connection test failed:")

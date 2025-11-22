@@ -4,8 +4,8 @@ EMPS Universe Scanner - Example Script
 
 Demonstrates full integration of EMPS with:
 1. FMP Data Downloader
-2. P04 Universe Selection
-3. Combined EMPS + Short Squeeze Scoring
+2. EMPS Universe Selection (standalone P05)
+3. Optional P04 Short Squeeze Integration
 
 Usage:
     python run_emps_scan.py --limit 50 --min-score 0.5 --output results.csv
@@ -19,13 +19,13 @@ from datetime import datetime
 import pandas as pd
 
 # Add project root
-PROJECT_ROOT = Path(__file__).resolve().parents[5]
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
-from src.ml.pipeline.p04_short_squeeze.config.data_classes import UniverseConfig
-from src.ml.pipeline.p05_emps.emps_p04_integration import create_emps_scanner
+from src.ml.pipeline.p05_emps.universe_loader import EMPSUniverseConfig
+from src.ml.pipeline.p05_emps.emps_integration import create_emps_scanner
 from src.ml.pipeline.p05_emps.emps import DEFAULTS as EMPS_DEFAULTS
 
 logger = setup_logger(__name__)
@@ -103,6 +103,19 @@ Examples:
         default=0.6,
         help='EMPS explosion flag threshold (default: 0.6)'
     )
+    parser.add_argument(
+        '--interval',
+        type=str,
+        default='15m',
+        choices=['5m', '15m', '30m', '1h'],
+        help='Data interval for EMPS calculation (default: 15m - optimized for screening)'
+    )
+    parser.add_argument(
+        '--days-back',
+        type=int,
+        default=2,
+        help='Days of historical data to fetch (default: 2 - optimized for screening)'
+    )
 
     return parser.parse_args()
 
@@ -117,10 +130,10 @@ def print_header(title: str):
 def print_results_summary(df: pd.DataFrame):
     """Print formatted results summary."""
     if df.empty:
-        print("⚠️  No candidates found above threshold\n")
+        print("[WARNING] No candidates found above threshold\n")
         return
 
-    print(f"✅ Found {len(df)} candidates:\n")
+    print(f"[OK] Found {len(df)} candidates:\n")
 
     # Format columns for display
     display_cols = ['ticker', 'emps_score', 'explosion_flag', 'vol_zscore', 'vwap_dev', 'rv_ratio']
@@ -174,6 +187,8 @@ def main():
     print("Configuration:")
     print(f"  Scan limit: {args.limit} tickers")
     print(f"  Min EMPS score: {args.min_score}")
+    print(f"  Data interval: {args.interval}")
+    print(f"  Days back: {args.days_back}")
     print(f"  Universe: ${args.min_cap/1e6:.0f}M - ${args.max_cap/1e9:.1f}B market cap")
     print(f"  Min volume: {args.min_volume:,}")
     print(f"  P04 integration: {'Enabled' if args.combine_p04 else 'Disabled'}")
@@ -186,19 +201,20 @@ def main():
     try:
         fmp = FMPDataDownloader()
         if not fmp.test_connection():
-            print("❌ FMP connection failed")
+            print("[ERROR] FMP connection failed")
             return 1
-        print("✅ FMP connection successful\n")
+        print("[OK] FMP connection successful\n")
     except Exception as e:
-        print(f"❌ Failed to initialize FMP: {e}")
+        print(f"[ERROR] Failed to initialize FMP: {e}")
         return 1
 
     # Configure universe
-    universe_config = UniverseConfig(
+    universe_config = EMPSUniverseConfig(
         min_market_cap=args.min_cap,
         max_market_cap=args.max_cap,
         min_avg_volume=args.min_volume,
-        exchanges=['NYSE', 'NASDAQ']
+        exchanges=['NYSE', 'NASDAQ'],
+        max_universe_size=1000
     )
 
     # Configure EMPS parameters
@@ -207,18 +223,24 @@ def main():
         'combined_score_thresh': args.emps_threshold
     }
 
+    # Configure data fetch parameters
+    fetch_params = {
+        'interval': args.interval,
+        'days_back': args.days_back
+    }
+
     # Create scanner
     logger.info("Initializing EMPS scanner...")
     try:
-        scanner = create_emps_scanner(fmp, universe_config, emps_params)
-        print("✅ EMPS scanner initialized\n")
+        scanner = create_emps_scanner(fmp, universe_config, emps_params, fetch_params)
+        print("[OK] EMPS scanner initialized\n")
     except Exception as e:
-        print(f"❌ Failed to initialize scanner: {e}")
+        print(f"[ERROR] Failed to initialize scanner: {e}")
         return 1
 
     # Run scan
     print_header("Scanning Universe")
-    print(f"⏳ Scanning {args.limit} tickers...\n")
+    print(f"[INFO] Scanning {args.limit} tickers...\n")
 
     try:
         if args.combine_p04:
@@ -241,7 +263,7 @@ def main():
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
             results.to_csv(output_path, index=False)
-            print(f"✅ Results saved to: {output_path}\n")
+            print(f"[OK] Results saved to: {output_path}\n")
 
         # Print top candidates
         if not results.empty:
@@ -266,7 +288,7 @@ def main():
 
     except Exception as e:
         logger.exception("Error during scan:")
-        print(f"\n❌ Scan failed: {e}\n")
+        print(f"\n[ERROR] Scan failed: {e}\n")
         return 1
 
 

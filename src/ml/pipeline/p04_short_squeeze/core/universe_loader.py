@@ -17,7 +17,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
-from src.data.db.core.database import session_scope
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.ml.pipeline.p04_short_squeeze.config.data_classes import UniverseConfig
 
@@ -324,9 +323,9 @@ class UniverseLoader:
         try:
             _logger.info("Querying FINRA data from database for %d tickers", len(tickers))
 
-            with session_scope() as session:
-                service = ShortSqueezeService(session)
-                finra_data = service.get_bulk_finra_short_interest(tickers)
+            # Service manages sessions internally via UoW pattern
+            service = ShortSqueezeService()
+            finra_data = service.get_bulk_finra_short_interest(tickers)
 
             _logger.info("Retrieved FINRA data for %d tickers from database", len(finra_data))
             return finra_data

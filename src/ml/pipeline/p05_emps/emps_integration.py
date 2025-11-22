@@ -1,8 +1,8 @@
 """
-EMPS Integration with P04 Short Squeeze Pipeline
+EMPS Integration Module
 
-Integrates EMPS (Explosive Move Probability Score) with the existing P04 short squeeze
-detection pipeline, allowing combined scoring and enhanced candidate detection.
+Provides universe scanning with EMPS (Explosive Move Probability Score).
+Standalone P05 implementation with optional P04 short squeeze integration.
 """
 
 from typing import List, Dict, Any, Optional
@@ -18,50 +18,53 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
-from src.ml.pipeline.p04_short_squeeze.core.universe_loader import UniverseLoader
-from src.ml.pipeline.p04_short_squeeze.config.data_classes import UniverseConfig
 from src.ml.pipeline.p05_emps.emps import compute_emps_from_intraday, DEFAULTS as EMPS_DEFAULTS
 from src.ml.pipeline.p05_emps.emps_data_adapter import EMPSDataAdapter
+from src.ml.pipeline.p05_emps.universe_loader import EMPSUniverseLoader, EMPSUniverseConfig
 
 logger = setup_logger(__name__)
 
-# Optional database imports (only needed for P04 integration)
+# Optional P04 integration (for short squeeze metrics)
 try:
     from src.data.db.services.short_squeeze_service import ShortSqueezeService
-    DB_AVAILABLE = True
+    P04_AVAILABLE = True
 except ImportError as e:
-    logger.warning("Database imports not available: %s. P04 integration will be limited.", e)
+    logger.warning("P04 short squeeze service not available: %s. P04 integration will be disabled.", e)
     ShortSqueezeService = None
-    DB_AVAILABLE = False
+    P04_AVAILABLE = False
 
 
 class EMPSUniverseScanner:
     """
     Scanner that applies EMPS scoring to a universe of stocks.
 
-    Integrates with P04 universe loader to scan and score stocks for explosive moves.
+    Standalone P05 implementation using EMPSUniverseLoader.
     """
 
     def __init__(
         self,
         downloader: FMPDataDownloader,
-        universe_loader: UniverseLoader,
-        emps_params: Optional[Dict[str, Any]] = None
+        universe_loader: EMPSUniverseLoader,
+        emps_params: Optional[Dict[str, Any]] = None,
+        fetch_params: Optional[Dict[str, Any]] = None
     ):
         """
         Initialize EMPS universe scanner.
 
         Args:
             downloader: Data downloader instance
-            universe_loader: Universe loader from P04 pipeline
+            universe_loader: EMPS universe loader (standalone P05 component)
             emps_params: Optional EMPS parameters (overrides defaults)
+            fetch_params: Optional data fetch parameters (interval, days_back)
         """
         self.downloader = downloader
         self.universe_loader = universe_loader
         self.emps_params = {**EMPS_DEFAULTS, **(emps_params or {})}
+        self.fetch_params = fetch_params or {'interval': '15m', 'days_back': 2}
         self.adapter = EMPSDataAdapter(downloader)
 
-        logger.info("EMPS Universe Scanner initialized")
+        logger.info("EMPS Universe Scanner initialized (interval=%s, days=%d)",
+                    self.fetch_params.get('interval'), self.fetch_params.get('days_back'))
 
     def scan_universe(
         self,
@@ -80,7 +83,7 @@ class EMPSUniverseScanner:
         """
         logger.info("Starting EMPS universe scan...")
 
-        # Load universe from P04
+        # Load universe
         universe = self.universe_loader.load_universe()
         if not universe:
             logger.warning("No tickers in universe")
@@ -101,13 +104,13 @@ class EMPSUniverseScanner:
 
                 if result and result.get('emps_score', 0) >= min_emps_score:
                     results.append(result)
-                    logger.info("  ✅ %s: EMPS=%.3f, explosion=%s",
+                    logger.info("  [OK] %s: EMPS=%.3f, explosion=%s",
                                 ticker, result['emps_score'], result['explosion_flag'])
                 else:
-                    logger.info("  ⏭️  %s: Below threshold", ticker)
+                    logger.info("  [SKIP] %s: Below threshold", ticker)
 
             except Exception as e:
-                logger.warning("  ❌ %s: Error - %s", ticker, e)
+                logger.warning("  [ERROR] %s: Error - %s", ticker, e)
                 continue
 
         if not results:
@@ -139,10 +142,10 @@ class EMPSUniverseScanner:
             # Fetch metadata
             metadata = self.adapter.fetch_ticker_metadata(ticker)
 
-            # Fetch intraday data
+            # Fetch intraday data using configured parameters
             df_intraday = self.adapter.fetch_intraday_for_emps(
                 ticker,
-                {'interval': '5m', 'days_back': 7}
+                self.fetch_params
             )
 
             if df_intraday.empty:
@@ -210,9 +213,9 @@ class EMPSUniverseScanner:
         if not combine_scores:
             return df_emps
 
-        # Check if database is available
-        if not DB_AVAILABLE:
-            logger.warning("Database not available - skipping P04 integration")
+        # Check if P04 integration is available
+        if not P04_AVAILABLE:
+            logger.warning("P04 short squeeze service not available - skipping P04 integration")
             return df_emps
 
         # Try to fetch P04 short squeeze data
@@ -330,31 +333,36 @@ class EMPSEnhancedCandidate:
 
 def create_emps_scanner(
     downloader: FMPDataDownloader,
-    universe_config: Optional[UniverseConfig] = None,
-    emps_params: Optional[Dict[str, Any]] = None
+    universe_config: Optional[EMPSUniverseConfig] = None,
+    emps_params: Optional[Dict[str, Any]] = None,
+    fetch_params: Optional[Dict[str, Any]] = None
 ) -> EMPSUniverseScanner:
     """
-    Factory function to create EMPS universe scanner with P04 integration.
+    Factory function to create EMPS universe scanner.
+
+    Standalone P05 implementation - no P04 dependencies required.
 
     Args:
         downloader: Data downloader instance
-        universe_config: Optional universe configuration (uses defaults if None)
+        universe_config: Optional EMPS universe configuration (uses defaults if None)
         emps_params: Optional EMPS parameters
+        fetch_params: Optional data fetch parameters (interval, days_back)
 
     Returns:
         Configured EMPS universe scanner
     """
     if universe_config is None:
-        universe_config = UniverseConfig(
+        universe_config = EMPSUniverseConfig(
             min_market_cap=100_000_000,  # $100M
             max_market_cap=10_000_000_000,  # $10B
             min_avg_volume=500_000,
-            exchanges=['NYSE', 'NASDAQ']
+            exchanges=['NYSE', 'NASDAQ'],
+            max_universe_size=1000
         )
 
-    universe_loader = UniverseLoader(downloader, universe_config)
+    universe_loader = EMPSUniverseLoader(downloader, universe_config)
 
-    return EMPSUniverseScanner(downloader, universe_loader, emps_params)
+    return EMPSUniverseScanner(downloader, universe_loader, emps_params, fetch_params)
 
 
 # Example usage

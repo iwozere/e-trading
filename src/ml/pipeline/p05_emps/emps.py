@@ -33,11 +33,14 @@ logger = setup_logger(__name__)
 
 # ------------------------- Defaults / thresholds -------------------------
 DEFAULTS = {
-    # lookbacks in bars for intraday series (e.g. 5m bars)
-    'vol_lookback': 60,  # ~5 hours with 5m bars
-    'vwap_lookback': 60,
-    'rv_short_window': 15,
-    'rv_long_window': 120,
+    # Lookbacks in bars for intraday series
+    # Optimized for 15m intervals (2 days = ~156 bars)
+    # For 5m bars: multiply by 3 (e.g., vol_lookback=60 for 5m)
+    # For 15m bars: use as-is (vol_lookback=20 for 15m)
+    'vol_lookback': 20,  # ~5 hours: 20 bars × 15m = 300 min
+    'vwap_lookback': 20,  # ~5 hours: 20 bars × 15m = 300 min
+    'rv_short_window': 5,  # ~75 min: 5 bars × 15m = 75 min
+    'rv_long_window': 40,  # ~10 hours: 40 bars × 15m = 600 min
 
     # thresholds for component interpretation
     'vol_zscore_thresh': 4.0,

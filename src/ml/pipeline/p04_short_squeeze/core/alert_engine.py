@@ -18,7 +18,6 @@ from src.ml.pipeline.p04_short_squeeze.core.models import (
     ScoredCandidate, Alert, AlertLevel
 )
 from src.ml.pipeline.p04_short_squeeze.config.data_classes import AlertConfig
-from src.data.db.core.database import session_scope
 from src.data.db.services.short_squeeze_service import ShortSqueezeService
 from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
 from src.notification.logger import setup_logger
@@ -194,9 +193,9 @@ class AlertEngine:
             True if in cooldown, False otherwise
         """
         try:
-            with session_scope() as session:
-                service = ShortSqueezeService(session)
-                return service.repo.alerts.check_cooldown(ticker, alert_level)
+            # Service manages sessions internally via UoW pattern
+            service = ShortSqueezeService()
+            return service.repo.alerts.check_cooldown(ticker, alert_level)
         except Exception as e:
             self._logger.error("Error checking cooldown for %s: %s", ticker, e)
             # Assume not in cooldown on error to avoid missing alerts
@@ -339,23 +338,23 @@ class AlertEngine:
             notification_id: Notification system ID
         """
         try:
-            with session_scope() as session:
-                service = ShortSqueezeService(session)
+            # Service manages sessions internally via UoW pattern
+            service = ShortSqueezeService()
 
-                # First create the alert in database if it doesn't exist
-                alert_id = service.create_alert(
-                    ticker=alert.ticker,
-                    alert_level=alert.alert_level,
-                    reason=alert.reason,
-                    squeeze_score=alert.squeeze_score,
-                    cooldown_days=self._get_cooldown_days(alert.alert_level)
-                )
+            # First create the alert in database if it doesn't exist
+            alert_id = service.create_alert(
+                ticker=alert.ticker,
+                alert_level=alert.alert_level,
+                reason=alert.reason,
+                squeeze_score=alert.squeeze_score,
+                cooldown_days=self._get_cooldown_days(alert.alert_level)
+            )
 
-                if alert_id:
-                    # Mark as sent
-                    service.mark_alert_sent(alert_id, notification_id)
-                    alert.sent = True
-                    alert.notification_id = notification_id
+            if alert_id:
+                # Mark as sent
+                service.mark_alert_sent(alert_id, notification_id)
+                alert.sent = True
+                alert.notification_id = notification_id
 
         except Exception as e:
             self._logger.error("Error marking alert as sent for %s: %s", alert.ticker, e)
@@ -447,11 +446,11 @@ class AlertEngine:
             Alert statistics
         """
         try:
-            with session_scope() as session:
-                service = ShortSqueezeService(session)
+            # Service manages sessions internally via UoW pattern
+            service = ShortSqueezeService()
 
-                # Get recent alerts
-                recent_alerts = service.repo.alerts.get_recent_alerts(days)
+            # Get recent alerts
+            recent_alerts = service.repo.alerts.get_recent_alerts(days)
 
                 # Count by level
                 level_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
