@@ -68,11 +68,7 @@ P05 EMPS Pipeline (Standalone)
 │   └── run_emps_scan.py          # CLI scanner
 │
 └── Documentation
-    ├── README.md                  # This file
-    ├── EMPS_DETAILED_EXPLANATION.md
-    ├── EMPS_QUICK_REFERENCE.md
-    ├── DATA_OPTIMIZATION_GUIDE.md
-    └── OPTIMIZATION_SUMMARY.md
+    └── README.md                  # This file
 ```
 
 ### Optional P04 Integration

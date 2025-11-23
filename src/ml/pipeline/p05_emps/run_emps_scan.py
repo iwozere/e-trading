@@ -113,7 +113,7 @@ Examples:
     parser.add_argument(
         '--days-back',
         type=int,
-        default=2,
+        default=7,
         help='Days of historical data to fetch (default: 2 - optimized for screening)'
     )
 
