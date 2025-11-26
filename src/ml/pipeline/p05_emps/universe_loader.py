@@ -65,21 +65,30 @@ class EMPSUniverseLoader:
                     self.config.max_market_cap // 1_000_000_000,
                     self.config.min_avg_volume // 1_000)
 
-    def load_universe(self) -> List[str]:
+    def load_universe(self, force_refresh: bool = False) -> List[str]:
         """
         Load universe of stocks suitable for EMPS analysis.
+
+        Args:
+            force_refresh: If True, bypass cache and force fresh fetch from screener
 
         Returns:
             List of ticker symbols
         """
         try:
-            logger.info("Loading EMPS universe...")
+            logger.info("Loading EMPS universe... (force_refresh=%s)", force_refresh)
 
-            # Check cache first
-            cached = self._load_from_cache()
-            if cached:
-                logger.info("Loaded %d tickers from cache", len(cached))
-                return cached
+            # Clear cache if force refresh requested
+            if force_refresh:
+                logger.info("Force refresh requested - clearing cache")
+                self.clear_cache()
+
+            # Check cache first (unless force refresh)
+            if not force_refresh:
+                cached = self._load_from_cache()
+                if cached:
+                    logger.info("Loaded %d tickers from cache", len(cached))
+                    return cached
 
             # Load from FMP screener
             universe = self._load_from_screener()
@@ -138,20 +147,37 @@ class EMPSUniverseLoader:
             all_tickers.update(tickers_2)
             logger.info("Strategy 2: Found %d new tickers", len(tickers_2) - len(all_tickers & set(tickers_2)))
 
-            # Strategy 3: Known explosive tickers
+            # Strategy 3: Known explosive tickers (prioritize these)
             known_tickers = self._get_known_explosive_tickers()
-            all_tickers.update(known_tickers)
-            logger.info("Strategy 3: Added %d known explosive tickers", len(known_tickers))
+            logger.info("Strategy 3: Adding %d known explosive tickers", len(known_tickers))
 
-            final_tickers = list(all_tickers)
+            # Prioritize known explosive tickers first, then add screener results
+            # This ensures high-quality explosive candidates are never excluded
+            final_tickers = []
 
-            # Limit to max universe size
+            # 1. Add known explosive tickers that aren't already included
+            for ticker in known_tickers:
+                if ticker not in all_tickers:
+                    final_tickers.append(ticker)
+
+            # 2. Add screener results (maintain their order - usually sorted by screener's relevance)
+            screener_tickers = list(all_tickers)
+            for ticker in screener_tickers:
+                if ticker not in final_tickers:
+                    final_tickers.append(ticker)
+
+            # 3. Add remaining known tickers that were in screener results (move to front)
+            known_in_screener = [t for t in known_tickers if t in all_tickers]
+            final_tickers = known_in_screener + [t for t in final_tickers if t not in known_in_screener]
+
+            # Limit to max universe size (after prioritization)
             if len(final_tickers) > self.config.max_universe_size:
-                logger.info("Limiting universe from %d to %d tickers",
+                logger.info("Limiting universe from %d to %d tickers (prioritized by explosion potential)",
                            len(final_tickers), self.config.max_universe_size)
                 final_tickers = final_tickers[:self.config.max_universe_size]
 
-            logger.info("Combined universe: %d unique tickers", len(final_tickers))
+            logger.info("Combined universe: %d unique tickers (known explosive: %d)",
+                       len(final_tickers), len([t for t in final_tickers if t in known_tickers]))
             return final_tickers
 
         except Exception:

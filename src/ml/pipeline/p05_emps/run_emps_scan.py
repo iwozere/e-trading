@@ -25,8 +25,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-from src.ml.pipeline.p05_emps.universe_loader import EMPSUniverseConfig
-from src.ml.pipeline.p05_emps.emps_integration import create_emps_scanner
+from src.ml.pipeline.p05_emps.universe_loader import EMPSUniverseConfig, EMPSUniverseLoader
+from src.ml.pipeline.p05_emps.emps_integration import EMPSUniverseScanner
 from src.ml.pipeline.p05_emps.emps import DEFAULTS as EMPS_DEFAULTS
 
 logger = setup_logger(__name__)
@@ -68,8 +68,8 @@ Examples:
     parser.add_argument(
         '--limit',
         type=int,
-        default=20,
-        help='Maximum number of tickers to scan (default: 20)'
+        default=1000,
+        help='Maximum number of tickers to scan (default: 1000)'
     )
     parser.add_argument(
         '--min-score',
@@ -107,6 +107,12 @@ Examples:
         default=500_000,
         help='Minimum average volume (default: 500K)'
     )
+    parser.add_argument(
+        '--max-universe-size',
+        type=int,
+        default=1000,
+        help='Maximum universe size before narrowing (default: 1000). Known explosive tickers are prioritized.'
+    )
 
     # EMPS parameters
     parser.add_argument(
@@ -125,8 +131,8 @@ Examples:
     parser.add_argument(
         '--days-back',
         type=int,
-        default=7,
-        help='Days of historical data to fetch (default: 2 - optimized for screening)'
+        default=20,
+        help='Days of historical data to fetch (default: 20 calendar days ~ 14 trading days for sufficient EMPS rolling windows)'
     )
     parser.add_argument(
         '--save-universe-to-db',
@@ -144,6 +150,12 @@ Examples:
         default='yfinance',
         choices=['fmp', 'yfinance'],
         help='Data provider to use: fmp (requires API key, paid for intraday) or yfinance (free, no API key, last 60 days intraday). Default: yfinance'
+    )
+    parser.add_argument(
+        '--force-refresh-universe',
+        action='store_true',
+        default=True,
+        help='Force refresh universe from screener by default; set to False programmatically if needed (useful when FMP API becomes available after previous failure)'
     )
 
     return parser.parse_args()
@@ -283,22 +295,23 @@ def print_results_summary(df: pd.DataFrame):
 
     # Format numeric columns
     format_dict = {
-        'emps_score': '{:.3f}',
-        'vol_zscore': '{:.2f}',
-        'vwap_dev': '{:.3f}',
-        'rv_ratio': '{:.2f}',
-        'short_interest_pct': '{:.1f}',
-        'days_to_cover': '{:.2f}',
-        'combined_score': '{:.3f}',
+        'emps_score': lambda x: f'{x:.3f}',
+        'vol_zscore': lambda x: f'{x:.2f}',
+        'vwap_dev': lambda x: f'{x:.3f}',
+        'rv_ratio': lambda x: f'{x:.2f}',
+        'short_interest_pct': lambda x: f'{x:.1f}',
+        'days_to_cover': lambda x: f'{x:.2f}',
+        'combined_score': lambda x: f'{x:.3f}',
     }
 
-    # Print table
-    print(df[display_cols].head(20).to_string(index=False, formatters=format_dict))
+    # Print table (only use formatters for columns that exist)
+    formatters_to_use = {k: v for k, v in format_dict.items() if k in display_cols}
+    print(df[display_cols].head(20).to_string(index=False, formatters=formatters_to_use))
 
     # Print statistics
-    print(f"\n{'─'*70}")
+    print(f"\n{'-'*70}")
     print("Statistics:")
-    print(f"{'─'*70}")
+    print(f"{'-'*70}")
     print(f"  Total candidates: {len(df)}")
     print(f"  Explosion flags: {df['explosion_flag'].sum()}")
     if 'hard_flag' in df.columns:
@@ -333,32 +346,54 @@ def main():
         print(f"  Output file: {args.output}")
     print()
 
-    # Initialize data downloader based on provider choice
-    logger.info("Initializing %s downloader...", args.data_provider)
-    try:
-        if args.data_provider == 'yfinance':
-            downloader = YahooDataDownloader()
-            print("[INFO] Using Yahoo Finance (free, no API key required)")
-            print("[INFO] Intraday data available for last 60 days")
-        else:  # fmp
-            downloader = FMPDataDownloader()
-            print("[INFO] Using FMP (requires API key)")
+    # Initialize data downloaders
+    # Strategy: Use FMP for universe screening (has screener API)
+    #           Use Yahoo Finance for OHLCV data (free, no API key)
+    logger.info("Initializing data downloaders...")
 
-        if not downloader.test_connection():
-            print(f"[ERROR] {args.data_provider.upper()} connection failed")
+    try:
+        # Always use FMP for universe screening (better screener API)
+        fmp_downloader = FMPDataDownloader()
+        print("[INFO] Universe provider: FMP (screener API)")
+
+        if not fmp_downloader.test_connection():
+            print("[ERROR] FMP connection failed - needed for universe screening")
             return 1
-        print(f"[OK] {args.data_provider.upper()} connection successful\n")
+        print("[OK] FMP connection successful (universe screening)\n")
+
     except Exception as e:
-        print(f"[ERROR] Failed to initialize {args.data_provider}: {e}")
+        print(f"[ERROR] Failed to initialize FMP for universe: {e}")
         return 1
 
-    # Configure universe
+    try:
+        # Use selected provider for OHLCV data
+        if args.data_provider == 'yfinance':
+            ohlcv_downloader = YahooDataDownloader()
+            print("[INFO] OHLCV provider: Yahoo Finance (free, no API key required)")
+            print("[INFO] Intraday data available for last 60 days")
+        else:  # fmp
+            ohlcv_downloader = FMPDataDownloader()
+            print("[INFO] OHLCV provider: FMP (requires API key)")
+            # Reuse FMP connection for both if user chose FMP
+            ohlcv_downloader = fmp_downloader
+
+        if ohlcv_downloader != fmp_downloader:
+            if not ohlcv_downloader.test_connection():
+                print(f"[ERROR] {args.data_provider.upper()} connection failed")
+                return 1
+            print(f"[OK] {args.data_provider.upper()} connection successful (OHLCV data)\n")
+
+    except Exception as e:
+        print(f"[ERROR] Failed to initialize {args.data_provider} for OHLCV: {e}")
+        return 1
+
+    # Configure universe (using FMP for screening)
     universe_config = EMPSUniverseConfig(
         min_market_cap=args.min_cap,
         max_market_cap=args.max_cap,
         min_avg_volume=args.min_volume,
         exchanges=['NYSE', 'NASDAQ'],
-        max_universe_size=1000
+        max_universe_size=args.max_universe_size
     )
 
     # Configure EMPS parameters
@@ -373,18 +408,30 @@ def main():
         'days_back': args.days_back
     }
 
-    # Create scanner
-    logger.info("Initializing EMPS scanner...")
+    # Create scanner with hybrid approach:
+    # - Universe loader uses FMP (for screener)
+    # - Data adapter uses selected provider (for OHLCV)
+    logger.info("Initializing EMPS scanner with hybrid providers...")
     try:
-        scanner = create_emps_scanner(downloader, universe_config, emps_params, fetch_params)
-        print("[OK] EMPS scanner initialized\n")
+        # Universe loader uses FMP (has screener API)
+        universe_loader = EMPSUniverseLoader(fmp_downloader, universe_config)
+
+        # Create scanner (it will create its own data adapter internally)
+        scanner = EMPSUniverseScanner(
+            downloader=ohlcv_downloader,
+            universe_loader=universe_loader,
+            emps_params=emps_params,
+            fetch_params=fetch_params
+        )
+
+        print("[OK] EMPS scanner initialized (FMP universe + Yahoo OHLCV)\n")
     except Exception as e:
         print(f"[ERROR] Failed to initialize scanner: {e}")
         return 1
 
     # Load and display universe
     logger.info("Loading universe...")
-    universe = scanner.universe_loader.load_universe()
+    universe = scanner.universe_loader.load_universe(force_refresh=args.force_refresh_universe)
 
     if not universe:
         print("[ERROR] Failed to load universe\n")
@@ -393,9 +440,9 @@ def main():
     # Print universe summary
     print_universe_summary(universe, universe_config)
 
-    # Save universe to CSV if requested
-    if args.universe_output:
-        save_universe_to_csv(universe, args.universe_output, universe_config)
+    # Save universe to CSV (always, with custom filename if provided)
+    universe_filename = args.universe_output if args.universe_output else 'universe.csv'
+    save_universe_to_csv(universe, universe_filename, universe_config)
 
     # Save universe to database if requested
     if args.save_universe_to_db:

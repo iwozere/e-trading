@@ -150,7 +150,8 @@ def compute_volume_zscore(df: pd.DataFrame, lookback: int) -> pd.Series:
         Series of z-scores (NaN for insufficient data, not filled)
     """
     vol = pd.to_numeric(df['Volume'], errors='coerce')
-    min_periods = max(10, lookback // 4)  # Require at least 25% of lookback period
+    # Require at least 25% of lookback period, but never exceed window
+    min_periods = min(lookback, max(10, lookback // 4))
 
     mean = vol.rolling(window=lookback, min_periods=min_periods).mean()
     std = vol.rolling(window=lookback, min_periods=min_periods).std()
@@ -170,7 +171,8 @@ def compute_vwap_deviation(df: pd.DataFrame, lookback_vwap: int) -> pd.Series:
     Returns:
         Series of VWAP deviations (NaN for insufficient data)
     """
-    min_periods = max(5, lookback_vwap // 10)
+    # Ensure min_periods doesn't exceed window (pandas constraint)
+    min_periods = min(lookback_vwap, max(5, lookback_vwap // 10))
 
     # Typical price
     tp = (df['High'] + df['Low'] + df['Close']) / 3.0
@@ -205,7 +207,8 @@ def realized_volatility(series_close: pd.Series, window: int) -> pd.Series:
     bars_per_day = max(1.0, 390.0 / median_min)  # 6.5h trading day ≈ 390 minutes
     annual_factor = math.sqrt(252.0 * bars_per_day)
 
-    min_periods = max(10, window // 4)
+    # Ensure min_periods doesn't exceed window (pandas constraint)
+    min_periods = min(window, max(10, window // 4))
     logret = np.log(series_close).diff()
     rv = logret.rolling(window=window, min_periods=min_periods).std() * annual_factor
 

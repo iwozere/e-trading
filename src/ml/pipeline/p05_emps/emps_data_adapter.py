@@ -102,13 +102,24 @@ class EMPSDataAdapter:
             if missing_cols:
                 raise RuntimeError(f"Missing required columns: {missing_cols}")
 
-            # Ensure datetime index
-            if not isinstance(df.index, pd.DatetimeIndex):
+            # Ensure datetime index (timezone-naive)
+            if isinstance(df.index, pd.DatetimeIndex):
+                # Already has datetime index, but need to ensure it's timezone-naive
+                if df.index.tz is not None:
+                    df.index = df.index.tz_localize(None)
+            else:
+                # Need to create datetime index from column
                 if 'timestamp' in df.columns:
                     df['timestamp'] = pd.to_datetime(df['timestamp'])
+                    # Remove timezone if present
+                    if hasattr(df['timestamp'].dt, 'tz') and df['timestamp'].dt.tz is not None:
+                        df['timestamp'] = df['timestamp'].dt.tz_localize(None)
                     df = df.set_index('timestamp')
                 elif 'date' in df.columns:
                     df['date'] = pd.to_datetime(df['date'])
+                    # Remove timezone if present
+                    if hasattr(df['date'].dt, 'tz') and df['date'].dt.tz is not None:
+                        df['date'] = df['date'].dt.tz_localize(None)
                     df = df.set_index('date')
                 else:
                     logger.warning("No datetime column found, using default index")

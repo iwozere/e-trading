@@ -137,6 +137,7 @@ class YahooDataDownloader(BaseDataDownloader):
         # Map yfinance names to standard
         rename_map = {
             'date': 'timestamp',
+            'datetime': 'timestamp',  # yfinance sometimes uses 'Datetime' as index name
             'open': 'open',
             'high': 'high',
             'low': 'low',
