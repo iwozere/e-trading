@@ -82,6 +82,20 @@ class EMPSDataAdapter:
             if df is None or df.empty:
                 raise RuntimeError(f"No data returned for {ticker}")
 
+            # Standardize column names (handle both lowercase and Title Case)
+            # Create a mapping of lowercase to Title Case
+            column_mapping = {col.lower(): col for col in df.columns}
+
+            # Rename lowercase columns to Title Case if needed
+            if 'open' in column_mapping and 'Open' not in df.columns:
+                df = df.rename(columns={
+                    'open': 'Open',
+                    'high': 'High',
+                    'low': 'Low',
+                    'close': 'Close',
+                    'volume': 'Volume'
+                })
+
             # Validate required columns
             required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
             missing_cols = [col for col in required_cols if col not in df.columns]

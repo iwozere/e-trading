@@ -488,30 +488,6 @@ combined_score = 0.6 * emps_score + 0.4 * (short_interest_pct / 100.0)
 
 ---
 
-## Documentation
-
-### Quick Reference
-
-For common commands and configuration:
-- [EMPS_QUICK_REFERENCE.md](EMPS_QUICK_REFERENCE.md)
-
-### Detailed Technical Documentation
-
-For component explanations and scoring methodology:
-- [EMPS_DETAILED_EXPLANATION.md](EMPS_DETAILED_EXPLANATION.md)
-
-### Performance Optimization
-
-For interval selection and workflow optimization:
-- [DATA_OPTIMIZATION_GUIDE.md](DATA_OPTIMIZATION_GUIDE.md)
-
-### Change Summary
-
-For version 2.0 optimization details:
-- [OPTIMIZATION_SUMMARY.md](OPTIMIZATION_SUMMARY.md)
-
----
-
 ## Troubleshooting
 
 ### Common Issues

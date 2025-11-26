@@ -9,7 +9,7 @@ echo.
 
 REM Get project root
 set "SCRIPT_DIR=%~dp0"
-set "PROJECT_ROOT=%SCRIPT_DIR%..\..\"
+set "PROJECT_ROOT=%SCRIPT_DIR%..\\..\"
 
 REM Change to project root
 cd /d "%PROJECT_ROOT%"

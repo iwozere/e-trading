@@ -1,9 +1,9 @@
 @echo off
 REM ========================================
-REM Crypto Trading Platform - Plotter Runner
+REM Crypto Trading Platform - Optimizer Runner
 REM ========================================
 
-echo Starting Crypto Trading Plotter...
+echo Starting Crypto Trading Optimizer...
 
 REM Get the directory where this batch file is located
 set SCRIPT_DIR=%~dp0
@@ -32,16 +32,16 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Run the plotter script
-echo Running plotter...
-python src\backtester\plotter\run_plotter.py
+REM Run the optimizer script
+echo Running optimizer...
+python src\backtester\optimizer\walk_forward_optimizer.py
 
 REM Check if script ran successfully
 if errorlevel 1 (
-    echo Error: Plotter script failed
+    echo Error: Optimizer script failed
     pause
     exit /b 1
 )
 
-echo Plotter completed successfully!
+echo Optimizer completed successfully!
 pause

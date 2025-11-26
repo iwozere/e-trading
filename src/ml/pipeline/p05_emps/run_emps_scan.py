@@ -24,11 +24,20 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.ml.pipeline.p05_emps.universe_loader import EMPSUniverseConfig
 from src.ml.pipeline.p05_emps.emps_integration import create_emps_scanner
 from src.ml.pipeline.p05_emps.emps import DEFAULTS as EMPS_DEFAULTS
 
 logger = setup_logger(__name__)
+
+# Optional DB imports
+try:
+    from src.data.db.services.short_squeeze_service import ShortSqueezeService
+    DB_AVAILABLE = True
+except ImportError:
+    logger.warning("Database modules not available. DB storage will be disabled.")
+    DB_AVAILABLE = False
 
 
 def parse_args():
@@ -38,17 +47,20 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Scan top 20 tickers with default settings
+  # Scan top 20 tickers with Yahoo Finance (free, default)
   python run_emps_scan.py --limit 20
 
-  # Scan with custom threshold and save results
+  # Scan with custom threshold and save results (auto-saves to results/emps/YYYY-MM-DD/)
   python run_emps_scan.py --limit 50 --min-score 0.6 --output emps_results.csv
 
-  # Enable P04 integration for combined scoring
-  python run_emps_scan.py --limit 30 --combine-p04
+  # Save universe to CSV and database
+  python run_emps_scan.py --limit 30 --universe-output universe.csv --save-universe-to-db
 
-  # Custom universe configuration
-  python run_emps_scan.py --min-cap 50000000 --max-cap 5000000000 --min-volume 1000000
+  # Use FMP data provider instead of Yahoo Finance
+  python run_emps_scan.py --limit 20 --data-provider fmp
+
+  # Custom universe configuration with P04 integration
+  python run_emps_scan.py --min-cap 50000000 --max-cap 5000000000 --combine-p04
         """
     )
 
@@ -68,7 +80,7 @@ Examples:
     parser.add_argument(
         '--output',
         type=str,
-        help='Output CSV file path (optional)'
+        help='Output CSV file for results (filename or full path). If filename only, saved to results/emps/YYYY-MM-DD/'
     )
     parser.add_argument(
         '--combine-p04',
@@ -116,6 +128,23 @@ Examples:
         default=7,
         help='Days of historical data to fetch (default: 2 - optimized for screening)'
     )
+    parser.add_argument(
+        '--save-universe-to-db',
+        action='store_true',
+        help='Save selected universe to ss_snapshot table in database'
+    )
+    parser.add_argument(
+        '--universe-output',
+        type=str,
+        help='Output CSV file for universe (filename or full path). If filename only, saved to results/emps/YYYY-MM-DD/'
+    )
+    parser.add_argument(
+        '--data-provider',
+        type=str,
+        default='yfinance',
+        choices=['fmp', 'yfinance'],
+        help='Data provider to use: fmp (requires API key, paid for intraday) or yfinance (free, no API key, last 60 days intraday). Default: yfinance'
+    )
 
     return parser.parse_args()
 
@@ -125,6 +154,113 @@ def print_header(title: str):
     print(f"\n{'='*70}")
     print(f"{title:^70}")
     print(f"{'='*70}\n")
+
+
+def print_universe_summary(universe: list, config: EMPSUniverseConfig):
+    """Print formatted universe summary."""
+    print_header("Selected Universe")
+    print(f"Universe size: {len(universe)} tickers")
+    print(f"Market cap range: ${config.min_market_cap/1e6:.0f}M - ${config.max_market_cap/1e9:.1f}B")
+    print(f"Min avg volume: {config.min_avg_volume:,}")
+    print(f"Exchanges: {', '.join(config.exchanges)}")
+    print(f"\nFirst 50 tickers:")
+
+    # Print tickers in rows of 10
+    for i in range(0, min(50, len(universe)), 10):
+        print("  " + ", ".join(universe[i:i+10]))
+
+    if len(universe) > 50:
+        print(f"  ... and {len(universe) - 50} more")
+    print()
+
+
+def get_results_path(filename: str) -> Path:
+    """
+    Get standardized results path under results/emps/yyyy-mm-dd/.
+
+    Args:
+        filename: Name of the output file
+
+    Returns:
+        Path object with full path including date-based folder
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    results_dir = PROJECT_ROOT / 'results' / 'emps' / today
+    results_dir.mkdir(parents=True, exist_ok=True)
+    return results_dir / filename
+
+
+def save_universe_to_csv(universe: list, filepath: str, config: EMPSUniverseConfig):
+    """Save universe to CSV file."""
+    try:
+        # If filepath is just a filename, use standardized results path
+        if not Path(filepath).is_absolute() and '/' not in filepath and '\\' not in filepath:
+            output_path = get_results_path(filepath)
+        else:
+            output_path = Path(filepath)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create DataFrame with universe metadata
+        df = pd.DataFrame({
+            'ticker': universe,
+            'scan_date': datetime.now().strftime('%Y-%m-%d'),
+            'min_market_cap': config.min_market_cap,
+            'max_market_cap': config.max_market_cap,
+            'min_avg_volume': config.min_avg_volume,
+            'exchanges': ','.join(config.exchanges)
+        })
+
+        df.to_csv(output_path, index=False)
+        print(f"[OK] Universe saved to: {output_path}\n")
+        logger.info("Universe saved to CSV: %s", output_path)
+
+    except Exception as e:
+        print(f"[ERROR] Failed to save universe to CSV: {e}\n")
+        logger.error("Failed to save universe to CSV: %s", e)
+
+
+def save_universe_to_db(universe: list, config: EMPSUniverseConfig):
+    """Save universe tickers to ss_snapshot table."""
+    if not DB_AVAILABLE:
+        print("[WARNING] Database not available. Skipping DB save.\n")
+        return
+
+    try:
+        run_date = datetime.now().date()
+
+        # Use the service layer instead of direct repository access
+        service = ShortSqueezeService()
+
+        # Create snapshot records for each ticker in universe
+        snapshots_data = []
+        for ticker in universe:
+            snapshot_data = {
+                'ticker': ticker.upper(),
+                'run_date': run_date,
+                'market_cap': None,  # Will be populated during EMPS scan
+                'avg_volume_14d': None,
+                'screener_score': None,
+                'short_interest_pct': None,
+                'days_to_cover': None,
+                'float_shares': None,
+                'data_quality': None,
+                'raw_payload': {'source': 'emps_universe_loader', 'config': {
+                    'min_market_cap': config.min_market_cap,
+                    'max_market_cap': config.max_market_cap,
+                    'min_avg_volume': config.min_avg_volume
+                }}
+            }
+            snapshots_data.append(snapshot_data)
+
+        # Save via service (which handles UoW and transactions)
+        count = service.save_screener_results(snapshots_data, run_date)
+
+        print(f"[OK] Universe saved to database: {count} tickers in ss_snapshot table\n")
+        logger.info("Universe saved to database: %d tickers for run_date=%s", count, run_date)
+
+    except Exception as e:
+        print(f"[ERROR] Failed to save universe to database: {e}\n")
+        logger.error("Failed to save universe to database: %s", e)
 
 
 def print_results_summary(df: pd.DataFrame):
@@ -185,6 +321,7 @@ def main():
 
     # Display configuration
     print("Configuration:")
+    print(f"  Data provider: {args.data_provider.upper()}")
     print(f"  Scan limit: {args.limit} tickers")
     print(f"  Min EMPS score: {args.min_score}")
     print(f"  Data interval: {args.interval}")
@@ -196,16 +333,23 @@ def main():
         print(f"  Output file: {args.output}")
     print()
 
-    # Initialize FMP downloader
-    logger.info("Initializing FMP downloader...")
+    # Initialize data downloader based on provider choice
+    logger.info("Initializing %s downloader...", args.data_provider)
     try:
-        fmp = FMPDataDownloader()
-        if not fmp.test_connection():
-            print("[ERROR] FMP connection failed")
+        if args.data_provider == 'yfinance':
+            downloader = YahooDataDownloader()
+            print("[INFO] Using Yahoo Finance (free, no API key required)")
+            print("[INFO] Intraday data available for last 60 days")
+        else:  # fmp
+            downloader = FMPDataDownloader()
+            print("[INFO] Using FMP (requires API key)")
+
+        if not downloader.test_connection():
+            print(f"[ERROR] {args.data_provider.upper()} connection failed")
             return 1
-        print("[OK] FMP connection successful\n")
+        print(f"[OK] {args.data_provider.upper()} connection successful\n")
     except Exception as e:
-        print(f"[ERROR] Failed to initialize FMP: {e}")
+        print(f"[ERROR] Failed to initialize {args.data_provider}: {e}")
         return 1
 
     # Configure universe
@@ -232,11 +376,30 @@ def main():
     # Create scanner
     logger.info("Initializing EMPS scanner...")
     try:
-        scanner = create_emps_scanner(fmp, universe_config, emps_params, fetch_params)
+        scanner = create_emps_scanner(downloader, universe_config, emps_params, fetch_params)
         print("[OK] EMPS scanner initialized\n")
     except Exception as e:
         print(f"[ERROR] Failed to initialize scanner: {e}")
         return 1
+
+    # Load and display universe
+    logger.info("Loading universe...")
+    universe = scanner.universe_loader.load_universe()
+
+    if not universe:
+        print("[ERROR] Failed to load universe\n")
+        return 1
+
+    # Print universe summary
+    print_universe_summary(universe, universe_config)
+
+    # Save universe to CSV if requested
+    if args.universe_output:
+        save_universe_to_csv(universe, args.universe_output, universe_config)
+
+    # Save universe to database if requested
+    if args.save_universe_to_db:
+        save_universe_to_db(universe, universe_config)
 
     # Run scan
     print_header("Scanning Universe")
@@ -259,8 +422,12 @@ def main():
 
         # Save to file if requested
         if args.output and not results.empty:
-            output_path = Path(args.output)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+            # If filepath is just a filename, use standardized results path
+            if not Path(args.output).is_absolute() and '/' not in args.output and '\\' not in args.output:
+                output_path = get_results_path(args.output)
+            else:
+                output_path = Path(args.output)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
 
             results.to_csv(output_path, index=False)
             print(f"[OK] Results saved to: {output_path}\n")

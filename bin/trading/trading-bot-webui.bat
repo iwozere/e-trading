@@ -17,7 +17,7 @@ set "NC=[0m"
 
 REM Configuration
 set "SCRIPT_DIR=%~dp0"
-set "PROJECT_ROOT=%SCRIPT_DIR%.."
+set "PROJECT_ROOT=%SCRIPT_DIR%..\\.."
 set "VENV_DIR=%PROJECT_ROOT%\.venv"
 set "LOG_DIR=%PROJECT_ROOT%\logs\webui"
 set "BACKEND_PORT=8000"

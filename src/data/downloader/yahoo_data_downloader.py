@@ -18,7 +18,7 @@ Classes:
 - YahooDataDownloader: Main class for interacting with Yahoo Finance and managing data downloads
 """
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 import pandas as pd
 import yfinance as yf
@@ -784,3 +784,117 @@ class YahooDataDownloader(BaseDataDownloader):
             return True
         except (ValueError, TypeError):
             return False
+
+    def test_connection(self) -> bool:
+        """
+        Test connection to Yahoo Finance by fetching data for a well-known ticker.
+
+        Returns:
+            True if connection successful, False otherwise
+        """
+        try:
+            _logger.info("Testing Yahoo Finance connection...")
+
+            # Try to fetch recent data for a well-known ticker
+            test_ticker = yf.Ticker("AAPL")
+            df = test_ticker.history(period="1d", interval="1d")
+
+            if df is not None and not df.empty:
+                _logger.info("Yahoo Finance connection test successful")
+                return True
+            else:
+                _logger.error("Yahoo Finance connection test failed: No data returned")
+                return False
+
+        except Exception as e:
+            _logger.error("Yahoo Finance connection test failed: %s", e)
+            return False
+
+    def load_universe_from_screener(self, criteria: Optional[Dict[str, any]] = None) -> List[str]:
+        """
+        Load universe from screener criteria.
+
+        Note: Yahoo Finance doesn't have a built-in screener API.
+        This method returns a curated fallback list of liquid tickers suitable for trading.
+
+        Args:
+            criteria: Screening criteria (not used, provided for interface compatibility)
+
+        Returns:
+            List of ticker symbols
+        """
+        _logger.warning(
+            "Yahoo Finance does not support screener functionality. "
+            "Returning curated list of liquid tickers suitable for EMPS analysis."
+        )
+
+        # Return a curated list of liquid, volatile tickers suitable for EMPS
+        fallback_tickers = [
+            # Large cap tech (high liquidity)
+            'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'META', 'NVDA', 'TSLA', 'NFLX', 'AMD',
+
+            # Volatile mid-caps
+            'PLTR', 'SOFI', 'HOOD', 'COIN', 'RIVN', 'LCID', 'PLUG', 'ROKU', 'UBER', 'LYFT',
+
+            # Meme stocks (high volatility)
+            'GME', 'AMC', 'BBBY',
+
+            # Biotech (volatile sector)
+            'MRNA', 'BNTX', 'NVAX', 'PFE', 'JNJ',
+
+            # Energy/EV (explosive moves common)
+            'FCEL', 'BLNK', 'CHPT', 'QS', 'HYLN',
+
+            # Growth/Fintech
+            'DKNG', 'UPST', 'AFRM', 'SQ', 'SHOP', 'PYPL',
+
+            # Additional high-volume stocks
+            'SPY', 'QQQ', 'IWM',  # ETFs for market exposure
+            'BA', 'DIS', 'BABA', 'NIO', 'INTC', 'SNAP', 'TWTR', 'PINS',
+        ]
+
+        _logger.info("Returning %d curated tickers for Yahoo Finance", len(fallback_tickers))
+        return fallback_tickers
+
+    def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get company profile information from Yahoo Finance.
+
+        Args:
+            symbol: Stock ticker symbol
+
+        Returns:
+            Dictionary with company profile data or None if failed
+        """
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+
+            if not info:
+                _logger.warning("No profile data for %s", symbol)
+                return None
+
+            # Map Yahoo Finance fields to common profile format
+            profile = {
+                'symbol': symbol.upper(),
+                'companyName': info.get('longName') or info.get('shortName'),
+                'exchange': info.get('exchange'),
+                'sector': info.get('sector'),
+                'industry': info.get('industry'),
+                'mktCap': info.get('marketCap'),
+                'marketCap': info.get('marketCap'),
+                'floatShares': info.get('floatShares'),
+                'volAvg': info.get('averageVolume'),
+                'avgVolume': info.get('averageVolume'),
+                'website': info.get('website'),
+                'description': info.get('longBusinessSummary'),
+                'country': info.get('country'),
+                'currency': info.get('currency'),
+            }
+
+            _logger.info("Retrieved profile for %s", symbol)
+            return profile
+
+        except Exception as e:
+            _logger.error("Error fetching profile for %s: %s", symbol, e)
+            return None

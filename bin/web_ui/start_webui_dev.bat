@@ -34,7 +34,7 @@ set "HOST=0.0.0.0"
 
 REM Get script directory and project root
 set "SCRIPT_DIR=%~dp0"
-set "PROJECT_ROOT=%SCRIPT_DIR%..\..\"
+set "PROJECT_ROOT=%SCRIPT_DIR%..\\..\"
 
 REM Parse command line arguments
 set "PORT=%DEFAULT_PORT%"

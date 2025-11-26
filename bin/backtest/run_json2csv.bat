@@ -7,7 +7,7 @@ echo Starting JSON to CSV Converter...
 
 REM Get the directory where this batch file is located
 set SCRIPT_DIR=%~dp0
-set PROJECT_ROOT=%SCRIPT_DIR%..
+set PROJECT_ROOT=%SCRIPT_DIR%..\\..
 
 REM Change to project root directory
 cd /d "%PROJECT_ROOT%"
