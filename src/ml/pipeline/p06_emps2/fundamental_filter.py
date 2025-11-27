@@ -124,6 +124,22 @@ class FundamentalFilter:
 
             _logger.info("Total fundamentals retrieved: %d tickers", len(df))
 
+            # Save raw data BEFORE filtering for inspection
+            raw_output_path = self._results_dir / "fundamental_raw_data.csv"
+            df.to_csv(raw_output_path, index=False)
+            _logger.info("Saved raw fundamental data to: %s", raw_output_path)
+
+            # Log sample data for debugging
+            if len(df) > 0:
+                sample = df.head(5)
+                _logger.info("Sample raw data (first 5 tickers):")
+                for idx, row in sample.iterrows():
+                    _logger.info("  %s: market_cap=$%.2fM, volume=%.0f, float=%.2fM",
+                                row['ticker'],
+                                row['market_cap'] / 1_000_000 if pd.notna(row['market_cap']) else 0,
+                                row['avg_volume'] if pd.notna(row['avg_volume']) else 0,
+                                row['float'] / 1_000_000 if pd.notna(row['float']) else 0)
+
             # Apply filters
             df_filtered = self._apply_fundamental_filters(df)
 
@@ -241,25 +257,29 @@ class FundamentalFilter:
                 return None
 
             # Extract relevant fields
+            # NOTE: market_cap and shares_outstanding are already in MILLIONS from Finnhub
             profile_data = {
                 'ticker': ticker.upper(),
-                'market_cap': fundamentals.market_cap * 1_000_000 if fundamentals.market_cap else None,  # Convert from millions
-                'float': fundamentals.shares_outstanding * 1_000_000 if fundamentals.shares_outstanding else None,  # Convert from millions
+                'market_cap': fundamentals.market_cap * 1_000_000 if fundamentals.market_cap else None,  # Already in millions, convert to dollars
+                'float': fundamentals.shares_outstanding * 1_000_000 if fundamentals.shares_outstanding else None,  # Already in millions, convert to shares
                 'sector': fundamentals.sector,
                 'current_price': fundamentals.current_price,
             }
 
-            # Get quote for volume (if not in fundamentals)
-            # Finnhub's get_fundamentals doesn't include volume, so we need quote API
+            # Get average volume from metrics API
+            # Finnhub's /quote endpoint returns None for volume
+            # Use /metrics endpoint which has 10DayAverageTradingVolume in millions
             import requests
             from config.donotshare.donotshare import FINNHUB_KEY
 
-            quote_url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={FINNHUB_KEY}"
-            quote_response = requests.get(quote_url, timeout=10)
+            metrics_url = f"https://finnhub.io/api/v1/stock/metric?symbol={ticker}&metric=all&token={FINNHUB_KEY}"
+            metrics_response = requests.get(metrics_url, timeout=10)
 
-            if quote_response.status_code == 200:
-                quote_data = quote_response.json()
-                profile_data['avg_volume'] = quote_data.get('volume', 0)
+            if metrics_response.status_code == 200:
+                metrics_data = metrics_response.json()
+                # Get 10-day average volume (in millions), convert to shares
+                avg_vol_millions = metrics_data.get('metric', {}).get('10DayAverageTradingVolume', 0)
+                profile_data['avg_volume'] = avg_vol_millions * 1_000_000 if avg_vol_millions else 0
             else:
                 profile_data['avg_volume'] = 0
 

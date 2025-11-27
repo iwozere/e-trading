@@ -37,7 +37,8 @@ from src.backtester.analyzer.bt_analyzers import (CAGR, CalmarRatio,
 from src.strategy.custom_strategy import CustomStrategy
 from src.notification.logger import setup_logger
 
-_logger = setup_logger(__name__)
+# Use multiprocessing-safe logging for optimizer (runs in worker processes)
+_logger = setup_logger(__name__, use_multiprocessing=True)
 
 class CustomOptimizer:
     def __init__(self, config: dict):
@@ -57,6 +58,8 @@ class CustomOptimizer:
         self.exit_logic = config.get("exit_logic")
         self.optimizer_settings = config.get("optimizer_settings", {})
         self.visualization_settings = config.get("visualization_settings", {})
+        self.symbol = config.get("symbol", "")
+        self.timeframe = config.get("timeframe", "")
 
         # Initialize settings
         self.initial_capital = self.optimizer_settings.get("initial_capital", 1000.0)
@@ -152,7 +155,12 @@ class CustomOptimizer:
         }
 
         # Add strategy with parameters
-        cerebro.addstrategy(CustomStrategy, strategy_config=strategy_params)
+        cerebro.addstrategy(
+            CustomStrategy,
+            strategy_config=strategy_params,
+            symbol=self.symbol,
+            timeframe=self.timeframe
+        )
 
         # Set broker parameters
         cerebro.broker.setcash(self.initial_capital)

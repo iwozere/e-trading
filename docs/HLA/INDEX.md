@@ -44,6 +44,7 @@ This index provides a comprehensive guide to all documentation, organized by top
 - **[Background Services](background-services.md)** - APScheduler system and job management
 - **[Notification Services](notification-services.md)** - Multi-channel notification integration
 - **[System Health Monitoring](system-health-monitoring.md)** - Comprehensive health monitoring and alerting
+- **[Logging Subsystem](logging-subsystem.md)** - Multiprocessing-safe logging architecture
 - **[Service Communication Diagram](diagrams/service-communication.mmd)** - Inter-service communication patterns
 
 ### API & External Integration
@@ -79,6 +80,7 @@ This index provides a comprehensive guide to all documentation, organized by top
 | **Circuit Breaker** | Failure detection and recovery pattern | Infrastructure | [Infrastructure](modules/infrastructure.md#error-handling) |
 | **Health Monitoring** | Automated system health tracking and alerting | All Systems | [System Health Monitoring](system-health-monitoring.md) |
 | **Heartbeat System** | Automatic health status reporting from all processes | Infrastructure | [System Health Monitoring](system-health-monitoring.md#heartbeat-implementation) |
+| **Multiprocessing Logging** | Queue-based logging for parallel workers | Infrastructure | [Logging Subsystem](logging-subsystem.md#multiprocessing-queue-based-architecture) |
 
 ### Data & ML Concepts
 | Term | Definition | Related Modules | Documentation |

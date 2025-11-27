@@ -2,14 +2,19 @@
 Provides logging utilities for the trading system, including console and file logging.
 
 This module sets up application-wide logging configuration and exposes a logger for use throughout the project.
+
+Supports multiprocessing-safe logging through QueueHandler and QueueListener.
 """
 
 import logging
 import sys
 import traceback
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
 from pathlib import Path
 from contextvars import ContextVar
+from multiprocessing import Queue
+import atexit
+import threading
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
@@ -190,6 +195,173 @@ for handler_name in ["file", "trade_file", "order_file", "telegram_screener_bot_
 logging.config.dictConfig(LOG_CONFIG)
 _logger = logging.getLogger()
 
+# Global queue listener for multiprocessing-safe logging
+_queue_listener = None
+_log_queue = None
+_listener_lock = threading.Lock()
+
+
+def _create_file_handlers():
+    """
+    Create all file handlers for multiprocessing-safe logging.
+
+    Returns:
+        list: List of configured file handlers
+    """
+    handlers = []
+
+    # Create file handler for main app log
+    file_handler = RotatingFileHandler(
+        str(PROJECT_ROOT / "logs" / "log" / "app.log"),
+        maxBytes=MAX_BYTES,
+        backupCount=BACKUP_COUNT,
+        encoding="utf-8"
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+    ))
+    handlers.append(file_handler)
+
+    # Create trade log handler
+    trade_handler = RotatingFileHandler(
+        str(PROJECT_ROOT / "logs" / "log" / "trades.log"),
+        maxBytes=MAX_BYTES,
+        backupCount=BACKUP_COUNT,
+        encoding="utf-8"
+    )
+    trade_handler.setLevel(logging.DEBUG)
+    trade_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+    ))
+    handlers.append(trade_handler)
+
+    # Create order log handler
+    order_handler = RotatingFileHandler(
+        str(PROJECT_ROOT / "logs" / "log" / "orders.log"),
+        maxBytes=MAX_BYTES,
+        backupCount=BACKUP_COUNT,
+        encoding="utf-8"
+    )
+    order_handler.setLevel(logging.DEBUG)
+    order_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+    ))
+    handlers.append(order_handler)
+
+    # Create error log handler
+    error_handler = RotatingFileHandler(
+        str(PROJECT_ROOT / "logs" / "log" / "app_errors.log"),
+        maxBytes=MAX_BYTES,
+        backupCount=BACKUP_COUNT,
+        encoding="utf-8"
+    )
+    error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+    ))
+    handlers.append(error_handler)
+
+    return handlers
+
+
+def setup_multiprocessing_logging():
+    """
+    Set up multiprocessing-safe logging using QueueHandler and QueueListener.
+
+    This should be called ONCE in the main process before spawning workers.
+    Worker processes will automatically use QueueHandler to send logs to the main process.
+
+    Returns:
+        Queue: The log queue that worker processes should use
+    """
+    global _queue_listener, _log_queue
+
+    with _listener_lock:
+        if _queue_listener is not None:
+            # Already set up
+            return _log_queue
+
+        # Create a queue for log messages
+        _log_queue = Queue(-1)
+
+        # Create file handlers
+        file_handlers = _create_file_handlers()
+
+        # Create console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.DEBUG)
+        console_handler.setFormatter(logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s"
+        ))
+
+        # Combine all handlers
+        all_handlers = [console_handler] + file_handlers
+
+        # Create and start the queue listener
+        _queue_listener = QueueListener(_log_queue, *all_handlers, respect_handler_level=True)
+        _queue_listener.start()
+
+        # Register cleanup function
+        atexit.register(shutdown_multiprocessing_logging)
+
+        _logger.info("Multiprocessing-safe logging initialized")
+
+        return _log_queue
+
+
+def shutdown_multiprocessing_logging():
+    """
+    Shut down the queue listener.
+
+    This is automatically called at exit via atexit.register().
+    """
+    global _queue_listener
+
+    with _listener_lock:
+        if _queue_listener is not None:
+            _queue_listener.stop()
+            _queue_listener = None
+            _logger.info("Multiprocessing-safe logging shut down")
+
+
+def get_multiprocessing_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
+    """
+    Get a logger configured for multiprocessing.
+
+    In the main process, this sets up the QueueListener.
+    In worker processes, this configures loggers to use QueueHandler.
+
+    Args:
+        name: Logger name
+        level: Logging level
+
+    Returns:
+        logging.Logger: Configured logger
+    """
+    global _log_queue
+
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+
+    # Check if we're in a worker process (no listener set up)
+    # or if we need to set up the main process listener
+    if _log_queue is None:
+        # Try to set up the main process listener
+        setup_multiprocessing_logging()
+
+    # Remove existing handlers to avoid duplicates
+    logger.handlers.clear()
+
+    # Add queue handler
+    if _log_queue is not None:
+        queue_handler = QueueHandler(_log_queue)
+        queue_handler.setLevel(level)
+        logger.addHandler(queue_handler)
+        logger.propagate = False
+
+    return logger
+
 
 def log_exception(logger, exc_info=None):
     """Log an exception with full stack trace"""
@@ -304,7 +476,7 @@ def get_logging_context() -> str:
 
 
 def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
-                inherit_from: str = None) -> logging.Logger:
+                inherit_from: str = None, use_multiprocessing: bool = False) -> logging.Logger:
     """
     Set up the logger with custom configuration.
 
@@ -313,10 +485,16 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
         log_file (str, optional): Path to the log file. If None, uses default handlers.
         level (int, optional): Logging level. Defaults to logging.DEBUG.
         inherit_from (str, optional): Parent logger name to inherit handlers from.
+        use_multiprocessing (bool, optional): If True, use multiprocessing-safe logging.
+                                             This should be True for code that runs in
+                                             worker processes (e.g., Optuna trials).
 
     Returns:
         logging.Logger: Configured logger instance.
     """
+    # If multiprocessing mode is requested, use queue-based logging
+    if use_multiprocessing:
+        return get_multiprocessing_logger(name, level)
     # Check if we should inherit from a parent logger
     if inherit_from:
         return ContextAwareLogger(name, inherit_from).logger

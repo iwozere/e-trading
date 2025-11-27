@@ -24,7 +24,7 @@ import optuna
 import pandas as pd
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
-from src.notification.logger import setup_logger
+from src.notification.logger import setup_logger, setup_multiprocessing_logging
 from src.backtester.optimizer.custom_optimizer import CustomOptimizer
 
 # Import utilities from run_optimizer
@@ -504,6 +504,8 @@ def run_window_optimization(
                         "exit_logic": exit_logic_config,
                         "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
                         "visualization_settings": optimizer_config.get("visualization_settings", {}),
+                        "symbol": symbol_from_file,
+                        "timeframe": timeframe,
                     }
                     optimizer = CustomOptimizer(_optimizer_config)
                     # Disable analyzers for optimization trials to improve performance
@@ -534,6 +536,8 @@ def run_window_optimization(
                     "exit_logic": exit_logic_config,
                     "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
                     "visualization_settings": optimizer_config.get("visualization_settings", {}),
+                    "symbol": symbol_from_file,
+                    "timeframe": timeframe,
                 }
                 best_trial = study.best_trial
                 best_optimizer = CustomOptimizer(_optimizer_config)
@@ -833,6 +837,10 @@ def save_optimization_results(
 
 def main():
     """Main orchestrator for walk-forward optimization."""
+    # Set up multiprocessing-safe logging FIRST
+    setup_multiprocessing_logging()
+    _logger.info("Multiprocessing-safe logging enabled for walk-forward optimization")
+
     start_time = dt.now()
     _logger.info("=" * 80)
     _logger.info("Walk-Forward Optimization Started")

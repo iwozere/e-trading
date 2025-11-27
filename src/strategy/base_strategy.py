@@ -19,9 +19,11 @@ sys.path.append(str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 from src.data.data_manager import ProviderSelector
 
-_logger = setup_logger(__name__)
-_order_logger = setup_logger('orders')
-_trade_logger = setup_logger('trades')
+# Loggers will be set up with multiprocessing support when needed
+# The multiprocessing logging is set up in the optimizer main process
+_logger = setup_logger(__name__, use_multiprocessing=True)
+_order_logger = setup_logger('orders', use_multiprocessing=True)
+_trade_logger = setup_logger('trades', use_multiprocessing=True)
 
 
 class BaseStrategy(bt.Strategy):

@@ -25,7 +25,7 @@ import optuna
 import pandas as pd
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
-from src.notification.logger import setup_logger
+from src.notification.logger import setup_logger, setup_multiprocessing_logging
 from src.backtester.optimizer.custom_optimizer import CustomOptimizer
 
 _logger = setup_logger(__name__)
@@ -413,6 +413,10 @@ def save_results(result, data_file):
 if __name__ == "__main__":
     """Run all optimizers with their respective configurations."""
 
+    # Set up multiprocessing-safe logging FIRST
+    setup_multiprocessing_logging()
+    _logger.info("Multiprocessing-safe logging enabled for optimizer")
+
     with open(os.path.join("config", "optimizer", "optimizer.json"), "r",) as f:
         optimizer_config = json.load(f)
 
@@ -469,6 +473,8 @@ if __name__ == "__main__":
                             "exit_logic": exit_logic_config,
                             "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
                             "visualization_settings": optimizer_config.get("visualization_settings", {}),
+                            "symbol": symbol,
+                            "timeframe": interval,
                         }
                         optimizer = CustomOptimizer(_optimizer_config)
                         # Disable analyzers for optimization trials to improve performance
@@ -502,6 +508,8 @@ if __name__ == "__main__":
                         "exit_logic": exit_logic_config,
                         "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
                         "visualization_settings": optimizer_config.get("visualization_settings", {}),
+                        "symbol": symbol,
+                        "timeframe": interval,
                     }
                     best_trial = study.best_trial
                     best_optimizer = CustomOptimizer(_optimizer_config)

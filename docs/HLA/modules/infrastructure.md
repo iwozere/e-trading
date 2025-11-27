@@ -473,15 +473,100 @@ class ConfigManager:
 
 ### 6. Logging & Observability
 
-Structured logging system with distributed tracing and metrics collection.
+Comprehensive logging system with multiprocessing-safe architecture, structured logging, and distributed tracing.
+
+#### 6.1 Standard Logging (Single Process)
 
 ```python
 from src.notification.logger import setup_logger
 
-# Structured logging configuration
+# Standard logger for single-process applications
 logger = setup_logger(__name__)
 
-# Context-aware logging
+# Basic logging
+logger.debug("Debug information")
+logger.info("Processing trade for %s", symbol)
+logger.warning("Low balance detected")
+logger.error("Failed to connect to exchange")
+logger.exception("Critical error occurred")  # Includes stack trace
+```
+
+#### 6.2 Multiprocessing-Safe Logging
+
+For parallel processing scenarios (e.g., optimization with `n_jobs=-1`), use queue-based logging:
+
+```python
+from src.notification.logger import setup_multiprocessing_logging, setup_logger
+
+# In main process (BEFORE spawning workers)
+def main():
+    # Initialize multiprocessing logging FIRST
+    setup_multiprocessing_logging()
+    logger = setup_logger(__name__)
+    logger.info("Multiprocessing logging enabled")
+
+    # Run Optuna with parallel workers
+    study.optimize(objective, n_trials=100, n_jobs=-1)
+
+# In worker process modules
+from src.notification.logger import setup_logger
+
+# Enable multiprocessing mode for workers
+_logger = setup_logger(__name__, use_multiprocessing=True)
+_order_logger = setup_logger('orders', use_multiprocessing=True)
+_trade_logger = setup_logger('trades', use_multiprocessing=True)
+```
+
+**Multiprocessing Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Main Process                          │
+│  ┌────────────────────────────────────────────────┐     │
+│  │  QueueListener (single writer thread)         │     │
+│  │  • Consumes log records from queue            │     │
+│  │  • Writes to file handlers safely             │     │
+│  │  • Prevents race conditions & corruption      │     │
+│  └────────────────────────────────────────────────┘     │
+│                        ▲                                │
+│                        │ Multiprocessing Queue          │
+│                        │                                │
+├────────────────────────┼────────────────────────────────┤
+│  Worker 1              │  Worker 2      Worker N        │
+│  ┌──────────┐         │   ┌──────────┐  ┌──────────┐  │
+│  │ Queue    │─────────┴──▶│ Queue    │  │ Queue    │  │
+│  │ Handler  │             │ Handler  │  │ Handler  │  │
+│  └──────────┘             └──────────┘  └──────────┘  │
+│  Optuna Trial #1         Trial #2       Trial #N      │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### 6.3 Specialized Loggers
+
+```python
+# Order logging (separate file: orders.log)
+from src.notification.logger import setup_logger
+_order_logger = setup_logger('orders', use_multiprocessing=True)
+_order_logger.info(
+    "ORDER - %s | Type: %s | Status: %s | Size: %.6f | Price: %.4f",
+    symbol, order_type, status, size, price
+)
+
+# Trade logging (separate file: trades.log)
+_trade_logger = setup_logger('trades', use_multiprocessing=True)
+_trade_logger.info(
+    "TRADE - %s | PnL: %.2f | Duration: %d bars | Reason: %s",
+    symbol, pnl, duration, exit_reason
+)
+
+# Telegram bot logging (separate file: telegram_screener_bot.log)
+_bot_logger = setup_logger('telegram_screener_bot')
+```
+
+#### 6.4 Context-Aware Logging
+
+```python
+# Context-aware logging for service hierarchies
 def log_with_context(level: str, message: str, **context):
     """Log message with structured context."""
     log_data = {
@@ -492,7 +577,7 @@ def log_with_context(level: str, message: str, **context):
         "version": "1.0.0",
         **context
     }
-    
+
     if level == "error":
         logger.error(json.dumps(log_data))
     elif level == "warning":
@@ -500,7 +585,7 @@ def log_with_context(level: str, message: str, **context):
     else:
         logger.info(json.dumps(log_data))
 
-# Usage example
+# Usage
 log_with_context(
     "info",
     "Trade executed successfully",
@@ -512,12 +597,63 @@ log_with_context(
 )
 ```
 
+#### 6.5 Log File Organization
+
+```
+logs/log/
+├── app.log                          # Main application log
+├── app_errors.log                   # ERROR and CRITICAL only
+├── orders.log                       # Order execution logs
+├── trades.log                       # Trade lifecycle logs
+├── telegram_screener_bot.log        # Telegram bot specific
+├── telegram_background_services.log # Background services
+├── telegram_alert_monitor.log       # Alert monitoring
+└── telegram_schedule_processor.log  # Scheduled tasks
+```
+
+**Log Rotation:**
+- **Max Size**: 500MB per file
+- **Backup Count**: 99 files
+- **Encoding**: UTF-8
+- **Format**: `timestamp - level - filename - function - line - message`
+
 **Logging Features:**
-- **Structured Logging**: JSON-formatted logs with consistent schema
-- **Context Propagation**: Request/session context across service calls
-- **Log Levels**: DEBUG, INFO, WARNING, ERROR, CRITICAL with appropriate usage
-- **Log Rotation**: Automatic log file rotation and archival
-- **Centralized Logging**: Support for log aggregation systems (ELK, Splunk)
+- ✅ **Multiprocessing-Safe**: Queue-based logging for parallel workers
+- ✅ **Process-Safe File Rotation**: No corruption with concurrent writes
+- ✅ **Structured Logging**: JSON-formatted logs with consistent schema
+- ✅ **Context Propagation**: Request/session context across service calls
+- ✅ **Log Levels**: DEBUG, INFO, WARNING, ERROR, CRITICAL with lazy formatting
+- ✅ **Automatic Rotation**: 500MB files with 99 backups (≈50GB total)
+- ✅ **Centralized Logging**: Support for log aggregation systems (ELK, Splunk)
+- ✅ **Lazy Formatting**: Efficient logging with deferred string interpolation
+- ✅ **Separate Log Files**: Dedicated files for orders, trades, services
+
+#### 6.6 Best Practices
+
+```python
+# ✅ GOOD: Lazy formatting (efficient)
+logger.info("Processing %s with %d items", symbol, count)
+
+# ❌ BAD: Eager formatting (wasteful if DEBUG is disabled)
+logger.info(f"Processing {symbol} with {count} items")
+
+# ✅ GOOD: Exception logging with stack trace
+try:
+    execute_trade()
+except Exception:
+    logger.exception("Trade execution failed for %s", symbol)
+
+# ✅ GOOD: Multiprocessing setup
+setup_multiprocessing_logging()  # Call ONCE in main process
+logger = setup_logger(__name__, use_multiprocessing=True)
+
+# ❌ BAD: No multiprocessing setup with n_jobs=-1
+study.optimize(objective, n_jobs=-1)  # WILL LOSE LOGS!
+```
+
+**See Also:**
+- [Multiprocessing Logging Guide](../../MULTIPROCESSING_LOGGING.md) - Detailed implementation guide
+- [Logging Coding Convention](../../.claude/CLAUDE.md#3-logging) - Project logging standards
 
 ## Architecture Patterns
 
