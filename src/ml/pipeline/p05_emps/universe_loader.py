@@ -56,7 +56,10 @@ class EMPSUniverseLoader:
         """
         self.downloader = downloader
         self.config = config or EMPSUniverseConfig()
-        self._cache_dir = Path("data/cache/emps_universe")
+
+        # Store universe files in results/emps/YYYY-MM-DD/ instead of data/cache/
+        today = datetime.now().strftime('%Y-%m-%d')
+        self._cache_dir = Path("results") / "emps" / today
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._cache_ttl_hours = 24
 
