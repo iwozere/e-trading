@@ -24,9 +24,11 @@ class EMPS2FilterConfig:
     max_market_cap: int = 5_000_000_000   # $5B
     max_float: int = 60_000_000           # 60M shares
 
-    # Volatility filters (Stage 3)
+    # Volatility filters (Stage 3) - Enhanced with P05 EMPS indicators
     min_volatility_threshold: float = 0.02  # ATR/Price > 2%
     min_price_range: float = 0.05           # 5% range over lookback period
+    min_vol_zscore: float = 2.0             # Volume Z-Score > 2.0 (early spike detection)
+    min_rv_ratio: float = 1.5               # RV Ratio > 1.5 (volatility acceleration)
 
     # Data parameters
     lookback_days: int = 7
@@ -68,6 +70,39 @@ class EMPS2UniverseConfig:
 
 
 @dataclass
+class RollingMemoryConfig:
+    """
+    Configuration for 10-day rolling memory and phase detection.
+
+    Tracks tickers across multiple days to detect accumulation patterns
+    and identify phase transitions (Phase 1 → Phase 2).
+    """
+
+    # Rolling memory settings
+    enabled: bool = True
+    lookback_days: int = 10  # How many days back to scan
+
+    # Phase 1 detection (Quiet Accumulation)
+    phase1_min_appearances: int = 5  # Must appear 5+ times in lookback period
+    phase1_max_sentiment: float = 0.5  # Low/neutral sentiment
+
+    # Phase 2 detection (Early Public Signal)
+    phase2_min_vol_zscore: float = 3.0  # Volume acceleration
+    phase2_min_sentiment: float = 0.5  # Sentiment starts rising
+    phase2_min_virality: float = 1.5  # Going viral
+
+    # Alert settings
+    send_alerts: bool = True
+    alert_on_phase1: bool = False  # Only alert on Phase 2 by default
+    alert_on_phase2: bool = True
+
+    # Output settings
+    save_rolling_candidates: bool = True
+    save_phase1_watchlist: bool = True
+    save_phase2_alerts: bool = True
+
+
+@dataclass
 class EMPS2PipelineConfig:
     """
     Complete EMPS2 pipeline configuration.
@@ -77,6 +112,7 @@ class EMPS2PipelineConfig:
 
     filter_config: EMPS2FilterConfig
     universe_config: EMPS2UniverseConfig
+    rolling_memory_config: RollingMemoryConfig
 
     # Output settings
     save_intermediate_results: bool = True
@@ -89,6 +125,7 @@ class EMPS2PipelineConfig:
         return cls(
             filter_config=EMPS2FilterConfig(),
             universe_config=EMPS2UniverseConfig(),
+            rolling_memory_config=RollingMemoryConfig(),
             save_intermediate_results=True,
             generate_summary=True,
             verbose_logging=True
@@ -109,6 +146,8 @@ class EMPS2PipelineConfig:
             max_float=40_000_000,           # 40M shares
             min_volatility_threshold=0.025,  # ATR/Price > 2.5%
             min_price_range=0.07,           # 7% range
+            min_vol_zscore=3.0,             # Strong volume spike
+            min_rv_ratio=1.8,               # Strong volatility acceleration
             lookback_days=7,
             interval="15m",
             atr_period=14
@@ -117,6 +156,7 @@ class EMPS2PipelineConfig:
         return cls(
             filter_config=filter_config,
             universe_config=EMPS2UniverseConfig(),
+            rolling_memory_config=RollingMemoryConfig(),
             save_intermediate_results=True,
             generate_summary=True,
             verbose_logging=True
@@ -137,6 +177,8 @@ class EMPS2PipelineConfig:
             max_float=100_000_000,          # 100M shares
             min_volatility_threshold=0.015,  # ATR/Price > 1.5%
             min_price_range=0.03,           # 3% range
+            min_vol_zscore=1.5,             # Moderate volume spike
+            min_rv_ratio=1.3,               # Moderate volatility acceleration
             lookback_days=7,
             interval="15m",
             atr_period=14
@@ -145,6 +187,7 @@ class EMPS2PipelineConfig:
         return cls(
             filter_config=filter_config,
             universe_config=EMPS2UniverseConfig(),
+            rolling_memory_config=RollingMemoryConfig(),
             save_intermediate_results=True,
             generate_summary=True,
             verbose_logging=True

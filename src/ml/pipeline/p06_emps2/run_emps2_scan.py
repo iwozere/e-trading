@@ -33,7 +33,7 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with default settings
+  # Run with default settings (with rolling memory enabled)
   python run_emps2_scan.py
 
   # Use aggressive filtering (stricter criteria)
@@ -42,13 +42,22 @@ Examples:
   # Use conservative filtering (broader universe)
   python run_emps2_scan.py --conservative
 
+  # Disable rolling memory (single-day scan only)
+  python run_emps2_scan.py --no-rolling-memory
+
+  # Custom rolling memory settings
+  python run_emps2_scan.py --lookback-days-rolling 15 --phase1-threshold 7
+
+  # Disable alerts (no Telegram/Email notifications)
+  python run_emps2_scan.py --no-alerts
+
   # Custom market cap range
   python run_emps2_scan.py --min-cap 100000000 --max-cap 2000000000
 
   # Custom volatility threshold
   python run_emps2_scan.py --min-volatility 0.025 --min-range 0.07
 
-  # Force refresh (bypass caches)
+  # Force refresh (bypass caches and fetch fresh data)
   python run_emps2_scan.py --force-refresh
 
   # Quiet mode (less logging)
@@ -126,12 +135,35 @@ Examples:
         help='ATR calculation period (default: 14)'
     )
 
+    # Rolling memory parameters
+    rolling_group = parser.add_argument_group('Rolling Memory & Phase Detection')
+    rolling_group.add_argument(
+        '--no-rolling-memory',
+        action='store_true',
+        help='Disable rolling memory (single-day scan only)'
+    )
+    rolling_group.add_argument(
+        '--lookback-days-rolling',
+        type=int,
+        help='Rolling memory lookback period (default: 10 days)'
+    )
+    rolling_group.add_argument(
+        '--phase1-threshold',
+        type=int,
+        help='Minimum appearances for Phase 1 (default: 5)'
+    )
+    rolling_group.add_argument(
+        '--no-alerts',
+        action='store_true',
+        help='Disable Telegram/Email alerts for Phase 2 transitions'
+    )
+
     # Execution parameters
     execution_group = parser.add_argument_group('Execution Options')
     execution_group.add_argument(
-        '--no-force-refresh',
+        '--force-refresh',
         action='store_true',
-        help='Use cached data if available (default: always force refresh)'
+        help='Force refresh (bypass cache and fetch fresh data)'
     )
     execution_group.add_argument(
         '--quiet',
@@ -240,14 +272,24 @@ def main():
     if args.atr_period is not None:
         config.filter_config.atr_period = args.atr_period
 
+    # Apply rolling memory parameters
+    if args.no_rolling_memory:
+        config.rolling_memory_config.enabled = False
+    if args.lookback_days_rolling is not None:
+        config.rolling_memory_config.lookback_days = args.lookback_days_rolling
+    if args.phase1_threshold is not None:
+        config.rolling_memory_config.phase1_min_appearances = args.phase1_threshold
+    if args.no_alerts:
+        config.rolling_memory_config.send_alerts = False
+
     # Update config flags
     if args.quiet:
         config.verbose_logging = False
     if args.no_summary:
         config.generate_summary = False
 
-    # Determine force_refresh (default is True, unless --no-force-refresh is specified)
-    force_refresh = not args.no_force_refresh
+    # Determine force_refresh (default is False, use cache unless --force-refresh is specified)
+    force_refresh = args.force_refresh
 
     # Display configuration
     print("Configuration:")
@@ -261,6 +303,12 @@ def main():
     print(f"  Lookback: {config.filter_config.lookback_days} days")
     print(f"  Interval: {config.filter_config.interval}")
     print(f"  Force Refresh: {force_refresh}")
+    print(f"\nRolling Memory:")
+    print(f"  Enabled: {config.rolling_memory_config.enabled}")
+    if config.rolling_memory_config.enabled:
+        print(f"  Lookback Days: {config.rolling_memory_config.lookback_days}")
+        print(f"  Phase 1 Threshold: {config.rolling_memory_config.phase1_min_appearances} appearances")
+        print(f"  Send Alerts: {config.rolling_memory_config.send_alerts}")
     print()
 
     # Create and run pipeline
@@ -281,6 +329,10 @@ def main():
         print(f"  - nasdaq_universe.csv         (Full NASDAQ universe)")
         print(f"  - fundamental_filtered.csv    (After fundamental filters)")
         print(f"  - volatility_filtered.csv     (After volatility filters)")
+        if config.rolling_memory_config.enabled:
+            print(f"  - rolling_candidates.csv      (10-day rolling memory)")
+            print(f"  - phase1_watchlist.csv        (Phase 1: Quiet Accumulation)")
+            print(f"  - phase2_alerts.csv           (Phase 2: Hot Candidates 🔥)")
         print(f"  - prefiltered_universe.csv    (Final results)")
         if config.generate_summary:
             print(f"  - summary.json                (Pipeline summary)")

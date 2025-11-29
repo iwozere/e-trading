@@ -482,7 +482,7 @@ if __name__ == "__main__":
                         return result["total_profit_with_commission"]
 
                     # Create study
-                    study = optuna.create_study(direction="maximize")
+                    study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=50, n_warmup_steps=10))
 
                     # Run optimization
                     try:

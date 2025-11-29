@@ -3,6 +3,10 @@ Volatility Filter
 
 Applies volatility-based filters using intraday data from Yahoo Finance.
 Calculates ATR using TA-Lib and filters by price, ATR/Price ratio, and price range.
+
+Enhanced with P05 EMPS indicators:
+- Volume Z-Score: Detects unusual volume spikes
+- RV Ratio: Measures volatility regime shifts (short-term vs long-term)
 """
 
 from pathlib import Path
@@ -11,6 +15,7 @@ from typing import List, Dict
 from datetime import datetime, timedelta
 
 import pandas as pd
+import numpy as np
 import talib
 
 # Add project root to path
@@ -52,10 +57,12 @@ class VolatilityFilter:
         self._results_dir = Path("results") / "emps2" / today
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
-        _logger.info("Volatility Filter initialized: ATR/Price>%.1f%%, range>%.1f%%, lookback=%dd",
+        _logger.info("Volatility Filter initialized: ATR/Price>%.1f%%, range>%.1f%%, lookback=%dd, vol_zscore>%.1f, rv_ratio>%.1f",
                     config.min_volatility_threshold * 100,
                     config.min_price_range * 100,
-                    config.lookback_days)
+                    config.lookback_days,
+                    config.min_vol_zscore,
+                    config.min_rv_ratio)
 
     def apply_filters(self, tickers: List[str]) -> List[str]:
         """
@@ -169,6 +176,18 @@ class VolatilityFilter:
             if price_range < self.config.min_price_range:
                 return False, {}
 
+            # Volume Z-Score (from P05 EMPS)
+            vol_zscore = self._compute_volume_zscore(df)
+
+            if vol_zscore < self.config.min_vol_zscore:
+                return False, {}
+
+            # RV Ratio - Realized Volatility acceleration (from P05 EMPS)
+            rv_ratio, rv_short, rv_long = self._compute_rv_ratio(df)
+
+            if rv_ratio < self.config.min_rv_ratio:
+                return False, {}
+
             # Passed all filters
             metrics = {
                 'ticker': ticker,
@@ -178,11 +197,15 @@ class VolatilityFilter:
                 'price_range': price_range,
                 'price_high': price_high,
                 'price_low': price_low,
+                'vol_zscore': vol_zscore,
+                'rv_ratio': rv_ratio,
+                'rv_short': rv_short,
+                'rv_long': rv_long,
                 'bars_count': len(df)
             }
 
-            _logger.debug("%s passed: price=$%.2f, ATR/Price=%.3f, range=%.3f",
-                         ticker, last_price, atr_ratio, price_range)
+            _logger.debug("%s passed: price=$%.2f, ATR/Price=%.3f, range=%.3f, vol_zscore=%.2f, rv_ratio=%.2f",
+                         ticker, last_price, atr_ratio, price_range, vol_zscore, rv_ratio)
 
             return True, metrics
 
@@ -220,6 +243,105 @@ class VolatilityFilter:
         except Exception:
             _logger.exception("Error computing ATR:")
             return None
+
+    def _compute_volume_zscore(self, df: pd.DataFrame, lookback: int = 20) -> float:
+        """
+        Calculate Volume Z-Score (from P05 EMPS).
+
+        Detects unusual volume spikes by measuring standard deviations
+        from rolling average.
+
+        Args:
+            df: OHLCV DataFrame with 'volume' column
+            lookback: Rolling window size (default: 20 bars)
+
+        Returns:
+            Latest volume z-score (higher = more unusual volume)
+        """
+        try:
+            if len(df) < lookback + 1:
+                return 0.0
+
+            volume = df['volume'].values
+
+            # Calculate rolling mean and std
+            vol_mean = pd.Series(volume).rolling(window=lookback, min_periods=lookback).mean()
+            vol_std = pd.Series(volume).rolling(window=lookback, min_periods=lookback).std()
+
+            # Z-score = (current - mean) / std
+            vol_zscore = (volume - vol_mean) / vol_std
+
+            # Return latest z-score
+            valid_zscore = vol_zscore[~pd.isna(vol_zscore)]
+
+            if len(valid_zscore) == 0:
+                return 0.0
+
+            return float(valid_zscore.iloc[-1])
+
+        except Exception:
+            _logger.exception("Error computing volume z-score:")
+            return 0.0
+
+    def _compute_rv_ratio(self, df: pd.DataFrame,
+                          short_window: int = 5,
+                          long_window: int = 40) -> tuple:
+        """
+        Calculate Realized Volatility Ratio (from P05 EMPS).
+
+        Measures volatility regime shifts by comparing short-term to
+        long-term realized volatility. Values >1.5 indicate acceleration.
+
+        Args:
+            df: OHLCV DataFrame with 'close' column
+            short_window: Short-term window (default: 5 bars = ~75 min for 15m)
+            long_window: Long-term window (default: 40 bars = ~10 hours for 15m)
+
+        Returns:
+            Tuple of (rv_ratio, rv_short, rv_long)
+            - rv_ratio: Short/Long ratio (>1.5 = acceleration)
+            - rv_short: Short-term annualized volatility
+            - rv_long: Long-term annualized volatility
+        """
+        try:
+            if len(df) < long_window + 1:
+                return 1.0, 0.0, 0.0
+
+            # Calculate log returns
+            close = df['close'].values
+            log_returns = np.log(close[1:] / close[:-1])
+
+            # Determine bars per day based on interval
+            # 15m = 26 bars/day (6.5 trading hours)
+            # 5m = 78 bars/day
+            # 1h = 6.5 bars/day
+            interval_map = {
+                '5m': 78,
+                '15m': 26,
+                '30m': 13,
+                '1h': 6.5
+            }
+            bars_per_day = interval_map.get(self.config.interval, 26)
+
+            # Calculate realized volatility (annualized)
+            # RV = std(returns) * sqrt(252 * bars_per_day)
+            if len(log_returns) >= long_window:
+                rv_short = np.std(log_returns[-short_window:]) * np.sqrt(252 * bars_per_day)
+                rv_long = np.std(log_returns[-long_window:]) * np.sqrt(252 * bars_per_day)
+            else:
+                return 1.0, 0.0, 0.0
+
+            # Avoid division by zero
+            if rv_long == 0 or np.isnan(rv_long):
+                return 1.0, rv_short, 0.0
+
+            rv_ratio = rv_short / rv_long
+
+            return float(rv_ratio), float(rv_short), float(rv_long)
+
+        except Exception:
+            _logger.exception("Error computing RV ratio:")
+            return 1.0, 0.0, 0.0
 
     def _save_results(self, results_data: List[dict]) -> None:
         """

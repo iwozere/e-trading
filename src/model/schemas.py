@@ -298,6 +298,7 @@ class Fundamentals:
     currency: Optional[str] = None
     shares_outstanding: Optional[float] = None
     float_shares: Optional[float] = None
+    avg_volume: Optional[float] = None  # 10-day average trading volume
     short_ratio: Optional[float] = None
     payout_ratio: Optional[float] = None
     peg_ratio: Optional[float] = None

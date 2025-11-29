@@ -203,6 +203,10 @@ class FundamentalFilter:
 
                 if profile_data:
                     fundamentals.append(profile_data)
+
+                    # Save checkpoint after EACH successful fetch for crash recovery
+                    if self.config.checkpoint_enabled:
+                        self._save_checkpoint(fundamentals)
                 else:
                     failed += 1
 
@@ -214,10 +218,6 @@ class FundamentalFilter:
                                 processed, total_tickers,
                                 100.0 * processed / total_tickers,
                                 len(fundamentals), failed, cache_hits)
-
-                # Checkpoint save
-                if self.config.checkpoint_enabled and processed % self.config.checkpoint_interval == 0:
-                    self._save_checkpoint(fundamentals)
 
             except KeyboardInterrupt:
                 _logger.warning("Interrupted by user. Saving checkpoint...")
@@ -258,30 +258,15 @@ class FundamentalFilter:
 
             # Extract relevant fields
             # NOTE: market_cap and shares_outstanding are already in MILLIONS from Finnhub
+            # NOTE: avg_volume is already in SHARES (converted from millions in get_fundamentals)
             profile_data = {
                 'ticker': ticker.upper(),
                 'market_cap': fundamentals.market_cap * 1_000_000 if fundamentals.market_cap else None,  # Already in millions, convert to dollars
                 'float': fundamentals.shares_outstanding * 1_000_000 if fundamentals.shares_outstanding else None,  # Already in millions, convert to shares
                 'sector': fundamentals.sector,
                 'current_price': fundamentals.current_price,
+                'avg_volume': fundamentals.avg_volume if fundamentals.avg_volume else 0,  # Already in shares
             }
-
-            # Get average volume from metrics API
-            # Finnhub's /quote endpoint returns None for volume
-            # Use /metrics endpoint which has 10DayAverageTradingVolume in millions
-            import requests
-            from config.donotshare.donotshare import FINNHUB_KEY
-
-            metrics_url = f"https://finnhub.io/api/v1/stock/metric?symbol={ticker}&metric=all&token={FINNHUB_KEY}"
-            metrics_response = requests.get(metrics_url, timeout=10)
-
-            if metrics_response.status_code == 200:
-                metrics_data = metrics_response.json()
-                # Get 10-day average volume (in millions), convert to shares
-                avg_vol_millions = metrics_data.get('metric', {}).get('10DayAverageTradingVolume', 0)
-                profile_data['avg_volume'] = avg_vol_millions * 1_000_000 if avg_vol_millions else 0
-            else:
-                profile_data['avg_volume'] = 0
 
             return profile_data
 
@@ -372,7 +357,9 @@ class FundamentalFilter:
 
             if not df.empty:
                 df.to_csv(checkpoint_path, index=False)
-                _logger.info("Checkpoint saved: %d records", len(df))
+                # Only log every 10 saves to reduce noise
+                if len(df) % 10 == 0:
+                    _logger.info("Checkpoint saved: %d records", len(df))
 
         except Exception:
             _logger.exception("Error saving checkpoint:")

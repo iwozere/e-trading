@@ -24,6 +24,8 @@ from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig
 from src.ml.pipeline.p06_emps2.universe_downloader import NasdaqUniverseDownloader
 from src.ml.pipeline.p06_emps2.fundamental_filter import FundamentalFilter
 from src.ml.pipeline.p06_emps2.volatility_filter import VolatilityFilter
+from src.ml.pipeline.p06_emps2.rolling_memory import RollingMemoryScanner
+from src.ml.pipeline.p06_emps2.alerts import EMPS2AlertSender
 
 _logger = setup_logger(__name__)
 
@@ -36,7 +38,9 @@ class EMPS2Pipeline:
     1. Download NASDAQ universe (~8000 tickers)
     2. Apply fundamental filters (~500-1000 tickers)
     3. Apply volatility filters (~50-200 tickers)
-    4. Save final results
+    4. Rolling memory analysis (10-day accumulation tracking)
+    5. Phase detection (Phase 1 → Phase 2 transitions)
+    6. Save final results and send alerts
 
     All output saved to results/emps2/YYYY-MM-DD/
     """
@@ -55,6 +59,9 @@ class EMPS2Pipeline:
         self._results_dir = Path("results") / "emps2" / today
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
+        # Results base path (for rolling memory to access historical data)
+        self._results_base_path = Path("results") / "emps2"
+
         # Initialize components
         self.universe_downloader = NasdaqUniverseDownloader(self.config.universe_config)
 
@@ -69,6 +76,16 @@ class EMPS2Pipeline:
             self.yahoo,
             self.config.filter_config
         )
+
+        # Rolling memory scanner
+        self.rolling_memory = RollingMemoryScanner(
+            config=self.config.rolling_memory_config,
+            results_base_path=self._results_base_path,
+            verbose=self.config.verbose_logging
+        )
+
+        # Alert sender
+        self.alert_sender = EMPS2AlertSender() if self.config.rolling_memory_config.send_alerts else None
 
         _logger.info("EMPS2 Pipeline initialized (results: %s)", self._results_dir)
 
@@ -103,18 +120,23 @@ class EMPS2Pipeline:
                 return pd.DataFrame()
 
             # Stage 3: Volatility filtering
-            volatility_tickers = self._stage3_volatility_filter(
+            volatility_df = self._stage3_volatility_filter(
                 fundamental_df['ticker'].tolist()
             )
 
-            if not volatility_tickers:
+            if volatility_df.empty:
                 _logger.error("No tickers passed volatility filters")
                 return pd.DataFrame()
 
-            # Stage 4: Create final results
-            final_df = self._stage4_create_final_results(
+            # Stage 4: Rolling Memory Analysis (10-day accumulation tracking)
+            phase1_df, phase2_df = self._stage4_rolling_memory_analysis(volatility_df)
+
+            # Stage 5: Create final results
+            final_df = self._stage5_create_final_results(
                 fundamental_df,
-                volatility_tickers
+                volatility_df,
+                phase1_df,
+                phase2_df
             )
 
             # Generate summary
@@ -122,7 +144,9 @@ class EMPS2Pipeline:
                 self._generate_summary(
                     len(universe_tickers),
                     len(fundamental_df),
-                    len(volatility_tickers),
+                    len(volatility_df),
+                    len(phase1_df) if not phase1_df.empty else 0,
+                    len(phase2_df) if not phase2_df.empty else 0,
                     start_time
                 )
 
@@ -177,7 +201,7 @@ class EMPS2Pipeline:
         _logger.info("Stage 2 complete: %d tickers", len(df))
         return df
 
-    def _stage3_volatility_filter(self, tickers: list) -> list:
+    def _stage3_volatility_filter(self, tickers: list) -> pd.DataFrame:
         """
         Stage 3: Apply volatility filters.
 
@@ -185,38 +209,139 @@ class EMPS2Pipeline:
             tickers: List of ticker symbols
 
         Returns:
-            List of tickers passing filters
+            DataFrame with volatility-filtered tickers and metrics
         """
         _logger.info("-"*70)
         _logger.info("Stage 3: Applying Volatility Filters")
         _logger.info("-"*70)
 
+        # Apply volatility filter (saves to volatility_filtered.csv)
         filtered_tickers = self.volatility_filter.apply_filters(tickers)
 
-        _logger.info("Stage 3 complete: %d tickers", len(filtered_tickers))
-        return filtered_tickers
+        # Read back the saved CSV to get the full DataFrame with metrics
+        volatility_csv = self._results_dir / "volatility_filtered.csv"
+        if volatility_csv.exists():
+            filtered_df = pd.read_csv(volatility_csv)
+        else:
+            # Fallback: create simple DataFrame from tickers
+            filtered_df = pd.DataFrame({'ticker': filtered_tickers})
 
-    def _stage4_create_final_results(
+        _logger.info("Stage 3 complete: %d tickers", len(filtered_df))
+        return filtered_df
+
+    def _stage4_rolling_memory_analysis(
+        self,
+        volatility_df: pd.DataFrame
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Stage 4: Rolling Memory Analysis and Phase Detection.
+
+        Scans historical results to detect:
+        - Phase 1: Quiet Accumulation (5+ appearances in 10 days)
+        - Phase 2: Early Public Signal (Phase 1 + acceleration)
+
+        Args:
+            volatility_df: DataFrame from volatility filter stage
+
+        Returns:
+            Tuple of (phase1_df, phase2_df)
+        """
+        _logger.info("-"*70)
+        _logger.info("Stage 4: Rolling Memory Analysis")
+        _logger.info("-"*70)
+
+        if not self.config.rolling_memory_config.enabled:
+            _logger.info("Rolling memory disabled, skipping phase detection")
+            return pd.DataFrame(), pd.DataFrame()
+
+        # Scan historical results
+        historical_df = self.rolling_memory.scan_historical_results()
+
+        if historical_df.empty:
+            _logger.warning("No historical data found, skipping phase detection")
+            return pd.DataFrame(), pd.DataFrame()
+
+        # Calculate appearance frequency
+        frequency_df = self.rolling_memory.calculate_appearance_frequency(historical_df)
+
+        # Detect Phase 1 (quiet accumulation)
+        phase1_df = self.rolling_memory.detect_phase1_candidates(frequency_df)
+
+        # Detect Phase 2 (early public signal)
+        phase2_df = self.rolling_memory.detect_phase2_candidates(
+            phase1_df=phase1_df,
+            current_scan_df=volatility_df
+        )
+
+        # Generate outputs
+        output_files = self.rolling_memory.generate_outputs(
+            frequency_df=frequency_df,
+            phase1_df=phase1_df,
+            phase2_df=phase2_df,
+            output_dir=self._results_dir
+        )
+
+        # Send alerts
+        if self.alert_sender:
+            if not phase2_df.empty and self.config.rolling_memory_config.alert_on_phase2:
+                self.alert_sender.send_phase2_alert(
+                    phase2_df=phase2_df,
+                    phase2_csv_path=output_files.get('phase2_alerts')
+                )
+
+            if not phase1_df.empty and self.config.rolling_memory_config.alert_on_phase1:
+                self.alert_sender.send_phase1_alert(
+                    phase1_df=phase1_df,
+                    phase1_csv_path=output_files.get('phase1_watchlist')
+                )
+
+        _logger.info("Stage 4 complete: Phase 1=%d, Phase 2=%d",
+                    len(phase1_df), len(phase2_df))
+
+        return phase1_df, phase2_df
+
+    def _stage5_create_final_results(
         self,
         fundamental_df: pd.DataFrame,
-        volatility_tickers: list
+        volatility_df: pd.DataFrame,
+        phase1_df: pd.DataFrame,
+        phase2_df: pd.DataFrame
     ) -> pd.DataFrame:
         """
-        Stage 4: Create final results DataFrame.
+        Stage 5: Create final results DataFrame.
 
         Args:
             fundamental_df: DataFrame with fundamental data
-            volatility_tickers: List of tickers passing volatility filters
+            volatility_df: DataFrame with volatility metrics
+            phase1_df: Phase 1 watchlist (optional)
+            phase2_df: Phase 2 alerts (optional)
 
         Returns:
             Final filtered DataFrame
         """
         _logger.info("-"*70)
-        _logger.info("Stage 4: Creating Final Results")
+        _logger.info("Stage 5: Creating Final Results")
         _logger.info("-"*70)
 
-        # Filter fundamental data to only include volatility-passed tickers
-        final_df = fundamental_df[fundamental_df['ticker'].isin(volatility_tickers)].copy()
+        # Use volatility_df as the final results (already has all metrics)
+        final_df = volatility_df.copy()
+
+        # Add phase information if available
+        if not phase1_df.empty:
+            phase1_tickers = set(phase1_df['ticker'].tolist())
+            final_df['in_phase1'] = final_df['ticker'].isin(phase1_tickers)
+        else:
+            final_df['in_phase1'] = False
+
+        if not phase2_df.empty:
+            phase2_tickers = set(phase2_df['ticker'].tolist())
+            final_df['in_phase2'] = final_df['ticker'].isin(phase2_tickers)
+            final_df['alert_priority'] = final_df['ticker'].apply(
+                lambda x: 'HIGH' if x in phase2_tickers else 'NORMAL'
+            )
+        else:
+            final_df['in_phase2'] = False
+            final_df['alert_priority'] = 'NORMAL'
 
         # Add scan metadata
         final_df['scan_date'] = datetime.now().strftime('%Y-%m-%d')
@@ -227,7 +352,7 @@ class EMPS2Pipeline:
         final_df.to_csv(output_path, index=False)
         _logger.info("Saved final results to: %s", output_path)
 
-        _logger.info("Stage 4 complete: %d tickers in final universe", len(final_df))
+        _logger.info("Stage 5 complete: %d tickers in final universe", len(final_df))
         return final_df
 
     def _generate_summary(
@@ -235,6 +360,8 @@ class EMPS2Pipeline:
         initial_count: int,
         fundamental_count: int,
         volatility_count: int,
+        phase1_count: int,
+        phase2_count: int,
         start_time: datetime
     ) -> None:
         """
@@ -244,6 +371,8 @@ class EMPS2Pipeline:
             initial_count: Initial universe size
             fundamental_count: After fundamental filtering
             volatility_count: After volatility filtering
+            phase1_count: Phase 1 candidates count
+            phase2_count: Phase 2 alerts count
             start_time: Pipeline start time
         """
         try:
@@ -251,7 +380,7 @@ class EMPS2Pipeline:
 
             summary = {
                 'pipeline': 'EMPS2',
-                'version': '1.0',
+                'version': '2.1',  # Updated version with rolling memory
                 'scan_date': datetime.now().strftime('%Y-%m-%d'),
                 'scan_timestamp': datetime.now().isoformat(),
                 'elapsed_seconds': elapsed,
@@ -269,11 +398,19 @@ class EMPS2Pipeline:
                         'count': volatility_count,
                         'percentage': 100.0 * volatility_count / fundamental_count if fundamental_count > 0 else 0,
                         'removed': fundamental_count - volatility_count
+                    },
+                    'stage4_rolling_memory': {
+                        'enabled': self.config.rolling_memory_config.enabled,
+                        'phase1_count': phase1_count,
+                        'phase2_count': phase2_count,
+                        'lookback_days': self.config.rolling_memory_config.lookback_days
                     }
                 },
                 'final_universe': {
                     'count': volatility_count,
-                    'percentage_of_initial': 100.0 * volatility_count / initial_count if initial_count > 0 else 0
+                    'percentage_of_initial': 100.0 * volatility_count / initial_count if initial_count > 0 else 0,
+                    'phase1_candidates': phase1_count,
+                    'phase2_alerts': phase2_count
                 },
                 'config': {
                     'min_price': self.config.filter_config.min_price,
@@ -283,9 +420,13 @@ class EMPS2Pipeline:
                     'max_float': self.config.filter_config.max_float,
                     'min_volatility_threshold': self.config.filter_config.min_volatility_threshold,
                     'min_price_range': self.config.filter_config.min_price_range,
+                    'min_vol_zscore': self.config.filter_config.min_vol_zscore,
+                    'min_rv_ratio': self.config.filter_config.min_rv_ratio,
                     'lookback_days': self.config.filter_config.lookback_days,
                     'interval': self.config.filter_config.interval,
-                    'atr_period': self.config.filter_config.atr_period
+                    'atr_period': self.config.filter_config.atr_period,
+                    'rolling_memory_enabled': self.config.rolling_memory_config.enabled,
+                    'phase1_min_appearances': self.config.rolling_memory_config.phase1_min_appearances
                 }
             }
 
@@ -306,6 +447,9 @@ class EMPS2Pipeline:
             _logger.info("  After volatility: %d tickers (%.1f%%)",
                         volatility_count,
                         summary['stages']['stage3_volatility']['percentage'])
+            if self.config.rolling_memory_config.enabled:
+                _logger.info("  Phase 1 candidates: %d tickers", phase1_count)
+                _logger.info("  Phase 2 alerts: %d tickers 🔥", phase2_count)
             _logger.info("  Final universe: %d tickers (%.2f%% of initial)",
                         volatility_count,
                         summary['final_universe']['percentage_of_initial'])

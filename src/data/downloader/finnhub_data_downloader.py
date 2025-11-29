@@ -222,6 +222,10 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
             _logger.debug("Retrieved fundamentals for %s: %s", symbol, profile_data.get('name', 'Unknown'))
 
+            # Extract volume data (in millions, convert to shares)
+            avg_vol_millions = metrics.get("10DayAverageTradingVolume", 0)
+            avg_volume = avg_vol_millions * 1_000_000 if avg_vol_millions else 0.0
+
             return Fundamentals(
                 ticker=symbol.upper(),
                 company_name=profile_data.get("name", "Unknown"),
@@ -253,6 +257,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 currency=profile_data.get("currency", None),
                 shares_outstanding=float(profile_data.get("shareOutstanding", 0)) if profile_data.get("shareOutstanding") else None,
                 float_shares=None,  # Finnhub doesn't provide float shares
+                avg_volume=avg_volume,  # 10-day average trading volume
                 short_ratio=float(metrics.get("shortInterestRatioAnnual", 0)) if metrics.get("shortInterestRatioAnnual") else None,
                 payout_ratio=float(metrics.get("payoutRatioAnnual", 0)) if metrics.get("payoutRatioAnnual") else None,
                 peg_ratio=float(metrics.get("pegAnnual", 0)) if metrics.get("pegAnnual") else None,
