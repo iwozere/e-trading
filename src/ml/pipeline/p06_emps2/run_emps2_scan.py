@@ -326,8 +326,10 @@ def main():
         print_header("Output Files")
         print(f"Results saved to: {results_dir}\n")
         print("Files:")
+        print(f"  - pipeline.log                (Full scan log)")
         print(f"  - nasdaq_universe.csv         (Full NASDAQ universe)")
         print(f"  - fundamental_filtered.csv    (After fundamental filters)")
+        print(f"  - volatility_diagnostics.csv  (ALL tickers with metrics & failure reasons)")
         print(f"  - volatility_filtered.csv     (After volatility filters)")
         if config.rolling_memory_config.enabled:
             print(f"  - rolling_candidates.csv      (10-day rolling memory)")

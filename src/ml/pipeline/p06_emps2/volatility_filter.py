@@ -96,6 +96,7 @@ class VolatilityFilter:
             # Apply filters
             passed_tickers = []
             results_data = []
+            diagnostic_data = []  # Track ALL tickers for diagnostics
 
             for ticker in tickers:
                 try:
@@ -103,30 +104,97 @@ class VolatilityFilter:
 
                     if df is None or df.empty:
                         _logger.debug("No data for %s", ticker)
+                        diagnostic_data.append({
+                            'ticker': ticker,
+                            'status': 'FAILED',
+                            'reason': 'no_data',
+                            'last_price': None,
+                            'atr': None,
+                            'atr_ratio': None,
+                            'price_range': None,
+                            'vol_zscore': None,
+                            'rv_ratio': None,
+                            'rv_short': None,
+                            'rv_long': None,
+                            'bars_count': 0
+                        })
                         continue
 
                     # Check minimum bars requirement
                     if len(df) < 20:
                         _logger.debug("%s has insufficient data (%d bars)", ticker, len(df))
+                        diagnostic_data.append({
+                            'ticker': ticker,
+                            'status': 'FAILED',
+                            'reason': 'insufficient_bars',
+                            'last_price': None,
+                            'atr': None,
+                            'atr_ratio': None,
+                            'price_range': None,
+                            'vol_zscore': None,
+                            'rv_ratio': None,
+                            'rv_short': None,
+                            'rv_long': None,
+                            'bars_count': len(df)
+                        })
                         continue
 
                     # Apply filters
-                    passed, metrics = self._check_volatility_filters(ticker, df)
+                    passed, metrics, reason = self._check_volatility_filters(ticker, df)
 
                     if passed:
                         passed_tickers.append(ticker)
                         results_data.append(metrics)
+                        # Add to diagnostics with PASSED status
+                        diag_entry = metrics.copy()
+                        diag_entry['status'] = 'PASSED'
+                        diag_entry['reason'] = 'all_filters_passed'
+                        diagnostic_data.append(diag_entry)
+                    else:
+                        # Add to diagnostics with failure reason
+                        diag_entry = metrics.copy() if metrics else {
+                            'ticker': ticker,
+                            'last_price': None,
+                            'atr': None,
+                            'atr_ratio': None,
+                            'price_range': None,
+                            'vol_zscore': None,
+                            'rv_ratio': None,
+                            'rv_short': None,
+                            'rv_long': None,
+                            'bars_count': len(df)
+                        }
+                        diag_entry['status'] = 'FAILED'
+                        diag_entry['reason'] = reason
+                        diagnostic_data.append(diag_entry)
 
                 except Exception:
                     _logger.exception("Error processing %s:", ticker)
+                    diagnostic_data.append({
+                        'ticker': ticker,
+                        'status': 'ERROR',
+                        'reason': 'exception',
+                        'last_price': None,
+                        'atr': None,
+                        'atr_ratio': None,
+                        'price_range': None,
+                        'vol_zscore': None,
+                        'rv_ratio': None,
+                        'rv_short': None,
+                        'rv_long': None,
+                        'bars_count': 0
+                    })
                     continue
 
             _logger.info("After volatility filtering: %d tickers (%.1f%%)",
                         len(passed_tickers),
                         100.0 * len(passed_tickers) / len(tickers) if tickers else 0)
 
-            # Save results
+            # Save results (passing tickers only)
             self._save_results(results_data)
+
+            # Save diagnostics (all tickers)
+            self._save_diagnostics(diagnostic_data)
 
             return passed_tickers
 
@@ -143,7 +211,10 @@ class VolatilityFilter:
             df: OHLCV DataFrame
 
         Returns:
-            Tuple of (passed: bool, metrics: dict)
+            Tuple of (passed: bool, metrics: dict, reason: str)
+            - passed: True if all filters passed
+            - metrics: Dictionary with all calculated metrics
+            - reason: Specific filter that failed (or 'all_filters_passed')
         """
         try:
             # Ensure data is sorted by timestamp
@@ -152,43 +223,26 @@ class VolatilityFilter:
             # Get latest price
             last_price = df['close'].iloc[-1]
 
-            # Price filter
-            if last_price < self.config.min_price:
-                return False, {}
-
+            # Calculate all metrics first (for diagnostics)
             # Calculate ATR using TA-Lib
             atr = self._compute_atr(df)
+            atr_ratio = None
 
-            if atr is None or pd.isna(atr):
-                return False, {}
-
-            # ATR/Price ratio
-            atr_ratio = atr / last_price
-
-            if atr_ratio < self.config.min_volatility_threshold:
-                return False, {}
+            if atr is not None and not pd.isna(atr):
+                atr_ratio = atr / last_price
 
             # Price range filter
             price_high = df['high'].max()
             price_low = df['low'].min()
             price_range = (price_high - price_low) / price_low
 
-            if price_range < self.config.min_price_range:
-                return False, {}
-
             # Volume Z-Score (from P05 EMPS)
             vol_zscore = self._compute_volume_zscore(df)
-
-            if vol_zscore < self.config.min_vol_zscore:
-                return False, {}
 
             # RV Ratio - Realized Volatility acceleration (from P05 EMPS)
             rv_ratio, rv_short, rv_long = self._compute_rv_ratio(df)
 
-            if rv_ratio < self.config.min_rv_ratio:
-                return False, {}
-
-            # Passed all filters
+            # Build metrics dictionary with all calculated values
             metrics = {
                 'ticker': ticker,
                 'last_price': last_price,
@@ -204,14 +258,40 @@ class VolatilityFilter:
                 'bars_count': len(df)
             }
 
+            # Now apply filters with specific failure reasons
+            # Price filter
+            if last_price < self.config.min_price:
+                return False, metrics, f'price_too_low (${last_price:.2f} < ${self.config.min_price})'
+
+            # ATR check
+            if atr is None or pd.isna(atr):
+                return False, metrics, 'atr_calculation_failed'
+
+            # ATR/Price ratio
+            if atr_ratio < self.config.min_volatility_threshold:
+                return False, metrics, f'atr_ratio_too_low ({atr_ratio:.4f} < {self.config.min_volatility_threshold})'
+
+            # Price range filter
+            if price_range < self.config.min_price_range:
+                return False, metrics, f'price_range_too_low ({price_range:.4f} < {self.config.min_price_range})'
+
+            # Volume Z-Score
+            if vol_zscore < self.config.min_vol_zscore:
+                return False, metrics, f'vol_zscore_too_low ({vol_zscore:.2f} < {self.config.min_vol_zscore})'
+
+            # RV Ratio
+            if rv_ratio < self.config.min_rv_ratio:
+                return False, metrics, f'rv_ratio_too_low ({rv_ratio:.2f} < {self.config.min_rv_ratio})'
+
+            # Passed all filters
             _logger.debug("%s passed: price=$%.2f, ATR/Price=%.3f, range=%.3f, vol_zscore=%.2f, rv_ratio=%.2f",
                          ticker, last_price, atr_ratio, price_range, vol_zscore, rv_ratio)
 
-            return True, metrics
+            return True, metrics, 'all_filters_passed'
 
         except Exception:
             _logger.exception("Error checking filters for %s:", ticker)
-            return False, {}
+            return False, {}, 'exception_during_calculation'
 
     def _compute_atr(self, df: pd.DataFrame) -> float:
         """
@@ -360,7 +440,7 @@ class VolatilityFilter:
             # Sort by ATR ratio (highest volatility first)
             df = df.sort_values('atr_ratio', ascending=False)
 
-            output_path = self._results_dir / "volatility_filtered.csv"
+            output_path = self._results_dir / "05_volatility_filtered.csv"
             df.to_csv(output_path, index=False)
 
             _logger.info("Saved volatility filter results to: %s", output_path)
@@ -373,6 +453,63 @@ class VolatilityFilter:
 
         except Exception:
             _logger.exception("Error saving volatility filter results:")
+
+    def _save_diagnostics(self, diagnostic_data: List[dict]) -> None:
+        """
+        Save diagnostic data for ALL tickers (passed and failed).
+
+        This CSV shows calculated metrics for every ticker and the specific
+        filter that caused rejection, helping diagnose filter effectiveness.
+
+        Args:
+            diagnostic_data: List of diagnostic dictionaries with status and reason
+        """
+        try:
+            if not diagnostic_data:
+                _logger.warning("No diagnostic data to save")
+                return
+
+            df = pd.DataFrame(diagnostic_data)
+
+            # Reorder columns for better readability
+            column_order = [
+                'ticker', 'status', 'reason',
+                'last_price', 'atr', 'atr_ratio', 'price_range',
+                'vol_zscore', 'rv_ratio', 'rv_short', 'rv_long',
+                'price_high', 'price_low', 'bars_count'
+            ]
+
+            # Only include columns that exist
+            available_cols = [col for col in column_order if col in df.columns]
+            df = df[available_cols]
+
+            # Sort by status (PASSED first, then FAILED, then ERROR)
+            status_order = {'PASSED': 0, 'FAILED': 1, 'ERROR': 2}
+            df['_sort_order'] = df['status'].map(status_order)
+            df = df.sort_values(['_sort_order', 'ticker'])
+            df = df.drop(columns=['_sort_order'])
+
+            output_path = self._results_dir / "04_volatility_diagnostics.csv"
+            df.to_csv(output_path, index=False)
+
+            _logger.info("Saved volatility diagnostics to: %s", output_path)
+
+            # Log summary statistics
+            status_counts = df['status'].value_counts()
+            _logger.info("Diagnostic Summary:")
+            for status, count in status_counts.items():
+                _logger.info("  %s: %d tickers", status, count)
+
+            # Log failure reason breakdown
+            if 'FAILED' in status_counts:
+                _logger.info("Failure Reasons:")
+                failed_df = df[df['status'] == 'FAILED']
+                reason_counts = failed_df['reason'].value_counts()
+                for reason, count in reason_counts.head(10).items():
+                    _logger.info("  %s: %d tickers", reason, count)
+
+        except Exception:
+            _logger.exception("Error saving volatility diagnostics:")
 
 
 def create_volatility_filter(

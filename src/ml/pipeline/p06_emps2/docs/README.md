@@ -514,7 +514,12 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
 
 ### Generated Files
 
-1. **nasdaq_universe.csv** - Complete NASDAQ universe (~8,000 tickers)
+1. **pipeline.log** - Complete scan log with timestamps
+   - Contains all DEBUG, INFO, WARNING, and ERROR messages from the entire pipeline
+   - Useful for debugging issues or reviewing scan details
+   - One log file per scan, kept alongside results
+
+2. **nasdaq_universe.csv** - Complete NASDAQ universe (~8,000 tickers)
    ```csv
    ticker,name,exchange,etf
    AAPL,Apple Inc.,NASDAQ,N
@@ -522,35 +527,35 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
    ...
    ```
 
-2. **fundamental_raw_data.csv** - Raw fundamental data BEFORE filtering
+3. **fundamental_raw_data.csv** - Raw fundamental data BEFORE filtering
    ```csv
    ticker,market_cap,float,sector,current_price,avg_volume
    AAPL,4101176466841,14776350000,Technology,276.26,47894000
    ...
    ```
 
-3. **fundamental_filtered.csv** - After fundamental filters (~500 tickers)
+4. **fundamental_filtered.csv** - After fundamental filters (~500 tickers)
    ```csv
    ticker,market_cap,float,sector,current_price,avg_volume
    GME,8500000000,76000000,Consumer Cyclical,24.50,12500000
    ...
    ```
 
-4. **volatility_filtered.csv** - After volatility filters (~100 tickers)
+5. **volatility_filtered.csv** - After volatility filters (~100 tickers)
    ```csv
    ticker,last_price,atr,atr_ratio,price_range,vol_zscore,rv_ratio,rv_short,rv_long
    GME,24.50,0.85,0.035,0.12,4.2,2.1,0.85,0.40
    ...
    ```
 
-5. **sentiment_filtered.csv** - After sentiment filters (~50 tickers) *OPTIONAL*
+6. **sentiment_filtered.csv** - After sentiment filters (~50 tickers) *OPTIONAL*
    ```csv
    ticker,mentions_24h,sentiment_score,virality_index,bot_pct,unique_authors,positive_ratio
    GME,450,0.72,2.8,0.15,125,0.68
    ...
    ```
 
-6. **prefiltered_universe.csv** - **FINAL RESULTS** (combined data)
+7. **prefiltered_universe.csv** - **FINAL RESULTS** (combined data)
    ```csv
    ticker,market_cap,float,sector,current_price,avg_volume,atr_ratio,vol_zscore,rv_ratio,mentions_24h,sentiment_score
    GME,8500000000,76000000,Consumer Cyclical,24.50,12500000,0.035,4.2,2.1,450,0.72
@@ -558,7 +563,7 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
    ...
    ```
 
-7. **summary.json** - Pipeline execution summary
+8. **summary.json** - Pipeline execution summary
    ```json
    {
      "pipeline_version": "2.0",

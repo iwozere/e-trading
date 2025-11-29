@@ -250,7 +250,7 @@ class SentimentFilter:
             # Sort by sentiment score (highest first)
             df = df.sort_values('sentiment_score', ascending=False)
 
-            output_path = self._results_dir / "sentiment_filtered.csv"
+            output_path = self._results_dir / "06_sentiment_filtered.csv"
             df.to_csv(output_path, index=False)
 
             _logger.info("Saved sentiment filter results to: %s", output_path)

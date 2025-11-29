@@ -62,12 +62,16 @@ class FundamentalFilter:
         self._results_dir = Path("results") / "emps2" / today
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize cache
+        # Initialize cache (with negative caching support)
         if config.fundamental_cache_enabled:
-            self.cache = FundamentalCache(cache_ttl_days=config.fundamental_cache_ttl_days)
+            self.cache = FundamentalCache(
+                cache_ttl_days=config.fundamental_cache_ttl_days,
+                negative_cache_ttl_days=2  # 2 days for failed/empty responses
+            )
             cache_stats = self.cache.get_stats()
-            _logger.info("Fundamental cache: %d valid, %d expired entries",
-                        cache_stats['valid'], cache_stats['expired'])
+            _logger.info("Fundamental cache: %d valid (%d positive, %d negative), %d expired",
+                        cache_stats['valid'], cache_stats['positive'],
+                        cache_stats['negative'], cache_stats['expired'])
         else:
             self.cache = None
 
@@ -125,7 +129,7 @@ class FundamentalFilter:
             _logger.info("Total fundamentals retrieved: %d tickers", len(df))
 
             # Save raw data BEFORE filtering for inspection
-            raw_output_path = self._results_dir / "fundamental_raw_data.csv"
+            raw_output_path = self._results_dir / "02_fundamental_raw_data.csv"
             df.to_csv(raw_output_path, index=False)
             _logger.info("Saved raw fundamental data to: %s", raw_output_path)
 
@@ -175,6 +179,7 @@ class FundamentalFilter:
         processed = 0
         failed = 0
         cache_hits = 0
+        negative_cache_skipped = 0  # Track API calls saved by negative caching
 
         _logger.info("Fetching fundamentals for %d tickers (cache: %s, checkpoints: every %d)",
                     total_tickers,
@@ -185,17 +190,28 @@ class FundamentalFilter:
             try:
                 # Try cache first (unless force_refresh)
                 profile_data = None
+                is_negative_cache_hit = False
+
                 if self.cache and not force_refresh:
-                    profile_data = self.cache.get(ticker)
-                    if profile_data:
+                    cached_result = self.cache.get(ticker)
+
+                    if cached_result:
                         cache_hits += 1
 
-                # Fetch from API if not cached
-                if not profile_data:
+                        # Check if this is a negative cache hit (known empty ticker)
+                        if cached_result.get('is_negative_cache'):
+                            is_negative_cache_hit = True
+                            negative_cache_skipped += 1
+                            _logger.debug("Skipping %s (negative cache: known empty ticker)", ticker)
+                        else:
+                            profile_data = cached_result
+
+                # Fetch from API if not cached and not a negative cache hit
+                if not profile_data and not is_negative_cache_hit:
                     profile_data = self._fetch_ticker_profile(ticker)
 
-                    # Save to cache
-                    if profile_data and self.cache:
+                    # Save to cache (both positive and negative results)
+                    if self.cache:
                         self.cache.set(ticker, profile_data)
 
                     # Rate limiting (only when fetching from API)
@@ -207,17 +223,18 @@ class FundamentalFilter:
                     # Save checkpoint after EACH successful fetch for crash recovery
                     if self.config.checkpoint_enabled:
                         self._save_checkpoint(fundamentals)
-                else:
+                elif not is_negative_cache_hit:
+                    # Only count as failed if it's a NEW failure (not negative cache hit)
                     failed += 1
 
                 processed += 1
 
                 # Progress logging
                 if processed % 100 == 0:
-                    _logger.info("Progress: %d/%d (%.1f%%), successful: %d, failed: %d, cache hits: %d",
+                    _logger.info("Progress: %d/%d (%.1f%%), successful: %d, failed: %d, cache hits: %d (neg: %d)",
                                 processed, total_tickers,
                                 100.0 * processed / total_tickers,
-                                len(fundamentals), failed, cache_hits)
+                                len(fundamentals), failed, cache_hits, negative_cache_skipped)
 
             except KeyboardInterrupt:
                 _logger.warning("Interrupted by user. Saving checkpoint...")
@@ -233,9 +250,10 @@ class FundamentalFilter:
         if self.config.checkpoint_enabled and fundamentals:
             self._save_checkpoint(fundamentals)
 
-        _logger.info("Fetched fundamentals: %d successful, %d failed, %d cache hits (%.1f%% cache hit rate)",
+        _logger.info("Fetched fundamentals: %d successful, %d failed, %d cache hits (%.1f%% hit rate, %d negative cache)",
                     len(fundamentals), failed, cache_hits,
-                    100.0 * cache_hits / total_tickers if total_tickers > 0 else 0)
+                    100.0 * cache_hits / total_tickers if total_tickers > 0 else 0,
+                    negative_cache_skipped)
 
         return fundamentals
 
@@ -334,7 +352,7 @@ class FundamentalFilter:
             df: Filtered DataFrame
         """
         try:
-            output_path = self._results_dir / "fundamental_filtered.csv"
+            output_path = self._results_dir / "03_fundamental_filtered.csv"
             df.to_csv(output_path, index=False)
             _logger.info("Saved fundamental filter results to: %s", output_path)
 

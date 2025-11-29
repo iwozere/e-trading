@@ -204,7 +204,7 @@ class NasdaqUniverseDownloader:
                 _logger.warning("No tickers to save to universe file")
                 return
 
-            output_path = self._cache_dir / "nasdaq_universe.csv"
+            output_path = self._cache_dir / "01_nasdaq_universe.csv"
 
             # Filter DataFrame to only include filtered tickers
             if "Symbol" in df.columns:

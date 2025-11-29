@@ -18,7 +18,7 @@ class EMPS2FilterConfig:
     """
 
     # Fundamental filters (Stage 2)
-    min_price: float = 1.0
+    min_price: float = 0.5
     min_avg_volume: int = 400_000
     min_market_cap: int = 50_000_000      # $50M
     max_market_cap: int = 5_000_000_000   # $5B
@@ -27,8 +27,8 @@ class EMPS2FilterConfig:
     # Volatility filters (Stage 3) - Enhanced with P05 EMPS indicators
     min_volatility_threshold: float = 0.02  # ATR/Price > 2%
     min_price_range: float = 0.05           # 5% range over lookback period
-    min_vol_zscore: float = 2.0             # Volume Z-Score > 2.0 (early spike detection)
-    min_rv_ratio: float = 1.5               # RV Ratio > 1.5 (volatility acceleration)
+    min_vol_zscore: float = 1.2             # Volume Z-Score > 1.2 (early spike detection - lowered from 2.0)
+    min_rv_ratio: float = 1.1               # RV Ratio > 1.1 (volatility acceleration - lowered from 1.5)
 
     # Data parameters
     lookback_days: int = 7

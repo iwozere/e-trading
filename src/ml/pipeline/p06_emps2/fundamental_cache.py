@@ -33,21 +33,23 @@ class FundamentalCache:
     - TTL expiration check
     """
 
-    def __init__(self, cache_ttl_days: int = 3):
+    def __init__(self, cache_ttl_days: int = 3, negative_cache_ttl_days: int = 2):
         """
         Initialize fundamental data cache.
 
         Args:
-            cache_ttl_days: Cache time-to-live in days (default: 3)
+            cache_ttl_days: Cache time-to-live in days for positive results (default: 3)
+            negative_cache_ttl_days: Cache TTL for negative results (empty/failed) (default: 2)
         """
         self.cache_ttl_days = cache_ttl_days
+        self.negative_cache_ttl_days = negative_cache_ttl_days
 
         # Cache directory structure: results/emps2/cache/fundamentals/
         self._cache_dir = Path("results") / "emps2" / "cache" / "fundamentals"
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
-        _logger.info("Fundamental cache initialized (TTL: %d days, dir: %s)",
-                    cache_ttl_days, self._cache_dir)
+        _logger.info("Fundamental cache initialized (TTL: %d days, negative TTL: %d days, dir: %s)",
+                    cache_ttl_days, negative_cache_ttl_days, self._cache_dir)
 
     def get(self, ticker: str) -> Optional[Dict[str, Any]]:
         """
@@ -57,7 +59,9 @@ class FundamentalCache:
             ticker: Stock ticker symbol
 
         Returns:
-            Cached fundamental data dict or None if not cached/expired
+            Cached fundamental data dict, or None if not cached/expired.
+            For negative cache hits (empty response), returns a special dict:
+            {'is_negative_cache': True} to signal "known bad ticker, skip API call"
         """
         try:
             cache_file = self._get_cache_path(ticker)
@@ -74,6 +78,11 @@ class FundamentalCache:
                 _logger.debug("Cache expired for %s", ticker)
                 return None
 
+            # Check if this is a negative cache entry (empty/failed response)
+            if cache_data.get('is_empty_response', False):
+                _logger.debug("Negative cache hit for %s (known empty ticker)", ticker)
+                return {'is_negative_cache': True}
+
             _logger.debug("Cache hit for %s", ticker)
             return cache_data.get('data')
 
@@ -81,28 +90,38 @@ class FundamentalCache:
             _logger.debug("Error reading cache for %s", ticker)
             return None
 
-    def set(self, ticker: str, data: Dict[str, Any]) -> None:
+    def set(self, ticker: str, data: Optional[Dict[str, Any]]) -> None:
         """
         Cache fundamental data for a ticker.
 
+        Supports both positive caching (valid data) and negative caching (empty/failed responses).
+
         Args:
             ticker: Stock ticker symbol
-            data: Fundamental data dictionary to cache
+            data: Fundamental data dictionary to cache, or None/empty dict for negative cache
         """
         try:
             cache_file = self._get_cache_path(ticker)
 
+            # Determine if this is a negative cache entry (empty/failed response)
+            is_empty = not data or data == {}
+
             cache_entry = {
                 'ticker': ticker.upper(),
-                'data': data,
+                'data': data if data else None,
                 'cached_at': datetime.now(timezone.utc).isoformat(),
-                'ttl_days': self.cache_ttl_days
+                'ttl_days': self.negative_cache_ttl_days if is_empty else self.cache_ttl_days,
+                'is_empty_response': is_empty
             }
 
             with open(cache_file, 'w') as f:
                 json.dump(cache_entry, f, indent=2)
 
-            _logger.debug("Cached data for %s", ticker)
+            if is_empty:
+                _logger.debug("Cached negative result for %s (TTL: %d days)",
+                            ticker, self.negative_cache_ttl_days)
+            else:
+                _logger.debug("Cached data for %s", ticker)
 
         except Exception:
             _logger.debug("Error caching data for %s", ticker)
@@ -154,7 +173,7 @@ class FundamentalCache:
         Get cache statistics.
 
         Returns:
-            Dict with cache stats (total, valid, expired)
+            Dict with cache stats (total, valid, expired, positive, negative)
         """
         try:
             cache_files = list(self._cache_dir.glob("*.json"))
@@ -162,6 +181,8 @@ class FundamentalCache:
 
             valid = 0
             expired = 0
+            positive = 0  # Valid data
+            negative = 0  # Empty/failed responses
 
             for cache_file in cache_files:
                 try:
@@ -172,17 +193,24 @@ class FundamentalCache:
                         expired += 1
                     else:
                         valid += 1
+                        # Count positive vs negative cache entries
+                        if cache_data.get('is_empty_response', False):
+                            negative += 1
+                        else:
+                            positive += 1
                 except Exception:
                     expired += 1
 
             return {
                 'total': total,
                 'valid': valid,
-                'expired': expired
+                'expired': expired,
+                'positive': positive,
+                'negative': negative
             }
 
         except Exception:
-            return {'total': 0, 'valid': 0, 'expired': 0}
+            return {'total': 0, 'valid': 0, 'expired': 0, 'positive': 0, 'negative': 0}
 
     def clear_expired(self) -> int:
         """
@@ -229,14 +257,18 @@ class FundamentalCache:
             _logger.exception("Error clearing cache:")
 
 
-def create_fundamental_cache(cache_ttl_days: int = 3) -> FundamentalCache:
+def create_fundamental_cache(
+    cache_ttl_days: int = 3,
+    negative_cache_ttl_days: int = 2
+) -> FundamentalCache:
     """
     Factory function to create fundamental cache.
 
     Args:
-        cache_ttl_days: Cache time-to-live in days
+        cache_ttl_days: Cache time-to-live in days for positive results
+        negative_cache_ttl_days: Cache TTL for negative results (empty/failed)
 
     Returns:
         FundamentalCache instance
     """
-    return FundamentalCache(cache_ttl_days)
+    return FundamentalCache(cache_ttl_days, negative_cache_ttl_days)

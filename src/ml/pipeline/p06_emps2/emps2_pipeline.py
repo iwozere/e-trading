@@ -10,6 +10,8 @@ import sys
 from typing import Optional
 from datetime import datetime
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 
 import pandas as pd
 
@@ -62,6 +64,9 @@ class EMPS2Pipeline:
         # Results base path (for rolling memory to access historical data)
         self._results_base_path = Path("results") / "emps2"
 
+        # Set up per-scan logging to pipeline.log in results directory
+        self._setup_pipeline_logging()
+
         # Initialize components
         self.universe_downloader = NasdaqUniverseDownloader(self.config.universe_config)
 
@@ -88,6 +93,52 @@ class EMPS2Pipeline:
         self.alert_sender = EMPS2AlertSender() if self.config.rolling_memory_config.send_alerts else None
 
         _logger.info("EMPS2 Pipeline initialized (results: %s)", self._results_dir)
+
+    def _setup_pipeline_logging(self) -> None:
+        """
+        Set up per-scan logging to pipeline.log in results directory.
+
+        This adds a file handler to the root logger that captures all pipeline
+        logs to results/emps2/YYYY-MM-DD/pipeline.log for this specific scan.
+        """
+        log_file = self._results_dir / "pipeline.log"
+
+        # Create file handler with rotation (max 100MB, 3 backups)
+        file_handler = RotatingFileHandler(
+            str(log_file),
+            maxBytes=100 * 1024 * 1024,  # 100MB
+            backupCount=3,
+            encoding="utf-8"
+        )
+        file_handler.setLevel(logging.DEBUG)
+
+        # Use detailed formatter to match project standards
+        formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        )
+        file_handler.setFormatter(formatter)
+
+        # Add handler to root logger so all modules log to this file
+        root_logger = logging.getLogger()
+        root_logger.addHandler(file_handler)
+
+        # Store handler reference for cleanup
+        self._pipeline_log_handler = file_handler
+
+        _logger.info("Per-scan logging initialized: %s", log_file)
+
+    def _cleanup_pipeline_logging(self) -> None:
+        """
+        Clean up the per-scan log handler.
+
+        Removes the pipeline log handler from the root logger to prevent
+        logs from subsequent scans being written to this scan's log file.
+        """
+        if hasattr(self, '_pipeline_log_handler'):
+            root_logger = logging.getLogger()
+            root_logger.removeHandler(self._pipeline_log_handler)
+            self._pipeline_log_handler.close()
+            _logger.debug("Per-scan logging handler cleaned up")
 
     def run(self, force_refresh: bool = False) -> pd.DataFrame:
         """
@@ -161,6 +212,10 @@ class EMPS2Pipeline:
         except Exception:
             _logger.exception("Error running EMPS2 pipeline:")
             return pd.DataFrame()
+
+        finally:
+            # Always clean up the log handler
+            self._cleanup_pipeline_logging()
 
     def _stage1_download_universe(self, force_refresh: bool) -> list:
         """
