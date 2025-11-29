@@ -239,7 +239,7 @@ class VolatilityFilter:
             # Volume Z-Score (from P05 EMPS)
             vol_zscore = self._compute_volume_zscore(df)
 
-            # RV Ratio - Realized Volatility acceleration (from P05 EMPS)
+            # RV Ratio - Realized Volatility acceleration (from P05 EMPS) but not for 'close' rather for 'volume'
             rv_ratio, rv_short, rv_long = self._compute_rv_ratio(df)
 
             # Build metrics dictionary with all calculated values
@@ -388,8 +388,8 @@ class VolatilityFilter:
                 return 1.0, 0.0, 0.0
 
             # Calculate log returns
-            close = df['close'].values
-            log_returns = np.log(close[1:] / close[:-1])
+            volume = df['volume'].values
+            log_returns = np.log(volume[1:] / volume[:-1])
 
             # Determine bars per day based on interval
             # 15m = 26 bars/day (6.5 trading hours)

@@ -519,7 +519,7 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
    - Useful for debugging issues or reviewing scan details
    - One log file per scan, kept alongside results
 
-2. **nasdaq_universe.csv** - Complete NASDAQ universe (~8,000 tickers)
+2. **01_nasdaq_universe.csv** - Complete NASDAQ universe (~8,000 tickers)
    ```csv
    ticker,name,exchange,etf
    AAPL,Apple Inc.,NASDAQ,N

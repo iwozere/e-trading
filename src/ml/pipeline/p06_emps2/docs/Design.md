@@ -60,10 +60,10 @@ Download nasdaqlisted.txt + otherlisted.txt
     ↓
 Combine and filter (remove test issues, special chars)
     ↓
-Save to nasdaq_universe.csv + cache
+Save to 01_nasdaq_universe.csv + cache
 ```
 
-#### 3. Fundamental Filter (`fundamental_filter.py`)
+#### 3. Fundamental Filter (`03_fundamental_filter.py`)
 
 **Responsibility:** Apply fundamental screening using Finnhub data.
 
@@ -171,7 +171,7 @@ Save all files to results/emps2/YYYY-MM-DD/
 ```
 results/emps2/
 ├── 2025-11-27/
-│   ├── nasdaq_universe.csv            # Full universe from NASDAQ
+│   ├── 01_nasdaq_universe.csv            # Full universe from NASDAQ
 │   ├── nasdaq_universe_cache.json     # Cache metadata
 │   ├── fundamental_filtered.csv       # After stage 2
 │   ├── volatility_filtered.csv        # After stage 3
@@ -183,7 +183,7 @@ results/emps2/
 
 ### File Formats
 
-**nasdaq_universe.csv:**
+**01_nasdaq_universe.csv:**
 - Columns: Symbol, Security Name, Market Category, Test Issue, etc.
 - Source: NASDAQ Trader FTP (raw format)
 

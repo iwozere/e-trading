@@ -32,7 +32,7 @@ class EMPS2FilterConfig:
 
     # Data parameters
     lookback_days: int = 7
-    interval: str = "15m"
+    interval: str = "1h"
     atr_period: int = 14
 
     # Processing parameters

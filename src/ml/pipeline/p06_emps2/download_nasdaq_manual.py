@@ -154,7 +154,7 @@ def process_nasdaq_data(nasdaq_text: str, other_text: str, results_dir: Path):
 
         # Save full universe CSV
         df_filtered = df[df["Symbol"].isin(filtered_tickers)]
-        universe_file = results_dir / "nasdaq_universe.csv"
+        universe_file = results_dir / "01_nasdaq_universe.csv"
         df_filtered.to_csv(universe_file, index=False)
 
         print(f"✓ Saved universe to: {universe_file}")
