@@ -270,11 +270,11 @@ class EMPS2Pipeline:
         _logger.info("Stage 3: Applying Volatility Filters")
         _logger.info("-"*70)
 
-        # Apply volatility filter (saves to volatility_filtered.csv)
+        # Apply volatility filter (saves to 05_volatility_filtered.csv)
         filtered_tickers = self.volatility_filter.apply_filters(tickers)
 
         # Read back the saved CSV to get the full DataFrame with metrics
-        volatility_csv = self._results_dir / "volatility_filtered.csv"
+        volatility_csv = self._results_dir / "05_volatility_filtered.csv"
         if volatility_csv.exists():
             filtered_df = pd.read_csv(volatility_csv)
         else:
@@ -403,7 +403,7 @@ class EMPS2Pipeline:
         final_df['scan_timestamp'] = datetime.now().isoformat()
 
         # Save final results
-        output_path = self._results_dir / "prefiltered_universe.csv"
+        output_path = self._results_dir / "06_prefiltered_universe.csv"
         final_df.to_csv(output_path, index=False)
         _logger.info("Saved final results to: %s", output_path)
 
@@ -476,7 +476,7 @@ class EMPS2Pipeline:
                     'min_volatility_threshold': self.config.filter_config.min_volatility_threshold,
                     'min_price_range': self.config.filter_config.min_price_range,
                     'min_vol_zscore': self.config.filter_config.min_vol_zscore,
-                    'min_rv_ratio': self.config.filter_config.min_rv_ratio,
+                    'min_vol_rv_ratio': self.config.filter_config.min_vol_rv_ratio,
                     'lookback_days': self.config.filter_config.lookback_days,
                     'interval': self.config.filter_config.interval,
                     'atr_period': self.config.filter_config.atr_period,

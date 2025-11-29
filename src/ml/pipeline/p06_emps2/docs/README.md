@@ -76,8 +76,8 @@ EMPS2 (Enhanced Explosive Move Pre-Screener v2) is a multi-stage filtering pipel
 │ • Filters:                                                  │
 │   - ATR/Price ratio: > 2%                                  │
 │   - Price range: > 5%                                      │
-│   - Volume Z-Score: > 2.0 (NEW from P05)                  │
-│   - RV Ratio: > 1.5 (NEW from P05)                        │
+│   - Volume Z-Score: > 1.2 (volume spike detection)        │
+│   - Vol/RV Ratio: > 0.5 (accumulation detection)          │
 │ • Output: ~50-200 tickers                                  │
 │ • Time: 30-60 seconds                                      │
 │ • Cost: FREE                                               │
@@ -129,17 +129,20 @@ Thresholds:
 - >= 4.0: Extreme spike (P05 soft flag)
 ```
 
-**Realized Volatility Ratio**
+**Volume/Volatility Ratio (Accumulation Detection)**
 ```python
-# Measures volatility regime shifts (short-term vs long-term)
+# Detects high volume during low price volatility (stealth accumulation)
+vol_zscore = (current_volume - mean_volume) / std_volume
 rv_short = std(log_returns[5_bars]) * sqrt(252 * bars_per_day)
-rv_long = std(log_returns[40_bars]) * sqrt(252 * bars_per_day)
-rv_ratio = rv_short / rv_long
+vol_rv_ratio = vol_zscore / rv_short
+
+High ratio = High volume + Low price volatility = Accumulation phase
+Low ratio = Normal volume or high volatility = Not accumulating
 
 Thresholds:
-- >= 1.5: Acceleration (default)
-- >= 1.8: Strong acceleration (aggressive)
-- >= 2.2: Extreme acceleration (P05 hard flag)
+- >= 0.5: Accumulation signal (default)
+- >= 1.0: Strong accumulation (aggressive)
+- >= 2.0: Extreme accumulation (conservative catches only strongest)
 ```
 
 ### 💬 Sentiment Analysis (NEW)
@@ -257,7 +260,7 @@ EMPS2FilterConfig(
     min_volatility_threshold=0.02,    # ATR/Price > 2%
     min_price_range=0.05,             # 5% range
     min_vol_zscore=2.0,               # Moderate volume spike
-    min_rv_ratio=1.5,                 # Moderate vol acceleration
+    min_vol_rv_ratio=0.5,             # Moderate accumulation signal
 
     # Data
     lookback_days=7,
@@ -290,7 +293,7 @@ EMPS2FilterConfig(
     min_volatility_threshold=0.025,   # ATR/Price > 2.5%
     min_price_range=0.07,             # 7% range
     min_vol_zscore=3.0,               # Strong volume spike
-    min_rv_ratio=1.8                  # Strong vol acceleration
+    min_vol_rv_ratio=1.0              # Strong accumulation signal
 )
 
 SentimentFilterConfig(
@@ -317,7 +320,7 @@ EMPS2FilterConfig(
     min_volatility_threshold=0.015,   # ATR/Price > 1.5%
     min_price_range=0.03,             # 3% range
     min_vol_zscore=1.5,               # Moderate volume
-    min_rv_ratio=1.3                  # Moderate acceleration
+    min_vol_rv_ratio=0.3              # Moderate accumulation
 )
 
 SentimentFilterConfig(
@@ -387,18 +390,25 @@ threshold = 2.0  # 2 standard deviations
 - Detects unusual volume spikes EARLY (before price)
 - Z-score > 4.0 = extreme spike (P05 soft flag)
 
-#### 2.4 RV Ratio (from P05)
+#### 2.4 Volume/Volatility Ratio (Accumulation Detection)
 ```python
-rv_short = std(returns[5_bars]) * sqrt(252 * 26)  # 15m bars
-rv_long = std(returns[40_bars]) * sqrt(252 * 26)
-rv_ratio = rv_short / rv_long
-threshold = 1.5  # Volatility acceleration
+# Volume component
+vol_zscore = (current_volume - mean_volume) / std_volume
+
+# Price volatility component
+rv_short = std(log_returns[5_bars]) * sqrt(252 * bars_per_day)
+
+# Combined ratio
+vol_rv_ratio = vol_zscore / rv_short
+threshold = 0.5  # Accumulation signal
 ```
-- **NEW enhancement from P05 EMPS**
-- Detects volatility regime shifts
-- > 1.5 = transitioning to high-volatility state
-- > 1.8 = strong acceleration (aggressive threshold)
-- > 2.2 = extreme acceleration (P05 hard flag)
+- **NEW enhancement for EMPS Phase 1 detection**
+- Detects stealth accumulation (high volume + low price volatility)
+- High ratio = Accumulation phase (buyers quietly loading)
+- Low ratio = Already moving or no unusual activity
+- >= 0.5 = Accumulation signal (default)
+- >= 1.0 = Strong accumulation (aggressive)
+- >= 2.0 = Extreme accumulation (conservative)
 
 **Why These Work**:
 - Volume spikes 6-24 hours BEFORE explosive moves
@@ -527,43 +537,65 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
    ...
    ```
 
-3. **fundamental_raw_data.csv** - Raw fundamental data BEFORE filtering
+3. **02_fundamental_raw_data.csv** - Raw fundamental data BEFORE filtering
    ```csv
    ticker,market_cap,float,sector,current_price,avg_volume
    AAPL,4101176466841,14776350000,Technology,276.26,47894000
    ...
    ```
 
-4. **fundamental_filtered.csv** - After fundamental filters (~500 tickers)
+4. **03_fundamental_filtered.csv** - After fundamental filters (~500 tickers)
    ```csv
    ticker,market_cap,float,sector,current_price,avg_volume
    GME,8500000000,76000000,Consumer Cyclical,24.50,12500000
    ...
    ```
 
-5. **volatility_filtered.csv** - After volatility filters (~100 tickers)
+5. **04_volatility_diagnostics.csv** - All tickers with diagnostics
    ```csv
-   ticker,last_price,atr,atr_ratio,price_range,vol_zscore,rv_ratio,rv_short,rv_long
-   GME,24.50,0.85,0.035,0.12,4.2,2.1,0.85,0.40
+   ticker,status,reason,last_price,atr,atr_ratio,price_range,vol_zscore,vol_rv_ratio
+   GME,PASSED,all_filters_passed,24.50,0.85,0.035,0.12,4.2,2.1
+   AAPL,FAILED,atr_ratio_too_low,276.26,1.20,0.0043,0.05,1.5,1.2
    ...
    ```
 
-6. **sentiment_filtered.csv** - After sentiment filters (~50 tickers) *OPTIONAL*
+6. **05_volatility_filtered.csv** - After volatility filters (~100 tickers)
    ```csv
-   ticker,mentions_24h,sentiment_score,virality_index,bot_pct,unique_authors,positive_ratio
-   GME,450,0.72,2.8,0.15,125,0.68
+   ticker,last_price,atr,atr_ratio,price_range,vol_zscore,vol_rv_ratio,rv_short,rv_long
+   GME,24.50,0.85,0.035,0.12,4.2,2.5,0.85,0.40
    ...
    ```
 
-7. **prefiltered_universe.csv** - **FINAL RESULTS** (combined data)
+7. **06_prefiltered_universe.csv** - **FINAL RESULTS** (combined data)
    ```csv
-   ticker,market_cap,float,sector,current_price,avg_volume,atr_ratio,vol_zscore,rv_ratio,mentions_24h,sentiment_score
-   GME,8500000000,76000000,Consumer Cyclical,24.50,12500000,0.035,4.2,2.1,450,0.72
-   AMC,2100000000,52000000,Communication Services,4.85,45000000,0.042,3.8,1.9,320,0.68
+   ticker,market_cap,float,sector,current_price,avg_volume,atr_ratio,vol_zscore,vol_rv_ratio,in_phase1,in_phase2,alert_priority
+   GME,8500000000,76000000,Consumer Cyclical,24.50,12500000,0.035,4.2,2.5,True,True,HIGH
+   AMC,2100000000,52000000,Communication Services,4.85,45000000,0.042,3.8,2.1,True,False,NORMAL
    ...
    ```
 
-8. **summary.json** - Pipeline execution summary
+8. **07_rolling_candidates.csv** - 10-day rolling memory analysis
+   ```csv
+   ticker,appearance_count,first_seen,last_seen,avg_vol_zscore,max_vol_zscore,avg_vol_rv_ratio,max_vol_rv_ratio
+   GME,8,2025-11-19,2025-11-28,3.8,5.2,2.1,3.0
+   ...
+   ```
+
+9. **08_phase1_watchlist.csv** - Phase 1: Quiet Accumulation
+   ```csv
+   ticker,appearance_count,avg_vol_zscore,max_vol_rv_ratio,phase
+   GME,8,3.8,3.0,"Phase 1: Quiet Accumulation"
+   ...
+   ```
+
+10. **09_phase2_alerts.csv** - Phase 2: Early Public Signal (HIGH PRIORITY)
+    ```csv
+    ticker,appearance_count,latest_vol_zscore,latest_vol_rv_ratio,phase,alert_priority
+    GME,8,4.2,2.5,"Phase 2: Early Public Signal",HIGH
+    ...
+    ```
+
+11. **summary.json** - Pipeline execution summary
    ```json
    {
      "pipeline_version": "2.0",
@@ -582,7 +614,7 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
    }
    ```
 
-8. **fundamental_checkpoint.csv** - Resume checkpoint (crash recovery)
+12. **fundamental_checkpoint.csv** - Resume checkpoint (crash recovery)
    - Auto-deleted on successful completion
    - Preserved on crash for resume
 
@@ -781,7 +813,7 @@ python run_emps2_scan.py --no-alerts
 
 2. **phase1_watchlist.csv** - Tickers with 5+ appearances (quiet accumulation)
    ```csv
-   ticker,appearance_count,phase,avg_vol_zscore,avg_rv_ratio,market_cap
+   ticker,appearance_count,phase,avg_vol_zscore,avg_vol_rv_ratio,market_cap
    GME,8,Phase 1: Quiet Accumulation,3.2,1.8,8500000000
    ```
 
@@ -856,7 +888,7 @@ See attached CSV for full details.
 
 ### Planned (High Priority)
 
-- [ ] **Metrics Trend Analysis** - Track vol_zscore, rv_ratio evolution over 10 days
+- [ ] **Metrics Trend Analysis** - Track vol_zscore, vol_rv_ratio evolution over 10 days
   - Detect: "Volume trending up" vs "Volume spiking randomly"
   - Alert when metrics show consistent acceleration
   - Example: vol_zscore increasing from 2.0 → 2.5 → 3.2 → 4.1 over 4 days
@@ -916,7 +948,7 @@ See attached CSV for full details.
 
 **Added**:
 - ✅ Volume Z-Score detection (from P05 EMPS)
-- ✅ RV Ratio - Realized Volatility (from P05 EMPS)
+- ✅ Volume/Volatility Ratio - Accumulation Detection (EMPS enhancement)
 - ✅ Sentiment analysis integration (optional, LAST stage)
 - ✅ Enhanced configuration presets
 - ✅ Performance optimizations (cache by default)

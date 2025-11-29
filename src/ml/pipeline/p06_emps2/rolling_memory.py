@@ -59,7 +59,7 @@ class RollingMemoryScanner:
 
         Returns:
             DataFrame with columns:
-            - scan_date, ticker, market_cap, vol_zscore, rv_ratio,
+            - scan_date, ticker, market_cap, vol_zscore, vol_rv_ratio,
               atr_ratio, last_price, avg_volume, etc.
         """
         lookback = lookback_days or self.config.lookback_days
@@ -85,8 +85,8 @@ class RollingMemoryScanner:
                 _logger.debug("No results for %s", date_str)
                 continue
 
-            # Load volatility_filtered.csv (has all technical indicators)
-            vol_file = day_folder / 'volatility_filtered.csv'
+            # Load 05_volatility_filtered.csv (has all technical indicators)
+            vol_file = day_folder / '05_volatility_filtered.csv'
             if vol_file.exists():
                 try:
                     df = pd.read_csv(vol_file)
@@ -122,7 +122,7 @@ class RollingMemoryScanner:
         Returns:
             DataFrame with:
             - ticker, appearance_count, first_seen, last_seen,
-              avg_vol_zscore, avg_rv_ratio, latest_price, etc.
+              avg_vol_zscore, avg_vol_rv_ratio, latest_price, etc.
         """
         if historical_df.empty:
             return pd.DataFrame()
@@ -135,8 +135,8 @@ class RollingMemoryScanner:
         # Add metrics if they exist
         if 'vol_zscore' in historical_df.columns:
             agg_dict['vol_zscore'] = ['mean', 'max', 'last']
-        if 'rv_ratio' in historical_df.columns:
-            agg_dict['rv_ratio'] = ['mean', 'max', 'last']
+        if 'vol_rv_ratio' in historical_df.columns:
+            agg_dict['vol_rv_ratio'] = ['mean', 'max', 'last']
         if 'atr_ratio' in historical_df.columns:
             agg_dict['atr_ratio'] = ['mean', 'last']
         if 'last_price' in historical_df.columns:

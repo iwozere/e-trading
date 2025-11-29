@@ -27,8 +27,8 @@ class EMPS2FilterConfig:
     # Volatility filters (Stage 3) - Enhanced with P05 EMPS indicators
     min_volatility_threshold: float = 0.02  # ATR/Price > 2%
     min_price_range: float = 0.05           # 5% range over lookback period
-    min_vol_zscore: float = 1.2             # Volume Z-Score > 1.2 (early spike detection - lowered from 2.0)
-    min_rv_ratio: float = 1.1               # RV Ratio > 1.1 (volatility acceleration - lowered from 1.5)
+    min_vol_zscore: float = 1.2             # Volume Z-Score > 1.2 (early spike detection)
+    min_vol_rv_ratio: float = 0.3           # Volume/Volatility Ratio > 0.5 (accumulation detection).Too many candidates? Increase to 0.7 or 1.0. Too few candidates? Decrease to 0.3 or 0.4.
 
     # Data parameters
     lookback_days: int = 7
@@ -147,7 +147,7 @@ class EMPS2PipelineConfig:
             min_volatility_threshold=0.025,  # ATR/Price > 2.5%
             min_price_range=0.07,           # 7% range
             min_vol_zscore=3.0,             # Strong volume spike
-            min_rv_ratio=1.8,               # Strong volatility acceleration
+            min_vol_rv_ratio=1.0,           # Strong accumulation signal
             lookback_days=7,
             interval="15m",
             atr_period=14
@@ -178,7 +178,7 @@ class EMPS2PipelineConfig:
             min_volatility_threshold=0.015,  # ATR/Price > 1.5%
             min_price_range=0.03,           # 3% range
             min_vol_zscore=1.5,             # Moderate volume spike
-            min_rv_ratio=1.3,               # Moderate volatility acceleration
+            min_vol_rv_ratio=0.3,           # Moderate accumulation signal
             lookback_days=7,
             interval="15m",
             atr_period=14

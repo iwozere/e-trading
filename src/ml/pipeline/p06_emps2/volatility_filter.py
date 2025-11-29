@@ -4,9 +4,9 @@ Volatility Filter
 Applies volatility-based filters using intraday data from Yahoo Finance.
 Calculates ATR using TA-Lib and filters by price, ATR/Price ratio, and price range.
 
-Enhanced with P05 EMPS indicators:
+Enhanced with EMPS accumulation indicators:
 - Volume Z-Score: Detects unusual volume spikes
-- RV Ratio: Measures volatility regime shifts (short-term vs long-term)
+- Volume/Volatility Ratio: Detects accumulation (high volume + low price volatility)
 """
 
 from pathlib import Path
@@ -57,12 +57,12 @@ class VolatilityFilter:
         self._results_dir = Path("results") / "emps2" / today
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
-        _logger.info("Volatility Filter initialized: ATR/Price>%.1f%%, range>%.1f%%, lookback=%dd, vol_zscore>%.1f, rv_ratio>%.1f",
+        _logger.info("Volatility Filter initialized: ATR/Price>%.1f%%, range>%.1f%%, lookback=%dd, vol_zscore>%.1f, vol_rv_ratio>%.1f",
                     config.min_volatility_threshold * 100,
                     config.min_price_range * 100,
                     config.lookback_days,
                     config.min_vol_zscore,
-                    config.min_rv_ratio)
+                    config.min_vol_rv_ratio)
 
     def apply_filters(self, tickers: List[str]) -> List[str]:
         """
@@ -113,7 +113,7 @@ class VolatilityFilter:
                             'atr_ratio': None,
                             'price_range': None,
                             'vol_zscore': None,
-                            'rv_ratio': None,
+                            'vol_rv_ratio': None,
                             'rv_short': None,
                             'rv_long': None,
                             'bars_count': 0
@@ -132,7 +132,7 @@ class VolatilityFilter:
                             'atr_ratio': None,
                             'price_range': None,
                             'vol_zscore': None,
-                            'rv_ratio': None,
+                            'vol_rv_ratio': None,
                             'rv_short': None,
                             'rv_long': None,
                             'bars_count': len(df)
@@ -159,7 +159,7 @@ class VolatilityFilter:
                             'atr_ratio': None,
                             'price_range': None,
                             'vol_zscore': None,
-                            'rv_ratio': None,
+                            'vol_rv_ratio': None,
                             'rv_short': None,
                             'rv_long': None,
                             'bars_count': len(df)
@@ -179,7 +179,7 @@ class VolatilityFilter:
                         'atr_ratio': None,
                         'price_range': None,
                         'vol_zscore': None,
-                        'rv_ratio': None,
+                        'vol_rv_ratio': None,
                         'rv_short': None,
                         'rv_long': None,
                         'bars_count': 0
@@ -239,8 +239,8 @@ class VolatilityFilter:
             # Volume Z-Score (from P05 EMPS)
             vol_zscore = self._compute_volume_zscore(df)
 
-            # RV Ratio - Realized Volatility acceleration (from P05 EMPS) but not for 'close' rather for 'volume'
-            rv_ratio, rv_short, rv_long = self._compute_rv_ratio(df)
+            # Volume/Volatility Ratio - Detects accumulation (high volume + low price volatility)
+            vol_rv_ratio, rv_short, rv_long = self._compute_volume_volatility_ratio(df)
 
             # Build metrics dictionary with all calculated values
             metrics = {
@@ -252,7 +252,7 @@ class VolatilityFilter:
                 'price_high': price_high,
                 'price_low': price_low,
                 'vol_zscore': vol_zscore,
-                'rv_ratio': rv_ratio,
+                'vol_rv_ratio': vol_rv_ratio,
                 'rv_short': rv_short,
                 'rv_long': rv_long,
                 'bars_count': len(df)
@@ -279,13 +279,13 @@ class VolatilityFilter:
             if vol_zscore < self.config.min_vol_zscore:
                 return False, metrics, f'vol_zscore_too_low ({vol_zscore:.2f} < {self.config.min_vol_zscore})'
 
-            # RV Ratio
-            if rv_ratio < self.config.min_rv_ratio:
-                return False, metrics, f'rv_ratio_too_low ({rv_ratio:.2f} < {self.config.min_rv_ratio})'
+            # Volume/Volatility Ratio (accumulation detection)
+            if vol_rv_ratio < self.config.min_vol_rv_ratio:
+                return False, metrics, f'vol_rv_ratio_too_low ({vol_rv_ratio:.2f} < {self.config.min_vol_rv_ratio})'
 
             # Passed all filters
-            _logger.debug("%s passed: price=$%.2f, ATR/Price=%.3f, range=%.3f, vol_zscore=%.2f, rv_ratio=%.2f",
-                         ticker, last_price, atr_ratio, price_range, vol_zscore, rv_ratio)
+            _logger.debug("%s passed: price=$%.2f, ATR/Price=%.3f, range=%.3f, vol_zscore=%.2f, vol_rv_ratio=%.2f",
+                         ticker, last_price, atr_ratio, price_range, vol_zscore, vol_rv_ratio)
 
             return True, metrics, 'all_filters_passed'
 
@@ -363,38 +363,40 @@ class VolatilityFilter:
             _logger.exception("Error computing volume z-score:")
             return 0.0
 
-    def _compute_rv_ratio(self, df: pd.DataFrame,
-                          short_window: int = 5,
-                          long_window: int = 40) -> tuple:
+    def _compute_volume_volatility_ratio(self, df: pd.DataFrame,
+                                          short_window: int = 5,
+                                          long_window: int = 40,
+                                          vol_window: int = 20) -> tuple:
         """
-        Calculate Realized Volatility Ratio (from P05 EMPS).
+        Calculate Volume/Volatility Ratio for accumulation detection.
 
-        Measures volatility regime shifts by comparing short-term to
-        long-term realized volatility. Values >1.5 indicate acceleration.
+        Detects high volume during low price volatility - a key indicator
+        of stealth accumulation before explosive moves.
+
+        High ratio = High volume + Low price volatility = Accumulation phase
+        Low ratio = Normal volume or high volatility = Not accumulating
 
         Args:
-            df: OHLCV DataFrame with 'close' column
-            short_window: Short-term window (default: 5 bars = ~75 min for 15m)
-            long_window: Long-term window (default: 40 bars = ~10 hours for 15m)
+            df: OHLCV DataFrame with 'close' and 'volume' columns
+            short_window: Short-term volatility window (default: 5 bars)
+            long_window: Long-term volatility window (default: 40 bars)
+            vol_window: Volume z-score window (default: 20 bars)
 
         Returns:
-            Tuple of (rv_ratio, rv_short, rv_long)
-            - rv_ratio: Short/Long ratio (>1.5 = acceleration)
-            - rv_short: Short-term annualized volatility
-            - rv_long: Long-term annualized volatility
+            Tuple of (vol_rv_ratio, rv_short, rv_long)
+            - vol_rv_ratio: Volume Z-Score / RV_short (higher = accumulation)
+            - rv_short: Short-term realized volatility (for reference)
+            - rv_long: Long-term realized volatility (for reference)
         """
         try:
-            if len(df) < long_window + 1:
-                return 1.0, 0.0, 0.0
+            if len(df) < max(long_window + 1, vol_window + 1):
+                return 0.0, 0.0, 0.0
 
-            # Calculate log returns
-            volume = df['volume'].values
-            log_returns = np.log(volume[1:] / volume[:-1])
+            # Calculate log returns for price volatility
+            close = df['close'].values
+            log_returns = np.log(close[1:] / close[:-1])
 
             # Determine bars per day based on interval
-            # 15m = 26 bars/day (6.5 trading hours)
-            # 5m = 78 bars/day
-            # 1h = 6.5 bars/day
             interval_map = {
                 '5m': 78,
                 '15m': 26,
@@ -403,25 +405,38 @@ class VolatilityFilter:
             }
             bars_per_day = interval_map.get(self.config.interval, 26)
 
-            # Calculate realized volatility (annualized)
-            # RV = std(returns) * sqrt(252 * bars_per_day)
+            # Calculate realized volatility (short-term)
             if len(log_returns) >= long_window:
                 rv_short = np.std(log_returns[-short_window:]) * np.sqrt(252 * bars_per_day)
                 rv_long = np.std(log_returns[-long_window:]) * np.sqrt(252 * bars_per_day)
             else:
-                return 1.0, 0.0, 0.0
+                return 0.0, 0.0, 0.0
 
-            # Avoid division by zero
-            if rv_long == 0 or np.isnan(rv_long):
-                return 1.0, rv_short, 0.0
+            # Calculate volume z-score
+            volume = df['volume'].values
+            if len(volume) >= vol_window:
+                vol_mean = np.mean(volume[-vol_window:])
+                vol_std = np.std(volume[-vol_window:])
 
-            rv_ratio = rv_short / rv_long
+                if vol_std > 0:
+                    current_vol_zscore = (volume[-1] - vol_mean) / vol_std
+                else:
+                    current_vol_zscore = 0.0
+            else:
+                current_vol_zscore = 0.0
 
-            return float(rv_ratio), float(rv_short), float(rv_long)
+            # Calculate Volume/Volatility Ratio
+            # High vol_rv_ratio = High volume (accumulation) + Low price volatility (quiet)
+            if rv_short > 0 and not np.isnan(rv_short):
+                vol_rv_ratio = current_vol_zscore / rv_short
+            else:
+                vol_rv_ratio = 0.0
+
+            return float(vol_rv_ratio), float(rv_short), float(rv_long)
 
         except Exception:
-            _logger.exception("Error computing RV ratio:")
-            return 1.0, 0.0, 0.0
+            _logger.exception("Error computing Volume/Volatility ratio:")
+            return 0.0, 0.0, 0.0
 
     def _save_results(self, results_data: List[dict]) -> None:
         """
@@ -475,7 +490,7 @@ class VolatilityFilter:
             column_order = [
                 'ticker', 'status', 'reason',
                 'last_price', 'atr', 'atr_ratio', 'price_range',
-                'vol_zscore', 'rv_ratio', 'rv_short', 'rv_long',
+                'vol_zscore', 'vol_rv_ratio', 'rv_short', 'rv_long',
                 'price_high', 'price_low', 'bars_count'
             ]
 
