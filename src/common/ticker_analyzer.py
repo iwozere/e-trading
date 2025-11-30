@@ -11,7 +11,7 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provider: str = None, force_refresh: bool = False) -> TickerAnalysis:
+async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provider: str = None, force_refresh: bool = False, force_refresh_fundamentals: bool = False) -> TickerAnalysis:
     """
     Analyze ticker with enhanced technical analysis and recommendations, supporting multiple providers.
 
@@ -20,7 +20,10 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
         period: Time period for historical data (e.g., '1d', '1mo', '1y', '2y')
         interval: Data interval (e.g., '1m', '5m', '1h', '1d')
         provider: Data provider code (optional, auto-selected if None)
-        force_refresh: If True, bypass cache and fetch fresh data (default: False)
+        force_refresh: If True, bypass cache for OHLCV data (default: False)
+        force_refresh_fundamentals: If True, bypass cache for fundamentals (default: False)
+            Note: Fundamentals have their own TTL (profiles: 14d, ratios: 3d, statements: 90d)
+            and typically don't need forced refresh as they update quarterly
 
     Returns:
         TickerAnalysis object with OHLCV, fundamentals, and technical analysis
@@ -32,13 +35,16 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
             provider = determine_provider(ticker)
 
         # Get OHLCV data using common function
+        # Force refresh OHLCV for live reports to ensure current prices
         df = get_ohlcv(ticker, interval, period, provider, force_refresh=force_refresh)
 
         # Get fundamentals using unified function with traditional fallback (only for stock providers)
+        # Fundamentals use TTL-based caching (14d for profiles, 3d for ratios, 90d for statements)
+        # Only force refresh if explicitly requested (rare, as fundamentals don't change daily)
         fundamentals = None
         if provider.lower() in ["fmp", "yf", "av", "fh", "td", "pg"]:
             try:
-                fundamentals = await get_fundamentals_unified(ticker, provider, force_refresh=force_refresh)
+                fundamentals = await get_fundamentals_unified(ticker, provider, force_refresh=force_refresh_fundamentals)
             except Exception:
                 _logger.exception("Error getting fundamentals using unified function, falling back to traditional function")
                 fundamentals = None

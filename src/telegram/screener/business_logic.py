@@ -2007,7 +2007,8 @@ async def analyze_ticker_business(
     provider: str = None,
     period: str = "2y",
     interval: str = "1d",
-    force_refresh: bool = True
+    force_refresh: bool = True,
+    force_refresh_fundamentals: bool = False
 ) -> TickerAnalysis:
     """
     Business logic: fetch OHLCV for ticker/provider/period/interval, return TickerAnalysis.
@@ -2018,7 +2019,9 @@ async def analyze_ticker_business(
         provider: Data provider code (optional, auto-selected if None)
         period: Time period for historical data (default: "2y")
         interval: Data interval (default: "1d")
-        force_refresh: If True, bypass cache and fetch fresh data (default: True for live reports)
+        force_refresh: If True, bypass cache for OHLCV (default: True for current prices)
+        force_refresh_fundamentals: If True, bypass cache for fundamentals (default: False)
+            Fundamentals use TTL-based caching and don't need forced refresh
 
     Returns:
         TickerAnalysis object with complete analysis
@@ -2026,13 +2029,14 @@ async def analyze_ticker_business(
     try:
         # Use the analyze_ticker function from src.common.ticker_analyzer
         # This ensures that indicators are properly calculated and added to the DataFrame
-        # Force refresh by default for Telegram reports to ensure users get current data
+        # Force refresh OHLCV by default for current prices, but respect fundamentals TTL
         analysis = await analyze_ticker(
             ticker=ticker,
             provider=provider,
             period=period,
             interval=interval,
-            force_refresh=force_refresh
+            force_refresh=force_refresh,
+            force_refresh_fundamentals=force_refresh_fundamentals
         )
 
         return analysis
