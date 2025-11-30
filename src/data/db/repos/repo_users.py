@@ -127,6 +127,46 @@ class UsersRepo:
         ).all()
         return [ext for ext, meta in rows if ext and (meta or {}).get("is_admin") is True]
 
+    def get_user_by_id(self, user_id: int) -> Optional[User]:
+        """Get user by ID."""
+        q = select(User).where(User.id == user_id)
+        return self.s.execute(q).scalar_one_or_none()
+
+    def get_user_notification_channels(self, user_id: int) -> Optional[Dict[str, str]]:
+        """
+        Get user's notification channels (email + telegram_chat_id).
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dictionary with email and telegram_chat_id, or None if user not found
+            {
+                "email": "user@example.com",
+                "telegram_chat_id": "123456789"
+            }
+        """
+        # Get user and telegram identity in one query
+        q = (
+            select(User, AuthIdentity)
+            .outerjoin(AuthIdentity, (AuthIdentity.user_id == User.id) &
+                      (AuthIdentity.provider == PROVIDER_TG))
+            .where(User.id == user_id)
+        )
+        row = self.s.execute(q).first()
+
+        if not row:
+            return None
+
+        user, telegram_identity = row
+
+        result = {
+            "email": user.email,
+            "telegram_chat_id": telegram_identity.external_id if telegram_identity else None
+        }
+
+        return result
+
 # -------------------- Verification --------------------
 class VerificationRepo:
     def __init__(self, s: Session) -> None:

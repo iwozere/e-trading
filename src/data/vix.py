@@ -142,4 +142,28 @@ def update_vix() -> None:
 
 
 if __name__ == "__main__":
+    import json
+
     update_vix()
+
+    # Output result for scheduler
+    try:
+        if VIX_FILE.exists():
+            vix_data = pd.read_csv(VIX_FILE)
+            if not vix_data.empty:
+                latest = vix_data.iloc[-1]
+                result = {
+                    "success": True,
+                    "vix_current": float(latest["vix"]),
+                    "regime": str(latest["regime"]),
+                    "date": str(latest["date"]),
+                    "total_records": len(vix_data)
+                }
+            else:
+                result = {"success": False, "error": "No VIX data available"}
+        else:
+            result = {"success": False, "error": "VIX file not found"}
+    except Exception as e:
+        result = {"success": False, "error": str(e)}
+
+    print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")

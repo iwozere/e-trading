@@ -436,6 +436,8 @@ class SchedulerService:
                 result = await self._execute_screener_job(schedule, run_record)
             elif schedule.job_type == JobType.REPORT.value:
                 result = await self._execute_report_job(schedule, run_record)
+            elif schedule.job_type == JobType.DATA_PROCESSING.value:
+                result = await self._execute_data_processing_job(schedule, run_record)
             else:
                 raise ValueError(f"Unsupported job type: {schedule.job_type}")
 
@@ -531,6 +533,322 @@ class SchedulerService:
             "status": "not_implemented",
             "message": "Report job execution will be implemented in future version"
         }
+
+    async def _execute_data_processing_job(self, schedule: Schedule, run_record: ScheduleRun) -> Dict[str, Any]:
+        """
+        Execute data processing job via subprocess.
+
+        This method runs Python scripts as subprocesses and handles their output.
+
+        task_params structure:
+        {
+            "script_path": "src/data/vix.py",
+            "script_args": [],
+            "timeout_seconds": 600,
+            "notification_rules": {
+                "conditions": [
+                    {
+                        "check_field": "vix_current",
+                        "operator": ">=",
+                        "threshold": 20,
+                        "channels": ["email"]
+                    },
+                    {
+                        "check_field": "vix_current",
+                        "operator": ">=",
+                        "threshold": 25,
+                        "channels": ["email", "telegram"]
+                    }
+                ]
+            }
+        }
+
+        Args:
+            schedule: Schedule object
+            run_record: ScheduleRun object
+
+        Returns:
+            Dictionary with execution results
+        """
+        import subprocess
+        import json
+        import sys
+        from pathlib import Path
+
+        task_params = schedule.task_params or {}
+        script_path = task_params.get("script_path")
+        script_args = task_params.get("script_args", [])
+        timeout_seconds = task_params.get("timeout_seconds", 600)  # Default 10 minutes
+
+        if not script_path:
+            raise ValueError("script_path is required in task_params")
+
+        _logger.info("Executing data processing job: %s with args: %s", script_path, script_args)
+
+        try:
+            # Build command
+            python_executable = sys.executable
+            script_full_path = Path(PROJECT_ROOT) / script_path
+
+            if not script_full_path.exists():
+                raise FileNotFoundError(f"Script not found: {script_full_path}")
+
+            cmd = [python_executable, str(script_full_path)] + script_args
+
+            _logger.debug("Running command: %s", " ".join(cmd))
+            _logger.debug("Timeout: %d seconds", timeout_seconds)
+
+            # Run subprocess
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(PROJECT_ROOT)
+            )
+
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=timeout_seconds
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                raise TimeoutError(f"Script execution timed out after {timeout_seconds} seconds")
+
+            exit_code = process.returncode
+            stdout_str = stdout.decode('utf-8', errors='replace') if stdout else ""
+            stderr_str = stderr.decode('utf-8', errors='replace') if stderr else ""
+
+            _logger.info("Script exit code: %d", exit_code)
+            if stderr_str:
+                _logger.warning("Script stderr: %s", stderr_str[:1000])  # Log first 1000 chars
+
+            # Parse result from stdout
+            script_result = self._parse_script_output(stdout_str)
+
+            # Check if script execution was successful
+            success = exit_code == 0
+
+            result = {
+                "success": success,
+                "exit_code": exit_code,
+                "script_result": script_result,
+                "stdout_preview": stdout_str[-500:] if len(stdout_str) > 500 else stdout_str,  # Last 500 chars
+                "stderr_preview": stderr_str[-500:] if len(stderr_str) > 500 else stderr_str,
+                "notification_sent": False
+            }
+
+            # Evaluate notification rules if script succeeded
+            if success:
+                notification_sent = await self._evaluate_notification_rules(
+                    schedule, script_result, task_params
+                )
+                result["notification_sent"] = notification_sent
+
+            return result
+
+        except Exception as e:
+            _logger.exception("Error executing data processing job:")
+            raise
+
+    def _parse_script_output(self, stdout: str) -> Dict[str, Any]:
+        """
+        Parse script output to extract JSON result.
+
+        Looks for a line starting with __SCHEDULER_RESULT__: followed by JSON.
+
+        Args:
+            stdout: Script stdout output
+
+        Returns:
+            Parsed result dictionary, or empty dict if not found
+        """
+        result = {}
+
+        for line in stdout.splitlines():
+            if line.startswith("__SCHEDULER_RESULT__:"):
+                try:
+                    json_str = line.split("__SCHEDULER_RESULT__:", 1)[1].strip()
+                    result = json.loads(json_str)
+                    _logger.debug("Parsed script result: %s", result)
+                    break
+                except json.JSONDecodeError as e:
+                    _logger.error("Failed to parse script JSON result: %s", e)
+                    result = {"parse_error": str(e), "raw": json_str[:200]}
+
+        return result
+
+    async def _evaluate_notification_rules(
+        self,
+        schedule: Schedule,
+        script_result: Dict[str, Any],
+        task_params: Dict[str, Any]
+    ) -> bool:
+        """
+        Evaluate notification rules and send notifications if conditions are met.
+
+        Args:
+            schedule: Schedule object
+            script_result: Parsed script result
+            task_params: Task parameters with notification rules
+
+        Returns:
+            True if any notification was sent, False otherwise
+        """
+        from src.data.db.services.users_service import UsersService
+
+        notification_rules = task_params.get("notification_rules", {})
+        conditions = notification_rules.get("conditions", [])
+
+        if not conditions:
+            _logger.debug("No notification conditions defined")
+            return False
+
+        # Get user notification channels
+        users_service = UsersService()
+        user_channels = users_service.get_user_notification_channels(schedule.user_id)
+
+        if not user_channels:
+            _logger.warning("No notification channels found for user %d", schedule.user_id)
+            return False
+
+        _logger.debug("User notification channels: email=%s, telegram=%s",
+                     user_channels.get("email"), user_channels.get("telegram_chat_id"))
+
+        # Evaluate conditions and collect matching channels
+        matching_channels = set()
+
+        for condition in conditions:
+            if self._check_condition(condition, script_result):
+                channels = condition.get("channels", [])
+                matching_channels.update(channels)
+                _logger.info("Notification condition met: %s -> channels: %s",
+                           condition, channels)
+
+        if not matching_channels:
+            _logger.debug("No notification conditions met")
+            return False
+
+        # Build notification message
+        message_title = f"Job Alert: {schedule.name}"
+        message_body_parts = [
+            f"**Scheduled Job:** {schedule.name}",
+            f"**Job Type:** {schedule.job_type}",
+            f"**Execution Time:** {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            ""
+        ]
+
+        # Add script results to message
+        if script_result:
+            message_body_parts.append("**Results:**")
+            for key, value in script_result.items():
+                if key not in ["parse_error", "raw"]:
+                    message_body_parts.append(f"  • {key}: {value}")
+            message_body_parts.append("")
+
+        message_body = "\n".join(message_body_parts)
+
+        # Send notification to matching channels
+        notification_data = {
+            "title": message_title,
+            "message": message_body,
+            "schedule_id": schedule.id,
+            "schedule_name": schedule.name,
+            "job_type": schedule.job_type,
+            "script_result": script_result,
+            "channels": list(matching_channels),
+            "user_id": schedule.user_id
+        }
+
+        # Add channel-specific recipients
+        if "email" in matching_channels and user_channels.get("email"):
+            notification_data["email_receiver"] = user_channels["email"]
+
+        if "telegram" in matching_channels and user_channels.get("telegram_chat_id"):
+            notification_data["telegram_chat_id"] = user_channels["telegram_chat_id"]
+
+        try:
+            # Use the notification client to send
+            success = await self.notification_client.send_notification(
+                notification_type=MessageType.REPORT,
+                title=message_title,
+                message=message_body,
+                priority=MessagePriority.NORMAL,
+                data=notification_data,
+                source="scheduler_data_processing",
+                channels=list(matching_channels),
+                recipient_id=str(schedule.user_id)
+            )
+
+            if success:
+                _logger.info("Notification sent successfully for schedule %d to channels: %s",
+                           schedule.id, matching_channels)
+            else:
+                _logger.warning("Notification service returned failure for schedule %d",
+                              schedule.id)
+
+            return success
+
+        except Exception as e:
+            _logger.error("Error sending notification for schedule %d: %s", schedule.id, e)
+            return False
+
+    def _check_condition(self, condition: Dict[str, Any], script_result: Dict[str, Any]) -> bool:
+        """
+        Check if a notification condition is met.
+
+        Supports conditions like:
+        {
+            "check_field": "vix_current",
+            "operator": ">=",
+            "threshold": 20
+        }
+
+        Args:
+            condition: Condition configuration
+            script_result: Script result data
+
+        Returns:
+            True if condition is met, False otherwise
+        """
+        check_field = condition.get("check_field")
+        operator = condition.get("operator", ">=")
+        threshold = condition.get("threshold")
+
+        if not check_field or threshold is None:
+            _logger.warning("Invalid condition: %s", condition)
+            return False
+
+        field_value = script_result.get(check_field)
+
+        if field_value is None:
+            _logger.debug("Field %s not found in script result", check_field)
+            return False
+
+        try:
+            field_value = float(field_value)
+            threshold = float(threshold)
+
+            if operator == ">=":
+                return field_value >= threshold
+            elif operator == ">":
+                return field_value > threshold
+            elif operator == "<=":
+                return field_value <= threshold
+            elif operator == "<":
+                return field_value < threshold
+            elif operator == "==":
+                return field_value == threshold
+            elif operator == "!=":
+                return field_value != threshold
+            else:
+                _logger.warning("Unknown operator: %s", operator)
+                return False
+
+        except (ValueError, TypeError) as e:
+            _logger.error("Error comparing values: %s", e)
+            return False
 
     async def _create_run_record(self, schedule: Schedule) -> ScheduleRun:
         """

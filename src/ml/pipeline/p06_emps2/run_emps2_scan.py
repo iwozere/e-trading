@@ -344,11 +344,50 @@ def main():
         print_header("Scan Complete")
         print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
+        # Output result for scheduler
+        import json
+        result = {
+            "success": True,
+            "total_candidates": len(final_df),
+            "results_dir": str(results_dir),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # Check for phase 1 and phase 2 candidates if rolling memory is enabled
+        if config.rolling_memory_config.enabled:
+            phase1_file = results_dir / "08_phase1_watchlist.csv"
+            phase2_file = results_dir / "09_phase2_alerts.csv"
+
+            phase1_count = 0
+            phase2_count = 0
+
+            if phase1_file.exists():
+                phase1_df = pd.read_csv(phase1_file)
+                phase1_count = len(phase1_df)
+
+            if phase2_file.exists():
+                phase2_df = pd.read_csv(phase2_file)
+                phase2_count = len(phase2_df)
+
+            result["phase1_count"] = phase1_count
+            result["phase2_count"] = phase2_count
+
+        print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
+
         return 0
 
     except Exception:
         _logger.exception("Error running pipeline:")
         print("\n[ERROR] Pipeline failed. Check logs for details.\n")
+
+        # Output error result for scheduler
+        import json
+        result = {
+            "success": False,
+            "error": "Pipeline execution failed"
+        }
+        print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
+
         return 1
 
 

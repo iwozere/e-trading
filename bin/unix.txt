@@ -1,7 +1,13 @@
+VIX (src/data/vix.py) - daily, notify by email when it is over 20 and by telegram when it is over 25.
+p06_emps2 (src/ml/pipeline/p06_emps2/run_emps2_scan.py) - run daily at market open and then at 8pm CET (only working days). Notify by email when there is something for phase1 and email/telegram when there is something for phase 2.
+Fundamentals refresh (src/data/util/refresh_fundamentals_cache.py) - run over weekend
+OHLCV refresh???
+
+
 git pull origin main
 
 telegram_bot.service
-notification_bot.service	
+notification_bot.service
 
 
 source .venv/bin/activate

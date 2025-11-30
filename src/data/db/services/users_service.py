@@ -44,3 +44,21 @@ class UsersService(BaseDBService):
             }
             for r in rows
         ]
+
+    @with_uow
+    def get_user_by_id(self, repos, user_id: int):
+        """Get user by ID."""
+        return repos.users.get_user_by_id(user_id)
+
+    @with_uow
+    def get_user_notification_channels(self, repos, user_id: int) -> Optional[Dict[str, str]]:
+        """
+        Get user's notification channels (email + telegram_chat_id).
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dictionary with email and telegram_chat_id, or None if user not found
+        """
+        return repos.users.get_user_notification_channels(user_id)

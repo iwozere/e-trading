@@ -325,8 +325,29 @@ Examples:
             _logger.info("Post-refresh cleanup: %d files removed",
                         cleanup_results['total_removed_files'])
 
-    except Exception:
+        # Output result for scheduler
+        if not args.dry_run:
+            import json
+            result = {
+                "success": True,
+                "total_symbols": len(symbols),
+                "successful_symbols": len(successful_symbols),
+                "failed_symbols": len(failed_symbols),
+                "cleanup_files_removed": cleanup_results['total_removed_files'] if not args.cleanup_only else 0
+            }
+            print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
+
+    except Exception as e:
         _logger.exception("Error during cache refresh:")
+
+        # Output error result for scheduler
+        import json
+        result = {
+            "success": False,
+            "error": str(e)
+        }
+        print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
+
         sys.exit(1)
 
 if __name__ == "__main__":

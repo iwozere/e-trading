@@ -1,36 +1,45 @@
 [Unit]
-Description=Trading Platform Scheduler Service
-Documentation=https://github.com/your-org/trading-platform
+Description=E-Trading Scheduler Service
+Documentation=https://github.com/your-org/e-trading
 After=network.target postgresql.service
 Wants=postgresql.service
 
 [Service]
 Type=simple
-User=trading
-Group=trading
-WorkingDirectory=/opt/trading-platform
-ExecStart=/opt/trading-platform/.venv/bin/python -m src.scheduler.main
+# IMPORTANT: Update User, Group, and WorkingDirectory for your installation
+# User=your_username
+# Group=your_group
+User=akossyrev
+Group=akossyrev
+WorkingDirectory=/home/akossyrev/e-trading
+ExecStart=/home/akossyrev/e-trading/.venv/bin/python -m src.scheduler.main
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=scheduler-service
+SyslogIdentifier=e-trading-scheduler
 
 # Environment variables
+# IMPORTANT: Update these for your environment
 Environment=TRADING_ENV=production
 Environment=LOG_LEVEL=INFO
 Environment=SCHEDULER_MAX_WORKERS=10
 Environment=NOTIFICATION_SERVICE_URL=http://localhost:8000
 Environment=DATA_CACHE_ENABLED=true
 
+# Database URL (update with your credentials)
+# Environment=DATABASE_URL=postgresql://user:password@localhost/e_trading
+
 # Security settings
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/trading-platform/logs
-ReadWritePaths=/opt/trading-platform/data
+ReadWritePaths=/home/akossyrev/e-trading/logs
+ReadWritePaths=/home/akossyrev/e-trading/data
+ReadWritePaths=/home/akossyrev/e-trading/data-cache
+ReadWritePaths=/home/akossyrev/e-trading/results
 
 # Resource limits
 LimitNOFILE=65536
