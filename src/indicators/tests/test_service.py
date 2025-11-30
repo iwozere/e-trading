@@ -28,7 +28,7 @@ try:
 except Exception:
     talib = None
 try:
-    import pandas_ta as pandas_ta  # type: ignore
+    import pandas_ta_classic as pandas_ta  # type: ignore
 except Exception:
     pandas_ta = None
 

@@ -37,7 +37,7 @@ def load_all_results(base_dir: str) -> Dict[str, Dict]:
     Load all result JSON files from subdirectories (organized by year).
 
     Args:
-        base_dir: Base directory (e.g., 'results/optimization' or 'results/validation')
+        base_dir: Base directory (e.g., 'results/walk_forward_reports/optimization' or 'results/walk_forward_reports/validation')
 
     Returns:
         dict: Nested dictionary mapping year -> strategy_key -> result
@@ -553,7 +553,7 @@ def main():
     is_results_by_year = load_all_results("results/walk_forward_reports")
 
     _logger.info("Loading out-of-sample (OOS) results...")
-    oos_results_by_year = load_all_results("results/validation")
+    oos_results_by_year = load_all_results("results/walk_forward_reports/validation")
 
     # Match IS and OOS results
     comparisons = []

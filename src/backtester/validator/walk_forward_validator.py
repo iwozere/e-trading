@@ -170,7 +170,7 @@ def save_validation_results(
     window_name: str,
     test_year: str,
     trained_on_year: str,
-    output_dir: str = "results/validation"
+    output_dir: str = "results/walk_forward_reports/validation"
 ):
     """
     Save validation results to appropriate directory.
@@ -444,7 +444,7 @@ def main():
     _logger.info("End time: %s", end_time)
     _logger.info("Total duration: %s", duration)
     _logger.info("Total OOS validations: %d", total_validations)
-    _logger.info("Results saved to: results/validation/")
+    _logger.info("Results saved to: results/walk_forward_reports/validation/")
     _logger.info("=" * 80)
 
 

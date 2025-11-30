@@ -357,7 +357,9 @@ TECHNICAL_INDICATORS = {
     "super_trend": "Super Trend",
     "ad": "Accumulation/Distribution Line",
     "adosc": "Chaikin A/D Oscillator",
-    "bop": "Balance of Power"
+    "bop": "Balance of Power",
+    "eom": "Ease of Movement",
+    "support_resistance": "Support and Resistance Levels"
 }
 
 # Fundamental indicators (canonical names in lowercase)
@@ -424,6 +426,9 @@ LEGACY_INDICATOR_NAMES = {
     "AD": "ad",
     "ADOSC": "adosc",
     "BOP": "bop",
+    "EOM": "eom",
+    "SUPPORT_RESISTANCE": "support_resistance",
+    "SR": "support_resistance",
 
     # Fundamental indicators - legacy uppercase names
     "PE_RATIO": "pe_ratio",

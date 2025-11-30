@@ -103,11 +103,11 @@ This will:
 - Load IS optimization results from Step 2
 - Extract best parameters for each strategy
 - Run backtests on OOS data **without re-optimization**
-- Save OOS results to `results/validation/{year}/`
+- Save OOS results to `results/walk_forward_reports/validation/{year}/`
 
 **Expected Output:**
 ```
-results/validation/2023/
+results/walk_forward_reports/validation/2023/
 ├── BTCUSDT_1h_20230101_20231231_RSIBBEntryMixin_TrailingStopExitMixin_OOS_20251109_150022.json
 ├── BTCUSDT_1h_20230101_20231231_MACDEntryMixin_ATRStopExitMixin_OOS_20251109_150145.json
 └── ...

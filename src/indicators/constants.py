@@ -19,7 +19,8 @@ MULTI_OUTPUT_INDICATORS = {
     "bbands": ["upper", "middle", "lower"],
     "stoch": ["k", "d"],
     "aroon": ["aroon_up", "aroon_down"],
-    "ichimoku": ["tenkan", "kijun", "senkou_a", "senkou_b", "chikou"]
+    "ichimoku": ["tenkan", "kijun", "senkou_a", "senkou_b", "chikou"],
+    "support_resistance": ["resistance", "support"]
 }
 
 # Legacy multi-output mappings for backward compatibility
@@ -128,7 +129,9 @@ DEFAULT_PARAMETERS = {
     "super_trend": {"length": 10, "multiplier": 3.0},
     "ad": {},
     "adosc": {"fastperiod": 3, "slowperiod": 10},
-    "bop": {}
+    "bop": {},
+    "eom": {"timeperiod": 14, "scale": 100000000.0},
+    "support_resistance": {"lookback_bars": 2, "max_swings": 50}
 }
 
 # Input requirements for each indicator
@@ -157,6 +160,8 @@ INDICATOR_INPUTS = {
     "ad": ["high", "low", "close", "volume"],
     "adosc": ["high", "low", "close", "volume"],
     "bop": ["open", "high", "low", "close"],
+    "eom": ["high", "low", "volume"],
+    "support_resistance": ["high", "low", "close"],
 
     # Fundamental indicators (no OHLCV inputs required)
     **{name: [] for name in FUNDAMENTAL_INDICATORS.keys()}
@@ -190,6 +195,8 @@ INDICATOR_OUTPUTS = {
     "aroon": ["aroon_up", "aroon_down"],
     "ichimoku": ["tenkan", "kijun", "senkou_a", "senkou_b", "chikou"],
     "super_trend": ["value", "trend"],
+    "eom": ["value"],
+    "support_resistance": ["resistance", "support"],
 
     # Fundamental indicators (all single-output)
     **{name: ["value"] for name in FUNDAMENTAL_INDICATORS.keys()}
@@ -219,7 +226,9 @@ PROVIDER_SUPPORT.update({
     "sar": ["ta-lib", "pandas-ta"],
     "ad": ["ta-lib", "pandas-ta"],
     "adosc": ["ta-lib", "pandas-ta"],
-    "bop": ["ta-lib", "pandas-ta"]
+    "bop": ["ta-lib", "pandas-ta"],
+    "eom": ["custom"],
+    "support_resistance": ["custom"]
 })
 
 

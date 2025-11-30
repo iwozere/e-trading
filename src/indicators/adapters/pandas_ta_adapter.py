@@ -9,7 +9,7 @@ from typing import Dict, Optional
 import pandas as pd
 
 try:
-    import pandas_ta as pta  # type: ignore
+    import pandas_ta_classic as pta  # type: ignore
 except Exception as e:
     raise ImportError(
         "pandas-ta is required for PandasTaAdapter. Install with `pip install pandas_ta`."
@@ -43,7 +43,7 @@ def _validate_and_collect_inputs(indicator: str, inputs: Dict[str, pd.Series]) -
     return out
 
 def _norm_params(indicator: str, params: Optional[dict]) -> dict:
-    """Canonical → pandas_ta param normalization (mostly pass-through)."""
+    """Canonical → pandas_ta_classic param normalization (mostly pass-through)."""
     p = dict(params or {})
 
     if indicator == "bbands":

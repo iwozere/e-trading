@@ -192,3 +192,13 @@ class IndicatorFactory:
             data, fast_period=fast_period, slow_period=slow_period,
             signal_period=signal_period, backend=backend
         )
+
+    def create_backtrader_eom(self, data, timeperiod: int = 14, scale: float = 100000000.0):
+        """Create Backtrader EOM (Ease of Movement) indicator"""
+        from src.indicators.eom_indicator import EOMIndicator
+        return EOMIndicator(data, timeperiod=timeperiod, scale=scale)
+
+    def create_backtrader_support_resistance(self, data, lookback_bars: int = 2, max_swings: int = 50):
+        """Create Backtrader Support/Resistance indicator"""
+        from src.indicators.support_resistance_indicator import SupportResistanceIndicator
+        return SupportResistanceIndicator(data, lookback_bars=lookback_bars, max_swings=max_swings)
