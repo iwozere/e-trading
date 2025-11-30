@@ -20,7 +20,7 @@ Classes:
 import os
 import re
 import yaml
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -1077,11 +1077,56 @@ class DataManager:
 
     def _get_cached_data(self, symbol: str, timeframe: str,
                         start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
-        """Get data from cache for the specified date range."""
+        """
+        Get data from cache for the specified date range with staleness check.
+
+        For daily and higher timeframes, if the latest cached data is more than
+        24 hours old and we're requesting recent data (end_date is today), the
+        cache is considered stale and we return None to force a fresh fetch.
+        """
         try:
             # Use UnifiedCache get method with date range
             cached_df = self.cache.get(symbol, timeframe, start_date, end_date)
             if cached_df is not None and not cached_df.empty:
+                # Check if cached data is stale
+                latest_cached_date = cached_df.index[-1]
+                now = datetime.now(timezone.utc)
+
+                # Make latest_cached_date timezone-aware if it isn't
+                if latest_cached_date.tzinfo is None:
+                    latest_cached_date = latest_cached_date.replace(tzinfo=timezone.utc)
+
+                # Calculate age of the latest data point
+                data_age = now - latest_cached_date
+
+                # Define staleness thresholds based on timeframe
+                staleness_thresholds = {
+                    '1m': timedelta(minutes=5),
+                    '5m': timedelta(minutes=15),
+                    '15m': timedelta(hours=1),
+                    '30m': timedelta(hours=2),
+                    '1h': timedelta(hours=4),
+                    '4h': timedelta(hours=12),
+                    '1d': timedelta(hours=24),
+                    '1w': timedelta(days=7),
+                    '1M': timedelta(days=30),
+                }
+
+                # Get threshold for this timeframe (default to 24 hours)
+                threshold = staleness_thresholds.get(timeframe, timedelta(hours=24))
+
+                # If data is stale and we're requesting recent data, reject cache
+                end_date_naive = end_date.replace(tzinfo=None) if end_date.tzinfo else end_date
+                now_naive = now.replace(tzinfo=None)
+                is_requesting_recent_data = (now_naive - end_date_naive) < timedelta(hours=2)
+
+                if data_age > threshold and is_requesting_recent_data:
+                    _logger.info(
+                        "Cache data for %s %s is stale (age: %s, threshold: %s), fetching fresh data",
+                        symbol, timeframe, data_age, threshold
+                    )
+                    return None
+
                 _logger.info("Cache hit for %s %s: %d rows", symbol, timeframe, len(cached_df))
                 return cached_df
 

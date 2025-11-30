@@ -2006,20 +2006,33 @@ async def analyze_ticker_business(
     ticker: str,
     provider: str = None,
     period: str = "2y",
-    interval: str = "1d"
+    interval: str = "1d",
+    force_refresh: bool = True
 ) -> TickerAnalysis:
     """
     Business logic: fetch OHLCV for ticker/provider/period/interval, return TickerAnalysis.
     Uses common functions from src/common for data retrieval and analysis.
+
+    Args:
+        ticker: Stock or crypto ticker symbol
+        provider: Data provider code (optional, auto-selected if None)
+        period: Time period for historical data (default: "2y")
+        interval: Data interval (default: "1d")
+        force_refresh: If True, bypass cache and fetch fresh data (default: True for live reports)
+
+    Returns:
+        TickerAnalysis object with complete analysis
     """
     try:
         # Use the analyze_ticker function from src.common.ticker_analyzer
         # This ensures that indicators are properly calculated and added to the DataFrame
+        # Force refresh by default for Telegram reports to ensure users get current data
         analysis = await analyze_ticker(
             ticker=ticker,
             provider=provider,
             period=period,
-            interval=interval
+            interval=interval,
+            force_refresh=force_refresh
         )
 
         return analysis

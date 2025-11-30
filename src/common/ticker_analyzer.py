@@ -11,8 +11,20 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
-async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provider: str = None) -> TickerAnalysis:
-    """Analyze ticker with enhanced technical analysis and recommendations, supporting multiple providers."""
+async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", provider: str = None, force_refresh: bool = False) -> TickerAnalysis:
+    """
+    Analyze ticker with enhanced technical analysis and recommendations, supporting multiple providers.
+
+    Args:
+        ticker: Stock or crypto ticker symbol
+        period: Time period for historical data (e.g., '1d', '1mo', '1y', '2y')
+        interval: Data interval (e.g., '1m', '5m', '1h', '1d')
+        provider: Data provider code (optional, auto-selected if None)
+        force_refresh: If True, bypass cache and fetch fresh data (default: False)
+
+    Returns:
+        TickerAnalysis object with OHLCV, fundamentals, and technical analysis
+    """
 
     try:
         # Infer provider if not specified
@@ -20,13 +32,13 @@ async def analyze_ticker(ticker: str, period: str = "2y", interval: str = "1d", 
             provider = determine_provider(ticker)
 
         # Get OHLCV data using common function
-        df = get_ohlcv(ticker, interval, period, provider)
+        df = get_ohlcv(ticker, interval, period, provider, force_refresh=force_refresh)
 
         # Get fundamentals using unified function with traditional fallback (only for stock providers)
         fundamentals = None
         if provider.lower() in ["fmp", "yf", "av", "fh", "td", "pg"]:
             try:
-                fundamentals = await get_fundamentals_unified(ticker, provider)
+                fundamentals = await get_fundamentals_unified(ticker, provider, force_refresh=force_refresh)
             except Exception:
                 _logger.exception("Error getting fundamentals using unified function, falling back to traditional function")
                 fundamentals = None

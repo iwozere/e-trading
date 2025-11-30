@@ -13,14 +13,23 @@ from src.data.data_manager import get_data_manager
 PROVIDER_CODES = ['fmp', 'yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
 
 
-async def get_fundamentals_unified(ticker: str, provider: str = None, **kwargs) -> Fundamentals:
+async def get_fundamentals_unified(ticker: str, provider: str = None, force_refresh: bool = False, **kwargs) -> Fundamentals:
     """
     Get fundamentals using the unified indicator service.
     This is the new recommended approach.
+
+    Args:
+        ticker: Stock ticker symbol
+        provider: Data provider code (optional)
+        force_refresh: If True, bypass cache and fetch fresh data (default: False)
+        **kwargs: Additional arguments
+
+    Returns:
+        Fundamentals object with company fundamental data
     """
     # First, try DataManager path which handles caching and multi-provider merge
     dm = get_data_manager()
-    combined = dm.get_fundamentals(symbol=ticker)
+    combined = dm.get_fundamentals(symbol=ticker, force_refresh=force_refresh)
 
     fundamental_data = {
         'ticker': ticker,
