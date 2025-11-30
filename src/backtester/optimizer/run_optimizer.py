@@ -21,8 +21,10 @@ import json
 from datetime import datetime as dt
 
 import backtrader as bt
+import numpy as np
 import optuna
 import pandas as pd
+from scipy import stats
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.notification.logger import setup_logger, setup_multiprocessing_logging
@@ -409,6 +411,260 @@ def save_results(result, data_file):
         raise
 
 
+def calculate_optimization_metrics(study: optuna.Study) -> dict:
+    """
+    Calculate comprehensive metrics from optimization study.
+
+    Args:
+        study: Optuna study object
+
+    Returns:
+        Dictionary with metrics: best, median, mean, std, top_10_avg, etc.
+        Returns None if no valid trials found.
+    """
+    completed_trials = [
+        t for t in study.trials
+        if t.state == optuna.trial.TrialState.COMPLETE
+    ]
+
+    if len(completed_trials) == 0:
+        _logger.warning("No completed trials found in study")
+        return None
+
+    trial_values = [t.value for t in completed_trials if t.value is not None]
+
+    if len(trial_values) == 0:
+        _logger.warning("No valid trial values found")
+        return None
+
+    metrics = {
+        'best_value': study.best_value,
+        'median_value': float(np.median(trial_values)),
+        'mean_value': float(np.mean(trial_values)),
+        'std_value': float(np.std(trial_values)),
+        'min_value': float(np.min(trial_values)),
+        'max_value': float(np.max(trial_values)),
+        'top_10_avg': float(np.mean(
+            sorted(trial_values, reverse=True)[:min(10, len(trial_values))]
+        )),
+        'top_20_percent_avg': float(np.mean(
+            sorted(trial_values, reverse=True)[:max(1, len(trial_values) // 5)]
+        )),
+        'bottom_10_avg': float(np.mean(
+            sorted(trial_values)[:min(10, len(trial_values))]
+        )),
+        'total_trials': len(trial_values),
+        'completed_trials': len(completed_trials),
+        'failed_trials': len(study.trials) - len(completed_trials),
+    }
+
+    return metrics
+
+
+def evaluate_combination_promise(metrics: dict, thresholds: dict) -> tuple:
+    """
+    Evaluate if combination is promising based on multiple criteria.
+
+    Args:
+        metrics: Dictionary of calculated metrics
+        thresholds: Dictionary of threshold values
+
+    Returns:
+        Tuple of (is_promising: bool, reason: str)
+    """
+    if metrics is None:
+        return False, "No valid metrics"
+
+    threshold_median = thresholds.get('threshold_median', 0.05)
+    threshold_best = thresholds.get('threshold_best', 0.15)
+    threshold_std = thresholds.get('threshold_std', 1.0)
+    min_trials = thresholds.get('min_trials_for_evaluation', 50)
+
+    # Check minimum trials
+    if metrics['total_trials'] < min_trials:
+        return False, f"Insufficient trials ({metrics['total_trials']} < {min_trials})"
+
+    # Check median return
+    if metrics['median_value'] <= threshold_median:
+        return False, f"Low median return ({metrics['median_value']:.4f} <= {threshold_median:.4f})"
+
+    # Check best return
+    if metrics['best_value'] <= threshold_best:
+        return False, f"Low best return ({metrics['best_value']:.4f} <= {threshold_best:.4f})"
+
+    # Check stability (standard deviation)
+    if metrics['std_value'] >= threshold_std:
+        return False, f"High volatility ({metrics['std_value']:.4f} >= {threshold_std:.4f})"
+
+    return True, "Passed all criteria"
+
+
+def perform_statistical_validation(
+    promising_results: dict,
+    unpromising_results: dict
+) -> dict:
+    """
+    Perform statistical tests to validate that promising combinations are significantly better.
+
+    Args:
+        promising_results: Dictionary of metrics for promising combinations
+        unpromising_results: Dictionary of metrics for unpromising combinations
+
+    Returns:
+        Dictionary with statistical test results
+    """
+    if not promising_results or not unpromising_results:
+        return None
+
+    promising_medians = [v['metrics']['median_value'] for v in promising_results.values() if v.get('metrics')]
+    unpromising_medians = [v['metrics']['median_value'] for v in unpromising_results.values() if v.get('metrics')]
+
+    if len(promising_medians) < 2 or len(unpromising_medians) < 2:
+        return None
+
+    try:
+        t_stat, p_value = stats.ttest_ind(promising_medians, unpromising_medians)
+
+        return {
+            't_statistic': float(t_stat),
+            'p_value': float(p_value),
+            'is_significant': p_value < 0.05,
+            'promising_mean': float(np.mean(promising_medians)),
+            'unpromising_mean': float(np.mean(unpromising_medians)),
+            'promising_count': len(promising_medians),
+            'unpromising_count': len(unpromising_medians),
+        }
+    except Exception as e:
+        _logger.warning("Error performing statistical validation: %s", e)
+        return None
+
+
+def generate_summary_report(
+    all_results: dict,
+    statistical_validation: dict,
+    output_dir: str = "results"
+) -> None:
+    """
+    Generate summary report comparing all combinations.
+
+    Args:
+        all_results: Dictionary with all optimization results
+        statistical_validation: Results from statistical validation
+        output_dir: Directory to save report files
+    """
+    # Create summary DataFrame
+    summary_data = []
+    for (entry, exit), data in all_results.items():
+        metrics = data.get('metrics')
+        if metrics is not None:
+            summary_data.append({
+                'Entry Logic': entry,
+                'Exit Logic': exit,
+                'Best': metrics['best_value'],
+                'Median': metrics['median_value'],
+                'Mean': metrics['mean_value'],
+                'Std': metrics['std_value'],
+                'Top 10 Avg': metrics['top_10_avg'],
+                'Top 20% Avg': metrics['top_20_percent_avg'],
+                'Total Trials': metrics['total_trials'],
+                'Stage': data.get('stage', 'unknown'),
+                'Promising': data.get('is_promising', False),
+            })
+
+    if not summary_data:
+        _logger.warning("No results to summarize")
+        return
+
+    summary_df = pd.DataFrame(summary_data)
+
+    # Sort by median (most reliable metric)
+    summary_df = summary_df.sort_values('Median', ascending=False)
+
+    # Save as CSV
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = dt.now().strftime('%Y%m%d_%H%M%S')
+    csv_path = os.path.join(output_dir, f"optimization_summary_{timestamp}.csv")
+    summary_df.to_csv(csv_path, index=False)
+
+    _logger.info("Summary report saved to %s", csv_path)
+
+    # Print to console
+    print("\n" + "=" * 120)
+    print("OPTIMIZATION SUMMARY - ALL COMBINATIONS")
+    print("=" * 120)
+    print(summary_df.to_string(index=False))
+
+    # Show top combinations
+    print("\n" + "=" * 120)
+    print("TOP 10 COMBINATIONS BY MEDIAN RETURN")
+    print("=" * 120)
+    print(summary_df.head(10).to_string(index=False))
+
+    # Show statistics by stage
+    print("\n" + "=" * 120)
+    print("STATISTICS BY STAGE")
+    print("=" * 120)
+
+    stage_stats = summary_df.groupby('Stage').agg({
+        'Median': ['count', 'mean', 'std', 'min', 'max'],
+        'Best': ['mean', 'max'],
+        'Std': ['mean']
+    }).round(4)
+    print(stage_stats)
+
+    # Show promising vs unpromising
+    print("\n" + "=" * 120)
+    print("PROMISING vs UNPROMISING COMBINATIONS")
+    print("=" * 120)
+
+    promising_df = summary_df[summary_df['Promising'] == True]
+    unpromising_df = summary_df[summary_df['Promising'] == False]
+
+    print(f"\nPromising combinations: {len(promising_df)}")
+    print(f"Unpromising combinations: {len(unpromising_df)}")
+
+    if len(promising_df) > 0:
+        print(f"\nPromising - Median stats: mean={promising_df['Median'].mean():.4f}, "
+              f"std={promising_df['Median'].std():.4f}, "
+              f"min={promising_df['Median'].min():.4f}, "
+              f"max={promising_df['Median'].max():.4f}")
+
+    if len(unpromising_df) > 0:
+        print(f"Unpromising - Median stats: mean={unpromising_df['Median'].mean():.4f}, "
+              f"std={unpromising_df['Median'].std():.4f}, "
+              f"min={unpromising_df['Median'].min():.4f}, "
+              f"max={unpromising_df['Median'].max():.4f}")
+
+    # Statistical validation results
+    if statistical_validation:
+        print("\n" + "=" * 120)
+        print("STATISTICAL VALIDATION (T-TEST)")
+        print("=" * 120)
+        print(f"T-statistic: {statistical_validation['t_statistic']:.4f}")
+        print(f"P-value: {statistical_validation['p_value']:.6f}")
+        print(f"Statistically significant: {statistical_validation['is_significant']} (p < 0.05)")
+        print(f"Promising mean median: {statistical_validation['promising_mean']:.4f}")
+        print(f"Unpromising mean median: {statistical_validation['unpromising_mean']:.4f}")
+
+    # Overall statistics
+    print("\n" + "=" * 120)
+    print("OVERALL STATISTICS")
+    print("=" * 120)
+
+    stage1_count = len([d for d in all_results.values() if d.get('stage') == 'screening'])
+    stage2_count = len([d for d in all_results.values() if d.get('stage') == 'deep_optimization'])
+    promising_count = len([d for d in all_results.values() if d.get('is_promising', False)])
+
+    print(f"Total combinations tested: {len(all_results)}")
+    print(f"Stage 1 (screening): {stage1_count}")
+    print(f"Stage 2 (deep optimization): {stage2_count}")
+    print(f"Promising combinations: {promising_count}")
+    if stage1_count > 0:
+        print(f"Pass rate to Stage 2: {stage2_count / stage1_count * 100:.1f}%")
+        print(f"Promising rate: {promising_count / stage1_count * 100:.1f}%")
+
+    print("\n")
+
 
 if __name__ == "__main__":
     """Run all optimizers with their respective configurations."""
@@ -422,6 +678,26 @@ if __name__ == "__main__":
 
     start_time = dt.now()
     _logger.info("Starting optimization at %s", start_time)
+
+    # Extract two-stage optimization settings
+    two_stage_enabled = optimizer_config.get("optimizer_settings", {}).get("two_stage_optimization", True)
+    stage1_trials = optimizer_config.get("optimizer_settings", {}).get("stage1_n_trials", 150)
+    stage2_trials = optimizer_config.get("optimizer_settings", {}).get("stage2_n_trials", 500)
+    selection_criteria = optimizer_config.get("optimizer_settings", {}).get("selection_criteria", {})
+    dry_run_mode = optimizer_config.get("optimizer_settings", {}).get("dry_run_mode", False)
+
+    _logger.info("Two-stage optimization: %s", "ENABLED" if two_stage_enabled else "DISABLED")
+    if two_stage_enabled:
+        _logger.info("Stage 1 trials: %d", stage1_trials)
+        _logger.info("Stage 2 trials: %d", stage2_trials)
+        _logger.info("Selection criteria: %s", selection_criteria)
+    if dry_run_mode:
+        _logger.info("DRY RUN MODE: Will show filtering decisions without running Stage 2")
+
+    # Global results storage
+    all_results = {}
+    promising_results = {}
+    unpromising_results = {}
 
     # Get the data files
     data_files = [f for f in os.listdir("data/") if f.endswith(".csv") and not f.startswith(".")]
@@ -481,20 +757,107 @@ if __name__ == "__main__":
                         _, _, result = optimizer.run_optimization(trial, include_analyzers=False)
                         return result["total_profit_with_commission"]
 
+                    # ========== STAGE 1: SCREENING OPTIMIZATION ==========
+                    _logger.info("STAGE 1: Screening phase (%d trials)", stage1_trials)
+
                     # Create study
                     study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=50, n_warmup_steps=10))
 
-                    # Run optimization
+                    # Run Stage 1 optimization
                     try:
                         study.optimize(
                             objective,
-                            n_trials=optimizer_config.get("optimizer_settings", {}).get("n_trials", 100),
+                            n_trials=stage1_trials,
                             n_jobs=optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1),
-                            #n_jobs=1,
                         )
                     except Exception as e:
-                        _logger.exception("Error during optimization for %s + %s: %s", entry_logic_name, exit_logic_name, e)
+                        _logger.exception("Error during Stage 1 optimization for %s + %s: %s", entry_logic_name, exit_logic_name, e)
                         raise
+
+                    # Calculate metrics from Stage 1
+                    metrics = calculate_optimization_metrics(study)
+
+                    if metrics is None:
+                        _logger.warning("No valid trials for %s + %s, skipping", entry_logic_name, exit_logic_name)
+                        continue
+
+                    # Log Stage 1 results
+                    _logger.info(
+                        "Stage 1 Results - %s + %s: Best=%.4f, Median=%.4f, Mean=%.4f, Std=%.4f, Top10=%.4f",
+                        entry_logic_name, exit_logic_name,
+                        metrics['best_value'], metrics['median_value'],
+                        metrics['mean_value'], metrics['std_value'], metrics['top_10_avg']
+                    )
+
+                    # Evaluate if combination is promising
+                    is_promising, reason = evaluate_combination_promise(metrics, selection_criteria)
+
+                    # Store Stage 1 results
+                    combination_key = (entry_logic_name, exit_logic_name)
+                    all_results[combination_key] = {
+                        'metrics': metrics,
+                        'best_params': study.best_params,
+                        'study': study if is_promising else None,  # Only save study for promising combinations
+                        'stage': 'screening',
+                        'is_promising': is_promising,
+                        'reason': reason,
+                    }
+
+                    if is_promising:
+                        promising_results[combination_key] = all_results[combination_key]
+                    else:
+                        unpromising_results[combination_key] = all_results[combination_key]
+
+                    # Log decision
+                    if is_promising:
+                        _logger.info("✓ PROMISING - %s + %s: %s", entry_logic_name, exit_logic_name, reason)
+                    else:
+                        _logger.info("✗ FILTERED OUT - %s + %s: %s", entry_logic_name, exit_logic_name, reason)
+
+                    # ========== STAGE 2: DEEP OPTIMIZATION (if enabled and promising) ==========
+                    if two_stage_enabled and is_promising and not dry_run_mode:
+                        _logger.info("STAGE 2: Deep optimization phase (additional %d trials, %d total)",
+                                   stage2_trials - stage1_trials, stage2_trials)
+
+                        # Continue from existing study (warm start)
+                        try:
+                            study.optimize(
+                                objective,
+                                n_trials=stage2_trials - stage1_trials,  # Additional trials
+                                n_jobs=optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1),
+                            )
+                        except Exception as e:
+                            _logger.exception("Error during Stage 2 optimization for %s + %s: %s", entry_logic_name, exit_logic_name, e)
+                            raise
+
+                        # Recalculate metrics with all trials
+                        metrics = calculate_optimization_metrics(study)
+
+                        if metrics is None:
+                            _logger.warning("No valid trials after Stage 2 for %s + %s, skipping", entry_logic_name, exit_logic_name)
+                            continue
+
+                        # Log Stage 2 results
+                        _logger.info(
+                            "Stage 2 Results - %s + %s: Best=%.4f, Median=%.4f, Mean=%.4f, Std=%.4f, Top10=%.4f",
+                            entry_logic_name, exit_logic_name,
+                            metrics['best_value'], metrics['median_value'],
+                            metrics['mean_value'], metrics['std_value'], metrics['top_10_avg']
+                        )
+
+                        # Update results with Stage 2 data
+                        all_results[combination_key].update({
+                            'metrics': metrics,
+                            'best_params': study.best_params,
+                            'study': study,
+                            'stage': 'deep_optimization',
+                        })
+                        promising_results[combination_key] = all_results[combination_key]
+
+                    # Skip full backtest if dry run mode or not promising
+                    if dry_run_mode or (two_stage_enabled and not is_promising):
+                        _logger.info("Skipping full backtest for %s + %s", entry_logic_name, exit_logic_name)
+                        continue
 
                     # Get best result
                     if len(study.trials) == 0:
@@ -535,8 +898,31 @@ if __name__ == "__main__":
 
     _logger.info("Optimization completed at %s", end_time)
     _logger.info("Total duration: %s", duration)
+
+    # Perform statistical validation
+    _logger.info("Performing statistical validation...")
+    statistical_validation = perform_statistical_validation(promising_results, unpromising_results)
+
+    if statistical_validation:
+        _logger.info("Statistical validation completed: p-value=%.6f, significant=%s",
+                    statistical_validation['p_value'],
+                    statistical_validation['is_significant'])
+    else:
+        _logger.info("Statistical validation skipped (insufficient data)")
+
+    # Generate summary report
+    _logger.info("Generating summary report...")
+    generate_summary_report(all_results, statistical_validation)
+
     _logger.info("Summary:")
     _logger.info("   - Total combinations: %d", total_combinations)
     _logger.info("   - Processed: %d", processed_combinations - skipped_combinations)
     _logger.info("   - Skipped (already processed): %d", skipped_combinations)
+    _logger.info("   - Promising combinations: %d", len(promising_results))
+    _logger.info("   - Unpromising combinations: %d", len(unpromising_results))
+    if two_stage_enabled:
+        stage2_count = len([r for r in all_results.values() if r.get('stage') == 'deep_optimization'])
+        _logger.info("   - Deep optimization runs: %d", stage2_count)
+        if len(all_results) > 0:
+            _logger.info("   - Pass rate to Stage 2: %.1f%%", stage2_count / len(all_results) * 100)
     _logger.info("   - Time saved by resume: %d minutes (estimated)", skipped_combinations * 5)

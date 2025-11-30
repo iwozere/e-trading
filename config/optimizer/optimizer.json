@@ -21,7 +21,17 @@
         "include_plots_in_report": true,
         "output_dir": "results",
         "position_size": 0.10,
-        "enable_database_logging": false
+        "enable_database_logging": false,
+        "two_stage_optimization": true,
+        "stage1_n_trials": 150,
+        "stage2_n_trials": 500,
+        "dry_run_mode": false,
+        "selection_criteria": {
+            "threshold_median": 0.05,
+            "threshold_best": 0.15,
+            "threshold_std": 1.0,
+            "min_trials_for_evaluation": 100
+        }
     },
     "visualization_settings": {
         "plot_size": [60, 30],
