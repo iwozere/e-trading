@@ -26,11 +26,21 @@ from apscheduler.events import (
 )
 
 from src.data.db.services.jobs_service import JobsService
+from src.data.db.services.notification_service import NotificationService
 from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType
 from src.common.alerts.cron_parser import CronParser
 from src.common.alerts.alert_evaluator import AlertEvaluator
-from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
 from src.notification.logger import setup_logger
+
+# Import MessagePriority enum for compatibility
+from enum import Enum
+
+class MessagePriority(str, Enum):
+    """Message priority levels."""
+    CRITICAL = "critical"
+    HIGH = "high"
+    NORMAL = "normal"
+    LOW = "low"
 
 _logger = setup_logger(__name__)
 
@@ -52,7 +62,7 @@ class SchedulerService:
     def __init__(self,
                  jobs_service: JobsService,
                  alert_evaluator: AlertEvaluator,
-                 notification_client: NotificationServiceClient,
+                 notification_db_service: NotificationService,
                  database_url: str,
                  max_workers: int = 10):
         """
@@ -61,13 +71,13 @@ class SchedulerService:
         Args:
             jobs_service: Service for database operations
             alert_evaluator: Service for alert evaluation
-            notification_client: Client for sending notifications
-            database_url: Database connection URL for APScheduler
+            notification_db_service: Database service for notifications (both alerts and data processing)
+            database_url: Database connection URL for APScheduler job store only
             max_workers: Maximum number of worker threads
         """
         self.jobs_service = jobs_service
         self.alert_evaluator = alert_evaluator
-        self.notification_client = notification_client
+        self.notification_db_service = notification_db_service
         self.database_url = database_url
         self.max_workers = max_workers
 
@@ -769,29 +779,30 @@ class SchedulerService:
             notification_data["telegram_chat_id"] = user_channels["telegram_chat_id"]
 
         try:
-            # Use the notification client to send
-            success = await self.notification_client.send_notification(
-                notification_type=MessageType.REPORT,
-                title=message_title,
-                message=message_body,
-                priority=MessagePriority.NORMAL,
-                data=notification_data,
-                source="scheduler_data_processing",
-                channels=list(matching_channels),
-                recipient_id=str(schedule.user_id)
-            )
+            # Create notification message in database
+            # The notification processor will handle delivery to channels
+            message_data = {
+                "message_type": "REPORT",
+                "channels": list(matching_channels),
+                "recipient_id": str(schedule.user_id),
+                "content": {
+                    "title": message_title,
+                    "body": message_body,
+                    "metadata": notification_data
+                },
+                "priority": "NORMAL",
+                "source": "scheduler_data_processing"
+            }
 
-            if success:
-                _logger.info("Notification sent successfully for schedule %d to channels: %s",
-                           schedule.id, matching_channels)
-            else:
-                _logger.warning("Notification service returned failure for schedule %d",
-                              schedule.id)
+            message = self.notification_db_service.create_message(message_data)
 
-            return success
+            _logger.info("Created notification message %d for schedule %d to channels: %s",
+                       message.id, schedule.id, matching_channels)
+
+            return True
 
         except Exception as e:
-            _logger.error("Error sending notification for schedule %d: %s", schedule.id, e)
+            _logger.error("Error creating notification for schedule %d: %s", schedule.id, e)
             return False
 
     def _check_condition(self, condition: Dict[str, Any], script_result: Dict[str, Any]) -> bool:
@@ -1117,42 +1128,40 @@ class SchedulerService:
             elif priority == "low":
                 message_priority = MessagePriority.LOW
 
-            # Send notification using the service client with retry logic
-            max_notification_retries = 3
-            for attempt in range(max_notification_retries):
-                try:
-                    success = await self.notification_client.send_notification(
-                        notification_type=MessageType.ALERT,
-                        title=title,
-                        message=message,
-                        priority=message_priority,
-                        data=notification_data,
-                        source="scheduler_service",
-                        channels=channels,
-                        recipient_id=recipient_id
-                    )
+            # Create notification message in database
+            # The notification processor will handle delivery to channels
+            try:
+                # Map priority to database format
+                priority_map = {
+                    MessagePriority.CRITICAL: "CRITICAL",
+                    MessagePriority.HIGH: "HIGH",
+                    MessagePriority.NORMAL: "NORMAL",
+                    MessagePriority.LOW: "LOW"
+                }
+                db_priority = priority_map.get(message_priority, "NORMAL")
 
-                    if success:
-                        _logger.info("Enhanced alert notification sent successfully for %s (attempt %d/%d)",
-                                   ticker, attempt + 1, max_notification_retries)
-                        return True
-                    else:
-                        _logger.warning("Notification service returned failure for %s (attempt %d/%d)",
-                                      ticker, attempt + 1, max_notification_retries)
+                message_data = {
+                    "message_type": "ALERT",
+                    "channels": channels,
+                    "recipient_id": str(recipient_id),
+                    "content": {
+                        "title": title,
+                        "body": message,
+                        "metadata": notification_data
+                    },
+                    "priority": db_priority,
+                    "source": "scheduler_service"
+                }
 
-                except Exception as e:
-                    _logger.error("Error sending notification for %s (attempt %d/%d): %s",
-                                ticker, attempt + 1, max_notification_retries, str(e))
+                message_record = self.notification_db_service.create_message(message_data)
 
-                # Wait before retry (except on last attempt)
-                if attempt < max_notification_retries - 1:
-                    wait_time = 2 ** attempt  # Exponential backoff
-                    _logger.info("Retrying notification in %d seconds...", wait_time)
-                    await asyncio.sleep(wait_time)
+                _logger.info("Created alert notification message %d for %s to channels: %s",
+                           message_record.id, ticker, channels)
+                return True
 
-            _logger.error("Failed to send enhanced alert notification for %s after %d attempts",
-                         ticker, max_notification_retries)
-            return False
+            except Exception as e:
+                _logger.error("Error creating alert notification for %s: %s", ticker, str(e))
+                return False
 
         except Exception:
             _logger.exception("Unexpected error sending enhanced notification:")

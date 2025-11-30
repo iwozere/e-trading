@@ -22,7 +22,7 @@ from src.common.alerts.schema_validator import AlertSchemaValidator
 from src.data.data_manager import DataManager
 from src.indicators.service import IndicatorService
 from src.data.db.services.jobs_service import JobsService
-from src.notification.service.client import NotificationServiceClient
+from src.data.db.services.notification_service import NotificationService
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -48,7 +48,7 @@ class SchedulerApplication:
         self.indicator_service: Optional[IndicatorService] = None
         self.jobs_service: Optional[JobsService] = None
         self.alert_evaluator: Optional[AlertEvaluator] = None
-        self.notification_client: Optional[NotificationServiceClient] = None
+        self.notification_db_service: Optional[NotificationService] = None
         self.schema_validator: Optional[AlertSchemaValidator] = None
 
         _logger.info("Scheduler application initialized")
@@ -70,13 +70,9 @@ class SchedulerApplication:
             self.indicator_service = IndicatorService()
             _logger.debug("Indicator service initialized")
 
-            # Initialize notification client
-            self.notification_client = NotificationServiceClient(
-                service_url=self.config.notification.service_url,
-                timeout=self.config.notification.timeout,
-                max_retries=self.config.notification.max_retries
-            )
-            _logger.debug("Notification client initialized")
+            # Initialize notification database service (for both alerts and data processing)
+            self.notification_db_service = NotificationService()
+            _logger.debug("Notification database service initialized")
 
             # Initialize jobs service (uses modern UoW pattern)
             self.jobs_service = JobsService()
@@ -95,7 +91,7 @@ class SchedulerApplication:
             self.scheduler_service = SchedulerService(
                 jobs_service=self.jobs_service,
                 alert_evaluator=self.alert_evaluator,
-                notification_client=self.notification_client,
+                notification_db_service=self.notification_db_service,
                 database_url=self.config.database.url,
                 max_workers=self.config.scheduler.max_workers
             )
@@ -137,10 +133,6 @@ class SchedulerApplication:
             if self.scheduler_service:
                 await self.scheduler_service.stop()
 
-            # Close notification client
-            if self.notification_client:
-                await self.notification_client.close()
-
             # Set shutdown event
             self._shutdown_event.set()
 
@@ -171,7 +163,7 @@ class SchedulerApplication:
             "environment": self.config.service.environment,
             "database_url": self.config.database.url.split('@')[1] if '@' in self.config.database.url else "local",
             "max_workers": self.config.scheduler.max_workers,
-            "notification_service": self.config.notification.service_url,
+            "notification_method": "database",  # Direct database, not HTTP
             "scheduler": None
         }
 

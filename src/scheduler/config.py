@@ -35,15 +35,6 @@ class APSchedulerConfig:
 
 
 @dataclass
-class NotificationConfig:
-    """Notification service configuration."""
-    service_url: str = "http://localhost:8000"
-    timeout: int = 30
-    max_retries: int = 3
-    enabled: bool = True
-
-
-@dataclass
 class DataConfig:
     """Data service configuration."""
     cache_enabled: bool = True
@@ -77,7 +68,6 @@ class SchedulerServiceConfig:
     """Complete scheduler service configuration."""
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     scheduler: APSchedulerConfig = field(default_factory=APSchedulerConfig)
-    notification: NotificationConfig = field(default_factory=NotificationConfig)
     data: DataConfig = field(default_factory=DataConfig)
     alert: AlertConfig = field(default_factory=AlertConfig)
     service: ServiceConfig = field(default_factory=ServiceConfig)
@@ -102,12 +92,6 @@ class SchedulerServiceConfig:
         self.scheduler.max_workers = int(os.getenv("SCHEDULER_MAX_WORKERS", self.scheduler.max_workers))
         self.scheduler.job_timeout = int(os.getenv("SCHEDULER_JOB_TIMEOUT", self.scheduler.job_timeout))
         self.scheduler.timezone = os.getenv("SCHEDULER_TIMEZONE", self.scheduler.timezone)
-
-        # Notification configuration
-        self.notification.service_url = os.getenv("NOTIFICATION_SERVICE_URL", self.notification.service_url)
-        self.notification.timeout = int(os.getenv("NOTIFICATION_TIMEOUT", self.notification.timeout))
-        self.notification.max_retries = int(os.getenv("NOTIFICATION_RETRIES", self.notification.max_retries))
-        self.notification.enabled = os.getenv("NOTIFICATION_ENABLED", "true").lower() == "true"
 
         # Data configuration
         self.data.cache_enabled = os.getenv("DATA_CACHE_ENABLED", "true").lower() == "true"
@@ -140,9 +124,6 @@ class SchedulerServiceConfig:
         if self.scheduler.job_timeout <= 0:
             raise ValueError("Scheduler job_timeout must be positive")
 
-        if self.notification.timeout <= 0:
-            raise ValueError("Notification timeout must be positive")
-
         if self.data.cache_ttl <= 0:
             raise ValueError("Data cache TTL must be positive")
 
@@ -172,12 +153,6 @@ class SchedulerServiceConfig:
                 "coalesce": self.scheduler.coalesce,
                 "max_instances": self.scheduler.max_instances,
                 "timezone": self.scheduler.timezone
-            },
-            "notification": {
-                "service_url": self.notification.service_url,
-                "timeout": self.notification.timeout,
-                "max_retries": self.notification.max_retries,
-                "enabled": self.notification.enabled
             },
             "data": {
                 "cache_enabled": self.data.cache_enabled,

@@ -1,6 +1,6 @@
 [Unit]
 Description=E-Trading Scheduler Service
-Documentation=https://github.com/your-org/e-trading
+Documentation=https://github.com/iwozere/e-trading
 After=network.target postgresql.service
 Wants=postgresql.service
 
@@ -9,10 +9,10 @@ Type=simple
 # IMPORTANT: Update User, Group, and WorkingDirectory for your installation
 # User=your_username
 # Group=your_group
-User=akossyrev
-Group=akossyrev
-WorkingDirectory=/home/akossyrev/e-trading
-ExecStart=/home/akossyrev/e-trading/.venv/bin/python -m src.scheduler.main
+User=alkotrader
+Group=alkotrader
+WorkingDirectory=/opt/apps/e-trading
+ExecStart=/opt/apps/e-trading/.venv/bin/python -m src.scheduler.main
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=10
@@ -25,21 +25,21 @@ SyslogIdentifier=e-trading-scheduler
 Environment=TRADING_ENV=production
 Environment=LOG_LEVEL=INFO
 Environment=SCHEDULER_MAX_WORKERS=10
-Environment=NOTIFICATION_SERVICE_URL=http://localhost:8000
 Environment=DATA_CACHE_ENABLED=true
 
-# Database URL (update with your credentials)
-# Environment=DATABASE_URL=postgresql://user:password@localhost/e_trading
+# Note: Database connectivity is handled automatically by src/data/db/core/database.py
+# No need to set DATABASE_URL unless you want to override the default
+# Notifications are sent directly to database (no HTTP service needed)
 
 # Security settings
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/home/akossyrev/e-trading/logs
-ReadWritePaths=/home/akossyrev/e-trading/data
-ReadWritePaths=/home/akossyrev/e-trading/data-cache
-ReadWritePaths=/home/akossyrev/e-trading/results
+ReadWritePaths=/opt/apps/e-trading/logs
+ReadWritePaths=/opt/apps/e-trading/data
+ReadWritePaths=/share/data-cache
+ReadWritePaths=/opt/apps/e-trading/results
 
 # Resource limits
 LimitNOFILE=65536
