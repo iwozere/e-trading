@@ -1,0 +1,31 @@
+git pull origin main
+
+telegram_bot.service
+notification_bot.service	
+
+
+source .venv/bin/activate
+
+/etc/systemd/system
+
+
+
+sudo systemctl status telegram_bot.service
+
+sudo journalctl -u telegram_bot.service --since "10 minutes ago"
+
+sudo systemctl status NAME
+
+sudo journalctl -u NAME --since "10 minutes ago"
+
+sudo journalctl -u NAME -f
+
+sudo systemctl restart NAME
+
+then immediately look at journalctl -u NAME -f in another terminal.
+
+Also check if it is enabled at boot:
+
+sudo systemctl is-enabled NAME
+
+sudo systemd-analyze verify /etc/systemd/system/telegram_bot.service 
