@@ -22,7 +22,7 @@ Environment="PYTHONUNBUFFERED=1"
 # EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env
 
 # Command to execute
-ExecStart=/usr/bin/python3 -m src.notification.notification_db_centric_bot
+ExecStart=/opt/apps/e-trading/.venv/bin/python -m src.notification.notification_db_centric_bot
 
 # Restart policy
 Restart=always

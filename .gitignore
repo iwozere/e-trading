@@ -46,6 +46,7 @@ htmlcov/
 *.db
 db/
 data/
+!config/data/
 !src/data/
 !src/data/db/
 results/

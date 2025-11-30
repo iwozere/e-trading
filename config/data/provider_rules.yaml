@@ -1,0 +1,396 @@
+# Provider Selection Rules Configuration
+# =====================================
+#
+# This file defines the rules for selecting data providers based on:
+# - Symbol type (crypto, stock, etc.)
+# - Timeframe requirements
+# - Data quality and reliability
+# - Rate limits and costs
+#
+# The rules are used by the ProviderSelector class in DataManager
+# to automatically choose the best provider for each data request.
+#
+# This configuration replaces the hardcoded logic from TickerClassifier
+# and provides a more maintainable, configuration-driven approach.
+
+# Symbol Classification Rules
+symbol_classification:
+  crypto:
+    patterns:
+      - "^[A-Z]{2,10}USD$"      # BTCUSD, ETHUSD, etc.
+      - "^[A-Z]{2,10}USDT$"     # BTCUSDT, ETHUSDT, etc.
+      - "^[A-Z]{2,10}USDC$"     # BTCUSDC, ETHUSDC, etc.
+      - "^[A-Z]{2,10}BTC$"      # ETHBTC, ADABTC, etc.
+      - "^[A-Z]{2,10}EUR$"      # BTCEUR, ETHEUR, etc.
+      - "^[A-Z]{2,10}GBP$"      # BTCGBP, etc.
+      - "^[A-Z]{2,10}BUSD$"     # BTCBUSD, etc.
+      - "^[A-Z]{2,10}BNB$"      # ETHBNB, etc.
+      - "^[A-Z]{2,10}ETH$"      # BTCETH, etc.
+    suffixes: [USDT, USDC, BTC, ETH, BNB, ADA, DOT, LINK, LTC, XRP, USD, EUR, GBP, BUSD]
+    known_assets: [BTC, ETH, BNB, ADA, DOT, LINK, LTC, XRP, SOL, MATIC, AVAX, LUNA, UNI, ATOM, ALGO, VET, ICP, THETA, FIL, TRX, ETC, XLM, AAVE, CAKE, SUSHI, CRV, COMP, YFI, SNX, MKR, ZEC, DASH, NEO, QTUM, ONT, ZIL, ICX, OMG, BAT, BCH, EOS, IOTA, XMR, FTT, CRO, LEO, HT, OKB, KCS, BTT, DOGE, SHIB, CHZ, HOT, ENJ, MANA, SAND, AXS, GALA, ROSE, ONE, HARMONY, IOTX, ANKR, OCEAN, ALPHA, AUDIO, RLC, STORJ, BAND, NMR, REN, KNC, ZRX, BAL, 1INCH, DYDX, PERP, RAD, RARE, ENS, IMX, OP, ARB, FTM, NEAR, OSMO, JUNO, SCRT, AKT, FET, ALICE, TLM, HERO, AGIX, CHAINLINK, PIVX, BEAM, GRIN]
+  
+  stock:
+    patterns:
+      - "^[A-Z]{2,5}$"          # GOOGL, AAPL, MSFT, etc. (2-5 letters)
+      - "^[A-Z]{1,4}\\.[A-Z]$"  # BRK.A, BRK.B, etc.
+    exchange_suffixes:
+      # US Exchanges
+      ".NASDAQ": "NASDAQ"
+      ".NYSE": "New York Stock Exchange"
+      # UK and Ireland
+      ".L": "London Stock Exchange"
+      ".LON": "London Stock Exchange"
+      ".LS": "London Stock Exchange"
+      ".IL": "Irish Stock Exchange"
+      # Swiss Exchange
+      ".SW": "Swiss Exchange (SIX)"
+      ".SIX": "Swiss Exchange (SIX)"
+      # German Exchanges
+      ".DE": "XETRA (Germany)"
+      ".F": "Frankfurt Stock Exchange"
+      ".BER": "Berlin Stock Exchange"
+      ".DUS": "Düsseldorf Stock Exchange"
+      ".HAM": "Hamburg Stock Exchange"
+      ".MUN": "Munich Stock Exchange"
+      ".STU": "Stuttgart Stock Exchange"
+      # French Exchanges
+      ".PA": "Euronext Paris"
+      ".PAR": "Euronext Paris"
+      # Dutch Exchanges
+      ".AS": "Euronext Amsterdam"
+      ".AMS": "Euronext Amsterdam"
+      # Belgian Exchanges
+      ".BR": "Euronext Brussels"
+      ".BRU": "Euronext Brussels"
+      # Italian Exchanges
+      ".MI": "Borsa Italiana"
+      ".MIL": "Borsa Italiana"
+      # Spanish Exchanges
+      ".MC": "Madrid Stock Exchange"
+      ".MAD": "Madrid Stock Exchange"
+      ".BCN": "Barcelona Stock Exchange"
+      ".BIL": "Bilbao Stock Exchange"
+      ".VAL": "Valencia Stock Exchange"
+      # Portuguese Exchanges
+      ".LS": "Euronext Lisbon"
+      ".LIS": "Euronext Lisbon"
+      # Nordic Exchanges
+      ".CO": "Copenhagen Stock Exchange (Denmark)"
+      ".CPH": "Copenhagen Stock Exchange (Denmark)"
+      ".ST": "Stockholm Stock Exchange (Sweden)"
+      ".STO": "Stockholm Stock Exchange (Sweden)"
+      ".HE": "Helsinki Stock Exchange (Finland)"
+      ".HEL": "Helsinki Stock Exchange (Finland)"
+      ".OS": "Oslo Stock Exchange (Norway)"
+      ".OSL": "Oslo Stock Exchange (Norway)"
+      ".IC": "Iceland Stock Exchange"
+      ".REY": "Iceland Stock Exchange"
+      # Canadian Exchanges
+      ".TO": "Toronto Stock Exchange"
+      ".TOR": "Toronto Stock Exchange"
+      ".V": "TSX Venture Exchange"
+      ".VAN": "TSX Venture Exchange"
+      ".NEO": "NEO Exchange"
+      # Australian Exchanges
+      ".AX": "Australian Securities Exchange"
+      ".ASX": "Australian Securities Exchange"
+      # New Zealand Exchange
+      ".NZ": "New Zealand Exchange"
+      ".NZX": "New Zealand Exchange"
+      # Asian Exchanges
+      ".HK": "Hong Kong Stock Exchange"
+      ".HKG": "Hong Kong Stock Exchange"
+      ".T": "Tokyo Stock Exchange"
+      ".TYO": "Tokyo Stock Exchange"
+      ".KS": "Korea Stock Exchange"
+      ".KSE": "Korea Stock Exchange"
+      ".SS": "Shanghai Stock Exchange"
+      ".SHA": "Shanghai Stock Exchange"
+      ".SZ": "Shenzhen Stock Exchange"
+      ".SHE": "Shenzhen Stock Exchange"
+      ".TW": "Taiwan Stock Exchange"
+      ".TWO": "Taiwan OTC Exchange"
+      ".SG": "Singapore Stock Exchange"
+      ".SIN": "Singapore Stock Exchange"
+      ".KL": "Malaysia Stock Exchange"
+      ".KUL": "Malaysia Stock Exchange"
+      ".BK": "Thailand Stock Exchange"
+      ".BKK": "Thailand Stock Exchange"
+      ".JK": "Indonesia Stock Exchange"
+      ".JKT": "Indonesia Stock Exchange"
+      ".PH": "Philippine Stock Exchange"
+      ".PSE": "Philippine Stock Exchange"
+      # Indian Exchanges
+      ".BO": "Bombay Stock Exchange"
+      ".BSE": "Bombay Stock Exchange"
+      ".NS": "National Stock Exchange of India"
+      ".NSE": "National Stock Exchange of India"
+      # Brazilian Exchanges
+      ".SA": "Brazil Stock Exchange (B3)"
+      ".B3": "Brazil Stock Exchange (B3)"
+      # Mexican Exchanges
+      ".MX": "Mexican Stock Exchange"
+      ".MEX": "Mexican Stock Exchange"
+      # Chilean Exchanges
+      ".SN": "Santiago Stock Exchange"
+      ".SGO": "Santiago Stock Exchange"
+      # Colombian Exchanges
+      ".BOG": "Colombia Stock Exchange"
+      # Peruvian Exchanges
+      ".LM": "Lima Stock Exchange"
+      ".LIM": "Lima Stock Exchange"
+      # Argentine Exchanges
+      ".BA": "Buenos Aires Stock Exchange"
+      ".BUE": "Buenos Aires Stock Exchange"
+      # South African Exchanges
+      ".JO": "Johannesburg Stock Exchange"
+      ".JSE": "Johannesburg Stock Exchange"
+      # Egyptian Exchanges
+      ".CA": "Cairo Stock Exchange"
+      ".CAI": "Cairo Stock Exchange"
+      # Nigerian Exchanges
+      ".NG": "Nigerian Stock Exchange"
+      ".LAG": "Nigerian Stock Exchange"
+      # Kenyan Exchanges
+      ".NA": "Nairobi Stock Exchange"
+      ".NBO": "Nairobi Stock Exchange"
+      # Israeli Exchanges
+      ".TA": "Tel Aviv Stock Exchange"
+      ".TLV": "Tel Aviv Stock Exchange"
+      # Turkish Exchanges
+      ".IS": "Istanbul Stock Exchange"
+      ".IST": "Istanbul Stock Exchange"
+      # Russian Exchanges
+      ".ME": "Moscow Exchange"
+      ".MOS": "Moscow Exchange"
+      # Polish Exchanges
+      ".WA": "Warsaw Stock Exchange"
+      ".WAR": "Warsaw Stock Exchange"
+      # Czech Exchanges
+      ".PR": "Prague Stock Exchange"
+      ".PRA": "Prague Stock Exchange"
+      # Hungarian Exchanges
+      ".BD": "Budapest Stock Exchange"
+      ".BUD": "Budapest Stock Exchange"
+      # Romanian Exchanges
+      ".BU": "Bucharest Stock Exchange"
+      ".BUC": "Bucharest Stock Exchange"
+      # Bulgarian Exchanges
+      ".SO": "Sofia Stock Exchange"
+      ".SOF": "Sofia Stock Exchange"
+      # Croatian Exchanges
+      ".ZG": "Zagreb Stock Exchange"
+      ".ZAG": "Zagreb Stock Exchange"
+      # Slovenian Exchanges
+      ".LJ": "Ljubljana Stock Exchange"
+      ".LJU": "Ljubljana Stock Exchange"
+      # Slovak Exchanges
+      ".BA": "Bratislava Stock Exchange"
+      ".BRA": "Bratislava Stock Exchange"
+      # Lithuanian Exchanges
+      ".VS": "Vilnius Stock Exchange"
+      ".VIL": "Vilnius Stock Exchange"
+      # Latvian Exchanges
+      ".RG": "Riga Stock Exchange"
+      ".RIG": "Riga Stock Exchange"
+      # Estonian Exchanges
+      ".TL": "Tallinn Stock Exchange"
+      ".TAL": "Tallinn Stock Exchange"
+
+# Crypto Data Providers
+crypto:
+  primary: binance
+  backup: [coingecko, alpha_vantage]
+  timeframes: [1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w, 1M]
+  description: "Cryptocurrency data with Binance as primary (free, excellent coverage)"
+  
+# Stock Intraday Data (high-frequency)
+stock_intraday:
+  primary: fmp
+  backup: [alpaca, alpha_vantage, polygon]
+  timeframes: [1m, 5m, 15m, 30m, 1h, 4h]
+  description: "Stock intraday data with FMP as primary (generous free tier: 3000 calls/min)"
+  
+# Stock Daily Data
+stock_daily:
+  primary: yahoo
+  backup: [alpaca, tiingo, fmp]
+  timeframes: [1d, 1w, 1M]
+  description: "Stock daily data with Yahoo Finance as primary (free, excellent coverage)"
+  
+# Stock Weekly/Monthly Data (long-term historical)
+stock_weekly_monthly:
+  primary: tiingo
+  backup: [yahoo, fmp]
+  timeframes: [1w, 1M]
+  description: "Long-term historical data with Tiingo as primary (back to 1962)"
+
+# Provider-specific configurations
+providers:
+  binance:
+    name: "Binance"
+    type: "crypto"
+    rate_limits:
+      requests_per_minute: 1200
+      requests_per_day: null
+    cost: "free"
+    data_quality: 5
+    reliability: 5
+    coverage: "excellent"
+    api_key_required: false
+    
+  yahoo:
+    name: "Yahoo Finance"
+    type: "stock"
+    rate_limits:
+      requests_per_minute: 100
+      requests_per_day: null
+    cost: "free"
+    data_quality: 4
+    reliability: 3
+    coverage: "excellent"
+    api_key_required: false
+    
+  alpha_vantage:
+    name: "Alpha Vantage"
+    type: "mixed"
+    rate_limits:
+      requests_per_minute: 5
+      requests_per_day: 25
+    cost: "free"
+    data_quality: 4
+    reliability: 4
+    coverage: "good"
+    api_key_required: true
+    api_key_env: "ALPHA_VANTAGE_API_KEY"
+    
+  fmp:
+    name: "Financial Modeling Prep"
+    type: "stock"
+    rate_limits:
+      requests_per_minute: 3000
+      requests_per_day: null
+    cost: "free"
+    data_quality: 5
+    reliability: 5
+    coverage: "excellent"
+    api_key_required: true
+    api_key_env: "FMP_API_KEY"
+    
+  tiingo:
+    name: "Tiingo"
+    type: "stock"
+    rate_limits:
+      requests_per_minute: null
+      requests_per_day: 1000
+    cost: "free"
+    data_quality: 5
+    reliability: 5
+    coverage: "excellent"
+    api_key_required: true
+    api_key_env: "TIINGO_API_KEY"
+    
+  polygon:
+    name: "Polygon.io"
+    type: "stock"
+    rate_limits:
+      requests_per_minute: 5
+      requests_per_day: null
+    cost: "free"
+    data_quality: 5
+    reliability: 5
+    coverage: "excellent"
+    api_key_required: true
+    api_key_env: "POLYGON_API_KEY"
+    
+  twelvedata:
+    name: "Twelve Data"
+    type: "mixed"
+    rate_limits:
+      requests_per_minute: 8
+      requests_per_day: 800
+    cost: "free"
+    data_quality: 4
+    reliability: 4
+    coverage: "good"
+    api_key_required: true
+    api_key_env: "TWELVEDATA_API_KEY"
+    
+  finnhub:
+    name: "Finnhub"
+    type: "stock"
+    rate_limits:
+      requests_per_minute: 60
+      requests_per_day: null
+    cost: "free"
+    data_quality: 4
+    reliability: 4
+    coverage: "good"
+    api_key_required: true
+    api_key_env: "FINNHUB_API_KEY"
+    
+  coingecko:
+    name: "CoinGecko"
+    type: "crypto"
+    rate_limits:
+      requests_per_minute: 50
+      requests_per_day: null
+    cost: "free"
+    data_quality: 4
+    reliability: 4
+    coverage: "good"
+    api_key_required: false
+    
+  alpaca:
+    name: "Alpaca Markets"
+    type: "stock"
+    rate_limits:
+      requests_per_minute: 200
+      requests_per_day: null
+    cost: "free"
+    data_quality: 5
+    reliability: 5
+    coverage: "excellent"
+    api_key_required: true
+    api_key_env: "ALPACA_API_KEY"
+    secret_key_env: "ALPACA_SECRET_KEY"
+
+# Live feed configurations
+live_feeds:
+  binance:
+    class: "BinanceLiveDataFeed"
+    websocket: true
+    supported_timeframes: [1m, 5m, 15m, 30m, 1h, 4h, 1d]
+    
+  yahoo:
+    class: "YahooLiveDataFeed"
+    websocket: false
+    polling_interval: 60
+    supported_timeframes: [1d]
+    
+  coingecko:
+    class: "CoinGeckoLiveDataFeed"
+    websocket: false
+    polling_interval: 300
+    supported_timeframes: [1d]
+
+# Failover configuration
+failover:
+  enabled: true
+  max_retries: 3
+  retry_delay: 1.0
+  exponential_backoff: true
+  
+# Cache configuration
+cache:
+  enabled: true
+  default_ttl_hours: 24
+  max_size_gb: 10.0
+  compression: "gzip"
+  
+# Data validation
+validation:
+  enabled: true
+  min_quality_score: 0.8
+  check_gaps: true
+  check_duplicates: true

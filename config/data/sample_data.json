@@ -1,0 +1,11 @@
+{
+  "data_source": "binance",
+  "symbol": "BTCUSDT",
+  "interval": "1h",
+  "lookback_bars": 1000,
+  "retry_interval": 60,
+  "testnet": false,
+  "host": "127.0.0.1",
+  "port": 7497,
+  "client_id": 1
+}

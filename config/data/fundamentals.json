@@ -1,0 +1,377 @@
+{
+  "version": "1.0.0",
+  "description": "Fundamentals cache configuration with provider sequences and refresh intervals",
+  "provider_sequences": {
+    "statements": [
+      "fmp",
+      "av",
+      "yf",
+      "td"
+    ],
+    "ratios": [
+      "yf",
+      "fmp",
+      "av",
+      "td"
+    ],
+    "profile": [
+      "fmp",
+      "yf",
+      "av",
+      "td"
+    ],
+    "calendar": [
+      "yf",
+      "fmp",
+      "av"
+    ],
+    "dividends": [
+      "yf",
+      "fmp",
+      "av"
+    ],
+    "splits": [
+      "yf",
+      "fmp"
+    ],
+    "insider_trading": [
+      "fmp",
+      "av"
+    ],
+    "analyst_estimates": [
+      "fmp",
+      "yf",
+      "av"
+    ]
+  },
+  "refresh_intervals": {
+    "profiles": "14d",
+    "ratios": "3d",
+    "statements": "90d",
+    "calendar": "7d",
+    "dividends": "7d",
+    "splits": "30d",
+    "insider_trading": "7d",
+    "analyst_estimates": "3d"
+  },
+  "field_priorities": {
+    "raw_statements": {
+      "income_statement": [
+        "fmp",
+        "av",
+        "yf"
+      ],
+      "balance_sheet": [
+        "fmp",
+        "av",
+        "yf"
+      ],
+      "cash_flow": [
+        "fmp",
+        "av",
+        "yf"
+      ]
+    },
+    "ttm_metrics": {
+      "pe_ratio": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "pb_ratio": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "roe": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "roa": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "debt_to_equity": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "current_ratio": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "gross_margin": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "operating_margin": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "net_margin": [
+        "yf",
+        "fmp",
+        "av"
+      ]
+    },
+    "company_profile": {
+      "name": [
+        "fmp",
+        "yf",
+        "av"
+      ],
+      "sector": [
+        "fmp",
+        "yf",
+        "av"
+      ],
+      "industry": [
+        "fmp",
+        "yf",
+        "av"
+      ],
+      "description": [
+        "fmp",
+        "yf",
+        "av"
+      ],
+      "website": [
+        "fmp",
+        "yf",
+        "av"
+      ],
+      "country": [
+        "fmp",
+        "yf",
+        "av"
+      ],
+      "employees": [
+        "fmp",
+        "yf",
+        "av"
+      ],
+      "ceo": [
+        "fmp",
+        "yf"
+      ],
+      "founded": [
+        "fmp",
+        "yf"
+      ]
+    },
+    "share_data": {
+      "shares_outstanding": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "float_shares": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "insider_ownership": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "institutional_ownership": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "market_cap": [
+        "yf",
+        "fmp",
+        "av"
+      ]
+    },
+    "calendar_events": {
+      "earnings_date": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "ex_dividend_date": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "dividend_payment_date": [
+        "yf",
+        "fmp",
+        "av"
+      ]
+    },
+    "dividends": {
+      "dividend_yield": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "dividend_rate": [
+        "yf",
+        "fmp",
+        "av"
+      ],
+      "payout_ratio": [
+        "yf",
+        "fmp",
+        "av"
+      ]
+    }
+  },
+  "provider_settings": {
+    "fmp": {
+      "name": "Financial Modeling Prep",
+      "priority": 1,
+      "rate_limits": {
+        "requests_per_minute": 3000,
+        "requests_per_day": null
+      },
+      "data_quality": 5,
+      "reliability": 5,
+      "coverage": "excellent",
+      "api_key_required": true,
+      "api_key_env": "FMP_API_KEY",
+      "strengths": [
+        "structured_statements",
+        "comprehensive_ratios",
+        "historical_data"
+      ],
+      "limitations": [
+        "daily_cap",
+        "some_fields_paywalled"
+      ]
+    },
+    "yf": {
+      "name": "Yahoo Finance",
+      "priority": 2,
+      "rate_limits": {
+        "requests_per_minute": 100,
+        "requests_per_day": null
+      },
+      "data_quality": 4,
+      "reliability": 3,
+      "coverage": "excellent",
+      "api_key_required": false,
+      "strengths": [
+        "calculated_ratios",
+        "ttm_metrics",
+        "calendar_events",
+        "international_coverage"
+      ],
+      "limitations": [
+        "scraping_based",
+        "field_name_changes",
+        "occasional_outages"
+      ]
+    },
+    "av": {
+      "name": "Alpha Vantage",
+      "priority": 3,
+      "rate_limits": {
+        "requests_per_minute": 5,
+        "requests_per_day": 25
+      },
+      "data_quality": 4,
+      "reliability": 4,
+      "coverage": "good",
+      "api_key_required": true,
+      "api_key_env": "ALPHA_VANTAGE_API_KEY",
+      "strengths": [
+        "consistent_json",
+        "reliable_overview",
+        "statements"
+      ],
+      "limitations": [
+        "strict_rate_limits",
+        "limited_international",
+        "thin_historical_depth"
+      ]
+    },
+    "td": {
+      "name": "Twelve Data",
+      "priority": 4,
+      "rate_limits": {
+        "requests_per_minute": 8,
+        "requests_per_day": 800
+      },
+      "data_quality": 4,
+      "reliability": 4,
+      "coverage": "good",
+      "api_key_required": true,
+      "api_key_env": "TWELVEDATA_API_KEY",
+      "strengths": [
+        "good_api_design",
+        "profile_data"
+      ],
+      "limitations": [
+        "limited_free_fundamentals",
+        "most_detailed_data_paid"
+      ]
+    }
+  },
+  "combination_strategies": {
+    "priority_based": {
+      "description": "Higher priority providers take precedence for each field",
+      "default": true
+    },
+    "quality_based": {
+      "description": "Select values from providers with highest quality scores",
+      "use_priority_as_tiebreaker": true
+    },
+    "consensus": {
+      "description": "For numeric fields, use average if values are close (within 10%)",
+      "tolerance_percentage": 10,
+      "fallback_strategy": "priority_based"
+    }
+  },
+  "cache_settings": {
+    "default_ttl_days": 7,
+    "max_cache_age_days": 30,
+    "cleanup_enabled": true,
+    "backup_copies": 1,
+    "compression": "gzip",
+    "validation_enabled": true
+  },
+  "data_validation": {
+    "enabled": true,
+    "min_quality_score": 0.8,
+    "cross_provider_validation": true,
+    "tolerance_percentage": 10,
+    "required_fields": [
+      "symbol",
+      "name",
+      "sector",
+      "market_cap"
+    ]
+  },
+  "error_handling": {
+    "max_retries": 3,
+    "retry_delay_seconds": 1.0,
+    "exponential_backoff": true,
+    "fallback_to_lower_priority": true,
+    "graceful_degradation": true
+  },
+  "symbol_mapping": {
+    "normalize_tickers": true,
+    "mappings": {
+      "BRK.B": "BRK-B",
+      "BRK.A": "BRK-A"
+    },
+    "exchange_suffixes": {
+      ".L": "London",
+      ".TO": "Toronto",
+      ".SW": "Swiss",
+      ".DE": "German",
+      ".PA": "Paris",
+      ".AS": "Amsterdam"
+    }
+  }
+}
