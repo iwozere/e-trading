@@ -1,0 +1,45 @@
+{
+    "name": "EOMRejectionExitMixin",
+    "timeframe": "5m",
+    "trading_style": "day_trading",
+    "description": "Resistance rejection + EOM reversal for 5m scalping exits",
+    "params": {
+        "x_resistance_threshold": {
+            "type": "float",
+            "low": 0.992,
+            "high": 0.998,
+            "default": 0.995,
+            "description": "Resistance rejection threshold (95%-99.8%)"
+        },
+        "x_rsi_overbought": {
+            "type": "int",
+            "low": 55,
+            "high": 70,
+            "default": 60,
+            "description": "RSI overbought threshold (lower for 5m)"
+        }
+    },
+    "indicator_params": {
+        "eom_timeperiod": {
+            "type": "int",
+            "low": 8,
+            "high": 16,
+            "default": 12,
+            "description": "EOM smoothing period"
+        },
+        "sr_lookback_bars": {
+            "type": "int",
+            "low": 2,
+            "high": 4,
+            "default": 2,
+            "description": "S/R swing detection lookback"
+        },
+        "rsi_period": {
+            "type": "int",
+            "low": 8,
+            "high": 16,
+            "default": 12,
+            "description": "RSI period (shorter for 5m)"
+        }
+    }
+}

@@ -1,0 +1,66 @@
+{
+    "name": "EOMPullbackEntryMixin",
+    "timeframe": "1h",
+    "trading_style": "swing_trading",
+    "description": "Pullback to support + EOM reversal for hourly swing",
+    "params": {
+        "e_support_threshold": {
+            "type": "float",
+            "low": 0.005,
+            "high": 0.012,
+            "default": 0.007,
+            "description": "Support bounce threshold"
+        },
+        "e_rsi_oversold": {
+            "type": "int",
+            "low": 32,
+            "high": 48,
+            "default": 40,
+            "description": "RSI oversold threshold"
+        },
+        "e_atr_floor_multiplier": {
+            "type": "float",
+            "low": 0.85,
+            "high": 1.0,
+            "default": 0.9,
+            "description": "ATR floor multiplier for volatility check"
+        }
+    },
+    "indicator_params": {
+        "eom_timeperiod": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14,
+            "description": "EOM smoothing period"
+        },
+        "sr_lookback_bars": {
+            "type": "int",
+            "low": 2,
+            "high": 5,
+            "default": 3,
+            "description": "S/R swing detection lookback"
+        },
+        "rsi_period": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14,
+            "description": "RSI period"
+        },
+        "atr_period": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14,
+            "description": "ATR period"
+        },
+        "atr_sma_period": {
+            "type": "int",
+            "low": 80,
+            "high": 120,
+            "default": 100,
+            "description": "ATR SMA period for floor calculation"
+        }
+    }
+}

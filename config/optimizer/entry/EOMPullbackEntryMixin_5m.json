@@ -1,0 +1,66 @@
+{
+    "name": "EOMPullbackEntryMixin",
+    "timeframe": "5m",
+    "trading_style": "day_trading",
+    "description": "Pullback to support + EOM reversal for 5m scalping",
+    "params": {
+        "e_support_threshold": {
+            "type": "float",
+            "low": 0.003,
+            "high": 0.008,
+            "default": 0.005,
+            "description": "Support bounce threshold (0.3%-0.8%)"
+        },
+        "e_rsi_oversold": {
+            "type": "int",
+            "low": 25,
+            "high": 45,
+            "default": 35,
+            "description": "RSI oversold threshold (more aggressive for 5m)"
+        },
+        "e_atr_floor_multiplier": {
+            "type": "float",
+            "low": 0.7,
+            "high": 1.0,
+            "default": 0.85,
+            "description": "ATR floor multiplier for volatility check"
+        }
+    },
+    "indicator_params": {
+        "eom_timeperiod": {
+            "type": "int",
+            "low": 8,
+            "high": 16,
+            "default": 12,
+            "description": "EOM smoothing period"
+        },
+        "sr_lookback_bars": {
+            "type": "int",
+            "low": 2,
+            "high": 4,
+            "default": 2,
+            "description": "S/R swing detection lookback"
+        },
+        "rsi_period": {
+            "type": "int",
+            "low": 8,
+            "high": 16,
+            "default": 12,
+            "description": "RSI period (shorter for 5m)"
+        },
+        "atr_period": {
+            "type": "int",
+            "low": 8,
+            "high": 16,
+            "default": 14,
+            "description": "ATR period"
+        },
+        "atr_sma_period": {
+            "type": "int",
+            "low": 50,
+            "high": 150,
+            "default": 100,
+            "description": "ATR SMA period for floor calculation"
+        }
+    }
+}

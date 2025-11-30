@@ -1,0 +1,45 @@
+{
+    "name": "EOMRejectionExitMixin",
+    "timeframe": "4h",
+    "trading_style": "swing_trading",
+    "description": "Resistance rejection + EOM reversal for 4h swing exits",
+    "params": {
+        "x_resistance_threshold": {
+            "type": "float",
+            "low": 0.994,
+            "high": 0.999,
+            "default": 0.996,
+            "description": "Resistance rejection threshold"
+        },
+        "x_rsi_overbought": {
+            "type": "int",
+            "low": 60,
+            "high": 75,
+            "default": 65,
+            "description": "RSI overbought threshold"
+        }
+    },
+    "indicator_params": {
+        "eom_timeperiod": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14,
+            "description": "EOM smoothing period"
+        },
+        "sr_lookback_bars": {
+            "type": "int",
+            "low": 2,
+            "high": 5,
+            "default": 3,
+            "description": "S/R swing detection lookback"
+        },
+        "rsi_period": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14,
+            "description": "RSI period"
+        }
+    }
+}

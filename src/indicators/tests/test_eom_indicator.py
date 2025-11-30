@@ -342,8 +342,9 @@ class TestEOMIndicator(unittest.TestCase):
         dates = [datetime(2024, 1, 1) + timedelta(days=i) for i in range(100)]
 
         close = np.full(100, 100.0)  # Constant price
-        high = close.copy()
-        low = close.copy()
+        # Add tiny variations to avoid exact zero range
+        high = close + 0.0001
+        low = close - 0.0001
         open_price = close.copy()
         volume = np.random.randint(1000000, 10000000, 100)
 
