@@ -7,8 +7,6 @@ Wants=postgresql.service
 [Service]
 Type=simple
 # IMPORTANT: Update User, Group, and WorkingDirectory for your installation
-# User=your_username
-# Group=your_group
 User=alkotrader
 Group=alkotrader
 WorkingDirectory=/opt/apps/e-trading
@@ -22,14 +20,12 @@ SyslogIdentifier=e-trading-scheduler
 
 # Environment variables
 # IMPORTANT: Update these for your environment
-Environment=TRADING_ENV=production
-Environment=LOG_LEVEL=INFO
-Environment=SCHEDULER_MAX_WORKERS=10
-Environment=DATA_CACHE_ENABLED=true
-
-# Note: Database connectivity is handled automatically by src/data/db/core/database.py
-# No need to set DATABASE_URL unless you want to override the default
-# Notifications are sent directly to database (no HTTP service needed)
+Environment="PYTHONPATH=/opt/apps/e-trading"
+Environment="PYTHONUNBUFFERED=1"
+Environment="TRADING_ENV=production"
+Environment="LOG_LEVEL=INFO"
+Environment="SCHEDULER_MAX_WORKERS=10"
+Environment="DATA_CACHE_ENABLED=true"
 
 # Security settings
 NoNewPrivileges=true
