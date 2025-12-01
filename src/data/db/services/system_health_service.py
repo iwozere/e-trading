@@ -64,7 +64,7 @@ class SystemHealthService(BaseDBService):
         if metadata:
             metadata_json = json.dumps(metadata)
 
-        health_record = self.uow.system_health.update_system_status(
+        health_record = self.repos.system_health.update_system_status(
             system=system,
             component=component,
             status=status,
@@ -94,7 +94,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             Dictionary with health data or None if not found
         """
-        health_record = self.uow.system_health.get_system_health(system, component)
+        health_record = self.repos.system_health.get_system_health(system, component)
 
         if not health_record:
             return None
@@ -113,7 +113,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             List of dictionaries with health data
         """
-        health_records = self.uow.system_health.list_system_health(include_stale=include_stale)
+        health_records = self.repos.system_health.list_system_health(include_stale=include_stale)
         return [self._format_health_record(record) for record in health_records]
 
     @with_uow
@@ -125,8 +125,8 @@ class SystemHealthService(BaseDBService):
         Returns:
             Dictionary with systems overview data
         """
-        overview_data = self.uow.system_health.get_systems_overview()
-        statistics = self.uow.system_health.get_health_statistics()
+        overview_data = self.repos.system_health.get_systems_overview()
+        statistics = self.repos.system_health.get_health_statistics()
 
         # Determine overall platform status
         overall_status = "HEALTHY"
@@ -153,7 +153,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             List of dictionaries with unhealthy systems data
         """
-        unhealthy_records = self.uow.system_health.get_unhealthy_systems()
+        unhealthy_records = self.repos.system_health.get_unhealthy_systems()
         return [self._format_health_record(record) for record in unhealthy_records]
 
     # Backward compatibility methods for notification channels
@@ -167,7 +167,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             List of dictionaries with channel health data
         """
-        channel_records = self.uow.system_health.get_notification_channels_health()
+        channel_records = self.repos.system_health.get_notification_channels_health()
         return [self._format_channel_health_record(record) for record in channel_records]
 
     @with_uow
@@ -182,7 +182,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             Dictionary with channel health data or None if not found
         """
-        channel_record = self.uow.system_health.get_notification_channel_health(channel)
+        channel_record = self.repos.system_health.get_notification_channel_health(channel)
 
         if not channel_record:
             return None
@@ -315,7 +315,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             Number of records deleted
         """
-        deleted_count = self.uow.system_health.cleanup_stale_records(stale_threshold_hours)
+        deleted_count = self.repos.system_health.cleanup_stale_records(stale_threshold_hours)
         _logger.info("Cleaned up %d stale health records", deleted_count)
         return deleted_count
 
@@ -332,7 +332,7 @@ class SystemHealthService(BaseDBService):
         Returns:
             True if record was deleted, False if not found
         """
-        return self.uow.system_health.delete_system_health(system, component)
+        return self.repos.system_health.delete_system_health(system, component)
 
     # Private helper methods
 

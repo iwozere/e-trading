@@ -5,12 +5,8 @@ from typing import Callable, TypeVar
 from functools import wraps
 from src.data.db.services.database_service import get_database_service, ReposBundle
 from src.notification.logger import setup_logger
-import threading
 
 T = TypeVar('T')
-
-# Thread-local storage for current UoW repos
-_thread_local = threading.local()
 
 def with_uow(func: Callable[..., T]) -> Callable[..., T]:
     """
@@ -19,15 +15,21 @@ def with_uow(func: Callable[..., T]) -> Callable[..., T]:
     """
     @wraps(func)
     def wrapper(self, *args, **kwargs) -> T:
+        # If already in a UoW context, just call the function
+        if hasattr(self, '_repos') and self._repos is not None:
+            return func(self, *args, **kwargs)
+
+        # Create a new UoW context
         with self._db.uow() as repos:
-            # Store repos in thread-local storage so self.uow can access it
-            old_repos = getattr(_thread_local, 'repos', None)
-            _thread_local.repos = repos
+            # Store repos in the instance
+            old_repos = getattr(self, '_repos', None)
+            self._repos = repos
+
             try:
                 return func(self, *args, **kwargs)
             finally:
                 # Restore previous repos (for nested calls)
-                _thread_local.repos = old_repos
+                self._repos = old_repos
     return wrapper
 
 def handle_db_error(func: Callable[..., T]) -> Callable[..., T]:
@@ -48,17 +50,19 @@ class BaseDBService:
     def __init__(self, db_service=None):
         self._db = db_service or get_database_service()
         self._logger = setup_logger(self.__class__.__name__)
+        self._repos = None  # Will be set by the UoW context
 
     @property
-    def uow(self) -> ReposBundle:
-        """
-        Get the current Unit of Work (repos bundle) from thread-local storage.
-        This property is only available within methods decorated with @with_uow.
-        """
-        repos = getattr(_thread_local, 'repos', None)
-        if repos is None:
+    def repos(self):
+        """Access the current UoW's repositories."""
+        if self._repos is None:
             raise RuntimeError(
-                "UoW not available. This property can only be accessed from methods "
+                "Repositories not available. This property can only be accessed from methods "
                 "decorated with @with_uow."
             )
-        return repos
+        return self._repos
+
+    @property
+    def uow(self):
+        """Alias for self.repos for backward compatibility."""
+        return self.repos

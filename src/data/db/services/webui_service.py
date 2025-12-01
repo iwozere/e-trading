@@ -66,39 +66,39 @@ class WebUIService(BaseDBService):
     @with_uow
     @handle_db_error
     def set_config(self, key: str, value: Dict[str, Any], description: Optional[str] = None) -> Dict[str, Any]:
-        row = self.uow.webui_config.set(key, value, description=description)
+        row = self.repos.webui_config.set(key, value, description=description)
         return self._config_to_dict(row)
 
     @with_uow
     @handle_db_error
     def get_config(self, key: str) -> Optional[Dict[str, Any]]:
-        row = self.uow.webui_config.get(key)
+        row = self.repos.webui_config.get(key)
         return self._config_to_dict(row) if row else None
 
     # ---------- Strategy Templates ----------
     @with_uow
     @handle_db_error
     def create_template(self, template_data: Dict[str, Any]) -> Dict[str, Any]:
-        row = self.uow.webui_templates.create(template_data)
+        row = self.repos.webui_templates.create(template_data)
         return self._template_to_dict(row)
 
     @with_uow
     @handle_db_error
     def get_templates_by_author(self, user_id: int) -> List[Dict[str, Any]]:
-        rows = self.uow.webui_templates.by_author(user_id)
+        rows = self.repos.webui_templates.by_author(user_id)
         return [self._template_to_dict(t) for t in rows]
 
     # ---------- Performance Snapshots ----------
     @with_uow
     @handle_db_error
     def add_snapshot(self, snapshot: Dict[str, Any]) -> Dict[str, Any]:
-        row = self.uow.webui_snapshots.add(snapshot)
+        row = self.repos.webui_snapshots.add(snapshot)
         return self._snapshot_to_dict(row)
 
     @with_uow
     @handle_db_error
     def latest_snapshots(self, strategy_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-        rows = self.uow.webui_snapshots.latest(strategy_id, limit=limit)
+        rows = self.repos.webui_snapshots.latest(strategy_id, limit=limit)
         return [self._snapshot_to_dict(s) for s in rows]
 
     # ---------- Audit Logs ----------
@@ -115,7 +115,7 @@ class WebUIService(BaseDBService):
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
     ) -> int:
-        row = self.uow.webui_audit.log(
+        row = self.repos.webui_audit.log(
             user_id=user_id,
             action=action,
             resource_type=resource_type,

@@ -114,21 +114,21 @@ class TradingService(BaseDBService):
     @handle_db_error
     def upsert_bot(self, bot: Dict[str, Any]) -> Dict[str, Any]:
         """Upsert a bot configuration."""
-        row = self.uow.bots.upsert_bot(bot)
+        row = self.repos.bots.upsert_bot(bot)
         return self._bot_to_dict(row)
 
     @with_uow
     @handle_db_error
     def heartbeat(self, bot_id: str) -> None:
         """Update bot heartbeat."""
-        self.uow.bots.heartbeat(bot_id)
+        self.repos.bots.heartbeat(bot_id)
 
     @with_uow
     @handle_db_error
     def get_bot_by_id(self, bot_id: int) -> Optional[Dict[str, Any]]:
         """Get a specific bot by ID."""
         from src.data.db.models.model_trading import BotInstance
-        bot = self.uow.s.get(BotInstance, bot_id)
+        bot = self.repos.s.get(BotInstance, bot_id)
         return self._bot_to_dict(bot) if bot else None
 
     @with_uow
@@ -142,7 +142,7 @@ class TradingService(BaseDBService):
         if user_id:
             query = query.where(BotInstance.user_id == user_id)
 
-        bots = self.uow.s.execute(query).scalars().all()
+        bots = self.repos.s.execute(query).scalars().all()
         return [self._bot_to_dict(bot) for bot in bots]
 
     @with_uow
@@ -156,7 +156,7 @@ class TradingService(BaseDBService):
         if user_id:
             query = query.where(BotInstance.user_id == user_id)
 
-        bots = self.uow.s.execute(query).scalars().all()
+        bots = self.repos.s.execute(query).scalars().all()
         return [self._bot_to_dict(bot) for bot in bots]
 
     @with_uow
@@ -183,7 +183,7 @@ class TradingService(BaseDBService):
 
         if status == "error" and error_message:
             # Increment error count and store error in extra_metadata
-            bot = self.uow.s.get(BotInstance, bot_id)
+            bot = self.repos.s.get(BotInstance, bot_id)
             if bot:
                 error_count = (bot.error_count or 0) + 1
                 metadata = bot.extra_metadata or {}
@@ -195,7 +195,7 @@ class TradingService(BaseDBService):
                     "extra_metadata": metadata
                 })
 
-        result = self.uow.s.execute(
+        result = self.repos.s.execute(
             update(BotInstance)
             .where(BotInstance.id == bot_id)
             .values(**update_data)
@@ -217,7 +217,7 @@ class TradingService(BaseDBService):
         if total_pnl is not None:
             update_data["total_pnl"] = total_pnl
 
-        result = self.uow.s.execute(
+        result = self.repos.s.execute(
             update(BotInstance)
             .where(BotInstance.id == bot_id)
             .values(**update_data)
@@ -228,7 +228,7 @@ class TradingService(BaseDBService):
     @handle_db_error
     def add_trade(self, trade: Dict[str, Any]) -> Dict[str, Any]:
         """Add a new trade."""
-        row = self.uow.trades.add(trade)
+        row = self.repos.trades.add(trade)
         return self._trade_to_dict(row)
 
     @with_uow
@@ -237,21 +237,21 @@ class TradingService(BaseDBService):
         """Close a trade."""
         if not fields:
             return False
-        self.uow.trades.close_trade(trade_id, **fields)
+        self.repos.trades.close_trade(trade_id, **fields)
         return True
 
     @with_uow
     @handle_db_error
     def get_open_trades(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get open trades, optionally filtered by symbol."""
-        rows = self.uow.trades.open_trades(symbol)
+        rows = self.repos.trades.open_trades(symbol)
         return [self._trade_to_dict(t) for t in rows]
 
     @with_uow
     @handle_db_error
     def get_pnl_summary(self, bot_id: Optional[str] = None) -> Dict[str, Any]:
         """Get PnL summary, optionally filtered by bot."""
-        agg = self.uow.trades.pnl_summary(bot_id)
+        agg = self.repos.trades.pnl_summary(bot_id)
         return {
             "net_pnl": float(agg.net_pnl or 0),
             "n_trades": int(agg.n_trades or 0),
@@ -270,7 +270,7 @@ class TradingService(BaseDBService):
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Ensure an open position exists."""
-        row = self.uow.positions.ensure_open(
+        row = self.repos.positions.ensure_open(
             bot_id=bot_id,
             trade_type=trade_type,
             symbol=symbol,
@@ -293,7 +293,7 @@ class TradingService(BaseDBService):
         close_when_flat: bool = True,
     ) -> Dict[str, Any]:
         """Apply a fill to a position."""
-        row = self.uow.positions.apply_fill(
+        row = self.repos.positions.apply_fill(
             position_id=position_id,
             action=action,
             qty=qty,
@@ -307,14 +307,14 @@ class TradingService(BaseDBService):
     @handle_db_error
     def close_if_flat(self, position_id: str, ts: Optional[datetime] = None) -> Dict[str, Any]:
         """Close a position if it's flat."""
-        row = self.uow.positions.close_if_flat(position_id=position_id, ts=ts)
+        row = self.repos.positions.close_if_flat(position_id=position_id, ts=ts)
         return self._position_to_dict(row)
 
     @with_uow
     @handle_db_error
     def mark_closed(self, position_id: str, ts: Optional[datetime] = None) -> Dict[str, Any]:
         """Mark a position as closed."""
-        row = self.uow.positions.mark_closed(position_id=position_id, ts=ts)
+        row = self.repos.positions.mark_closed(position_id=position_id, ts=ts)
         return self._position_to_dict(row)
 
     @with_uow
@@ -326,21 +326,21 @@ class TradingService(BaseDBService):
         symbol: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get open positions, optionally filtered by bot and symbol."""
-        rows = self.uow.positions.open_positions(bot_id=bot_id, symbol=symbol)
+        rows = self.repos.positions.open_positions(bot_id=bot_id, symbol=symbol)
         return [self._position_to_dict(p) for p in rows]
 
     @with_uow
     @handle_db_error
     def add_metric(self, metric: Dict[str, Any]) -> Dict[str, Any]:
         """Add a new metric."""
-        row = self.uow.metrics.add(metric)
+        row = self.repos.metrics.add(metric)
         return self._metric_to_dict(row)
 
     @with_uow
     @handle_db_error
     def latest_metrics(self, bot_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Get latest metrics for a bot."""
-        rows = self.uow.metrics.latest_for_bot(bot_id, limit=limit)
+        rows = self.repos.metrics.latest_for_bot(bot_id, limit=limit)
         return [self._metric_to_dict(m) for m in rows]
 
     @with_uow
@@ -357,7 +357,7 @@ class TradingService(BaseDBService):
         """
         from src.data.db.models.model_trading import BotInstance
 
-        bot = self.uow.s.get(BotInstance, bot_id)
+        bot = self.repos.s.get(BotInstance, bot_id)
         if not bot:
             return False, [f"Bot with ID {bot_id} not found"], []
 

@@ -38,7 +38,7 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def reset_user_email_verification(self, telegram_user_id: str) -> bool:
-        self.uow.users.update_telegram_profile(
+        self.repos.users.update_telegram_profile(
             telegram_user_id,
             verified=False,
             verification_code=None,
@@ -49,20 +49,20 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def verify_user_email(self, telegram_user_id: str) -> bool:
-        self.uow.users.update_telegram_profile(telegram_user_id, verified=True)
+        self.repos.users.update_telegram_profile(telegram_user_id, verified=True)
         return True
 
     @with_uow
     @handle_db_error
     def set_user_limit(self, telegram_user_id: str, key: str, value: int) -> None:
         assert key in ("max_alerts", "max_schedules")
-        self.uow.users.update_telegram_profile(telegram_user_id, **{key: int(value)})
+        self.repos.users.update_telegram_profile(telegram_user_id, **{key: int(value)})
 
     @with_uow
     @handle_db_error
     def get_user_limit(self, telegram_user_id: str, key: str) -> Optional[int]:
         assert key in ("max_alerts", "max_schedules")
-        profile = self.uow.users.get_telegram_profile(telegram_user_id)
+        profile = self.repos.users.get_telegram_profile(telegram_user_id)
         if not profile:
             return None
         return profile.get(key)
@@ -79,7 +79,7 @@ class TelegramService(BaseDBService):
         Returns:
             Dictionary with user status or None if user not found
         """
-        profile = self.uow.users.get_telegram_profile(telegram_user_id)
+        profile = self.repos.users.get_telegram_profile(telegram_user_id)
         if not profile:
             return None
 
@@ -97,13 +97,13 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def approve_user(self, telegram_user_id: str) -> bool:
-        self.uow.users.update_telegram_profile(telegram_user_id, approved=True)
+        self.repos.users.update_telegram_profile(telegram_user_id, approved=True)
         return True
 
     @with_uow
     @handle_db_error
     def reject_user(self, telegram_user_id: str) -> bool:
-        self.uow.users.update_telegram_profile(telegram_user_id, approved=False)
+        self.repos.users.update_telegram_profile(telegram_user_id, approved=False)
         return True
 
     @with_uow
@@ -111,10 +111,10 @@ class TelegramService(BaseDBService):
     def update_user_language(self, telegram_user_id: str, language: str) -> bool:
         from sqlalchemy import text
 
-        user = self.uow.users.ensure_user_for_telegram(telegram_user_id)
+        user = self.repos.users.ensure_user_for_telegram(telegram_user_id)
         uid = user.id
 
-        session = self.uow.s
+        session = self.repos.s
         result = session.execute(
             text("UPDATE usr_users SET language = :language WHERE id = :user_id"),
             {"language": language, "user_id": uid},
@@ -124,7 +124,7 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def set_user_email(self, telegram_user_id: str, email: str, code: str, sent_time: int, language: str = "en", is_admin: bool = False) -> None:
-        self.uow.users.update_telegram_profile(
+        self.repos.users.update_telegram_profile(
             telegram_user_id,
             email=email,
             verification_code=code,
@@ -140,10 +140,10 @@ class TelegramService(BaseDBService):
         from sqlalchemy import text
 
         current_time = int(time.time())
-        user = self.uow.users.ensure_user_for_telegram(telegram_user_id)
+        user = self.repos.users.ensure_user_for_telegram(telegram_user_id)
         uid = user.id
 
-        session = self.uow.s
+        session = self.repos.s
         result = session.execute(
             text("SELECT code, sent_time FROM usr_verification_codes WHERE user_id = :user_id AND code = :code ORDER BY created_at DESC LIMIT 1"),
             {"user_id": uid, "code": code},
@@ -155,7 +155,7 @@ class TelegramService(BaseDBService):
 
         stored_code, code_sent_time = row
         if stored_code == code and (current_time - code_sent_time) <= expiry_seconds:
-            self.uow.users.update_telegram_profile(telegram_user_id, verified=True)
+            self.repos.users.update_telegram_profile(telegram_user_id, verified=True)
             return True
         return False
 
@@ -163,15 +163,15 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def set_verification_code(self, telegram_user_id: str, *, code: str, sent_time: int) -> None:
-        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
-        self.uow.telegram_verification.issue(uid, code=code, sent_time=sent_time)
-        self.uow.users.update_telegram_profile(telegram_user_id, verification_code=code, code_sent_time=sent_time)
+        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        self.repos.telegram_verification.issue(uid, code=code, sent_time=sent_time)
+        self.repos.users.update_telegram_profile(telegram_user_id, verification_code=code, code_sent_time=sent_time)
 
     @with_uow
     @handle_db_error
     def count_codes_last_hour(self, telegram_user_id: str, now_unix: Optional[int] = None) -> int:
-        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
-        return self.uow.telegram_verification.count_last_hour_by_user_id(uid, int(now_unix or time.time()))
+        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        return self.repos.telegram_verification.count_last_hour_by_user_id(uid, int(now_unix or time.time()))
 
     # --- Alerts / Jobs ---
     @with_uow
@@ -180,7 +180,7 @@ class TelegramService(BaseDBService):
         import json
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
         config = json.loads(config_json) if isinstance(config_json, str) else config_json
         ticker = config.get("ticker", "unknown")
 
@@ -200,7 +200,7 @@ class TelegramService(BaseDBService):
             "enabled": status == "ARMED",
         }
 
-        schedule = self.uow.jobs.create_schedule(schedule_data)
+        schedule = self.repos.jobs.create_schedule(schedule_data)
         return schedule.id
 
     @with_uow
@@ -242,10 +242,10 @@ class TelegramService(BaseDBService):
         import json
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
 
         # Get all alert-type schedules for this user
-        schedules = self.uow.jobs.list_schedules(
+        schedules = self.repos.jobs.list_schedules(
             user_id=uid,
             job_type=JobType.ALERT
         )
@@ -304,7 +304,7 @@ class TelegramService(BaseDBService):
     def add_schedule(self, telegram_user_id: str, ticker: str, scheduled_time: str, **kwargs) -> int:
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
         cron = f"0 {scheduled_time.split(':')[0]} * * *" if ":" in scheduled_time else "0 9 * * *"
 
         schedule_data = {
@@ -317,7 +317,7 @@ class TelegramService(BaseDBService):
             "enabled": True,
         }
 
-        schedule = self.uow.jobs.create_schedule(schedule_data)
+        schedule = self.repos.jobs.create_schedule(schedule_data)
         return schedule.id
 
     @with_uow
@@ -326,7 +326,7 @@ class TelegramService(BaseDBService):
         import json
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
         config = json.loads(config_json) if isinstance(config_json, str) else config_json
         ticker = config.get("ticker", "unknown")
 
@@ -339,7 +339,7 @@ class TelegramService(BaseDBService):
             "cron": "0 9 * * *",
             "enabled": True,
         }
-        schedule = self.uow.jobs.create_schedule(schedule_data)
+        schedule = self.repos.jobs.create_schedule(schedule_data)
         return schedule.id
 
     @with_uow
@@ -348,8 +348,8 @@ class TelegramService(BaseDBService):
         import json
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
-        schedules = self.uow.jobs.list_schedules(user_id=uid, job_type=JobType.SCREENER)
+        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        schedules = self.repos.jobs.list_schedules(user_id=uid, job_type=JobType.SCREENER)
 
         telegram_schedules: List[Dict[str, Any]] = []
         for schedule in schedules:
@@ -389,7 +389,7 @@ class TelegramService(BaseDBService):
     def get_schedule(self, schedule_id: int):
         import json
 
-        schedule = self.uow.jobs.get_schedule(schedule_id)
+        schedule = self.repos.jobs.get_schedule(schedule_id)
         if not schedule or schedule.job_type not in ["screener", "report"]:
             return None
 
@@ -424,7 +424,7 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def update_schedule(self, schedule_id: int, **values) -> bool:
-        schedule = self.uow.jobs.get_schedule(schedule_id)
+        schedule = self.repos.jobs.get_schedule(schedule_id)
         if not schedule or schedule.job_type not in ["screener", "report"]:
             return False
 
@@ -442,56 +442,56 @@ class TelegramService(BaseDBService):
             update_data["task_params"] = task_params
 
         if update_data:
-            updated = self.uow.jobs.update_schedule(schedule_id, update_data)
+            updated = self.repos.jobs.update_schedule(schedule_id, update_data)
             return updated is not None
         return True
 
     @with_uow
     @handle_db_error
     def delete_schedule(self, schedule_id: int) -> bool:
-        return self.uow.jobs.delete_schedule(schedule_id)
+        return self.repos.jobs.delete_schedule(schedule_id)
 
     # --- Settings ---
     @with_uow
     @handle_db_error
     def get_setting(self, key: str) -> Optional[str]:
-        row = self.uow.telegram_settings.get(key)
+        row = self.repos.telegram_settings.get(key)
         return row.value if row else None
 
     @with_uow
     @handle_db_error
     def set_setting(self, key: str, value: Optional[str]) -> None:
-        self.uow.telegram_settings.set(key, value)
+        self.repos.telegram_settings.set(key, value)
 
     # --- Feedback ---
     @with_uow
     @handle_db_error
     def add_feedback(self, telegram_user_id: str, type_: str, message: str) -> int:
-        uid = self.uow.users.ensure_user_for_telegram(telegram_user_id).id
-        row = self.uow.telegram_feedback.create(uid, type_, message)
+        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        row = self.repos.telegram_feedback.create(uid, type_, message)
         return row.id
 
     @with_uow
     @handle_db_error
     def list_feedback(self, type_: Optional[str] = None):
-        return list(self.uow.telegram_feedback.list(type_))
+        return list(self.repos.telegram_feedback.list(type_))
 
     @with_uow
     @handle_db_error
     def update_feedback_status(self, feedback_id: int, status: str) -> bool:
-        return self.uow.telegram_feedback.set_status(feedback_id, status)
+        return self.repos.telegram_feedback.set_status(feedback_id, status)
 
     # --- Command audit ---
     @with_uow
     @handle_db_error
     def log_command_audit(self, telegram_user_id: str, command: str, **kwargs) -> int:
-        row = self.uow.telegram_audit.log(str(telegram_user_id), command, **kwargs)
+        row = self.repos.telegram_audit.log(str(telegram_user_id), command, **kwargs)
         return row.id
 
     @with_uow
     @handle_db_error
     def get_user_command_history(self, telegram_user_id: str, limit: int = 20):
-        logs = self.uow.telegram_audit.last_commands(str(telegram_user_id), limit=limit)
+        logs = self.repos.telegram_audit.last_commands(str(telegram_user_id), limit=limit)
         return [
             {
                 "id": log.id,
@@ -511,7 +511,7 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def get_all_command_audit(self, *, limit: int = 100, offset: int = 0, user_id: Optional[str] = None, command: Optional[str] = None, success_only: Optional[bool] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
-        logs = self.uow.telegram_audit.list(limit=limit, offset=offset, user_id=user_id, command=command, success_only=success_only, start_date=start_date, end_date=end_date)
+        logs = self.repos.telegram_audit.list(limit=limit, offset=offset, user_id=user_id, command=command, success_only=success_only, start_date=start_date, end_date=end_date)
         return [
             {
                 "id": log.id,
@@ -531,19 +531,19 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def get_command_audit_stats(self) -> Dict[str, Any]:
-        return self.uow.telegram_audit.stats()
+        return self.repos.telegram_audit.stats()
 
     # --- Broadcast logs ---
     @with_uow
     @handle_db_error
     def log_broadcast(self, message: str, sent_by: str, success_count: int, total_count: int) -> int:
-        row = self.uow.telegram_broadcast.create(message=message, sent_by=sent_by, success_count=success_count, total_count=total_count)
+        row = self.repos.telegram_broadcast.create(message=message, sent_by=sent_by, success_count=success_count, total_count=total_count)
         return row.id
 
     @with_uow
     @handle_db_error
     def get_broadcast_history(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
-        logs = self.uow.telegram_broadcast.list(limit=limit, offset=offset)
+        logs = self.repos.telegram_broadcast.list(limit=limit, offset=offset)
         return [
             {
                 "id": log.id,
@@ -561,12 +561,12 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def get_broadcast_stats(self) -> Dict[str, Any]:
-        return self.uow.telegram_broadcast.stats()
+        return self.repos.telegram_broadcast.stats()
 
     @with_uow
     @handle_db_error
     def get_active_alerts(self):
-        return self.uow.jobs.active_alerts()
+        return self.repos.jobs.active_alerts()
 
     @with_uow
     @handle_db_error
@@ -574,7 +574,7 @@ class TelegramService(BaseDBService):
         import json
         from src.data.db.models.model_jobs import JobType
 
-        schedules = self.uow.jobs.list_schedules(job_type=JobType.SCREENER, enabled=True)
+        schedules = self.repos.jobs.list_schedules(job_type=JobType.SCREENER, enabled=True)
         telegram_schedules: List[Dict[str, Any]] = []
         for schedule in schedules:
             task_params = schedule.task_params or {}
