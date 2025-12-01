@@ -257,7 +257,9 @@ class SchedulerService:
             self.jobstore = SQLAlchemyJobStore(url=self.database_url)
 
             # Create async executor
-            executor = AsyncIOExecutor(max_workers=self.max_workers)
+            # Note: AsyncIOExecutor doesn't support max_workers parameter
+            # The asyncio event loop handles concurrency automatically
+            executor = AsyncIOExecutor()
 
             # Configure jobstores and executors
             jobstores = {
@@ -270,7 +272,7 @@ class SchedulerService:
             # Job defaults
             job_defaults = {
                 'coalesce': False,
-                'max_instances': 1
+                'max_instances': self.max_workers  # Use max_workers here for concurrent job instances
             }
 
             # Create scheduler with jobstore and executor
