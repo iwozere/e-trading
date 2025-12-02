@@ -93,6 +93,13 @@ class VolatilityFilter:
                 end_date
             )
 
+            # Load TRF volume correction factors
+            trf_corrections = self._load_trf_volume_corrections()
+            if trf_corrections:
+                _logger.info("Loaded TRF volume corrections for %d tickers", len(trf_corrections))
+            else:
+                _logger.warning("No TRF data found - volume calculations will use yfinance data only")
+
             # Apply filters
             passed_tickers = []
             results_data = []
@@ -116,7 +123,8 @@ class VolatilityFilter:
                             'vol_rv_ratio': None,
                             'rv_short': None,
                             'rv_long': None,
-                            'bars_count': 0
+                            'bars_count': 0,
+                            'trf_correction_factor': None
                         })
                         continue
 
@@ -135,12 +143,25 @@ class VolatilityFilter:
                             'vol_rv_ratio': None,
                             'rv_short': None,
                             'rv_long': None,
-                            'bars_count': len(df)
+                            'bars_count': len(df),
+                            'trf_correction_factor': None
                         })
                         continue
 
+                    # Apply TRF volume correction if available
+                    if ticker in trf_corrections:
+                        trf_factor = trf_corrections[ticker]
+                        df = self._apply_trf_volume_correction(df, trf_factor)
+                        _logger.debug("%s: Applied TRF correction factor %.3f", ticker, trf_factor)
+                    else:
+                        trf_factor = None
+
                     # Apply filters
                     passed, metrics, reason = self._check_volatility_filters(ticker, df)
+
+                    # Add TRF correction factor to metrics
+                    if metrics:
+                        metrics['trf_correction_factor'] = trf_factor
 
                     if passed:
                         passed_tickers.append(ticker)
@@ -438,6 +459,109 @@ class VolatilityFilter:
             _logger.exception("Error computing Volume/Volatility ratio:")
             return 0.0, 0.0, 0.0
 
+    def _load_trf_volume_corrections(self) -> Dict[str, float]:
+        """
+        Load TRF data and calculate volume correction factors.
+
+        TRF data shows off-exchange (dark pool) volume that's not fully captured
+        in yfinance intraday data. We calculate a correction factor to augment
+        intraday volume with the dark pool component.
+
+        Returns:
+            Dictionary mapping ticker -> correction_factor
+            correction_factor = (yfinance_volume + trf_volume) / yfinance_volume
+        """
+        try:
+            trf_file = self._results_dir / "trf.csv"
+
+            if not trf_file.exists():
+                _logger.debug("TRF file not found: %s", trf_file)
+                return {}
+
+            trf_df = pd.read_csv(trf_file)
+
+            if trf_df.empty:
+                _logger.warning("TRF file is empty")
+                return {}
+
+            # Aggregate TRF data by ticker (sum across facilities)
+            agg_df = trf_df.groupby('ticker').agg({
+                'total_volume': 'sum',  # Total TRF volume (dark pools)
+                'volume': 'first',  # yfinance daily volume (same for all facilities)
+            }).reset_index()
+
+            # Calculate correction factor
+            # correction = (yfinance + dark_pool) / yfinance
+            # This gives us the multiplier to apply to intraday bars
+            corrections = {}
+            for _, row in agg_df.iterrows():
+                ticker = row['ticker']
+                yf_volume = row['volume']
+                trf_volume = row['total_volume']
+
+                # Only create correction if yfinance volume is valid
+                if pd.notna(yf_volume) and yf_volume > 0:
+                    # Correction factor = total_real_volume / reported_volume
+                    correction_factor = (yf_volume + trf_volume) / yf_volume
+                    corrections[ticker] = correction_factor
+
+                    if correction_factor > 1.5:  # Log significant corrections
+                        _logger.debug("%s: TRF correction factor %.3f (yf=%d, trf=%d)",
+                                     ticker, correction_factor, int(yf_volume), int(trf_volume))
+
+            _logger.info("Calculated TRF corrections for %d tickers (avg factor: %.3f)",
+                        len(corrections),
+                        np.mean(list(corrections.values())) if corrections else 0.0)
+
+            return corrections
+
+        except Exception:
+            _logger.exception("Error loading TRF volume corrections:")
+            return {}
+
+    def _apply_trf_volume_correction(self, df: pd.DataFrame, correction_factor: float) -> pd.DataFrame:
+        """
+        Apply TRF volume correction factor to intraday OHLCV data.
+
+        IMPORTANT: TRF data is only available for yesterday (T-1), so we only
+        apply corrections to historical bars (yesterday and before). Today's
+        bars use raw yfinance volume since TRF data isn't available yet.
+
+        This prevents temporal mismatch where yesterday's dark pool ratio
+        is incorrectly applied to today's potentially different patterns.
+
+        Args:
+            df: OHLCV DataFrame with 'volume' and 'timestamp' columns
+            correction_factor: Multiplier to apply to volume (from yesterday's TRF)
+
+        Returns:
+            DataFrame with corrected volume (only for historical bars)
+        """
+        try:
+            df = df.copy()
+
+            # Get yesterday's date (TRF data is from T-1)
+            yesterday = (datetime.now() - timedelta(days=1)).date()
+
+            # Only apply correction to bars from yesterday and before
+            # Today's bars remain unchanged (no TRF data available yet)
+            historical_mask = df['timestamp'].dt.date <= yesterday
+
+            if historical_mask.any():
+                df.loc[historical_mask, 'volume'] = df.loc[historical_mask, 'volume'] * correction_factor
+                _logger.debug("Applied TRF correction (%.3f) to %d historical bars (< %s)",
+                             correction_factor, historical_mask.sum(), yesterday)
+
+            today_bars = (~historical_mask).sum()
+            if today_bars > 0:
+                _logger.debug("Kept %d today's bars unchanged (no TRF data yet)", today_bars)
+
+            return df
+
+        except Exception:
+            _logger.exception("Error applying TRF volume correction:")
+            return df
+
     def _save_results(self, results_data: List[dict]) -> None:
         """
         Save volatility filter results to CSV.
@@ -491,7 +615,7 @@ class VolatilityFilter:
                 'ticker', 'status', 'reason',
                 'last_price', 'atr', 'atr_ratio', 'price_range',
                 'vol_zscore', 'vol_rv_ratio', 'rv_short', 'rv_long',
-                'price_high', 'price_low', 'bars_count'
+                'price_high', 'price_low', 'bars_count', 'trf_correction_factor'
             ]
 
             # Only include columns that exist

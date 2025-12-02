@@ -74,6 +74,8 @@ TWELVE_DATA_KEY=os.getenv("TWELVE_DATA_KEY")
 POLYGON_KEY=os.getenv("POLYGON_KEY")
 FMP_API_KEY=os.getenv("FMP_API_KEY")
 TIINGO_API_KEY=os.getenv("TIINGO_API_KEY")
+FINRA_API_CLIENT=os.getenv("FINRA_API_CLIENT")
+FINRA_API_SECRET=os.getenv("FINRA_API_SECRET")
 
 ##################################################################
 #

@@ -170,6 +170,9 @@ class EMPS2Pipeline:
                 _logger.error("No tickers passed fundamental filters")
                 return pd.DataFrame()
 
+            # Stage 2b: Download TRF data (for volume correction in Stage 3)
+            self._stage2b_download_trf_data()
+
             # Stage 3: Volatility filtering
             volatility_df = self._stage3_volatility_filter(
                 fundamental_df['ticker'].tolist()
@@ -255,6 +258,81 @@ class EMPS2Pipeline:
 
         _logger.info("Stage 2 complete: %d tickers", len(df))
         return df
+
+    def _stage2b_download_trf_data(self) -> None:
+        """
+        Stage 2b: Download TRF data for volume correction.
+
+        Downloads FINRA TRF data for yesterday to provide dark pool volume
+        corrections for the volatility filter stage.
+
+        Smart behavior:
+        - Checks if TRF file already exists in today's results folder
+        - If exists: Uses existing data (no re-download)
+        - If missing: Downloads from FINRA API
+        - This allows daily pipeline runs to accumulate historical TRF data
+          without redundant downloads
+        """
+        _logger.info("-"*70)
+        _logger.info("Stage 2b: TRF Data Acquisition")
+        _logger.info("-"*70)
+
+        try:
+            from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
+            from datetime import timedelta
+
+            # Calculate yesterday's date
+            yesterday = datetime.now() - timedelta(days=1)
+            yesterday_str = yesterday.strftime("%Y-%m-%d")
+
+            # Check if TRF file already exists in TODAY's results folder
+            trf_file = self._results_dir / "trf.csv"
+
+            if trf_file.exists():
+                _logger.info("TRF data already exists in today's folder: %s", trf_file)
+
+                # Validate the existing file
+                try:
+                    import pandas as pd
+                    trf_df = pd.read_csv(trf_file)
+
+                    if trf_df.empty:
+                        _logger.warning("Existing TRF file is empty, will re-download")
+                        trf_file.unlink()  # Delete empty file
+                    else:
+                        ticker_count = len(trf_df["ticker"].unique())
+                        _logger.info("Using existing TRF data: %d tickers", ticker_count)
+                        _logger.info("Stage 2b complete: Using cached TRF data")
+                        return
+
+                except Exception as e:
+                    _logger.warning("Failed to read existing TRF file: %s, will re-download", str(e))
+                    trf_file.unlink()  # Delete corrupted file
+
+            # TRF file doesn't exist or was invalid, download it
+            _logger.info("TRF data not found for today, downloading for %s", yesterday_str)
+
+            downloader = FinraTRFDownloader(
+                date=yesterday_str,
+                output_dir=self._results_dir,
+                output_filename="trf.csv",
+                fetch_yfinance_data=True  # Include yfinance validation
+            )
+
+            result_df = downloader.run()
+
+            if result_df.empty:
+                _logger.warning("No TRF data downloaded for %s (market may be closed)", yesterday_str)
+                _logger.info("Stage 2b complete: No TRF data available")
+            else:
+                ticker_count = len(result_df["ticker"].unique())
+                _logger.info("Successfully downloaded TRF data for %s: %d tickers",
+                           yesterday_str, ticker_count)
+                _logger.info("Stage 2b complete: TRF data ready for volume correction")
+
+        except Exception:
+            _logger.exception("Error in TRF data acquisition:")
+            _logger.warning("Continuing without TRF volume corrections")
 
     def _stage3_volatility_filter(self, tickers: list) -> pd.DataFrame:
         """
@@ -449,10 +527,16 @@ class EMPS2Pipeline:
                         'percentage': 100.0 * fundamental_count / initial_count if initial_count > 0 else 0,
                         'removed': initial_count - fundamental_count
                     },
+                    'stage2b_trf': {
+                        'enabled': True,
+                        'trf_file_exists': (self._results_dir / "trf.csv").exists(),
+                        'description': 'TRF volume corrections for dark pool activity'
+                    },
                     'stage3_volatility': {
                         'count': volatility_count,
                         'percentage': 100.0 * volatility_count / fundamental_count if fundamental_count > 0 else 0,
-                        'removed': fundamental_count - volatility_count
+                        'removed': fundamental_count - volatility_count,
+                        'uses_trf_corrections': (self._results_dir / "trf.csv").exists()
                     },
                     'stage4_rolling_memory': {
                         'enabled': self.config.rolling_memory_config.enabled,

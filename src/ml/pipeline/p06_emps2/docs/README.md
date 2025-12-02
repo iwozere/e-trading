@@ -1,8 +1,8 @@
 # P06 EMPS2 Pipeline - Enhanced Explosive Move Pre-Screener
 
-**Version:** 2.0 (Production)
-**Status:** ✅ Production Ready
-**Last Updated:** 2025-11-28
+**Version:** 2.2 (Production)
+**Status:** ✅ Production Ready with TRF Dark Pool Integration
+**Last Updated:** 2025-12-02
 
 ---
 
@@ -71,13 +71,26 @@ EMPS2 (Enhanced Explosive Move Pre-Screener v2) is a multi-stage filtering pipel
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 2: Volatility Filter (Enhanced with P05)             │
-│ • Source: Yahoo Finance 15m data (free)                    │
+│ Stage 2b: TRF Data Download (NEW v2.2)                     │
+│ • Source: FINRA TRF API (OAuth)                            │
+│ • Purpose: Dark pool volume corrections                    │
+│ • Data: Off-exchange (dark pool) trading volume            │
+│ • Output: trf.csv with volume correction factors           │
+│ • Time: ~10-20 seconds                                     │
+│ • Cost: FREE (FINRA public API)                            │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Stage 2: Volatility Filter (Enhanced with TRF + P05)       │
+│ • Source: Yahoo Finance 1h data + TRF corrections (free)   │
+│ • TRF Enhancement: Corrects volume for dark pool activity  │
+│   - Historical bars: Volume × TRF correction factor        │
+│   - Today's bars: Raw yfinance (TRF not available yet)     │
 │ • Filters:                                                  │
 │   - ATR/Price ratio: > 2%                                  │
 │   - Price range: > 5%                                      │
-│   - Volume Z-Score: > 1.2 (volume spike detection)        │
-│   - Vol/RV Ratio: > 0.5 (accumulation detection)          │
+│   - Volume Z-Score: > 1.2 (NOW INCLUDES dark pools!)      │
+│   - Vol/RV Ratio: > 0.5 (NOW INCLUDES dark pools!)        │
 │ • Output: ~50-200 tickers                                  │
 │ • Time: 30-60 seconds                                      │
 │ • Cost: FREE                                               │
@@ -357,11 +370,87 @@ Price:          > $1.00         # Avoid penny stocks
 
 ---
 
-### Stage 2: Volatility Filter (Enhanced)
+### Stage 2b: TRF Data Download (NEW v2.2)
+
+**Purpose**: Download dark pool (off-exchange) volume data to correct yfinance volume underreporting
+
+**Data Source**: FINRA TRF API (Trade Reporting Facilities)
+
+**What is TRF Data?**
+
+FINRA TRF (Trade Reporting Facility) data captures **ALL trades**, including:
+- **Exchange trades** (NASDAQ, NYSE, etc.)
+- **Dark pool trades** (off-exchange institutional trading)
+- **OTC trades** (over-the-counter)
+
+**The Volume Gap Problem**:
+```
+Yahoo Finance intraday data only shows EXCHANGE volume
+Dark pools (institutional) volume is MISSING
+→ Volume-based metrics underestimate real activity!
+
+Example:
+  Ticker: XYZ
+  yfinance reports: 1M volume
+  TRF dark pools: 1.5M volume
+  Real total: 2.5M (60% higher!)
+```
+
+**TRF Correction Factor**:
+```python
+correction_factor = (yfinance_volume + trf_dark_pool_volume) / yfinance_volume
+
+# Applied to intraday bars:
+corrected_volume = yfinance_volume × correction_factor
+```
+
+**Real Example (from 2025-12-01)**:
+```
+Ticker: AAL
+  yfinance daily: 75,390,600
+  TRF dark pools: 56,180,856
+  Correction: 1.745 (74.5% dark pool activity!)
+
+Average across all tickers: 1.597 (59.7% dark pool)
+Tickers with >50% dark pool: 55% of universe
+```
+
+**Temporal Alignment**:
+- TRF data available: **T-1** (yesterday)
+- Applied to: **Historical intraday bars only** (yesterday and before)
+- Today's bars: **Raw yfinance** (no TRF data yet)
+
+This prevents temporal mismatch where yesterday's dark pool ratio is incorrectly applied to today's different patterns.
+
+**Output**: `trf.csv` with correction factors per ticker
+
+---
+
+### Stage 2: Volatility Filter (Enhanced with TRF + P05)
 
 **Purpose**: Detect volatility expansion and unusual activity
 
-**Data Source**: Yahoo Finance 15m intraday data (free, unlimited)
+**Data Source**: Yahoo Finance 1h intraday data (free) + TRF volume corrections
+
+**TRF Volume Correction** (NEW v2.2):
+
+Before filtering, all intraday volume data is corrected for dark pool activity:
+```python
+# Load TRF correction factors (from Stage 2b)
+trf_corrections = load_trf_data()  # e.g., {"AAPL": 1.35, "GME": 1.78}
+
+# Apply corrections to historical bars
+for each intraday bar <= yesterday:
+    corrected_volume = yfinance_volume × trf_correction_factor
+
+# Today's bars remain unchanged (no TRF data yet)
+```
+
+**Impact on Volume Metrics**:
+- ✅ `vol_zscore` now includes dark pool volume → Catches institutional accumulation
+- ✅ `vol_rv_ratio` now reflects real total volume → More accurate accumulation detection
+- ✅ Historical baseline corrected → Better spike detection
+- ✅ Prevents false negatives from underreported volume
 
 **Filters**:
 
@@ -559,12 +648,20 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
    ...
    ```
 
-6. **05_volatility_filtered.csv** - After volatility filters (~100 tickers)
+5b. **trf.csv** - FINRA TRF dark pool data (NEW v2.2)
    ```csv
-   ticker,last_price,atr,atr_ratio,price_range,vol_zscore,vol_rv_ratio,rv_short,rv_long
-   GME,24.50,0.85,0.035,0.12,4.2,2.5,0.85,0.40
+   date,ticker,short_volume,short_exempt_volume,total_volume,short_ratio,market_code,facility_code,volume,volume_ratio
+   2025-12-01,AAL,12500000,50000,56180856,0.45,Q,NQTRF,75390600,0.745
    ...
    ```
+
+6. **05_volatility_filtered.csv** - After volatility filters (~100 tickers)
+   ```csv
+   ticker,last_price,atr,atr_ratio,price_range,vol_zscore,vol_rv_ratio,rv_short,rv_long,trf_correction_factor
+   GME,24.50,0.85,0.035,0.12,4.2,2.5,0.85,0.40,1.78
+   ...
+   ```
+   - **NOTE**: `vol_zscore` and `vol_rv_ratio` are TRF-corrected (include dark pool volume)!
 
 7. **06_prefiltered_universe.csv** - **FINAL RESULTS** (combined data)
    ```csv
@@ -923,7 +1020,36 @@ See attached CSV for full details.
 
 ## Change Log
 
-### Version 2.1 (2025-11-29) - Current
+### Version 2.2 (2025-12-02) - Current
+
+**Added**:
+- ✅ TRF Data Integration - FINRA dark pool volume corrections
+- ✅ Stage 2b: TRF Download - Automatic FINRA API integration
+- ✅ Volume Correction - Intraday volume adjusted for dark pools
+- ✅ Temporal Alignment - Smart correction (historical bars only, not today)
+- ✅ New output file: trf.csv with correction factors
+- ✅ TRF statistics in summary.json
+
+**Changed**:
+- ✅ Volume calculations now include dark pool activity
+- ✅ `vol_zscore` and `vol_rv_ratio` TRF-corrected
+- ✅ `05_volatility_filtered.csv` includes `trf_correction_factor` column
+- ✅ Pipeline now 6 stages (added TRF download)
+
+**Impact**:
+- Catches institutional accumulation in dark pools
+- Prevents false negatives from underreported volume
+- Real-world data: 59.7% average dark pool volume across tickers
+- 55% of tickers have >50% dark pool activity
+- +10-20 seconds per scan for TRF download
+
+**Technical Details**:
+- TRF correction applied to historical bars only (≤ yesterday)
+- Today's bars use raw yfinance (TRF not available yet)
+- Correction factor = (yfinance + trf_dark_pool) / yfinance
+- Graceful degradation if TRF data unavailable
+
+### Version 2.1 (2025-11-29)
 
 **Added**:
 - ✅ Rolling Memory System - 10-day accumulation tracking
