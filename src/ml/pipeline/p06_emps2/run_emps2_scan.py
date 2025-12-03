@@ -112,6 +112,7 @@ Examples:
     volatility_group.add_argument(
         '--min-volatility',
         type=float,
+        default=0.015,
         help='Minimum ATR/Price ratio (default: 0.02 = 2%%)'
     )
     volatility_group.add_argument(
@@ -122,6 +123,7 @@ Examples:
     volatility_group.add_argument(
         '--lookback-days',
         type=int,
+        default=14,
         help='Lookback period in days (default: 7)'
     )
     volatility_group.add_argument(
@@ -133,6 +135,7 @@ Examples:
     volatility_group.add_argument(
         '--atr-period',
         type=int,
+        default=14,
         help='ATR calculation period (default: 14)'
     )
 
