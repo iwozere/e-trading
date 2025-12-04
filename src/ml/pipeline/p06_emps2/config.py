@@ -83,7 +83,7 @@ class RollingMemoryConfig:
     lookback_days: int = 10  # How many days back to scan
 
     # Phase 1 detection (Quiet Accumulation)
-    phase1_min_appearances: int = 5  # Must appear 5+ times in lookback period
+    phase1_min_appearances: int = 3  # Must appear 5+ times in lookback period
     phase1_max_sentiment: float = 0.5  # Low/neutral sentiment
 
     # Phase 2 detection (Early Public Signal)

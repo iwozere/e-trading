@@ -7,7 +7,7 @@ This script calls the main FINRA TRF downloader from src/data/downloader.
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional
 
 # Add project root to path
@@ -43,26 +43,29 @@ def download_trf(target_date: Optional[datetime] = None, force_download: bool = 
     Returns:
         Path to the downloaded TRF file
     """
-    if target_date is None:
-        target_date = get_previous_trading_day()
+    # Get the actual date of the TRF data
+    if target_date is None or (isinstance(target_date, datetime) and target_date.date() == date.today()):
+        trf_date = get_previous_trading_day()
+    else:
+        trf_date = target_date
 
-    date_str = target_date.strftime('%Y-%m-%d')
-
-    # Set up output directory based on the target date
-    output_dir = Path("results") / "emps2" / date_str
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / "trf.csv"
+    date_str = trf_date.strftime('%Y-%m-%d')
+    trf_dir = Path("results") / "emps2" / date_str
+    output_file = trf_dir / "trf.csv"
 
     # Check if file already exists
     if output_file.exists() and not force_download:
         _logger.info(f"TRF file already exists: {output_file}")
         return output_file
 
+    # Create output directory
+    trf_dir.mkdir(parents=True, exist_ok=True)
+
     # Download the TRF data
     _logger.info(f"Downloading TRF data for {date_str}")
     downloader = FinraTRFDownloader(
         date=date_str,
-        output_dir=output_dir,
+        output_dir=str(trf_dir),  # Use the TRF date directory
         output_filename="trf.csv"
     )
 
