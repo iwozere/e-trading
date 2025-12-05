@@ -281,10 +281,14 @@ def compute_uoa_score(df: pd.DataFrame) -> pd.DataFrame:
         # Calculate basic metrics with safe division
         df['total_volume'] = df['call_volume'] + df['put_volume']
 
-        # Safe calculation of put/call ratio
-        df['put_call_ratio'] = 0  # Default to 0 when call_volume is 0
+        # Safe calculation of put/call ratio with explicit type conversion
+        df['put_call_ratio'] = 0.0  # Initialize as float64
         mask = df['call_volume'] > 0
-        df.loc[mask, 'put_call_ratio'] = df['put_volume'] / df['call_volume']
+        if mask.any():
+            # Convert to float64 before division to avoid type warnings
+            put_vol = df['put_volume'].astype('float64')
+            call_vol = df['call_volume'].astype('float64')
+            df.loc[mask, 'put_call_ratio'] = put_vol[mask] / call_vol[mask]
 
         # Initialize UOA score with default value of 0
         df['uoa_score'] = 0.0
