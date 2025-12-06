@@ -20,6 +20,7 @@ SyslogIdentifier=e-trading-scheduler
 
 # Environment variables
 # IMPORTANT: Update these for your environment
+EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env
 Environment="PYTHONPATH=/opt/apps/e-trading"
 Environment="PYTHONUNBUFFERED=1"
 Environment="TRADING_ENV=production"

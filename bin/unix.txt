@@ -8,6 +8,7 @@ git pull origin main
 
 telegram_bot.service
 notification_bot.service
+scheduler.service
 
 
 source .venv/bin/activate
