@@ -1,6 +1,6 @@
 # src/data/db/repos/repo_telegram.py
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Sequence, List, Dict, Any
 from sqlalchemy import select, update, func
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from src.data.db.models.model_telegram import (
     TelegramCommandAudit,
     TelegramBroadcastLog,
 )
+from src.data.db.core.constants import PROVIDER_TG
 
 UTC = timezone.utc
 utcnow = lambda: datetime.now(UTC)
@@ -19,13 +20,17 @@ utcnow = lambda: datetime.now(UTC)
 
 # -------------------- Settings --------------------
 class SettingsRepo:
+    """Repository for Telegram-specific settings storage."""
+
     def __init__(self, s: Session) -> None:
         self.s = s
 
     def get(self, key: str) -> Optional[TelegramSetting]:
+        """Retrieve a setting by key."""
         return self.s.get(TelegramSetting, key)
 
     def set(self, key: str, value: Optional[str]) -> None:
+        """Create or update a setting."""
         row = self.s.get(TelegramSetting, key)
         if row is None:
             row = TelegramSetting(key=key, value=value)
@@ -37,26 +42,33 @@ class SettingsRepo:
 
 # -------------------- Feedback --------------------
 class FeedbackRepo:
+    """Repository for user feedback handling."""
+
     def __init__(self, s: Session) -> None:
         self.s = s
 
     def create(self, user_id: int, type_: str, message: str) -> TelegramFeedback:
+        """Create a new feedback entry."""
         row = TelegramFeedback(user_id=user_id, type=type_, message=message, status="open", created_at=utcnow())
         self.s.add(row); self.s.flush(); return row
 
     def list(self, type_: Optional[str] = None) -> Sequence[TelegramFeedback]:
+        """List feedback, optionally filtered by type."""
         q = select(TelegramFeedback)
         if type_:
             q = q.where(TelegramFeedback.type == type_)
         return list(self.s.execute(q).scalars())
 
     def set_status(self, feedback_id: int, status: str) -> bool:
+        """Update the status of a feedback entry."""
         res = self.s.execute(update(TelegramFeedback).where(TelegramFeedback.id == feedback_id).values(status=status))
         return (res.rowcount or 0) > 0
 
 
 # -------------------- Broadcasts --------------------
 class BroadcastRepo:
+    """Repository for managing broadcast logs."""
+
     def __init__(self, s: Session) -> None:
         self.s = s
 
@@ -103,7 +115,6 @@ class BroadcastRepo:
         successful_deliveries = result[1] or 0
 
         # Recent activity (last 24 hours)
-        from datetime import datetime, timedelta
         yesterday = datetime.now(timezone.utc) - timedelta(days=1)
         recent_q = select(func.count(TelegramBroadcastLog.id)).where(
             TelegramBroadcastLog.created_at >= yesterday
@@ -122,10 +133,13 @@ class BroadcastRepo:
 
 # -------------------- Command audit --------------------
 class CommandAuditRepo:
+    """Repository for auditing Telegram commands."""
+
     def __init__(self, s: Session) -> None:
         self.s = s
 
     def log(self, telegram_user_id: str, command: str, **kwargs) -> TelegramCommandAudit:
+        """Log a command execution."""
         row = TelegramCommandAudit(
             telegram_user_id=telegram_user_id,
             command=command,
@@ -140,6 +154,7 @@ class CommandAuditRepo:
         self.s.add(row); self.s.flush(); return row
 
     def last_commands(self, telegram_user_id: str, *, limit: int = 20) -> Sequence[TelegramCommandAudit]:
+        """Get the last executed commands for a user."""
         q = (
             select(TelegramCommandAudit)
             .where(TelegramCommandAudit.telegram_user_id == telegram_user_id)
@@ -159,6 +174,7 @@ class CommandAuditRepo:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> Sequence[TelegramCommandAudit]:
+        """List audit logs with filtering."""
         q = select(TelegramCommandAudit)
         if user_id:
             q = q.where(TelegramCommandAudit.telegram_user_id == user_id)
@@ -173,7 +189,8 @@ class CommandAuditRepo:
         q = q.order_by(TelegramCommandAudit.id.desc()).offset(offset).limit(limit)
         return list(self.s.execute(q).scalars())
 
-    def stats(self) -> dict:
+    def stats(self) -> Dict[str, Any]:
+        """Get command usage statistics."""
         total = int(self.s.execute(select(func.count(TelegramCommandAudit.id))).scalar_one() or 0)
         rows = self.s.execute(
             select(TelegramCommandAudit.command, func.count(TelegramCommandAudit.id)).group_by(TelegramCommandAudit.command)
@@ -181,6 +198,7 @@ class CommandAuditRepo:
         success = int(self.s.execute(select(func.count(TelegramCommandAudit.id)).where(TelegramCommandAudit.success.is_(True))).scalar_one() or 0)
         return {"total": total, "by_command": {cmd: int(cnt) for cmd, cnt in rows}, "success_rate": (success / total) if total else None}
 
-    def unique_users_summary(self) -> list[dict]:
+    def unique_users_summary(self) -> List[Dict[str, str]]:
+        """Get summary of unique users seen."""
         rows = self.s.execute(select(TelegramCommandAudit.telegram_user_id).distinct()).all()
         return [{"telegram_user_id": r[0]} for r in rows]

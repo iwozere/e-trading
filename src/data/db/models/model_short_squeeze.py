@@ -5,12 +5,15 @@ SQLAlchemy models for the short squeeze detection pipeline.
 Includes ScreenerSnapshot, DeepScanMetrics, SqueezeAlert, and AdHocCandidateModel models.
 """
 
+from datetime import date, datetime
+from typing import Optional
 from enum import Enum
 
 from sqlalchemy import (
-    Column, BigInteger, String, Date, DateTime, Numeric, Boolean, Text,
+    BigInteger, String, Date, DateTime, Numeric, Boolean, Text,
     CheckConstraint, UniqueConstraint, Index, func
 )
+from sqlalchemy.orm import Mapped, mapped_column
 from src.data.db.core.json_types import JsonType
 
 from src.data.db.core.base import Base
@@ -37,18 +40,18 @@ class ScreenerSnapshot(Base):
 
     __tablename__ = "ss_snapshot"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    ticker = Column(String(10), nullable=False, index=True)
-    run_date = Column(Date, nullable=False, index=True)
-    short_interest_pct = Column(Numeric(5, 4), nullable=True)
-    days_to_cover = Column(Numeric(8, 2), nullable=True)
-    float_shares = Column(BigInteger, nullable=True)
-    avg_volume_14d = Column(BigInteger, nullable=True)
-    market_cap = Column(BigInteger, nullable=True)
-    screener_score = Column(Numeric(5, 4), nullable=True)
-    raw_payload = Column(JsonType(), nullable=True)
-    data_quality = Column(Numeric(3, 2), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(10), index=True)
+    run_date: Mapped[date] = mapped_column(Date, index=True)
+    short_interest_pct: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
+    days_to_cover: Mapped[Numeric | None] = mapped_column(Numeric(8, 2))
+    float_shares: Mapped[int | None] = mapped_column(BigInteger)
+    avg_volume_14d: Mapped[int | None] = mapped_column(BigInteger)
+    market_cap: Mapped[int | None] = mapped_column(BigInteger)
+    screener_score: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
+    raw_payload: Mapped[dict | None] = mapped_column(JsonType())
+    data_quality: Mapped[Numeric | None] = mapped_column(Numeric(3, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     __table_args__ = (
         Index("idx_ss_snapshot_ticker_date", "ticker", "run_date"),
@@ -92,17 +95,17 @@ class DeepScanMetrics(Base):
 
     __tablename__ = "ss_deep_metrics"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    ticker = Column(String(10), nullable=False, index=True)
-    date = Column(Date, nullable=False, index=True)
-    volume_spike = Column(Numeric(6, 2), nullable=True)
-    call_put_ratio = Column(Numeric(6, 2), nullable=True)
-    sentiment_24h = Column(Numeric(4, 3), nullable=True)
-    borrow_fee_pct = Column(Numeric(5, 4), nullable=True)
-    squeeze_score = Column(Numeric(5, 4), nullable=True)
-    alert_level = Column(String(10), nullable=True)
-    raw_payload = Column(JsonType(), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(10), index=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    volume_spike: Mapped[Numeric | None] = mapped_column(Numeric(6, 2))
+    call_put_ratio: Mapped[Numeric | None] = mapped_column(Numeric(6, 2))
+    sentiment_24h: Mapped[Numeric | None] = mapped_column(Numeric(4, 3))
+    borrow_fee_pct: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
+    squeeze_score: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
+    alert_level: Mapped[str | None] = mapped_column(String(10))
+    raw_payload: Mapped[dict | None] = mapped_column(JsonType())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
 
     __table_args__ = (
         UniqueConstraint("ticker", "date", name="unique_ticker_date"),
@@ -143,15 +146,15 @@ class SqueezeAlert(Base):
 
     __tablename__ = "ss_alerts"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    ticker = Column(String(10), nullable=False, index=True)
-    alert_level = Column(String(10), nullable=False)
-    reason = Column(Text, nullable=True)
-    squeeze_score = Column(Numeric(5, 4), nullable=True)
-    timestamp = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    sent = Column(Boolean, nullable=False, default=False)
-    cooldown_expires = Column(DateTime(timezone=True), nullable=True)
-    notification_id = Column(String(50), nullable=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(10), index=True)
+    alert_level: Mapped[str] = mapped_column(String(10))
+    reason: Mapped[str | None] = mapped_column(Text)
+    squeeze_score: Mapped[Numeric | None] = mapped_column(Numeric(5, 4))
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    cooldown_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notification_id: Mapped[str | None] = mapped_column(String(50))
 
     __table_args__ = (
         Index("idx_ss_alerts_ticker_cooldown", "ticker", "cooldown_expires"),
@@ -187,13 +190,13 @@ class AdHocCandidateModel(Base):
 
     __tablename__ = "ss_ad_hoc_candidates"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    ticker = Column(String(10), nullable=False, unique=True)
-    reason = Column(Text, nullable=True)
-    first_seen = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    active = Column(Boolean, nullable=False, default=True)
-    promoted_by_screener = Column(Boolean, nullable=False, default=False)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(10), unique=True)
+    reason: Mapped[str | None] = mapped_column(Text)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    promoted_by_screener: Mapped[bool] = mapped_column(Boolean, default=False)
 
     __table_args__ = (
         UniqueConstraint("ticker", name="unique_ticker"),

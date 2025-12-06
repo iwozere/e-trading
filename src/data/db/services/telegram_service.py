@@ -13,9 +13,10 @@ All operations use a single Unit-of-Work:
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import time
+import json
 
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
-from src.data.db.services import users_service
+from src.data.db.services.users_service import users_service
 
 
 class TelegramService(BaseDBService):
@@ -38,7 +39,7 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def reset_user_email_verification(self, telegram_user_id: str) -> bool:
-        self.repos.users.update_telegram_profile(
+        users_service.update_telegram_profile(
             telegram_user_id,
             verified=False,
             verification_code=None,
@@ -49,20 +50,20 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def verify_user_email(self, telegram_user_id: str) -> bool:
-        self.repos.users.update_telegram_profile(telegram_user_id, verified=True)
+        users_service.update_telegram_profile(telegram_user_id, verified=True)
         return True
 
     @with_uow
     @handle_db_error
     def set_user_limit(self, telegram_user_id: str, key: str, value: int) -> None:
         assert key in ("max_alerts", "max_schedules")
-        self.repos.users.update_telegram_profile(telegram_user_id, **{key: int(value)})
+        users_service.update_telegram_profile(telegram_user_id, **{key: int(value)})
 
     @with_uow
     @handle_db_error
     def get_user_limit(self, telegram_user_id: str, key: str) -> Optional[int]:
         assert key in ("max_alerts", "max_schedules")
-        profile = self.repos.users.get_telegram_profile(telegram_user_id)
+        profile = users_service.get_telegram_profile(telegram_user_id)
         if not profile:
             return None
         return profile.get(key)
@@ -79,7 +80,7 @@ class TelegramService(BaseDBService):
         Returns:
             Dictionary with user status or None if user not found
         """
-        profile = self.repos.users.get_telegram_profile(telegram_user_id)
+        profile = users_service.get_telegram_profile(telegram_user_id)
         if not profile:
             return None
 
@@ -97,13 +98,13 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def approve_user(self, telegram_user_id: str) -> bool:
-        self.repos.users.update_telegram_profile(telegram_user_id, approved=True)
+        users_service.update_telegram_profile(telegram_user_id, approved=True)
         return True
 
     @with_uow
     @handle_db_error
     def reject_user(self, telegram_user_id: str) -> bool:
-        self.repos.users.update_telegram_profile(telegram_user_id, approved=False)
+        users_service.update_telegram_profile(telegram_user_id, approved=False)
         return True
 
     @with_uow
@@ -111,8 +112,7 @@ class TelegramService(BaseDBService):
     def update_user_language(self, telegram_user_id: str, language: str) -> bool:
         from sqlalchemy import text
 
-        user = self.repos.users.ensure_user_for_telegram(telegram_user_id)
-        uid = user.id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
 
         session = self.repos.s
         result = session.execute(
@@ -124,7 +124,7 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def set_user_email(self, telegram_user_id: str, email: str, code: str, sent_time: int, language: str = "en", is_admin: bool = False) -> None:
-        self.repos.users.update_telegram_profile(
+        users_service.update_telegram_profile(
             telegram_user_id,
             email=email,
             verification_code=code,
@@ -140,8 +140,7 @@ class TelegramService(BaseDBService):
         from sqlalchemy import text
 
         current_time = int(time.time())
-        user = self.repos.users.ensure_user_for_telegram(telegram_user_id)
-        uid = user.id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
 
         session = self.repos.s
         result = session.execute(
@@ -155,7 +154,7 @@ class TelegramService(BaseDBService):
 
         stored_code, code_sent_time = row
         if stored_code == code and (current_time - code_sent_time) <= expiry_seconds:
-            self.repos.users.update_telegram_profile(telegram_user_id, verified=True)
+            users_service.update_telegram_profile(telegram_user_id, verified=True)
             return True
         return False
 
@@ -163,24 +162,23 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def set_verification_code(self, telegram_user_id: str, *, code: str, sent_time: int) -> None:
-        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
         self.repos.telegram_verification.issue(uid, code=code, sent_time=sent_time)
-        self.repos.users.update_telegram_profile(telegram_user_id, verification_code=code, code_sent_time=sent_time)
+        users_service.update_telegram_profile(telegram_user_id, verification_code=code, code_sent_time=sent_time)
 
     @with_uow
     @handle_db_error
     def count_codes_last_hour(self, telegram_user_id: str, now_unix: Optional[int] = None) -> int:
-        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
         return self.repos.telegram_verification.count_last_hour_by_user_id(uid, int(now_unix or time.time()))
 
     # --- Alerts / Jobs ---
     @with_uow
     @handle_db_error
     def add_json_alert(self, telegram_user_id: str, config_json: str, *, email: Optional[bool] = None, status: str = "ARMED", re_arm_config: Optional[str] = None) -> int:
-        import json
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
         config = json.loads(config_json) if isinstance(config_json, str) else config_json
         ticker = config.get("ticker", "unknown")
 
@@ -206,16 +204,12 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def add_alert(self, telegram_user_id: str, ticker: str, price: float, condition: str, email: bool = False) -> int:
-        import json
-
         config_json = json.dumps({"ticker": ticker, "price": price, "condition": condition, "email": email})
         return self.add_json_alert(telegram_user_id, config_json, email=email)
 
     @with_uow
     @handle_db_error
     def add_indicator_alert(self, telegram_user_id: str, ticker: str, indicator: str, condition: str, value: float, timeframe: str = "15m", alert_action: str = "telegram", email: bool = False) -> int:
-        import json
-
         config_json = json.dumps({
             "ticker": ticker,
             "indicator": indicator,
@@ -239,10 +233,9 @@ class TelegramService(BaseDBService):
         Returns:
             List of alert dictionaries with alert details
         """
-        import json
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
 
         # Get all alert-type schedules for this user
         schedules = self.repos.jobs.list_schedules(
@@ -304,7 +297,7 @@ class TelegramService(BaseDBService):
     def add_schedule(self, telegram_user_id: str, ticker: str, scheduled_time: str, **kwargs) -> int:
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
         cron = f"0 {scheduled_time.split(':')[0]} * * *" if ":" in scheduled_time else "0 9 * * *"
 
         schedule_data = {
@@ -323,10 +316,9 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def add_json_schedule(self, telegram_user_id: str, config_json: str, *, schedule_config: Optional[str] = None) -> int:
-        import json
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
         config = json.loads(config_json) if isinstance(config_json, str) else config_json
         ticker = config.get("ticker", "unknown")
 
@@ -345,10 +337,9 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def list_schedules(self, telegram_user_id: str):
-        import json
         from src.data.db.models.model_jobs import JobType
 
-        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
         schedules = self.repos.jobs.list_schedules(user_id=uid, job_type=JobType.SCREENER)
 
         telegram_schedules: List[Dict[str, Any]] = []
@@ -387,8 +378,6 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def get_schedule(self, schedule_id: int):
-        import json
-
         schedule = self.repos.jobs.get_schedule(schedule_id)
         if not schedule or schedule.job_type not in ["screener", "report"]:
             return None
@@ -467,7 +456,7 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def add_feedback(self, telegram_user_id: str, type_: str, message: str) -> int:
-        uid = self.repos.users.ensure_user_for_telegram(telegram_user_id).id
+        uid = users_service.ensure_user_for_telegram(telegram_user_id)
         row = self.repos.telegram_feedback.create(uid, type_, message)
         return row.id
 
@@ -571,7 +560,6 @@ class TelegramService(BaseDBService):
     @with_uow
     @handle_db_error
     def get_active_schedules(self):
-        import json
         from src.data.db.models.model_jobs import JobType
 
         schedules = self.repos.jobs.list_schedules(job_type=JobType.SCREENER, enabled=True)
@@ -611,4 +599,3 @@ class TelegramService(BaseDBService):
 
 # Global service instance
 telegram_service = TelegramService()
-

@@ -5,14 +5,17 @@ SQLAlchemy models for the job scheduling and execution system.
 Includes Schedule and Run models with proper relationships and validation.
 """
 
-from datetime import datetime
+from __future__ import annotations
+import datetime
+from datetime import datetime as dt
 from enum import Enum
 from typing import Optional, Dict, Any
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, BigInteger,
+    Integer, String, Boolean, DateTime, Text, BigInteger,
     CheckConstraint, UniqueConstraint, Index, func
 )
+from sqlalchemy.orm import Mapped, mapped_column
 from src.data.db.core.json_types import JsonType
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
@@ -49,17 +52,17 @@ class Schedule(Base):
 
     __tablename__ = "job_schedules"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False, index=True)
-    name = Column(String(255), nullable=False)
-    job_type = Column(String(50), nullable=False)
-    target = Column(String(255), nullable=False)
-    task_params = Column(JsonType(), nullable=False, default={})
-    cron = Column(String(100), nullable=False)
-    enabled = Column(Boolean, nullable=False, default=True, index=True)
-    next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    job_type: Mapped[str] = mapped_column(String(50))
+    target: Mapped[str] = mapped_column(String(255))
+    task_params: Mapped[dict] = mapped_column(JsonType(), default={})
+    cron: Mapped[str] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    next_run_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     # Constraints
     __table_args__ = (
@@ -79,18 +82,18 @@ class ScheduleRun(Base):
 
     __tablename__ = "job_schedule_runs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    job_type = Column(Text, nullable=False)
-    job_id = Column(BigInteger, nullable=True)
-    user_id = Column(BigInteger, nullable=True)
-    status = Column(Text, nullable=True)
-    scheduled_for = Column(DateTime(timezone=True), nullable=True)
-    enqueued_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    finished_at = Column(DateTime(timezone=True), nullable=True)
-    job_snapshot = Column(JsonType(), nullable=True)
-    result = Column(JsonType(), nullable=True)
-    error = Column(Text, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    job_type: Mapped[str] = mapped_column(Text)
+    job_id: Mapped[int | None] = mapped_column(BigInteger)
+    user_id: Mapped[int | None] = mapped_column(BigInteger)
+    status: Mapped[str | None] = mapped_column(Text)
+    scheduled_for: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
+    enqueued_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=func.now())
+    started_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
+    job_snapshot: Mapped[dict | None] = mapped_column(JsonType())
+    result: Mapped[dict | None] = mapped_column(JsonType())
+    error: Mapped[str | None] = mapped_column(Text)
 
     # Constraints - using Index instead of UniqueConstraint for better SQLite compatibility
     __table_args__ = (
@@ -141,9 +144,9 @@ class ScheduleResponse(BaseModel):
     task_params: Dict[str, Any]
     cron: str
     enabled: bool
-    next_run_at: Optional[datetime]
-    created_at: datetime
-    updated_at: datetime
+    next_run_at: Optional[dt]
+    created_at: dt
+    updated_at: dt
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -151,15 +154,15 @@ class ScheduleRunCreate(BaseModel):
     """Pydantic model for creating a run."""
     job_type: JobType
     job_id: Optional[int] = None
-    scheduled_for: datetime
+    scheduled_for: dt
     job_snapshot: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ScheduleRunUpdate(BaseModel):
     """Pydantic model for updating a run."""
     status: Optional[RunStatus] = None
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
+    started_at: Optional[dt] = None
+    finished_at: Optional[dt] = None
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
@@ -171,10 +174,10 @@ class ScheduleRunResponse(BaseModel):
     job_id: Optional[int]
     user_id: Optional[int]
     status: Optional[RunStatus]
-    scheduled_for: Optional[datetime]
-    enqueued_at: Optional[datetime]
-    started_at: Optional[datetime]
-    finished_at: Optional[datetime]
+    scheduled_for: Optional[dt]
+    enqueued_at: Optional[dt]
+    started_at: Optional[dt]
+    finished_at: Optional[dt]
     job_snapshot: Optional[Dict[str, Any]]
     result: Optional[Dict[str, Any]]
     error: Optional[str]
@@ -184,7 +187,7 @@ class ReportRequest(BaseModel):
     """Pydantic model for report execution requests."""
     report_type: str = Field(..., min_length=1, max_length=100)
     parameters: Dict[str, Any] = Field(default_factory=dict)
-    scheduled_for: Optional[datetime] = None
+    scheduled_for: Optional[dt] = None
 
 
 class ScreenerRequest(BaseModel):
@@ -193,7 +196,7 @@ class ScreenerRequest(BaseModel):
     tickers: Optional[list[str]] = Field(None, min_length=1)
     filter_criteria: Dict[str, Any] = Field(default_factory=dict)
     top_n: Optional[int] = Field(None, ge=1, le=1000)
-    scheduled_for: Optional[datetime] = None
+    scheduled_for: Optional[dt] = None
 
     @field_validator('tickers')
     def validate_tickers_or_set(cls, v, values):

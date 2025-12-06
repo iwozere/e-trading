@@ -19,7 +19,6 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig
@@ -28,7 +27,9 @@ from src.ml.pipeline.p06_emps2.fundamental_filter import FundamentalFilter
 from src.ml.pipeline.p06_emps2.volatility_filter import VolatilityFilter
 from src.ml.pipeline.p06_emps2.rolling_memory import RollingMemoryScanner
 from src.ml.pipeline.p06_emps2.alerts import EMPS2AlertSender
+from src.ml.pipeline.p06_emps2.uoa_analyzer import UOAAnalyzer
 
+from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 
@@ -185,6 +186,9 @@ class EMPS2Pipeline:
             # Stage 4: Rolling Memory Analysis (10-day accumulation tracking)
             phase1_df, phase2_df = self._stage4_rolling_memory_analysis(volatility_df)
 
+            # Run stage 5: UOA Analysis
+            self._stage5_uoa_analysis()
+
             # Stage 5: Create final results
             final_df = self._stage5_create_final_results(
                 fundamental_df,
@@ -285,11 +289,13 @@ class EMPS2Pipeline:
             yesterday = datetime.now() - timedelta(days=1)
             yesterday_str = yesterday.strftime("%Y-%m-%d")
 
-            # Check if TRF file already exists in TODAY's results folder
-            trf_file = self._results_dir / "trf.csv"
+            # Create directory for yesterday's TRF data
+            yesterday_dir = self._results_dir.parent / yesterday_str
+            yesterday_dir.mkdir(parents=True, exist_ok=True)
+            trf_file = yesterday_dir / "trf.csv"
 
             if trf_file.exists():
-                _logger.info("TRF data already exists in today's folder: %s", trf_file)
+                _logger.info("TRF data already exists for %s: %s", yesterday_str, trf_file)
 
                 # Validate the existing file
                 try:
@@ -310,11 +316,11 @@ class EMPS2Pipeline:
                     trf_file.unlink()  # Delete corrupted file
 
             # TRF file doesn't exist or was invalid, download it
-            _logger.info("TRF data not found for today, downloading for %s", yesterday_str)
+            _logger.info("Downloading TRF data for %s", yesterday_str)
 
             downloader = FinraTRFDownloader(
                 date=yesterday_str,
-                output_dir=self._results_dir,
+                output_dir=str(yesterday_dir),  # Save in yesterday's directory
                 output_filename="trf.csv",
                 fetch_yfinance_data=True  # Include yfinance validation
             )
@@ -487,6 +493,28 @@ class EMPS2Pipeline:
 
         _logger.info("Stage 5 complete: %d tickers in final universe", len(final_df))
         return final_df
+
+    def _stage5_uoa_analysis(self) -> None:
+        """Stage 5: Perform UOA analysis on rolling candidates"""
+        _logger.info("-"*70)
+        _logger.info("Stage 5: UOA Analysis")
+        _logger.info("-"*70)
+
+        if not self.config.enable_uoa_analysis:
+            _logger.info("UOA analysis is disabled in config")
+            return
+
+        try:
+            uoa_analyzer = UOAAnalyzer(self._results_dir.parent)
+            uoa_file = uoa_analyzer.run()
+
+            if uoa_file and uoa_file.exists():
+                _logger.info("UOA analysis complete. Results saved to: %s", uoa_file)
+            else:
+                _logger.warning("No UOA data was generated")
+
+        except Exception as e:
+            _logger.exception("UOA analysis failed")
 
     def _generate_summary(
         self,

@@ -27,7 +27,7 @@ from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
 _logger = setup_logger(__name__)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="EMPS2 Universe Scanner - Enhanced Explosive Move Pre-Screener",
@@ -237,21 +237,26 @@ def print_results_summary(final_df, config: EMPS2PipelineConfig):
     print()
 
 
-def main():
-    """Main execution function."""
+def main() -> int:
+    """
+    Main execution function.
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
     args = parse_args()
 
     print_header("EMPS2 Universe Scanner")
 
     # Create configuration
     if args.aggressive:
-        print("[INFO] Using AGGRESSIVE filtering preset\n")
+        _logger.info("Using AGGRESSIVE filtering preset")
         config = EMPS2PipelineConfig.create_aggressive()
     elif args.conservative:
-        print("[INFO] Using CONSERVATIVE filtering preset\n")
+        _logger.info("Using CONSERVATIVE filtering preset")
         config = EMPS2PipelineConfig.create_conservative()
     else:
-        print("[INFO] Using DEFAULT filtering settings\n")
+        _logger.info("Using DEFAULT filtering settings")
         config = EMPS2PipelineConfig.create_default()
 
     # Apply custom parameters

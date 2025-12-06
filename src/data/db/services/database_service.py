@@ -189,13 +189,3 @@ def init_databases() -> None:
     get_database_service().init_databases()
 
 
-# ------------------------------ Deprecated APIs ------------------------------
-# If you had helpers like get_telegram_repo() / get_webui_repo() / get_trading_repo(),
-# remove them. They encouraged ad-hoc sessions and made multi-repo transactions non-atomic.
-# Use:
-#   with get_database_service().uow() as r:
-#       r.telegram_alerts.create(...)
-#       r.telegram_audit.log(...)
-# which guarantees a single transaction and consistent session.
-
-

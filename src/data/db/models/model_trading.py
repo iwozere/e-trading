@@ -6,13 +6,15 @@ Includes BotInstance, Trade, Position, and PerformanceMetric models.
 """
 
 
+from __future__ import annotations
+from typing import Optional
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Text, Numeric, ForeignKey, func, Index,
+    Integer, String, DateTime, Text, Numeric, ForeignKey, func, Index,
     event
 )
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.exc import IntegrityError
 from src.data.db.core.json_types import JsonType
-from sqlalchemy.orm import relationship
 
 from src.data.db.core.base import Base
 
@@ -22,19 +24,19 @@ class BotInstance(Base):
 
     __tablename__ = "trading_bots"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("usr_users.id", ondelete="CASCADE"), nullable=False)
-    status = Column(String(20), nullable=False)  # 'running', 'stopped', etc.
-    started_at = Column(DateTime, nullable=True)
-    last_heartbeat = Column(DateTime, nullable=True)
-    error_count = Column(Integer, nullable=True)
-    current_balance = Column(Numeric(20, 8), nullable=True)
-    total_pnl = Column(Numeric(20, 8), nullable=True)
-    extra_metadata = Column(JsonType(), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
-    updated_at = Column(DateTime, nullable=True)
-    config = Column(JsonType(), nullable=False, info={"required": True})
-    description = Column(Text, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("usr_users.id", ondelete="CASCADE"))
+    status: Mapped[str] = mapped_column(String(20))  # 'running', 'stopped', etc.
+    started_at: Mapped[DateTime | None] = mapped_column(DateTime)
+    last_heartbeat: Mapped[DateTime | None] = mapped_column(DateTime)
+    error_count: Mapped[int | None] = mapped_column(Integer)
+    current_balance: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    total_pnl: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[DateTime | None] = mapped_column(DateTime)
+    config: Mapped[dict] = mapped_column(JsonType(), info={"required": True})
+    description: Mapped[str | None] = mapped_column(Text)
 
     # Relationships
     trades = relationship("Trade", back_populates="bot", cascade="all, delete-orphan")
@@ -50,36 +52,36 @@ class Trade(Base):
 
     __tablename__ = "trading_trades"
 
-    id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("trading_bots.id", ondelete="CASCADE"), nullable=False)
-    trade_type = Column(String(10), nullable=False)  # 'paper' or 'live'
-    strategy_name = Column(String(100), nullable=True)
-    entry_logic_name = Column(String(100), nullable=False)
-    exit_logic_name = Column(String(100), nullable=False)
-    symbol = Column(String(20), nullable=False)
-    interval = Column(String(10), nullable=False)
-    entry_time = Column(DateTime, nullable=True)
-    exit_time = Column(DateTime, nullable=True)
-    buy_order_created = Column(DateTime, nullable=True)
-    buy_order_closed = Column(DateTime, nullable=True)
-    sell_order_created = Column(DateTime, nullable=True)
-    sell_order_closed = Column(DateTime, nullable=True)
-    entry_price = Column(Numeric(20, 8), nullable=True)
-    exit_price = Column(Numeric(20, 8), nullable=True)
-    entry_value = Column(Numeric(20, 8), nullable=True)
-    exit_value = Column(Numeric(20, 8), nullable=True)
-    size = Column(Numeric(20, 8), nullable=True)
-    direction = Column(String(10), nullable=False)
-    commission = Column(Numeric(20, 8), nullable=True)
-    gross_pnl = Column(Numeric(20, 8), nullable=True)
-    net_pnl = Column(Numeric(20, 8), nullable=True)
-    pnl_percentage = Column(Numeric(10, 4), nullable=True)
-    exit_reason = Column(String(100), nullable=True)
-    status = Column(String(20), nullable=False)
-    extra_metadata = Column(JsonType(), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
-    updated_at = Column(DateTime, nullable=True)
-    position_id = Column(Integer, ForeignKey("trading_positions.id", ondelete="SET NULL"), nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE"))
+    trade_type: Mapped[str] = mapped_column(String(10))  # 'paper' or 'live'
+    strategy_name: Mapped[str | None] = mapped_column(String(100))
+    entry_logic_name: Mapped[str] = mapped_column(String(100))
+    exit_logic_name: Mapped[str] = mapped_column(String(100))
+    symbol: Mapped[str] = mapped_column(String(20))
+    interval: Mapped[str] = mapped_column(String(10))
+    entry_time: Mapped[DateTime | None] = mapped_column(DateTime)
+    exit_time: Mapped[DateTime | None] = mapped_column(DateTime)
+    buy_order_created: Mapped[DateTime | None] = mapped_column(DateTime)
+    buy_order_closed: Mapped[DateTime | None] = mapped_column(DateTime)
+    sell_order_created: Mapped[DateTime | None] = mapped_column(DateTime)
+    sell_order_closed: Mapped[DateTime | None] = mapped_column(DateTime)
+    entry_price: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    exit_price: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    entry_value: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    exit_value: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    size: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    direction: Mapped[str] = mapped_column(String(10))
+    commission: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    gross_pnl: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    net_pnl: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    pnl_percentage: Mapped[Numeric | None] = mapped_column(Numeric(10, 4))
+    exit_reason: Mapped[str | None] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(20))
+    extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[DateTime | None] = mapped_column(DateTime)
+    position_id: Mapped[int | None] = mapped_column(ForeignKey("trading_positions.id", ondelete="SET NULL"))
 
     # Relationships
     bot = relationship("BotInstance", foreign_keys=[bot_id], back_populates="trades")
@@ -103,18 +105,18 @@ class Position(Base):
 
     __tablename__ = "trading_positions"
 
-    id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("trading_bots.id", ondelete="CASCADE"), nullable=False)
-    trade_type = Column(String(10), nullable=False)  # 'paper' or 'live'
-    symbol = Column(String(20), nullable=False)
-    direction = Column(String(10), nullable=False)
-    opened_at = Column(DateTime, nullable=True)
-    closed_at = Column(DateTime, nullable=True)
-    qty_open = Column(Numeric(20, 8), nullable=False, default=0)
-    avg_price = Column(Numeric(20, 8), nullable=True)
-    realized_pnl = Column(Numeric(20, 8), nullable=True, default=0)
-    status = Column(String(12), nullable=False)
-    extra_metadata = Column(JsonType(), nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE"))
+    trade_type: Mapped[str] = mapped_column(String(10))  # 'paper' or 'live'
+    symbol: Mapped[str] = mapped_column(String(20))
+    direction: Mapped[str] = mapped_column(String(10))
+    opened_at: Mapped[DateTime | None] = mapped_column(DateTime)
+    closed_at: Mapped[DateTime | None] = mapped_column(DateTime)
+    qty_open: Mapped[Numeric] = mapped_column(Numeric(20, 8), default=0)
+    avg_price: Mapped[Numeric | None] = mapped_column(Numeric(20, 8))
+    realized_pnl: Mapped[Numeric | None] = mapped_column(Numeric(20, 8), default=0)
+    status: Mapped[str] = mapped_column(String(12))
+    extra_metadata: Mapped[dict | None] = mapped_column(JsonType())
 
     # Relationship
     bot = relationship("BotInstance", foreign_keys=[bot_id], back_populates="positions")
@@ -134,16 +136,16 @@ class PerformanceMetric(Base):
 
     __tablename__ = "trading_performance_metrics"
 
-    id = Column(Integer, primary_key=True, index=True)
-    bot_id = Column(Integer, ForeignKey("trading_bots.id", ondelete="CASCADE"), nullable=False)
-    trade_type = Column(String(10), nullable=False)  # 'paper' or 'live'
-    symbol = Column(String(20), nullable=True)
-    interval = Column(String(10), nullable=True)
-    entry_logic_name = Column(String(100), nullable=True)
-    exit_logic_name = Column(String(100), nullable=True)
-    metrics = Column(JsonType(), nullable=False)
-    calculated_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=True, default=func.now())
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    bot_id: Mapped[int] = mapped_column(ForeignKey("trading_bots.id", ondelete="CASCADE"))
+    trade_type: Mapped[str] = mapped_column(String(10))  # 'paper' or 'live'
+    symbol: Mapped[str | None] = mapped_column(String(20))
+    interval: Mapped[str | None] = mapped_column(String(10))
+    entry_logic_name: Mapped[str | None] = mapped_column(String(100))
+    exit_logic_name: Mapped[str | None] = mapped_column(String(100))
+    metrics: Mapped[dict] = mapped_column(JsonType())
+    calculated_at: Mapped[DateTime | None] = mapped_column(DateTime)
+    created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), default=func.now())
 
     # Relationship
     bot = relationship("BotInstance", foreign_keys=[bot_id], back_populates="performance_metrics")

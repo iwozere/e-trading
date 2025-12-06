@@ -126,45 +126,23 @@ async def process_register_command_immediate(user_id: str, args, message):
                     return
                 else:
                     # Same email but not verified - send new verification code
+                    # Same email but not verified - send new verification code
                     try:
-                        from src.data.db.services.database_service import database_service
-                        with database_service.uow() as r:
-                            # Direct update to bypass constraint issues
-                            r.users.update_telegram_profile(
-                                user_id,
-                                verification_code=verification_code,
-                                code_sent_time=sent_time,
-                                verified=False
-                            )
+                        telegram_svc.set_user_email(user_id, email, verification_code, sent_time, language)
                         _logger.info("Successfully updated verification code for user %s: %s", user_id, verification_code)
                         await message.reply(f"📧 **Resending Verification Code**\n\nYour email **{email}** is already registered but not verified.\n📨 Sending a new verification code...", parse_mode="Markdown")
                     except Exception as e:
-                        _logger.error("Failed to update verification code directly: %s", e)
-                        # Fallback to original method
-                        telegram_svc.set_user_email(user_id, email, verification_code, sent_time, language)
-                        await message.reply(f"📧 **Resending Verification Code**\n\nYour email **{email}** is already registered but not verified.\n📨 Sending a new verification code...", parse_mode="Markdown")
+                        _logger.error("Failed to update verification code: %s", e)
+                        await message.reply("❌ An error occurred. Please try again later.")
             else:
                 # Different email - always require verification for new email address
-                # Try direct database update as workaround for constraint issues
                 try:
-                    from src.data.db.services.database_service import database_service
-                    with database_service.uow() as r:
-                        # Direct update to bypass constraint issues
-                        r.users.update_telegram_profile(
-                            user_id,
-                            email=email,
-                            verification_code=verification_code,
-                            code_sent_time=sent_time,
-                            verified=False,
-                            language=language
-                        )
+                    telegram_svc.set_user_email(user_id, email, verification_code, sent_time, language)
                     _logger.info("Successfully updated user %s with new email %s and verification code %s", user_id, email, verification_code)
                     await message.reply(f"✅ **Email Updated!**\n\n📧 Your email has been updated to **{email}**\n📨 A new verification code has been sent\n\nUse `/verify CODE` to verify your new email address.", parse_mode="Markdown")
                 except Exception as e:
-                    _logger.error("Failed to update user email directly: %s", e)
-                    # Fallback to original method
-                    telegram_svc.set_user_email(user_id, email, verification_code, sent_time, language)
-                    await message.reply(f"✅ **Email Updated!**\n\n📧 Your email has been updated to **{email}**\n📨 A new verification code has been sent\n\nUse `/verify CODE` to verify your new email address.", parse_mode="Markdown")
+                    _logger.error("Failed to update user email: %s", e)
+                    await message.reply("❌ An error occurred. Please try again later.")
         else:
             # Register new user
             telegram_svc.set_user_email(user_id, email, verification_code, sent_time, language)

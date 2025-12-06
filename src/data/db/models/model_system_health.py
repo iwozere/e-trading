@@ -6,13 +6,15 @@ in the e-trading platform, including notification channels, telegram bot,
 API services, web UI, and trading components.
 """
 
+from __future__ import annotations
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
 from sqlalchemy import (
-    BigInteger, CheckConstraint, Column, DateTime, Integer, String, Text, func
+    BigInteger, CheckConstraint, DateTime, Integer, String, Text, func
 )
+from sqlalchemy.orm import Mapped, mapped_column
 
 from src.data.db.core.base import Base
 from src.notification.logger import setup_logger
@@ -47,17 +49,17 @@ class SystemHealth(Base):
 
     __tablename__ = "msg_system_health"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    system = Column(String(50), nullable=False, index=True)
-    component = Column(String(100), nullable=True)  # For specific components within a system
-    status = Column(String(20), nullable=False, index=True)
-    last_success = Column(DateTime(timezone=True), nullable=True)
-    last_failure = Column(DateTime(timezone=True), nullable=True)
-    failure_count = Column(Integer, nullable=False, default=0)
-    avg_response_time_ms = Column(Integer, nullable=True)
-    error_message = Column(Text, nullable=True)
-    system_metadata = Column("metadata", Text, nullable=True)  # JSON string for system-specific data
-    checked_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    system: Mapped[str] = mapped_column(String(50), index=True)
+    component: Mapped[str | None] = mapped_column(String(100))  # For specific components within a system
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    last_success: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_failure: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    avg_response_time_ms: Mapped[int | None] = mapped_column(Integer)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    system_metadata: Mapped[str | None] = mapped_column("metadata", Text)  # JSON string for system-specific data
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
 
     # Constraints
     __table_args__ = (

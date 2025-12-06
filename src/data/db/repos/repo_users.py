@@ -4,39 +4,31 @@ from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from src.data.db.models.model_users import User, AuthIdentity, VerificationCode
-
-PROVIDER_TG = "telegram"
+from src.data.db.core.constants import PROVIDER_TG
 
 class UsersRepo:
     def __init__(self, s: Session) -> None:
         self.s = s
 
     # ---------- generic helpers ----------
-    def _get_identity(self, *, provider: str, external_id: str) -> Optional[AuthIdentity]:
+    def create_user(self, user: User) -> User:
+        """Create a new user."""
+        self.s.add(user)
+        self.s.flush()
+        return user
+
+    def create_identity(self, identity: AuthIdentity) -> AuthIdentity:
+        """Create a new auth identity."""
+        self.s.add(identity)
+        self.s.flush()
+        return identity
+
+    def get_identity(self, provider: str, external_id: str) -> Optional[AuthIdentity]:
+        """Get identity by provider and external ID."""
         q = (select(AuthIdentity)
              .where(AuthIdentity.provider == provider,
                     AuthIdentity.external_id == str(external_id)))
         return self.s.execute(q).scalar_one_or_none()
-
-    def _ensure_identity(self, *, provider: str, external_id: str, defaults_user: dict | None = None) -> Tuple[User, AuthIdentity]:
-        row = (self.s.execute(
-            select(User, AuthIdentity)
-            .join(AuthIdentity, AuthIdentity.user_id == User.id)
-            .where(AuthIdentity.provider == provider,
-                   AuthIdentity.external_id == str(external_id))
-        ).first())
-        if row:
-            u, ident = row
-            if ident.identity_metadata is None:
-                ident.identity_metadata = {}
-            return u, ident
-
-        u = User(**(defaults_user or {}))
-        self.s.add(u); self.s.flush()
-        ident = AuthIdentity(user_id=u.id, provider=provider,
-                             external_id=str(external_id), identity_metadata={})
-        self.s.add(ident); self.s.flush()
-        return u, ident
 
     # ---------- telegram-specific wrappers ----------
     def get_user_by_telegram_id(self, telegram_user_id: str | int) -> Optional[User]:
@@ -48,32 +40,11 @@ class UsersRepo:
         )
         return self.s.execute(q).scalar_one_or_none()
 
-    def ensure_user_for_telegram(self, telegram_user_id: str | int, defaults_user: dict | None = None) -> User:
-        u, _ = self._ensure_identity(provider=PROVIDER_TG, external_id=str(telegram_user_id),
-                                     defaults_user=defaults_user)
-        return u
-
-    def update_telegram_profile(self, telegram_user_id: str | int, **fields) -> None:
-        """
-        Merge fields into auth_identities.metadata for provider='telegram'.
-        Supported keys: verified, approved, language, is_admin,
-                        max_alerts, max_schedules, verification_code, code_sent_time
-        You may also pass email=<str> to update users.email.
-        """
-        u, ident = self._ensure_identity(provider=PROVIDER_TG, external_id=str(telegram_user_id))
-        # keep email on users table
-        if "email" in fields:
-            u.email = fields.pop("email")
-        meta = ident.identity_metadata or {}
-        meta.update({k: v for k, v in fields.items() if v is not None})
-        ident.identity_metadata = meta
-        self.s.flush()
-
     def get_telegram_profile(self, telegram_user_id: str | int) -> Optional[Dict[str, Any]]:
         u = self.get_user_by_telegram_id(telegram_user_id)
         if not u:
             return None
-        ident = self._get_identity(provider=PROVIDER_TG, external_id=str(telegram_user_id))
+        ident = self.get_identity(provider=PROVIDER_TG, external_id=str(telegram_user_id))
         meta = (ident.identity_metadata or {}) if ident else {}
         return {
             "user_id": u.id,

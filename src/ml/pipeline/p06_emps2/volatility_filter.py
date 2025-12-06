@@ -250,13 +250,17 @@ class VolatilityFilter:
             atr = self._compute_atr(df)
             atr_ratio = None
 
-            if atr is not None and not pd.isna(atr):
+            if atr is not None and not pd.isna(atr) and last_price > 0:
                 atr_ratio = atr / last_price
 
             # Price range filter
             price_high = df['high'].max()
             price_low = df['low'].min()
-            price_range = (price_high - price_low) / price_low
+
+            if price_low > 0:
+                price_range = (price_high - price_low) / price_low
+            else:
+                price_range = 0.0
 
             # Volume Z-Score (from P05 EMPS)
             vol_zscore = self._compute_volume_zscore(df)

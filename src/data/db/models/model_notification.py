@@ -5,14 +5,16 @@ SQLAlchemy models for the notification service system.
 Includes Message, DeliveryStatus, ChannelHealth, RateLimit, and ChannelConfig models.
 """
 
-from datetime import datetime
+from __future__ import annotations
+import datetime
+from datetime import datetime as dt
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, BigInteger, CheckConstraint, UniqueConstraint, ForeignKey, func
+    Integer, String, Boolean, DateTime, Text, BigInteger, CheckConstraint, UniqueConstraint, ForeignKey, func
 )
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from src.data.db.core.base import Base
@@ -52,25 +54,25 @@ class Message(Base):
 
     __tablename__ = "msg_messages"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    message_type = Column(String(50), nullable=False, index=True)
-    priority = Column(String(20), nullable=False, default=MessagePriority.NORMAL.value)
-    channels = Column(ARRAY(String), nullable=False)
-    recipient_id = Column(String(100), nullable=True, index=True)
-    template_name = Column(String(100), nullable=True)
-    content = Column(JsonType(), nullable=False)
-    message_metadata = Column("metadata", JsonType(), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)
-    scheduled_for = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)
-    status = Column(String(20), nullable=False, default=MessageStatus.PENDING.value, index=True)
-    retry_count = Column(Integer, nullable=False, default=0)
-    max_retries = Column(Integer, nullable=False, default=3)
-    last_error = Column(Text, nullable=True)
-    processed_at = Column(DateTime(timezone=True), nullable=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    message_type: Mapped[str] = mapped_column(String(50), index=True)
+    priority: Mapped[str] = mapped_column(String(20), default=MessagePriority.NORMAL.value)
+    channels: Mapped[list[str]] = mapped_column(ARRAY(String))
+    recipient_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    template_name: Mapped[str | None] = mapped_column(String(100))
+    content: Mapped[dict] = mapped_column(JsonType())
+    message_metadata: Mapped[dict | None] = mapped_column("metadata", JsonType())
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
+    scheduled_for: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
+    status: Mapped[str] = mapped_column(String(20), default=MessageStatus.PENDING.value, index=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, default=3)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    processed_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
 
     # Distributed processing lock fields
-    locked_by = Column(String(100), nullable=True, index=True)
-    locked_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    locked_by: Mapped[str | None] = mapped_column(String(100), index=True)
+    locked_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), index=True)
 
     # Relationships
     delivery_statuses = relationship("MessageDeliveryStatus", back_populates="message", cascade="all, delete-orphan")
@@ -102,15 +104,15 @@ class MessageDeliveryStatus(Base):
 
     __tablename__ = "msg_delivery_status"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    message_id = Column(BigInteger, ForeignKey("msg_messages.id", ondelete="CASCADE"), nullable=False, index=True)
-    channel = Column(String(50), nullable=False, index=True)
-    status = Column(String(20), nullable=False, index=True)
-    delivered_at = Column(DateTime(timezone=True), nullable=True, index=True)
-    response_time_ms = Column(Integer, nullable=True)
-    error_message = Column(Text, nullable=True)
-    external_id = Column(String(255), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    message_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("msg_messages.id", ondelete="CASCADE"), index=True)
+    channel: Mapped[str] = mapped_column(String(50), index=True)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    delivered_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), index=True)
+    response_time_ms: Mapped[int | None] = mapped_column(Integer)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    external_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
 
     # Relationships
     message = relationship("Message", back_populates="delivery_statuses")
@@ -130,14 +132,14 @@ class RateLimit(Base):
 
     __tablename__ = "msg_rate_limits"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    user_id = Column(String(100), nullable=False, index=True)
-    channel = Column(String(50), nullable=False, index=True)
-    tokens = Column(Integer, nullable=False)
-    last_refill = Column(DateTime(timezone=True), nullable=False, default=func.now(), index=True)
-    max_tokens = Column(Integer, nullable=False)
-    refill_rate = Column(Integer, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(100), index=True)
+    channel: Mapped[str] = mapped_column(String(50), index=True)
+    tokens: Mapped[int] = mapped_column(Integer)
+    last_refill: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), index=True)
+    max_tokens: Mapped[int] = mapped_column(Integer)
+    refill_rate: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
 
     # Constraints
     __table_args__ = (
@@ -182,15 +184,15 @@ class ChannelConfig(Base):
 
     __tablename__ = "msg_channel_configs"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    channel = Column(String(50), nullable=False, unique=True)
-    enabled = Column(Boolean, nullable=False, default=True, index=True)
-    config = Column(JsonType(), nullable=False)
-    rate_limit_per_minute = Column(Integer, nullable=False, default=60)
-    max_retries = Column(Integer, nullable=False, default=3)
-    timeout_seconds = Column(Integer, nullable=False, default=30)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now(), index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    channel: Mapped[str] = mapped_column(String(50), unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    config: Mapped[dict] = mapped_column(JsonType())
+    rate_limit_per_minute: Mapped[int] = mapped_column(Integer, default=60)
+    max_retries: Mapped[int] = mapped_column(Integer, default=3)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=30)
+    created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), index=True)
 
     # Constraints
     __table_args__ = (
@@ -213,7 +215,7 @@ class MessageCreate(BaseModel):
     template_name: Optional[str] = Field(None, max_length=100)
     content: Dict[str, Any] = Field(...)
     message_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    scheduled_for: Optional[datetime] = None
+    scheduled_for: Optional[dt] = None
     max_retries: int = Field(default=3, ge=0)
 
     @field_validator('channels')
@@ -229,7 +231,7 @@ class MessageUpdate(BaseModel):
     status: Optional[MessageStatus] = None
     retry_count: Optional[int] = Field(None, ge=0)
     last_error: Optional[str] = None
-    processed_at: Optional[datetime] = None
+    processed_at: Optional[dt] = None
 
 
 class MessageResponse(BaseModel):
@@ -242,13 +244,13 @@ class MessageResponse(BaseModel):
     template_name: Optional[str]
     content: Dict[str, Any]
     message_metadata: Optional[Dict[str, Any]]
-    created_at: datetime
-    scheduled_for: datetime
+    created_at: dt
+    scheduled_for: dt
     status: MessageStatus
     retry_count: int
     max_retries: int
     last_error: Optional[str]
-    processed_at: Optional[datetime]
+    processed_at: Optional[dt]
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -263,7 +265,7 @@ class DeliveryStatusCreate(BaseModel):
 class DeliveryStatusUpdate(BaseModel):
     """Pydantic model for updating delivery status."""
     status: Optional[DeliveryStatus] = None
-    delivered_at: Optional[datetime] = None
+    delivered_at: Optional[dt] = None
     response_time_ms: Optional[int] = Field(None, ge=0)
     error_message: Optional[str] = None
     external_id: Optional[str] = Field(None, max_length=255)
@@ -275,11 +277,11 @@ class DeliveryStatusResponse(BaseModel):
     message_id: int
     channel: str
     status: DeliveryStatus
-    delivered_at: Optional[datetime]
+    delivered_at: Optional[dt]
     response_time_ms: Optional[int]
     error_message: Optional[str]
     external_id: Optional[str]
-    created_at: datetime
+    created_at: dt
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -288,12 +290,12 @@ class ChannelHealthResponse(BaseModel):
     id: int
     channel: str
     status: SystemHealthStatus
-    last_success: Optional[datetime]
-    last_failure: Optional[datetime]
+    last_success: Optional[dt]
+    last_failure: Optional[dt]
     failure_count: int
     avg_response_time_ms: Optional[int]
     error_message: Optional[str]
-    checked_at: datetime
+    checked_at: dt
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -305,8 +307,8 @@ class RateLimitResponse(BaseModel):
     tokens: int
     max_tokens: int
     refill_rate: int
-    last_refill: datetime
-    created_at: datetime
+    last_refill: dt
+    created_at: dt
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -338,6 +340,6 @@ class ChannelConfigResponse(BaseModel):
     rate_limit_per_minute: int
     max_retries: int
     timeout_seconds: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: dt
+    updated_at: dt
     model_config = ConfigDict(from_attributes=True)

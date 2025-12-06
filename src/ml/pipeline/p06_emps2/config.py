@@ -118,6 +118,7 @@ class EMPS2PipelineConfig:
     save_intermediate_results: bool = True
     generate_summary: bool = True
     verbose_logging: bool = True
+    enable_uoa_analysis: bool = False # requires paid subscription
 
     @classmethod
     def create_default(cls) -> "EMPS2PipelineConfig":
@@ -128,7 +129,8 @@ class EMPS2PipelineConfig:
             rolling_memory_config=RollingMemoryConfig(),
             save_intermediate_results=True,
             generate_summary=True,
-            verbose_logging=True
+            verbose_logging=True,
+            enable_uoa_analysis=False # requires paid subscription
         )
 
     @classmethod
@@ -159,7 +161,8 @@ class EMPS2PipelineConfig:
             rolling_memory_config=RollingMemoryConfig(),
             save_intermediate_results=True,
             generate_summary=True,
-            verbose_logging=True
+            verbose_logging=True,
+            enable_uoa_analysis=False # requires paid subscription
         )
 
     @classmethod
@@ -190,5 +193,6 @@ class EMPS2PipelineConfig:
             rolling_memory_config=RollingMemoryConfig(),
             save_intermediate_results=True,
             generate_summary=True,
-            verbose_logging=True
+            verbose_logging=True,
+            enable_uoa_analysis=False # requires paid subscription
         )

@@ -1,8 +1,8 @@
 # P06 EMPS2 Pipeline - Enhanced Explosive Move Pre-Screener
 
-**Version:** 2.2 (Production)
-**Status:** ✅ Production Ready with TRF Dark Pool Integration
-**Last Updated:** 2025-12-02
+**Version:** 2.3 (Production)
+**Status:** ✅ Production Ready with TRF Dark Pool & UOA Integration
+**Last Updated:** 2025-12-06
 
 ---
 
@@ -58,14 +58,14 @@ EMPS2 (Enhanced Explosive Move Pre-Screener v2) is a multi-stage filtering pipel
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 1: Fundamental Filter                                 │
+│ Stage 1: Fundamental Filter                                │
 │ • Source: Finnhub API (profile2 + metrics)                 │
-│ • Filters:                                                  │
-│   - Market cap: $50M - $5B                                 │
-│   - Float shares: < 60M                                    │
-│   - Avg volume: > 400K                                     │
-│   - Price: > $1.00                                         │
-│ • Output: ~500-800 tickers                                 │
+│ • Filters:                                                 │
+│   - Market cap: $50M - $5B                                │
+│   - Float shares: < 60M                                   │
+│   - Avg volume: > 400K                                    │
+│   - Price: > $1.00                                        │
+│ • Output: ~500-800 tickers                                │
 │ • Time: 1-2 minutes (with cache: ~30 seconds)             │
 │ • Cost: API calls (cached 3 days)                         │
 └─────────────────────────────────────────────────────────────┘
@@ -73,45 +73,64 @@ EMPS2 (Enhanced Explosive Move Pre-Screener v2) is a multi-stage filtering pipel
 ┌─────────────────────────────────────────────────────────────┐
 │ Stage 2b: TRF Data Download (NEW v2.2)                     │
 │ • Source: FINRA TRF API (OAuth)                            │
-│ • Purpose: Dark pool volume corrections                    │
-│ • Data: Off-exchange (dark pool) trading volume            │
 │ • Output: trf.csv with volume correction factors           │
 │ • Time: ~10-20 seconds                                     │
 │ • Cost: FREE (FINRA public API)                            │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 2: Volatility Filter (Enhanced with TRF + P05)       │
-│ • Source: Yahoo Finance 1h data + TRF corrections (free)   │
-│ • TRF Enhancement: Corrects volume for dark pool activity  │
-│   - Historical bars: Volume × TRF correction factor        │
-│   - Today's bars: Raw yfinance (TRF not available yet)     │
-│ • Filters:                                                  │
+│ Stage 2: Volatility Filter (Enhanced with TRF)             │
+│ • Source: Yahoo Finance 1h data + TRF corrections          │
+│ • Filters:                                                 │
 │   - ATR/Price ratio: > 2%                                  │
 │   - Price range: > 5%                                      │
-│   - Volume Z-Score: > 1.2 (NOW INCLUDES dark pools!)      │
-│   - Vol/RV Ratio: > 0.5 (NOW INCLUDES dark pools!)        │
+│   - Volume Z-Score: > 1.2                                  │
+│   - Vol/RV Ratio: > 0.5                                    │
 │ • Output: ~50-200 tickers                                  │
 │ • Time: 30-60 seconds                                      │
 │ • Cost: FREE                                               │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 3: Sentiment Filter (OPTIONAL - LAST)                │
+│ Stage 3: Rolling Memory Analysis                           │
+│ • Input: Volatility-filtered tickers                       │
+│ • Tracks tickers over 10-day window                        │
+│ • Identifies accumulation patterns                         │
+│ • Output: 07_rolling_candidates.csv                        │
+│ • Time: ~5-15 seconds                                      │
+│ • Cost: None (uses local files)                            │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Stage 4: UOA Analysis (NEW v2.3)                           │
+│ • Source: EODHD Options API                                │
+│ • Input: 07_rolling_candidates.csv                         │
+│ • Metrics:                                                 │
+│   - Put/Call Ratio                                         │
+│   - Volume Ratios                                          │
+│   - UOA Score (0-100)                                      │
+│ • Output: uoa.csv                                          │
+│ • Time: ~30-60 seconds                                     │
+│ • Cost: EODHD API calls (cached 24h)                       │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Stage 5: Sentiment Filter (OPTIONAL - LAST)                │
 │ • Source: StockTwits + Reddit (async)                      │
-│ • Filters:                                                  │
+│ • Filters:                                                 │
 │   - Mentions (24h): >= 10                                  │
-│   - Sentiment score: >= 0.5 (neutral/positive)            │
+│   - Sentiment score: >= 0.5                                │
 │   - Bot activity: < 30%                                    │
-│   - Virality index: >= 1.2 (growing mentions)             │
-│   - Unique authors: >= 5 (organic discussion)             │
-│ • Output: ~20-100 tickers                                  │
-│ • Time: 30-90 seconds (async, 8 concurrent)               │
-│ • Cost: API rate-limited (optional)                       │
+│   - Virality index: >= 1.2                                 │
+│   - Unique authors: >= 5                                   │
+│ • Output: ~20-50 tickers                                   │
+│ • Time: 30-90 seconds (async, 8 concurrent)                │
+│ • Cost: API rate-limited (optional)                        │
 └─────────────────────────────────────────────────────────────┘
                            ↓
                     FINAL OUTPUT
                ~20-50 HIGH-CONVICTION CANDIDATES
+               + UOA Analysis in uoa.csv
 ```
 
 ### Why This Sequence?
@@ -172,6 +191,37 @@ Thresholds:
 - **Virality Index**: Growth rate in mentions (>1.2 = viral)
 - **Bot Percentage**: Filters pump-and-dump schemes (<30%)
 - **Unique Authors**: Organic vs bot-driven (<5 = suspicious)
+
+### 🎯 UOA Analysis (NEW v2.3)
+
+**Unusual Options Activity Detection**
+```python
+# UOA Score Components:
+1. Call Volume Spike: Current vs 30-day average
+2. Put/Call Ratio: Unusual options flow
+3. Volume Concentration: Unusual volume concentration
+
+# Thresholds:
+- UOA Score >= 70: Strong signal
+- UOA Score 50-70: Moderate signal
+- UOA Score < 50: Weak or no signal
+```
+
+**Output File (uoa.csv)**
+- `ticker`: Stock symbol
+- `date`: Trading date
+- `call_volume`: Call options volume
+- `put_volume`: Put options volume
+- `total_volume`: Total options volume
+- `put_call_ratio`: Ratio of put to call volume
+- `call_volume_ratio`: Current call volume vs 30-day average
+- `uoa_score`: Composite UOA score (0-100)
+
+**Integration Points**
+- Runs after Rolling Memory stage
+- Uses candidates from `07_rolling_candidates.csv`
+- Saves to `results/emps2/YYYY-MM-DD/uoa.csv`
+- Enabled by default (disable via `enable_uoa_analysis` config)
 
 ### 📊 Caching & Performance
 
