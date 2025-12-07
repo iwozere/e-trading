@@ -13,7 +13,7 @@ from src.data.db.services.base_service import BaseDBService, with_uow, handle_db
 from src.data.db.models.model_jobs import (
     Schedule, ScheduleRun, RunStatus, JobType,
     ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate,
-    ScheduleResponse
+    ScheduleResponse, ScheduleRunResponse
 )
 
 
