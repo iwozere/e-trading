@@ -12,7 +12,8 @@ import croniter
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.data.db.models.model_jobs import (
     Schedule, ScheduleRun, RunStatus, JobType,
-    ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate
+    ScheduleCreate, ScheduleUpdate, ScheduleRunCreate, ScheduleRunUpdate,
+    ScheduleResponse
 )
 
 
@@ -48,7 +49,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def create_schedule(self, user_id: int, schedule_data: ScheduleCreate) -> Schedule:
+    def create_schedule(self, user_id: int, schedule_data: ScheduleCreate) -> ScheduleResponse:
         """Create a new schedule."""
         # Validate cron expression
         self._validate_cron(schedule_data.cron)
@@ -70,12 +71,13 @@ class JobsService(BaseDBService):
 
         schedule = self.repos.jobs.create_schedule(schedule_dict)
         self._logger.info("Created schedule: %s for user %s", schedule.name, user_id)
-        return schedule
+        return ScheduleResponse.model_validate(schedule)
 
     @with_uow
-    def get_schedule(self, schedule_id: int) -> Optional[Schedule]:
+    def get_schedule(self, schedule_id: int) -> Optional[ScheduleResponse]:
         """Get a schedule by ID."""
-        return self.repos.jobs.get_schedule(schedule_id)
+        schedule = self.repos.jobs.get_schedule(schedule_id)
+        return ScheduleResponse.model_validate(schedule) if schedule else None
 
     @with_uow
     def list_schedules(
@@ -85,13 +87,14 @@ class JobsService(BaseDBService):
         enabled: Optional[bool] = None,
         limit: int = 100,
         offset: int = 0
-    ) -> List[Schedule]:
+    ) -> List[ScheduleResponse]:
         """List schedules with optional filtering."""
-        return self.repos.jobs.list_schedules(user_id, job_type, enabled, limit, offset)
+        schedules = self.repos.jobs.list_schedules(user_id, job_type, enabled, limit, offset)
+        return [ScheduleResponse.model_validate(s) for s in schedules]
 
     @with_uow
     @handle_db_error
-    def update_schedule(self, schedule_id: int, update_data: ScheduleUpdate) -> Optional[Schedule]:
+    def update_schedule(self, schedule_id: int, update_data: ScheduleUpdate) -> Optional[ScheduleResponse]:
         """Update a schedule."""
         # Prepare update dictionary (only include non-None values)
         update_dict = {}
@@ -108,8 +111,9 @@ class JobsService(BaseDBService):
         schedule = self.repos.jobs.update_schedule(schedule_id, update_dict)
         if schedule:
             self._logger.info("Updated schedule: %s (ID: %s)", schedule.name, schedule_id)
+            return ScheduleResponse.model_validate(schedule)
 
-        return schedule
+        return None
 
     @with_uow
     @handle_db_error
@@ -122,7 +126,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def trigger_schedule(self, schedule_id: int) -> Optional[ScheduleRun]:
+    def trigger_schedule(self, schedule_id: int) -> Optional[ScheduleRunResponse]:
         """Manually trigger a schedule to create a run."""
         schedule = self.repos.jobs.get_schedule(schedule_id)
         if not schedule:
@@ -149,9 +153,10 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def get_pending_schedules(self) -> List[Schedule]:
+    def get_pending_schedules(self) -> List[ScheduleResponse]:
         """Get schedules that are due for execution."""
-        return self.repos.jobs.get_pending_schedules(datetime.now(timezone.utc))
+        schedules = self.repos.jobs.get_pending_schedules(datetime.now(timezone.utc))
+        return [ScheduleResponse.model_validate(s) for s in schedules]
 
     @with_uow
     @handle_db_error
@@ -168,7 +173,7 @@ class JobsService(BaseDBService):
 
     @with_uow
     @handle_db_error
-    def create_run(self, user_id: int, run_data: ScheduleRunCreate) -> ScheduleRun:
+    def create_run(self, user_id: int, run_data: ScheduleRunCreate) -> ScheduleRunResponse:
         """Create a new run."""
         # Prepare run data
         run_dict = {
@@ -181,13 +186,14 @@ class JobsService(BaseDBService):
 
         run = self.repos.jobs.create_run(run_dict)
         self._logger.info("Created run: %s (%s:%s)", run.id, run.job_type, run.job_id)
-        return run
+        return ScheduleRunResponse.model_validate(run)
 
     @with_uow
     @handle_db_error
-    def get_run(self, run_id: int) -> Optional[ScheduleRun]:
+    def get_run(self, run_id: int) -> Optional[ScheduleRunResponse]:
         """Get a run by ID."""
-        return self.repos.jobs.get_run(run_id)
+        run = self.repos.jobs.get_run(run_id)
+        return ScheduleRunResponse.model_validate(run) if run else None
 
     @with_uow
     @handle_db_error
@@ -200,13 +206,14 @@ class JobsService(BaseDBService):
         offset: int = 0,
         order_by: str = "scheduled_for",
         order_desc: bool = True
-    ) -> List[ScheduleRun]:
+    ) -> List[ScheduleRunResponse]:
         """List runs with optional filtering."""
-        return self.repos.jobs.list_runs(user_id, job_type, status, limit, offset, order_by, order_desc)
+        sruns = self.repos.jobs.list_runs(user_id, job_type, status, limit, offset, order_by, order_desc)
+        return [ScheduleRunResponse.model_validate(r) for r in sruns]
 
     @with_uow
     @handle_db_error
-    def update_run(self, run_id: int, update_data: ScheduleRunUpdate) -> Optional[ScheduleRun]:
+    def update_run(self, run_id: int, update_data: ScheduleRunUpdate) -> Optional[ScheduleRunResponse]:
         """Update a run."""
         # Prepare update dictionary (only include non-None values)
         update_dict = {}
@@ -220,23 +227,26 @@ class JobsService(BaseDBService):
         run = self.repos.jobs.update_run(run_id, update_dict)
         if run:
             self._logger.info("Updated run: %s (status: %s)", run.id, run.status)
+            return ScheduleRunResponse.model_validate(run)
 
-        return run
+        return None
 
     @with_uow
     @handle_db_error
-    def claim_run(self, run_id: int, worker_id: str) -> Optional[ScheduleRun]:
+    def claim_run(self, run_id: int, worker_id: str) -> Optional[ScheduleRunResponse]:
         """Atomically claim a run for execution by a worker."""
         run = self.repos.jobs.claim_run(run_id, worker_id)
         if run:
             self._logger.info("Claimed run: %s by worker: %s", run.id, worker_id)
-        return run
+            return ScheduleRunResponse.model_validate(run)
+        return None
 
     @with_uow
     @handle_db_error
-    def get_pending_runs(self, job_type: Optional[JobType] = None, limit: int = 10) -> List[ScheduleRun]:
+    def get_pending_runs(self, job_type: Optional[JobType] = None, limit: int = 10) -> List[ScheduleRunResponse]:
         """Get pending runs that can be claimed by workers."""
-        return self.repos.jobs.get_pending_runs(job_type, limit)
+        runs = self.repos.jobs.get_pending_runs(job_type, limit)
+        return [ScheduleRunResponse.model_validate(r) for r in runs]
 
     @with_uow
     @handle_db_error
@@ -347,7 +357,7 @@ class JobsService(BaseDBService):
         filter_criteria: Optional[Dict[str, Any]] = None,
         top_n: Optional[int] = None,
         scheduled_for: Optional[datetime] = None
-    ) -> ScheduleRun:
+    ) -> ScheduleRunResponse:
         """Create a screener run with proper job snapshot."""
         if not screener_set and not tickers:
             raise ValueError("Either screener_set or tickers must be provided")
@@ -391,7 +401,7 @@ class JobsService(BaseDBService):
         report_type: str,
         parameters: Optional[Dict[str, Any]] = None,
         scheduled_for: Optional[datetime] = None
-    ) -> ScheduleRun:
+    ) -> ScheduleRunResponse:
         """Create a report run with proper job snapshot."""
         # Create job snapshot
         job_snapshot = {

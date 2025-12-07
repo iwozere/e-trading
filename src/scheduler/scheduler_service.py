@@ -27,7 +27,7 @@ from apscheduler.events import (
 
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.services.notification_service import NotificationService
-from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType
+from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType, ScheduleResponse, ScheduleRunResponse
 from src.common.alerts.cron_parser import CronParser
 from src.common.alerts.alert_evaluator import AlertEvaluator
 from src.notification.logger import setup_logger
@@ -346,7 +346,7 @@ class SchedulerService:
             _logger.exception("Failed to load schedules from database:")
             raise
 
-    async def _register_schedule(self, schedule: Schedule) -> None:
+    async def _register_schedule(self, schedule: ScheduleResponse) -> None:
         """
         Register a single schedule with APScheduler.
 
@@ -471,7 +471,7 @@ class SchedulerService:
             if run_record:
                 await self._complete_run_record(run_record, RunStatus.FAILED, None, error_msg)
 
-    async def _execute_alert_job(self, schedule: Schedule, run_record: ScheduleRun) -> Dict[str, Any]:
+    async def _execute_alert_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
         """
         Execute an alert job using AlertEvaluator.
 
@@ -506,7 +506,7 @@ class SchedulerService:
             _logger.exception("Error executing alert job:")
             raise
 
-    async def _execute_screener_job(self, schedule: Schedule, run_record: ScheduleRun) -> Dict[str, Any]:
+    async def _execute_screener_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
         """
         Execute a screener job.
 
@@ -526,7 +526,7 @@ class SchedulerService:
             "message": "Screener job execution will be implemented in future version"
         }
 
-    async def _execute_report_job(self, schedule: Schedule, run_record: ScheduleRun) -> Dict[str, Any]:
+    async def _execute_report_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
         """
         Execute a report job.
 
@@ -546,7 +546,7 @@ class SchedulerService:
             "message": "Report job execution will be implemented in future version"
         }
 
-    async def _execute_data_processing_job(self, schedule: Schedule, run_record: ScheduleRun) -> Dict[str, Any]:
+    async def _execute_data_processing_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
         """
         Execute data processing job via subprocess.
 
@@ -693,7 +693,7 @@ class SchedulerService:
 
     async def _evaluate_notification_rules(
         self,
-        schedule: Schedule,
+        schedule: ScheduleResponse,
         script_result: Dict[str, Any],
         task_params: Dict[str, Any]
     ) -> bool:
@@ -863,7 +863,7 @@ class SchedulerService:
             _logger.error("Error comparing values: %s", e)
             return False
 
-    async def _create_run_record(self, schedule: Schedule) -> ScheduleRun:
+    async def _create_run_record(self, schedule: ScheduleResponse) -> ScheduleRunResponse:
         """
         Create a ScheduleRun record for job execution tracking.
 

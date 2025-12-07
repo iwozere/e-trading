@@ -54,7 +54,7 @@ async def run_report(
         )
 
         _logger.info("Created report run: %s for user %s", run.id, current_user.id)
-        return ScheduleRunResponse.from_orm(run)
+        return run
 
     except Exception as e:
         _logger.exception("Failed to create report run:")
@@ -86,7 +86,7 @@ async def run_screener(
         )
 
         _logger.info("Created screener run: %s for user %s", run.id, current_user.id)
-        return ScheduleRunResponse.from_orm(run)
+        return run
 
     except ValueError as e:
         _logger.exception("Invalid screener request:")
@@ -127,7 +127,7 @@ async def get_run(
             detail="Access denied"
         )
 
-    return ScheduleRunResponse.from_orm(run)
+    return run
 
 
 @router.get("/runs", response_model=List[ScheduleRunResponse])
@@ -159,7 +159,7 @@ async def list_runs(
         order_desc=order_desc
     )
 
-    return [ScheduleRunResponse.from_orm(run) for run in runs]
+    return runs
 
 
 @router.delete("/runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -211,7 +211,7 @@ async def create_schedule(
     try:
         schedule = jobs_service.create_schedule(current_user.id, schedule_data)
         _logger.info("Created schedule: %s for user %s", schedule.name, current_user.id)
-        return ScheduleResponse.from_orm(schedule)
+        return schedule
 
     except ValueError as e:
         _logger.exception("Invalid schedule data:")
@@ -252,7 +252,7 @@ async def list_schedules(
         offset=offset
     )
 
-    return [ScheduleResponse.from_orm(schedule) for schedule in schedules]
+    return schedules
 
 
 @router.get("/schedules/{schedule_id}", response_model=ScheduleResponse)
@@ -280,7 +280,7 @@ async def get_schedule(
             detail="Access denied"
         )
 
-    return ScheduleResponse.from_orm(schedule)
+    return schedule
 
 
 @router.put("/schedules/{schedule_id}", response_model=ScheduleResponse)
@@ -318,7 +318,7 @@ async def update_schedule(
             )
 
         _logger.info("Updated schedule: %s (ID: %s)", updated_schedule.name, schedule_id)
-        return ScheduleResponse.from_orm(updated_schedule)
+        return updated_schedule
 
     except ValueError as e:
         _logger.exception("Invalid schedule update data:")
@@ -401,7 +401,7 @@ async def trigger_schedule(
             )
 
         _logger.info("Triggered schedule: %s (ID: %s)", schedule.name, schedule_id)
-        return ScheduleRunResponse.from_orm(run)
+        return run
 
     except ValueError as e:
         _logger.exception("Cannot trigger schedule:")
