@@ -82,12 +82,12 @@ class BaseTradingBot:
         self.position_notification_manager = None
 
         try:
-            # Initialize notification service client (using Main API Service)
-            notification_service_url = config.get('notification_service_url', 'http://localhost:8000')
+            # Initialize notification service client with direct database queuing
+            notification_service_url = config.get('notification_service_url', 'database://direct')
             self.notification_client = NotificationServiceClient(
                 service_url=notification_service_url,
-                timeout=30,
-                max_retries=3
+                timeout=5,  # Shorter timeout since we're using direct DB
+                max_retries=1  # No need for retries with direct DB
             )
 
             # Initialize enhanced position notification manager

@@ -19,7 +19,7 @@ Environment="PYTHONPATH=/opt/apps/e-trading"
 Environment="PYTHONUNBUFFERED=1"
 
 # Optional: Load environment from file
-# EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env
+EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env
 
 # Command to execute
 ExecStart=/opt/apps/e-trading/.venv/bin/python -m src.notification.notification_db_centric_bot
