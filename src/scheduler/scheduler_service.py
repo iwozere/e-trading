@@ -97,6 +97,7 @@ class SchedulerService:
         # APScheduler components
         self.scheduler: Optional[AsyncIOScheduler] = None
         self.jobstore: Optional[SQLAlchemyJobStore] = None
+        self.notification_client = None  # Placeholder for legacy/future notification client
 
         # Service state
         self.is_running = False
