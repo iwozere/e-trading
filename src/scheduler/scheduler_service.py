@@ -43,8 +43,21 @@ class MessagePriority(str, Enum):
     LOW = "low"
 
 _logger = setup_logger(__name__)
-
 UTC = timezone.utc
+
+# Global service instance reference for pickle-safe job execution
+_service_instance: Optional['SchedulerService'] = None
+
+
+async def execute_job_wrapper(schedule_id: int) -> None:
+    """
+    Module-level wrapper for job execution to avoid pickling the service instance.
+    APScheduler pickles the function reference, not the instance.
+    """
+    if _service_instance:
+        await _service_instance._execute_job(schedule_id)
+    else:
+        _logger.error("Cannot execute job %d: SchedulerService instance not available", schedule_id)
 
 
 class SchedulerService:
@@ -91,6 +104,10 @@ class SchedulerService:
         self.max_startup_retries = 3
 
         _logger.info("SchedulerService initialized with max_workers=%d", max_workers)
+
+        # Set global instance
+        global _service_instance
+        _service_instance = self
 
     async def start(self) -> None:
         """
@@ -392,8 +409,9 @@ class SchedulerService:
             job_id = f"schedule_{schedule.id}"
 
             # Register job with APScheduler
+            # Use module-level wrapper instead of instance method to avoid pickling errors
             self.scheduler.add_job(
-                func=self._execute_job,
+                func=execute_job_wrapper,
                 trigger=trigger,
                 id=job_id,
                 args=[schedule.id],
