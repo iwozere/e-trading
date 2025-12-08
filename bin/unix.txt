@@ -19,9 +19,11 @@ source .venv/bin/activate
 
 sudo systemctl status telegram_bot.service
 sudo systemctl status scheduler.service
+sudo systemctl status notification_bot.service
 
 sudo journalctl -u telegram_bot.service --since "10 minutes ago"
 sudo journalctl -u scheduler.service --since "10 minutes ago"
+sudo journalctl -u notification_bot.service --since "10 minutes ago"
 
 sudo systemctl status NAME
 
@@ -30,6 +32,7 @@ sudo journalctl -u NAME --since "10 minutes ago"
 sudo journalctl -u NAME -f
 
 sudo systemctl restart NAME
+sudo systemctl restart scheduler.service
 
 then immediately look at journalctl -u NAME -f in another terminal.
 
@@ -40,3 +43,13 @@ sudo systemctl is-enabled NAME
 sudo systemd-analyze verify /etc/systemd/system/telegram_bot.service 
 
 sudo systemd-analyze verify /etc/systemd/system/scheduler.service
+
+
+###########################################
+# Run manually
+###########################################
+cd /opt/apps/e-trading
+# Load env vars first
+#set -a; source config/donotshare/.env; set +a
+# Run python module
+.venv/bin/python -m src.scheduler.main
