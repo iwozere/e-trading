@@ -428,8 +428,8 @@ async def collect_sentiment_batch(
     config = validate_config(config)
 
     # Initialize adapter manager and cache
-    from src.common.sentiments.adapters.adapter_manager import AdapterManager
-    manager = AdapterManager()
+    from src.common.sentiments.adapters.adapter_manager import get_adapter_manager
+    manager = get_adapter_manager()
     cache_manager = _initialize_cache(config)
 
     try:
@@ -446,6 +446,10 @@ async def collect_sentiment_batch(
         from src.common.sentiments.caching.cache_manager import CacheKeyStrategy
         cache_keys = CacheKeyStrategy()
         config_hash = cache_keys.config_hash(config)
+
+        # Initialize performance optimization (needed for decorator below)
+        from src.common.sentiments.performance.performance_profiler import PerformanceProfiler
+        profiler = PerformanceProfiler()
 
         # Extract configuration values
         lookback = lookback_hours or config.get("lookback_hours", 24)
@@ -654,11 +658,9 @@ async def collect_sentiment_batch(
                     _logger.exception("Error processing ticker %s: %s", tk, e)
                     return None
 
-        # Initialize performance optimization
+        # Initialize batch optimizer
         from src.common.sentiments.performance.batch_optimizer import BatchOptimizer
-        from src.common.sentiments.performance.performance_profiler import PerformanceProfiler
         batch_optimizer = BatchOptimizer()
-        profiler = PerformanceProfiler()
 
         # Process tickers in optimized batches
         _logger.info("Processing %d tickers with batch optimization", len(tickers))

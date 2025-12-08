@@ -1,14 +1,13 @@
 """
-Cache metrics collection and monitoring.
+Cache metrics tracking for sentiment analysis caching.
 
-Provides comprehensive metrics for cache performance monitoring including
-hit/miss ratios, response times, and cache size statistics.
+Provides statistics and performance monitoring for cache operations.
 """
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional
-from datetime import datetime, timedelta
+from typing import Dict, Optional, List
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 
@@ -34,7 +33,7 @@ class CacheStats:
     min_response_time_ms: float = float('inf')
     cache_size: int = 0
     memory_usage_bytes: int = 0
-    last_reset: datetime = field(default_factory=timezone.utcnow)
+    last_reset: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def hit_ratio(self) -> float:
@@ -145,7 +144,7 @@ class CacheMetrics:
         summary = {}
         for tier, stats in self.stats_by_tier.items():
             summary[tier] = {
-                'hit_ratio': stats.hit_ratio,
+               'hit_ratio': stats.hit_ratio,
                 'miss_ratio': stats.miss_ratio,
                 'total_operations': stats.hits + stats.misses + stats.sets + stats.deletes,
                 'avg_response_time_ms': stats.avg_response_time_ms,

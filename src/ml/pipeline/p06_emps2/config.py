@@ -7,9 +7,6 @@ Configuration dataclasses for the EMPS2 (Enhanced Explosive Move Pre-Screener) p
 from dataclasses import dataclass
 from typing import List
 
-# Import sentiment filter config
-from src.ml.pipeline.p06_emps2.sentiment_filter import SentimentFilterConfig
-
 
 @dataclass
 class EMPS2FilterConfig:
@@ -103,6 +100,24 @@ class RollingMemoryConfig:
     save_rolling_candidates: bool = True
     save_phase1_watchlist: bool = True
     save_phase2_alerts: bool = True
+
+
+
+@dataclass
+class SentimentFilterConfig:
+    """
+    Sentiment filtering parameters.
+
+    These thresholds define social momentum criteria for identifying
+    stocks with crowd psychology support.
+    """
+
+    min_mentions_24h: int = 10
+    min_sentiment_score: float = 0.5
+    max_bot_pct: float = 0.3
+    min_virality_index: float = 1.2
+    min_unique_authors: int = 5
+    enabled: bool = True
 
 
 @dataclass

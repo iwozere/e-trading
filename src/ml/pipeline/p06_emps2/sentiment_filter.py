@@ -25,45 +25,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.ml.pipeline.p06_emps2.config import EMPS2FilterConfig
+from src.ml.pipeline.p06_emps2.config import SentimentFilterConfig
 
 _logger = setup_logger(__name__)
-
-
-class SentimentFilterConfig:
-    """
-    Sentiment filtering parameters.
-
-    These thresholds define social momentum criteria for identifying
-    stocks with crowd psychology support.
-    """
-
-    def __init__(
-        self,
-        min_mentions_24h: int = 10,
-        min_sentiment_score: float = 0.5,
-        max_bot_pct: float = 0.3,
-        min_virality_index: float = 1.2,
-        min_unique_authors: int = 5,
-        enabled: bool = True
-    ):
-        """
-        Initialize sentiment filter configuration.
-
-        Args:
-            min_mentions_24h: Minimum social mentions (default: 10)
-            min_sentiment_score: Minimum sentiment 0-1 (default: 0.5 = neutral)
-            max_bot_pct: Maximum bot activity 0-1 (default: 0.3 = 30%)
-            min_virality_index: Minimum virality ratio (default: 1.2 = 20% growth)
-            min_unique_authors: Minimum unique authors (default: 5)
-            enabled: Enable sentiment filtering (default: True)
-        """
-        self.min_mentions_24h = min_mentions_24h
-        self.min_sentiment_score = min_sentiment_score
-        self.max_bot_pct = max_bot_pct
-        self.min_virality_index = min_virality_index
-        self.min_unique_authors = min_unique_authors
-        self.enabled = enabled
 
 
 class SentimentFilter:
@@ -131,8 +95,7 @@ class SentimentFilter:
             # Collect sentiment data (concurrent API calls)
             sentiment_data = await self.collect_sentiment_batch(
                 tickers,
-                lookback_hours=24,
-                concurrency=8
+                lookback_hours=24
             )
 
             # Apply filters
