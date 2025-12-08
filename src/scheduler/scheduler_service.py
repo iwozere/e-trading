@@ -15,6 +15,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 import asyncio
 import traceback
+import asyncpg
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -99,6 +100,9 @@ class SchedulerService:
         self.jobstore: Optional[SQLAlchemyJobStore] = None
         self.notification_client = None  # Placeholder for legacy/future notification client
 
+        # DB Listener
+        self._db_listener_task: Optional[asyncio.Task] = None
+
         # Service state
         self.is_running = False
         self.startup_retry_count = 0
@@ -133,6 +137,9 @@ class SchedulerService:
                 await self._initialize_scheduler()
                 await self._load_and_register_schedules()
                 self.scheduler.start()
+
+                # Start DB listener
+                self._db_listener_task = asyncio.create_task(self._listen_for_db_changes())
 
                 self.is_running = True
                 self.startup_retry_count = 0
@@ -177,6 +184,14 @@ class SchedulerService:
         try:
             if self.scheduler:
                 self.scheduler.shutdown()
+
+            if self._db_listener_task:
+                self._db_listener_task.cancel()
+                try:
+                    await self._db_listener_task
+                except asyncio.CancelledError:
+                    pass
+                self._db_listener_task = None
 
             await self._cleanup_scheduler()
 
@@ -798,6 +813,52 @@ class SchedulerService:
 
         if "telegram" in matching_channels and user_channels.get("telegram_chat_id"):
             notification_data["telegram_chat_id"] = user_channels["telegram_chat_id"]
+
+        return True
+
+    async def _listen_for_db_changes(self) -> None:
+        """
+        Listen for database notifications and reload schedules.
+        """
+        _logger.info("Starting database listener for scheduler updates...")
+
+        conn = None
+        current_db_url = self.database_url
+
+        # Asyncpg requires postgresql://, fix if needed
+        if "+psycopg2" in current_db_url:
+            current_db_url = current_db_url.replace("+psycopg2", "")
+
+        retry_count = 0
+
+        while self.is_running:
+            try:
+                conn = await asyncpg.connect(current_db_url)
+
+                # Add listener
+                await conn.add_listener('scheduler_updates', lambda *args: asyncio.create_task(self.reload_schedules()))
+
+                _logger.info("Listening for 'scheduler_updates' notifications")
+                retry_count = 0
+
+                # Keep connection alive
+                while self.is_running:
+                    await asyncio.sleep(60)
+                    if conn.is_closed():
+                        break
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                retry_count += 1
+                _logger.error("Database listener error (retry %d): %s", retry_count, e)
+                await asyncio.sleep(min(30, 2 ** retry_count)) # Exponential backoff capped at 30s
+            finally:
+                if conn and not conn.is_closed():
+                    try:
+                        await conn.close()
+                    except Exception:
+                        pass
 
         try:
             # Create notification message in database
