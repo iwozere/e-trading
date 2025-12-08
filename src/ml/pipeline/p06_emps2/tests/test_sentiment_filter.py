@@ -36,7 +36,7 @@ def test_sentiment_single_ticker():
     sentiment_filter = SentimentFilter(config)
 
     # Test with a popular ticker
-    test_ticker = "AAPL"
+    test_ticker = "NVDA"
     print(f"\nAnalyzing sentiment for: {test_ticker}")
     print("-" * 70)
 
