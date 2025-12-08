@@ -7,6 +7,9 @@ Configuration dataclasses for the EMPS2 (Enhanced Explosive Move Pre-Screener) p
 from dataclasses import dataclass
 from typing import List
 
+# Import sentiment filter config
+from src.ml.pipeline.p06_emps2.sentiment_filter import SentimentFilterConfig
+
 
 @dataclass
 class EMPS2FilterConfig:
@@ -113,6 +116,7 @@ class EMPS2PipelineConfig:
     filter_config: EMPS2FilterConfig
     universe_config: EMPS2UniverseConfig
     rolling_memory_config: RollingMemoryConfig
+    sentiment_config: SentimentFilterConfig
 
     # Output settings
     save_intermediate_results: bool = True
@@ -127,6 +131,7 @@ class EMPS2PipelineConfig:
             filter_config=EMPS2FilterConfig(),
             universe_config=EMPS2UniverseConfig(),
             rolling_memory_config=RollingMemoryConfig(),
+            sentiment_config=SentimentFilterConfig(enabled=True),
             save_intermediate_results=True,
             generate_summary=True,
             verbose_logging=True,
@@ -159,6 +164,7 @@ class EMPS2PipelineConfig:
             filter_config=filter_config,
             universe_config=EMPS2UniverseConfig(),
             rolling_memory_config=RollingMemoryConfig(),
+            sentiment_config=SentimentFilterConfig(enabled=True),
             save_intermediate_results=True,
             generate_summary=True,
             verbose_logging=True,
@@ -191,6 +197,7 @@ class EMPS2PipelineConfig:
             filter_config=filter_config,
             universe_config=EMPS2UniverseConfig(),
             rolling_memory_config=RollingMemoryConfig(),
+            sentiment_config=SentimentFilterConfig(enabled=True),
             save_intermediate_results=True,
             generate_summary=True,
             verbose_logging=True,

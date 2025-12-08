@@ -26,6 +26,7 @@ from src.ml.pipeline.p06_emps2.universe_downloader import NasdaqUniverseDownload
 from src.ml.pipeline.p06_emps2.fundamental_filter import FundamentalFilter
 from src.ml.pipeline.p06_emps2.volatility_filter import VolatilityFilter
 from src.ml.pipeline.p06_emps2.rolling_memory import RollingMemoryScanner
+from src.ml.pipeline.p06_emps2.sentiment_filter import SentimentFilter
 from src.ml.pipeline.p06_emps2.alerts import EMPS2AlertSender
 from src.ml.pipeline.p06_emps2.uoa_analyzer import UOAAnalyzer
 
@@ -43,7 +44,8 @@ class EMPS2Pipeline:
     3. Apply volatility filters (~50-200 tickers)
     4. Rolling memory analysis (10-day accumulation tracking)
     5. Phase detection (Phase 1 → Phase 2 transitions)
-    6. Save final results and send alerts
+    6. Sentiment enrichment (add social momentum metrics)
+    7. Save final results and send alerts
 
     All output saved to results/emps2/YYYY-MM-DD/
     """
@@ -92,6 +94,9 @@ class EMPS2Pipeline:
 
         # Alert sender
         self.alert_sender = EMPS2AlertSender() if self.config.rolling_memory_config.send_alerts else None
+
+        # Sentiment filter
+        self.sentiment_filter = SentimentFilter(self.config.sentiment_config) if self.config.sentiment_config.enabled else None
 
         _logger.info("EMPS2 Pipeline initialized (results: %s)", self._results_dir)
 
@@ -186,15 +191,19 @@ class EMPS2Pipeline:
             # Stage 4: Rolling Memory Analysis (10-day accumulation tracking)
             phase1_df, phase2_df = self._stage4_rolling_memory_analysis(volatility_df)
 
+            # Stage 6: Sentiment Enrichment (add social momentum metrics)
+            sentiment_df = self._stage6_sentiment_enrichment(phase2_df)
+
             # Run stage 5: UOA Analysis
             self._stage5_uoa_analysis()
 
-            # Stage 5: Create final results
-            final_df = self._stage5_create_final_results(
+            # Stage 7: Create final results
+            final_df = self._stage7_create_final_results(
                 fundamental_df,
                 volatility_df,
                 phase1_df,
-                phase2_df
+                phase2_df,
+                sentiment_df
             )
 
             # Generate summary
@@ -439,7 +448,42 @@ class EMPS2Pipeline:
 
         return phase1_df, phase2_df
 
-    def _stage5_create_final_results(
+    def _stage6_sentiment_enrichment(self, phase2_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Stage 6: Sentiment Enrichment.
+
+        Apply sentiment analysis to Phase 2 candidates (most explosive tickers).
+        Adds social momentum metrics: sentiment_score, mentions_24h, virality_index, etc.
+
+        Args:
+            phase2_df: Phase 2 alerts DataFrame
+
+        Returns:
+            DataFrame with sentiment metrics
+        """
+        _logger.info("-"*70)
+        _logger.info("Stage 6: Sentiment Enrichment")
+        _logger.info("-"*70)
+
+        if not self.sentiment_filter:
+            _logger.info("Sentiment filtering disabled, skipping enrichment")
+            return pd.DataFrame()
+
+        if phase2_df.empty:
+            _logger.info("No Phase 2 candidates to enrich with sentiment")
+            return pd.DataFrame()
+
+        # Extract tickers from Phase 2
+        tickers = phase2_df['ticker'].tolist()
+        _logger.info("Analyzing sentiment for %d Phase 2 candidates", len(tickers))
+
+        # Apply sentiment filter
+        sentiment_df = self.sentiment_filter.apply_filters(tickers)
+
+        _logger.info("Stage 6 complete: %d tickers with sentiment data", len(sentiment_df))
+        return sentiment_df
+
+    def _stage7_create_final_results(
         self,
         fundamental_df: pd.DataFrame,
         volatility_df: pd.DataFrame,
@@ -459,7 +503,7 @@ class EMPS2Pipeline:
             Final filtered DataFrame
         """
         _logger.info("-"*70)
-        _logger.info("Stage 5: Creating Final Results")
+        _logger.info("Stage 7: Creating Final Results")
         _logger.info("-"*70)
 
         # Use volatility_df as the final results (already has all metrics)
@@ -486,12 +530,26 @@ class EMPS2Pipeline:
         final_df['scan_date'] = datetime.now().strftime('%Y-%m-%d')
         final_df['scan_timestamp'] = datetime.now().isoformat()
 
+        # Merge sentiment data if available
+        if not sentiment_df.empty:
+            # Merge sentiment metrics into final results
+            sentiment_cols = ['ticker', 'sentiment_score', 'mentions_24h', 'virality_index', 'unique_authors', 'bot_pct', 'positive_ratio']
+            available_sentiment_cols = [col for col in sentiment_cols if col in sentiment_df.columns]
+
+            if available_sentiment_cols:
+                final_df = final_df.merge(
+                    sentiment_df[available_sentiment_cols],
+                    on='ticker',
+                    how='left'
+                )
+                _logger.info("Merged sentiment data: %d columns", len(available_sentiment_cols) - 1)
+
         # Save final results
         output_path = self._results_dir / "06_prefiltered_universe.csv"
         final_df.to_csv(output_path, index=False)
         _logger.info("Saved final results to: %s", output_path)
 
-        _logger.info("Stage 5 complete: %d tickers in final universe", len(final_df))
+        _logger.info("Stage 7 complete: %d tickers in final universe", len(final_df))
         return final_df
 
     def _stage5_uoa_analysis(self) -> None:

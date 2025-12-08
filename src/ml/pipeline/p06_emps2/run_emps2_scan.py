@@ -180,6 +180,14 @@ Examples:
         help='Skip summary generation'
     )
 
+    # Sentiment filtering parameters
+    sentiment_group = parser.add_argument_group('Sentiment Filtering')
+    sentiment_group.add_argument(
+        '--no-sentiment',
+        action='store_true',
+        help='Disable sentiment filtering (skip social momentum analysis)'
+    )
+
     return parser.parse_args()
 
 
@@ -296,6 +304,8 @@ def main() -> int:
         config.verbose_logging = False
     if args.no_summary:
         config.generate_summary = False
+    if args.no_sentiment:
+        config.sentiment_config.enabled = False
 
     # Determine force_refresh (default is False, use cache unless --force-refresh is specified)
     force_refresh = args.force_refresh
@@ -318,6 +328,12 @@ def main() -> int:
         print(f"  Lookback Days: {config.rolling_memory_config.lookback_days}")
         print(f"  Phase 1 Threshold: {config.rolling_memory_config.phase1_min_appearances} appearances")
         print(f"  Send Alerts: {config.rolling_memory_config.send_alerts}")
+    print(f"\nSentiment Filtering:")
+    print(f"  Enabled: {config.sentiment_config.enabled}")
+    if config.sentiment_config.enabled:
+        print(f"  Min Mentions: {config.sentiment_config.min_mentions_24h}")
+        print(f"  Min Sentiment Score: {config.sentiment_config.min_sentiment_score}")
+        print(f"  Max Bot Activity: {config.sentiment_config.max_bot_pct*100:.0f}%")
     print()
 
     # Create and run pipeline
