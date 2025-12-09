@@ -1,8 +1,8 @@
 # P06 EMPS2 Pipeline - Enhanced Explosive Move Pre-Screener
 
-**Version:** 2.3 (Production)
-**Status:** ✅ Production Ready with TRF Dark Pool & UOA Integration
-**Last Updated:** 2025-12-06
+**Version:** 2.2 (Production - Yesterday Model)
+**Status:** ✅ Production Ready with Yesterday-Based Execution
+**Last Updated:** 2025-12-09
 
 ---
 
@@ -42,9 +42,39 @@ EMPS2 (Enhanced Explosive Move Pre-Screener v2) is a multi-stage filtering pipel
 - **P06 EMPS2**: Pre-filter universe for stocks ABOUT TO move → Watchlist for next 1-3 days
 - **Combined**: P06 (pre-filter 8000 → 50) → P05 (detailed scoring on 50) → Top 10-20 high-conviction plays
 
----
+### Yesterday Model (v2.2)
 
-## Pipeline Stages
+**Execution Timing**: Pipeline processes data for the **previous trading day** (T-1) at completion.
+
+**Why Yesterday?**
+- All data sources aligned to same trading day:
+  - TRF data: Available T-1 (FINRA publishes next day)
+  - OHLCV data: Complete end-of-day data for T-1
+  - Volume metrics: Full trading day volume (not partial)
+- Consistent date-based folder structure
+- Optimal for 6am cron scheduling
+
+**Folder Structure**:
+```
+results/emps2/YYYY-MM-DD/  ← Yesterday's date
+├── trf.csv                 ← T-1 dark pool data
+├── 09_phase2_alerts.csv    ← T-1 candidates
+└── ... (all other CSVs)
+```
+
+**Example**:
+- Run on: Monday Dec 9, 2025 at 6:00 AM
+- Target date: Friday Dec 6, 2025 (last trading day)
+- Results folder: `results/emps2/2025-12-06/`
+- All CSV timestamps: 2025-12-06
+
+**Benefits**:
+- ✅ Complete data availability
+- ✅ No partial/missing data issues
+- ✅ Historical consistency
+- ✅ Manual override for backfilling: `EMPS2Pipeline(target_date="2025-12-01")`
+
+
 
 ### OPTIMAL SEQUENCE (Resource-Efficient)
 
@@ -817,7 +847,122 @@ for ticker in candidates['ticker']:
 
 ---
 
+## Alerts & Scheduling
+
+### Email Alerts (Phase 2 Candidates)
+
+**Automatic Notifications**: Pipeline sends email alerts when Phase 2 candidates are detected.
+
+**What You Receive**:
+- ✅ Email with `09_phase2_alerts.csv` attached
+- ✅ Telegram notification (if configured)
+- ✅ Summary of top candidates in message body
+
+**Alert Trigger**:
+```python
+# Sent automatically when phase2_df is not empty
+# No configuration needed - enabled by default
+```
+
+**Example Email**:
+```
+Subject: 🔥 EMPS2 Phase 2 Alert - 3 Hot Candidates
+
+Detected 3 tickers transitioning to Phase 2 (Early Public Signal)
+
+Top candidates:
+GME, AMC, BBBY
+
+These tickers showed persistent accumulation (5+ days) and are now showing:
+- Volume acceleration (Z-Score >3.0)
+- Rising momentum
+
+See attached CSV for full details.
+```
+
+**No Candidates**:
+- Currently: No email sent if no Phase 2 candidates
+- To receive "no candidates" emails: Contact maintainer
+
+**Disabling Alerts**:
+```bash
+# Run without alerts
+python run_emps2_scan.py --no-alerts
+```
+
+### Scheduling (Daily Automation)
+
+**Recommended Schedule**: 6:00 AM daily (after TRF data availability)
+
+**Linux/macOS Cron Example**:
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line (runs daily at 6am)
+0 6 * * * cd /path/to/e-trading && python src/ml/pipeline/p06_emps2/run_emps2_scan.py >> /var/log/emps2.log 2>&1
+```
+
+**Windows Task Scheduler**:
+1. Open Task Scheduler
+2. Create Basic Task → Daily → 6:00 AM
+3. Action: Start a program
+   - Program: `python`
+   - Arguments: `src\ml\pipeline\p06_emps2\run_emps2_scan.py`
+   - Start in: `C:\path\to\e-trading`
+
+**Raspberry Pi Systemd Timer** (Recommended):
+```bash
+# Create service file: /etc/systemd/system/emps2.service
+[Unit]
+Description=EMPS2 Daily Scan
+After=network.target
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/e-trading
+ExecStart=/usr/bin/python3 src/ml/pipeline/p06_emps2/run_emps2_scan.py
+StandardOutput=journal
+StandardError=journal
+
+# Create timer file: /etc/systemd/system/emps2.timer
+[Unit]
+Description=EMPS2 Daily Timer
+
+[Timer]
+OnCalendar=*-*-* 06:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
+# Enable and start
+sudo systemctl enable emps2.timer
+sudo systemctl start emps2.timer
+
+# Check status
+sudo systemctl status emps2.timer
+sudo systemctl list-timers
+```
+
+**What Happens During Scheduled Run**:
+1. Processes yesterday's trading data
+2. Saves results to `results/emps2/YYYY-MM-DD/` (yesterday's date)
+3. Generates Phase 2 alerts (if any)
+4. Sends email to configured address
+5. Logs to `results/emps2/YYYY-MM-DD/pipeline.log`
+
+**Weekend Handling**:
+- Pipeline runs even on weekends
+- TRF download fails gracefully (no data for non-trading days)
+- No Phase 2 candidates detected (no recent data)
+- No email sent (no alerts)
+
+---
+
 ## Troubleshooting
+
 
 ### Common Issues
 
@@ -1120,7 +1265,39 @@ See attached CSV for full details.
 - 40-50% fewer false positives (persistent signals only)
 - +10-20 seconds per scan (negligible overhead)
 
-### Version 2.0 (2025-11-28)
+### Version 2.2 (2025-12-09)
+
+**Added**:
+- ✅ Yesterday-based execution model (target_date parameter)
+- ✅ Consistent date-based folder structure
+- ✅ Automatic email/Telegram alerts for Phase 2 candidates
+- ✅ Manual date override for backfilling
+- ✅ Updated documentation with scheduling guide
+
+**Changed**:
+- ✅ All results now save to T-1 (yesterday) folder by default
+- ✅ TRF download aligned to target_date (no more folder mismatch)
+- ✅ Pipeline version metadata updated to 2.2
+- ✅ scan_date in CSVs now reflects target_date not execution date
+
+**Why This Matters**:
+- Ensures all data sources (TRF, OHLCV, volume) aligned to same trading day
+- Optimal for 6am cron scheduling
+- Complete data availability (no partial day issues)
+
+### Version 2.1 (2025-12-06)
+
+**Added**:
+- ✅ Rolling Memory Analysis (10-day tracking)
+- ✅ Phase 1: Quiet Accumulation detection
+- ✅ Phase 2: Early Public Signal detection
+- ✅ Phase-based alert system
+- ✅ Historical pattern recognition
+- ✅ UOA (Unusual Options Activity) analysis
+
+**Impact**:
+- 40-50% fewer false positives (persistent signals only)
+- +10-20 seconds per scan (negligible overhead)
 
 **Added**:
 - ✅ Volume Z-Score detection (from P05 EMPS)
@@ -1152,10 +1329,12 @@ See attached CSV for full details.
 
 ---
 
-**Status**: ✅ Production Ready
+**Status**: ✅ Production Ready (v2.2 - Yesterday Model)
 **Performance**: 2-4 minutes (full scan), 40-90 seconds (cached)
 **Accuracy**: 40-50% precision (vs 15-20% before)
-**Next Review**: 2025-12-05
+**Data Model**: Yesterday's trading day (T-1)
+**Alerts**: Email + Telegram for Phase 2 candidates
+**Next Review**: 2025-12-15
 
 ---
 

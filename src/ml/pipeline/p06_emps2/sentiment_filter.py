@@ -42,18 +42,23 @@ class SentimentFilter:
     Filters for stocks with genuine social momentum and positive sentiment.
     """
 
-    def __init__(self, config: SentimentFilterConfig):
+    def __init__(self, config: SentimentFilterConfig, target_date: Optional[str] = None):
         """
         Initialize sentiment filter.
 
         Args:
             config: Sentiment filter configuration
+            target_date: Target date for results folder (YYYY-MM-DD)
         """
         self.config = config
 
-        # Results directory (dated)
-        today = datetime.now().strftime('%Y-%m-%d')
-        self._results_dir = Path("results") / "emps2" / today
+        # Results directory (dated for target trading day)
+        if target_date is None:
+            from datetime import timedelta
+            yesterday = datetime.now() - timedelta(days=1)
+            target_date = yesterday.strftime('%Y-%m-%d')
+
+        self._results_dir = Path("results") / "emps2" / target_date
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         # Try to import sentiment collection (graceful degradation)
@@ -229,14 +234,16 @@ class SentimentFilter:
             _logger.exception("Error saving sentiment filter results:")
 
 
-def create_sentiment_filter(config: SentimentFilterConfig) -> SentimentFilter:
+def create_sentiment_filter(config: SentimentFilterConfig,
+                          target_date: Optional[str] = None) -> SentimentFilter:
     """
     Factory function to create sentiment filter.
 
     Args:
         config: Sentiment filter configuration
+        target_date: Optional target date (YYYY-MM-DD)
 
     Returns:
         SentimentFilter instance
     """
-    return SentimentFilter(config)
+    return SentimentFilter(config, target_date)

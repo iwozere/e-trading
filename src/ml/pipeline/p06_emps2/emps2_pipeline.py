@@ -50,18 +50,27 @@ class EMPS2Pipeline:
     All output saved to results/emps2/YYYY-MM-DD/
     """
 
-    def __init__(self, config: Optional[EMPS2PipelineConfig] = None):
+    def __init__(self, config: Optional[EMPS2PipelineConfig] = None, target_date: Optional[str] = None):
         """
         Initialize EMPS2 pipeline.
 
         Args:
             config: Optional pipeline configuration (uses defaults if None)
+            target_date: Target trading date (YYYY-MM-DD). Defaults to yesterday.
+                        Allows manual override for backfilling or testing.
         """
         self.config = config or EMPS2PipelineConfig.create_default()
 
-        # Results directory (dated)
-        today = datetime.now().strftime('%Y-%m-%d')
-        self._results_dir = Path("results") / "emps2" / today
+        # Target date defaults to yesterday (for end-of-day data)
+        if target_date is None:
+            from datetime import timedelta
+            yesterday = datetime.now() - timedelta(days=1)
+            target_date = yesterday.strftime('%Y-%m-%d')
+
+        self.target_date = target_date
+
+        # Results directory (dated for target trading day)
+        self._results_dir = Path("results") / "emps2" / target_date
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         # Results base path (for rolling memory to access historical data)
@@ -70,8 +79,11 @@ class EMPS2Pipeline:
         # Set up per-scan logging to pipeline.log in results directory
         self._setup_pipeline_logging()
 
-        # Initialize components
-        self.universe_downloader = NasdaqUniverseDownloader(self.config.universe_config)
+        # Initialize components (pass target_date for consistent folder usage)
+        self.universe_downloader = NasdaqUniverseDownloader(
+            self.config.universe_config,
+            target_date=target_date
+        )
 
         self.finnhub = FinnhubDataDownloader()
         self.fundamental_filter = FundamentalFilter(
@@ -96,9 +108,13 @@ class EMPS2Pipeline:
         self.alert_sender = EMPS2AlertSender() if self.config.rolling_memory_config.send_alerts else None
 
         # Sentiment filter
-        self.sentiment_filter = SentimentFilter(self.config.sentiment_config) if self.config.sentiment_config.enabled else None
+        self.sentiment_filter = SentimentFilter(
+            self.config.sentiment_config,
+            target_date=target_date
+        ) if self.config.sentiment_config.enabled else None
 
-        _logger.info("EMPS2 Pipeline initialized (results: %s)", self._results_dir)
+        _logger.info("EMPS2 Pipeline initialized (target_date: %s, results: %s)",
+                    self.target_date, self._results_dir)
 
     def _setup_pipeline_logging(self) -> None:
         """
@@ -294,17 +310,12 @@ class EMPS2Pipeline:
             from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
             from datetime import timedelta
 
-            # Calculate yesterday's date
-            yesterday = datetime.now() - timedelta(days=1)
-            yesterday_str = yesterday.strftime("%Y-%m-%d")
-
-            # Create directory for yesterday's TRF data
-            yesterday_dir = self._results_dir.parent / yesterday_str
-            yesterday_dir.mkdir(parents=True, exist_ok=True)
-            trf_file = yesterday_dir / "trf.csv"
+            # TRF data should match our target_date (already yesterday)
+            trf_dir = self._results_dir  # Use same directory as pipeline target
+            trf_file = trf_dir / "trf.csv"
 
             if trf_file.exists():
-                _logger.info("TRF data already exists for %s: %s", yesterday_str, trf_file)
+                _logger.info("TRF data already exists for %s: %s", self.target_date, trf_file)
 
                 # Validate the existing file
                 try:
@@ -325,11 +336,11 @@ class EMPS2Pipeline:
                     trf_file.unlink()  # Delete corrupted file
 
             # TRF file doesn't exist or was invalid, download it
-            _logger.info("Downloading TRF data for %s", yesterday_str)
+            _logger.info("Downloading TRF data for %s", self.target_date)
 
             downloader = FinraTRFDownloader(
-                date=yesterday_str,
-                output_dir=str(yesterday_dir),  # Save in yesterday's directory
+                date=self.target_date,
+                output_dir=str(trf_dir),  # Save in target date's directory
                 output_filename="trf.csv",
                 fetch_yfinance_data=True  # Include yfinance validation
             )
@@ -337,12 +348,12 @@ class EMPS2Pipeline:
             result_df = downloader.run()
 
             if result_df.empty:
-                _logger.warning("No TRF data downloaded for %s (market may be closed)", yesterday_str)
+                _logger.warning("No TRF data downloaded for %s (market may be closed)", self.target_date)
                 _logger.info("Stage 2b complete: No TRF data available")
             else:
                 ticker_count = len(result_df["ticker"].unique())
                 _logger.info("Successfully downloaded TRF data for %s: %d tickers",
-                           yesterday_str, ticker_count)
+                           self.target_date, ticker_count)
                 _logger.info("Stage 2b complete: TRF data ready for volume correction")
 
         except Exception:
@@ -488,7 +499,8 @@ class EMPS2Pipeline:
         fundamental_df: pd.DataFrame,
         volatility_df: pd.DataFrame,
         phase1_df: pd.DataFrame,
-        phase2_df: pd.DataFrame
+        phase2_df: pd.DataFrame,
+        sentiment_df: pd.DataFrame = pd.DataFrame()
     ) -> pd.DataFrame:
         """
         Stage 5: Create final results DataFrame.
@@ -527,8 +539,8 @@ class EMPS2Pipeline:
             final_df['alert_priority'] = 'NORMAL'
 
         # Add scan metadata
-        final_df['scan_date'] = datetime.now().strftime('%Y-%m-%d')
-        final_df['scan_timestamp'] = datetime.now().isoformat()
+        final_df['scan_date'] = self.target_date
+        final_df['scan_timestamp'] = datetime.now().isoformat()  # When scan was run
 
         # Merge sentiment data if available
         if not sentiment_df.empty:
@@ -599,9 +611,9 @@ class EMPS2Pipeline:
 
             summary = {
                 'pipeline': 'EMPS2',
-                'version': '2.1',  # Updated version with rolling memory
-                'scan_date': datetime.now().strftime('%Y-%m-%d'),
-                'scan_timestamp': datetime.now().isoformat(),
+                'version': '2.2',  # Updated version with target_date support
+                'target_date': self.target_date,  # Target trading day
+                'scan_timestamp': datetime.now().isoformat(),  # When scan was executed
                 'elapsed_seconds': elapsed,
                 'stages': {
                     'stage1_universe': {
@@ -684,14 +696,16 @@ class EMPS2Pipeline:
             _logger.exception("Error generating summary:")
 
 
-def create_pipeline(config: Optional[EMPS2PipelineConfig] = None) -> EMPS2Pipeline:
+def create_pipeline(config: Optional[EMPS2PipelineConfig] = None,
+                   target_date: Optional[str] = None) -> EMPS2Pipeline:
     """
     Factory function to create EMPS2 pipeline.
 
     Args:
         config: Optional pipeline configuration
+        target_date: Optional target trading date (YYYY-MM-DD). Defaults to yesterday.
 
     Returns:
         EMPS2Pipeline instance
     """
-    return EMPS2Pipeline(config)
+    return EMPS2Pipeline(config, target_date)

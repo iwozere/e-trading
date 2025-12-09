@@ -168,10 +168,13 @@ Save all files to results/emps2/YYYY-MM-DD/
 
 ### Results Directory Structure
 
+**Note**: Pipeline uses yesterday's date (T-1) for folder names by default (v2.2+)
+
 ```
 results/emps2/
-├── 2025-11-27/
+├── 2025-12-08/  ← Yesterday's date (when run on 2025-12-09)
 │   ├── pipeline.log                      # Full scan log
+│   ├── trf.csv                           # FINRA TRF dark pool data
 │   ├── 01_nasdaq_universe.csv            # Full universe from NASDAQ
 │   ├── nasdaq_universe_cache.json        # Cache metadata
 │   ├── 02_fundamental_raw_data.csv       # Raw fundamental data
@@ -183,7 +186,7 @@ results/emps2/
 │   ├── 08_phase1_watchlist.csv           # Phase 1: Quiet Accumulation
 │   ├── 09_phase2_alerts.csv              # Phase 2: Hot Candidates
 │   └── summary.json                      # Pipeline summary
-├── 2025-11-28/
+├── 2025-12-07/  ← Previous day
 │   └── ...
 ```
 
@@ -234,7 +237,7 @@ results/emps2/
 ### Standalone Usage
 
 ```python
-from src.ml.pipeline.p06_emps2 import EMPS2Pipeline
+from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
 
 pipeline = EMPS2Pipeline()
 results = pipeline.run()
@@ -247,7 +250,7 @@ for ticker in results['ticker']:
 ### Integration with P05 EMPS
 
 ```python
-from src.ml.pipeline.p06_emps2 import EMPS2Pipeline
+from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
 from src.ml.pipeline.p05_emps.emps_integration import EMPSUniverseScanner
 
 # Stage 1: EMPS2 pre-screening
@@ -265,7 +268,7 @@ results = scanner.scan_universe(
 ### Custom Configuration
 
 ```python
-from src.ml.pipeline.p06_emps2 import EMPS2PipelineConfig, EMPS2FilterConfig
+from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2PipelineConfig, EMPS2FilterConfig
 
 # Create custom filter config
 filter_config = EMPS2FilterConfig(
@@ -378,4 +381,4 @@ results = pipeline.run()
 
 ---
 
-**Last Updated:** 2025-11-27
+**Last Updated:** 2025-12-09 (v2.2 - Yesterday Model)
