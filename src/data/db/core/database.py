@@ -125,10 +125,24 @@ def create_all_tables(*bases: Iterable) -> None:
 
 
 def drop_all_tables(*bases: Iterable) -> None:
-    """Handy in tests."""
+    """
+    Drop all database tables. Handy in tests.
+
+    ⚠️ SAFETY: This function will REFUSE to drop tables from a production database.
+    DB_URL must contain 'test' to proceed.
+    """
+    # Safety check: prevent dropping production database
+    if 'test' not in DB_URL.lower():
+        raise RuntimeError(
+            f"CRITICAL SAFETY CHECK FAILED: Attempted to drop tables from non-test database!\n"
+            f"DB_URL must contain 'test' but got: {DB_URL[:50]}...\n"
+            f"If you really need to drop tables, use a test database URL."
+        )
+
     if not bases:
         # If no bases provided, use the shared Base
         Base.metadata.drop_all(engine)
     else:
         for base in bases:
             base.metadata.drop_all(engine)
+
