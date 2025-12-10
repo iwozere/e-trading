@@ -42,20 +42,22 @@ class VolatilityFilter:
     Filters for stocks showing early volatility expansion.
     """
 
-    def __init__(self, downloader: YahooDataDownloader, config: EMPS2FilterConfig):
+    def __init__(self, downloader: YahooDataDownloader, config: EMPS2FilterConfig, target_date: Optional[str] = None):
         """
         Initialize volatility filter.
 
         Args:
             downloader: Yahoo Finance data downloader instance
             config: Filter configuration
+            target_date: Target trading date (YYYY-MM-DD). Defaults to today.
         """
         self.downloader = downloader
         self.config = config
 
         # Results directory (dated)
-        today = datetime.now().strftime('%Y-%m-%d')
-        self._results_dir = Path("results") / "emps2" / today
+        if target_date is None:
+            target_date = datetime.now().strftime('%Y-%m-%d')
+        self._results_dir = Path("results") / "emps2" / target_date
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         _logger.info("Volatility Filter initialized: ATR/Price>%.1f%%, range>%.1f%%, lookback=%dd, vol_zscore>%.1f, vol_rv_ratio>%.1f",

@@ -88,13 +88,15 @@ class EMPS2Pipeline:
         self.finnhub = FinnhubDataDownloader()
         self.fundamental_filter = FundamentalFilter(
             self.finnhub,
-            self.config.filter_config
+            self.config.filter_config,
+            target_date=target_date
         )
 
         self.yahoo = YahooDataDownloader()
         self.volatility_filter = VolatilityFilter(
             self.yahoo,
-            self.config.filter_config
+            self.config.filter_config,
+            target_date=target_date
         )
 
         # Rolling memory scanner

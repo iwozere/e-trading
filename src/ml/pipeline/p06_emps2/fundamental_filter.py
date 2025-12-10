@@ -46,20 +46,22 @@ class FundamentalFilter:
     - Progress tracking and intermediate saves
     """
 
-    def __init__(self, downloader: FinnhubDataDownloader, config: EMPS2FilterConfig):
+    def __init__(self, downloader: FinnhubDataDownloader, config: EMPS2FilterConfig, target_date: Optional[str] = None):
         """
         Initialize fundamental filter.
 
         Args:
             downloader: Finnhub data downloader instance
             config: Filter configuration
+            target_date: Target trading date (YYYY-MM-DD). Defaults to today.
         """
         self.downloader = downloader
         self.config = config
 
         # Results directory (dated)
-        today = datetime.now().strftime('%Y-%m-%d')
-        self._results_dir = Path("results") / "emps2" / today
+        if target_date is None:
+            target_date = datetime.now().strftime('%Y-%m-%d')
+        self._results_dir = Path("results") / "emps2" / target_date
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize cache (with negative caching support)
