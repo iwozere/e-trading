@@ -11,7 +11,7 @@ Enhanced with EMPS accumulation indicators:
 
 from pathlib import Path
 import sys
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 
 import pandas as pd
