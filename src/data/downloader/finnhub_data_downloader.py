@@ -1,10 +1,12 @@
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import requests
+import aiohttp
+import asyncio
 import time
 from src.notification.logger import setup_logger
-from src.model.schemas import OptionalFundamentals, Fundamentals
+from src.model.schemas import OptionalFundamentals, Fundamentals, SentimentData
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
@@ -649,3 +651,292 @@ class FinnhubDataDownloader(BaseDataDownloader):
         except Exception:
             _logger.exception("Error in Finnhub batch data retrieval:")
             return {}
+
+    # ========================================================================
+    # ASYNC SENTIMENT DATA METHODS (New Implementation)
+    # ========================================================================
+
+    async def get_news_sentiment(self, symbol: str) -> Optional[SentimentData]:
+        """
+        Get news sentiment data for a symbol (async).
+
+        This method fetches sentiment data from Finnhub's news-sentiment API,
+        which provides bullish/bearish percentages, buzz metrics, and sector comparisons.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            SentimentData object with news sentiment metrics, or None if failed
+        """
+        try:
+            url = "https://finnhub.io/api/v1/news-sentiment"
+            params = {
+                'symbol': symbol.upper(),
+                'token': self.api_key
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status == 429:
+                        _logger.warning("Finnhub API rate limit exceeded for news sentiment")
+                        return None
+
+                    if response.status != 200:
+                        _logger.warning("Finnhub news sentiment API error: %s", response.status)
+                        return None
+
+                    data = await response.json()
+
+                    if not data:
+                        _logger.warning("No news sentiment data found for %s", symbol)
+                        return None
+
+                    # Extract sentiment metrics
+                    sentiment = data.get('sentiment', {})
+                    buzz = data.get('buzz', {})
+
+                    bullish_pct = sentiment.get('bullishPercent', 0)
+                    bearish_pct = sentiment.get('bearishPercent', 0)
+
+                    # Calculate normalized sentiment score (-1 to 1)
+                    if bullish_pct + bearish_pct > 0:
+                        sentiment_score = (bullish_pct - bearish_pct) / 100.0
+                    else:
+                        sentiment_score = 0.0
+
+                    # Create SentimentData object
+                    sentiment_data = SentimentData(
+                        symbol=symbol.upper(),
+                        provider='finnhub',
+                        timestamp=datetime.now().isoformat(),
+                        sentiment_score=sentiment_score,
+                        bullish_score=bullish_pct / 100.0 if bullish_pct else None,
+                        bearish_score=bearish_pct / 100.0 if bearish_pct else None,
+                        article_count=buzz.get('articlesInLastWeek', 0),
+                        buzz_ratio=buzz.get('buzz', None),
+                        sector_comparison={
+                            'sector_average_bullish': sentiment.get('sectorAverageBullishPercent', 0) / 100.0,
+                            'vs_sector_bullish': (bullish_pct - sentiment.get('sectorAverageBullishPercent', 0)) / 100.0,
+                            'company_news_score': data.get('companyNewsScore', 0),
+                            'sector_average_news_score': data.get('sectorAverageNewsScore', 0)
+                        },
+                        raw_data=data,
+                        data_source='finnhub_news_sentiment_api'
+                    )
+
+                    _logger.debug("Retrieved news sentiment for %s: score=%.3f, articles=%d",
+                                symbol, sentiment_score, buzz.get('articlesInLastWeek', 0))
+
+                    return sentiment_data
+
+        except asyncio.TimeoutError:
+            _logger.error("Timeout getting news sentiment for %s", symbol)
+            return None
+        except Exception as e:
+            _logger.error("Error getting news sentiment for %s: %s", symbol, e)
+            return None
+
+    async def get_social_sentiment(self, symbol: str, days_back: int = 7) -> Optional[SentimentData]:
+        """
+        Get social media sentiment data for a symbol (async).
+
+        This method fetches sentiment from Reddit, Twitter, and other social platforms
+        via Finnhub's social-sentiment API, providing historical daily data.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+            days_back: Number of days to look back (default: 7, max: 30)
+
+        Returns:
+            SentimentData object with social sentiment metrics, or None if failed
+        """
+        try:
+            url = "https://finnhub.io/api/v1/stock/social-sentiment"
+
+            # Calculate date range
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days_back)
+
+            params = {
+                'symbol': symbol.upper(),
+                'from': start_date.strftime('%Y-%m-%d'),
+                'to': end_date.strftime('%Y-%m-%d'),
+                'token': self.api_key
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status == 429:
+                        _logger.warning("Finnhub API rate limit exceeded for social sentiment")
+                        return None
+
+                    if response.status != 200:
+                        _logger.warning("Finnhub social sentiment API error: %s", response.status)
+                        return None
+
+                    data = await response.json()
+
+                    if not data:
+                        _logger.warning("No social sentiment data found for %s", symbol)
+                        return None
+
+                    # Process Reddit data
+                    reddit_data = None
+                    reddit_mentions = 0
+                    reddit_score = 0.0
+
+                    if 'reddit' in data and data['reddit']:
+                        reddit_entries = data['reddit']
+                        # Get most recent entry or aggregate
+                        if reddit_entries:
+                            latest_reddit = reddit_entries[-1]  # Most recent
+                            reddit_mentions = latest_reddit.get('mention', 0)
+                            reddit_score = latest_reddit.get('score', 0.0)
+                            reddit_data = {
+                                'mentions': reddit_mentions,
+                                'positive_mentions': latest_reddit.get('positiveMention', 0),
+                                'negative_mentions': latest_reddit.get('negativeMention', 0),
+                                'score': reddit_score,
+                                'positive_score': latest_reddit.get('positiveScore', 0),
+                                'negative_score': latest_reddit.get('negativeScore', 0),
+                                'time': latest_reddit.get('atTime', '')
+                            }
+
+                    # Process Twitter data
+                    twitter_data = None
+                    twitter_mentions = 0
+                    twitter_score = 0.0
+
+                    if 'twitter' in data and data['twitter']:
+                        twitter_entries = data['twitter']
+                        if twitter_entries:
+                            latest_twitter = twitter_entries[-1]  # Most recent
+                            twitter_mentions = latest_twitter.get('mention', 0)
+                            twitter_score = latest_twitter.get('score', 0.0)
+                            twitter_data = {
+                                'mentions': twitter_mentions,
+                                'positive_mentions': latest_twitter.get('positiveMention', 0),
+                                'negative_mentions': latest_twitter.get('negativeMention', 0),
+                                'score': twitter_score,
+                                'positive_score': latest_twitter.get('positiveScore', 0),
+                                'negative_score': latest_twitter.get('negativeScore', 0),
+                                'time': latest_twitter.get('atTime', '')
+                            }
+
+                    # Calculate overall sentiment score (weighted average)
+                    total_mentions = reddit_mentions + twitter_mentions
+                    if total_mentions > 0:
+                        overall_score = (reddit_score * reddit_mentions + twitter_score * twitter_mentions) / total_mentions
+                    else:
+                        overall_score = 0.0
+
+                    # Create SentimentData object
+                    sentiment_data = SentimentData(
+                        symbol=symbol.upper(),
+                        provider='finnhub',
+                        timestamp=datetime.now().isoformat(),
+                        sentiment_score=overall_score,
+                        mention_count=total_mentions,
+                        reddit_data=reddit_data,
+                        twitter_data=twitter_data,
+                        sources={
+                            'reddit': reddit_data is not None,
+                            'twitter': twitter_data is not None
+                        },
+                        raw_data=data,
+                        data_source='finnhub_social_sentiment_api'
+                    )
+
+                    _logger.debug("Retrieved social sentiment for %s: score=%.3f, mentions=%d (reddit=%d, twitter=%d)",
+                                symbol, overall_score, total_mentions, reddit_mentions, twitter_mentions)
+
+                    return sentiment_data
+
+        except asyncio.TimeoutError:
+            _logger.error("Timeout getting social sentiment for %s", symbol)
+            return None
+        except Exception as e:
+            _logger.error("Error getting social sentiment for %s: %s", symbol, e)
+            return None
+
+    async def get_combined_sentiment(self, symbol: str) -> Optional[SentimentData]:
+        """
+        Get combined sentiment from both news and social sources (async).
+
+        This method fetches and combines sentiment from both news sentiment API
+        and social sentiment API to provide a comprehensive view.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            SentimentData object with combined sentiment metrics, or None if failed
+        """
+        try:
+            # Fetch both sentiment types concurrently
+            news_task = self.get_news_sentiment(symbol)
+            social_task = self.get_social_sentiment(symbol)
+
+            news_sentiment, social_sentiment = await asyncio.gather(news_task, social_task, return_exceptions=True)
+
+            # Handle exceptions from gather
+            if isinstance(news_sentiment, Exception):
+                _logger.warning("News sentiment failed for %s: %s", symbol, news_sentiment)
+                news_sentiment = None
+
+            if isinstance(social_sentiment, Exception):
+                _logger.warning("Social sentiment failed for %s: %s", symbol, social_sentiment)
+                social_sentiment = None
+
+            # If both failed, return None
+            if not news_sentiment and not social_sentiment:
+                _logger.warning("Both sentiment sources failed for %s", symbol)
+                return None
+
+            # Combine the data
+            if news_sentiment and social_sentiment:
+                # Both available - average the scores
+                combined_score = (news_sentiment.sentiment_score + social_sentiment.sentiment_score) / 2.0
+
+                combined_data = SentimentData(
+                    symbol=symbol.upper(),
+                    provider='finnhub',
+                    timestamp=datetime.now().isoformat(),
+                    sentiment_score=combined_score,
+                    bullish_score=news_sentiment.bullish_score,
+                    bearish_score=news_sentiment.bearish_score,
+                    mention_count=social_sentiment.mention_count,
+                    buzz_ratio=news_sentiment.buzz_ratio,
+                    article_count=news_sentiment.article_count,
+                    reddit_data=social_sentiment.reddit_data,
+                    twitter_data=social_sentiment.twitter_data,
+                    sector_comparison=news_sentiment.sector_comparison,
+                    sources={
+                        'news': True,
+                        'reddit': social_sentiment.reddit_data is not None,
+                        'twitter': social_sentiment.twitter_data is not None
+                    },
+                    raw_data={
+                        'news': news_sentiment.raw_data,
+                        'social': social_sentiment.raw_data
+                    },
+                    data_source='finnhub_combined_sentiment_api'
+                )
+
+                _logger.debug("Retrieved combined sentiment for %s: score=%.3f", symbol, combined_score)
+                return combined_data
+
+            elif news_sentiment:
+                # Only news available
+                _logger.debug("Using news sentiment only for %s", symbol)
+                return news_sentiment
+
+            else:
+                # Only social available
+                _logger.debug("Using social sentiment only for %s", symbol)
+                return social_sentiment
+
+        except Exception as e:
+            _logger.error("Error getting combined sentiment for %s: %s", symbol, e)
+            return None

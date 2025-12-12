@@ -1,9 +1,11 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 import pandas as pd
 import requests
+import aiohttp
+import asyncio
 from src.notification.logger import setup_logger
-from src.model.schemas import OptionalFundamentals, Fundamentals
+from src.model.schemas import OptionalFundamentals, Fundamentals, SentimentData
 _logger = setup_logger(__name__)
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 
@@ -296,4 +298,194 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Alpha Vantage."""
         return ['1m', '5m', '15m', '30m', '60m', '1d', '1wk', '1mo']
+
+    # ========================================================================
+    # ASYNC SENTIMENT DATA METHODS (New Implementation)
+    # ===================================================================
+
+
+    async def get_news_sentiment(
+        self,
+        symbol: str,
+        time_from: Optional[str] = None,
+        limit: int = 50
+    ) -> Optional[SentimentData]:
+        """
+        Get news sentiment data for a symbol using Alpha Vantage NEWS_SENTIMENT API (async).
+
+        This method fetches sentiment analysis from financial news articles,
+        providing ticker-specific sentiment scores, relevance, and labels.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+            time_from: Optional start time in format YYYYMMDDTHHMM (e.g., '20240101T0000')
+            limit: Maximum number of articles to fetch (default: 50, max: 1000)
+
+        Returns:
+            SentimentData object with news sentiment metrics, or None if failed
+        """
+        try:
+            url = self.base_url
+            params = {
+                'function': 'NEWS_SENTIMENT',
+                'tickers': symbol.upper(),
+                'apikey': self.api_key,
+                'limit': min(limit, 1000)
+            }
+
+            if time_from:
+                params['time_from'] = time_from
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                    if response.status == 429:
+                        _logger.warning("Alpha Vantage API rate limit exceeded for news sentiment")
+                        return None
+
+                    if response.status != 200:
+                        _logger.warning("Alpha Vantage news sentiment API error: %s", response.status)
+                        return None
+
+                    data = await response.json()
+
+                    if not data or 'feed' not in data:
+                        _logger.warning("No news sentiment data found for %s", symbol)
+                        return None
+
+                    feed = data.get('feed', [])
+
+                    if not feed:
+                        _logger.warning("Empty news feed for %s", symbol)
+                        return None
+
+                    # Process articles to extract sentiment
+                    ticker_sentiments = []
+                    total_relevance = 0.0
+                    weighted_sentiment = 0.0
+
+                    bullish_count = 0
+                    bearish_count = 0
+                    neutral_count = 0
+
+                    articles = []
+
+                    for article in feed:
+                        # Find ticker-specific sentiment
+                        ticker_sent = None
+                        if 'ticker_sentiment' in article:
+                            for ts in article['ticker_sentiment']:
+                                if ts.get('ticker', '').upper() == symbol.upper():
+                                    ticker_sent = ts
+                                    break
+
+                        if ticker_sent:
+                            relevance = float(ticker_sent.get('relevance_score', '0'))
+                            sent_score = float(ticker_sent.get('ticker_sentiment_score', '0'))
+                            sent_label = ticker_sent.get('ticker_sentiment_label', 'Neutral')
+
+                            total_relevance += relevance
+                            weighted_sentiment += sent_score * relevance
+
+                            # Count sentiment labels
+                            label_lower = sent_label.lower()
+                            if 'bullish' in label_lower:
+                                bullish_count += 1
+                            elif 'bearish' in label_lower:
+                                bearish_count += 1
+                            else:
+                                neutral_count += 1
+
+                            ticker_sentiments.append({
+                                'score': sent_score,
+                                'label': sent_label,
+                                'relevance': relevance
+                            })
+
+                            # Store article metadata
+                            articles.append({
+                                'title': article.get('title', ''),
+                                'url': article.get('url', ''),
+                                'time_published': article.get('time_published', ''),
+                                'source': article.get('source', ''),
+                                'sentiment_score': sent_score,
+                                'sentiment_label': sent_label,
+                                'relevance': relevance
+                            })
+
+                    # Calculate overall sentiment score
+                    if total_relevance > 0:
+                        overall_sentiment = weighted_sentiment / total_relevance
+                    else:
+                        overall_sentiment = 0.0
+
+                    total_articles = len(ticker_sentiments)
+
+                    # Calculate percentages
+                    total_categorized = bullish_count + bearish_count + neutral_count
+                    if total_categorized > 0:
+                        bullish_pct = bullish_count / total_categorized
+                        bearish_pct = bearish_count / total_categorized
+                        neutral_pct = neutral_count / total_categorized
+                    else:
+                        bullish_pct = bearish_pct = neutral_pct = 0.0
+
+                    # Create SentimentData object
+                    sentiment_data = SentimentData(
+                        symbol=symbol.upper(),
+                        provider='alpha_vantage',
+                        timestamp=datetime.now().isoformat(),
+                        sentiment_score=overall_sentiment,
+                        bullish_score=bullish_pct,
+                        bearish_score=bearish_pct,
+                        neutral_score=neutral_pct,
+                        article_count=total_articles,
+                        articles=articles if articles else None,
+                        raw_data=data,
+                        confidence_score=total_relevance / total_articles if total_articles > 0 else None,
+                        data_source='alpha_vantage_news_sentiment_api'
+                    )
+
+                    _logger.debug("Retrieved news sentiment for %s: score=%.3f, articles=%d (bullish=%d, bearish=%d, neutral=%d)",
+                                symbol, overall_sentiment, total_articles, bullish_count, bearish_count, neutral_count)
+
+                    return sentiment_data
+
+        except asyncio.TimeoutError:
+            _logger.error("Timeout getting news sentiment for %s", symbol)
+            return None
+        except Exception as e:
+            _logger.error("Error getting news sentiment for %s: %s", symbol, e)
+            return None
+
+    async def get_news_articles(
+        self,
+        symbol: str,
+        time_from: Optional[str] = None,
+        limit: int = 200
+    ) -> List[Dict[str, Any]]:
+        """
+        Get news articles for a symbol (async).
+
+        This is a convenience method that returns just the article list
+        without aggregated sentiment metrics.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+            time_from: Optional start time in format YYYYMMDDTHHMM
+            limit: Maximum number of articles to fetch (default: 200)
+
+        Returns:
+            List of article dictionaries, or empty list if failed
+        """
+        try:
+            sentiment_data = await self.get_news_sentiment(symbol, time_from, limit)
+
+            if sentiment_data and sentiment_data.articles:
+                return sentiment_data.articles
+            else:
+                return []
+
+        except Exception as e:
+            _logger.error("Error getting news articles for %s: %s", symbol, e)
+            return []
 

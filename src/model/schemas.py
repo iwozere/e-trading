@@ -251,12 +251,12 @@ __all__ = [
     'DataInterval',
     'DataProvider',
     'Fundamentals',
-    'Fundamentals',
     'OHLCVData',
     'DataCacheConfig',
     'DataFrameOrOHLCV',
     'OptionalFundamentals',
-    'CachePath'
+    'CachePath',
+    'SentimentData'
 ]
 
 
@@ -336,6 +336,83 @@ class Fundamentals:
         """Get 52-week low price."""
         # This field doesn't exist in the original, but we can add it
         return getattr(self, 'fifty_two_week_low', None)
+
+
+@dataclass
+class SentimentData:
+    """
+    Unified sentiment data structure for all sentiment data providers.
+
+    This class provides a consistent interface for sentiment data across
+    different providers (Finnhub, Alpha Vantage, Santiment), allowing for
+    easy aggregation and comparison of sentiment metrics.
+
+    Sentiment scores are normalized to -1 to 1 where possible:
+    - -1.0: Maximum bearish/negative sentiment
+    -  0.0: Neutral sentiment
+    - +1.0: Maximum bullish/positive sentiment
+    """
+
+    # Core identification
+    symbol: str
+    provider: str  # 'finnhub', 'alpha_vantage', 'santiment'
+    timestamp: str  # ISO 8601 format
+
+    # Sentiment scores (normalized to -1 to 1 where possible)
+    sentiment_score: Optional[float] = None  # Overall sentiment (-1 to 1)
+    bullish_score: Optional[float] = None     # 0 to 1 or percentage
+    bearish_score: Optional[float] = None     # 0 to 1 or percentage
+    neutral_score: Optional[float] = None     # 0 to 1 or percentage
+
+    # Volume/buzz metrics
+    mention_count: Optional[int] = None       # Total mentions
+    buzz_ratio: Optional[float] = None        # Current vs historical average
+
+    # Source breakdown (for multi-source providers)
+    sources: Optional[Dict[str, Any]] = None  # {'reddit': {...}, 'twitter': {...}}
+
+    # News-specific fields
+    article_count: Optional[int] = None
+    articles: Optional[List[Dict[str, Any]]] = None  # Full article data if needed
+
+    # Social media specific (by platform)
+    reddit_data: Optional[Dict[str, Any]] = None
+    twitter_data: Optional[Dict[str, Any]] = None
+
+    # Comparative metrics (vs sector or historical)
+    sector_comparison: Optional[Dict[str, float]] = None
+
+    # Raw provider-specific data (for advanced users who need original format)
+    raw_data: Optional[Dict[str, Any]] = None
+
+    # Data quality indicators
+    confidence_score: Optional[float] = None  # Provider's confidence in the data (0-1)
+    data_source: Optional[str] = None  # Specific API endpoint used
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
+        return {
+            'symbol': self.symbol,
+            'provider': self.provider,
+            'timestamp': self.timestamp,
+            'sentiment_score': self.sentiment_score,
+            'bullish_score': self.bullish_score,
+            'bearish_score': self.bearish_score,
+            'neutral_score': self.neutral_score,
+            'mention_count': self.mention_count,
+            'buzz_ratio': self.buzz_ratio,
+            'sources': self.sources,
+            'article_count': self.article_count,
+            'reddit_data': self.reddit_data,
+            'twitter_data': self.twitter_data,
+            'sector_comparison': self.sector_comparison,
+            'confidence_score': self.confidence_score,
+            'data_source': self.data_source
+        }
+
+    def __repr__(self) -> str:
+        return (f"SentimentData(symbol={self.symbol}, provider={self.provider}, "
+                f"sentiment_score={self.sentiment_score}, mentions={self.mention_count})")
 
 
 # Configuration Schema Classes
