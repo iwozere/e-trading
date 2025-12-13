@@ -218,11 +218,11 @@ class VolatilityFilter:
                         len(passed_tickers),
                         100.0 * len(passed_tickers) / len(tickers) if tickers else 0)
 
-            # Save results (passing tickers only)
-            self._save_results(results_data)
-
             # Save diagnostics (all tickers)
             self._save_diagnostics(diagnostic_data)
+
+            # Save results (passing tickers only)
+            self._save_results(results_data)
 
             return passed_tickers
 
@@ -590,7 +590,7 @@ class VolatilityFilter:
             # Sort by ATR ratio (highest volatility first)
             df = df.sort_values('atr_ratio', ascending=False)
 
-            output_path = self._results_dir / "04_volatility_filtered.csv"
+            output_path = self._results_dir / "05_volatility_filtered.csv"
             df.to_csv(output_path, index=False)
 
             _logger.info("Saved volatility filter results to: %s", output_path)
@@ -639,7 +639,7 @@ class VolatilityFilter:
             df = df.sort_values(['_sort_order', 'ticker'])
             df = df.drop(columns=['_sort_order'])
 
-            output_path = self._results_dir / "05_volatility_diagnostics.csv"
+            output_path = self._results_dir / "04_volatility_diagnostics.csv"
             df.to_csv(output_path, index=False)
 
             _logger.info("Saved volatility diagnostics to: %s", output_path)

@@ -89,14 +89,15 @@ class RollingMemoryScanner:
                 _logger.debug("No results for %s", date_str)
                 continue
 
-            # Load 04_volatility_filtered.csv (has all technical indicators)
-            vol_file = day_folder / '04_volatility_filtered.csv'
+            # Try new filename first (05_volatility_filtered.csv)
+            vol_file = day_folder / '05_volatility_filtered.csv'
+
             if vol_file.exists():
                 try:
                     df = pd.read_csv(vol_file)
                     df['scan_date'] = scan_date
                     all_results.append(df)
-                    _logger.debug("Loaded %d tickers from %s", len(df), date_str)
+                    _logger.debug("Loaded %d tickers from %s (%s)", len(df), date_str, vol_file.name)
                 except Exception:
                     _logger.exception("Error loading %s", vol_file)
 

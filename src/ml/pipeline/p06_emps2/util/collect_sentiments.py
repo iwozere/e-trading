@@ -27,7 +27,7 @@ from typing import List, Set
 from tqdm import tqdm
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
@@ -47,7 +47,7 @@ def get_phase2_tickers_from_date(date: datetime) -> Set[str]:
         Set of ticker symbols
     """
     date_str = date.strftime('%Y-%m-%d')
-    alerts_file = PROJECT_ROOT / 'results' / 'emps2' / date_str / '09_phase2_alerts.csv'
+    alerts_file = PROJECT_ROOT / 'results' / 'emps2' / date_str / '08_phase2_alerts.csv'
 
     if not alerts_file.exists():
         _logger.debug(f"No Phase 2 alerts found for {date_str}")
@@ -123,7 +123,7 @@ def collect_sentiments():
         output_dir = PROJECT_ROOT / 'results' / 'emps2' / yesterday
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        output_file = output_dir / '10_phase2_sentiments.csv'
+        output_file = output_dir / '10_sentiments.csv'
         results_df.to_csv(output_file, index=False)
 
         _logger.info(f"Saved sentiment data for {len(results_df)} tickers to {output_file}")

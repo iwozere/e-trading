@@ -83,79 +83,82 @@ results/emps2/YYYY-MM-DD/  ← Yesterday's date
 │ Stage 0: Universe Download                                  │
 │ • Source: NASDAQ Trader FTP (free)                          │
 │ • Output: ~8,000 tickers                                    │
-│ • Time: <5 seconds (cached: 24h TTL)                       │
+│ • Time: <5 seconds (cached: 24h TTL)                        │
 │ • Cost: FREE                                                │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 1: Fundamental Filter                                │
-│ • Source: Finnhub API (profile2 + metrics)                 │
-│ • Filters:                                                 │
-│   - Market cap: $50M - $5B                                │
-│   - Float shares: < 60M                                   │
-│   - Avg volume: > 400K                                    │
-│   - Price: > $1.00                                        │
-│ • Output: ~500-800 tickers                                │
-│ • Time: 1-2 minutes (with cache: ~30 seconds)             │
-│ • Cost: API calls (cached 3 days)                         │
+│ Stage 1: Fundamental Filter                                 │
+│ • Source: Finnhub API (profile2 + metrics)                  │
+│ • Filters:                                                  │
+│   - Market cap: $50M - $5B                                  │
+│   - Float shares: < 60M                                     │
+│   - Avg volume: > 400K                                      │
+│   - Price: > $1.00                                          │
+│ • Output: ~500-800 tickers                                  │
+│ • Time: 1-2 minutes (with cache: ~30 seconds)               │
+│ • Cost: API calls (cached 3 days)                           │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 2b: TRF Data Download (NEW v2.2)                     │
-│ • Source: FINRA TRF API (OAuth)                            │
-│ • Output: trf.csv with volume correction factors           │
-│ • Time: ~10-20 seconds                                     │
-│ • Cost: FREE (FINRA public API)                            │
+│ Stage 2b: TRF Data Download (NEW v2.2)                      │
+│ • Source: FINRA TRF API (OAuth)                             │
+│ • Output: trf.csv with volume correction factors            │
+│ • Time: ~10-20 seconds                                      │
+│ • Cost: FREE (FINRA public API)                             │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 2: Volatility Filter (Enhanced with TRF)             │
-│ • Source: Yahoo Finance 1h data + TRF corrections          │
-│ • Filters:                                                 │
-│   - ATR/Price ratio: > 2%                                  │
-│   - Price range: > 5%                                      │
-│   - Volume Z-Score: > 1.2                                  │
-│   - Vol/RV Ratio: > 0.5                                    │
-│ • Output: ~50-200 tickers                                  │
-│ • Time: 30-60 seconds                                      │
-│ • Cost: FREE                                               │
+│ Stage 2: Volatility Filter (Enhanced with TRF)              │
+│ • Source: Yahoo Finance 1h data + TRF corrections           │
+│ • Filters:                                                  │
+│   - ATR/Price ratio: > 2%                                   │
+│   - Price range: > 5%                                       │
+│   - Volume Z-Score: > 1.2                                   │
+│   - Vol/RV Ratio: > 0.5                                     │
+│ • Output: ~50-200 tickers                                   │
+│ • Files:                                                    │
+│   - 04_volatility_diagnostics.csv (All metrics)             │
+│   - 05_volatility_filtered.csv    (Passed only)             │
+│ • Time: 30-60 seconds                                       │
+│ • Cost: FREE                                                │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 3: Rolling Memory Analysis                           │
-│ • Input: Volatility-filtered tickers                       │
-│ • Tracks tickers over 10-day window                        │
-│ • Identifies accumulation patterns                         │
-│ • Output: 06_rolling_candidates.csv                        │
-│ • Time: ~5-15 seconds                                      │
-│ • Cost: None (uses local files)                            │
+│ Stage 3: Rolling Memory Analysis                            │
+│ • Input: Volatility-filtered tickers                        │
+│ • Tracks tickers over 10-day window                         │
+│ • Identifies accumulation patterns                          │
+│ • Output: 06_rolling_candidates.csv                         │
+│ • Time: ~5-15 seconds                                       │
+│ • Cost: None (uses local files)                             │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 4: UOA Analysis (NEW v2.3)                           │
-│ • Source: EODHD Options API                                │
-│ • Input: 06_rolling_candidates.csv                         │
-│ • Metrics:                                                 │
-│   - Put/Call Ratio                                         │
-│   - Volume Ratios                                          │
-│   - UOA Score (0-100)                                      │
-│ • Output: uoa.csv                                          │
-│ • Time: ~30-60 seconds                                     │
-│ • Cost: EODHD API calls (cached 24h)                       │
+│ Stage 4: UOA Analysis (NEW v2.3)                            │
+│ • Source: EODHD Options API                                 │
+│ • Input: 06_rolling_candidates.csv                          │
+│ • Metrics:                                                  │
+│   - Put/Call Ratio                                          │
+│   - Volume Ratios                                           │
+│   - UOA Score (0-100)                                       │
+│ • Output: uoa.csv                                           │
+│ • Time: ~30-60 seconds                                      │
+│ • Cost: EODHD API calls (cached 24h)                        │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 5: Sentiment Filter (OPTIONAL - LAST)                │
-│ • Source: StockTwits + Reddit (async)                      │
-│ • Filters:                                                 │
-│   - Mentions (24h): >= 10                                  │
-│   - Sentiment score: >= 0.5                                │
-│   - Bot activity: < 30%                                    │
-│   - Virality index: >= 1.2                                 │
-│   - Unique authors: >= 5                                   │
-│ • Output: ~20-50 tickers                                   │
-│ • Time: 30-90 seconds (async, 8 concurrent)                │
-│ • Cost: API rate-limited (optional)                        │
+│ Stage 5: Sentiment Filter (OPTIONAL - LAST)                 │
+│ • Source: StockTwits + Reddit (async)                       │
+│ • Filters:                                                  │
+│   - Mentions (24h): >= 10                                   │
+│   - Sentiment score: >= 0.5                                 │
+│   - Bot activity: < 30%                                     │
+│   - Virality index: >= 1.2                                  │
+│   - Unique authors: >= 5                                    │
+│ • Output: ~20-50 tickers                                    │
+│ • Time: 30-90 seconds (async, 8 concurrent)                 │
+│ • Cost: API rate-limited (optional)                         │
 └─────────────────────────────────────────────────────────────┘
                            ↓
                     FINAL OUTPUT

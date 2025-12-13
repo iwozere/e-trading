@@ -381,7 +381,7 @@ class EMPS2Pipeline:
         filtered_tickers = self.volatility_filter.apply_filters(tickers)
 
         # Read back the saved CSV to get the full DataFrame with metrics
-        volatility_csv = self._results_dir / "04_volatility_filtered.csv"
+        volatility_csv = self._results_dir / "05_volatility_filtered.csv"
         if volatility_csv.exists():
             filtered_df = pd.read_csv(volatility_csv)
         else:

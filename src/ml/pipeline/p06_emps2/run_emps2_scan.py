@@ -365,8 +365,8 @@ def main() -> int:
         print(f"  - 01_nasdaq_universe.csv          (Full NASDAQ universe)")
         print(f"  - 02_fundamental_raw_data.csv     (Raw fundamental data)")
         print(f"  - 03_fundamental_filtered.csv     (After fundamental filters)")
-        print(f"  - 04_volatility_filtered.csv      (After volatility filters)")
-        print(f"  - 05_volatility_diagnostics.csv   (ALL tickers with metrics & failure reasons)")
+        print(f"  - 04_volatility_diagnostics.csv   (ALL tickers with metrics & failure reasons)")
+        print(f"  - 05_volatility_filtered.csv      (After volatility filters)")
         if config.rolling_memory_config.enabled:
             print(f"  - 06_rolling_candidates.csv       (14-day rolling memory)")
             print(f"  - 07_phase1_watchlist.csv         (Phase 1: Quiet Accumulation)")

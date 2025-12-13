@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 import argparse
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
