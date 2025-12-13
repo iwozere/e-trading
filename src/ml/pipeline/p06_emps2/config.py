@@ -5,17 +5,29 @@ Configuration dataclasses for the EMPS2 (Enhanced Explosive Move Pre-Screener) p
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
+# ... (rest of imports)
 
 @dataclass
-class EMPS2FilterConfig:
+class EMPS2PipelineConfig:
     """
-    EMPS2 filtering parameters.
+    Complete EMPS2 pipeline configuration.
 
-    These thresholds define the multi-stage filtering criteria for identifying
-    stocks with explosive move potential.
+    Combines filter config and universe config for end-to-end pipeline execution.
     """
+
+    filter_config: EMPS2FilterConfig
+    universe_config: EMPS2UniverseConfig
+    rolling_memory_config: RollingMemoryConfig
+    sentiment_config: SentimentFilterConfig
+
+    # Output settings
+    save_intermediate_results: bool = True
+    generate_summary: bool = True
+    verbose_logging: bool = True
+    enable_uoa_analysis: bool = False # requires paid subscription
+    user_id: Optional[str] = None
 
     # Fundamental filters (Stage 2)
     min_price: float = 0.5
@@ -138,6 +150,7 @@ class EMPS2PipelineConfig:
     generate_summary: bool = True
     verbose_logging: bool = True
     enable_uoa_analysis: bool = False # requires paid subscription
+    user_id: Optional[str] = None
 
     @classmethod
     def create_default(cls) -> "EMPS2PipelineConfig":

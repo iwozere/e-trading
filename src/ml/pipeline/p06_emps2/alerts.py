@@ -25,9 +25,10 @@ class EMPS2AlertSender:
     - src.notification.service.client.NotificationServiceClient
     """
 
-    def __init__(self):
+    def __init__(self, user_id: Optional[str] = None):
         """Initialize alert sender with NotificationServiceClient."""
         self.client = None
+        self.user_id = user_id
 
         # Try to initialize notification client
         try:
@@ -114,6 +115,7 @@ See attached CSV for full details."""
             message=message,
             priority="high",
             channels=channels,
+            recipient_id=self.user_id,
             attachments=attachments,
             source="emps2_pipeline"
         )

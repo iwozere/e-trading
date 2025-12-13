@@ -278,7 +278,7 @@ class NotificationServiceClient:
                 "message_type": str(notification_type),
                 "priority": str(priority),
                 "channels": channels or ["telegram", "email"],
-                "recipient_id": recipient_id or email_receiver or "default",
+                "recipient_id": recipient_id or email_receiver,
                 "template_name": None,
                 "content": {
                     "title": title,

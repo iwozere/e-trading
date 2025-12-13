@@ -189,6 +189,11 @@ Examples:
         action='store_true',
         help='Skip summary generation'
     )
+    execution_group.add_argument(
+        '--user-id',
+        type=str,
+        help='User ID to associate with alerts and jobs'
+    )
 
     # Sentiment filtering parameters
     sentiment_group = parser.add_argument_group('Sentiment Filtering')
@@ -201,12 +206,20 @@ Examples:
     return parser.parse_args()
 
 
-def print_header(title: str):
-    """Print formatted header."""
-    print(f"\n{'='*70}")
-    print(f"{title:^70}")
-    print(f"{'='*70}\n")
+# ... (skipping to main function body)
 
+    # Update config flags
+    if args.quiet:
+        config.verbose_logging = False
+    if args.no_summary:
+        config.generate_summary = False
+    if args.no_sentiment:
+        config.sentiment_config.enabled = False
+    if args.user_id:
+        config.user_id = args.user_id
+
+    # Determine force_refresh (default is False, use cache unless --force-refresh is specified)
+    force_refresh = args.force_refresh
 
 def print_results_summary(final_df, config: EMPS2PipelineConfig):
     """
@@ -316,6 +329,8 @@ def main() -> int:
         config.generate_summary = False
     if args.no_sentiment:
         config.sentiment_config.enabled = False
+    if args.user_id:
+        config.user_id = args.user_id
 
     # Determine force_refresh (default is False, use cache unless --force-refresh is specified)
     force_refresh = args.force_refresh

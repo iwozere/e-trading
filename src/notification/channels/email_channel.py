@@ -26,6 +26,7 @@ from src.notification.channels.config import (
     ConfigValidator, CommonValidationRules, validate_email
 )
 from src.notification.logger import setup_logger
+from src.data.db.services.users_service import users_service
 
 _logger = setup_logger(__name__)
 
@@ -195,9 +196,34 @@ class EmailChannel(NotificationChannel):
 
             # Check for email_receiver in metadata first (for multi-channel messages)
             # This allows different recipients for different channels (e.g., email vs Telegram)
-            to_email = metadata.get("email_receiver") or recipient or self.config.get("default_recipient")
+            to_email = metadata.get("email_receiver")
+
+            # If not in metadata, try to resolve from recipient (which might be user_id or "default")
             if not to_email:
-                raise ValueError("No recipient email address provided")
+                if recipient and recipient != "default":
+                    if "@" in recipient:
+                        # It's already an email address
+                        to_email = recipient
+                    else:
+                        # Try to resolve as user_id
+                        try:
+                            user_id_int = int(recipient)
+                            _logger.debug(f"Attempting to resolve email for user_id: {user_id_int}")
+                            user_channels = users_service.get_user_notification_channels(user_id_int)
+                            if user_channels and user_channels.get("email"):
+                                to_email = user_channels["email"]
+                                _logger.info(f"Resolved user_id {user_id_int} to email: {to_email}")
+                            else:
+                                _logger.warning(f"No email found for user_id: {user_id_int}")
+                        except (ValueError, TypeError):
+                            # Not an integer user_id, and not an email
+                            _logger.warning(f"Recipient '{recipient}' is not a valid email or user_id")
+
+            # Fallback to config default was REMOVED as per user request
+            # We strictly require a valid resolved email
+
+            if not to_email:
+                raise ValueError(f"No recipient email address provided. Could not resolve '{recipient}' to an email.")
 
             # Parse recipients (support comma-separated)
             recipients = [email.strip() for email in to_email.split(",")]

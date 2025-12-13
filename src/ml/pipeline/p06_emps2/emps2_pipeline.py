@@ -108,7 +108,7 @@ class EMPS2Pipeline:
         )
 
         # Alert sender
-        self.alert_sender = EMPS2AlertSender() if self.config.rolling_memory_config.send_alerts else None
+        self.alert_sender = EMPS2AlertSender(user_id=self.config.user_id) if self.config.rolling_memory_config.send_alerts else None
 
         # Sentiment filter
         self.sentiment_filter = SentimentFilter(
