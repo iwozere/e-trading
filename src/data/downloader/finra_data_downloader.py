@@ -28,7 +28,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from config.donotshare.donotshare import FINRA_API_CLIENT, FINRA_API_SECRET
 
 _logger = setup_logger(__name__)
 
@@ -98,6 +97,10 @@ class FinraDataDownloader(BaseDataDownloader):
         # OAuth token management for TRF API
         self._access_token: Optional[str] = None
         self._token_expires_at: Optional[datetime] = None
+
+        # Store API credentials for OAuth (loaded via centralized config)
+        self._finra_api_client = self._get_config_value('FINRA_API_CLIENT', 'FINRA_API_CLIENT')
+        self._finra_api_secret = self._get_config_value('FINRA_API_SECRET', 'FINRA_API_SECRET')
 
         _logger.info("FinraDataDownloader initialized")
 
@@ -551,7 +554,7 @@ class FinraDataDownloader(BaseDataDownloader):
             # Use Basic Auth with Client ID and Secret
             response = requests.post(
                 self.FINRA_AUTH_URL,
-                auth=(FINRA_API_CLIENT, FINRA_API_SECRET),
+                auth=(self._finra_api_client, self._finra_api_secret),
                 timeout=30
             )
             response.raise_for_status()

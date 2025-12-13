@@ -27,9 +27,9 @@ The `src/data/downloader` folder implements a data downloader system with 17+ do
 
 #### 1.1 **Inconsistent Inheritance Pattern**
 **Issue**: Several downloaders don't inherit from `BaseDataDownloader`:
-- `EODHDApiError` / `eodhd_downloader.py` - standalone functions
-- `TradierDownloader` - standalone class
-- `vix_downloader.py` - standalone functions
+- ~~`EODHDApiError` / `eodhd_downloader.py` - standalone functions~~ ✅ **COMPLETED**: Converted to `EODHDDataDownloader`
+- ~~`TradierDownloader` - standalone class~~ ✅ **COMPLETED**: Converted to `TradierDataDownloader`
+- ~~`vix_downloader.py` - standalone functions~~ ✅ **COMPLETED**: Converted to `VIXDataDownloader`
 - ~~`FINRADataDownloader` - standalone class~~ ✅ **COMPLETED**: Consolidated into `FinraDataDownloader`
 - ~~`FinraTRFDownloader` - standalone class~~ ✅ **COMPLETED**: Consolidated into `FinraDataDownloader`
 
@@ -52,11 +52,11 @@ class EODHDDataDownloader(BaseDataDownloader):
 ```
 
 **Action Items**:
-- [ ] Refactor `EODHDDataDownloader` to inherit from `BaseDataDownloader`
-- [ ] Refactor `TradierDownloader` to inherit from `BaseDataDownloader`
+- [x] Refactor `EODHDDataDownloader` to inherit from `BaseDataDownloader` ✅ **COMPLETED**: Converted to `EODHDDataDownloader` class
+- [x] Refactor `TradierDownloader` to inherit from `BaseDataDownloader` ✅ **COMPLETED**: Converted to `TradierDataDownloader` class
+- [x] Refactor `vix_downloader.py` to inherit from `BaseDataDownloader` ✅ **COMPLETED**: Converted to `VIXDataDownloader` class
 - [x] Refactor `FINRADataDownloader` to inherit from `BaseDataDownloader` ✅ **COMPLETED**: Consolidated into `FinraDataDownloader` which inherits from `BaseDataDownloader`
 - [x] Refactor `FinraTRFDownloader` to inherit from `BaseDataDownloader` ✅ **COMPLETED**: Consolidated into `FinraDataDownloader` which inherits from `BaseDataDownloader`
-- [ ] Consider if `vix_downloader.py` should be a downloader or a utility module
 
 **Completed Changes (1.1)**:
 - ✅ Consolidated `FINRADataDownloader` and `FinraTRFDownloader` into a single `FinraDataDownloader` class
@@ -94,11 +94,11 @@ All callers have been updated to use the consolidated `FinraDataDownloader` clas
 
 #### 1.2 **Factory Missing Downloaders**
 **Issue**: `DataDownloaderFactory` doesn't include:
-- EODHD
-- Tradier
-- FINRA
-- FINRA TRF
-- VIX (if it should be a downloader)
+- ~~EODHD~~ ✅ **COMPLETED**: Added to factory
+- ~~Tradier~~ ✅ **COMPLETED**: Added to factory (using code "trdr" to resolve conflict)
+- ~~FINRA~~ ✅ **COMPLETED**: Added to factory
+- ~~FINRA TRF~~ ✅ **COMPLETED**: Added to factory (maps to same FinraDataDownloader)
+- ~~VIX~~ ✅ **COMPLETED**: Added to factory
 
 **Impact**: 
 - These downloaders can't be created via factory
@@ -115,7 +115,7 @@ PROVIDER_MAP = {
     "tradier": "tradier",
     "td": "tradier",  # Note: conflicts with "twelvedata"
     "finra": "finra",
-    "finra_trf": "finra_trf",
+    "finra_trf": "finra",
 }
 
 # Add to _get_downloader_class
@@ -124,14 +124,35 @@ downloader_classes = {
     "eodhd": EODHDDataDownloader,
     "tradier": TradierDataDownloader,
     "finra": FinraDataDownloader,  # Note: Consolidated from FINRADataDownloader and FinraTRFDownloader
-    "finra_trf": FinraDataDownloader,  # Note: Consolidated from FinraTRFDownloader
 }
 ```
 
 **Action Items**:
-- [ ] Add missing downloaders to factory
-- [ ] Resolve provider code conflicts (e.g., "td" for both tradier and twelvedata)
-- [ ] Update factory instantiation logic for new downloaders
+- [x] Add FINRA downloaders to factory ✅ **COMPLETED**: Added `FinraDataDownloader` to factory with codes "finra" and "finra_trf"
+- [x] Add EODHD to factory ✅ **COMPLETED**: Added `EODHDDataDownloader` to factory with codes "eodhd" and "eod"
+- [x] Add Tradier to factory ✅ **COMPLETED**: Added `TradierDataDownloader` to factory with codes "trdr" and "tradier" (resolved conflict with "td" used by twelvedata)
+- [x] Add VIX to factory ✅ **COMPLETED**: Added `VIXDataDownloader` to factory with code "vix"
+- [x] Resolve provider code conflicts ✅ **COMPLETED**: Used "trdr" for Tradier to avoid conflict with "td" (twelvedata)
+- [x] Update factory instantiation logic ✅ **COMPLETED**: Added instantiation logic for all new downloaders
+
+**Completed Changes (1.2)**:
+- ✅ Added `FinraDataDownloader` import to factory
+- ✅ Added "finra" and "finra_trf" provider codes to `PROVIDER_MAP` (both map to "finra")
+- ✅ Added `EODHDDataDownloader` import to factory
+- ✅ Added "eodhd" and "eod" provider codes to `PROVIDER_MAP` (both map to "eodhd")
+- ✅ Added `TradierDataDownloader` import to factory
+- ✅ Added "trdr" and "tradier" provider codes to `PROVIDER_MAP` (both map to "tradier")
+  - Used "trdr" to resolve conflict with "td" used by twelvedata
+- ✅ Added `VIXDataDownloader` import to factory
+- ✅ Added "vix" provider code to `PROVIDER_MAP`
+- ✅ Added all new downloaders to `_get_downloader_class()` method
+- ✅ Added instantiation logic in `_create_downloader_instance()` for all new downloaders:
+  - **FINRA**: `rate_limit_delay`, `date`, `output_dir`, `output_filename`, `fetch_yfinance_data`
+  - **EODHD**: `api_key` (from env or kwargs)
+  - **Tradier**: `api_key` (from env or kwargs), `rate_limit_sleep` (default: 0.3)
+  - **VIX**: No parameters required
+- ✅ Added all new downloaders to `get_provider_info()` method with complete provider information
+- ✅ Updated factory documentation to include all new providers in supported providers list
 
 ---
 
@@ -170,10 +191,31 @@ class BaseDataDownloader(ABC):
 ```
 
 **Action Items**:
-- [ ] Create centralized config accessor
-- [ ] Refactor all downloaders to use centralized config
-- [ ] Support environment variables as primary source
-- [ ] Add config validation
+- [x] Create centralized config accessor ✅ **COMPLETED**: Added `_get_config_value()` static method to `BaseDataDownloader`
+- [x] Refactor all downloaders to use centralized config ✅ **COMPLETED**: All downloaders updated
+- [x] Support environment variables as primary source ✅ **COMPLETED**: Method prioritizes environment variables
+- [x] Add config validation ✅ **COMPLETED**: Method handles ImportError and AttributeError gracefully
+
+**Completed Changes (1.3)**:
+- ✅ Added `_get_config_value()` static method to `BaseDataDownloader` class
+  - Method prioritizes environment variables (if `env_var` is provided)
+  - Falls back to `config.donotshare.donotshare` module using `getattr()`
+  - Returns `default` value if not found
+  - Handles `ImportError` and `AttributeError` gracefully
+- ✅ Updated all downloaders to use `_get_config_value()` instead of direct imports:
+  - `AlphaVantageDataDownloader`: Uses `_get_config_value('ALPHA_VANTAGE_KEY', 'ALPHA_VANTAGE_KEY')`
+  - `FinnhubDataDownloader`: Uses `_get_config_value('FINNHUB_KEY', 'FINNHUB_KEY')`
+  - `PolygonDataDownloader`: Uses `_get_config_value('POLYGON_KEY', 'POLYGON_KEY')`
+  - `TwelveDataDataDownloader`: Uses `_get_config_value('TWELVE_DATA_KEY', 'TWELVE_DATA_KEY')`
+  - `FMPDataDownloader`: Uses `_get_config_value('FMP_API_KEY', 'FMP_API_KEY')`
+  - `TiingoDataDownloader`: Uses `_get_config_value('TIINGO_API_KEY', 'TIINGO_API_KEY')`
+  - `AlpacaDataDownloader`: Uses `_get_config_value()` for both `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`
+  - `EODHDDataDownloader`: Uses `_get_config_value('EODHD_API_KEY', 'EODHD_API_KEY')`
+  - `FinraDataDownloader`: Uses `_get_config_value()` for both `FINRA_API_CLIENT` and `FINRA_API_SECRET`
+- ✅ Removed all direct imports from `config.donotshare.donotshare` in downloader files
+- ✅ Environment variables are now the primary source (checked first)
+- ✅ Config module is fallback (checked second)
+- ✅ All changes maintain backward compatibility with existing configuration structure
 
 ---
 

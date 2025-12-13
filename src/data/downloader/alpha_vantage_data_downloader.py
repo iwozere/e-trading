@@ -80,9 +80,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
     def __init__(self, api_key: Optional[str] = None):
         super().__init__()
         # Get API key from parameter or config
-        from config.donotshare.donotshare import ALPHA_VANTAGE_KEY
-
-        self.api_key = api_key or ALPHA_VANTAGE_KEY
+        self.api_key = api_key or self._get_config_value('ALPHA_VANTAGE_KEY', 'ALPHA_VANTAGE_KEY')
         self.base_url = "https://www.alphavantage.co/query"
 
         if not self.api_key:

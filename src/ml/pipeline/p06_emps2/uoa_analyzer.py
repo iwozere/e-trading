@@ -4,13 +4,14 @@ from datetime import datetime, timedelta
 import pandas as pd
 from typing import List, Optional
 from src.notification.logger import setup_logger
-from src.data.downloader.eodhd_downloader import download_for_date
+from src.data.downloader.eodhd_downloader import EODHDDataDownloader
 
 _logger = setup_logger(__name__)
 
 class UOAAnalyzer:
     def __init__(self, results_dir: Path):
         self.results_dir = results_dir
+        self.eodhd_downloader = EODHDDataDownloader()
 
     def get_yesterday_str(self) -> str:
         """Get yesterday's date in YYYY-MM-DD format"""
@@ -44,7 +45,7 @@ class UOAAnalyzer:
         all_data = []
         for ticker in tickers:
             try:
-                df = download_for_date(ticker, target_date)
+                df = self.eodhd_downloader.download_for_date([ticker], target_date)
                 if not df.empty:
                     all_data.append(df)
             except Exception as e:

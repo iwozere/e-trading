@@ -9,11 +9,7 @@ import os
 
 # Import the module to test
 from src.data.downloader.eodhd_downloader import (
-    fetch_chain,
-    download_for_date,
-    compute_30d_stats,
-    compute_uoa_score,
-    save_to_file,
+    EODHDDataDownloader,
     EODHDApiError
 )
 
@@ -84,14 +80,15 @@ def sample_historical_data():
 
 # Test cases
 class TestFetchChain:
-    @patch('src.data.downloader.eodhd_downloader._make_api_request')
+    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request')
     def test_fetch_chain_success(self, mock_api_request):
         """Test successful option chain fetch."""
         # Setup
         mock_api_request.return_value = SAMPLE_OPTION_CHAIN
+        downloader = EODHDDataDownloader()
 
         # Execute
-        result = fetch_chain("AAPL", "2025-12-05")
+        result = downloader.fetch_chain("AAPL", "2025-12-05")
 
         # Verify
         assert not result.empty
@@ -99,45 +96,48 @@ class TestFetchChain:
         assert "AAPL" in result["ticker"].values
         assert 150.0 in result["strike"].values
 
-    @patch('src.data.downloader.eodhd_downloader._make_api_request')
+    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request')
     def test_fetch_chain_no_data(self, mock_api_request):
         """Test handling of no data from API."""
         # Setup
         mock_api_request.return_value = {"data": []}
+        downloader = EODHDDataDownloader()
 
         # Execute
-        result = fetch_chain("INVALID", "2025-12-05")
+        result = downloader.fetch_chain("INVALID", "2025-12-05")
 
         # Verify
         assert result.empty
 
-    @patch('src.data.downloader.eodhd_downloader._make_api_request')
+    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request')
     def test_fetch_chain_api_error(self, mock_api_request):
         """Test handling of API errors."""
         # Setup
         mock_api_request.side_effect = EODHDApiError("API Error")
+        downloader = EODHDDataDownloader()
 
         # Execute & Verify
         with pytest.raises(EODHDApiError):
-            fetch_chain("AAPL", "2025-12-05")
+            downloader.fetch_chain("AAPL", "2025-12-05")
 
 class TestDownloadForDate:
-    @patch('src.data.downloader.eodhd_downloader.fetch_chain')
+    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader.fetch_chain')
     def test_download_for_date_single_ticker(self, mock_fetch):
         """Test downloading data for a single ticker."""
         # Setup
         mock_df = pd.DataFrame([{"ticker": "AAPL", "volume": 1000}])
         mock_fetch.return_value = mock_df
+        downloader = EODHDDataDownloader()
 
         # Execute
-        result = download_for_date(["AAPL"], "2025-12-05")
+        result = downloader.download_for_date(["AAPL"], "2025-12-05")
 
         # Verify
         assert not result.empty
         assert len(result) == 1
         mock_fetch.assert_called_once()
 
-    @patch('src.data.downloader.eodhd_downloader.fetch_chain')
+    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader.fetch_chain')
     def test_download_for_date_multiple_tickers(self, mock_fetch):
         """Test downloading data for multiple tickers."""
         # Setup
@@ -145,9 +145,10 @@ class TestDownloadForDate:
             pd.DataFrame([{"ticker": "AAPL", "volume": 1000}]),
             pd.DataFrame([{"ticker": "MSFT", "volume": 800}])
         ]
+        downloader = EODHDDataDownloader()
 
         # Execute
-        result = download_for_date(["AAPL", "MSFT"], "2025-12-05")
+        result = downloader.download_for_date(["AAPL", "MSFT"], "2025-12-05")
 
         # Verify
         assert len(result) == 2
@@ -156,8 +157,9 @@ class TestDownloadForDate:
 class TestCompute30dStats:
     def test_compute_30d_stats_basic(self, sample_historical_data):
         """Test computing 30-day statistics."""
+        downloader = EODHDDataDownloader()
         # Execute
-        result = compute_30d_stats(sample_historical_data)
+        result = downloader.compute_30d_stats(sample_historical_data)
 
         # Verify
         assert not result.empty
@@ -167,8 +169,9 @@ class TestCompute30dStats:
 
     def test_compute_30d_stats_empty_input(self):
         """Test with empty input DataFrame."""
+        downloader = EODHDDataDownloader()
         # Execute
-        result = compute_30d_stats(pd.DataFrame())
+        result = downloader.compute_30d_stats(pd.DataFrame())
 
         # Verify
         assert result.empty
@@ -176,11 +179,12 @@ class TestCompute30dStats:
 class TestComputeUOAScore:
     def test_compute_uoa_score_basic(self, sample_historical_data):
         """Test computing UOA score."""
+        downloader = EODHDDataDownloader()
         # Setup
-        stats = compute_30d_stats(sample_historical_data)
+        stats = downloader.compute_30d_stats(sample_historical_data)
 
         # Execute
-        result = compute_uoa_score(stats)
+        result = downloader.compute_uoa_score(stats)
 
         # Verify
         assert not result.empty
@@ -190,6 +194,7 @@ class TestComputeUOAScore:
 
     def test_compute_uoa_score_edge_cases(self):
         """Test UOA score with edge cases."""
+        downloader = EODHDDataDownloader()
         # Setup
         df = pd.DataFrame([{
             "ticker": "AAPL",
@@ -201,7 +206,7 @@ class TestComputeUOAScore:
         }])
 
         # Execute
-        result = compute_uoa_score(df)
+        result = downloader.compute_uoa_score(df)
 
         # Verify
         assert not result.empty
@@ -210,12 +215,13 @@ class TestComputeUOAScore:
 class TestSaveToFile:
     def test_save_to_csv(self, tmp_path):
         """Test saving to CSV file."""
+        downloader = EODHDDataDownloader()
         # Setup
         df = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
         filepath = tmp_path / "test.csv"
 
         # Execute
-        result = save_to_file(df, str(tmp_path), "test.csv")
+        result = downloader.save_to_file(df, str(tmp_path), "test.csv")
 
         # Verify
         assert result
@@ -224,35 +230,37 @@ class TestSaveToFile:
 
     def test_save_to_unsupported_format(self):
         """Test handling of unsupported file formats."""
+        downloader = EODHDDataDownloader()
         # Setup
         df = pd.DataFrame({"col1": [1, 2]})
 
         # Execute & Verify
         with pytest.raises(ValueError):
-            save_to_file(df, ".", "test.unsupported")
+            downloader.save_to_file(df, ".", "test.unsupported")
 
 # Integration test
 class TestIntegration:
-    @patch('src.data.downloader.eodhd_downloader._make_api_request')
+    @patch('src.data.downloader.eodhd_downloader.EODHDDataDownloader._make_api_request')
     def test_end_to_end_flow(self, mock_api_request, tmp_path):
         """Test the complete flow from API call to file save."""
+        downloader = EODHDDataDownloader()
         # Setup mock API response
         mock_api_request.return_value = SAMPLE_OPTION_CHAIN
 
         # 1. Fetch data
-        df = fetch_chain("AAPL", "2025-12-05")
+        df = downloader.fetch_chain("AAPL", "2025-12-05")
         assert not df.empty
 
         # 2. Compute stats
-        stats = compute_30d_stats(df)
+        stats = downloader.compute_30d_stats(df)
         assert not stats.empty
 
         # 3. Compute UOA score
-        scores = compute_uoa_score(stats)
+        scores = downloader.compute_uoa_score(stats)
         assert "uoa_score" in scores.columns
 
         # 4. Save results
         output_file = tmp_path / "uoa_scores.csv"
-        save_result = save_to_file(scores, str(tmp_path), "uoa_scores.csv")
+        save_result = downloader.save_to_file(scores, str(tmp_path), "uoa_scores.csv")
         assert save_result
         assert output_file.exists()

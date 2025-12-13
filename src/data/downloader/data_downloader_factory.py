@@ -10,6 +10,7 @@ Classes:
 """
 
 import os
+from pathlib import Path
 from typing import Dict, Any, Optional, Type
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
@@ -22,6 +23,10 @@ from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloade
 from src.data.downloader.fmp_data_downloader import FMPDataDownloader
 from src.data.downloader.tiingo_data_downloader import TiingoDataDownloader
 from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
+from src.data.downloader.finra_data_downloader import FinraDataDownloader
+from src.data.downloader.eodhd_downloader import EODHDDataDownloader
+from src.data.downloader.tradier_downloader import TradierDataDownloader
+from src.data.downloader.vix_downloader import VIXDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -45,6 +50,10 @@ class DataDownloaderFactory:
     - "fmp" or "financial_modeling_prep" -> Financial Modeling Prep
     - "tiingo" -> Tiingo
     - "alp" or "alpaca" -> Alpaca
+    - "finra" or "finra_trf" -> FINRA (short interest and TRF data)
+    - "eodhd" or "eod" -> EODHD (options data)
+    - "trdr" or "tradier" -> Tradier (options data)
+    - "vix" -> VIX (volatility index data)
     """
 
     # Provider code mapping
@@ -93,7 +102,22 @@ class DataDownloaderFactory:
 
         # Alpaca
         "alpaca": "alpaca",
-        "alp": "alpaca"
+        "alp": "alpaca",
+
+        # FINRA
+        "finra": "finra",
+        "finra_trf": "finra",
+
+        # EODHD
+        "eodhd": "eodhd",
+        "eod": "eodhd",
+
+        # Tradier
+        "trdr": "tradier",
+        "tradier": "tradier",
+
+        # VIX
+        "vix": "vix"
     }
 
     @staticmethod
@@ -174,6 +198,10 @@ class DataDownloaderFactory:
             "fmp": FMPDataDownloader,
             "tiingo": TiingoDataDownloader,
             "alpaca": AlpacaDataDownloader,
+            "finra": FinraDataDownloader,
+            "eodhd": EODHDDataDownloader,
+            "tradier": TradierDataDownloader,
+            "vix": VIXDataDownloader,
         }
         return downloader_classes.get(provider)
 
@@ -240,6 +268,35 @@ class DataDownloaderFactory:
             if not api_key or not secret_key:
                 raise ValueError("Alpaca API key and secret key are required")
             return downloader_class(api_key=api_key, secret_key=secret_key, base_url=base_url)
+
+        elif provider == "finra":
+            # FINRA can work with or without explicit parameters
+            # It uses OAuth for TRF data and direct API for short interest
+            rate_limit_delay = kwargs.get("rate_limit_delay", 1.0)
+            date = kwargs.get("date")
+            output_dir = kwargs.get("output_dir")
+            output_filename = kwargs.get("output_filename", "finra_trf.csv")
+            fetch_yfinance_data = kwargs.get("fetch_yfinance_data", True)
+            return downloader_class(
+                rate_limit_delay=rate_limit_delay,
+                date=date,
+                output_dir=output_dir,
+                output_filename=output_filename,
+                fetch_yfinance_data=fetch_yfinance_data
+            )
+
+        elif provider == "eodhd":
+            api_key = kwargs.get("api_key") or os.getenv("EODHD_API_KEY")
+            return downloader_class(api_key=api_key)
+
+        elif provider == "tradier":
+            api_key = kwargs.get("api_key") or os.getenv("TRADIER_API")
+            rate_limit_sleep = kwargs.get("rate_limit_sleep", 0.3)
+            return downloader_class(api_key=api_key, rate_limit_sleep=rate_limit_sleep)
+
+        elif provider == "vix":
+            # VIX doesn't require API key
+            return downloader_class()
 
         elif provider in ["yahoo", "coingecko"]:
             # These don't require API keys
@@ -367,6 +424,46 @@ class DataDownloaderFactory:
                 "cost": "Free tier available",
                 "fundamental_data": "Comprehensive",
                 "coverage": "US stocks and ETFs"
+            },
+            "finra": {
+                "codes": ["finra", "finra_trf"],
+                "name": "FINRA",
+                "description": "Official short interest data (bi-weekly) and TRF daily short sale volume data",
+                "requires_api_key": True,
+                "rate_limits": "Respectful rate limiting recommended (1+ second delays)",
+                "cost": "Free",
+                "fundamental_data": "Short interest and TRF data only",
+                "coverage": "US stocks (short interest and TRF data)"
+            },
+            "eodhd": {
+                "codes": ["eodhd", "eod"],
+                "name": "EODHD",
+                "description": "Options data and historical market data",
+                "requires_api_key": True,
+                "rate_limits": "Varies by plan",
+                "cost": "Free tier available",
+                "fundamental_data": "Options data only",
+                "coverage": "Global stocks (options data)"
+            },
+            "tradier": {
+                "codes": ["trdr", "tradier"],
+                "name": "Tradier",
+                "description": "Options data and market data",
+                "requires_api_key": True,
+                "rate_limits": "Varies by plan",
+                "cost": "Free tier available",
+                "fundamental_data": "Options data only",
+                "coverage": "US stocks (options data)"
+            },
+            "vix": {
+                "codes": ["vix"],
+                "name": "VIX",
+                "description": "Volatility Index data from Yahoo Finance",
+                "requires_api_key": False,
+                "rate_limits": "None for basic usage",
+                "cost": "Free",
+                "fundamental_data": "Volatility index data only",
+                "coverage": "VIX volatility index"
             }
         }
 

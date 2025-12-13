@@ -20,7 +20,8 @@ Classes:
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+import os
 
 import pandas as pd
 
@@ -44,6 +45,48 @@ class BaseDataDownloader(ABC):
     def __init__(self):
         """Initialize the data downloader."""
         pass
+
+    @staticmethod
+    def _get_config_value(config_key: str, env_var: Optional[str] = None, default: Optional[str] = None) -> Optional[str]:
+        """
+        Get config value from environment variables or config module.
+
+        This method provides centralized configuration access that:
+        1. First tries environment variables (if env_var is provided)
+        2. Falls back to config.donotshare.donotshare module
+        3. Returns default value if not found
+
+        Args:
+            config_key: Name of the config variable in config.donotshare.donotshare
+            env_var: Environment variable name (optional, defaults to config_key)
+            default: Default value to return if not found (optional)
+
+        Returns:
+            Config value as string, or None/default if not found
+
+        Example:
+            >>> api_key = BaseDataDownloader._get_config_value('POLYGON_KEY', 'POLYGON_KEY')
+            >>> # Tries POLYGON_KEY env var first, then config.donotshare.donotshare.POLYGON_KEY
+        """
+        # Use env_var if provided, otherwise use config_key
+        env_var_name = env_var or config_key
+
+        # Try environment variable first
+        value = os.getenv(env_var_name)
+        if value:
+            return value
+
+        # Fallback to config module
+        try:
+            config_module = __import__('config.donotshare.donotshare', fromlist=[config_key])
+            value = getattr(config_module, config_key, None)
+            if value:
+                return value
+        except (ImportError, AttributeError):
+            pass
+
+        # Return default if nothing found
+        return default
 
 
     @abstractmethod

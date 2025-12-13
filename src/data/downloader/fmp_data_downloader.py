@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from config.donotshare.donotshare import FMP_API_KEY
 
 _logger = setup_logger(__name__)
 
@@ -39,7 +38,7 @@ class FMPDataDownloader(BaseDataDownloader):
             rate_limit_delay: Delay between requests in seconds
         """
         super().__init__()
-        self.api_key = api_key or FMP_API_KEY
+        self.api_key = api_key or self._get_config_value('FMP_API_KEY', 'FMP_API_KEY')
         self.rate_limit_delay = rate_limit_delay
         #self.base_url = "https://financialmodelingprep.com/api/v3" -- Deprecated v3 endpoints end of life August 31, 2025
         self.stable_url = "https://financialmodelingprep.com/stable"

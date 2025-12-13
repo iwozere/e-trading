@@ -106,10 +106,8 @@ class AlpacaDataDownloader(BaseDataDownloader):
             )
 
         # Get API credentials from parameter or config
-        from config.donotshare.donotshare import ALPACA_API_KEY, ALPACA_SECRET_KEY
-
-        self.api_key = api_key or ALPACA_API_KEY
-        self.secret_key = secret_key or ALPACA_SECRET_KEY
+        self.api_key = api_key or self._get_config_value('ALPACA_API_KEY', 'ALPACA_API_KEY')
+        self.secret_key = secret_key or self._get_config_value('ALPACA_SECRET_KEY', 'ALPACA_SECRET_KEY')
         self.base_url = base_url or os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets')
 
         if not self.api_key or not self.secret_key:

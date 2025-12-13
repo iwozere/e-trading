@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from config.donotshare.donotshare import TIINGO_API_KEY
 
 _logger = setup_logger(__name__)
 
@@ -39,7 +38,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             rate_limit_delay: Delay between requests in seconds
         """
         super().__init__()
-        self.api_key = api_key or TIINGO_API_KEY
+        self.api_key = api_key or self._get_config_value('TIINGO_API_KEY', 'TIINGO_API_KEY')
         self.rate_limit_delay = rate_limit_delay
         self.base_url = "https://api.tiingo.com/tiingo"
 
