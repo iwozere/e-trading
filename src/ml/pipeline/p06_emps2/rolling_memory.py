@@ -85,8 +85,8 @@ class RollingMemoryScanner:
                 _logger.debug("No results for %s", date_str)
                 continue
 
-            # Load 05_volatility_filtered.csv (has all technical indicators)
-            vol_file = day_folder / '05_volatility_filtered.csv'
+            # Load 04_volatility_filtered.csv (has all technical indicators)
+            vol_file = day_folder / '04_volatility_filtered.csv'
             if vol_file.exists():
                 try:
                     df = pd.read_csv(vol_file)

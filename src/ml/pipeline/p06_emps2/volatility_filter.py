@@ -586,7 +586,7 @@ class VolatilityFilter:
             # Sort by ATR ratio (highest volatility first)
             df = df.sort_values('atr_ratio', ascending=False)
 
-            output_path = self._results_dir / "05_volatility_filtered.csv"
+            output_path = self._results_dir / "04_volatility_filtered.csv"
             df.to_csv(output_path, index=False)
 
             _logger.info("Saved volatility filter results to: %s", output_path)
@@ -635,7 +635,7 @@ class VolatilityFilter:
             df = df.sort_values(['_sort_order', 'ticker'])
             df = df.drop(columns=['_sort_order'])
 
-            output_path = self._results_dir / "04_volatility_diagnostics.csv"
+            output_path = self._results_dir / "05_volatility_diagnostics.csv"
             df.to_csv(output_path, index=False)
 
             _logger.info("Saved volatility diagnostics to: %s", output_path)

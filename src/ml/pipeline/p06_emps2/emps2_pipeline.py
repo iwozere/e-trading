@@ -44,7 +44,7 @@ class EMPS2Pipeline:
     3. Apply volatility filters (~50-200 tickers)
     4. Rolling memory analysis (10-day accumulation tracking)
     5. Phase detection (Phase 1 → Phase 2 transitions)
-    6. Sentiment enrichment (add social momentum metrics)
+    6. Sentiment data collection (social momentum metrics)
     7. Save final results and send alerts
 
     All output saved to results/emps2/YYYY-MM-DD/
@@ -209,8 +209,8 @@ class EMPS2Pipeline:
             # Stage 4: Rolling Memory Analysis (10-day accumulation tracking)
             phase1_df, phase2_df = self._stage4_rolling_memory_analysis(volatility_df)
 
-            # Stage 6: Sentiment Enrichment (add social momentum metrics)
-            sentiment_df = self._stage6_sentiment_enrichment(phase2_df)
+            # Stage 6: Sentiment Data Collection (social momentum metrics)
+            sentiment_df = self._stage6_sentiment_data_collection(phase2_df)
 
             # Run stage 5: UOA Analysis
             self._stage5_uoa_analysis()
@@ -376,11 +376,11 @@ class EMPS2Pipeline:
         _logger.info("Stage 3: Applying Volatility Filters")
         _logger.info("-"*70)
 
-        # Apply volatility filter (saves to 05_volatility_filtered.csv)
+        # Apply volatility filter (saves to 04_volatility_filtered.csv)
         filtered_tickers = self.volatility_filter.apply_filters(tickers)
 
         # Read back the saved CSV to get the full DataFrame with metrics
-        volatility_csv = self._results_dir / "05_volatility_filtered.csv"
+        volatility_csv = self._results_dir / "04_volatility_filtered.csv"
         if volatility_csv.exists():
             filtered_df = pd.read_csv(volatility_csv)
         else:
@@ -461,40 +461,59 @@ class EMPS2Pipeline:
 
         return phase1_df, phase2_df
 
-    def _stage6_sentiment_enrichment(self, phase2_df: pd.DataFrame) -> pd.DataFrame:
+    def _stage6_sentiment_data_collection(self, phase2_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Stage 6: Sentiment Enrichment.
+        Stage 6: Sentiment Data Collection.
 
-        Apply sentiment analysis to Phase 2 candidates (most explosive tickers).
-        Adds social momentum metrics: sentiment_score, mentions_24h, virality_index, etc.
+        Collects sentiment data for all Phase 2 candidates without filtering.
+        Saves social momentum metrics to separate file: 10_sentiments.csv
 
         Args:
             phase2_df: Phase 2 alerts DataFrame
 
         Returns:
-            DataFrame with sentiment metrics
+            DataFrame with sentiment metrics for all tickers
         """
         _logger.info("-"*70)
-        _logger.info("Stage 6: Sentiment Enrichment")
+        _logger.info("Stage 6: Sentiment Data Collection")
         _logger.info("-"*70)
 
-        if not self.sentiment_filter:
-            _logger.info("Sentiment filtering disabled, skipping enrichment")
-            return pd.DataFrame()
-
         if phase2_df.empty:
-            _logger.info("No Phase 2 candidates to enrich with sentiment")
+            _logger.info("No Phase 2 candidates to collect sentiment data for")
             return pd.DataFrame()
 
         # Extract tickers from Phase 2
         tickers = phase2_df['ticker'].tolist()
-        _logger.info("Analyzing sentiment for %d Phase 2 candidates", len(tickers))
+        _logger.info("Collecting sentiment data for %d Phase 2 candidates", len(tickers))
 
-        # Apply sentiment filter
-        sentiment_df = self.sentiment_filter.apply_filters(tickers)
+        try:
+            # Create a new SentimentFilter instance with minimal filtering
+            from src.ml.pipeline.p06_emps2.sentiment_filter import SentimentFilter
+            from src.ml.pipeline.p06_emps2.config import SentimentFilterConfig
 
-        _logger.info("Stage 6 complete: %d tickers with sentiment data", len(sentiment_df))
-        return sentiment_df
+            # Configure to collect all data without filtering
+            config = SentimentFilterConfig(
+                min_mentions_24h=0,      # No minimum mentions
+                min_sentiment_score=-1.0,  # Include all sentiment scores
+                max_bot_pct=1.0,         # Include all bot percentages
+                min_virality_index=0.0,   # No minimum virality
+                min_unique_authors=0,     # No minimum authors
+                enabled=True
+            )
+
+            # Initialize a temporary sentiment filter with the permissive config
+            sentiment_filter = SentimentFilter(config)
+
+            # Apply the filter to collect data (won't filter anything out with these settings)
+            sentiment_df = sentiment_filter.apply_filters(tickers)
+
+            _logger.info("Collected sentiment data for %d/%d tickers", len(sentiment_df), len(tickers))
+            return sentiment_df
+
+        except Exception as e:
+            _logger.exception("Error collecting sentiment data:")
+            return pd.DataFrame()
+
 
     def _stage7_create_final_results(
         self,
@@ -544,19 +563,11 @@ class EMPS2Pipeline:
         final_df['scan_date'] = self.target_date
         final_df['scan_timestamp'] = datetime.now().isoformat()  # When scan was run
 
-        # Merge sentiment data if available
+        # Save sentiment data separately (do not merge into final results)
         if not sentiment_df.empty:
-            # Merge sentiment metrics into final results
-            sentiment_cols = ['ticker', 'sentiment_score', 'mentions_24h', 'virality_index', 'unique_authors', 'bot_pct', 'positive_ratio']
-            available_sentiment_cols = [col for col in sentiment_cols if col in sentiment_df.columns]
-
-            if available_sentiment_cols:
-                final_df = final_df.merge(
-                    sentiment_df[available_sentiment_cols],
-                    on='ticker',
-                    how='left'
-                )
-                _logger.info("Merged sentiment data: %d columns", len(available_sentiment_cols) - 1)
+            sentiment_output_path = self._results_dir / "10_sentiments.csv"
+            sentiment_df.to_csv(sentiment_output_path, index=False)
+            _logger.info("Saved sentiment data to: %s (%d tickers)", sentiment_output_path, len(sentiment_df))
 
         # Save final results
         output_path = self._results_dir / "06_prefiltered_universe.csv"
