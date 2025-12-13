@@ -29,7 +29,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import os
 os.chdir(PROJECT_ROOT)
 
-from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
+from src.data.downloader.finra_data_downloader import FinraDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -79,7 +79,7 @@ def backfill_trf_data(dates: list[datetime]) -> dict:
         _logger.info("="*70)
 
         try:
-            downloader = FinraTRFDownloader(
+            downloader = FinraDataDownloader(
                 date=date_str,
                 output_dir=output_dir,
                 output_filename="trf.csv",

@@ -14,7 +14,7 @@ from typing import Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
+from src.data.downloader.finra_data_downloader import FinraDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -63,7 +63,7 @@ def download_trf(target_date: Optional[datetime] = None, force_download: bool = 
 
     # Download the TRF data
     _logger.info(f"Downloading TRF data for {date_str}")
-    downloader = FinraTRFDownloader(
+    downloader = FinraDataDownloader(
         date=date_str,
         output_dir=str(trf_dir),  # Use the TRF date directory
         output_filename="trf.csv"

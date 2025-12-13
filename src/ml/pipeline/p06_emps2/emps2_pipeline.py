@@ -309,7 +309,7 @@ class EMPS2Pipeline:
         _logger.info("-"*70)
 
         try:
-            from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
+            from src.data.downloader.finra_data_downloader import FinraDataDownloader
             from datetime import timedelta
 
             # TRF data should match our target_date (already yesterday)
@@ -340,7 +340,7 @@ class EMPS2Pipeline:
             # TRF file doesn't exist or was invalid, download it
             _logger.info("Downloading TRF data for %s", self.target_date)
 
-            downloader = FinraTRFDownloader(
+            downloader = FinraDataDownloader(
                 date=self.target_date,
                 output_dir=str(trf_dir),  # Save in target date's directory
                 output_filename="trf.csv",
