@@ -58,7 +58,7 @@ EMPS2 (Enhanced Explosive Move Pre-Screener v2) is a multi-stage filtering pipel
 ```
 results/emps2/YYYY-MM-DD/  ← Yesterday's date
 ├── trf.csv                 ← T-1 dark pool data
-├── 09_phase2_alerts.csv    ← T-1 candidates
+├── 08_phase2_alerts.csv    ← T-1 candidates
 └── ... (all other CSVs)
 ```
 
@@ -126,7 +126,7 @@ results/emps2/YYYY-MM-DD/  ← Yesterday's date
 │ • Input: Volatility-filtered tickers                       │
 │ • Tracks tickers over 10-day window                        │
 │ • Identifies accumulation patterns                         │
-│ • Output: 07_rolling_candidates.csv                        │
+│ • Output: 06_rolling_candidates.csv                        │
 │ • Time: ~5-15 seconds                                      │
 │ • Cost: None (uses local files)                            │
 └─────────────────────────────────────────────────────────────┘
@@ -134,7 +134,7 @@ results/emps2/YYYY-MM-DD/  ← Yesterday's date
 ┌─────────────────────────────────────────────────────────────┐
 │ Stage 4: UOA Analysis (NEW v2.3)                           │
 │ • Source: EODHD Options API                                │
-│ • Input: 07_rolling_candidates.csv                         │
+│ • Input: 06_rolling_candidates.csv                         │
 │ • Metrics:                                                 │
 │   - Put/Call Ratio                                         │
 │   - Volume Ratios                                          │
@@ -249,7 +249,7 @@ Thresholds:
 
 **Integration Points**
 - Runs after Rolling Memory stage
-- Uses candidates from `07_rolling_candidates.csv`
+- Uses candidates from `06_rolling_candidates.csv`
 - Saves to `results/emps2/YYYY-MM-DD/uoa.csv`
 - Enabled by default (disable via `enable_uoa_analysis` config)
 
@@ -743,7 +743,7 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
    ```
    - **NOTE**: `vol_zscore` and `vol_rv_ratio` are TRF-corrected (include dark pool volume)!
 
-7. **06_prefiltered_universe.csv** - **FINAL RESULTS** (combined data)
+7. **09_final_universe.csv** - **FINAL RESULTS** (combined data)
    ```csv
    ticker,market_cap,float,sector,current_price,avg_volume,atr_ratio,vol_zscore,vol_rv_ratio,in_phase1,in_phase2,alert_priority
    GME,8500000000,76000000,Consumer Cyclical,24.50,12500000,0.035,4.2,2.5,True,True,HIGH
@@ -751,21 +751,21 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
    ...
    ```
 
-8. **07_rolling_candidates.csv** - 10-day rolling memory analysis
+8. **06_rolling_candidates.csv** - 10-day rolling memory analysis
    ```csv
    ticker,appearance_count,first_seen,last_seen,avg_vol_zscore,max_vol_zscore,avg_vol_rv_ratio,max_vol_rv_ratio
    GME,8,2025-11-19,2025-11-28,3.8,5.2,2.1,3.0
    ...
    ```
 
-9. **08_phase1_watchlist.csv** - Phase 1: Quiet Accumulation
+9. **07_phase1_watchlist.csv** - Phase 1: Quiet Accumulation
    ```csv
    ticker,appearance_count,avg_vol_zscore,max_vol_rv_ratio,phase
    GME,8,3.8,3.0,"Phase 1: Quiet Accumulation"
    ...
    ```
 
-10. **09_phase2_alerts.csv** - Phase 2: Early Public Signal (HIGH PRIORITY)
+10. **08_phase2_alerts.csv** - Phase 2: Early Public Signal (HIGH PRIORITY)
     ```csv
     ticker,appearance_count,latest_vol_zscore,latest_vol_rv_ratio,phase,alert_priority
     GME,8,4.2,2.5,"Phase 2: Early Public Signal",HIGH

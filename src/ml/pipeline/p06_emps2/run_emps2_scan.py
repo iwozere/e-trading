@@ -8,9 +8,9 @@ Stage 1: Download NASDAQ universe → 01_nasdaq_universe.csv
 Stage 2: Fundamental filtering → 02_fundamental_raw_data.csv, 03_fundamental_filtered.csv
 Stage 2b: TRF data download → trf.csv
 Stage 3: Volatility filtering → 04_volatility_filtered.csv, 05_volatility_diagnostics.csv
-Stage 4: Rolling memory analysis → 07_rolling_candidates.csv, 08_phase1_watchlist.csv, 09_phase2_alerts.csv
+Stage 4: Rolling memory analysis → 06_rolling_candidates.csv, 07_phase1_watchlist.csv, 08_phase2_alerts.csv
 Stage 5: UOA analysis
-Stage 6: Create final results → 06_prefiltered_universe.csv
+Stage 6: Create final results → 09_final_universe.csv
 Stage 7: Sentiment data collection → 10_sentiments.csv (if enabled and Phase 2 candidates exist)
 
 Usage:
@@ -132,7 +132,7 @@ Examples:
     volatility_group.add_argument(
         '--lookback-days',
         type=int,
-        default=14,
+        default=10,
         help='Lookback period in days (default: 7)'
     )
     volatility_group.add_argument(
@@ -158,7 +158,8 @@ Examples:
     rolling_group.add_argument(
         '--lookback-days-rolling',
         type=int,
-        help='Rolling memory lookback period (default: 14 days)'
+        default=10,
+        help='Rolling memory lookback period (default: 10 days)'
     )
     rolling_group.add_argument(
         '--phase1-threshold',
@@ -366,11 +367,11 @@ def main() -> int:
         print(f"  - 03_fundamental_filtered.csv     (After fundamental filters)")
         print(f"  - 04_volatility_filtered.csv      (After volatility filters)")
         print(f"  - 05_volatility_diagnostics.csv   (ALL tickers with metrics & failure reasons)")
-        print(f"  - 06_prefiltered_universe.csv     (Final results)")
         if config.rolling_memory_config.enabled:
-            print(f"  - 07_rolling_candidates.csv       (14-day rolling memory)")
-            print(f"  - 08_phase1_watchlist.csv         (Phase 1: Quiet Accumulation)")
-            print(f"  - 09_phase2_alerts.csv            (Phase 2: Hot Candidates 🔥)")
+            print(f"  - 06_rolling_candidates.csv       (14-day rolling memory)")
+            print(f"  - 07_phase1_watchlist.csv         (Phase 1: Quiet Accumulation)")
+            print(f"  - 08_phase2_alerts.csv            (Phase 2: Hot Candidates 🔥)")
+        print(f"  - 09_final_universe.csv           (Final results)")
         if config.sentiment_config.enabled:
             print(f"  - 10_sentiments.csv               (Social sentiment data)")
         if config.generate_summary:
@@ -391,8 +392,8 @@ def main() -> int:
 
         # Check for phase 1 and phase 2 candidates if rolling memory is enabled
         if config.rolling_memory_config.enabled:
-            phase1_file = results_dir / "08_phase1_watchlist.csv"
-            phase2_file = results_dir / "09_phase2_alerts.csv"
+            phase1_file = results_dir / "07_phase1_watchlist.csv"
+            phase2_file = results_dir / "08_phase2_alerts.csv"
 
             phase1_count = 0
             phase2_count = 0

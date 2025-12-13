@@ -27,6 +27,7 @@ from src.data.downloader.finra_data_downloader import FinraDataDownloader
 from src.data.downloader.eodhd_downloader import EODHDDataDownloader
 from src.data.downloader.tradier_downloader import TradierDataDownloader
 from src.data.downloader.vix_downloader import VIXDataDownloader
+from src.data.downloader.santiment_data_downloader import SantimentDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -117,7 +118,12 @@ class DataDownloaderFactory:
         "tradier": "tradier",
 
         # VIX
-        "vix": "vix"
+        "vix": "vix",
+
+        # Santiment
+        "san": "santiment",
+        "santiment": "santiment",
+        "santiment_net": "santiment"
     }
 
     @staticmethod
@@ -202,6 +208,7 @@ class DataDownloaderFactory:
             "eodhd": EODHDDataDownloader,
             "tradier": TradierDataDownloader,
             "vix": VIXDataDownloader,
+            "santiment": SantimentDataDownloader,
         }
         return downloader_classes.get(provider)
 
@@ -296,6 +303,10 @@ class DataDownloaderFactory:
 
         elif provider == "vix":
             # VIX doesn't require API key
+            return downloader_class()
+
+        elif provider == "santiment":
+            # Santiment uses config internally or falls back to limited access
             return downloader_class()
 
         elif provider in ["yahoo", "coingecko"]:
@@ -464,6 +475,16 @@ class DataDownloaderFactory:
                 "cost": "Free",
                 "fundamental_data": "Volatility index data only",
                 "coverage": "VIX volatility index"
+            },
+            "santiment": {
+                "codes": ["san", "santiment", "santiment_net"],
+                "name": "Santiment",
+                "description": "Crypto and stock sentiment/social metrics",
+                "requires_api_key": False,
+                "rate_limits": "100 calls/month (free), varies by plan",
+                "cost": "Free tier available",
+                "fundamental_data": "Sentiment and social metrics",
+                "coverage": "Crypto and Stocks"
             }
         }
 

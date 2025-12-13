@@ -584,7 +584,7 @@ class EMPS2Pipeline:
         final_df['scan_timestamp'] = datetime.now().isoformat()  # When scan was run
 
         # Save final results
-        output_path = self._results_dir / "06_prefiltered_universe.csv"
+        output_path = self._results_dir / "09_final_universe.csv"
         final_df.to_csv(output_path, index=False)
         _logger.info("Saved final results to: %s", output_path)
 

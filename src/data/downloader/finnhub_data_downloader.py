@@ -860,35 +860,19 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
     async def get_combined_sentiment(self, symbol: str) -> Optional[SentimentData]:
         """
-        Get combined sentiment from both news and social sources (async).
-
-        This method fetches and combines sentiment from both news sentiment API
-        and social sentiment API to provide a comprehensive view.
-
-        Args:
-            symbol: Stock symbol (e.g., 'AAPL')
-
-        Returns:
-            SentimentData object with combined sentiment metrics, or None if failed
+        Get aggregated sentiment data from both news and social sources (async).
         """
         try:
-            # Fetch both sentiment types concurrently
+            # Fetch both concurrently
             news_task = self.get_news_sentiment(symbol)
             social_task = self.get_social_sentiment(symbol)
 
-            news_sentiment, social_sentiment = await asyncio.gather(news_task, social_task, return_exceptions=True)
+            results = await asyncio.gather(news_task, social_task, return_exceptions=True)
 
-            # Handle exceptions from gather
-            if isinstance(news_sentiment, Exception):
-                _logger.warning("News sentiment failed for %s: %s", symbol, news_sentiment)
-                news_sentiment = None
+            news_data = results[0] if not isinstance(results[0], Exception) else None
+            social_data = results[1] if not isinstance(results[1], Exception) else None
 
-            if isinstance(social_sentiment, Exception):
-                _logger.warning("Social sentiment failed for %s: %s", symbol, social_sentiment)
-                social_sentiment = None
-
-            # If both failed, return None
-            if not news_sentiment and not social_sentiment:
+            if not news_data and not social_data:
                 _logger.warning("Both sentiment sources failed for %s", symbol)
                 return None
 

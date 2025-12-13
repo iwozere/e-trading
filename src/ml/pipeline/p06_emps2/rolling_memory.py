@@ -342,21 +342,21 @@ class RollingMemoryScanner:
 
         # 1. Rolling candidates (all tickers in 14-day window)
         if self.config.save_rolling_candidates and not frequency_df.empty:
-            rolling_file = output_dir / '07_rolling_candidates.csv'
+            rolling_file = output_dir / '06_rolling_candidates.csv'
             frequency_df.to_csv(rolling_file, index=False)
             output_files['rolling_candidates'] = rolling_file
             _logger.info("Saved rolling candidates: %s", rolling_file)
 
         # 2. Phase 1 watchlist
         if self.config.save_phase1_watchlist and not phase1_df.empty:
-            phase1_file = output_dir / '08_phase1_watchlist.csv'
+            phase1_file = output_dir / '07_phase1_watchlist.csv'
             phase1_df.to_csv(phase1_file, index=False)
             output_files['phase1_watchlist'] = phase1_file
             _logger.info("Saved Phase 1 watchlist: %s", phase1_file)
 
         # 3. Phase 2 alerts (HOT)
         if self.config.save_phase2_alerts and not phase2_df.empty:
-            phase2_file = output_dir / '09_phase2_alerts.csv'
+            phase2_file = output_dir / '08_phase2_alerts.csv'
             phase2_df.to_csv(phase2_file, index=False)
             output_files['phase2_alerts'] = phase2_file
             _logger.info("Saved Phase 2 alerts: %s ⚠️", phase2_file)

@@ -31,6 +31,9 @@ from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
 
 _logger = setup_logger(__name__)
 
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+
 
 class AsyncNewsAdapter(BaseSentimentAdapter):
     """
@@ -68,6 +71,10 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self._finnhub_requests = []
         self._alpha_vantage_requests = []
         self._newsapi_requests = []
+
+        # Initialize downloaders
+        self.finnhub_downloader = FinnhubDataDownloader(api_key=self.finnhub_token)
+        self.av_downloader = AlphaVantageDataDownloader(api_key=self.alpha_vantage_token)
 
         # Source credibility weights (0.0 to 1.0)
         self.source_credibility = {
@@ -269,7 +276,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         return None
 
     async def _fetch_finnhub_news(self, ticker: str, since_ts: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Fetch news from Finnhub API."""
+        """Fetch news from Finnhub API via downloader."""
         if not self.finnhub_token:
             return []
 
@@ -281,15 +288,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             else:
                 from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
 
-            url = f"{self.finnhub_base}/company-news"
-            params = {
-                'symbol': ticker.upper(),
-                'from': from_date,
-                'to': to_date,
-                'token': self.finnhub_token
-            }
-
-            data = await self._get_with_retry(url, params=params, api='finnhub')
+            data = await self.finnhub_downloader.get_company_news(ticker, from_date, to_date)
             if not data:
                 return []
 
@@ -317,30 +316,21 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             return []
 
     async def _fetch_alpha_vantage_news(self, ticker: str, since_ts: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Fetch news from Alpha Vantage API."""
+        """Fetch news from Alpha Vantage API via downloader."""
         if not self.alpha_vantage_token:
             return []
 
         try:
-            url = self.alpha_vantage_base
-            params = {
-                'function': 'NEWS_SENTIMENT',
-                'tickers': ticker.upper(),
-                'apikey': self.alpha_vantage_token,
-                'limit': min(200, limit)  # Alpha Vantage limit
-            }
-
-            # Add time filter if provided
+            time_from = None
             if since_ts:
                 time_from = datetime.fromtimestamp(since_ts).strftime('%Y%m%dT%H%M')
-                params['time_from'] = time_from
 
-            data = await self._get_with_retry(url, params=params, api='alpha_vantage')
-            if not data or 'feed' not in data:
+            data = await self.av_downloader.get_news_articles(ticker, time_from=time_from, limit=limit)
+            if not data:
                 return []
 
             articles = []
-            for article in data['feed'][:limit]:
+            for article in data:
                 try:
                     # Extract ticker-specific sentiment if available
                     ticker_sentiment = None

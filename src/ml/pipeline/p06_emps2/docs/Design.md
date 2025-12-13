@@ -181,10 +181,10 @@ results/emps2/
 │   ├── 03_fundamental_filtered.csv       # After stage 2
 │   ├── 04_volatility_diagnostics.csv     # All tickers with metrics
 │   ├── 05_volatility_filtered.csv        # After stage 3
-│   ├── 06_prefiltered_universe.csv       # Final results
-│   ├── 07_rolling_candidates.csv         # 10-day rolling memory
-│   ├── 08_phase1_watchlist.csv           # Phase 1: Quiet Accumulation
-│   ├── 09_phase2_alerts.csv              # Phase 2: Hot Candidates
+│   ├── 06_rolling_candidates.csv         # 10-day rolling memory
+│   ├── 07_phase1_watchlist.csv           # Phase 1: Quiet Accumulation
+│   ├── 08_phase2_alerts.csv              # Phase 2: Hot Candidates
+│   ├── 09_final_universe.csv             # Final results
 │   └── summary.json                      # Pipeline summary
 ├── 2025-12-07/  ← Previous day
 │   └── ...
@@ -212,19 +212,19 @@ results/emps2/
 - Columns: ticker, last_price, atr, atr_ratio, price_range, price_high, price_low, vol_zscore, vol_rv_ratio, bars_count
 - Only tickers passing volatility filters, sorted by ATR ratio (highest volatility first)
 
-**06_prefiltered_universe.csv:**
+**09_final_universe.csv:**
 - Merged fundamental + volatility data with phase information
 - Final output for consumption by trading strategies
 - Includes scan_date, scan_timestamp, in_phase1, in_phase2, alert_priority metadata
 
-**07_rolling_candidates.csv:**
+**06_rolling_candidates.csv:**
 - Columns: ticker, appearance_count, first_seen, last_seen, avg_vol_zscore, max_vol_zscore, avg_vol_rv_ratio, max_vol_rv_ratio, etc.
 - 10-day historical frequency analysis
 
-**08_phase1_watchlist.csv:**
+**07_phase1_watchlist.csv:**
 - Tickers with 5+ appearances in 10-day lookback (quiet accumulation phase)
 
-**09_phase2_alerts.csv:**
+**08_phase2_alerts.csv:**
 - Phase 1 tickers showing acceleration (high priority alerts)
 
 **summary.json:**

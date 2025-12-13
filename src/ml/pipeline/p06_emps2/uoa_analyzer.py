@@ -18,9 +18,9 @@ class UOAAnalyzer:
         return (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
     def get_todays_candidates(self) -> List[str]:
-        """Get tickers from today's 07_rolling_candidates.csv"""
+        """Get tickers from today's 06_rolling_candidates.csv"""
         today = datetime.now().strftime('%Y-%m-%d')
-        candidates_file = self.results_dir / today / "07_rolling_candidates.csv"
+        candidates_file = self.results_dir / today / "06_rolling_candidates.csv"
 
         if not candidates_file.exists():
             _logger.warning(f"No rolling candidates file found at {candidates_file}")
