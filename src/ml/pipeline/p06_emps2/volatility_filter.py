@@ -54,9 +54,12 @@ class VolatilityFilter:
         self.downloader = downloader
         self.config = config
 
-        # Results directory (dated)
+        # Store target_date
         if target_date is None:
             target_date = datetime.now().strftime('%Y-%m-%d')
+        self.target_date = target_date
+
+        # Results directory (dated)
         self._results_dir = Path("results") / "emps2" / target_date
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -80,8 +83,9 @@ class VolatilityFilter:
         try:
             _logger.info("Applying volatility filters to %d tickers", len(tickers))
 
-            # Calculate date range
-            end_date = datetime.now()
+            # Calculate date range using target_date as reference
+            from datetime import datetime as dt
+            end_date = dt.strptime(self.target_date, '%Y-%m-%d') + timedelta(days=1)  # Include target date
             start_date = end_date - timedelta(days=self.config.lookback_days)
 
             # Download intraday data in batch

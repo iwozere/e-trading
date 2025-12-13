@@ -72,7 +72,7 @@ class EMPS2UniverseConfig:
 @dataclass
 class RollingMemoryConfig:
     """
-    Configuration for 10-day rolling memory and phase detection.
+    Configuration for 14-day rolling memory and phase detection.
 
     Tracks tickers across multiple days to detect accumulation patterns
     and identify phase transitions (Phase 1 → Phase 2).
@@ -80,7 +80,7 @@ class RollingMemoryConfig:
 
     # Rolling memory settings
     enabled: bool = True
-    lookback_days: int = 10  # How many days back to scan
+    lookback_days: int = 14  # How many days back to scan
 
     # Phase 1 detection (Quiet Accumulation)
     phase1_min_appearances: int = 3  # Must appear 5+ times in lookback period

@@ -4,6 +4,15 @@ EMPS2 Universe Scanner - CLI Entry Point
 
 Command-line interface for running the EMPS2 pre-screening pipeline.
 
+Stage 1: Download NASDAQ universe → 01_nasdaq_universe.csv
+Stage 2: Fundamental filtering → 02_fundamental_raw_data.csv, 03_fundamental_filtered.csv
+Stage 2b: TRF data download → trf.csv
+Stage 3: Volatility filtering → 04_volatility_filtered.csv, 05_volatility_diagnostics.csv
+Stage 4: Rolling memory analysis → 07_rolling_candidates.csv, 08_phase1_watchlist.csv, 09_phase2_alerts.csv
+Stage 5: UOA analysis
+Stage 6: Create final results → 06_prefiltered_universe.csv
+Stage 7: Sentiment data collection → 10_sentiments.csv (if enabled and Phase 2 candidates exist)
+
 Usage:
     python src/ml/pipeline/p06_emps2/run_emps2_scan.py
     python src/ml/pipeline/p06_emps2/run_emps2_scan.py --aggressive
@@ -149,7 +158,7 @@ Examples:
     rolling_group.add_argument(
         '--lookback-days-rolling',
         type=int,
-        help='Rolling memory lookback period (default: 10 days)'
+        help='Rolling memory lookback period (default: 14 days)'
     )
     rolling_group.add_argument(
         '--phase1-threshold',
@@ -359,7 +368,7 @@ def main() -> int:
         print(f"  - 05_volatility_diagnostics.csv   (ALL tickers with metrics & failure reasons)")
         print(f"  - 06_prefiltered_universe.csv     (Final results)")
         if config.rolling_memory_config.enabled:
-            print(f"  - 07_rolling_candidates.csv       (10-day rolling memory)")
+            print(f"  - 07_rolling_candidates.csv       (14-day rolling memory)")
             print(f"  - 08_phase1_watchlist.csv         (Phase 1: Quiet Accumulation)")
             print(f"  - 09_phase2_alerts.csv            (Phase 2: Hot Candidates 🔥)")
         if config.sentiment_config.enabled:

@@ -1,8 +1,8 @@
 """
-Rolling Memory Module - 10-Day Accumulation Tracker
+Rolling Memory Module - 14-Day Accumulation Tracker
 
 Scans historical daily results to identify:
-- Phase 1: Quiet Accumulation (5+ appearances in 10 days)
+- Phase 1: Quiet Accumulation (5+ appearances in 14 days)
 - Phase 2: Early Public Signal (Phase 1 + volume/sentiment acceleration)
 """
 
@@ -33,6 +33,7 @@ class RollingMemoryScanner:
         self,
         config: RollingMemoryConfig,
         results_base_path: Path,
+        target_date: str,
         verbose: bool = True
     ):
         """
@@ -41,10 +42,12 @@ class RollingMemoryScanner:
         Args:
             config: Rolling memory configuration
             results_base_path: Base path to results/emps2/ folder
+            target_date: Target trading date (YYYY-MM-DD) to use as reference
             verbose: Enable verbose logging
         """
         self.config = config
         self.results_base_path = results_base_path
+        self.target_date = target_date
         self.verbose = verbose
 
     def scan_historical_results(
@@ -64,8 +67,9 @@ class RollingMemoryScanner:
         """
         lookback = lookback_days or self.config.lookback_days
 
-        # Calculate date range
-        today = datetime.now(timezone.utc).date()
+        # Calculate date range using target_date as reference
+        from datetime import datetime as dt
+        today = dt.strptime(self.target_date, '%Y-%m-%d').date()
         start_date = today - timedelta(days=lookback)
 
         _logger.info(
@@ -336,7 +340,7 @@ class RollingMemoryScanner:
         output_dir.mkdir(parents=True, exist_ok=True)
         output_files = {}
 
-        # 1. Rolling candidates (all tickers in 10-day window)
+        # 1. Rolling candidates (all tickers in 14-day window)
         if self.config.save_rolling_candidates and not frequency_df.empty:
             rolling_file = output_dir / '07_rolling_candidates.csv'
             frequency_df.to_csv(rolling_file, index=False)

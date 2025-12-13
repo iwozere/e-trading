@@ -42,10 +42,10 @@ class EMPS2Pipeline:
     1. Download NASDAQ universe (~8000 tickers)
     2. Apply fundamental filters (~500-1000 tickers)
     3. Apply volatility filters (~50-200 tickers)
-    4. Rolling memory analysis (10-day accumulation tracking)
-    5. Phase detection (Phase 1 → Phase 2 transitions)
-    6. Sentiment data collection (social momentum metrics)
-    7. Save final results and send alerts
+    4. Rolling memory analysis (14-day accumulation tracking)
+    5. UOA analysis (unusual options activity)
+    6. Save final results and send alerts
+    7. Sentiment data collection (social momentum metrics)
 
     All output saved to results/emps2/YYYY-MM-DD/
     """
@@ -103,6 +103,7 @@ class EMPS2Pipeline:
         self.rolling_memory = RollingMemoryScanner(
             config=self.config.rolling_memory_config,
             results_base_path=self._results_base_path,
+            target_date=target_date,
             verbose=self.config.verbose_logging
         )
 
@@ -208,21 +209,21 @@ class EMPS2Pipeline:
 
             # Stage 4: Rolling Memory Analysis (10-day accumulation tracking)
             phase1_df, phase2_df = self._stage4_rolling_memory_analysis(volatility_df)
-
-            # Stage 6: Sentiment Data Collection (social momentum metrics)
-            sentiment_df = self._stage6_sentiment_data_collection(phase2_df)
+            _logger.info("After Stage 4: Phase1=%d, Phase2=%d", len(phase1_df), len(phase2_df))
 
             # Run stage 5: UOA Analysis
             self._stage5_uoa_analysis()
 
-            # Stage 7: Create final results
-            final_df = self._stage7_create_final_results(
+            # Stage 6: Create final results (before sentiment collection)
+            final_df = self._stage6_create_final_results(
                 fundamental_df,
                 volatility_df,
                 phase1_df,
-                phase2_df,
-                sentiment_df
+                phase2_df
             )
+
+            # Stage 7: Sentiment Data Collection (social momentum metrics)
+            sentiment_df = self._stage7_sentiment_data_collection(phase2_df)
 
             # Generate summary
             if self.config.generate_summary:
@@ -398,7 +399,7 @@ class EMPS2Pipeline:
         Stage 4: Rolling Memory Analysis and Phase Detection.
 
         Scans historical results to detect:
-        - Phase 1: Quiet Accumulation (5+ appearances in 10 days)
+        - Phase 1: Quiet Accumulation (5+ appearances in 14 days)
         - Phase 2: Early Public Signal (Phase 1 + acceleration)
 
         Args:
@@ -416,23 +417,29 @@ class EMPS2Pipeline:
             return pd.DataFrame(), pd.DataFrame()
 
         # Scan historical results
+        _logger.info("Scanning historical results for rolling memory analysis...")
         historical_df = self.rolling_memory.scan_historical_results()
+        _logger.info("Historical data found: %d records", len(historical_df))
 
         if historical_df.empty:
             _logger.warning("No historical data found, skipping phase detection")
+            _logger.warning("This might be the first run - phase detection requires historical data")
             return pd.DataFrame(), pd.DataFrame()
 
         # Calculate appearance frequency
         frequency_df = self.rolling_memory.calculate_appearance_frequency(historical_df)
+        _logger.info("Frequency analysis: %d unique tickers", len(frequency_df))
 
         # Detect Phase 1 (quiet accumulation)
         phase1_df = self.rolling_memory.detect_phase1_candidates(frequency_df)
+        _logger.info("Phase 1 detection: %d candidates", len(phase1_df))
 
         # Detect Phase 2 (early public signal)
         phase2_df = self.rolling_memory.detect_phase2_candidates(
             phase1_df=phase1_df,
             current_scan_df=volatility_df
         )
+        _logger.info("Phase 2 detection: %d candidates", len(phase2_df))
 
         # Generate outputs
         output_files = self.rolling_memory.generate_outputs(
@@ -461,9 +468,9 @@ class EMPS2Pipeline:
 
         return phase1_df, phase2_df
 
-    def _stage6_sentiment_data_collection(self, phase2_df: pd.DataFrame) -> pd.DataFrame:
+    def _stage7_sentiment_data_collection(self, phase2_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Stage 6: Sentiment Data Collection.
+        Stage 7: Sentiment Data Collection.
 
         Collects sentiment data for all Phase 2 candidates without filtering.
         Saves social momentum metrics to separate file: 10_sentiments.csv
@@ -475,8 +482,13 @@ class EMPS2Pipeline:
             DataFrame with sentiment metrics for all tickers
         """
         _logger.info("-"*70)
-        _logger.info("Stage 6: Sentiment Data Collection")
+        _logger.info("Stage 7: Sentiment Data Collection")
         _logger.info("-"*70)
+
+        # Check if sentiment is enabled
+        if not self.config.sentiment_config.enabled:
+            _logger.info("Sentiment data collection is disabled in config")
+            return pd.DataFrame()
 
         if phase2_df.empty:
             _logger.info("No Phase 2 candidates to collect sentiment data for")
@@ -508,6 +520,15 @@ class EMPS2Pipeline:
             sentiment_df = sentiment_filter.apply_filters(tickers)
 
             _logger.info("Collected sentiment data for %d/%d tickers", len(sentiment_df), len(tickers))
+
+            # Save sentiment data to separate file
+            if not sentiment_df.empty:
+                sentiment_output_path = self._results_dir / "10_sentiments.csv"
+                sentiment_df.to_csv(sentiment_output_path, index=False)
+                _logger.info("Saved sentiment data to: %s (%d tickers)", sentiment_output_path, len(sentiment_df))
+            else:
+                _logger.warning("No sentiment data collected to save")
+
             return sentiment_df
 
         except Exception as e:
@@ -515,16 +536,15 @@ class EMPS2Pipeline:
             return pd.DataFrame()
 
 
-    def _stage7_create_final_results(
+    def _stage6_create_final_results(
         self,
         fundamental_df: pd.DataFrame,
         volatility_df: pd.DataFrame,
         phase1_df: pd.DataFrame,
-        phase2_df: pd.DataFrame,
-        sentiment_df: pd.DataFrame = pd.DataFrame()
+        phase2_df: pd.DataFrame
     ) -> pd.DataFrame:
         """
-        Stage 5: Create final results DataFrame.
+        Stage 6: Create final results DataFrame.
 
         Args:
             fundamental_df: DataFrame with fundamental data
@@ -536,7 +556,7 @@ class EMPS2Pipeline:
             Final filtered DataFrame
         """
         _logger.info("-"*70)
-        _logger.info("Stage 7: Creating Final Results")
+        _logger.info("Stage 6: Creating Final Results")
         _logger.info("-"*70)
 
         # Use volatility_df as the final results (already has all metrics)
@@ -563,18 +583,12 @@ class EMPS2Pipeline:
         final_df['scan_date'] = self.target_date
         final_df['scan_timestamp'] = datetime.now().isoformat()  # When scan was run
 
-        # Save sentiment data separately (do not merge into final results)
-        if not sentiment_df.empty:
-            sentiment_output_path = self._results_dir / "10_sentiments.csv"
-            sentiment_df.to_csv(sentiment_output_path, index=False)
-            _logger.info("Saved sentiment data to: %s (%d tickers)", sentiment_output_path, len(sentiment_df))
-
         # Save final results
         output_path = self._results_dir / "06_prefiltered_universe.csv"
         final_df.to_csv(output_path, index=False)
         _logger.info("Saved final results to: %s", output_path)
 
-        _logger.info("Stage 7 complete: %d tickers in final universe", len(final_df))
+        _logger.info("Stage 6 complete: %d tickers in final universe", len(final_df))
         return final_df
 
     def _stage5_uoa_analysis(self) -> None:

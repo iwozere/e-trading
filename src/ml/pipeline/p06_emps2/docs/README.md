@@ -1063,7 +1063,7 @@ EMPS2 now tracks tickers across **10 days** of daily scans to detect persistent 
 ```python
 RollingMemoryConfig(
     enabled=True,                   # Enable/disable rolling memory
-    lookback_days=10,               # Scan last 10 days
+    lookback_days=14,               # Scan last 14 days
     phase1_min_appearances=5,       # 5+ appearances = Phase 1
     phase2_min_vol_zscore=3.0,      # Volume acceleration
     phase2_min_sentiment=0.5,       # Sentiment threshold
