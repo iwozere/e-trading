@@ -340,7 +340,11 @@ class TelegramService(BaseDBService):
         from src.data.db.models.model_jobs import JobType
 
         uid = users_service.ensure_user_for_telegram(telegram_user_id)
-        schedules = self.repos.jobs.list_schedules(user_id=uid, job_type=JobType.SCREENER)
+        # Get all schedules except alerts (which are handled by /alerts)
+        all_schedules = self.repos.jobs.list_schedules(user_id=uid)
+
+        # Filter out ALERT type schedules
+        schedules = [s for s in all_schedules if s.job_type != JobType.ALERT.value]
 
         telegram_schedules: List[Dict[str, Any]] = []
         for schedule in schedules:
