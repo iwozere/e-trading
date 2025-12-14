@@ -641,6 +641,11 @@ class SchedulerService:
 
             cmd = [python_executable, str(script_full_path)] + script_args
 
+            # Automatically inject user_id if present in the schedule
+            # This ensures scripts like EMPS2 pipeline receive the user context
+            if schedule.user_id:
+                cmd.extend(["--user-id", str(schedule.user_id)])
+
             _logger.debug("Running command: %s", " ".join(cmd))
             _logger.debug("Timeout: %d seconds", timeout_seconds)
 
