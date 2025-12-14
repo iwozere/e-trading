@@ -272,3 +272,34 @@ class AlertSchemaValidator:
             List of cached schema type names
         """
         return list(self._schema_cache.keys())
+
+
+def get_schedule_summary(config_json: Any) -> Dict[str, Any]:
+    """
+    Get a summary of schedule configuration.
+
+    Args:
+        config_json: Schedule configuration (JSON string or dict)
+
+    Returns:
+        Dictionary with summary fields (type, scheduled_time, ticker, etc.)
+    """
+    try:
+        if isinstance(config_json, str):
+            config = json.loads(config_json)
+        else:
+            config = config_json
+
+        if not isinstance(config, dict):
+            return {"error": "Invalid configuration format"}
+
+        return {
+            "type": config.get("schedule_type", "screener"),  # Default to screener
+            "scheduled_time": config.get("scheduled_time", "09:00"),
+            "ticker": config.get("ticker", ""),
+            "list_type": config.get("list_type", ""),
+            "period": config.get("period", ""),
+            "email": config.get("email", False)
+        }
+    except Exception as e:
+        return {"error": f"Error parsing schedule config: {str(e)}"}
