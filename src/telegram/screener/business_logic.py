@@ -2891,6 +2891,35 @@ def handle_schedules_enhanced_screener(telegram_user_id: str, config_json: str) 
         return {"status": "error", "message": f"Error adding enhanced screener schedule: {str(e)}"}
 
 
+
+def _format_cron_time(cron: str) -> str:
+    """Helper to format cron expression into readable time."""
+    if not cron:
+        return "Unknown"
+
+    parts = cron.split()
+    if len(parts) != 5:
+        return cron
+
+    try:
+        minute, hour, dom, month, dow = parts
+        time_str = f"{int(hour):02d}:{int(minute):02d}"
+
+        if dom == '*' and month == '*' and dow == '*':
+            return time_str
+        if dom == '*' and month == '*' and dow == '1-5':
+            return f"{time_str} Mon-Fri"
+
+        # Map days if simple digit
+        days = {'0': 'Sun', '1': 'Mon', '2': 'Tue', '3': 'Wed', '4': 'Thu', '5': 'Fri', '6': 'Sat', '7': 'Sun'}
+        if dom == '*' and month == '*' and dow in days:
+            return f"{time_str} {days[dow]}"
+
+        return f"{time_str} ({cron})"
+    except Exception:
+        return cron
+
+
 def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
     """List all schedules for a user."""
     try:
@@ -2907,12 +2936,17 @@ def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
             status = "🟢 Active" if schedule.get("active") else "🔴 Paused"
             email_flag = "📧" if schedule.get("email") else "💬"
 
+            # Use cron field for accurate time display
+            cron_expr = schedule.get("cron", "")
+            display_time = _format_cron_time(cron_expr)
+            schedule_name = schedule.get("name", "Schedule")
+
             # Handle different schedule types
             schedule_config = schedule.get("schedule_config", "simple")
             if schedule_config == "simple":
                 period = schedule.get("period", "daily")
                 schedule_list.append(
-                    f"#{schedule['id']}: {schedule['ticker']} at {schedule['scheduled_time']} ({period}) {email_flag} - {status}"
+                    f"#{schedule['id']} ({schedule_name}): {schedule['ticker']} at {display_time} ({period}) {email_flag} - {status}"
                 )
             else:
                 # JSON-based schedule
@@ -2922,29 +2956,29 @@ def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
                     summary = get_schedule_summary(config_json)
                     if "error" not in summary:
                         schedule_type = summary.get("type", "Unknown")
-                        scheduled_time = summary.get("scheduled_time", "Unknown")
+                        # scheduled_time is ignored in favor of cron/display_time
                         ticker = summary.get("ticker", "")
                         list_type = summary.get("list_type", "")
 
                         if schedule_type == "report":
                             schedule_list.append(
-                                f"#{schedule['id']}: 📊 {ticker} Report at {scheduled_time} {email_flag} - {status}"
+                                f"#{schedule['id']} ({schedule_name}): 📊 {ticker} Report at {display_time} {email_flag} - {status}"
                             )
                         elif schedule_type == "screener":
                             schedule_list.append(
-                                f"#{schedule['id']}: 🔍 {list_type} Screener at {scheduled_time} {email_flag} - {status}"
+                                f"#{schedule['id']} ({schedule_name}): 🔍 {list_type} Screener at {display_time} {email_flag} - {status}"
                             )
                         else:
                             schedule_list.append(
-                                f"#{schedule['id']}: ⚙️ {schedule_type} at {scheduled_time} {email_flag} - {status}"
+                                f"#{schedule['id']} ({schedule_name}): ⚙️ {schedule_type} at {display_time} {email_flag} - {status}"
                             )
                     else:
                         schedule_list.append(
-                            f"#{schedule['id']}: ⚙️ JSON Schedule at {schedule.get('scheduled_time', 'Unknown')} {email_flag} - {status}"
+                            f"#{schedule['id']} ({schedule_name}): ⚙️ JSON Schedule at {display_time} {email_flag} - {status}"
                         )
                 else:
                     schedule_list.append(
-                        f"#{schedule['id']}: ⚙️ JSON Schedule at {schedule.get('scheduled_time', 'Unknown')} {email_flag} - {status}"
+                        f"#{schedule['id']} ({schedule_name}): ⚙️ JSON Schedule at {display_time} {email_flag} - {status}"
                     )
 
         message = f"Your scheduled reports ({len(schedules)}):\n\n" + "\n".join(schedule_list)
