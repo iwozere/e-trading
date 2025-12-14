@@ -135,6 +135,10 @@ class MessageProcessor:
             # Get channel configurations from config
             channels_config = config.channels
 
+            # Load all available channel plugins
+            from src.notification.channels.loader import load_all_channels
+            load_all_channels()
+
             # PHASE 1 FIX: Only enable email channel
             # Telegram channel is handled by telegram bot to avoid duplicates
             # See MIGRATION_PLAN.md Phase 1 for details

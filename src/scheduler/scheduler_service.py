@@ -838,7 +838,8 @@ class SchedulerService:
 
         while self.is_running:
             try:
-                conn = await asyncpg.connect(current_db_url)
+                # SSL is not required for local network connection, bypassing permission issues with keys
+                conn = await asyncpg.connect(current_db_url, ssl='disable')
 
                 # Add listener
                 await conn.add_listener('scheduler_updates', lambda *args: asyncio.create_task(self.reload_schedules()))
