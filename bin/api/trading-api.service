@@ -1,42 +1,53 @@
 [Unit]
-Description=Trading Web UI Service
-Documentation=https://github.com/your-repo/trading-system
-After=network.target network-online.target
+Description=Trading API Service
+Documentation=https://github.com/iwozere/e-trading
+After=network.target postgresql.service mysql.service
 Wants=network-online.target
-StartLimitIntervalSec=500
-StartLimitBurst=5
 
 [Service]
-Type=exec
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/trading-system
-Environment=PYTHONPATH=/home/pi/trading-system
-Environment=PYTHONUNBUFFERED=1
-Environment=WEBUI_HOST=0.0.0.0
-Environment=WEBUI_PORT=5003
+Type=simple
 
-# Use the production startup script
-ExecStart=/home/pi/trading-system/bin/web_ui/start_webui_prod.sh --host 0.0.0.0 --port 5003
+# User and Group
+User=alkotrader
+Group=alkotrader
+
+# Working directory
+WorkingDirectory=/opt/apps/e-trading
+
+# Environment variables
+Environment="PYTHONPATH=/opt/apps/e-trading"
+Environment="PYTHONUNBUFFERED=1"
+
+# Load environment from file
+EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env
+
+# Command to execute (API service)
+ExecStart=/opt/apps/e-trading/.venv/bin/python -m src.api.main
 
 # Restart policy
 Restart=always
 RestartSec=10
-TimeoutStartSec=300
+
+# Graceful shutdown
+KillMode=mixed
+KillSignal=SIGTERM
 TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=trading-api
 
 # Security settings
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/home/pi/trading-system/logs
-ReadWritePaths=/home/pi/trading-system/db
+ReadWritePaths=/opt/apps/e-trading/logs /opt/apps/e-trading/data
 
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=trading-webui
+# Resource limits
+LimitNOFILE=65536
+# MemoryLimit=1G
 
 [Install]
 WantedBy=multi-user.target

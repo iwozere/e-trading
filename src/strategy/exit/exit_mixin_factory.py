@@ -11,6 +11,9 @@ from src.strategy.exit.rsi_bb_exit_mixin import RSIBBExitMixin
 from src.strategy.exit.rsi_or_bb_exit_mixin import RSIOrBBExitMixin
 from src.strategy.exit.time_based_exit_mixin import TimeBasedExitMixin
 from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
+from src.strategy.exit.eom_breakdown_exit_mixin import EOMBreakdownExitMixin
+from src.strategy.exit.eom_macd_breakdown_exit_mixin import EOMMAcdBreakdownExitMixin
+from src.strategy.exit.eom_rejection_exit_mixin import EOMRejectionExitMixin
 
 # Import other mixins...
 
@@ -25,6 +28,9 @@ EXIT_MIXIN_REGISTRY = {
     "RSIOrBBExitMixin": RSIOrBBExitMixin,
     "TimeBasedExitMixin": TimeBasedExitMixin,
     "TrailingStopExitMixin": TrailingStopExitMixin,
+    "EOMBreakdownExitMixin": EOMBreakdownExitMixin,
+    "EOMMAcdBreakdownExitMixin": EOMMAcdBreakdownExitMixin,
+    "EOMRejectionExitMixin": EOMRejectionExitMixin,
     # Add other mixins...
 }
 

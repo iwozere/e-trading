@@ -105,7 +105,8 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
         and accessed via get_indicator().
         """
         # New architecture: indicators already created by strategy
-        _logger.debug("EOMMAcdBreakdownExitMixin: indicators provided by strategy")
+        #_logger.debug("EOMMAcdBreakdownExitMixin: indicators provided by strategy")
+        pass
 
     def should_exit(self) -> bool:
         """

@@ -1,5 +1,5 @@
 [Unit]
-Description=Trading Web UI Service
+Description=E-Trading Bot Service
 Documentation=https://github.com/iwozere/e-trading
 After=network.target postgresql.service mysql.service
 Wants=network-online.target
@@ -21,9 +21,9 @@ Environment="PYTHONUNBUFFERED=1"
 # Load environment from file
 EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env
 
-# Command to execute (Web UI)
-# Using same python environment as other services
-ExecStart=/opt/apps/e-trading/.venv/bin/python -m src.web_ui.run_web_ui --host 0.0.0.0 --port 5003
+# Command to execute
+# Runs the trading bot with default configuration (usually 0001.json)
+ExecStart=/opt/apps/e-trading/.venv/bin/python -m src.trading.trading_bot
 
 # Restart policy
 Restart=always
@@ -37,7 +37,7 @@ TimeoutStopSec=30
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=trading-webui
+SyslogIdentifier=trading-bot
 
 # Security settings
 NoNewPrivileges=true

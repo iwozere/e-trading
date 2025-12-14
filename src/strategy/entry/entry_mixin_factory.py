@@ -8,6 +8,9 @@ from src.strategy.entry.rsi_bb_volume_entry_mixin import RSIBBVolumeEntryMixin
 from src.strategy.entry.rsi_ichimoku_entry_mixin import RSIIchimokuEntryMixin
 from src.strategy.entry.bb_volume_supertrend_entry_mixin import BBVolumeSupertrendEntryMixin
 from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupertrendEntryMixin
+from src.strategy.entry.eom_breakout_entry_mixin import EOMBreakoutEntryMixin
+from src.strategy.entry.eom_macd_breakout_entry_mixin import EOMMAcdBreakoutEntryMixin
+from src.strategy.entry.eom_pullback_entry_mixin import EOMPullbackEntryMixin
 
 # Import other mixins...
 
@@ -19,6 +22,9 @@ ENTRY_MIXIN_REGISTRY = {
     "RSIBBVolumeEntryMixin": RSIBBVolumeEntryMixin,
     "RSIVolumeSupertrendEntryMixin": RSIVolumeSupertrendEntryMixin,
     "BBVolumeSuperTrendEntryMixin": BBVolumeSupertrendEntryMixin,
+    "EOMBreakoutEntryMixin": EOMBreakoutEntryMixin,
+    "EOMMAcdBreakoutEntryMixin": EOMMAcdBreakoutEntryMixin,
+    "EOMPullbackEntryMixin": EOMPullbackEntryMixin,
 }
 
 

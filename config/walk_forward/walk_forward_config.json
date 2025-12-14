@@ -2,29 +2,23 @@
   "window_type": "rolling",
   "auto_discover_data": true,
   "data_dir": "data",
-
-  "symbols": ["BTCUSDT", "ETHUSDT", "LTCUSDT"],
-  "timeframes": ["15m"],
-
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "LTCUSDT"
+  ],
+  "timeframes": [
+    "4h"
+  ],
   "entry_strategies": [
-    "BBVolumeSuperTrendEntryMixin",
-    "RSIBBEntryMixin",
-    "RSIBBVolumeEntryMixin",
-    "RSIIchimokuEntryMixin",
-    "RSIOrBBEntryMixin",
-    "RSIVolumeSupertrendEntryMixin"
+    "EOMBreakoutEntryMixin",
+    "EOMMAcdBreakoutEntryMixin",
+    "EOMPullbackEntryMixin"
   ],
   "exit_strategies": [
-    "ATRExitMixin",
-    "AdvancedATRExitMixin",
-    "FixedRatioExitMixin",
-    "MACrossoverExitMixin",
-    "RSIBBExitMixin",
-    "RSIOrBBExitMixin",
-    "SimpleATRExitMixin",
-    "TimeBasedExitMixin",
-    "TrailingStopExitMixin"
+    "EOMBreakdownExitMixin",
+    "EOMMAcdBreakdownExitMixin",
+    "EOMRejectionExitMixin"
   ],
-
   "optimizer_config_path": "config/optimizer/optimizer.json"
 }

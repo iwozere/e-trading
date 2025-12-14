@@ -15,8 +15,21 @@ source .venv/bin/activate
 
 /etc/systemd/system
 
+############################################
+# Systemd
+############################################
+ibgateway-docker.service
+notification_bot.service
+scheduler.service
+telegram_bot.service
+trading.service
+trading-webui.service
+trading-api.service
 
 
+############################################
+#   Systemctl
+############################################
 sudo systemctl status telegram_bot.service
 sudo systemctl status scheduler.service
 sudo systemctl status notification_bot.service

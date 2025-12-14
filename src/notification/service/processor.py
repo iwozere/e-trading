@@ -138,7 +138,7 @@ class MessageProcessor:
             # PHASE 1 FIX: Only enable email channel
             # Telegram channel is handled by telegram bot to avoid duplicates
             # See MIGRATION_PLAN.md Phase 1 for details
-            enabled_channels = ['email']  # Telegram bot handles telegram, notification service handles email only
+            enabled_channels = ['email', 'telegram']  # Re-enabling telegram as it seems required for queued messages
 
             self._logger.info(
                 "Notification Service - Enabled channels: %s (Telegram handled by telegram bot)",

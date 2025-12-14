@@ -110,7 +110,8 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
         and accessed via get_indicator().
         """
         # New architecture: indicators already created by strategy
-        _logger.debug("EOMPullbackEntryMixin: indicators provided by strategy")
+        #_logger.debug("EOMPullbackEntryMixin: indicators provided by strategy")
+        pass
 
     def should_enter(self) -> bool:
         """
