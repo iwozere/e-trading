@@ -294,7 +294,7 @@ def get_schedule_summary(config_json: Any) -> Dict[str, Any]:
             return {"error": "Invalid configuration format"}
 
         return {
-            "type": config.get("schedule_type", "screener"),  # Default to screener
+            "type": config.get("schedule_type"),
             "scheduled_time": config.get("scheduled_time", "09:00"),
             "ticker": config.get("ticker", ""),
             "list_type": config.get("list_type", ""),

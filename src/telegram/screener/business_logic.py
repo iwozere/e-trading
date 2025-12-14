@@ -2955,7 +2955,9 @@ def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
                 if config_json:
                     summary = get_schedule_summary(config_json)
                     if "error" not in summary:
-                        schedule_type = summary.get("type", "Unknown")
+                        # Use schedule_type from config, or fallback to DB job_type
+                        schedule_type = summary.get("type") or schedule.get("job_type", "Unknown")
+
                         # scheduled_time is ignored in favor of cron/display_time
                         ticker = summary.get("ticker", "")
                         list_type = summary.get("list_type", "")
@@ -2968,9 +2970,15 @@ def handle_schedules_list(telegram_user_id: str) -> Dict[str, Any]:
                             schedule_list.append(
                                 f"#{schedule['id']} ({schedule_name}): 🔍 {list_type} Screener at {display_time} {email_flag} - {status}"
                             )
-                        else:
+                        elif schedule_type == "data_processing":
                             schedule_list.append(
-                                f"#{schedule['id']} ({schedule_name}): ⚙️ {schedule_type} at {display_time} {email_flag} - {status}"
+                                f"#{schedule['id']} ({schedule_name}): 🔄 Data Processing at {display_time} {email_flag} - {status}"
+                            )
+                        else:
+                            # Clean up the type name for display (e.g. "backup" -> "Backup")
+                            display_type = schedule_type.replace("_", " ").title()
+                            schedule_list.append(
+                                f"#{schedule['id']} ({schedule_name}): ⚙️ {display_type} at {display_time} {email_flag} - {status}"
                             )
                     else:
                         schedule_list.append(

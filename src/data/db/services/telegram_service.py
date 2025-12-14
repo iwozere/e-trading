@@ -358,6 +358,8 @@ class TelegramService(BaseDBService):
             telegram_schedule = {
                 "id": schedule.id,
                 "user_id": schedule.user_id,
+                "name": schedule.name,
+                "job_type": schedule.job_type,
                 "ticker": task_params.get("ticker", schedule.target or config.get("ticker", "")),
                 "config_json": config_json,
                 "schedule_config": task_params.get("schedule_config"),
