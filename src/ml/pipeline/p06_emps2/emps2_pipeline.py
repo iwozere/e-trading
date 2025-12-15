@@ -89,7 +89,11 @@ class EMPS2Pipeline:
         self.fundamental_filter = FundamentalFilter(
             self.finnhub,
             self.config.filter_config,
-            target_date=target_date
+            target_date=target_date,
+            cache_enabled=self.config.fundamental_cache_enabled,
+            cache_ttl_days=self.config.fundamental_cache_ttl_days,
+            checkpoint_enabled=self.config.checkpoint_enabled,
+            checkpoint_interval=self.config.checkpoint_interval
         )
 
         self.yahoo = YahooDataDownloader()

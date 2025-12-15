@@ -46,7 +46,14 @@ class FundamentalFilter:
     - Progress tracking and intermediate saves
     """
 
-    def __init__(self, downloader: FinnhubDataDownloader, config: EMPS2FilterConfig, target_date: Optional[str] = None):
+    def __init__(self,
+                 downloader: FinnhubDataDownloader,
+                 config: EMPS2FilterConfig,
+                 target_date: Optional[str] = None,
+                 cache_enabled: bool = True,
+                 cache_ttl_days: int = 3,
+                 checkpoint_enabled: bool = True,
+                 checkpoint_interval: int = 100):
         """
         Initialize fundamental filter.
 
@@ -54,9 +61,15 @@ class FundamentalFilter:
             downloader: Finnhub data downloader instance
             config: Filter configuration
             target_date: Target trading date (YYYY-MM-DD). Defaults to today.
+            cache_enabled: Whether to enable caching
+            cache_ttl_days: Cache TTL in days
+            checkpoint_enabled: Whether to enable checkpoints
+            checkpoint_interval: Checkpoint save interval
         """
         self.downloader = downloader
         self.config = config
+        self.checkpoint_enabled = checkpoint_enabled
+        self.checkpoint_interval = checkpoint_interval
 
         # Results directory (dated)
         if target_date is None:
@@ -65,9 +78,10 @@ class FundamentalFilter:
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize cache (with negative caching support)
-        if config.fundamental_cache_enabled:
+        # Initialize cache (with negative caching support)
+        if cache_enabled:
             self.cache = FundamentalCache(
-                cache_ttl_days=config.fundamental_cache_ttl_days,
+                cache_ttl_days=cache_ttl_days,
                 negative_cache_ttl_days=2  # 2 days for failed/empty responses
             )
             cache_stats = self.cache.get_stats()
@@ -185,8 +199,8 @@ class FundamentalFilter:
 
         _logger.info("Fetching fundamentals for %d tickers (cache: %s, checkpoints: every %d)",
                     total_tickers,
-                    "enabled" if self.config.fundamental_cache_enabled else "disabled",
-                    self.config.checkpoint_interval)
+                    "enabled" if self.cache is not None else "disabled",
+                    self.checkpoint_interval)
 
         for ticker in tickers:
             try:
@@ -223,7 +237,7 @@ class FundamentalFilter:
                     fundamentals.append(profile_data)
 
                     # Save checkpoint after EACH successful fetch for crash recovery
-                    if self.config.checkpoint_enabled:
+                    if self.checkpoint_enabled:
                         self._save_checkpoint(fundamentals)
                 elif not is_negative_cache_hit:
                     # Only count as failed if it's a NEW failure (not negative cache hit)
@@ -249,7 +263,7 @@ class FundamentalFilter:
                 continue
 
         # Final checkpoint
-        if self.config.checkpoint_enabled and fundamentals:
+        if self.checkpoint_enabled and fundamentals:
             self._save_checkpoint(fundamentals)
 
         _logger.info("Fetched fundamentals: %d successful, %d failed, %d cache hits (%.1f%% hit rate, %d negative cache)",
@@ -368,7 +382,7 @@ class FundamentalFilter:
         Args:
             fundamentals: List of fundamental data dicts
         """
-        if not self.config.checkpoint_enabled:
+        if not self.checkpoint_enabled:
             return
 
         try:
@@ -391,7 +405,7 @@ class FundamentalFilter:
         Returns:
             DataFrame from checkpoint or None
         """
-        if not self.config.checkpoint_enabled:
+        if not self.checkpoint_enabled:
             return None
 
         try:
@@ -414,7 +428,7 @@ class FundamentalFilter:
 
     def _clear_checkpoint(self) -> None:
         """Clear checkpoint file after successful completion."""
-        if not self.config.checkpoint_enabled:
+        if not self.checkpoint_enabled:
             return
 
         try:

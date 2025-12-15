@@ -1,0 +1,74 @@
+{
+    "name": "EOMBreakoutEntryMixin",
+    "trading_style": "swing_trading",
+    "description": "Breakout + EOM confirmation for swing trades (Generic Fallback)",
+    "params": {
+        "e_breakout_threshold": {
+            "type": "float",
+            "low": 0.002,
+            "high": 0.008,
+            "default": 0.003,
+            "description": "Breakout threshold above resistance"
+        },
+        "e_use_atr_filter": {
+            "type": "categorical",
+            "choices": [
+                true,
+                false
+            ],
+            "default": true,
+            "description": "Use ATR filter to avoid low volatility periods"
+        },
+        "e_rsi_overbought": {
+            "type": "int",
+            "low": 68,
+            "high": 78,
+            "default": 72,
+            "description": "RSI overbought threshold"
+        }
+    },
+    "indicator_params": {
+        "eom_timeperiod": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14,
+            "description": "EOM smoothing period"
+        },
+        "sr_lookback_bars": {
+            "type": "int",
+            "low": 2,
+            "high": 5,
+            "default": 3,
+            "description": "S/R swing detection lookback"
+        },
+        "volume_sma_period": {
+            "type": "int",
+            "low": 15,
+            "high": 30,
+            "default": 20,
+            "description": "Volume SMA period"
+        },
+        "atr_period": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14,
+            "description": "ATR period"
+        },
+        "atr_sma_period": {
+            "type": "int",
+            "low": 80,
+            "high": 120,
+            "default": 100,
+            "description": "ATR SMA period for trend filter"
+        },
+        "rsi_period": {
+            "type": "int",
+            "low": 12,
+            "high": 20,
+            "default": 14,
+            "description": "RSI period"
+        }
+    }
+}

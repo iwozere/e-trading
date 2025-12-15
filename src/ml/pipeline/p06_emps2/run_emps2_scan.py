@@ -33,7 +33,16 @@ from src.notification.logger import setup_logger
 from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig, EMPS2FilterConfig
 from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
 
+
 _logger = setup_logger(__name__)
+
+
+def print_header(title: str):
+    """Print a formatted header."""
+    print(f"\n{'=' * 70}")
+    print(f" {title}")
+    print(f"{'=' * 70}\n")
+
 
 
 def parse_args() -> argparse.Namespace:

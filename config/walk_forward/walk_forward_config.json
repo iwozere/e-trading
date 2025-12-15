@@ -8,7 +8,10 @@
     "LTCUSDT"
   ],
   "timeframes": [
-    "4h"
+    "1h",
+    "30m",
+    "15m",
+    "5m"
   ],
   "entry_strategies": [
     "EOMBreakoutEntryMixin",

@@ -10,25 +10,12 @@ from typing import List, Optional
 # ... (rest of imports)
 
 @dataclass
-class EMPS2PipelineConfig:
+class EMPS2FilterConfig:
     """
-    Complete EMPS2 pipeline configuration.
+    Configuration for Stage 2 & 3 filters.
 
-    Combines filter config and universe config for end-to-end pipeline execution.
+    Defines thresholds for fundamental and technical filtering.
     """
-
-    filter_config: EMPS2FilterConfig
-    universe_config: EMPS2UniverseConfig
-    rolling_memory_config: RollingMemoryConfig
-    sentiment_config: SentimentFilterConfig
-
-    # Output settings
-    save_intermediate_results: bool = True
-    generate_summary: bool = True
-    verbose_logging: bool = True
-    enable_uoa_analysis: bool = False # requires paid subscription
-    user_id: Optional[str] = None
-
     # Fundamental filters (Stage 2)
     min_price: float = 0.5
     min_avg_volume: int = 400_000
@@ -40,24 +27,12 @@ class EMPS2PipelineConfig:
     min_volatility_threshold: float = 0.02  # ATR/Price > 2%
     min_price_range: float = 0.05           # 5% range over lookback period
     min_vol_zscore: float = 1.2             # Volume Z-Score > 1.2 (early spike detection)
-    min_vol_rv_ratio: float = 0.3           # Volume/Volatility Ratio > 0.5 (accumulation detection).Too many candidates? Increase to 0.7 or 1.0. Too few candidates? Decrease to 0.3 or 0.4.
+    min_vol_rv_ratio: float = 0.3           # Volume/Volatility Ratio > 0.3
 
     # Data parameters
     lookback_days: int = 7
     interval: str = "1h"
     atr_period: int = 14
-
-    # Processing parameters
-    batch_size: int = 100  # For batching API calls
-    max_retries: int = 3   # Retry failed API calls
-
-    # Cache parameters
-    fundamental_cache_enabled: bool = True
-    fundamental_cache_ttl_days: int = 3  # Cache TTL for profile2 data
-
-    # Checkpoint parameters
-    checkpoint_enabled: bool = True
-    checkpoint_interval: int = 100  # Save checkpoint every N tickers
 
 
 @dataclass
@@ -151,6 +126,18 @@ class EMPS2PipelineConfig:
     verbose_logging: bool = True
     enable_uoa_analysis: bool = False # requires paid subscription
     user_id: Optional[str] = None
+
+    # Processing parameters
+    batch_size: int = 100  # For batching API calls
+    max_retries: int = 3   # Retry failed API calls
+
+    # Cache parameters
+    fundamental_cache_enabled: bool = True
+    fundamental_cache_ttl_days: int = 3  # Cache TTL for profile2 data
+
+    # Checkpoint parameters
+    checkpoint_enabled: bool = True
+    checkpoint_interval: int = 100  # Save checkpoint every N tickers
 
     @classmethod
     def create_default(cls) -> "EMPS2PipelineConfig":

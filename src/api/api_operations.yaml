@@ -30,12 +30,50 @@ core_endpoints:
   health_check:
     path: "/api/health"
     method: "GET"
-    description: "Health check endpoint"
+    description: "Unified health check endpoint"
     authentication: false
     response:
-      status: "healthy"
-      timestamp: "float"
-      trading_system_available: "boolean"
+      status: "string"
+      timestamp: "string (ISO datetime)"
+      database: "string"
+      api: "string"
+      total_messages: "integer (optional)"
+
+  get_channels_health:
+    path: "/api/health/channels"
+    method: "GET"
+    description: "Get comprehensive health status for all notification channels"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response:
+      status: "string"
+      timestamp: "string (ISO datetime)"
+      services: "object"
+      summary: "object"
+
+  get_telegram_bot_health:
+    path: "/api/health/telegram"
+    method: "GET"
+    description: "Get Telegram Bot health status"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "Health status object"
+
+  get_notification_service_health:
+    path: "/api/health/notification"
+    method: "GET"
+    description: "Get Notification Service health status"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "Health status object"
+
+  get_database_health:
+    path: "/api/health/database"
+    method: "GET"
+    description: "Get database health and connectivity status"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "Health status object"
 
   test_auth:
     path: "/api/test-auth"
@@ -158,9 +196,99 @@ strategy_management:
     roles: ["trader", "admin"]
     parameters:
       strategy_id: "string (path parameter)"
-    response:
       message: "string"
       strategy_id: "string"
+
+# ============================================
+# TRADING BOT MANAGEMENT ENDPOINTS (trading_bot_routes.py)
+# ============================================
+
+trading_bot_management:
+  get_trading_bots:
+    path: "/api/trading/bots"
+    method: "GET"
+    description: "Get all trading bots for the current user"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "BotResponse object containing list of bots"
+
+  get_trading_bot:
+    path: "/api/trading/bots/{bot_id}"
+    method: "GET"
+    description: "Get a specific trading bot by ID"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    parameters:
+      bot_id: "string (path parameter)"
+    response: "BotResponse object containing bot details"
+
+  create_trading_bot:
+    path: "/api/trading/bots"
+    method: "POST"
+    description: "Create a new trading bot"
+    authentication: true
+    roles: ["trader", "admin"]
+    request_body: "BotConfigRequest object"
+    response: "BotResponse object"
+
+  update_trading_bot:
+    path: "/api/trading/bots/{bot_id}"
+    method: "PUT"
+    description: "Update an existing trading bot configuration"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      bot_id: "string (path parameter)"
+    request_body: "BotConfigRequest object"
+    response: "BotResponse object"
+
+  update_bot_status:
+    path: "/api/trading/bots/{bot_id}/status"
+    method: "PUT"
+    description: "Update bot status (start/stop/restart)"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      bot_id: "string (path parameter)"
+    request_body: "BotStatusRequest object"
+    response: "BotResponse object"
+
+  delete_trading_bot:
+    path: "/api/trading/bots/{bot_id}"
+    method: "DELETE"
+    description: "Delete a trading bot"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      bot_id: "string (path parameter)"
+    response: "BotResponse object"
+
+  get_mixin_configurations:
+    path: "/api/trading/config/mixins"
+    method: "GET"
+    description: "Get available mixins and their parameter definitions"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "ConfigOptionsResponse object"
+
+  get_configuration_options:
+    path: "/api/trading/config/options"
+    method: "GET"
+    description: "Get configuration options for dropdowns and selects"
+    authentication: true
+    roles: ["viewer", "trader", "admin"]
+    response: "ConfigOptionsResponse object"
+
+  validate_bot_configuration:
+    path: "/api/trading/bots/{bot_id}/validate"
+    method: "POST"
+    description: "Validate a bot configuration without saving"
+    authentication: true
+    roles: ["trader", "admin"]
+    parameters:
+      bot_id: "string (path parameter, use 0 for new)"
+    request_body: "BotConfigRequest object"
+    response: "ValidationResponse object"
 
 # ============================================
 # STRATEGY LIFECYCLE ENDPOINTS (main.py)
@@ -1037,6 +1165,49 @@ data_models:
       response_time_ms: "integer (optional)"
       error_message: "string (optional)"
       external_id: "string (optional)"
+
+  BotConfigRequest:
+    description: "Request model for bot configuration"
+    fields:
+      name: "string"
+      symbol: "string"
+      description: "string (optional)"
+      enabled: "boolean"
+      broker: "object"
+      strategy: "object"
+      data: "object"
+      trading: "object"
+      risk_management: "object"
+      notifications: "object"
+
+  BotStatusRequest:
+    description: "Request model for bot status update"
+    fields:
+      action: "string (start, stop, restart)"
+
+  BotResponse:
+    description: "Response model for bot operations"
+    fields:
+      success: "boolean"
+      bot: "object (optional)"
+      bots: "array (optional)"
+      message: "string (optional)"
+      error: "string (optional)"
+
+  ConfigOptionsResponse:
+    description: "Response model for configuration options"
+    fields:
+      success: "boolean"
+      options: "object (optional)"
+      entry_mixins: "array (optional)"
+      exit_mixins: "array (optional)"
+
+  ValidationResponse:
+    description: "Response model for validation results"
+    fields:
+      success: "boolean"
+      validation: "object (optional)"
+      error: "string (optional)"
 
   NotificationStats:
     description: "Notification statistics model"
