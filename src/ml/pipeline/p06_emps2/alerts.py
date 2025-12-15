@@ -109,16 +109,19 @@ See attached CSV for full details."""
             attachments: Optional attachments dict
             channels: List of channels to use
         """
-        await self.client.send_notification(
-            notification_type="alert",
-            title=title,
-            message=message,
-            priority="high",
-            channels=channels,
-            recipient_id=self.user_id,
-            attachments=attachments,
-            source="emps2_pipeline"
-        )
+        try:
+            await self.client.send_notification(
+                notification_type="alert",
+                title=title,
+                message=message,
+                priority="high",
+                channels=channels,
+                recipient_id=self.user_id,
+                attachments=attachments,
+                source="emps2_pipeline"
+            )
+        finally:
+            await self.client.close()
 
     def send_phase1_alert(
         self,
