@@ -159,8 +159,8 @@ downloader_classes = {
 #### 1.3 **Hardcoded Configuration Imports**
 **Issue**: Downloaders directly import from `config.donotshare.donotshare`:
 ```python
-from config.donotshare.donotshare import POLYGON_KEY
-self.api_key = api_key or POLYGON_KEY
+from config.donotshare.donotshare import POLYGON_API_KEY
+self.api_key = api_key or POLYGON_API_KEY
 ```
 
 **Impact**:
@@ -203,10 +203,10 @@ class BaseDataDownloader(ABC):
   - Returns `default` value if not found
   - Handles `ImportError` and `AttributeError` gracefully
 - ✅ Updated all downloaders to use `_get_config_value()` instead of direct imports:
-  - `AlphaVantageDataDownloader`: Uses `_get_config_value('ALPHA_VANTAGE_KEY', 'ALPHA_VANTAGE_KEY')`
-  - `FinnhubDataDownloader`: Uses `_get_config_value('FINNHUB_KEY', 'FINNHUB_KEY')`
-  - `PolygonDataDownloader`: Uses `_get_config_value('POLYGON_KEY', 'POLYGON_KEY')`
-  - `TwelveDataDataDownloader`: Uses `_get_config_value('TWELVE_DATA_KEY', 'TWELVE_DATA_KEY')`
+  - `AlphaVantageDataDownloader`: Uses `_get_config_value('ALPHA_VANTAGE_API_KEY', 'ALPHA_VANTAGE_API_KEY')`
+  - `FinnhubDataDownloader`: Uses `_get_config_value('FINNHUB_API_KEY', 'FINNHUB_API_KEY')`
+  - `PolygonDataDownloader`: Uses `_get_config_value('POLYGON_API_KEY', 'POLYGON_API_KEY')`
+  - `TwelveDataDataDownloader`: Uses `_get_config_value('TWELVE_DATA_API_KEY', 'TWELVE_DATA_API_KEY')`
   - `FMPDataDownloader`: Uses `_get_config_value('FMP_API_KEY', 'FMP_API_KEY')`
   - `TiingoDataDownloader`: Uses `_get_config_value('TIINGO_API_KEY', 'TIINGO_API_KEY')`
   - `AlpacaDataDownloader`: Uses `_get_config_value()` for both `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`
@@ -270,11 +270,11 @@ class DownloaderConfig:
 # Register configurations
 DOWNLOADER_CONFIGS = {
     "alphavantage": DownloaderConfig(
-        api_key_env="ALPHA_VANTAGE_KEY",
+        api_key_env="ALPHA_VANTAGE_API_KEY",
         requires_api_key=True
     ),
     "finnhub": DownloaderConfig(
-        api_key_env="FINNHUB_KEY",
+        api_key_env="FINNHUB_API_KEY",
         requires_api_key=True
     ),
     # ... etc

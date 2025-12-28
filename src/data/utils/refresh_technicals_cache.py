@@ -31,7 +31,7 @@ from src.data.cache.unified_cache import configure_unified_cache
 from src.data.sources.base_data_source import BaseDataSource
 
 # Import API keys from donotshare
-from config.donotshare.donotshare import ALPHA_VANTAGE_KEY, DATA_CACHE_DIR
+from config.donotshare.donotshare import ALPHA_VANTAGE_API_KEY, DATA_CACHE_DIR
 # Validation removed - data is cached as-is without validation
 from src.notification.logger import setup_logger
 
@@ -143,8 +143,8 @@ def populate_cache(symbols: List[str], intervals: List[str],
 
     try:
         # Check if Alpha Vantage API key is available
-        if ALPHA_VANTAGE_KEY:
-            downloaders['alpha_vantage'] = AlphaVantageDataDownloader(api_key=ALPHA_VANTAGE_KEY)
+        if ALPHA_VANTAGE_API_KEY:
+            downloaders['alpha_vantage'] = AlphaVantageDataDownloader(api_key=ALPHA_VANTAGE_API_KEY)
             print("  ✅ Alpha Vantage downloader initialized")
         else:
             print("  ⚠️  Alpha Vantage downloader skipped: No API key found in donotshare.py")

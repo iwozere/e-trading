@@ -1,0 +1,201 @@
+(.venv) PS C:\dev\cursor\e-trading>  c:; cd 'c:\dev\cursor\e-trading'; & 'c:\dev\cursor\e-trading\.venv\Scripts\python.exe' 'c:\Users\akoss\.antigravity\extensions\ms-python.debugpy-2025.18.0-win32-x64\bundled\libs\debugpy\launcher' '57020' '--' 'c:\dev\cursor\e-trading\src\common\sentiments\collect_sentiment_async.py' 
+--- Running Quick Sentiment Test for ['AAPL', 'TSLA', 'NVDA', 'BTC'] ---
+Lookback: 24h
+2025-12-28 15:21:12,288 - DEBUG - Normalizing provider weights from sum 1.500 to 1.0
+2025-12-28 15:21:12,416 - INFO - Initialized global rate limit coordinator
+2025-12-28 15:21:12,417 - INFO - Global rate limiting enabled
+2025-12-28 15:21:12,430 - DEBUG - Redis not available, will use memory-only caching
+2025-12-28 15:21:12,433 - WARNING - Redis not available, RedisCache will always fail
+2025-12-28 15:21:12,434 - WARNING - Redis cache initialized but not available
+2025-12-28 15:21:19,493 - INFO - Registered adapter: stocktwits
+2025-12-28 15:21:19,495 - INFO - Registered adapter: reddit_pushshift
+2025-12-28 15:21:19,497 - INFO - Registered adapter: reddit
+2025-12-28 15:21:19,534 - INFO - Registered adapter: huggingface
+2025-12-28 15:21:19,537 - INFO - Registered adapter: twitter
+2025-12-28 15:21:19,540 - INFO - Registered adapter: discord
+2025-12-28 15:21:20,289 - INFO - Registered adapter: news
+2025-12-28 15:21:20,291 - INFO - Registered adapter: trends
+2025-12-28 15:21:20,292 - DEBUG - Loaded 63 positive and 73 negative keywords
+2025-12-28 15:21:20,302 - INFO - Updated rate limiter config for stocktwits: 5.00 req/s, burst 10
+2025-12-28 15:21:20,303 - INFO - Manual rate adjustment for stocktwits: 1.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,303 - DEBUG - Reallocated resources: {'stocktwits': '30.00 req/s'}
+2025-12-28 15:21:20,303 - INFO - Registered adapter stocktwits with global coordinator (weight: 1.00)
+2025-12-28 15:21:20,304 - INFO - Added adapter: stocktwits
+2025-12-28 15:21:20,305 - DEBUG - Loaded 63 positive and 73 negative keywords
+2025-12-28 15:21:20,305 - INFO - Updated rate limiter config for stocktwits: 5.00 req/s, burst 10
+2025-12-28 15:21:20,306 - INFO - Manual rate adjustment for stocktwits: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,306 - INFO - Updated rate limiter config for reddit: 5.00 req/s, burst 10
+2025-12-28 15:21:20,306 - INFO - Manual rate adjustment for reddit: 1.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,307 - DEBUG - Reallocated resources: {'stocktwits': '30.00 req/s', 'reddit': '30.00 req/s'}
+2025-12-28 15:21:20,307 - INFO - Registered adapter reddit with global coordinator (weight: 1.00)
+2025-12-28 15:21:20,307 - WARNING - Reddit adapter added but REDDIT_API_KEY is missing in secrets!
+2025-12-28 15:21:20,308 - INFO - Added adapter: reddit
+2025-12-28 15:21:20,309 - DEBUG - Loaded 63 positive and 73 negative keywords
+2025-12-28 15:21:20,310 - INFO - Updated rate limiter config for stocktwits: 5.00 req/s, burst 10
+2025-12-28 15:21:20,311 - INFO - Manual rate adjustment for stocktwits: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,311 - INFO - Updated rate limiter config for reddit: 5.00 req/s, burst 10
+2025-12-28 15:21:20,311 - INFO - Manual rate adjustment for reddit: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,311 - INFO - Updated rate limiter config for news: 5.00 req/s, burst 10
+2025-12-28 15:21:20,312 - INFO - Manual rate adjustment for news: 1.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,312 - DEBUG - Reallocated resources: {'stocktwits': '20.00 req/s', 'reddit': '20.00 req/s', 'news': '20.00 req/s'}
+2025-12-28 15:21:20,312 - INFO - Registered adapter news with global coordinator (weight: 1.00)
+2025-12-28 15:21:20,313 - INFO - Added adapter: news
+2025-12-28 15:21:20,313 - INFO - Updated rate limiter config for stocktwits: 5.00 req/s, burst 10
+2025-12-28 15:21:20,314 - INFO - Manual rate adjustment for stocktwits: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,314 - INFO - Updated rate limiter config for reddit: 5.00 req/s, burst 10
+2025-12-28 15:21:20,315 - INFO - Manual rate adjustment for reddit: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,315 - INFO - Updated rate limiter config for news: 5.00 req/s, burst 10
+2025-12-28 15:21:20,315 - INFO - Manual rate adjustment for news: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,316 - INFO - Updated rate limiter config for trends: 5.00 req/s, burst 10
+2025-12-28 15:21:20,316 - INFO - Manual rate adjustment for trends: 1.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,316 - DEBUG - Reallocated resources: {'stocktwits': '15.00 req/s', 'reddit': '15.00 req/s', 'news': '15.00 req/s', 'trends': '15.00 req/s'}
+2025-12-28 15:21:20,317 - INFO - Registered adapter trends with global coordinator (weight: 1.00)
+2025-12-28 15:21:20,318 - INFO - Added adapter: trends
+2025-12-28 15:21:20,319 - DEBUG - Loaded 63 positive and 73 negative keywords
+2025-12-28 15:21:20,320 - INFO - Updated rate limiter config for stocktwits: 5.00 req/s, burst 10
+2025-12-28 15:21:20,320 - INFO - Manual rate adjustment for stocktwits: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,321 - INFO - Updated rate limiter config for reddit: 5.00 req/s, burst 10
+2025-12-28 15:21:20,321 - INFO - Manual rate adjustment for reddit: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,321 - INFO - Updated rate limiter config for news: 5.00 req/s, burst 10
+2025-12-28 15:21:20,322 - INFO - Manual rate adjustment for news: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,322 - INFO - Updated rate limiter config for trends: 5.00 req/s, burst 10
+2025-12-28 15:21:20,322 - INFO - Manual rate adjustment for trends: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,323 - INFO - Updated rate limiter config for discord: 5.00 req/s, burst 10
+2025-12-28 15:21:20,323 - INFO - Manual rate adjustment for discord: 1.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,324 - DEBUG - Reallocated resources: {'stocktwits': '12.00 req/s', 'reddit': '12.00 req/s', 'news': '12.00 req/s', 'trends': '12.00 req/s', 'discord': '12.00 req/s'}
+2025-12-28 15:21:20,324 - INFO - Registered adapter discord with global coordinator (weight: 1.00)
+2025-12-28 15:21:20,324 - INFO - Added adapter: discord
+2025-12-28 15:21:20,325 - DEBUG - Loaded 63 positive and 73 negative keywords
+2025-12-28 15:21:20,327 - INFO - Updated rate limiter config for stocktwits: 5.00 req/s, burst 10
+2025-12-28 15:21:20,327 - INFO - Manual rate adjustment for stocktwits: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,327 - INFO - Updated rate limiter config for reddit: 5.00 req/s, burst 10
+2025-12-28 15:21:20,328 - INFO - Manual rate adjustment for reddit: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,328 - INFO - Updated rate limiter config for news: 5.00 req/s, burst 10
+2025-12-28 15:21:20,328 - INFO - Manual rate adjustment for news: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,329 - INFO - Updated rate limiter config for trends: 5.00 req/s, burst 10
+2025-12-28 15:21:20,329 - INFO - Manual rate adjustment for trends: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,329 - INFO - Updated rate limiter config for discord: 5.00 req/s, burst 10
+2025-12-28 15:21:20,330 - INFO - Manual rate adjustment for discord: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,330 - INFO - Updated rate limiter config for twitter: 5.00 req/s, burst 10
+2025-12-28 15:21:20,331 - INFO - Manual rate adjustment for twitter: 1.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,331 - DEBUG - Reallocated resources: {'stocktwits': '10.00 req/s', 'reddit': '10.00 req/s', 'news': '10.00 req/s', 'trends': '10.00 req/s', 'discord': '10.00 req/s', 'twitter': '10.00 req/s'} 
+2025-12-28 15:21:20,331 - INFO - Registered adapter twitter with global coordinator (weight: 1.00)
+2025-12-28 15:21:20,332 - INFO - Added adapter: twitter
+2025-12-28 15:21:20,333 - DEBUG - Loaded 63 positive and 73 negative keywords
+2025-12-28 15:21:20,334 - INFO - Updated rate limiter config for stocktwits: 5.00 req/s, burst 10
+2025-12-28 15:21:20,334 - INFO - Manual rate adjustment for stocktwits: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,334 - INFO - Updated rate limiter config for reddit: 5.00 req/s, burst 10
+2025-12-28 15:21:20,335 - INFO - Manual rate adjustment for reddit: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,335 - INFO - Updated rate limiter config for news: 5.00 req/s, burst 10
+2025-12-28 15:21:20,335 - INFO - Manual rate adjustment for news: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,336 - INFO - Updated rate limiter config for trends: 5.00 req/s, burst 10
+2025-12-28 15:21:20,336 - INFO - Manual rate adjustment for trends: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,336 - INFO - Updated rate limiter config for discord: 5.00 req/s, burst 10
+2025-12-28 15:21:20,337 - INFO - Manual rate adjustment for discord: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,337 - INFO - Updated rate limiter config for twitter: 5.00 req/s, burst 10
+2025-12-28 15:21:20,337 - INFO - Manual rate adjustment for twitter: 5.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,338 - INFO - Updated rate limiter config for reddit_pushshift: 5.00 req/s, burst 10
+2025-12-28 15:21:20,338 - INFO - Manual rate adjustment for reddit_pushshift: 1.00 -> 5.00 req/s (reason: global_reallocation)
+2025-12-28 15:21:20,338 - DEBUG - Reallocated resources: {'stocktwits': '8.57 req/s', 'reddit': '8.57 req/s', 'news': '8.57 req/s', 'trends': '8.57 req/s', 'discord': '8.57 req/s', 'twitter': '8.57 req/s', 'reddit_pushshift': '8.57 req/s'}
+2025-12-28 15:21:20,339 - INFO - Registered adapter reddit_pushshift with global coordinator (weight: 1.00)
+2025-12-28 15:21:20,339 - INFO - Added adapter: reddit_pushshift
+2025-12-28 15:21:20,339 - INFO - Using adapters: ['stocktwits', 'reddit', 'news', 'trends', 'discord', 'twitter', 'reddit_pushshift']
+2025-12-28 15:21:20,379 - INFO - Processing 4 tickers with batch optimization
+2025-12-28 15:21:20,380 - DEBUG - Created 1 batches of size ~4 for adapter sentiment_collection (4 items total)
+2025-12-28 15:21:20,380 - INFO - Processing 1 batches for adapter sentiment_collection
+2025-12-28 15:21:20,381 - INFO - Started system health monitoring in GlobalRateLimitCoordinator
+2025-12-28 15:21:20,504 - INFO - Fetching new Reddit OAuth token
+2025-12-28 15:21:20,508 - WARNING - No news API tokens configured
+2025-12-28 15:21:20,509 - DEBUG - Generated news summary for ticker AAPL: 0 articles, score 0.000, credibility 0.00
+2025-12-28 15:21:20,510 - DEBUG - Found 0 financial channels across 0 guilds
+2025-12-28 15:21:20,510 - WARNING - No financial channels found for Discord monitoring
+2025-12-28 15:21:20,511 - DEBUG - Generated Discord summary for ticker AAPL: 0 mentions, score 0.000, 0 users
+2025-12-28 15:21:20,517 - INFO - Fetching new Reddit OAuth token
+2025-12-28 15:21:20,518 - WARNING - No news API tokens configured
+2025-12-28 15:21:20,518 - DEBUG - Generated news summary for ticker TSLA: 0 articles, score 0.000, credibility 0.00
+2025-12-28 15:21:20,519 - DEBUG - Found 0 financial channels across 0 guilds
+2025-12-28 15:21:20,520 - WARNING - No financial channels found for Discord monitoring
+2025-12-28 15:21:20,520 - DEBUG - Generated Discord summary for ticker TSLA: 0 mentions, score 0.000, 0 users
+2025-12-28 15:21:20,521 - INFO - Fetching new Reddit OAuth token
+2025-12-28 15:21:20,522 - WARNING - No news API tokens configured
+2025-12-28 15:21:20,522 - DEBUG - Generated news summary for ticker NVDA: 0 articles, score 0.000, credibility 0.00
+2025-12-28 15:21:20,523 - DEBUG - Found 0 financial channels across 0 guilds
+2025-12-28 15:21:20,524 - WARNING - No financial channels found for Discord monitoring
+2025-12-28 15:21:20,524 - DEBUG - Generated Discord summary for ticker NVDA: 0 mentions, score 0.000, 0 users
+2025-12-28 15:21:20,526 - INFO - Fetching new Reddit OAuth token
+2025-12-28 15:21:20,527 - WARNING - No news API tokens configured
+2025-12-28 15:21:20,528 - DEBUG - Generated news summary for ticker BTC: 0 articles, score 0.000, credibility 0.00
+2025-12-28 15:21:20,528 - DEBUG - Found 0 financial channels across 0 guilds
+2025-12-28 15:21:20,529 - WARNING - No financial channels found for Discord monitoring
+2025-12-28 15:21:20,529 - DEBUG - Generated Discord summary for ticker BTC: 0 mentions, score 0.000, 0 users
+2025-12-28 15:21:20,609 - ERROR - Stocktwits request failed after 4 attempts: https://api.stocktwits.com/api/2/streams/symbol/BTC.json 403, message='Forbidden', url='https://api.stocktwits.com/api/2/streams/symbol/BTC.json?limit=30'
+2025-12-28 15:21:20,610 - WARNING - No payload received for ticker BTC
+2025-12-28 15:21:20,610 - DEBUG - Generated summary for ticker BTC: 0 mentions, score 0.000
+2025-12-28 15:21:20,626 - ERROR - Stocktwits request failed after 4 attempts: https://api.stocktwits.com/api/2/streams/symbol/AAPL.json 403, message='Forbidden', url='https://api.stocktwits.com/api/2/streams/symbol/AAPL.json?limit=30'
+2025-12-28 15:21:20,626 - WARNING - No payload received for ticker AAPL
+2025-12-28 15:21:20,627 - DEBUG - Generated summary for ticker AAPL: 0 mentions, score 0.000
+2025-12-28 15:21:20,642 - ERROR - Stocktwits request failed after 4 attempts: https://api.stocktwits.com/api/2/streams/symbol/TSLA.json 403, message='Forbidden', url='https://api.stocktwits.com/api/2/streams/symbol/TSLA.json?limit=30'
+2025-12-28 15:21:20,642 - WARNING - No payload received for ticker TSLA
+2025-12-28 15:21:20,643 - DEBUG - Generated summary for ticker TSLA: 0 mentions, score 0.000
+2025-12-28 15:21:20,645 - ERROR - Stocktwits request failed after 4 attempts: https://api.stocktwits.com/api/2/streams/symbol/NVDA.json 403, message='Forbidden', url='https://api.stocktwits.com/api/2/streams/symbol/NVDA.json?limit=30'
+2025-12-28 15:21:20,646 - WARNING - No payload received for ticker NVDA
+2025-12-28 15:21:20,646 - DEBUG - Generated summary for ticker NVDA: 0 mentions, score 0.000
+2025-12-28 15:21:20,719 - WARNING - Twitter 429 rate limit (attempt 1/4) - sleeping 556s
+2025-12-28 15:21:20,724 - WARNING - Twitter 429 rate limit (attempt 1/4) - sleeping 556s
+2025-12-28 15:21:20,725 - WARNING - Twitter 429 rate limit (attempt 1/4) - sleeping 556s
+2025-12-28 15:21:20,726 - WARNING - Twitter 429 rate limit (attempt 1/4) - sleeping 556s
+2025-12-28 15:21:20,732 - ERROR - Failed to fetch Reddit token: 401, message='Unauthorized', url='https://www.reddit.com/api/v1/access_token'
+2025-12-28 15:21:20,733 - ERROR - Error fetching Reddit messages for BTC: 401, message='Unauthorized', url='https://www.reddit.com/api/v1/access_token'
+2025-12-28 15:21:20,734 - ERROR - Failed to fetch Reddit token: 401, message='Unauthorized', url='https://www.reddit.com/api/v1/access_token'
+2025-12-28 15:21:20,735 - ERROR - Error fetching Reddit messages for TSLA: 401, message='Unauthorized', url='https://www.reddit.com/api/v1/access_token'
+2025-12-28 15:21:20,738 - ERROR - Failed to fetch Reddit token: 401, message='Unauthorized', url='https://www.reddit.com/api/v1/access_token'
+2025-12-28 15:21:20,738 - ERROR - Error fetching Reddit messages for NVDA: 401, message='Unauthorized', url='https://www.reddit.com/api/v1/access_token'
+2025-12-28 15:21:20,788 - ERROR - Failed to fetch Reddit token: 401, message='Unauthorized', url='https://www.reddit.com/api/v1/access_token'
+2025-12-28 15:21:20,789 - ERROR - Error fetching Reddit messages for AAPL: 401, message='Unauthorized', url='https://www.reddit.com/api/v1/access_token'
+2025-12-28 15:21:21,015 - ERROR - Pushshift request failed after 4 attempts: https://api.pushshift.io/reddit/search/submission 403, message='Forbidden', url='https://api.pushshift.io/reddit/search/submission?q=AAPL+OR+$AAPL&size=200&after=1766845280'
+2025-12-28 15:21:21,061 - ERROR - Pushshift request failed after 4 attempts: https://api.pushshift.io/reddit/search/submission 403, message='Forbidden', url='https://api.pushshift.io/reddit/search/submission?q=BTC+OR+$BTC&size=200&after=1766845280'
+2025-12-28 15:21:21,322 - ERROR - Pushshift request failed after 4 attempts: https://api.pushshift.io/reddit/search/submission 403, message='Forbidden', url='https://api.pushshift.io/reddit/search/submission?q=NVDA+OR+$NVDA&size=200&after=1766845280'
+2025-12-28 15:21:21,323 - DEBUG - Fetched 0 submissions for ticker AAPL
+2025-12-28 15:21:21,368 - ERROR - Pushshift request failed after 4 attempts: https://api.pushshift.io/reddit/search/submission 403, message='Forbidden', url='https://api.pushshift.io/reddit/search/submission?q=TSLA+OR+$TSLA&size=200&after=1766845280'
+2025-12-28 15:21:21,369 - DEBUG - Fetched 0 submissions for ticker BTC
+2025-12-28 15:21:21,634 - DEBUG - Fetched 0 submissions for ticker NVDA
+2025-12-28 15:21:21,681 - DEBUG - Fetched 0 submissions for ticker TSLA
+2025-12-28 15:21:21,738 - ERROR - Pushshift request failed after 4 attempts: https://api.pushshift.io/reddit/search/comment 403, message='Forbidden', url='https://api.pushshift.io/reddit/search/comment?q=AAPL+OR+$AAPL&size=500&after=1766845280'
+2025-12-28 15:21:21,780 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:21,854 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:22,012 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:22,012 - DEBUG - Fetched 0 Google Trends data points for ticker TSLA
+2025-12-28 15:21:22,041 - DEBUG - Fetched 0 comments for ticker AAPL
+2025-12-28 15:21:22,041 - DEBUG - Generated summary for ticker AAPL: 0 mentions, 0 unique authors, score 0.000
+2025-12-28 15:21:22,092 - ERROR - Pushshift request failed after 4 attempts: https://api.pushshift.io/reddit/search/comment 403, message='Forbidden', url='https://api.pushshift.io/reddit/search/comment?q=BTC+OR+$BTC&size=500&after=1766845280'
+2025-12-28 15:21:22,096 - ERROR - Pushshift request failed after 4 attempts: https://api.pushshift.io/reddit/search/comment 403, message='Forbidden', url='https://api.pushshift.io/reddit/search/comment?q=TSLA+OR+$TSLA&size=500&after=1766845280'
+2025-12-28 15:21:22,126 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:22,213 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:22,359 - ERROR - Pushshift request failed after 4 attempts: https://api.pushshift.io/reddit/search/comment 403, message='Forbidden', url='https://api.pushshift.io/reddit/search/comment?q=NVDA+OR+$NVDA&size=500&after=1766845280'
+2025-12-28 15:21:22,399 - DEBUG - Fetched 0 comments for ticker BTC
+2025-12-28 15:21:22,400 - DEBUG - Generated summary for ticker BTC: 0 mentions, 0 unique authors, score 0.000
+2025-12-28 15:21:22,400 - DEBUG - Fetched 0 comments for ticker TSLA
+2025-12-28 15:21:22,400 - DEBUG - Generated summary for ticker TSLA: 0 mentions, 0 unique authors, score 0.000
+2025-12-28 15:21:22,464 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:22,661 - DEBUG - Fetched 0 comments for ticker NVDA
+2025-12-28 15:21:22,662 - DEBUG - Generated summary for ticker NVDA: 0 mentions, 0 unique authors, score 0.000
+2025-12-28 15:21:23,127 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:23,443 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:23,444 - DEBUG - Fetched 0 Google Trends data points for ticker AAPL
+2025-12-28 15:21:23,609 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:23,942 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:24,361 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:24,361 - DEBUG - Generated Google Trends summary for ticker TSLA: 0 data points, score 0.000, volume 0.0
+2025-12-28 15:21:24,692 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:24,692 - DEBUG - Fetched 0 Google Trends data points for ticker NVDA
+2025-12-28 15:21:25,001 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:25,002 - DEBUG - Fetched 0 Google Trends data points for ticker BTC
+2025-12-28 15:21:25,443 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:25,444 - DEBUG - Generated Google Trends summary for ticker AAPL: 0 data points, score 0.000, volume 0.0
+2025-12-28 15:21:25,444 - DEBUG - Rate limiting detected for trends, triggering adaptation
+2025-12-28 15:21:26,675 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:26,676 - DEBUG - Generated Google Trends summary for ticker NVDA: 0 data points, score 0.000, volume 0.0
+2025-12-28 15:21:26,676 - DEBUG - Rate limiting detected for trends, triggering adaptation
+2025-12-28 15:21:27,915 - WARNING - Google Trends returned status 400
+2025-12-28 15:21:27,916 - DEBUG - Generated Google Trends summary for ticker BTC: 0 data points, score 0.000, volume 0.0
+2025-12-28 15:21:27,916 - DEBUG - Rate limiting detected for trends, triggering adaptation

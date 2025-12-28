@@ -65,7 +65,7 @@
 #### Binance API Credentials (Optional)
 - **Purpose**: Higher rate limits for cryptocurrency data
 - **Rate limit**: 1200 requests/minute (free tier)
-- **Environment variables**: `BINANCE_API_KEY`, `BINANCE_SECRET_KEY`
+- **Environment variables**: `BINANCE_KEY`, `BINANCE_SECRET`
 - **Registration**: [Binance](https://www.binance.com/en/my/settings/api-management)
 - **Usage**: Cryptocurrency symbols (BTCUSDT, ETHUSDT, etc.)
 
@@ -204,11 +204,11 @@ pip install -r requirements.txt
 2. Add your API keys to the `.env` file:
 ```bash
 # Financial Data APIs
-ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
+ALPHA_VANTAGE_API_KEY=your_ALPHA_VANTAGE_API_KEY
 
 # Cryptocurrency APIs (optional)
-BINANCE_API_KEY=your_binance_api_key
-BINANCE_SECRET_KEY=your_binance_secret_key
+BINANCE_KEY=your_BINANCE_KEY
+BINANCE_SECRET=your_BINANCE_SECRET
 ```
 
 ## Cache System Setup

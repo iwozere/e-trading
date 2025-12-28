@@ -228,25 +228,25 @@ class DataDownloaderFactory:
         """
         # Provider-specific parameter extraction
         if provider == "alphavantage":
-            api_key = kwargs.get("api_key") or os.getenv("ALPHA_VANTAGE_KEY")
+            api_key = kwargs.get("api_key") or os.getenv("ALPHA_VANTAGE_API_KEY")
             if not api_key:
                 raise ValueError("Alpha Vantage API key is required")
             return downloader_class(api_key=api_key)
 
         elif provider == "finnhub":
-            api_key = kwargs.get("api_key") or os.getenv("FINNHUB_KEY")
+            api_key = kwargs.get("api_key") or os.getenv("FINNHUB_API_KEY")
             if not api_key:
                 raise ValueError("Finnhub API key is required")
             return downloader_class(api_key=api_key)
 
         elif provider == "polygon":
-            api_key = kwargs.get("api_key") or os.getenv("POLYGON_KEY")
+            api_key = kwargs.get("api_key") or os.getenv("POLYGON_API_KEY")
             if not api_key:
                 raise ValueError("Polygon.io API key is required")
             return downloader_class(api_key=api_key)
 
         elif provider == "twelvedata":
-            api_key = kwargs.get("api_key") or os.getenv("TWELVE_DATA_KEY")
+            api_key = kwargs.get("api_key") or os.getenv("TWELVE_DATA_API_KEY")
             if not api_key:
                 raise ValueError("Twelve Data API key is required")
             return downloader_class(api_key=api_key)

@@ -398,7 +398,7 @@ DB_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@localhost:5
 # API Keys
 BINANCE_KEY = os.getenv("BINANCE_KEY")
 BINANCE_SECRET = os.getenv("BINANCE_SECRET")
-ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY")
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 FMP_API_KEY = os.getenv("FMP_API_KEY")
 
 # Notification credentials
@@ -415,9 +415,9 @@ POSTGRES_PASSWORD=secure_password_here
 POSTGRES_DATABASE=trading
 
 # API Keys
-BINANCE_KEY=your_binance_api_key
-BINANCE_SECRET=your_binance_secret_key
-ALPHA_VANTAGE_KEY=your_alpha_vantage_key
+BINANCE_KEY=your_BINANCE_KEY
+BINANCE_SECRET=your_BINANCE_SECRET
+ALPHA_VANTAGE_API_KEY=your_ALPHA_VANTAGE_API_KEY
 FMP_API_KEY=your_fmp_api_key
 
 # Notification Services

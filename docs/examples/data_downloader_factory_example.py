@@ -65,9 +65,9 @@ def demonstrate_alpha_vantage():
     print("-" * 50)
 
     # Check if API key is available
-    api_key = os.getenv("ALPHA_VANTAGE_KEY")
+    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
     if not api_key:
-        print("⚠️  ALPHA_VANTAGE_KEY environment variable not set")
+        print("⚠️  ALPHA_VANTAGE_API_KEY environment variable not set")
         print("   Skipping Alpha Vantage example")
         print()
         return
@@ -102,11 +102,11 @@ def demonstrate_binance():
     print("-" * 50)
 
     # Check if API credentials are available
-    api_key = os.getenv("BINANCE_API_KEY")
-    secret_key = os.getenv("BINANCE_SECRET_KEY")
+    api_key = os.getenv("BINANCE_KEY")
+    secret_key = os.getenv("BINANCE_SECRET")
 
     if not api_key or not secret_key:
-        print("⚠️  BINANCE_API_KEY or BINANCE_SECRET_KEY environment variables not set")
+        print("⚠️  BINANCE_KEY or BINANCE_SECRET environment variables not set")
         print("   Skipping Binance example")
         print()
         return
@@ -188,7 +188,7 @@ def demonstrate_error_handling():
     # Test Alpha Vantage without API key
     print("\nTesting Alpha Vantage without API key:")
     # Temporarily remove API key
-    original_key = os.environ.pop("ALPHA_VANTAGE_KEY", None)
+    original_key = os.environ.pop("ALPHA_VANTAGE_API_KEY", None)
 
     try:
         downloader = DataDownloaderFactory.create_downloader("av")
@@ -200,7 +200,7 @@ def demonstrate_error_handling():
     finally:
         # Restore API key if it existed
         if original_key:
-            os.environ["ALPHA_VANTAGE_KEY"] = original_key
+            os.environ["ALPHA_VANTAGE_API_KEY"] = original_key
 
     print()
 

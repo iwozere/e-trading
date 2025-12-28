@@ -19,10 +19,10 @@ from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloa
 
 # Import API keys from donotshare configuration
 from config.donotshare.donotshare import (
-    ALPHA_VANTAGE_KEY,
-    POLYGON_KEY,
-    FINNHUB_KEY,
-    TWELVE_DATA_KEY
+    ALPHA_VANTAGE_API_KEY,
+    POLYGON_API_KEY,
+    FINNHUB_API_KEY,
+    TWELVE_DATA_API_KEY
 )
 
 REQUIRED_COLUMNS = ["timestamp", "open", "high", "low", "close", "volume"]
@@ -69,10 +69,10 @@ def test_is_valid_period_interval(downloader_class, period, interval):
     (BinanceDataDownloader, 'BTCUSDT', '1h', None),
     (CoinGeckoDataDownloader, 'bitcoin', '1d', None),
     (YahooDataDownloader, 'AAPL', '1d', None),
-    (AlphaVantageDataDownloader, 'AAPL', '1d', 'ALPHA_VANTAGE_KEY'),
-    (PolygonDataDownloader, 'AAPL', '1d', 'POLYGON_KEY'),
-    (FinnhubDataDownloader, 'AAPL', '1d', 'FINNHUB_KEY'),
-    (TwelveDataDataDownloader, 'AAPL', '1d', 'TWELVE_DATA_KEY'),
+    (AlphaVantageDataDownloader, 'AAPL', '1d', 'ALPHA_VANTAGE_API_KEY'),
+    (PolygonDataDownloader, 'AAPL', '1d', 'POLYGON_API_KEY'),
+    (FinnhubDataDownloader, 'AAPL', '1d', 'FINNHUB_API_KEY'),
+    (TwelveDataDataDownloader, 'AAPL', '1d', 'TWELVE_DATA_API_KEY'),
 ])
 @pytest.mark.network
 def test_get_ohlcv_smoke(downloader_class, symbol, interval, api_env):
@@ -87,10 +87,10 @@ def test_get_ohlcv_smoke(downloader_class, symbol, interval, api_env):
     if api_env:
         # Map environment variable names to imported API keys
         api_key_map = {
-            'ALPHA_VANTAGE_KEY': ALPHA_VANTAGE_KEY,
-            'POLYGON_KEY': POLYGON_KEY,
-            'FINNHUB_KEY': FINNHUB_KEY,
-            'TWELVE_DATA_KEY': TWELVE_DATA_KEY
+            'ALPHA_VANTAGE_API_KEY': ALPHA_VANTAGE_API_KEY,
+            'POLYGON_API_KEY': POLYGON_API_KEY,
+            'FINNHUB_API_KEY': FINNHUB_API_KEY,
+            'TWELVE_DATA_API_KEY': TWELVE_DATA_API_KEY
         }
         api_key = api_key_map.get(api_env)
         if not api_key:

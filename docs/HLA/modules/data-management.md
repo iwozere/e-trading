@@ -411,7 +411,7 @@ stock_daily:
 # API Keys
 ALPHA_VANTAGE_API_KEY=your_api_key
 FMP_API_KEY=your_api_key
-POLYGON_KEY=your_api_key
+POLYGON_API_KEY=your_api_key
 ALPACA_API_KEY=your_api_key
 ALPACA_SECRET_KEY=your_secret_key
 

@@ -81,7 +81,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
     def __init__(self, api_key: Optional[str] = None):
         super().__init__()
         # Get API key from parameter or config
-        self.api_key = api_key or self._get_config_value('FINNHUB_KEY', 'FINNHUB_KEY')
+        self.api_key = api_key or self._get_config_value('FINNHUB_API_KEY', 'FINNHUB_API_KEY')
         self.base_url = "https://finnhub.io/api/v1/stock/candle"
 
         if not self.api_key:
@@ -922,3 +922,41 @@ class FinnhubDataDownloader(BaseDataDownloader):
         except Exception as e:
             _logger.error("Error getting combined sentiment for %s: %s", symbol, e)
             return None
+
+    async def get_company_news(self, symbol: str, from_date: str, to_date: str) -> List[Dict[str, Any]]:
+        """
+        Get company news for a given symbol and date range (async).
+
+        Args:
+            symbol: Stock symbol
+            from_date: Start date (YYYY-MM-DD)
+            to_date: End date (YYYY-MM-DD)
+
+        Returns:
+            List of news articles
+        """
+        try:
+            url = "https://finnhub.io/api/v1/company-news"
+            params = {
+                'symbol': symbol.upper(),
+                'from': from_date,
+                'to': to_date,
+                'token': self.api_key
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status == 429:
+                        _logger.warning("Finnhub API rate limit exceeded for company news")
+                        return []
+
+                    if response.status != 200:
+                        _logger.warning("Finnhub company news API error: %s", response.status)
+                        return []
+
+                    data = await response.json()
+                    return data if isinstance(data, list) else []
+
+        except Exception as e:
+            _logger.error("Error getting company news for %s: %s", symbol, e)
+            return []

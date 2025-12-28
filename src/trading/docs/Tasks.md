@@ -32,7 +32,7 @@ python -c "import backtrader, pandas, numpy, requests; print('Dependencies OK')"
 Create `.env` file in project root:
 ```bash
 # Binance Testnet API Keys
-BINANCE_API_KEY=your_testnet_api_key_here
+BINANCE_KEY=your_testnet_api_key_here
 BINANCE_API_SECRET=your_testnet_secret_here
 
 # Trading Settings
@@ -139,7 +139,7 @@ python -c "
 import os
 from src.trading.broker.binance_paper_broker import BinancePaperBroker
 broker = BinancePaperBroker(
-    os.getenv('BINANCE_API_KEY'),
+    os.getenv('BINANCE_KEY'),
     os.getenv('BINANCE_API_SECRET')
 )
 print('✅ API connection successful!')

@@ -335,8 +335,17 @@ class AdaptiveRateLimiter:
             min(self.config.max_requests_per_second, new_rate)
         )
 
+        if abs(new_rate - old_rate) < 0.01 and reason == getattr(self, '_last_adjustment_reason', ''):
+            return
+
         self._update_rate_limiter()
         self.total_adaptations += 1
+        self._last_adjustment_reason = reason
+
+        _logger.debug(
+            "Manual rate adjustment for %s: %.2f -> %.2f req/s (reason: %s)",
+            self.name, old_rate, self.current_rate, reason
+        )
 
         _logger.info(
             "Manual rate adjustment for %s: %.2f -> %.2f req/s (reason: %s)",

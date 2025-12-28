@@ -49,7 +49,7 @@ Create a `.env` file in the project root:
 
 ```bash
 # Binance Testnet API Keys
-BINANCE_API_KEY=your_testnet_api_key_here
+BINANCE_KEY=your_testnet_api_key_here
 BINANCE_API_SECRET=your_testnet_secret_here
 
 # Database (optional - defaults to SQLite)
@@ -108,7 +108,7 @@ python -c "
 from src.trading.broker.binance_paper_broker import BinancePaperBroker
 import os
 broker = BinancePaperBroker(
-    os.getenv('BINANCE_API_KEY'),
+    os.getenv('BINANCE_KEY'),
     os.getenv('BINANCE_API_SECRET')
 )
 print('API connection successful!')

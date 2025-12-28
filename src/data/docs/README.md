@@ -585,8 +585,8 @@ The system respects API rate limits with built-in throttling:
 ALPHA_VANTAGE_API_KEY=your_api_key
 
 # Binance API Credentials (optional, for higher rate limits)
-BINANCE_API_KEY=your_api_key
-BINANCE_SECRET_KEY=your_secret_key
+BINANCE_KEY=your_api_key
+BINANCE_SECRET=your_secret_key
 ```
 
 ### Cache Configuration

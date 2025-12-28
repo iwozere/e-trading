@@ -414,7 +414,7 @@ class TestDataProviderIntegration(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.fmp_downloader = FMPDataDownloader(api_key="test_fmp_key", rate_limit_delay=0.01)
-        self.finnhub_downloader = FinnhubDataDownloader(api_key="test_finnhub_key")
+        self.finnhub_downloader = FinnhubDataDownloader(api_key="test_FINNHUB_API_KEY")
 
     def test_combined_data_retrieval(self):
         """Test combining data from both providers."""

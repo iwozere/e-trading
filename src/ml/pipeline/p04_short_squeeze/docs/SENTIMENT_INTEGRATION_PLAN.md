@@ -727,7 +727,7 @@ Add to `.env` or environment configuration:
 
 # Provider API Keys (optional - some work without keys)
 STOCKTWITS_ACCESS_TOKEN=your_token_here  # Optional, higher rate limits
-NEWSAPI_KEY=your_key_here                 # Optional for NewsAPI
+NEWSAPI_API_KEY=your_key_here                 # Optional for NewsAPI
 ALPHAVANTAGE_KEY=your_key_here            # Optional for Alpha Vantage
 
 # Provider Toggles

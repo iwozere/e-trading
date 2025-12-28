@@ -32,8 +32,9 @@ class GlobalLimitConfig:
     adapter_priority_weights: Dict[str, float] = None
     enable_fair_sharing: bool = True
     enable_adaptive_global_limit: bool = True
-    system_load_threshold: float = 0.8
-    memory_threshold_mb: int = 1024
+    system_load_threshold: float = 0.9  # 90% CPU
+    memory_threshold_mb: int = 4096    # 4GB (more realistic)
+    memory_percent_threshold: float = 0.95 # 95% RAM
 
     def __post_init__(self):
         if self.adapter_priority_weights is None:
@@ -80,8 +81,14 @@ class GlobalRateLimitCoordinator:
         self.created_at = datetime.now(timezone.utc)
 
         # System monitoring
-        self._last_reallocation = datetime.now(timezone.utc)
         self._reallocation_interval = timedelta(minutes=5)
+
+        # Async health monitoring state
+        self._cached_cpu_usage = 0.0
+        self._cached_memory_percent = 0.0
+        self._cached_memory_available_mb = 0.0
+        self._last_health_check = 0.0
+        self._health_check_task: Optional[asyncio.Task] = None
 
     def register_adapter(self, name: str,
                         adaptive_config: Optional[AdaptiveConfig] = None,
@@ -294,8 +301,11 @@ class GlobalRateLimitCoordinator:
                             base_rate *= 1.1
 
                 # Update allocation
-                allocation.allocated_rate = max(0.1, min(base_rate, self.config.max_global_requests_per_second))
-                allocation.max_concurrent = max(1, int(allocation.allocated_rate * 2))
+                # Use a burst factor to allow adapters to use more RPS if the global budget allows.
+                # The GlobalPermission semaphore and system overload checks will still provide safety.
+                burst_factor = 2.0
+                allocation.allocated_rate = max(0.1, min(base_rate * burst_factor, self.config.max_global_requests_per_second))
+                allocation.max_concurrent = max(5, int(allocation.allocated_rate * 2))
 
                 # Update adapter's rate limiter
                 adapter_limiter = self._adapters[name]
@@ -312,32 +322,65 @@ class GlobalRateLimitCoordinator:
         if datetime.now(timezone.utc) - self._last_reallocation > self._reallocation_interval:
             self._reallocate_resources()
 
-    def _is_system_overloaded(self) -> bool:
-        """Check if the system is currently overloaded."""
+    async def start_monitoring(self):
+        """Start the background monitoring task."""
+        if self._health_check_task and not self._health_check_task.done():
+            return
+
+        self._health_check_task = asyncio.create_task(self._monitor_system_health())
+        _logger.info("Started system health monitoring in GlobalRateLimitCoordinator")
+
+    async def stop_monitoring(self):
+        """Stop the background monitoring task."""
+        if self._health_check_task:
+            self._health_check_task.cancel()
+            try:
+                await self._health_check_task
+            except asyncio.CancelledError:
+                pass
+            self._health_check_task = None
+
+    async def _monitor_system_health(self):
+        """Periodically check system health in a non-blocking way."""
         try:
             import psutil
-
-            # Check CPU usage
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            if cpu_percent > self.config.system_load_threshold * 100:
-                return True
-
-            # Check memory usage
-            memory = psutil.virtual_memory()
-            if memory.used / (1024 * 1024) > self.config.memory_threshold_mb:
-                return True
-
-            # Check active request count
-            with self._lock:
-                total_active = sum(alloc.active_requests for alloc in self._allocations.values())
-                if total_active >= self.config.max_concurrent_requests * 0.9:
-                    return True
-
-            return False
-
+            while True:
+                # Use psutil without interval (instantaneous) or run in thread
+                self._cached_cpu_usage = psutil.cpu_percent()
+                memory = psutil.virtual_memory()
+                self._cached_memory_percent = memory.percent
+                self._cached_memory_available_mb = memory.available / (1024 * 1024)
+                self._last_health_check = time.time()
+                await asyncio.sleep(5)  # Check every 5 seconds
+        except ImportError:
+            _logger.warning("psutil not installed, system health monitoring disabled")
         except Exception as e:
-            _logger.debug("Failed to check system load: %s", e)
+            _logger.error("Error in system health monitor: %s", e)
+
+    def _is_system_overloaded(self) -> bool:
+        """Check if the system is currently overloaded using cached values."""
+        # Use cached values to avoid blocking calls in request path
+        # If monitoring hasn't started or cache is stale, assume not overloaded to avoid blocking.
+        if not hasattr(self, '_cached_cpu_usage') or (time.time() - self._last_health_check > 10):
+            _logger.debug("System health cache is stale or not initialized, assuming not overloaded for now.")
             return False
+
+        if self._cached_cpu_usage > self.config.system_load_threshold * 100:
+            return True
+
+        if self._cached_memory_percent > self.config.memory_percent_threshold * 100:
+            return True
+
+        if self._cached_memory_available_mb < 512:
+            return True
+
+        # Check active request count
+        with self._lock:
+            total_active = sum(alloc.active_requests for alloc in self._allocations.values())
+            if total_active >= self.config.max_concurrent_requests * 0.9:
+                return True
+
+        return False
 
     def get_global_statistics(self) -> Dict[str, Any]:
         """Get comprehensive global coordination statistics."""

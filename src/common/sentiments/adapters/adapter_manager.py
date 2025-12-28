@@ -20,6 +20,7 @@ from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter, AdapterStatus, AdapterHealthInfo
 from src.common.sentiments.rate_limiting.global_coordinator import GlobalRateLimitCoordinator, GlobalLimitConfig
 from src.common.sentiments.rate_limiting.adaptive_limiter import AdaptiveConfig
+import config.donotshare.donotshare as secrets
 
 _logger = setup_logger(__name__)
 
@@ -172,11 +173,14 @@ class AdapterManager:
             try:
                 from src.common.sentiments.rate_limiting.global_coordinator import initialize_global_coordinator
                 global_config = GlobalLimitConfig(
-                    max_global_requests_per_second=8.0,
-                    max_concurrent_requests=15,
+                    max_global_requests_per_second=30.0,
+                    max_concurrent_requests=50,
                     enable_adaptive_global_limit=True
                 )
                 self._global_coordinator = initialize_global_coordinator(global_config)
+                # Note: Monitoring task will be started when needed or manually
+                if hasattr(self._global_coordinator, 'start_monitoring'):
+                    asyncio.create_task(self._global_coordinator.start_monitoring())
                 _logger.info("Global rate limiting enabled")
             except Exception as e:
                 _logger.warning("Failed to initialize global rate limiting: %s", e)
@@ -213,6 +217,21 @@ class AdapterManager:
                 self._global_coordinator.register_adapter(name, adaptive_config, priority_weight)
             except Exception as e:
                 _logger.warning("Failed to register adapter %s with global coordinator: %s", name, e)
+
+        if name == "reddit" and not (config.get("client_id") or secrets.REDDIT_API_KEY):
+            _logger.warning("Reddit adapter added but REDDIT_API_KEY is missing in secrets!")
+
+        if name == "twitter" and not (config.get("bearer_token") or secrets.TWITTER_BEARER_TOKEN):
+            _logger.warning("Twitter adapter added but TWITTER_BEARER_TOKEN is missing in secrets!")
+
+        if name == "news":
+            if not (config.get("finnhub_token") or secrets.FINNHUB_API_KEY):
+                _logger.warning("News adapter: FINNHUB_API_KEY is missing!")
+            if not (config.get("alpha_vantage_token") or secrets.ALPHA_VANTAGE_API_KEY):
+                _logger.warning("News adapter: ALPHA_VANTAGE_API_KEY is missing!")
+
+        if name == "discord" and not (config.get("bot_token") or secrets.DISCORD_BOT_TOKEN):
+            _logger.warning("Discord adapter added but DISCORD_BOT_TOKEN is missing!")
 
         _logger.info("Added adapter: %s", name)
 
@@ -418,6 +437,9 @@ class AdapterManager:
 
     async def close_all(self) -> None:
         """Close all adapters and clean up resources."""
+        if self._global_coordinator and hasattr(self._global_coordinator, 'stop_monitoring'):
+            await self._global_coordinator.stop_monitoring()
+
         _logger.info("Closing %d adapters", len(self._adapters))
 
         close_tasks = []

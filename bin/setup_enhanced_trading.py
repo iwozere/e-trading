@@ -46,7 +46,7 @@ def create_env_file():
 
 # Binance API Configuration
 # For paper trading, you can use testnet keys from: https://testnet.binance.vision/
-BINANCE_API_KEY=your_binance_api_key_here
+BINANCE_KEY=your_BINANCE_KEY_here
 BINANCE_API_SECRET=your_binance_api_secret_here
 
 # IBKR Configuration (optional)

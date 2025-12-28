@@ -17,7 +17,7 @@ sys.path.insert(0, str(project_root))
 from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
 # Import API key from donotshare configuration
-from config.donotshare.donotshare import ALPHA_VANTAGE_KEY
+from config.donotshare.donotshare import ALPHA_VANTAGE_API_KEY
 
 
 def test_alpha_vantage_intraday():
@@ -26,9 +26,9 @@ def test_alpha_vantage_intraday():
     print("=" * 60)
 
     # Check if API key is available
-    api_key = ALPHA_VANTAGE_KEY
+    api_key = ALPHA_VANTAGE_API_KEY
     if not api_key:
-        print("❌ ALPHA_VANTAGE_KEY not found in donotshare.py!")
+        print("❌ ALPHA_VANTAGE_API_KEY not found in donotshare.py!")
         print("Please get a free API key from: https://www.alphavantage.co/support/#api-key")
         print("Then add it to config/donotshare/donotshare.py")
         return False
@@ -82,9 +82,9 @@ def test_alpha_vantage_crypto():
     print("\n🧪 Testing Alpha Vantage Crypto Data Download")
     print("=" * 60)
 
-    api_key = ALPHA_VANTAGE_KEY
+    api_key = ALPHA_VANTAGE_API_KEY
     if not api_key:
-        print("❌ ALPHA_VANTAGE_KEY not found in donotshare.py")
+        print("❌ ALPHA_VANTAGE_API_KEY not found in donotshare.py")
         return False
 
     try:

@@ -27,6 +27,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 
 _logger = setup_logger(__name__)
 
@@ -47,6 +48,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         self._session = session
         self.max_retries = max_retries
         self._consecutive_failures = 0
+        self._analyzer = HeuristicSentimentAnalyzer()
 
         # Twitter API configuration
         self.bearer_token = bearer_token or os.getenv('TWITTER_BEARER_TOKEN')
@@ -116,22 +118,33 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                     start_time = time.time()
                     headers = self._get_headers()
 
+                    if getattr(self, '_in_backoff', False):
+                        wait_time = max(0, self._backoff_until - time.time())
+                        if wait_time > 0:
+                            _logger.debug("Twitter already in backoff, waiting %.2fs", wait_time)
+                            await asyncio.sleep(wait_time)
+                            continue
+
                     async with self._session.get(url, params=params, headers=headers, timeout=timeout) as resp:
                         response_time_ms = (time.time() - start_time) * 1000
-                        self._record_request()
 
                         if resp.status == 429:
-                            # Rate limited - check headers for reset time
-                            reset_time = resp.headers.get('x-rate-limit-reset')
-                            if reset_time:
-                                wait_time = int(reset_time) - int(time.time())
-                                wait_time = max(wait_time, 60)  # Wait at least 1 minute
-                            else:
-                                wait_time = self.rate_limit_delay * (2 ** attempt)
+                            # Rate limited
+                            backoff_delay = self.rate_limit_delay * (2 ** attempt) + 1.0
+                            retry_after = resp.headers.get("x-rate-limit-reset")
+                            if retry_after:
+                                backoff_delay = max(backoff_delay, float(retry_after) - time.time() + 1.0)
 
-                            _logger.warning("Twitter 429 rate limit (attempt %d/%d) - sleeping %ds",
-                                          attempt + 1, self.max_retries + 1, wait_time)
-                            await asyncio.sleep(wait_time)
+                            # Limit sleep to something reasonable to avoid "hangs"
+                            backoff_delay = min(backoff_delay, 120.0)
+
+                            self._in_backoff = True
+                            self._backoff_until = time.time() + backoff_delay
+
+                            _logger.warning("Twitter 429 rate limit (attempt %d/%d) - sleeping %.2fs",
+                                          attempt + 1, self.max_retries + 1, backoff_delay)
+                            await asyncio.sleep(backoff_delay)
+                            self._in_backoff = False
 
                             if attempt < self.max_retries:
                                 continue
@@ -372,18 +385,6 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
             verified_tweets = 0
             hashtag_counts: Dict[str, int] = {}
 
-            # Define sentiment keywords for financial context
-            bullish_keywords = (
-                "bull", "bullish", "moon", "to the moon", "diamond hands", "buy", "long",
-                "🚀", "rocket", "hold", "hodl", "pump", "rally", "breakout", "calls",
-                "green", "up", "rise", "surge", "gain", "profit", "target", "support"
-            )
-            bearish_keywords = (
-                "bear", "bearish", "short", "sell", "dump", "crash", "fall", "drop",
-                "puts", "red", "down", "decline", "loss", "resistance", "breakdown",
-                "correction", "bubble", "overvalued", "panic", "fear"
-            )
-
             for tweet in tweets:
                 try:
                     body = (tweet.get("body") or "").lower()
@@ -412,13 +413,11 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                         if hashtag:
                             hashtag_counts[hashtag.lower()] = hashtag_counts.get(hashtag.lower(), 0) + 1
 
-                    # Sentiment analysis with keyword matching
-                    has_bullish = any(keyword in body for keyword in bullish_keywords)
-                    has_bearish = any(keyword in body for keyword in bearish_keywords)
-
-                    if has_bullish and not has_bearish:
+                    # Unified sentiment analysis
+                    result = self._analyzer.analyze_sentiment(body)
+                    if result.score > 0.1:
                         bullish += 1
-                    elif has_bearish and not has_bullish:
+                    elif result.score < -0.1:
                         bearish += 1
                     else:
                         neutral += 1

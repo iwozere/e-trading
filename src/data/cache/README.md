@@ -172,7 +172,7 @@ python src/data/cache/cleanup_failed_cache.py --validate-and-cleanup
 1. **Configure API Keys**:
    ```bash
    # Ensure API keys are set in config/donotshare/donotshare.py
-   # Required: ALPHA_VANTAGE_KEY for intraday stock data
+   # Required: ALPHA_VANTAGE_API_KEY for intraday stock data
    ```
 
 2. **Test System Components**:
@@ -252,19 +252,19 @@ cache-dir/
 ## Configuration
 
 ### Environment Variables
-- `ALPHA_VANTAGE_KEY`: Required for intraday stock data from Alpha Vantage
+- `ALPHA_VANTAGE_API_KEY`: Required for intraday stock data from Alpha Vantage
 - Cache directory can be specified via `--cache-dir` parameter (defaults to `c:/data-cache`)
 
 ### API Keys
 API keys are managed through `config/donotshare/donotshare.py`:
-- `ALPHA_VANTAGE_KEY`: For Alpha Vantage API access
+- `ALPHA_VANTAGE_API_KEY`: For Alpha Vantage API access
 - Binance and Yahoo Finance don't require API keys for basic historical data
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"No API key found"**: Ensure `ALPHA_VANTAGE_KEY` is set in `donotshare.py`
+1. **"No API key found"**: Ensure `ALPHA_VANTAGE_API_KEY` is set in `donotshare.py`
 2. **Timezone errors**: Fixed in current version - ensure using latest scripts
 3. **Cache re-downloading**: Check that cache directory path is consistent
 4. **Provider selection issues**: Verify ticker classification is working correctly

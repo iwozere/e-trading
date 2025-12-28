@@ -192,16 +192,16 @@ Set these environment variables for API key providers:
 export FMP_API_KEY="your_fmp_api_key"
 
 # Alpha Vantage
-export ALPHA_VANTAGE_KEY="your_alpha_vantage_key"
+export ALPHA_VANTAGE_API_KEY="your_ALPHA_VANTAGE_API_KEY"
 
 # Finnhub
-export FINNHUB_KEY="your_finnhub_key"
+export FINNHUB_API_KEY="your_FINNHUB_API_KEY"
 
 # Polygon.io
-export POLYGON_KEY="your_polygon_key"
+export POLYGON_API_KEY="your_POLYGON_API_KEY"
 
 # Twelve Data
-export TWELVE_DATA_KEY="your_twelve_data_key"
+export TWELVE_DATA_API_KEY="your_TWELVE_DATA_API_KEY"
 
 # Tiingo
 export TIINGO_API_KEY="your_tiingo_key"

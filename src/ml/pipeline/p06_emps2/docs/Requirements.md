@@ -80,7 +80,7 @@ pip install TA-Lib
 Add Finnhub API key to `config/donotshare/donotshare.py`:
 
 ```python
-FINNHUB_KEY = "your_api_key_here"
+FINNHUB_API_KEY = "your_api_key_here"
 ```
 
 Get free API key at: https://finnhub.io/register

@@ -58,7 +58,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         # API tokens
         self.finnhub_token = finnhub_token or os.getenv('FINNHUB_API_KEY')
         self.alpha_vantage_token = alpha_vantage_token or os.getenv('ALPHA_VANTAGE_API_KEY')
-        self.newsapi_token = newsapi_token or os.getenv('NEWSAPI_KEY')
+        self.newsapi_token = newsapi_token or os.getenv('NEWSAPI_API_KEY')
 
         # API endpoints
         self.finnhub_base = "https://finnhub.io/api/v1"

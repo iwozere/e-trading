@@ -162,7 +162,7 @@ python src/data/cache/populate_cache.py --symbols AAPL,GOOGL --intervals 1w,1m -
 ### **4. Add Alpha Vantage as Backup**
 ```bash
 # Set API key in config/donotshare/donotshare.py
-# ALPHA_VANTAGE_KEY = "your_key_here"
+# ALPHA_VANTAGE_API_KEY = "your_key_here"
 
 # Use as backup for intraday data (limited to 25 calls/day)
 python src/data/cache/populate_cache.py --symbols AAPL,GOOGL --intervals 5m,15m --start-date 2020-01-01

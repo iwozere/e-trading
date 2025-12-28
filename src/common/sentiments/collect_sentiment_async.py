@@ -136,7 +136,11 @@ def _load_config_from_env() -> Dict[str, Any]:
 DEFAULT_CONFIG = {
     "providers": {
         "stocktwits": True,
-        "reddit_pushshift": True,
+        "reddit": True,
+        "news": True,
+        "trends": True,
+        "discord": True,
+        "twitter": True,
         "hf_enabled": False
     },
     "lookback_hours": 24,
@@ -152,9 +156,13 @@ DEFAULT_CONFIG = {
         "rate_limit_delay_sec": 0.3
     },
     "weights": {
-        "stocktwits": 0.4,
-        "reddit": 0.6,
-        "heuristic_vs_hf": 0.5  # how to combine heuristic and hf per-message: 0..1 weight for hf
+        "stocktwits": 0.2,
+        "reddit": 0.3,
+        "news": 0.2,
+        "trends": 0.1,
+        "discord": 0.1,
+        "twitter": 0.1,
+        "heuristic_vs_hf": 0.5
     },
     "heuristic": {
         "positive_tokens": ["moon","🚀","diamond","buy","long","hold","to the moon","rocket"],
@@ -227,17 +235,23 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     if config.get("batching", {}).get("concurrency", 0) <= 0:
         raise ValueError("batching.concurrency must be positive")
 
-    # Validate weights sum to reasonable values
-    weights = config.get("weights", {})
-    provider_weight_sum = weights.get("stocktwits", 0) + weights.get("reddit", 0)
-    if provider_weight_sum <= 0:
-        raise ValueError("Provider weights must sum to a positive value")
-
     # Normalize weights to sum to 1.0
-    if provider_weight_sum != 1.0:
+    active_providers = [p for p, enabled in config.get("providers", {}).items() if enabled and p != "hf_enabled"]
+    if not active_providers:
+        return config
+
+    weights = config.get("weights", {})
+    provider_weight_sum = sum(weights.get(p, 0.0) for p in active_providers)
+
+    if provider_weight_sum <= 0:
+        # Default to equal weighting
+        equal_weight = 1.0 / len(active_providers)
+        for p in active_providers:
+            weights[p] = equal_weight
+    elif provider_weight_sum != 1.0:
         _logger.debug("Normalizing provider weights from sum %.3f to 1.0", provider_weight_sum)
-        weights["stocktwits"] = weights.get("stocktwits", 0) / provider_weight_sum
-        weights["reddit"] = weights.get("reddit", 0) / provider_weight_sum
+        for p in active_providers:
+            weights[p] = weights.get(p, 0.0) / provider_weight_sum
 
     return config
 
@@ -324,27 +338,26 @@ def _initialize_adapters(manager, config: Dict[str, Any]) -> None:
         from src.common.sentiments.adapters.adapter_manager import register_default_adapters
         register_default_adapters()
 
-        # Add enabled adapters
-        if config["providers"].get("stocktwits", False):
-            manager.add_adapter("stocktwits", {
-                "concurrency": config["batching"]["concurrency"],
-                "rate_limit_delay": config["batching"]["rate_limit_delay_sec"]
-            })
+        # Register and add all enabled adapters
+        for provider, enabled in config["providers"].items():
+            if enabled and provider != "hf_enabled":
+                # Get default config for this adapter type if available
+                adapter_config = {
+                    "concurrency": config["batching"]["concurrency"],
+                    "rate_limit_delay": config["batching"]["rate_limit_delay_sec"]
+                }
 
-        if config["providers"].get("reddit_pushshift", False):
-            manager.add_adapter("reddit", {
-                "concurrency": config["batching"]["concurrency"],
-                "rate_limit_delay": config["batching"]["rate_limit_delay_sec"]
-            })
+                # Special handling for HuggingFace
+                if provider == "huggingface":
+                    adapter_config.update({
+                        "model_name": config["hf"]["model_name"],
+                        "device": config["hf"]["device"],
+                        "max_workers": config["hf"]["max_workers"]
+                    })
 
-        if config["providers"].get("hf_enabled", False):
-            manager.add_adapter("huggingface", {
-                "model_name": config["hf"]["model_name"],
-                "device": config["hf"]["device"],
-                "max_workers": config["hf"]["max_workers"]
-            })
+                manager.add_adapter(provider, adapter_config)
 
-    except ImportError as e:
+    except Exception as e:
         _logger.warning("Could not initialize some adapters: %s", e)
 
 # -------------------------
@@ -483,54 +496,50 @@ async def collect_sentiment_batch(
                             _logger.debug("Cache hit for aggregated sentiment: %s", tk)
                             return cached_result
 
-                    # Collect summaries from available adapters
+                    # Collect summaries from available adapters dynamically
                     summaries = {}
+                    active_providers = [p for p, enabled in config["providers"].items() if enabled and p != "hf_enabled"]
 
-                    # StockTwits
-                    if "stocktwits" in available_adapters:
+                    async def fetch_one_summary(provider):
                         try:
                             # Check cache first
-                            cache_key = cache_keys.sentiment_summary_key(tk, since_ts, "stocktwits")
+                            cache_key = cache_keys.sentiment_summary_key(tk, since_ts, provider)
                             summary = None
                             if cache_manager:
                                 summary = cache_manager.get(cache_key)
 
                             if not summary:
-                                summary = await manager.fetch_summary_from_adapter("stocktwits", tk, since_ts)
+                                try:
+                                    # Add timeout to prevent one slow adapter from hanging the whole process
+                                    summary = await asyncio.wait_for(
+                                        manager.fetch_summary_from_adapter(provider, tk, since_ts),
+                                        timeout=45.0
+                                    )
+                                except asyncio.TimeoutError:
+                                    _logger.warning("%s summary timed out for %s", provider.capitalize(), tk)
+                                    summary = {"error": "timeout", "mentions": 0, "sentiment_score": 0.0}
+
                                 if summary and cache_manager:
                                     cache_manager.set(cache_key, summary, 1800)  # 30 min TTL
 
-                            if summary:
-                                summaries["stocktwits"] = summary
-                                data_quality["stocktwits"] = "ok"
-                            else:
-                                data_quality["stocktwits"] = "missing"
+                            return provider, summary
                         except Exception as e:
-                            _logger.debug("StockTwits summary error for %s: %s", tk, e)
-                            data_quality["stocktwits"] = "failed"
+                            _logger.debug("%s summary error for %s: %s", provider.capitalize(), tk, e)
+                            return provider, {"error": str(e), "mentions": 0, "sentiment_score": 0.0}
 
-                    # Reddit
-                    if "reddit" in available_adapters:
-                        try:
-                            # Check cache first
-                            cache_key = cache_keys.sentiment_summary_key(tk, since_ts, "reddit")
-                            summary = None
-                            if cache_manager:
-                                summary = cache_manager.get(cache_key)
+                    # Fetch all summaries concurrently
+                    fetch_tasks = [fetch_one_summary(p) for p in active_providers if p in available_adapters]
+                    fetched_results = await asyncio.gather(*fetch_tasks)
 
-                            if not summary:
-                                summary = await manager.fetch_summary_from_adapter("reddit", tk, since_ts)
-                                if summary and cache_manager:
-                                    cache_manager.set(cache_key, summary, 1800)  # 30 min TTL
-
-                            if summary:
-                                summaries["reddit"] = summary
-                                data_quality["reddit"] = "ok"
+                    for provider, summary in fetched_results:
+                        if summary:
+                            summaries[provider] = summary
+                            if "error" in summary:
+                                data_quality[provider] = f"error: {summary['error']}"
                             else:
-                                data_quality["reddit"] = "missing"
-                        except Exception as e:
-                            _logger.debug("Reddit summary error for %s: %s", tk, e)
-                            data_quality["reddit"] = "failed"
+                                data_quality[provider] = "ok"
+                        else:
+                            data_quality[provider] = "missing"
 
                     raw_payload.update(summaries)
 
@@ -576,15 +585,16 @@ async def collect_sentiment_batch(
                             # Fetch detailed messages for HF analysis
                             all_messages = []
 
-                            if "stocktwits" in available_adapters:
-                                messages = await manager.fetch_messages_from_adapter("stocktwits", tk, since_ts, 150)
-                                if messages:
-                                    all_messages.extend(messages)
+                            # Fetch messages for HF analysis from all active providers
+                            fetch_msg_tasks = []
+                            for p in active_providers:
+                                if p in available_adapters:
+                                    fetch_msg_tasks.append(manager.fetch_messages_from_adapter(p, tk, since_ts, 150))
 
-                            if "reddit" in available_adapters:
-                                messages = await manager.fetch_messages_from_adapter("reddit", tk, since_ts, 200)
-                                if messages:
-                                    all_messages.extend(messages)
+                            results = await asyncio.gather(*fetch_msg_tasks, return_exceptions=True)
+                            for res in results:
+                                if isinstance(res, list):
+                                    all_messages.extend(res)
 
                             if all_messages:
                                 # Check cache for HF predictions
@@ -838,3 +848,52 @@ def features_to_record(f: SentimentFeatures) -> Dict[str, Any]:
     rec["raw_payload_json"] = json.dumps(rec.pop("raw_payload", {}), default=str)
     rec["data_quality_json"] = json.dumps(rec.pop("data_quality", {}), default=str)
     return rec
+
+
+if __name__ == "__main__":
+    import pprint
+
+    # 1. Define tickers to test
+    test_tickers = ["AAPL", "TSLA", "NVDA", "BTC"]
+
+    # 2. Load configuration
+    cfg = get_default_config()
+
+    # 3. Enable some providers explicitly for testing if not already enabled
+    # Actually, we'll just use the default which we've already updated
+
+    print(f"--- Running Quick Sentiment Test for {test_tickers} ---")
+    print(f"Lookback: {cfg.get('lookback_hours', 24)}h")
+
+    # 4. Run collection
+    results = collect_sentiment_batch_sync(
+        tickers=test_tickers,
+        lookback_hours=24,
+        config=cfg,
+        output_format="dataclass"
+    )
+
+    # 5. Print summary
+    print("\n--- Results Summary ---")
+    for ticker, features in results.items():
+        if features:
+            print(f"\n[{ticker}]")
+            print(f"  Sentiment Score: {features.sentiment_score_24h:.4f} (Normalized: {features.sentiment_normalized:.4f})")
+            print(f"  Total Mentions: {features.mentions_24h}")
+            print(f"  Virality Index: {features.virality_index:.2f}")
+            print(f"  Data Quality: {features.data_quality}")
+
+            # Diagnostic for missing providers
+            missing = [p for p, q in features.data_quality.items() if q == "missing"]
+            if missing:
+                print(f"  [!] Missing data from: {missing}")
+                # Check raw_payload for hints
+                for p in missing:
+                    if p in features.raw_payload and "error" in features.raw_payload[p]:
+                        print(f"      - {p} error: {features.raw_payload[p]['error']}")
+        else:
+            print(f"\n[{ticker}] Failed to collect sentiment.")
+
+    print("\n--- Raw Payload Sample (AAPL) ---")
+    if results.get("AAPL"):
+        pprint.pprint(results["AAPL"].raw_payload)

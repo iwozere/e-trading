@@ -78,7 +78,7 @@ class PolygonDataDownloader(BaseDataDownloader):
     def __init__(self, api_key: Optional[str] = None):
         super().__init__()
         # Get API key from parameter or config
-        self.api_key = api_key or self._get_config_value('POLYGON_KEY', 'POLYGON_KEY')
+        self.api_key = api_key or self._get_config_value('POLYGON_API_KEY', 'POLYGON_API_KEY')
         self.base_url = "https://api.polygon.io/v2/aggs/ticker"
 
         if not self.api_key:

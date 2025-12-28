@@ -30,11 +30,11 @@ Create a `.env` file in your project root or set environment variables:
 
 ```bash
 # Option 1: Create .env file
-echo "BINANCE_API_KEY=your_testnet_api_key_here" > .env
+echo "BINANCE_KEY=your_testnet_api_key_here" > .env
 echo "BINANCE_API_SECRET=your_testnet_secret_key_here" >> .env
 
 # Option 2: Set environment variables
-export BINANCE_API_KEY="your_testnet_api_key_here"
+export BINANCE_KEY="your_testnet_api_key_here"
 export BINANCE_API_SECRET="your_testnet_secret_key_here"
 ```
 

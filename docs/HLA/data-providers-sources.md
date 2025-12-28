@@ -135,7 +135,7 @@ data = downloader.download_data("AAPL", "5m", "2020-01-01", "2023-12-31")
 ```python
 from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 
-downloader = AlphaVantageDataDownloader(api_key="your_alpha_vantage_key")
+downloader = AlphaVantageDataDownloader(api_key="your_ALPHA_VANTAGE_API_KEY")
 data = downloader.download_data("AAPL", "5m", "2020-01-01", "2023-12-31")
 ```
 
@@ -677,7 +677,7 @@ providers:
     
   binance:
     enabled: true
-    api_key: ${BINANCE_API_KEY}
+    api_key: ${BINANCE_KEY}
     api_secret: ${BINANCE_API_SECRET}
     testnet: false
     rate_limit:
@@ -691,13 +691,13 @@ providers:
 ```bash
 # Data provider API keys
 export FMP_API_KEY="your_fmp_api_key"
-export ALPHA_VANTAGE_KEY="your_alpha_vantage_key"
+export ALPHA_VANTAGE_API_KEY="your_ALPHA_VANTAGE_API_KEY"
 export TIINGO_API_KEY="your_tiingo_api_key"
-export BINANCE_API_KEY="your_binance_api_key"
+export BINANCE_KEY="your_BINANCE_KEY"
 export BINANCE_API_SECRET="your_binance_secret"
 export ALPACA_API_KEY="your_alpaca_key"
 export ALPACA_SECRET_KEY="your_alpaca_secret"
-export POLYGON_API_KEY="your_polygon_key"
+export POLYGON_API_KEY="your_POLYGON_API_KEY"
 
 # Cache configuration
 export DATA_CACHE_DIR="/path/to/cache"

@@ -41,11 +41,12 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
     """
 
     def __init__(self, name: str = "discord", session: Optional[aiohttp.ClientSession] = None,
+                 concurrency: int = 2, rate_limit_delay: float = 1.0, max_retries: int = 3,
                  bot_token: Optional[str] = None, guild_ids: Optional[List[str]] = None):
-        super().__init__(name, 2, 1.0) # concurrency and rate_limit_delay are hardcoded for now
+        super().__init__(name, concurrency, rate_limit_delay)
         self._provided_session = session is not None
         self._session = session
-        self.max_retries = 3 # max_retries is hardcoded for now
+        self.max_retries = max_retries
         self._consecutive_failures = 0
         self._analyzer = HeuristicSentimentAnalyzer()
 

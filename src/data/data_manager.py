@@ -54,11 +54,11 @@ _logger = setup_logger(__name__)
 # Import API keys from donotshare configuration
 try:
     from config.donotshare.donotshare import (
-        ALPHA_VANTAGE_KEY,
+        ALPHA_VANTAGE_API_KEY,
         FMP_API_KEY,
-        POLYGON_KEY,
-        TWELVE_DATA_KEY,
-        FINNHUB_KEY,
+        POLYGON_API_KEY,
+        TWELVE_DATA_API_KEY,
+        FINNHUB_API_KEY,
         TIINGO_API_KEY,
         ALPACA_API_KEY,
         ALPACA_SECRET_KEY,
@@ -66,11 +66,11 @@ try:
     )
 except ImportError:
     # Fallback to environment variables if donotshare is not available
-    ALPHA_VANTAGE_KEY = os.getenv('ALPHA_VANTAGE_KEY')
+    ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
     FMP_API_KEY = os.getenv('FMP_API_KEY')
-    POLYGON_KEY = os.getenv('POLYGON_KEY')
-    TWELVE_DATA_KEY = os.getenv('TWELVE_DATA_KEY')
-    FINNHUB_KEY = os.getenv('FINNHUB_KEY')
+    POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
+    TWELVE_DATA_API_KEY = os.getenv('TWELVE_DATA_API_KEY')
+    FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
     TIINGO_API_KEY = os.getenv('TIINGO_API_KEY')
     ALPACA_API_KEY = os.getenv('ALPACA_API_KEY')
     ALPACA_SECRET_KEY = os.getenv('ALPACA_SECRET_KEY')
@@ -209,33 +209,33 @@ class ProviderSelector:
                     # Yahoo Finance doesn't require API keys
                     self.downloaders[name] = downloader_class()
                 elif name == 'alpha_vantage':
-                    if not ALPHA_VANTAGE_KEY:
+                    if not ALPHA_VANTAGE_API_KEY:
                         _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
-                    self.downloaders[name] = downloader_class(api_key=ALPHA_VANTAGE_KEY)
+                    self.downloaders[name] = downloader_class(api_key=ALPHA_VANTAGE_API_KEY)
                 elif name == 'fmp':
                     if not FMP_API_KEY:
                         _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
                     self.downloaders[name] = downloader_class(api_key=FMP_API_KEY)
                 elif name == 'polygon':
-                    if not POLYGON_KEY:
+                    if not POLYGON_API_KEY:
                         _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
-                    self.downloaders[name] = downloader_class(api_key=POLYGON_KEY)
+                    self.downloaders[name] = downloader_class(api_key=POLYGON_API_KEY)
                 elif name == 'coingecko':
                     # CoinGecko doesn't require API key or data_dir
                     self.downloaders[name] = downloader_class()
                 elif name == 'twelvedata':
-                    if not TWELVE_DATA_KEY:
+                    if not TWELVE_DATA_API_KEY:
                         _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
-                    self.downloaders[name] = downloader_class(api_key=TWELVE_DATA_KEY)
+                    self.downloaders[name] = downloader_class(api_key=TWELVE_DATA_API_KEY)
                 elif name == 'finnhub':
-                    if not FINNHUB_KEY:
+                    if not FINNHUB_API_KEY:
                         _logger.warning("Skipping %s downloader: No API key found", name)
                         continue
-                    self.downloaders[name] = downloader_class(api_key=FINNHUB_KEY)
+                    self.downloaders[name] = downloader_class(api_key=FINNHUB_API_KEY)
                 elif name == 'tiingo':
                     if not TIINGO_API_KEY:
                         _logger.warning("Skipping %s downloader: No API key found", name)

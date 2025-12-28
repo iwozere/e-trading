@@ -79,7 +79,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
     def __init__(self, api_key: Optional[str] = None):
         super().__init__()
         # Get API key from parameter or config
-        self.api_key = api_key or self._get_config_value('TWELVE_DATA_KEY', 'TWELVE_DATA_KEY')
+        self.api_key = api_key or self._get_config_value('TWELVE_DATA_API_KEY', 'TWELVE_DATA_API_KEY')
         self.base_url = "https://api.twelvedata.com/time_series"
 
         if not self.api_key:

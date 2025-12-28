@@ -27,7 +27,7 @@ import pandas as pd
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from config.donotshare.donotshare import ALPHA_VANTAGE_KEY, DATA_CACHE_DIR
+from config.donotshare.donotshare import ALPHA_VANTAGE_API_KEY, DATA_CACHE_DIR
 from src.data.cache.unified_cache import configure_unified_cache
 from src.data.downloader.binance_data_downloader import BinanceDataDownloader
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
@@ -90,8 +90,8 @@ def initialize_downloaders() -> Dict[str, Any]:
 
     # Initialize Alpha Vantage downloader
     try:
-        if ALPHA_VANTAGE_KEY:
-            downloaders['alpha_vantage'] = AlphaVantageDataDownloader(api_key=ALPHA_VANTAGE_KEY)
+        if ALPHA_VANTAGE_API_KEY:
+            downloaders['alpha_vantage'] = AlphaVantageDataDownloader(api_key=ALPHA_VANTAGE_API_KEY)
             print("  ✅ Alpha Vantage downloader initialized")
         else:
             print("  ⚠️  Alpha Vantage downloader skipped: No API key found in donotshare.py")

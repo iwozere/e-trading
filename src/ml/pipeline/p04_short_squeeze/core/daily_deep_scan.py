@@ -920,7 +920,7 @@ if __name__ == "__main__":
 
     # Create downloaders
     fmp_downloader = FMPDataDownloader()
-    finnhub_downloader = FinnhubDataDownloader("your_finnhub_api_key")
+    finnhub_downloader = FinnhubDataDownloader("your_FINNHUB_API_KEY")
 
     # Create configuration
     deep_scan_config = DeepScanConfig()

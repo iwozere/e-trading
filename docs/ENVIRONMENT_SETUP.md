@@ -13,7 +13,7 @@ For security reasons, API keys and other sensitive credentials are not stored in
 #### Binance
 ```bash
 # For live trading
-export BINANCE_KEY="your_binance_api_key"
+export BINANCE_KEY="your_BINANCE_KEY"
 export BINANCE_SECRET="your_binance_api_secret"
 
 # For paper trading (optional, can use same keys)

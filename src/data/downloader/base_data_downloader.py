@@ -65,8 +65,8 @@ class BaseDataDownloader(ABC):
             Config value as string, or None/default if not found
 
         Example:
-            >>> api_key = BaseDataDownloader._get_config_value('POLYGON_KEY', 'POLYGON_KEY')
-            >>> # Tries POLYGON_KEY env var first, then config.donotshare.donotshare.POLYGON_KEY
+            >>> api_key = BaseDataDownloader._get_config_value('POLYGON_API_KEY', 'POLYGON_API_KEY')
+            >>> # Tries POLYGON_API_KEY env var first, then config.donotshare.donotshare.POLYGON_API_KEY
         """
         # Use env_var if provided, otherwise use config_key
         env_var_name = env_var or config_key

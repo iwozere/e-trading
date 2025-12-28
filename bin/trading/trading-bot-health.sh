@@ -317,7 +317,7 @@ check_configuration() {
         
         # Check for required variables
         source "$CONFIG_DIR/trading-bot.env"
-        if [ -n "$BINANCE_API_KEY" ] && [ -n "$BINANCE_API_SECRET" ]; then
+        if [ -n "$BINANCE_KEY" ] && [ -n "$BINANCE_API_SECRET" ]; then
             echo -e "${GREEN}✅ API keys configured${NC}"
         else
             echo -e "${YELLOW}⚠️  API keys not configured${NC}"

@@ -256,9 +256,9 @@ class DailyDeepScanRunner:
 
             # Initialize Finnhub downloader (optional)
             try:
-                from config.donotshare.donotshare import FINNHUB_KEY
-                if FINNHUB_KEY:
-                    self.finnhub_downloader = FinnhubDataDownloader(FINNHUB_KEY)
+                from config.donotshare.donotshare import FINNHUB_API_KEY
+                if FINNHUB_API_KEY:
+                    self.finnhub_downloader = FinnhubDataDownloader(FINNHUB_API_KEY)
                     _logger.info("Finnhub API initialized with key from config")
                 else:
                     self.finnhub_downloader = None
