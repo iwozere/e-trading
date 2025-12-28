@@ -279,6 +279,41 @@ data = downloader.download_data("bitcoin", "1d", "2020-01-01", "2023-12-31")
 - **API Key**: Required
 - **Reliability**: ⭐⭐⭐⭐ (96% uptime)
 
+### 4. Alternative & Sentiment Data Providers
+
+#### Finnhub Sentiment (Hybrid)
+- **Provider Code**: `finnhub`
+- **Data Types**: Aggregated sentiment, social mentions, news analysis
+- **Free Tier Limitations**: Restricted `news-sentiment` and `social-sentiment` (403). Only `company-news` headline fetching is available.
+- **Tier Support**: Automatic fallback to news analysis if premium endpoints (403) are restricted.
+- **Role**: Primary source for high-quality institutional-grade news sentiment.
+
+#### Google Trends (Search Interest)
+- **Provider Code**: `trends`
+- **Data Types**: Search frequency, regional popularity, related queries
+- **Free Tier Limitations**: No official API; rely on scraping-mimicry which is subject to periodic 429/400 blocks.
+- **Implementation**: Uses proxy/Chrome-mimicry to bypass bot detection.
+- **Role**: Macro-level retail interest tracking.
+
+#### Twitter/X (Social Velocity)
+- **Provider Code**: `twitter`
+- **Data Types**: Tweet volume, engagement, user verification status
+- **Free Tier Limitations**: Extreme **1 request / 15 minutes** limit. No access to historical search beyond 7 days.
+- **Status**: Currently restricted/disabled by default due to Free tier limits.
+- **Role**: Breaking news and retail hype tracking (Basic/Pro tiers recommended).
+
+#### StockTwits (Financial Social)
+- **Provider Code**: `stocktwits`
+- **Data Types**: "Bullish/Bearish" signals, message stream
+- **Status**: Currently blocked (403) by CDN/Anti-bot.
+- **Role**: Direct retail trader sentiment.
+
+#### Discord (Community Data)
+- **Provider Code**: `discord`
+- **Data Types**: Real-time channel activity, ticker mentions
+- **Implementation**: Bot-based scraping of financial channels.
+- **Role**: Niche community sentiment.
+
 ## Data Provider Factory
 
 ### Factory Pattern Implementation

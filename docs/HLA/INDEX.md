@@ -24,6 +24,7 @@ This index provides a comprehensive guide to all documentation, organized by top
 |--------|---------|--------------|--------|
 | **[Data Management](modules/data-management.md)** | Market data acquisition and caching | Data feeds, providers, OHLCV processing | ✅ Complete |
 | **[Trading Engine](modules/trading-engine.md)** | Strategy execution and bot management | Trading bots, strategy framework, execution | ✅ Complete |
+| **[Sentiments](modules/sentiments.md)** | Social and news sentiment collection | Adapters, aggregation, heuristics | ✅ Complete |
 | **[ML & Analytics](modules/ml-analytics.md)** | Machine learning and performance analytics | MLflow, feature engineering, backtesting | ✅ In Progress |
 
 ### User Interfaces & Communication
@@ -89,6 +90,7 @@ This index provides a comprehensive guide to all documentation, organized by top
 | **Feature Engineering** | Data transformation for machine learning | ML & Analytics | [ML & Analytics](modules/ml-analytics.md#feature-engineering) |
 | **Regime Detection** | Market state identification using ML | ML & Analytics | [ML & Analytics](modules/ml-analytics.md#regime-detection) |
 | **Performance Metrics** | Trading strategy evaluation metrics | ML & Analytics | [ML & Analytics](modules/ml-analytics.md#performance-analytics) |
+| **Sentiment Adapters** | Modular collectors for news/social data | Sentiments | [Sentiments](modules/sentiments.md#provider-adapters) |
 
 ## 🔗 Cross-Module Dependencies
 

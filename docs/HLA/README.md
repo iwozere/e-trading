@@ -67,6 +67,7 @@ graph TB
         SCHED[Scheduler Service]
         DATA[Data Management]
         ML[ML & Analytics]
+        SENT[Sentiments Module]
     end
     
     subgraph "Infrastructure"
@@ -88,11 +89,13 @@ graph TB
     API --> SCHED
     API --> DATA
     API --> ML
+    API --> SENT
     
     TRADE --> DB
     SCHED --> DB
     DATA --> DB
     ML --> DB
+    SENT --> DB
     
     DATA --> BINANCE
     DATA --> YAHOO
@@ -114,6 +117,7 @@ graph TB
 | **[Data Management](modules/data-management.md)** | ✅ | Market data, providers, caching | Data feeds, downloaders, OHLCV processing |
 | **[Trading Engine](modules/trading-engine.md)** | ✅ | Strategy execution, bot management | Trading bots, strategy framework, execution |
 | **[ML & Analytics](modules/ml-analytics.md)** | ✅ | Machine learning, performance analytics | MLflow, feature engineering, backtesting |
+| **[Sentiments](modules/sentiments.md)** | ✅ | Social media and news sentiment | Adapters, aggregation, heuristic analysis |
 | **[Communication](modules/communication.md)** | ✅ | User interfaces, notifications | Telegram bot, Web UI, email notifications |
 | **[Infrastructure](modules/infrastructure.md)** | ✅ | Database, scheduling, error handling | PostgreSQL, APScheduler, logging |
 | **[Configuration](modules/configuration.md)** | ✅ | System configuration, templates | Config management, environment handling |
@@ -129,6 +133,7 @@ graph TB
 | **[Model](modules/data-management.md#data-models)** | Data structures, schemas, validation | Trade, User, Alert models, Database schemas | PostgreSQL, SQLAlchemy | ✅ |
 | **[Common](modules/infrastructure.md#shared-utilities)** | Shared utilities, indicator calculations | IndicatorService, RecommendationEngine, OHLCV utils | TA-Lib, pandas, numpy | ✅ |
 | **[Strategy](modules/trading-engine.md#strategy-framework)** | Trading strategy framework, mixins | BaseStrategy, Entry/Exit mixins, CustomStrategy | Backtrader, Common, Data | ✅ |
+| **[Sentiments](modules/sentiments.md)** | Sentiment collection and analysis | News/Social adapters, Aggregator, Heuristics | Finnhub, Google Trends, aiohttp | ✅ |
 | **[Trading](modules/trading-engine.md#execution-engine)** | Trade execution, bot management | TradingBot, BrokerFactory, Position management | Strategy, Data, Model | ✅ |
 | **[Backtester](modules/trading-engine.md#backtesting)** | Historical strategy testing | BacktestEngine, Performance analytics | Backtrader, Strategy, Data | ✅ |
 | **[ML](modules/ml-analytics.md)** | Machine learning, regime detection | MLflow integration, Feature engineering, LSTM/HMM models | MLflow, scikit-learn, PyTorch | 🔄 |
@@ -166,6 +171,7 @@ graph TB
         STRATEGY[Strategy Framework]
         TRADING[Trading Engine]
         ML[ML & Analytics]
+        SENTIMENT[Sentiment Module]
         BACKTESTER[Backtester]
         ANALYTICS[Analytics]
     end
@@ -210,24 +216,30 @@ graph TB
     DATA --> ML
     DATA --> BACKTESTER
     DATA --> ANALYTICS
+    DATA --> SENTIMENT
 
     MODEL --> STRATEGY
     MODEL --> TRADING
     MODEL --> ML
     MODEL --> BACKTESTER
     MODEL --> ANALYTICS
+    MODEL --> SENTIMENT
 
     INDICATORS --> STRATEGY
     INDICATORS --> BACKTESTER
     INDICATORS --> ML
+    INDICATORS --> SENTIMENT
     COMMON --> STRATEGY
     COMMON --> TRADING
     COMMON --> ML
     COMMON --> ANALYTICS
+    COMMON --> SENTIMENT
 
     STRATEGY --> BACKTESTER
     STRATEGY --> TRADING
     ML --> STRATEGY
+    SENTIMENT --> STRATEGY
+    SENTIMENT --> ML
     BACKTESTER --> ANALYTICS
     TRADING --> ANALYTICS
 
@@ -251,6 +263,7 @@ graph TB
     TRADING --> NOTIFICATION
     ANALYTICS --> NOTIFICATION
     ML --> NOTIFICATION
+    SENTIMENT --> NOTIFICATION
     SCHEDULER --> NOTIFICATION
 
     %% Interface Layer Connections

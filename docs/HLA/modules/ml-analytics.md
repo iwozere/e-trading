@@ -28,6 +28,7 @@ The ML & Analytics module provides comprehensive machine learning capabilities a
 - **Model Management**: MLflow integration for model versioning, tracking, and deployment
 - **Performance Analytics**: Advanced trading performance analysis with risk metrics
 - **Automated Training**: Scheduled model retraining with drift detection and A/B testing
+- **Sentiment Analysis**: Multi-adapter sentiment extraction and aggregation from news and social media
 - **Hyperparameter Optimization**: Optuna-based automated hyperparameter tuning
 
 ## Key Components
@@ -301,7 +302,17 @@ cvar_95 = analytics.calculate_cvar(confidence_level=0.95)
 drawdown_analysis = analytics.analyze_drawdowns()
 ```
 
-### 6. Hyperparameter Optimization
+### 6. Sentiment Collection System
+
+The Sentiment module (detailed in **[Sentiments Module](sentiments.md)**) provides real-time and historical sentiment features derived from news, Twitter, Discord, and Google Trends.
+
+**Key Features:**
+- **Provider Adapters**: Pluggable architecture for different social/news sources.
+- **Sentiment Aggregation**: Weighted combination of scores into a unified `SentimentFeatures` object.
+- **Hybrid Tier Support**: Subscription-aware fetching (e.g., Finnhub fallback).
+- **Heuristic Analysis**: Built-in NLP for local sentiment scoring when API scores are unavailable.
+
+### 7. Hyperparameter Optimization
 
 The framework integrates Optuna for automated hyperparameter optimization across all model types.
 
@@ -468,6 +479,7 @@ The training pipeline defines the overall training workflow while allowing custo
 - **Advanced Analytics**: Comprehensive performance metrics and risk analysis
 - **Hyperparameter Optimization**: Optuna integration for automated tuning
 - **Model Persistence**: Save/load functionality for all model types
+- **Sentiment Module**: Fully integrated multi-source sentiment collection and normalization
 
 ### 🔄 In Progress (Q1 2025)
 - **Automated Training Pipeline**: Scheduled retraining with drift detection (Target: Feb 2025)
@@ -498,10 +510,8 @@ The training pipeline defines the overall training workflow while allowing custo
   - Complexity: Very High - requires RL expertise and extensive testing
 
 - **Alternative Data**: Integration of sentiment, news, and social media data
-  - Timeline: August-November 2025
-  - Benefits: Enhanced signal generation, market sentiment analysis
-  - Dependencies: Data provider integrations, NLP capabilities
-  - Complexity: High - data processing and integration challenges
+  - Status: ✅ Beta Implemented (Finnhub, Trends, Discord, News)
+  - Next Steps: Improve ML model integration (using sentiments as features)
 
 #### Q4 2025 - Scale & Interpretability
 - **Distributed Training**: Multi-GPU and distributed model training
