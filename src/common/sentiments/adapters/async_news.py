@@ -34,6 +34,7 @@ _logger = setup_logger(__name__)
 
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
+from src.data.downloader.newsapi_data_downloader import NewsAPIDataDownloader
 
 
 class AsyncNewsAdapter(BaseSentimentAdapter):
@@ -60,23 +61,17 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self.alpha_vantage_token = alpha_vantage_token or os.getenv('ALPHA_VANTAGE_API_KEY')
         self.newsapi_token = newsapi_token or os.getenv('NEWSAPI_API_KEY')
 
-        # API endpoints
-        self.finnhub_base = "https://finnhub.io/api/v1"
-        self.alpha_vantage_base = "https://www.alphavantage.co/query"
-        self.newsapi_base = "https://newsapi.org/v2"
-
         # Rate limiting per API
         self.finnhub_rate_limit = 60  # requests per minute
         self.alpha_vantage_rate_limit = 5  # requests per minute
-        self.newsapi_rate_limit = 1000  # requests per day
 
         self._finnhub_requests = []
         self._alpha_vantage_requests = []
-        self._newsapi_requests = []
 
         # Initialize downloaders
         self.finnhub_downloader = FinnhubDataDownloader(api_key=self.finnhub_token)
         self.av_downloader = AlphaVantageDataDownloader(api_key=self.alpha_vantage_token)
+        self.newsapi_downloader = NewsAPIDataDownloader(api_key=self.newsapi_token)
 
 
         # Bias detection keywords
@@ -108,14 +103,6 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             ]
             return len(self._alpha_vantage_requests) < self.alpha_vantage_rate_limit
 
-        elif api == 'newsapi':
-            # NewsAPI has daily limit, check last 24 hours
-            self._newsapi_requests = [
-                req_time for req_time in self._newsapi_requests
-                if current_time - req_time < 86400
-            ]
-            return len(self._newsapi_requests) < self.newsapi_rate_limit
-
         return True
 
     def _record_request(self, api: str) -> None:
@@ -126,8 +113,6 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             self._finnhub_requests.append(current_time)
         elif api == 'alpha_vantage':
             self._alpha_vantage_requests.append(current_time)
-        elif api == 'newsapi':
-            self._newsapi_requests.append(current_time)
 
     async def _get_with_retry(self, url: str, params: Optional[dict] = None,
                              api: str = 'generic', timeout: int = 30) -> Optional[dict]:
@@ -335,26 +320,21 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
             # Build search query
             query = f'"{ticker}" OR "${ticker.upper()}" OR "#{ticker.upper()}"'
 
-            url = f"{self.newsapi_base}/everything"
-            params = {
-                'q': query,
-                'language': 'en',
-                'sortBy': 'publishedAt',
-                'pageSize': min(100, limit),
-                'apiKey': self.newsapi_token
-            }
-
             # Add time filter if provided
+            from_date = None
             if since_ts:
                 from_date = datetime.fromtimestamp(since_ts).strftime('%Y-%m-%d')
-                params['from'] = from_date
 
-            data = await self._get_with_retry(url, params=params, api='newsapi')
-            if not data or 'articles' not in data:
+            data = await self.newsapi_downloader.get_everything(
+                query=query,
+                from_date=from_date,
+                page_size=limit
+            )
+            if not data:
                 return []
 
             articles = []
-            for article in data['articles'][:limit]:
+            for article in data[:limit]:
                 try:
                     articles.append({
                         'id': f"newsapi_{hash(article.get('url', ''))}",
