@@ -58,12 +58,15 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         self.search_rate_limit = 300  # requests per 15 minutes
         self.search_window = 15 * 60  # 15 minutes in seconds
         self._search_requests = []
+        self.use_cashtags = True  # Fallback flag for restricted API plans
 
         # Tweet fields to request
-        self.tweet_fields = [
-            'id', 'text', 'created_at', 'author_id', 'public_metrics',
-            'context_annotations', 'entities', 'referenced_tweets'
-        ]
+        self.tweet_fields = ['id', 'text', 'created_at', 'author_id', 'public_metrics']
+
+        # Potentially restricted fields (Free/Basic tier might reject these)
+        self.extra_tweet_fields = ['context_annotations', 'entities', 'referenced_tweets']
+        self.use_extra_fields = True
+
         self.user_fields = ['id', 'username', 'name', 'public_metrics', 'verified']
 
         if not self.bearer_token:
@@ -133,11 +136,11 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                             backoff_delay = self.rate_limit_delay * (2 ** attempt) + 1.0
                             retry_after = resp.headers.get("x-rate-limit-reset")
                             if retry_after:
-                                backoff_delay = max(backoff_delay, float(retry_after) - time.time() + 1.0)
+                                delay = float(retry_after) - time.time() + 1.0
+                                backoff_delay = max(backoff_delay, delay)
 
-                            # Limit sleep to something reasonable to avoid "hangs"
+                            # Cap backoff to fit within 180s system timeout and 4 attempt limit
                             backoff_delay = min(backoff_delay, 120.0)
-
                             self._in_backoff = True
                             self._backoff_until = time.time() + backoff_delay
 
@@ -149,12 +152,26 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                             if attempt < self.max_retries:
                                 continue
                             else:
-                                raise aiohttp.ClientResponseError(
-                                    request_info=resp.request_info,
-                                    history=resp.history,
-                                    status=resp.status,
-                                    message="Rate limit exceeded after retries"
-                                )
+                                _logger.error("Twitter rate limit exceeded after retries")
+                                break
+
+                        if resp.status == 400:
+                            try:
+                                error_text = await resp.text()
+                                _logger.error("Twitter returned 400 Bad Request for %s: %s", url, error_text)
+
+                                # Check for specific operator errors
+                                if "invalid operator 'cashtag'" in error_text.lower():
+                                    _logger.warning("Cashtag operator rejected by Twitter. Disabling cashtags for future requests.")
+                                    self.use_cashtags = False
+
+                                # If we tried extra fields and failed, try disabling them for next time
+                                if getattr(self, 'use_extra_fields', True):
+                                    _logger.warning("Attempting to disable extra tweet fields for future requests due to 400 error")
+                                    self.use_extra_fields = False
+                            except Exception:
+                                _logger.error("Twitter returned 400 Bad Request for %s", url)
+                            break
 
                         if resp.status == 401:
                             _logger.error("Twitter authentication failed - check bearer token")
@@ -220,8 +237,7 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         self._consecutive_failures += 1
         if last_exception:
             self._update_health_failure(last_exception)
-            _logger.error("Twitter request failed after %d attempts: %s %s",
-                         self.max_retries + 1, url, last_exception)
+            _logger.error("Twitter request failed: %s %s", url, last_exception)
 
         return None
 
@@ -230,11 +246,14 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         symbol = ticker.upper().strip()
 
         # Build query with various ticker formats and exclude retweets
-        query_parts = [
-            f'${symbol}',  # Cashtag
+        query_parts = []
+        if getattr(self, 'use_cashtags', True):
+            query_parts.append(f'${symbol}')
+
+        query_parts.extend([
             f'#{symbol}',  # Hashtag
             f'"{symbol}"',  # Exact match in quotes
-        ]
+        ])
 
         # Combine with OR and exclude retweets
         query = f"({' OR '.join(query_parts)}) -is:retweet lang:en"
@@ -267,11 +286,15 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
             # Build search query
             query = self._build_search_query(symbol)
 
-            # Build API parameters
+            # Build API parameters - start with base fields
+            all_tweet_fields = list(self.tweet_fields)
+            if getattr(self, 'use_extra_fields', True):
+                all_tweet_fields.extend(self.extra_tweet_fields)
+
             params = {
                 'query': query,
-                'max_results': min(100, limit),  # Twitter API v2 limit is 100 per request
-                'tweet.fields': ','.join(self.tweet_fields),
+                'max_results': min(100, limit),
+                'tweet.fields': ','.join(all_tweet_fields),
                 'user.fields': ','.join(self.user_fields),
                 'expansions': 'author_id'
             }

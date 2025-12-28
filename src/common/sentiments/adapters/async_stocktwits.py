@@ -38,12 +38,25 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
         self.max_retries = max_retries
         self._consecutive_failures = 0
         self._analyzer = HeuristicSentimentAnalyzer()
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]
 
     async def _get_with_retry(self, path: str, params: Optional[dict] = None, timeout: int = 10) -> Optional[dict]:
         """Make HTTP request with exponential backoff retry logic."""
         url = f"{BASE}{path}"
-        if not self._session:
-            self._session = aiohttp.ClientSession()
+        if not self._session or self._session.closed:
+            headers = {
+                'User-Agent': self.user_agents[0],
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-site',
+                'DNT': '1'
+            }
+            self._session = aiohttp.ClientSession(headers=headers)
 
         last_exception = None
 
@@ -81,8 +94,15 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
                                 await asyncio.sleep(backoff_delay)
                                 continue
 
-                        resp.raise_for_status()
-                        data = await resp.json()
+                        if resp.status != 200:
+                            _logger.warning("Stocktwits status %d for %s", resp.status, url)
+
+                        try:
+                            data = await resp.json()
+                        except Exception as e:
+                            body = await resp.text()
+                            _logger.error("Stocktwits failed to parse JSON from %s: %s (Body: %s)", url, e, body[:200])
+                            raise
 
                         # Success - reset failure counter and update health
                         self._consecutive_failures = 0

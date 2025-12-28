@@ -46,6 +46,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
         self.max_retries = max_retries
         self._token: Optional[str] = None
         self._token_expiry: float = 0
+        self._token_lock = asyncio.Lock()
         self._analyzer = HeuristicSentimentAnalyzer()
         self._subreddits: List[str] = self._analyzer.get_subreddits()
 
@@ -54,11 +55,27 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
         self.client_secret = secrets.REDDIT_API_SECRET
         self.user_agent = secrets.REDDIT_USER_AGENT or "e-trading:sentiment:v1.0.0 (by /u/akoss)"
 
+        # Identify common placeholder strings
+        placeholders = ["YOUR_CLIENT_ID", "YOUR_CLIENT_SECRET", "YOUR_API_KEY", "YOUR_API_SECRET"]
+        has_placeholders = any(p in str(self.client_id) or p in str(self.client_secret) for p in placeholders)
+
+        self.enabled = bool(self.client_id and self.client_secret and not has_placeholders)
+        if not self.enabled:
+            _logger.warning("Reddit credentials missing or placeholder detected - adapter will be inactive.")
+
 
     async def _ensure_token(self):
         """Ensure we have a valid OAuth2 token."""
+        if not self.enabled:
+            return
+
         if self._token and time.time() < self._token_expiry - 60:
             return
+
+        async with self._token_lock:
+            # Re-check after acquiring lock
+            if self._token and time.time() < self._token_expiry - 60:
+                return
 
         if not self._session:
             self._session = aiohttp.ClientSession()
@@ -70,7 +87,10 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
 
         try:
             async with self._session.post(REDDIT_TOKEN_URL, auth=auth, data=data, headers=headers) as resp:
-                resp.raise_for_status()
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    _logger.error("Failed to fetch Reddit token (Status %d): %s", resp.status, error_text)
+                    resp.raise_for_status()
                 payload = await resp.json()
                 self._token = payload["access_token"]
                 # Expires in usually 3600 seconds
@@ -141,7 +161,7 @@ class AsyncRedditAdapter(BaseSentimentAdapter):
         """
         Fetch individual messsages (submissions and comments) for a ticker from Reddit.
         """
-        if not ticker:
+        if not ticker or not self.enabled:
             return []
 
         ticker = ticker.upper().strip()

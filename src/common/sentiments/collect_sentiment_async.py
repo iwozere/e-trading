@@ -78,7 +78,8 @@ def _load_config_from_env() -> Dict[str, Any]:
     # Provider settings
     config["providers"] = {
         "stocktwits": os.getenv("SENTIMENT_STOCKTWITS_ENABLED", "true").lower() == "true",
-        "reddit_pushshift": os.getenv("SENTIMENT_REDDIT_ENABLED", "true").lower() == "true",
+        "reddit": os.getenv("SENTIMENT_REDDIT_ENABLED", "true").lower() == "true",
+        "reddit_pushshift": os.getenv("SENTIMENT_PUSHSHIFT_ENABLED", "false").lower() == "true",
         "hf_enabled": os.getenv("SENTIMENT_HF_ENABLED", "false").lower() == "true"
     }
 
@@ -141,6 +142,7 @@ DEFAULT_CONFIG = {
         "trends": True,
         "discord": True,
         "twitter": True,
+        "reddit_pushshift": False,
         "hf_enabled": False
     },
     "lookback_hours": 24,
@@ -513,7 +515,7 @@ async def collect_sentiment_batch(
                                     # Add timeout to prevent one slow adapter from hanging the whole process
                                     summary = await asyncio.wait_for(
                                         manager.fetch_summary_from_adapter(provider, tk, since_ts),
-                                        timeout=45.0
+                                        timeout=180.0
                                     )
                                 except asyncio.TimeoutError:
                                     _logger.warning("%s summary timed out for %s", provider.capitalize(), tk)

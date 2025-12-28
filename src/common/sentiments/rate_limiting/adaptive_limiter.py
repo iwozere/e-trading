@@ -342,11 +342,6 @@ class AdaptiveRateLimiter:
         self.total_adaptations += 1
         self._last_adjustment_reason = reason
 
-        _logger.debug(
-            "Manual rate adjustment for %s: %.2f -> %.2f req/s (reason: %s)",
-            self.name, old_rate, self.current_rate, reason
-        )
-
         _logger.info(
             "Manual rate adjustment for %s: %.2f -> %.2f req/s (reason: %s)",
             self.name, old_rate, self.current_rate, reason

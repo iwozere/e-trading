@@ -39,9 +39,13 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
         self.max_retries = max_retries
         self._consecutive_failures = 0
         self._analyzer = HeuristicSentimentAnalyzer()
+        self.enabled = False # Force disabled due to API restrictions
 
     async def _get_with_retry(self, endpoint: str, params: Dict, timeout: int = 15) -> List[Dict]:
         """Make HTTP request with exponential backoff retry logic."""
+        if not self.enabled:
+            return []
+
         url = f"{BASE}/{endpoint}"
         if not self._session:
             self._session = aiohttp.ClientSession()
@@ -133,8 +137,8 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
 
         return []
 
-    async def fetch_submissions(self, ticker: str, since_ts: Optional[int], limit: int = 100) -> List[Dict]:
-        """Fetch Reddit submissions mentioning the ticker."""
+        if not self.enabled: return []
+
         if not ticker or not ticker.strip():
             raise ValueError("Ticker cannot be empty")
 
@@ -157,6 +161,7 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
 
     async def fetch_comments(self, ticker: str, since_ts: Optional[int], limit: int = 100) -> List[Dict]:
         """Fetch Reddit comments mentioning the ticker."""
+        if not self.enabled: return []
         if not ticker or not ticker.strip():
             raise ValueError("Ticker cannot be empty")
 
@@ -178,16 +183,8 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
             raise
 
     async def fetch_mentions_summary(self, ticker: str, since_ts: Optional[int]) -> Dict[str, Any]:
-        """
-        Fetch aggregated sentiment summary for a ticker from Reddit.
-
-        Args:
-            ticker: Stock ticker symbol
-            since_ts: Unix timestamp to fetch data since
-
-        Returns:
-            Dictionary containing sentiment metrics and counts
-        """
+        """Fetch aggregated sentiment summary for a ticker from Reddit."""
+        if not self.enabled: return {"mentions": 0, "sentiment_score": 0.0, "provider": "reddit"}
         if not ticker or not ticker.strip():
             raise ValueError("Ticker cannot be empty")
 
