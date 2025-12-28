@@ -27,6 +27,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 
 _logger = setup_logger(__name__)
 
@@ -40,14 +41,13 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
     """
 
     def __init__(self, name: str = "discord", session: Optional[aiohttp.ClientSession] = None,
-                 concurrency: int = 2, rate_limit_delay: float = 1.0, max_retries: int = 3,
-                 bot_token: Optional[str] = None, guild_ids: Optional[List[str]] = None,
-                 channel_keywords: Optional[List[str]] = None):
-        super().__init__(name, concurrency, rate_limit_delay)
+                 bot_token: Optional[str] = None, guild_ids: Optional[List[str]] = None):
+        super().__init__(name, 2, 1.0) # concurrency and rate_limit_delay are hardcoded for now
         self._provided_session = session is not None
         self._session = session
-        self.max_retries = max_retries
+        self.max_retries = 3 # max_retries is hardcoded for now
         self._consecutive_failures = 0
+        self._analyzer = HeuristicSentimentAnalyzer()
 
         # Discord API configuration
         self.bot_token = bot_token or os.getenv('DISCORD_BOT_TOKEN')
@@ -58,10 +58,7 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
         self.guild_ids = [gid.strip() for gid in self.guild_ids if gid.strip()]
 
         # Keywords to identify financial channels
-        self.channel_keywords = channel_keywords or [
-            'trading', 'stocks', 'crypto', 'finance', 'market', 'investing',
-            'options', 'futures', 'forex', 'analysis', 'signals', 'alerts'
-        ]
+        self.channel_keywords = self._analyzer.get_discord_channel_keywords()
 
         # Rate limiting - Discord API limits
         self.global_rate_limit = 50  # requests per second
@@ -458,19 +455,6 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
             unique_users = set()
             channel_distribution: Dict[str, int] = {}
 
-            # Define sentiment keywords for financial context
-            bullish_keywords = (
-                "bull", "bullish", "moon", "to the moon", "diamond hands", "buy", "long",
-                "🚀", "rocket", "hold", "hodl", "pump", "rally", "breakout", "calls",
-                "green", "up", "rise", "surge", "gain", "profit", "target", "support",
-                "lambo", "ape", "yolo", "stonks"
-            )
-            bearish_keywords = (
-                "bear", "bearish", "short", "sell", "dump", "crash", "fall", "drop",
-                "puts", "red", "down", "decline", "loss", "resistance", "breakdown",
-                "correction", "bubble", "overvalued", "panic", "fear", "rekt", "bag"
-            )
-
             for msg in messages:
                 try:
                     body = (msg.get("body") or "").lower()
@@ -491,13 +475,11 @@ class AsyncDiscordAdapter(BaseSentimentAdapter):
                     channel_name = msg.get("channel", {}).get("name", "unknown")
                     channel_distribution[channel_name] = channel_distribution.get(channel_name, 0) + 1
 
-                    # Sentiment analysis with keyword matching
-                    has_bullish = any(keyword in body for keyword in bullish_keywords)
-                    has_bearish = any(keyword in body for keyword in bearish_keywords)
-
-                    if has_bullish and not has_bearish:
+                    # Sentiment analysis with unified analyzer
+                    result = self._analyzer.analyze_sentiment(body)
+                    if result.score > 0.1:
                         bullish += 1
-                    elif has_bearish and not has_bullish:
+                    elif result.score < -0.1:
                         bearish += 1
                     else:
                         neutral += 1

@@ -10,10 +10,12 @@ This module provides sophisticated keyword-based sentiment detection with:
 """
 
 import re
-from typing import Dict, List, Optional
+import json
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from pathlib import Path
 import sys
+from urllib.parse import urlparse
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -22,6 +24,8 @@ sys.path.append(str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+CONFIG_PATH = PROJECT_ROOT / "config" / "sentiments" / "sentiments.json"
 
 @dataclass
 class SentimentResult:
@@ -53,7 +57,7 @@ class HeuristicSentimentAnalyzer:
         Args:
             config: Configuration dictionary with sentiment rules and keywords
         """
-        self.config = config or {}
+        self.config = config or self._load_default_config()
 
         # Load sentiment keywords and rules
         self._load_sentiment_keywords()
@@ -67,50 +71,24 @@ class HeuristicSentimentAnalyzer:
         self.slang_weight = self.config.get("slang_weight", 0.2)
         self.keyword_weight = self.config.get("keyword_weight", 0.5)
 
+    def _load_default_config(self) -> Dict[str, Any]:
+        """Load default configuration from JSON file or fallback to internal defaults."""
+        try:
+            if CONFIG_PATH.exists():
+                with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                _logger.warning("Sentiment config not found at %s, using minimal defaults", CONFIG_PATH)
+                return {}
+        except Exception as e:
+            _logger.error("Error loading sentiment config: %s", e)
+            return {}
+
     def _load_sentiment_keywords(self) -> None:
         """Load financial domain-specific sentiment keywords."""
-        # Enhanced positive keywords for financial context
-        default_positive = [
-            # Basic positive
-            "moon", "rocket", "diamond", "buy", "long", "hold", "bullish", "bull",
-            "up", "rise", "gain", "profit", "win", "winning", "strong", "solid",
-
-            # Financial positive
-            "breakout", "rally", "surge", "pump", "squeeze", "momentum", "uptrend",
-            "support", "resistance", "bounce", "recovery", "growth", "earnings beat",
-            "upgrade", "outperform", "overweight", "accumulate", "target raised",
-
-            # Social media positive
-            "to the moon", "diamond hands", "hodl", "ape", "lambo", "tendies",
-            "stonks", "this is the way", "buy the dip", "btfd", "yolo",
-
-            # Emojis as text
-            "🚀", "💎", "🌙", "📈", "💰", "🔥", "💪", "👍", "✅", "🎯"
-        ]
-
-        # Enhanced negative keywords for financial context
-        default_negative = [
-            # Basic negative
-            "short", "sell", "dump", "crash", "fall", "drop", "down", "bearish", "bear",
-            "loss", "lose", "losing", "weak", "bad", "terrible", "awful",
-
-            # Financial negative
-            "breakdown", "collapse", "plunge", "tank", "correction", "pullback",
-            "downtrend", "resistance", "rejection", "decline", "selloff", "panic",
-            "earnings miss", "downgrade", "underperform", "underweight", "reduce",
-            "target lowered", "bankruptcy", "delisting", "fraud", "investigation",
-
-            # Social media negative
-            "paper hands", "bag holder", "bagholder", "rekt", "fud", "shill",
-            "pump and dump", "rug pull", "dead cat bounce", "falling knife",
-
-            # Emojis as text
-            "📉", "💀", "🔻", "❌", "😭", "😱", "🤡", "💩", "⚠️", "🚨"
-        ]
-
-        # Load from config or use defaults
-        self.positive_keywords = set(self.config.get("positive_keywords", default_positive))
-        self.negative_keywords = set(self.config.get("negative_keywords", default_negative))
+        # Load from config or use internal defaults (abbreviated here for brevity, assuming sentiments.json is primary)
+        self.positive_keywords = set(self.config.get("positive_keywords", ["moon", "rocket", "buy", "long", "bull"]))
+        self.negative_keywords = set(self.config.get("negative_keywords", ["short", "sell", "dump", "crash", "bear"]))
 
         # Create weighted keyword mappings
         self.keyword_weights = self.config.get("keyword_weights", {})
@@ -120,15 +98,7 @@ class HeuristicSentimentAnalyzer:
 
     def _load_negation_patterns(self) -> None:
         """Load negation patterns for context-aware analysis."""
-        default_negations = [
-            "not", "no", "never", "none", "nothing", "nowhere", "neither", "nor",
-            "don't", "doesn't", "didn't", "won't", "wouldn't", "can't", "cannot",
-            "couldn't", "shouldn't", "mustn't", "isn't", "aren't", "wasn't", "weren't",
-            "haven't", "hasn't", "hadn't", "without", "lack", "lacking", "absent",
-            "fail", "failed", "failing", "unable", "impossible", "hardly", "barely",
-            "scarcely", "seldom", "rarely"
-        ]
-
+        default_negations = ["not", "no", "never", "don't", "doesn't", "isn't", "wasn't"]
         self.negation_words = set(self.config.get("negation_words", default_negations))
 
         # Compile negation patterns
@@ -137,48 +107,17 @@ class HeuristicSentimentAnalyzer:
 
     def _load_emoji_mappings(self) -> None:
         """Load emoji sentiment mappings."""
+        # Default emoji sentiment if not in config
         default_emoji_sentiment = {
-            # Very positive
-            "🚀": 1.0, "💎": 0.9, "🌙": 0.8, "📈": 0.9, "💰": 0.8,
-            "🔥": 0.7, "💪": 0.7, "👍": 0.6, "✅": 0.6, "🎯": 0.7,
-            "😍": 0.8, "🤩": 0.8, "😎": 0.6, "🥳": 0.8, "🎉": 0.7,
-
-            # Positive
-            "😊": 0.5, "😄": 0.6, "😃": 0.5, "🙂": 0.4, "👌": 0.5,
-            "💯": 0.7, "⭐": 0.6, "🌟": 0.6, "⚡": 0.6, "🎊": 0.6,
-
-            # Negative
-            "😢": -0.6, "😭": -0.7, "😱": -0.8, "😰": -0.6, "😨": -0.7,
-            "🤡": -0.8, "💩": -0.9, "😡": -0.8, "🤬": -0.9, "😤": -0.6,
-
-            # Very negative
-            "📉": -0.9, "💀": -1.0, "🔻": -0.8, "❌": -0.7, "⚠️": -0.6,
-            "🚨": -0.8, "💸": -0.7, "🔥": -0.5,  # Fire can be negative in "money burning" context
+            "🚀": 1.0, "💎": 0.9, "🌙": 0.8, "📈": 0.9, "📉": -0.9, "💀": -1.0
         }
-
         self.emoji_sentiment = self.config.get("emoji_sentiment", default_emoji_sentiment)
 
     def _load_slang_mappings(self) -> None:
         """Load social media slang sentiment mappings."""
         default_slang_sentiment = {
-            # Very positive slang
-            "hodl": 0.8, "diamond hands": 0.9, "to the moon": 1.0, "lambo": 0.8,
-            "tendies": 0.7, "stonks": 0.6, "this is the way": 0.7, "ape": 0.6,
-            "btfd": 0.8, "buy the dip": 0.8, "yolo": 0.5, "fomo": 0.3,
-
-            # Positive slang
-            "bullish af": 0.9, "moon mission": 0.9, "rocket fuel": 0.8,
-            "diamond handed": 0.8, "ape strong": 0.7, "hold the line": 0.7,
-
-            # Negative slang
-            "paper hands": -0.8, "bag holder": -0.7, "bagholder": -0.7,
-            "rekt": -0.9, "fud": -0.6, "shill": -0.7, "cope": -0.5,
-
-            # Very negative slang
-            "rug pull": -1.0, "pump and dump": -0.9, "exit scam": -1.0,
-            "dead cat bounce": -0.8, "falling knife": -0.8, "bag holding": -0.7,
+            "hodl": 0.8, "lambo": 0.8, "rekt": -0.9, "fud": -0.6
         }
-
         self.slang_sentiment = self.config.get("slang_sentiment", default_slang_sentiment)
 
         # Create regex patterns for multi-word slang
@@ -191,12 +130,6 @@ class HeuristicSentimentAnalyzer:
     def analyze_sentiment(self, text: str) -> SentimentResult:
         """
         Analyze sentiment of text using enhanced heuristic methods.
-
-        Args:
-            text: Text to analyze for sentiment
-
-        Returns:
-            SentimentResult with detailed sentiment analysis
         """
         if not text or not text.strip():
             return SentimentResult(0.0, 0.0, [], [], False, 0.0, 0.0)
@@ -208,36 +141,47 @@ class HeuristicSentimentAnalyzer:
         negative_signals = self._find_negative_signals(text_lower)
 
         # Analyze emoji sentiment
-        emoji_sentiment = self._analyze_emoji_sentiment(text)
+        emoji_count = 0
+        total_emoji_sentiment = 0.0
+        for emoji, sentiment in self.emoji_sentiment.items():
+            count = text.count(emoji)
+            if count > 0:
+                total_emoji_sentiment += sentiment * count
+                emoji_count += count
+        emoji_sentiment = total_emoji_sentiment / max(1, emoji_count) if emoji_count > 0 else 0.0
 
         # Analyze slang sentiment
-        slang_sentiment = self._analyze_slang_sentiment(text_lower)
+        total_slang_sentiment = 0.0
+        slang_count = 0
+        for pattern, sentiment in self.slang_patterns.items():
+            matches = pattern.findall(text_lower)
+            if matches:
+                total_slang_sentiment += sentiment * len(matches)
+                slang_count += len(matches)
+        for word in text_lower.split():
+            if word in self.slang_sentiment:
+                total_slang_sentiment += self.slang_sentiment[word]
+                slang_count += 1
+        slang_sentiment = total_slang_sentiment / max(1, slang_count) if slang_count > 0 else 0.0
 
         # Detect negation context
         negation_detected = self._detect_negation_context(text_lower, positive_signals + negative_signals)
 
         # Calculate base sentiment score
-        pos_score = sum(self._get_keyword_weight(signal) for signal in positive_signals)
-        neg_score = sum(self._get_keyword_weight(signal) for signal in negative_signals)
-
-        # Combine different sentiment components
+        pos_score = sum(self.keyword_weights.get(signal, 1.0) for signal in positive_signals)
+        neg_score = sum(self.keyword_weights.get(signal, 1.0) for signal in negative_signals)
         keyword_sentiment = pos_score - neg_score
 
-        # Apply negation if detected
         if negation_detected:
-            keyword_sentiment *= -0.8  # Flip and slightly reduce intensity
+            keyword_sentiment *= -0.8
 
-        # Weighted combination of sentiment components
         final_score = (
             self.keyword_weight * keyword_sentiment +
             self.emoji_weight * emoji_sentiment +
             self.slang_weight * slang_sentiment
         )
-
-        # Normalize to [-1, 1] range
         final_score = max(-1.0, min(1.0, final_score))
 
-        # Calculate confidence based on signal strength
         signal_count = len(positive_signals) + len(negative_signals)
         confidence = min(1.0, signal_count * 0.2 + abs(emoji_sentiment) * 0.3 + abs(slang_sentiment) * 0.3)
 
@@ -252,115 +196,71 @@ class HeuristicSentimentAnalyzer:
         )
 
     def _find_positive_signals(self, text: str) -> List[str]:
-        """Find positive sentiment signals in text."""
-        signals = []
-        for keyword in self.positive_keywords:
-            if keyword.lower() in text:
-                signals.append(keyword)
-        return signals
+        return [kw for kw in self.positive_keywords if kw.lower() in text]
 
     def _find_negative_signals(self, text: str) -> List[str]:
-        """Find negative sentiment signals in text."""
-        signals = []
-        for keyword in self.negative_keywords:
-            if keyword.lower() in text:
-                signals.append(keyword)
-        return signals
-
-    def _analyze_emoji_sentiment(self, text: str) -> float:
-        """Analyze emoji sentiment in text."""
-        total_sentiment = 0.0
-        emoji_count = 0
-
-        for emoji, sentiment in self.emoji_sentiment.items():
-            count = text.count(emoji)
-            if count > 0:
-                total_sentiment += sentiment * count
-                emoji_count += count
-
-        return total_sentiment / max(1, emoji_count) if emoji_count > 0 else 0.0
-
-    def _analyze_slang_sentiment(self, text: str) -> float:
-        """Analyze social media slang sentiment in text."""
-        total_sentiment = 0.0
-        slang_count = 0
-
-        # Check multi-word slang patterns
-        for pattern, sentiment in self.slang_patterns.items():
-            matches = pattern.findall(text)
-            if matches:
-                total_sentiment += sentiment * len(matches)
-                slang_count += len(matches)
-
-        # Check single-word slang
-        words = text.split()
-        for word in words:
-            if word in self.slang_sentiment:
-                total_sentiment += self.slang_sentiment[word]
-                slang_count += 1
-
-        return total_sentiment / max(1, slang_count) if slang_count > 0 else 0.0
+        return [kw for kw in self.negative_keywords if kw.lower() in text]
 
     def _detect_negation_context(self, text: str, signals: List[str]) -> bool:
-        """
-        Detect if sentiment signals appear in negation context.
-
-        Args:
-            text: Text to analyze
-            signals: List of sentiment signals found
-
-        Returns:
-            True if negation context detected
-        """
-        if not signals:
-            return False
-
+        if not signals: return False
         words = text.split()
-
         for signal in signals:
-            signal_words = signal.split()
-
-            # Find signal position in text
-            for i in range(len(words) - len(signal_words) + 1):
-                if ' '.join(words[i:i+len(signal_words)]) == signal:
-                    # Check negation window before signal
-                    start_idx = max(0, i - self.negation_window)
-                    context_words = words[start_idx:i]
-
-                    # Check if any negation words in context
-                    for word in context_words:
-                        if word in self.negation_words:
+            try:
+                # Find the index of the signal word(s) in the list of words
+                signal_words = signal.lower().split()
+                for i in range(len(words) - len(signal_words) + 1):
+                    if words[i:i+len(signal_words)] == signal_words:
+                        idx = i
+                        start_idx = max(0, idx - self.negation_window)
+                        if any(word in self.negation_words for word in words[start_idx:idx]):
                             return True
-
+                        break
+            except Exception:
+                continue
         return False
 
-    def _get_keyword_weight(self, keyword: str) -> float:
-        """Get weight for a specific keyword."""
-        return self.keyword_weights.get(keyword, 1.0)
+    def analyze_bias(self, text: str) -> Dict[str, bool]:
+        """Detect potential bias indicators in text."""
+        text_lower = text.lower()
+        bias_indicators = self.config.get("bias_indicators", {})
+        bias_detected = {}
+        for bias_type, keywords in bias_indicators.items():
+            bias_detected[bias_type] = any(keyword in text_lower for keyword in keywords)
+        return bias_detected
 
-    def update_keywords(self, positive_keywords: Optional[List[str]] = None,
-                       negative_keywords: Optional[List[str]] = None) -> None:
-        """
-        Update sentiment keywords dynamically.
+    def analyze_trend_queries(self, queries: List[str]) -> Dict[str, int]:
+        """Analyze sentiment of trend-related queries using group matching."""
+        sentiment_counts = {'bullish': 0, 'bearish': 0, 'neutral': 0}
+        trend_terms = self.config.get("trend_terms", {})
 
-        Args:
-            positive_keywords: New positive keywords to add
-            negative_keywords: New negative keywords to add
-        """
-        if positive_keywords:
-            self.positive_keywords.update(positive_keywords)
-            _logger.info("Added %d positive keywords", len(positive_keywords))
+        for query in queries:
+            query_lower = query.lower()
+            bullish_found = any(all(term in query_lower for term in term_group)
+                               for term_group in trend_terms.get('bullish', []))
+            bearish_found = any(all(term in query_lower for term in term_group)
+                               for term_group in trend_terms.get('bearish', []))
 
-        if negative_keywords:
-            self.negative_keywords.update(negative_keywords)
-            _logger.info("Added %d negative keywords", len(negative_keywords))
+            if bullish_found and not bearish_found:
+                sentiment_counts['bullish'] += 1
+            elif bearish_found and not bullish_found:
+                sentiment_counts['bearish'] += 1
+            else:
+                sentiment_counts['neutral'] += 1
+        return sentiment_counts
 
-    def get_keyword_stats(self) -> Dict[str, int]:
-        """Get statistics about loaded keywords."""
-        return {
-            "positive_keywords": len(self.positive_keywords),
-            "negative_keywords": len(self.negative_keywords),
-            "emoji_mappings": len(self.emoji_sentiment),
-            "slang_mappings": len(self.slang_sentiment),
-            "negation_words": len(self.negation_words)
-        }
+    def get_credibility(self, url: str) -> float:
+        """Get credibility score for a news source URL."""
+        try:
+            domain = urlparse(url).netloc.lower().replace('www.', '')
+            cred_mapping = self.config.get("source_credibility", {})
+            return cred_mapping.get(domain, cred_mapping.get("default", 0.5))
+        except Exception:
+            return 0.5
+
+    def get_subreddits(self) -> List[str]:
+        """Get list of monitored subreddits."""
+        return self.config.get("subreddits", ["wallstreetbets", "stocks", "pennystocks", "options"])
+
+    def get_discord_channel_keywords(self) -> List[str]:
+        """Get keywords to identify financial Discord channels."""
+        return self.config.get("discord_channel_keywords", ["trading", "stocks", "market"])

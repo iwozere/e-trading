@@ -28,6 +28,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 
 _logger = setup_logger(__name__)
 
@@ -52,6 +53,7 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self._session = session
         self.max_retries = max_retries
         self._consecutive_failures = 0
+        self._analyzer = HeuristicSentimentAnalyzer()
 
         # API tokens
         self.finnhub_token = finnhub_token or os.getenv('FINNHUB_API_KEY')
@@ -76,56 +78,17 @@ class AsyncNewsAdapter(BaseSentimentAdapter):
         self.finnhub_downloader = FinnhubDataDownloader(api_key=self.finnhub_token)
         self.av_downloader = AlphaVantageDataDownloader(api_key=self.alpha_vantage_token)
 
-        # Source credibility weights (0.0 to 1.0)
-        self.source_credibility = {
-            # High credibility financial sources
-            'reuters.com': 0.95,
-            'bloomberg.com': 0.95,
-            'wsj.com': 0.95,
-            'ft.com': 0.95,
-            'cnbc.com': 0.90,
-            'marketwatch.com': 0.85,
-            'yahoo.com': 0.80,
-            'investing.com': 0.75,
-            'seekingalpha.com': 0.70,
-            'fool.com': 0.65,
-
-            # Medium credibility sources
-            'benzinga.com': 0.60,
-            'zacks.com': 0.60,
-            'thestreet.com': 0.55,
-
-            # Default for unknown sources
-            'default': 0.50
-        }
 
         # Bias detection keywords
-        self.bias_indicators = {
-            'promotional': ['sponsored', 'advertisement', 'paid promotion', 'affiliate'],
-            'speculative': ['could', 'might', 'possibly', 'rumor', 'speculation'],
-            'emotional': ['shocking', 'amazing', 'incredible', 'unbelievable', 'must-see']
-        }
+        self.bias_indicators = self._analyzer.config.get("bias_indicators", {})
 
     def _get_source_credibility(self, url: str) -> float:
         """Get credibility score for a news source."""
-        try:
-            domain = urlparse(url).netloc.lower()
-            # Remove www. prefix
-            domain = domain.replace('www.', '')
-
-            return self.source_credibility.get(domain, self.source_credibility['default'])
-        except Exception:
-            return self.source_credibility['default']
+        return self._analyzer.get_credibility(url)
 
     def _detect_bias(self, title: str, content: str) -> Dict[str, bool]:
         """Detect potential bias indicators in article content."""
-        text = f"{title} {content}".lower()
-
-        bias_detected = {}
-        for bias_type, keywords in self.bias_indicators.items():
-            bias_detected[bias_type] = any(keyword in text for keyword in keywords)
-
-        return bias_detected
+        return self._analyzer.analyze_bias(f"{title} {content}")
 
     def _check_rate_limit(self, api: str) -> bool:
         """Check if we're within rate limits for specific API."""

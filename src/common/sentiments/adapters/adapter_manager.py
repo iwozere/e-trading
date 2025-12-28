@@ -465,12 +465,21 @@ def register_default_adapters() -> None:
 
     try:
         from src.common.sentiments.adapters.async_pushshift import AsyncPushshiftAdapter
-        manager.register_adapter_type("reddit", AsyncPushshiftAdapter, {
+        manager.register_adapter_type("reddit_pushshift", AsyncPushshiftAdapter, {
             "concurrency": 5,
             "rate_limit_delay": 0.5
         })
     except ImportError as e:
-        _logger.warning("Could not register Reddit adapter: %s", e)
+        _logger.warning("Could not register Pushshift adapter: %s", e)
+
+    try:
+        from src.common.sentiments.adapters.async_reddit import AsyncRedditAdapter
+        manager.register_adapter_type("reddit", AsyncRedditAdapter, {
+            "concurrency": 5,
+            "rate_limit_delay": 1.0
+        })
+    except ImportError as e:
+        _logger.warning("Could not register Reddit (direct) adapter: %s", e)
 
     try:
         from src.common.sentiments.adapters.async_hf_sentiment import AsyncHFSentiment

@@ -24,6 +24,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 
 _logger = setup_logger(__name__)
 BASE = "https://api.stocktwits.com/api/2"
@@ -36,6 +37,7 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
         self._session = session
         self.max_retries = max_retries
         self._consecutive_failures = 0
+        self._analyzer = HeuristicSentimentAnalyzer()
 
     async def _get_with_retry(self, path: str, params: Optional[dict] = None, timeout: int = 10) -> Optional[dict]:
         """Make HTTP request with exponential backoff retry logic."""
@@ -223,10 +225,6 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
             bearish = 0
             neutral = 0
 
-            # Define sentiment keywords
-            bullish_keywords = ("bull", "moon", "to the moon", "diamond", "buy", "long", "🚀", "rocket", "hold")
-            bearish_keywords = ("short", "sell", "dump", "bear", "bankrupt", "crash", "fall", "drop")
-
             for m in msgs:
                 try:
                     body = (m.get("body") or "").lower()
@@ -234,12 +232,10 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
                         neutral += 1
                         continue
 
-                    has_bullish = any(keyword in body for keyword in bullish_keywords)
-                    has_bearish = any(keyword in body for keyword in bearish_keywords)
-
-                    if has_bullish and not has_bearish:
+                    result = self._analyzer.analyze_sentiment(body)
+                    if result.score > 0.1:
                         bullish += 1
-                    elif has_bearish and not has_bullish:
+                    elif result.score < -0.1:
                         bearish += 1
                     else:
                         neutral += 1

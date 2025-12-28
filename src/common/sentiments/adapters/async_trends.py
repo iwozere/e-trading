@@ -488,8 +488,8 @@ class AsyncTrendsAdapter(BaseSentimentAdapter):
                         if query_text:
                             related_queries.append(query_text)
 
-                # Analyze sentiment of related queries
-                sentiment_analysis = self._analyze_search_sentiment(related_queries)
+                # Analyze sentiment of related queries using unified analyzer
+                sentiment_analysis = self._analyzer.analyze_trend_queries(related_queries)
 
             # Calculate sentiment score based on trend direction and query sentiment
             total_sentiment_queries = sum(sentiment_analysis.values())

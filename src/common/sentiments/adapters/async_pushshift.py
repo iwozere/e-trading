@@ -25,6 +25,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter
+from src.common.sentiments.processing.heuristic_analyzer import HeuristicSentimentAnalyzer
 
 _logger = setup_logger(__name__)
 BASE = "https://api.pushshift.io/reddit/search"
@@ -37,6 +38,7 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
         self._session = session
         self.max_retries = max_retries
         self._consecutive_failures = 0
+        self._analyzer = HeuristicSentimentAnalyzer()
 
     async def _get_with_retry(self, endpoint: str, params: Dict, timeout: int = 15) -> List[Dict]:
         """Make HTTP request with exponential backoff retry logic."""
@@ -198,10 +200,6 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
             neg = 0
             neutral = 0
 
-            # Define sentiment keywords
-            positive_keywords = ("moon", "rocket", "diamond", "buy", "long", "🚀", "hold", "bull", "up")
-            negative_keywords = ("short", "sell", "dump", "bankrupt", "crash", "bear", "down", "fall")
-
             # Process submissions
             for s in subs:
                 try:
@@ -210,12 +208,10 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                         neutral += 1
                         continue
 
-                    has_positive = any(keyword in text for keyword in positive_keywords)
-                    has_negative = any(keyword in text for keyword in negative_keywords)
-
-                    if has_positive and not has_negative:
+                    result = self._analyzer.analyze_sentiment(text)
+                    if result.score > 0.1:
                         pos += 1
-                    elif has_negative and not has_positive:
+                    elif result.score < -0.1:
                         neg += 1
                     else:
                         neutral += 1
@@ -233,12 +229,10 @@ class AsyncPushshiftAdapter(BaseSentimentAdapter):
                         neutral += 1
                         continue
 
-                    has_positive = any(keyword in text for keyword in positive_keywords)
-                    has_negative = any(keyword in text for keyword in negative_keywords)
-
-                    if has_positive and not has_negative:
+                    result = self._analyzer.analyze_sentiment(text)
+                    if result.score > 0.1:
                         pos += 1
-                    elif has_negative and not has_positive:
+                    elif result.score < -0.1:
                         neg += 1
                     else:
                         neutral += 1
