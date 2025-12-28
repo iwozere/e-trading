@@ -61,13 +61,16 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
         self.use_cashtags = True  # Fallback flag for restricted API plans
 
         # Tweet fields to request
-        self.tweet_fields = ['id', 'text', 'created_at', 'author_id', 'public_metrics']
+        self.tweet_fields = ['id', 'text', 'created_at', 'author_id']
 
-        # Potentially restricted fields (Free/Basic tier might reject these)
-        self.extra_tweet_fields = ['context_annotations', 'entities', 'referenced_tweets']
-        self.use_extra_fields = True
+        # Potentially restricted fields
+        self.extra_tweet_fields = ['public_metrics', 'entities']
+        self.use_extra_fields = False # Default to False for Free tier stability
 
-        self.user_fields = ['id', 'username', 'name', 'public_metrics', 'verified']
+        self.user_fields = ['id', 'username', 'name', 'verified']
+
+        # HARD DISABLE: Twitter API limits on Free tier make it impractical for default use
+        self.enabled = False
 
         if not self.bearer_token:
             _logger.warning("Twitter bearer token not provided - adapter will not function")
@@ -100,6 +103,9 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
 
     async def _get_with_retry(self, url: str, params: Optional[dict] = None, timeout: int = 30) -> Optional[dict]:
         """Make HTTP request with exponential backoff retry logic."""
+        if not self.enabled:
+            return None
+
         if not self.bearer_token:
             _logger.error("Twitter bearer token not configured")
             return None
@@ -131,6 +137,13 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                     async with self._session.get(url, params=params, headers=headers, timeout=timeout) as resp:
                         response_time_ms = (time.time() - start_time) * 1000
 
+                        # Log rate limit info for debugging
+                        _limit = resp.headers.get("x-rate-limit-limit")
+                        _rem = resp.headers.get("x-rate-limit-remaining")
+                        _res = resp.headers.get("x-rate-limit-reset")
+                        if _limit or _rem or _res:
+                            _logger.debug("Twitter Rate Limit: %s/%s, resets at %s", _rem, _limit, _res)
+
                         if resp.status == 429:
                             # Rate limited
                             backoff_delay = self.rate_limit_delay * (2 ** attempt) + 1.0
@@ -144,6 +157,9 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                             self._in_backoff = True
                             self._backoff_until = time.time() + backoff_delay
 
+                            if _limit == "1":
+                                _logger.warning("Twitter API capacity is extremely low (1/15min). You appear to be on the Free tier.")
+
                             _logger.warning("Twitter 429 rate limit (attempt %d/%d) - sleeping %.2fs",
                                           attempt + 1, self.max_retries + 1, backoff_delay)
                             await asyncio.sleep(backoff_delay)
@@ -156,21 +172,27 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
                                 break
 
                         if resp.status == 400:
+                            error_text = await resp.text()
+                            _logger.error("Twitter 400 Bad Request for %s: %s", url, error_text)
+
+                            # Check for specific operator errors
+                            if "invalid operator 'cashtag'" in error_text.lower():
+                                _logger.warning("Cashtag operator rejected by Twitter. Disabling cashtags for future requests.")
+                                self.use_cashtags = False
+
+                            # Try to parse JSON to see specific field errors
                             try:
-                                error_text = await resp.text()
-                                _logger.error("Twitter returned 400 Bad Request for %s: %s", url, error_text)
+                                err_json = json.loads(error_text)
+                                for detail in err_json.get('errors', []):
+                                    if 'field' in detail:
+                                        _logger.warning("Twitter rejected field: %s", detail['field'])
+                            except:
+                                pass
 
-                                # Check for specific operator errors
-                                if "invalid operator 'cashtag'" in error_text.lower():
-                                    _logger.warning("Cashtag operator rejected by Twitter. Disabling cashtags for future requests.")
-                                    self.use_cashtags = False
-
-                                # If we tried extra fields and failed, try disabling them for next time
-                                if getattr(self, 'use_extra_fields', True):
-                                    _logger.warning("Attempting to disable extra tweet fields for future requests due to 400 error")
-                                    self.use_extra_fields = False
-                            except Exception:
-                                _logger.error("Twitter returned 400 Bad Request for %s", url)
+                            # If we tried extra fields and failed, try disabling them for next time
+                            if getattr(self, 'use_extra_fields', True):
+                                _logger.warning("Disabling extra fields due to 400 error")
+                                self.use_extra_fields = False
                             break
 
                         if resp.status == 401:
@@ -263,17 +285,9 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
     async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
         """
         Fetch individual tweets for a ticker from Twitter API v2.
-
-        Args:
-            ticker: Stock ticker symbol
-            since_ts: Unix timestamp to fetch messages since
-            limit: Maximum number of tweets to fetch (max 100 per request)
-
-        Returns:
-            List of normalized tweet dictionaries
         """
-        if not ticker or not ticker.strip():
-            raise ValueError("Ticker cannot be empty")
+        if not self.enabled or not ticker or not ticker.strip():
+            return []
 
         if not self.bearer_token:
             _logger.error("Twitter bearer token not configured")
@@ -385,16 +399,9 @@ class AsyncTwitterAdapter(BaseSentimentAdapter):
     async def fetch_summary(self, ticker: str, since_ts: Optional[int] = None) -> Dict[str, Any]:
         """
         Fetch aggregated sentiment summary for a ticker from Twitter.
-
-        Args:
-            ticker: Stock ticker symbol
-            since_ts: Unix timestamp to fetch data since
-
-        Returns:
-            Dictionary containing sentiment metrics and counts
         """
-        if not ticker or not ticker.strip():
-            raise ValueError("Ticker cannot be empty")
+        if not self.enabled or not ticker or not ticker.strip():
+            return {"mentions": 0, "sentiment_score": 0.0, "provider": "twitter"}
 
         try:
             tweets = await self.fetch_messages(ticker, since_ts=since_ts, limit=200)

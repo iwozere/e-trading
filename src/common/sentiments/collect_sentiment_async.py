@@ -79,6 +79,9 @@ def _load_config_from_env() -> Dict[str, Any]:
     config["providers"] = {
         "stocktwits": os.getenv("SENTIMENT_STOCKTWITS_ENABLED", "true").lower() == "true",
         "reddit": os.getenv("SENTIMENT_REDDIT_ENABLED", "true").lower() == "true",
+        "discord": os.getenv("SENTIMENT_DISCORD_ENABLED", "true").lower() == "true",
+        "twitter": os.getenv("SENTIMENT_TWITTER_ENABLED", "false").lower() == "true",
+        "finnhub": os.getenv("SENTIMENT_FINNHUB_ENABLED", "true").lower() == "true",
         "reddit_pushshift": os.getenv("SENTIMENT_PUSHSHIFT_ENABLED", "false").lower() == "true",
         "hf_enabled": os.getenv("SENTIMENT_HF_ENABLED", "false").lower() == "true"
     }
@@ -103,8 +106,12 @@ def _load_config_from_env() -> Dict[str, Any]:
 
     # Provider weights
     config["weights"] = {
-        "stocktwits": float(os.getenv("SENTIMENT_WEIGHT_STOCKTWITS", "0.4")),
-        "reddit": float(os.getenv("SENTIMENT_WEIGHT_REDDIT", "0.6")),
+        "stocktwits": float(os.getenv("SENTIMENT_WEIGHT_STOCKTWITS", "0.2")),
+        "reddit": float(os.getenv("SENTIMENT_WEIGHT_REDDIT", "0.2")),
+        "news": float(os.getenv("SENTIMENT_WEIGHT_NEWS", "0.2")),
+        "finnhub": float(os.getenv("SENTIMENT_WEIGHT_FINNHUB", "0.2")),
+        "twitter": float(os.getenv("SENTIMENT_WEIGHT_TWITTER", "0.1")),
+        "discord": float(os.getenv("SENTIMENT_WEIGHT_DISCORD", "0.1")),
         "heuristic_vs_hf": float(os.getenv("SENTIMENT_WEIGHT_HF", "0.5"))
     }
 
@@ -141,7 +148,8 @@ DEFAULT_CONFIG = {
         "news": True,
         "trends": True,
         "discord": True,
-        "twitter": True,
+        "twitter": False,
+        "finnhub": True,
         "reddit_pushshift": False,
         "hf_enabled": False
     },
@@ -159,9 +167,10 @@ DEFAULT_CONFIG = {
     },
     "weights": {
         "stocktwits": 0.2,
-        "reddit": 0.3,
+        "reddit": 0.2,
         "news": 0.2,
-        "trends": 0.1,
+        "finnhub": 0.2,
+        "trends": 0.0,  # Trends is strictly for interest volume, not sentiment polarity
         "discord": 0.1,
         "twitter": 0.1,
         "heuristic_vs_hf": 0.5

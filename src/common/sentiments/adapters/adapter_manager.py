@@ -547,3 +547,12 @@ def register_default_adapters() -> None:
         })
     except ImportError as e:
         _logger.warning("Could not register Google Trends adapter: %s", e)
+
+    try:
+        from src.common.sentiments.adapters.async_finnhub import AsyncFinnhubSentimentAdapter
+        manager.register_adapter_type("finnhub", AsyncFinnhubSentimentAdapter, {
+            "concurrency": 2,
+            "rate_limit_delay": 1.0
+        })
+    except ImportError as e:
+        _logger.warning("Could not register Finnhub sentiment adapter: %s", e)
