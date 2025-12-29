@@ -41,90 +41,121 @@ class FundamentalCache:
             cache_ttl_days: Cache time-to-live in days for positive results (default: 3)
             negative_cache_ttl_days: Cache TTL for negative results (empty/failed) (default: 2)
         """
-        self.cache_ttl_days = cache_ttl_days
+        self.profile_ttl_days = 14
+        self.metrics_ttl_days = 1
+        self.quote_ttl_days = 1
         self.negative_cache_ttl_days = negative_cache_ttl_days
 
         # Cache directory structure: results/emps2/cache/fundamentals/
         self._cache_dir = Path("results") / "emps2" / "cache" / "fundamentals"
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
-        _logger.info("Fundamental cache initialized (TTL: %d days, negative TTL: %d days, dir: %s)",
-                    cache_ttl_days, negative_cache_ttl_days, self._cache_dir)
+        _logger.info("Fundamental cache initialized (Profile: 14d, Metrics: 1d, Quote: 1d, Neg: %dd)",
+                    negative_cache_ttl_days)
+
+    def get_full_entry(self, ticker: str) -> Optional[Dict[str, Any]]:
+        """Get the entire cache entry for a ticker."""
+        try:
+            cache_file = self._get_cache_path(ticker)
+            if not cache_file.exists():
+                return None
+            with open(cache_file, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return None
+
+    def get_data(self, ticker: str, data_type: str) -> Optional[Dict[str, Any]]:
+        """
+        Get specific data type (profile, metrics, quote) from cache if not expired.
+        """
+        entry = self.get_full_entry(ticker)
+        if not entry:
+            return None
+
+        if entry.get('is_empty_response'):
+            # Check negative cache expiration
+            if self._is_expired(entry.get('cached_at'), self.negative_cache_ttl_days):
+                return None
+            return {'is_negative_cache': True}
+
+        type_data = entry.get(data_type)
+        if not type_data:
+            return None
+
+        # Determine TTL for this type
+        ttl_map = {
+            'profile': self.profile_ttl_days,
+            'metrics': self.metrics_ttl_days,
+            'quote': self.quote_ttl_days
+        }
+        ttl = ttl_map.get(data_type, 1)
+
+        if self._is_expired(type_data.get('updated_at'), ttl):
+            return None
+
+        return type_data.get('data')
+
+    def set_data(self, ticker: str, data_type: str, data: Optional[Dict[str, Any]]) -> None:
+        """Set specific data type in cache."""
+        try:
+            cache_file = self._get_cache_path(ticker)
+            entry = self.get_full_entry(ticker) or {'ticker': ticker.upper()}
+
+            is_empty = not data or data == {}
+
+            if is_empty:
+                entry['is_empty_response'] = True
+                entry['cached_at'] = datetime.now(timezone.utc).isoformat()
+            else:
+                entry['is_empty_response'] = False
+                entry[data_type] = {
+                    'data': data,
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }
+
+            with open(cache_file, 'w') as f:
+                json.dump(entry, f, indent=2)
+
+        except Exception:
+            _logger.debug("Error caching %s for %s", data_type, ticker)
 
     def get(self, ticker: str) -> Optional[Dict[str, Any]]:
         """
-        Get cached fundamental data for a ticker.
-
-        Args:
-            ticker: Stock ticker symbol
-
-        Returns:
-            Cached fundamental data dict, or None if not cached/expired.
-            For negative cache hits (empty response), returns a special dict:
-            {'is_negative_cache': True} to signal "known bad ticker, skip API call"
+        Backward compatible get() - returns a combined dict if all types are valid.
         """
-        try:
-            cache_file = self._get_cache_path(ticker)
+        profile = self.get_data(ticker, 'profile')
+        if profile and profile.get('is_negative_cache'):
+            return profile
 
-            if not cache_file.exists():
-                return None
+        metrics = self.get_data(ticker, 'metrics')
+        quote = self.get_data(ticker, 'quote')
 
-            # Read cache file
-            with open(cache_file, 'r') as f:
-                cache_data = json.load(f)
-
-            # Check if cache is expired
-            if self._is_expired(cache_data):
-                _logger.debug("Cache expired for %s", ticker)
-                return None
-
-            # Check if this is a negative cache entry (empty/failed response)
-            if cache_data.get('is_empty_response', False):
-                _logger.debug("Negative cache hit for %s (known empty ticker)", ticker)
-                return {'is_negative_cache': True}
-
-            _logger.debug("Cache hit for %s", ticker)
-            return cache_data.get('data')
-
-        except Exception:
-            _logger.debug("Error reading cache for %s", ticker)
+        if not profile or not metrics or not quote:
             return None
+
+        # Combine into expected format for FundamentalFilter
+        combined = profile.copy()
+        combined.update(metrics)
+        combined.update(quote)
+        return combined
 
     def set(self, ticker: str, data: Optional[Dict[str, Any]]) -> None:
         """
-        Cache fundamental data for a ticker.
-
-        Supports both positive caching (valid data) and negative caching (empty/failed responses).
-
-        Args:
-            ticker: Stock ticker symbol
-            data: Fundamental data dictionary to cache, or None/empty dict for negative cache
+        Backward compatible set() - sets all types at once.
         """
-        try:
-            cache_file = self._get_cache_path(ticker)
+        if not data:
+            self.set_data(ticker, 'profile', None)
+            return
 
-            # Determine if this is a negative cache entry (empty/failed response)
-            is_empty = not data or data == {}
+        # Map combined keys back to types
+        # This is a bit hacky but maintains compatibility during transition
+        profile_keys = {'ticker', 'company_name', 'sector', 'industry', 'shares_outstanding', 'marketChar'}
+        metrics_keys = {'avg_volume', 'pe_ratio', 'forward_pe', 'eps'} # etc
 
-            cache_entry = {
-                'ticker': ticker.upper(),
-                'data': data if data else None,
-                'cached_at': datetime.now(timezone.utc).isoformat(),
-                'ttl_days': self.negative_cache_ttl_days if is_empty else self.cache_ttl_days,
-                'is_empty_response': is_empty
-            }
-
-            with open(cache_file, 'w') as f:
-                json.dump(cache_entry, f, indent=2)
-
-            if is_empty:
-                _logger.debug("Cached negative result for %s (TTL: %d days)",
-                            ticker, self.negative_cache_ttl_days)
-            else:
-                _logger.debug("Cached data for %s", ticker)
-
-        except Exception:
-            _logger.debug("Error caching data for %s", ticker)
+        # Since we use Fundamentals dataclass mostly, we'll just split by known fields
+        self.set_data(ticker, 'profile', {k: v for k, v in data.items() if k in profile_keys or k == 'market_cap'})
+        self.set_data(ticker, 'metrics', {k: v for k, v in data.items() if k == 'avg_volume'})
+        self.set_data(ticker, 'quote', {k: v for k, v in data.items() if k == 'current_price'})
 
     def _get_cache_path(self, ticker: str) -> Path:
         """
@@ -138,32 +169,19 @@ class FundamentalCache:
         """
         return self._cache_dir / f"{ticker.upper()}.json"
 
-    def _is_expired(self, cache_data: Dict[str, Any]) -> bool:
-        """
-        Check if cached data is expired.
-
-        Args:
-            cache_data: Cache entry dictionary
-
-        Returns:
-            True if expired, False otherwise
-        """
+    def _is_expired(self, timestamp_str: Optional[str], ttl_days: int) -> bool:
+        """Check if a specific timestamp is expired."""
         try:
-            cached_at_str = cache_data.get('cached_at')
-            if not cached_at_str:
+            if not timestamp_str:
                 return True
 
-            cached_at = datetime.fromisoformat(cached_at_str)
+            updated_at = datetime.fromisoformat(timestamp_str)
             now = datetime.now(timezone.utc)
 
-            # Make cached_at timezone-aware if it isn't
-            if cached_at.tzinfo is None:
-                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
 
-            age = now - cached_at
-            max_age = timedelta(days=self.cache_ttl_days)
-
-            return age > max_age
+            return (now - updated_at) > timedelta(days=ttl_days)
 
         except Exception:
             return True

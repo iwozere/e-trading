@@ -194,63 +194,33 @@ class FundamentalFilter:
         total_tickers = len(tickers)
         processed = 0
         failed = 0
-        cache_hits = 0
-        negative_cache_skipped = 0  # Track API calls saved by negative caching
+        cache_hits = 0  # Re-adding for logging compatibility if needed
+        negative_cache_skipped = 0
 
-        _logger.info("Fetching fundamentals for %d tickers (cache: %s, checkpoints: every %d)",
-                    total_tickers,
-                    "enabled" if self.cache is not None else "disabled",
-                    self.checkpoint_interval)
+        _logger.info("Fetching fundamentals for %d tickers (cache enabled, tiered optimization active)", total_tickers)
 
         for ticker in tickers:
             try:
                 # Try cache first (unless force_refresh)
-                profile_data = None
-                is_negative_cache_hit = False
-
-                if self.cache and not force_refresh:
-                    cached_result = self.cache.get(ticker)
-
-                    if cached_result:
-                        cache_hits += 1
-
-                        # Check if this is a negative cache hit (known empty ticker)
-                        if cached_result.get('is_negative_cache'):
-                            is_negative_cache_hit = True
-                            negative_cache_skipped += 1
-                            _logger.debug("Skipping %s (negative cache: known empty ticker)", ticker)
-                        else:
-                            profile_data = cached_result
-
-                # Fetch from API if not cached and not a negative cache hit
-                if not profile_data and not is_negative_cache_hit:
-                    profile_data = self._fetch_ticker_profile(ticker)
-
-                    # Save to cache (both positive and negative results)
-                    if self.cache:
-                        self.cache.set(ticker, profile_data)
-
-                    # Rate limiting (only when fetching from API)
-                    time.sleep(1.1)
+                profile_data = self._fetch_ticker_profile(ticker, force_refresh)
 
                 if profile_data:
                     fundamentals.append(profile_data)
 
-                    # Save checkpoint after EACH successful fetch for crash recovery
+                    # Save checkpoint after successful fetch
                     if self.checkpoint_enabled:
                         self._save_checkpoint(fundamentals)
-                elif not is_negative_cache_hit:
-                    # Only count as failed if it's a NEW failure (not negative cache hit)
+                else:
                     failed += 1
 
                 processed += 1
 
                 # Progress logging
                 if processed % 100 == 0:
-                    _logger.info("Progress: %d/%d (%.1f%%), successful: %d, failed: %d, cache hits: %d (neg: %d)",
+                    _logger.info("Progress: %d/%d (%.1f%%), successful: %d, failed/skipped: %d",
                                 processed, total_tickers,
                                 100.0 * processed / total_tickers,
-                                len(fundamentals), failed, cache_hits, negative_cache_skipped)
+                                len(fundamentals), failed)
 
             except KeyboardInterrupt:
                 _logger.warning("Interrupted by user. Saving checkpoint...")
@@ -266,46 +236,86 @@ class FundamentalFilter:
         if self.checkpoint_enabled and fundamentals:
             self._save_checkpoint(fundamentals)
 
-        _logger.info("Fetched fundamentals: %d successful, %d failed, %d cache hits (%.1f%% hit rate, %d negative cache)",
-                    len(fundamentals), failed, cache_hits,
-                    100.0 * cache_hits / total_tickers if total_tickers > 0 else 0,
-                    negative_cache_skipped)
+        _logger.info("Fetched fundamentals: %d successful, %d failed/skipped",
+                    len(fundamentals), failed)
 
         return fundamentals
 
-    def _fetch_ticker_profile(self, ticker: str) -> Optional[dict]:
+    def _fetch_ticker_profile(self, ticker: str, force_refresh: bool = False) -> Optional[dict]:
         """
-        Fetch profile and quote data for a single ticker.
-
-        Args:
-            ticker: Ticker symbol
-
-        Returns:
-            Dictionary with fundamental data or None if failed
+        Fetch profile and quote data for a single ticker with pre-filtering.
         """
         try:
-            # Use get_fundamentals method from Finnhub downloader
-            fundamentals = self.downloader.get_fundamentals(ticker)
+            # 1. Background Check (Check cache for all components)
+            profile_data = None
+            metrics_data = None
+            quote_data = None
 
-            if not fundamentals or fundamentals.market_cap == 0:
+            if self.cache and not force_refresh:
+                profile_data = self.cache.get_data(ticker, 'profile')
+                metrics_data = self.cache.get_data(ticker, 'metrics')
+                quote_data = self.cache.get_data(ticker, 'quote')
+
+                # Check negative cache
+                if profile_data and profile_data.get('is_negative_cache'):
+                    _logger.debug("Skipping %s (negative cache hit)", ticker)
+                    return None
+
+            # 2. Fetch missing Profile/Metrics if necessary
+            if not profile_data:
+                profile_data = self.downloader.get_company_profile(ticker)
+                if not profile_data:
+                    if self.cache: self.cache.set_data(ticker, 'profile', None)
+                    return None
+                if self.cache: self.cache.set_data(ticker, 'profile', profile_data)
+
+            if not metrics_data:
+                metrics_data = self.downloader.get_basic_financials(ticker)
+                if not metrics_data:
+                    # Non-critical metrics failure? No, we need avg volume.
+                    return None
+                if self.cache: self.cache.set_data(ticker, 'metrics', metrics_data)
+
+            # 3. Pre-Filter (Step 2 of optimization plan)
+            # Use Profile/Metrics to estimate if ticker is worth a Quote call
+            shares = profile_data.get('shareOutstanding', 0) * 1_000_000
+            metrics = metrics_data.get('metric', {})
+            avg_vol = metrics.get('10DayAverageTradingVolume', 0) * 1_000_000
+
+            # Estimate market cap using cached price if available, otherwise use profile marketCap
+            last_price = quote_data.get('c', 0) if quote_data else 0
+            market_cap_est = shares * last_price if last_price > 0 else profile_data.get('marketCapitalization', 0) * 1_000_000
+
+            # Pre-filter checks (with 20% buffer to avoid accidental drops)
+            if avg_vol < self.config.min_avg_volume * 0.8:
+                _logger.debug("Pre-filter skip %s: Volume %d < %d", ticker, avg_vol, self.config.min_avg_volume)
                 return None
 
-            # Extract relevant fields
-            # NOTE: market_cap and shares_outstanding are already in MILLIONS from Finnhub
-            # NOTE: avg_volume is already in SHARES (converted from millions in get_fundamentals)
-            profile_data = {
+            if market_cap_est < self.config.min_market_cap * 0.8:
+                _logger.debug("Pre-filter skip %s: Market Cap Est $%dM < $%dM",
+                            ticker, market_cap_est // 1_000_000, self.config.min_market_cap // 1_000_000)
+                return None
+
+            # 4. Intentional Call (Step 3 of optimization plan)
+            # Fetch fresh quote ONLY for survivors
+            if not quote_data:
+                quote_data = self.downloader.get_quote(ticker)
+                if not quote_data:
+                    return None
+                if self.cache: self.cache.set_data(ticker, 'quote', quote_data)
+
+            # 5. Build final record
+            return {
                 'ticker': ticker.upper(),
-                'market_cap': fundamentals.market_cap * 1_000_000 if fundamentals.market_cap else None,  # Already in millions, convert to dollars
-                'float': fundamentals.shares_outstanding * 1_000_000 if fundamentals.shares_outstanding else None,  # Already in millions, convert to shares
-                'sector': fundamentals.sector,
-                'current_price': fundamentals.current_price,
-                'avg_volume': fundamentals.avg_volume if fundamentals.avg_volume else 0,  # Already in shares
+                'market_cap': shares * quote_data.get('c', 0) if quote_data.get('c') else profile_data.get('marketCapitalization', 0) * 1_000_000,
+                'float': shares, # Finnhub doesn't have float, using shares as proxy
+                'sector': profile_data.get('finnhubIndustry'),
+                'current_price': quote_data.get('c', 0),
+                'avg_volume': avg_vol,
             }
 
-            return profile_data
-
         except Exception:
-            _logger.debug("Failed to fetch profile for %s", ticker)
+            _logger.debug("Failed to process ticker %s", ticker)
             return None
 
     def _apply_fundamental_filters(self, df: pd.DataFrame) -> pd.DataFrame:

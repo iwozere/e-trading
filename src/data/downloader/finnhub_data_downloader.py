@@ -87,6 +87,61 @@ class FinnhubDataDownloader(BaseDataDownloader):
         if not self.api_key:
             raise ValueError("Finnhub API key is required. Get one at: https://finnhub.io/")
 
+        # Rate limiting state
+        self._last_request_time = 0
+        self._request_delay = 1.1  # 1.1s delay to stay under 60 RPM
+
+    def _make_request(self, url: str, params: Dict[str, Any], max_retries: int = 3) -> Optional[Dict[str, Any]]:
+        """
+        Make a throttled and retried API request to Finnhub.
+
+        Args:
+            url: API endpoint URL
+            params: Query parameters
+            max_retries: Maximum number of retries for 429/5xx errors
+
+        Returns:
+            JSON response dictionary or None if failed
+        """
+        for retry in range(max_retries):
+            # Enforce rate limit (1 call per 1.1 seconds)
+            elapsed = time.time() - self._last_request_time
+            if elapsed < self._request_delay:
+                time.sleep(self._request_delay - elapsed)
+
+            try:
+                self._last_request_time = time.time()
+                response = requests.get(url, params=params, timeout=30)
+
+                if response.status_code == 200:
+                    return response.json()
+
+                if response.status_code == 429:
+                    # Rate limit exceeded - exponential backoff
+                    wait_time = (2 ** retry) + 1
+                    _logger.warning("Finnhub rate limit exceeded (429). Retrying in %ds... (Attempt %d/%d)",
+                                  wait_time, retry + 1, max_retries)
+                    time.sleep(wait_time)
+                    continue
+
+                if response.status_code >= 500:
+                    # Server error - exponential backoff
+                    wait_time = (2 ** retry) + 1
+                    _logger.warning("Finnhub server error (%d). Retrying in %ds... (Attempt %d/%d)",
+                                  response.status_code, wait_time, retry + 1, max_retries)
+                    time.sleep(wait_time)
+                    continue
+
+                # For other errors (4xx), don't retry
+                _logger.error("Finnhub API error %d: %s", response.status_code, response.text)
+                return None
+
+            except Exception as e:
+                _logger.error("Finnhub connection error: %s. Retrying...", str(e))
+                time.sleep(2 ** retry)
+
+        return None
+
     def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """
         Download historical data for a given symbol from Finnhub.
@@ -119,14 +174,12 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 'to': end_unix,
                 'token': self.api_key
             }
-            response = requests.get(self.base_url, params=params)
-            if response.status_code == 429:
-                raise RuntimeError("Finnhub API rate limit exceeded (free tier: 60 requests/minute)")
-            if response.status_code != 200:
-                raise RuntimeError(f"Finnhub API error: {response.status_code} {response.text}")
-            data = response.json()
-            if data.get('s') != 'ok':
-                raise ValueError(f"No results in Finnhub response: {data}")
+
+            data = self._make_request(self.base_url, params)
+
+            if not data or data.get('s') != 'ok':
+                _logger.warning("No results in Finnhub response for %s", symbol)
+                return pd.DataFrame()
             # Finnhub returns: t (timestamp), o (open), h (high), l (low), c (close), v (volume)
             df = pd.DataFrame({
                 'timestamp': pd.to_datetime(data['t'], unit='s'),
@@ -168,57 +221,46 @@ class FinnhubDataDownloader(BaseDataDownloader):
         Returns:
             Fundamentals: Comprehensive fundamental data for the stock
         """
+    def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch company profile (shares outstanding, sector, etc)."""
+        url = "https://finnhub.io/api/v1/stock/profile2"
+        return self._make_request(url, {'symbol': symbol, 'token': self.api_key})
+
+    def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch current price quote."""
+        url = "https://finnhub.io/api/v1/quote"
+        return self._make_request(url, {'symbol': symbol, 'token': self.api_key})
+
+    def get_basic_financials(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch basic financial metrics (avg volume, ratios)."""
+        url = "https://finnhub.io/api/v1/stock/metric"
+        return self._make_request(url, {'symbol': symbol, 'metric': 'all', 'token': self.api_key})
+
+    def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
+        """
+        Get comprehensive fundamental data for a given stock using Finnhub.
+
+        Args:
+            symbol: Stock symbol (e.g., 'AAPL')
+
+        Returns:
+            Fundamentals: Comprehensive fundamental data for the stock
+        """
         try:
-            # Get company profile
-            profile_url = "https://finnhub.io/api/v1/stock/profile2"
-            profile_params = {
-                'symbol': symbol,
-                'token': self.api_key
-            }
-
-            profile_response = requests.get(profile_url, params=profile_params)
-            if profile_response.status_code != 200:
-                raise RuntimeError(f"Finnhub API error: {profile_response.status_code}")
-
-            profile_data = profile_response.json()
+            # 1. Get company profile
+            profile_data = self.get_company_profile(symbol)
 
             if not profile_data:
-                _logger.error("No data returned from Finnhub for ticker %s", symbol)
-                return Fundamentals(
-                    ticker=symbol.upper(),
-                    company_name="Unknown",
-                    current_price=0.0,
-                    market_cap=0.0,
-                    pe_ratio=0.0,
-                    forward_pe=0.0,
-                    dividend_yield=0.0,
-                    earnings_per_share=0.0,
-                    data_source="Finnhub",
-                    last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                )
+                _logger.error("No profile data returned from Finnhub for ticker %s", symbol)
+                return self._create_empty_fundamentals(symbol)
 
-            # Get current price
-            quote_url = "https://finnhub.io/api/v1/quote"
-            quote_params = {
-                'symbol': symbol,
-                'token': self.api_key
-            }
-
-            quote_response = requests.get(quote_url, params=quote_params)
-            quote_data = quote_response.json() if quote_response.status_code == 200 else {}
+            # 2. Get current price
+            quote_data = self.get_quote(symbol)
             current_price = quote_data.get('c', 0.0) if quote_data else 0.0
 
-            # Get financial metrics
-            metrics_url = "https://finnhub.io/api/v1/stock/metric"
-            metrics_params = {
-                'symbol': symbol,
-                'metric': 'all',
-                'token': self.api_key
-            }
-
-            metrics_response = requests.get(metrics_url, params=metrics_params)
-            metrics_data = metrics_response.json() if metrics_response.status_code == 200 else {}
-            metrics = metrics_data.get('metric', {}) if metrics_data else {}
+            # 3. Get financial metrics
+            metrics_response = self.get_basic_financials(symbol)
+            metrics = metrics_response.get('metric', {}) if metrics_response else {}
 
             _logger.debug("Retrieved fundamentals for %s: %s", symbol, profile_data.get('name', 'Unknown'))
 
@@ -270,18 +312,22 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
         except Exception as e:
             _logger.exception("Failed to get fundamentals for %s: %s", symbol, str(e))
-            return Fundamentals(
-                ticker=symbol.upper(),
-                company_name="Unknown",
-                current_price=0.0,
-                market_cap=0.0,
-                pe_ratio=0.0,
-                forward_pe=0.0,
-                dividend_yield=0.0,
-                earnings_per_share=0.0,
-                data_source="Finnhub",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            )
+            return self._create_empty_fundamentals(symbol)
+
+    def _create_empty_fundamentals(self, symbol: str) -> Fundamentals:
+        """Helper to create an empty Fundamentals object."""
+        return Fundamentals(
+            ticker=symbol.upper(),
+            company_name="Unknown",
+            current_price=0.0,
+            market_cap=0.0,
+            pe_ratio=0.0,
+            forward_pe=0.0,
+            dividend_yield=0.0,
+            earnings_per_share=0.0,
+            data_source="Finnhub",
+            last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
 
     def download_multiple_symbols(
         self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
