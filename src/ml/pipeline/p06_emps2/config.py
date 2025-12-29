@@ -30,7 +30,7 @@ class EMPS2FilterConfig:
     min_vol_rv_ratio: float = 0.3           # Volume/Volatility Ratio > 0.3
 
     # Data parameters
-    lookback_days: int = 7
+    lookback_days: int = 15
     interval: str = "1h"
     atr_period: int = 14
 

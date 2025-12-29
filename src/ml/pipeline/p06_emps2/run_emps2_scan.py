@@ -141,8 +141,8 @@ Examples:
     volatility_group.add_argument(
         '--lookback-days',
         type=int,
-        default=10,
-        help='Lookback period in days (default: 7)'
+        default=15,
+        help='Lookback period in days (default: 15)'
     )
     volatility_group.add_argument(
         '--interval',
