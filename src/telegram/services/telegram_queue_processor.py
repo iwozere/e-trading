@@ -27,6 +27,7 @@ from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 
 from src.notification.service.message_queue_client import get_message_queue_client
 from src.notification.logger import setup_logger
+from src.data.db.services.users_service import users_service
 
 _logger = setup_logger(__name__)
 
@@ -202,24 +203,48 @@ class TelegramQueueProcessor:
 
     def _extract_telegram_chat_id(self, message: Dict[str, Any]) -> Optional[int]:
         """
-        Extract telegram_chat_id from message metadata.
+        Extract telegram_chat_id from message metadata or resolve from recipient_id.
 
         Args:
             message: Message dictionary
 
         Returns:
-            Telegram chat ID or None if not found
+            Telegram chat ID or None if not found/could not be resolved
         """
-        # Check metadata first
+        # 1. Check metadata first (direct chat_id override)
         message_metadata = message.get('message_metadata') or {}
         telegram_chat_id = message_metadata.get("telegram_chat_id")
         if telegram_chat_id:
-            return int(telegram_chat_id)
+            try:
+                return int(telegram_chat_id)
+            except (ValueError, TypeError):
+                self._logger.warning("Invalid telegram_chat_id in metadata: %s", telegram_chat_id)
 
-        # Fall back to recipient_id if it looks like a telegram chat ID
-        recipient_id = message.get('recipient_id', '')
-        if recipient_id and str(recipient_id).isdigit():
-            return int(recipient_id)
+        # 2. Check recipient_id
+        recipient_id = message.get('recipient_id')
+        if recipient_id:
+            # If it's a numeric string that looks like a Telegram ID (usually > 100k)
+            # but we'll try to resolve it as a User ID first if it's small,
+            # or if it's explicitly a User ID.
+
+            try:
+                recipient_id_int = int(recipient_id)
+
+                # If recipient_id is small (e.g. < 1,000,000), it's likely our internal User ID
+                # Telegram IDs are typically much larger integers.
+                if recipient_id_int < 1000000:
+                    self._logger.debug("Attempting to resolve User ID %s to Telegram Chat ID", recipient_id_int)
+                    channels = users_service.get_user_notification_channels(recipient_id_int)
+                    if channels and channels.get('telegram_chat_id'):
+                        resolved_id = channels['telegram_chat_id']
+                        self._logger.debug("Resolved User ID %s to Telegram Chat ID %s", recipient_id_int, resolved_id)
+                        return int(resolved_id)
+
+                # Otherwise, treat it as a direct Chat ID
+                return recipient_id_int
+            except (ValueError, TypeError):
+                # Probably not a numeric ID
+                pass
 
         return None
 
