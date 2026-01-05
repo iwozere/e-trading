@@ -152,6 +152,31 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
 
         return None
 
+    def _to_int(self, value: Any, default: int = 0) -> int:
+        """
+        Robustly convert StockTwits API values to integers.
+        Handles cases where integers are returned as dictionaries with 'total' or 'count'.
+        """
+        if value is None:
+            return default
+
+        if isinstance(value, (int, float)):
+            return int(value)
+
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return default
+
+        if isinstance(value, dict):
+            # Check for common StockTwits nested count fields
+            for key in ["total", "count", "value"]:
+                if key in value:
+                    return self._to_int(value[key], default)
+
+        return default
+
     async def fetch_messages(self, ticker: str, since_ts: Optional[int] = None, limit: int = 200) -> List[Dict[str, Any]]:
         """
         Fetch individual messages for a ticker from StockTwits.
@@ -186,8 +211,8 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
             for m in page:
                 try:
                     # Validate required fields
-                    if not m.get("id"):
-                        _logger.debug("Skipping message without ID for ticker %s", symbol)
+                    if m is None or not m.get("id"):
+                        _logger.debug("Skipping invalid or missing ID message for ticker %s", symbol)
                         continue
 
                     msg = {
@@ -197,10 +222,10 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
                         "user": {
                             "username": m.get("user", {}).get("username", ""),
                             "id": str(m.get("user", {}).get("id", "")),
-                            "followers": int(m.get("user", {}).get("followers", 0)),
+                            "followers": self._to_int(m.get("user", {}).get("followers", 0)),
                         },
-                        "likes": int(m.get("likes", 0)),
-                        "replies": int(m.get("replies", 0)),
+                        "likes": self._to_int(m.get("likes", 0)),
+                        "replies": self._to_int(m.get("replies", 0)),
                         "retweets": 0,  # StockTwits doesn't have retweets, normalize to 0
                         "provider": "stocktwits"
                     }
