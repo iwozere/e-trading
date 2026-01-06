@@ -40,7 +40,8 @@ class EMPS2AlertSender:
     def send_phase2_alert(
         self,
         phase2_df: pd.DataFrame,
-        phase2_csv_path: Optional[Path] = None
+        phase2_csv_path: Optional[Path] = None,
+        sentiment_csv_path: Optional[Path] = None
     ) -> None:
         """
         Send alert for Phase 2 transitions.
@@ -73,12 +74,16 @@ These tickers showed persistent accumulation (5+ days) and are now showing:
 
 See attached CSV for full details."""
 
-        # Prepare attachments if CSV path provided
-        attachments = None
+        # Prepare attachments (flat dictionary: filename -> path)
+        attachments = {}
         if phase2_csv_path and phase2_csv_path.exists():
-            attachments = {
-                'files': [str(phase2_csv_path)]
-            }
+            attachments[phase2_csv_path.name] = str(phase2_csv_path)
+
+        if sentiment_csv_path and sentiment_csv_path.exists():
+            attachments[sentiment_csv_path.name] = str(sentiment_csv_path)
+
+        if not attachments:
+            attachments = None
 
         # Send notification via both Telegram and Email
         try:
@@ -157,12 +162,13 @@ These tickers appeared 5+ times in the last 10 days, showing persistent accumula
 
 Watchlist updated. See attached CSV for full details."""
 
-        # Prepare attachments if CSV path provided
-        attachments = None
+        # Prepare attachments (flat dictionary: filename -> path)
+        attachments = {}
         if phase1_csv_path and phase1_csv_path.exists():
-            attachments = {
-                'files': [str(phase1_csv_path)]
-            }
+            attachments[phase1_csv_path.name] = str(phase1_csv_path)
+
+        if not attachments:
+            attachments = None
 
         # Send notification via both Telegram and Email
         try:

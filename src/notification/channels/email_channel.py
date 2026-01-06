@@ -392,6 +392,17 @@ class EmailChannel(NotificationChannel):
         """Add attachments to email message."""
         max_size_bytes = self.config["max_attachment_size_mb"] * 1024 * 1024
 
+        # Handle nested dictionary format: {"files": ["path1", "path2"]}
+        if isinstance(attachments, dict) and "files" in attachments and len(attachments) == 1:
+            files_list = attachments["files"]
+            if isinstance(files_list, list):
+                # Convert to flat dictionary for processing
+                flat_attachments = {}
+                for f in files_list:
+                    p = Path(f)
+                    flat_attachments[p.name] = str(f)
+                attachments = flat_attachments
+
         for filename, attachment_data in attachments.items():
             try:
                 if isinstance(attachment_data, bytes):
@@ -413,7 +424,7 @@ class EmailChannel(NotificationChannel):
 
                     msg.attach(attachment)
 
-                elif isinstance(attachment_data, str):
+                elif isinstance(attachment_data, (str, Path)):
                     # File path
                     file_path = Path(attachment_data)
                     if not file_path.exists():

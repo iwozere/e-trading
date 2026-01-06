@@ -229,6 +229,9 @@ class EMPS2Pipeline:
             # Stage 7: Sentiment Data Collection (social momentum metrics)
             sentiment_df = self._stage7_sentiment_data_collection(phase2_df)
 
+            # Stage 8: Send Alerts (with sentiment data)
+            self._stage8_send_alerts(phase1_df, phase2_df)
+
             # Generate summary
             if self.config.generate_summary:
                 self._generate_summary(
@@ -446,26 +449,12 @@ class EMPS2Pipeline:
         _logger.info("Phase 2 detection: %d candidates", len(phase2_df))
 
         # Generate outputs
-        output_files = self.rolling_memory.generate_outputs(
+        self._output_files = self.rolling_memory.generate_outputs(
             frequency_df=frequency_df,
             phase1_df=phase1_df,
             phase2_df=phase2_df,
             output_dir=self._results_dir
         )
-
-        # Send alerts
-        if self.alert_sender:
-            if not phase2_df.empty and self.config.rolling_memory_config.alert_on_phase2:
-                self.alert_sender.send_phase2_alert(
-                    phase2_df=phase2_df,
-                    phase2_csv_path=output_files.get('phase2_alerts')
-                )
-
-            if not phase1_df.empty and self.config.rolling_memory_config.alert_on_phase1:
-                self.alert_sender.send_phase1_alert(
-                    phase1_df=phase1_df,
-                    phase1_csv_path=output_files.get('phase1_watchlist')
-                )
 
         _logger.info("Stage 4 complete: Phase 1=%d, Phase 2=%d",
                     len(phase1_df), len(phase2_df))
@@ -529,8 +518,10 @@ class EMPS2Pipeline:
             if not sentiment_df.empty:
                 sentiment_output_path = self._results_dir / "10_sentiments.csv"
                 sentiment_df.to_csv(sentiment_output_path, index=False)
+                self._sentiment_csv_path = sentiment_output_path
                 _logger.info("Saved sentiment data to: %s (%d tickers)", sentiment_output_path, len(sentiment_df))
             else:
+                self._sentiment_csv_path = None
                 _logger.warning("No sentiment data collected to save")
 
             return sentiment_df
@@ -539,6 +530,38 @@ class EMPS2Pipeline:
             _logger.exception("Error collecting sentiment data:")
             return pd.DataFrame()
 
+
+    def _stage8_send_alerts(self, phase1_df: pd.DataFrame, phase2_df: pd.DataFrame) -> None:
+        """
+        Stage 8: Send alerts with all collected data (including sentiment).
+        """
+        if not self.alert_sender:
+            return
+
+        _logger.info("-" * 70)
+        _logger.info("Stage 8: Sending Alerts")
+        _logger.info("-" * 70)
+
+        # Send Phase 2 alerts (with sentiment CSV)
+        if not phase2_df.empty and self.config.rolling_memory_config.alert_on_phase2:
+            sentiment_path = getattr(self, "_sentiment_csv_path", None)
+            phase2_path = self._output_files.get("phase2_alerts")
+
+            self.alert_sender.send_phase2_alert(
+                phase2_df=phase2_df,
+                phase2_csv_path=phase2_path,
+                sentiment_csv_path=sentiment_path,
+            )
+
+        # Send Phase 1 alerts
+        if not phase1_df.empty and self.config.rolling_memory_config.alert_on_phase1:
+            phase1_path = self._output_files.get("phase1_watchlist")
+            self.alert_sender.send_phase1_alert(
+                phase1_df=phase1_df,
+                phase1_csv_path=phase1_path,
+            )
+
+        _logger.info("Stage 8 complete: Alerts sent")
 
     def _stage6_create_final_results(
         self,

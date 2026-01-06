@@ -339,8 +339,8 @@ class VolatilityFilter:
         """
         try:
             # Debug: Print DataFrame info
-            _logger.debug("DataFrame shape: %s", df.shape)
-            _logger.debug("DataFrame head:\n%s", df[['high', 'low', 'close']].head())
+            #_logger.debug("DataFrame shape: %s", df.shape)
+            #_logger.debug("DataFrame head:\n%s", df[['high', 'low', 'close']].head())
 
             # Check for required columns
             required_columns = ['high', 'low', 'close']
@@ -366,13 +366,13 @@ class VolatilityFilter:
             close = df['close'].values
 
             # Debug: Print first few values
-            _logger.debug("First few values - High: %s, Low: %s, Close: %s", high[:5], low[:5], close[:5])
+            #_logger.debug("First few values - High: %s, Low: %s, Close: %s", high[:5], low[:5], close[:5])
 
             # Calculate ATR
             atr_values = talib.ATR(high, low, close, timeperiod=self.config.atr_period)
 
             # Debug: Print ATR values
-            _logger.debug("ATR values: %s", atr_values)
+            #_logger.debug("ATR values: %s", atr_values)
 
             # Return latest ATR (skip NaN values)
             valid_atr = atr_values[~pd.isna(atr_values)]

@@ -285,6 +285,17 @@ class TelegramQueueProcessor:
             attachments: Dictionary of filename -> attachment data
             reply_to_message_id: Optional message ID to reply to
         """
+        # Handle nested dictionary format: {"files": ["path1", "path2"]}
+        if isinstance(attachments, dict) and "files" in attachments and len(attachments) == 1:
+            files_list = attachments["files"]
+            if isinstance(files_list, list):
+                # Convert to flat dictionary for processing
+                flat_attachments = {}
+                for f in files_list:
+                    p = Path(f)
+                    flat_attachments[p.name] = str(f)
+                attachments = flat_attachments
+
         # Send each attachment as a document
         for filename, attachment_data in attachments.items():
             try:
