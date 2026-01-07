@@ -391,8 +391,9 @@ class EmailChannel(NotificationChannel):
     async def _add_attachments(self, msg: MIMEMultipart, attachments: Dict[str, Any]):
         """Add attachments to email message."""
         max_size_bytes = self.config["max_attachment_size_mb"] * 1024 * 1024
+        import base64
 
-        # Handle nested dictionary format: {"files": ["path1", "path2"]}
+        # Handle nested list format: {"files": ["path1", "path2"]}
         if isinstance(attachments, dict) and "files" in attachments and len(attachments) == 1:
             files_list = attachments["files"]
             if isinstance(files_list, list):
@@ -405,54 +406,58 @@ class EmailChannel(NotificationChannel):
 
         for filename, attachment_data in attachments.items():
             try:
+                # Determine what the actual data is
+                file_data = None
+
                 if isinstance(attachment_data, bytes):
-                    # Bytes data
-                    if len(attachment_data) > max_size_bytes:
-                        _logger.warning(
-                            "Attachment %s too large (%d bytes), skipping",
-                            filename, len(attachment_data)
-                        )
-                        continue
-
-                    # Determine MIME type based on file extension
-                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
-                        attachment = MIMEImage(attachment_data)
-                        attachment.add_header("Content-Disposition", f"attachment; filename={filename}")
-                    else:
-                        attachment = MIMEApplication(attachment_data)
-                        attachment.add_header("Content-Disposition", f"attachment; filename={filename}")
-
-                    msg.attach(attachment)
-
+                    file_data = attachment_data
                 elif isinstance(attachment_data, (str, Path)):
-                    # File path
                     file_path = Path(attachment_data)
-                    if not file_path.exists():
+                    if file_path.exists():
+                        with open(file_path, "rb") as f:
+                            file_data = f.read()
+                    else:
                         _logger.warning("Attachment file not found: %s", attachment_data)
                         continue
+                elif isinstance(attachment_data, dict):
+                    # Wrapped format from NotificationServiceClient
+                    if attachment_data.get("type") == "base64":
+                        file_data = base64.b64decode(attachment_data["data"])
+                    elif attachment_data.get("type") == "file_path":
+                        file_path = Path(attachment_data.get("path", ""))
+                        if file_path.exists():
+                            with open(file_path, "rb") as f:
+                                file_data = f.read()
+                        else:
+                            _logger.warning("Attachment file path not found: %s", file_path)
+                            continue
 
-                    if file_path.stat().st_size > max_size_bytes:
-                        _logger.warning(
-                            "Attachment file %s too large (%d bytes), skipping",
-                            attachment_data, file_path.stat().st_size
-                        )
-                        continue
+                if not file_data:
+                    _logger.warning("Could not resolve attachment data for %s", filename)
+                    continue
 
-                    with open(file_path, "rb") as f:
-                        file_data = f.read()
+                if len(file_data) > max_size_bytes:
+                    _logger.warning(
+                        "Attachment %s too large (%d bytes), skipping",
+                        filename, len(file_data)
+                    )
+                    continue
 
-                    # Determine MIME type
-                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
-                        attachment = MIMEImage(file_data)
-                    elif filename.lower().endswith(('.txt', '.log')):
+                # Determine MIME type and create attachment
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                    attachment = MIMEImage(file_data)
+                elif filename.lower().endswith(('.txt', '.log')):
+                    try:
                         attachment = MIMEText(file_data.decode('utf-8', errors='ignore'))
-                    else:
-                        attachment = MIMEBase("application", "octet-stream")
-                        attachment.set_payload(file_data)
-                        encoders.encode_base64(attachment)
+                    except Exception:
+                        attachment = MIMEApplication(file_data)
+                else:
+                    attachment = MIMEBase("application", "octet-stream")
+                    attachment.set_payload(file_data)
+                    encoders.encode_base64(attachment)
 
-                    attachment.add_header("Content-Disposition", f"attachment; filename={filename}")
-                    msg.attach(attachment)
+                attachment.add_header("Content-Disposition", f"attachment; filename={filename}")
+                msg.attach(attachment)
 
             except Exception as e:
                 _logger.error("Failed to attach file %s: %s", filename, e)

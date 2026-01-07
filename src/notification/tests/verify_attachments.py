@@ -10,7 +10,14 @@ async def test_attachment_resolution():
     print("Testing attachment resolution logic...")
 
     # Mock config
-    channel_config = config.channels.email.dict()
+    channel_config = {
+        "max_attachment_size_mb": 10,
+        "smtp_host": "localhost",
+        "smtp_port": 587,
+        "smtp_username": "test@example.com",
+        "smtp_password": "test",
+        "from_email": "test@example.com"
+    }
     channel = EmailChannel("email", channel_config)
 
     # Create dummy files
@@ -41,6 +48,18 @@ async def test_attachment_resolution():
         msg = MockMIME()
         await channel._add_attachments(msg, attachments_flat)
         print(f"Flat format resulted in {len(msg.parts)} attachments")
+        assert len(msg.parts) == 2
+
+        # 3. Test wrapped format (the current DB structure)
+        attachments_wrapped = {
+            p1.name: {"path": str(p1), "type": "file_path"},
+            p2.name: {"path": str(p2), "type": "file_path"}
+        }
+        print(f"Testing wrapped format: {attachments_wrapped}")
+
+        msg = MockMIME()
+        await channel._add_attachments(msg, attachments_wrapped)
+        print(f"Wrapped format resulted in {len(msg.parts)} attachments")
         assert len(msg.parts) == 2
 
         print("✅ Attachment resolution tests passed!")
