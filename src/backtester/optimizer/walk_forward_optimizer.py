@@ -6,6 +6,9 @@ This module orchestrates walk-forward optimization by:
 2. Running optimization on in-sample (IS) data for each window
 3. Saving IS optimization results for later validation
 
+performance_comparer.py
+walk_forward_validator.py
+
 The optimizer ensures temporal integrity by never training on future data.
 """
 

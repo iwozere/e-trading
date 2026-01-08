@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 import asyncio
 import traceback
 import asyncpg
+import json
+import subprocess
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -585,42 +587,7 @@ class SchedulerService:
         Execute data processing job via subprocess.
 
         This method runs Python scripts as subprocesses and handles their output.
-
-        task_params structure:
-        {
-            "script_path": "src/data/vix.py",
-            "script_args": [],
-            "timeout_seconds": 600,
-            "notification_rules": {
-                "conditions": [
-                    {
-                        "check_field": "vix_current",
-                        "operator": ">=",
-                        "threshold": 20,
-                        "channels": ["email"]
-                    },
-                    {
-                        "check_field": "vix_current",
-                        "operator": ">=",
-                        "threshold": 25,
-                        "channels": ["email", "telegram"]
-                    }
-                ]
-            }
-        }
-
-        Args:
-            schedule: Schedule object
-            run_record: ScheduleRun object
-
-        Returns:
-            Dictionary with execution results
         """
-        import subprocess
-        import json
-        import sys
-        from pathlib import Path
-
         task_params = schedule.task_params or {}
         script_path = task_params.get("script_path")
         script_args = task_params.get("script_args", [])
@@ -819,7 +786,32 @@ class SchedulerService:
         if "telegram" in matching_channels and user_channels.get("telegram_chat_id"):
             notification_data["telegram_chat_id"] = user_channels["telegram_chat_id"]
 
-        return True
+        try:
+            # Create notification message in database
+            # The notification processor will handle delivery to channels
+            message_data = {
+                "message_type": "REPORT",
+                "channels": list(matching_channels),
+                "recipient_id": str(schedule.user_id),
+                "content": {
+                    "title": message_title,
+                    "body": message_body,
+                    "metadata": notification_data
+                },
+                "priority": "NORMAL",
+                "source": "scheduler_data_processing"
+            }
+
+            message = self.notification_db_service.create_message(message_data)
+
+            _logger.info("Created notification message %d for schedule %d to channels: %s",
+                       message.id, schedule.id, matching_channels)
+
+            return True
+
+        except Exception as e:
+            _logger.error("Error creating notification for schedule %d: %s", schedule.id, e)
+            return False
 
     async def _listen_for_db_changes(self) -> None:
         """
@@ -865,33 +857,6 @@ class SchedulerService:
                         await conn.close()
                     except Exception:
                         pass
-
-        try:
-            # Create notification message in database
-            # The notification processor will handle delivery to channels
-            message_data = {
-                "message_type": "REPORT",
-                "channels": list(matching_channels),
-                "recipient_id": str(schedule.user_id),
-                "content": {
-                    "title": message_title,
-                    "body": message_body,
-                    "metadata": notification_data
-                },
-                "priority": "NORMAL",
-                "source": "scheduler_data_processing"
-            }
-
-            message = self.notification_db_service.create_message(message_data)
-
-            _logger.info("Created notification message %d for schedule %d to channels: %s",
-                       message.id, schedule.id, matching_channels)
-
-            return True
-
-        except Exception as e:
-            _logger.error("Error creating notification for schedule %d: %s", schedule.id, e)
-            return False
 
     def _check_condition(self, condition: Dict[str, Any], script_result: Dict[str, Any]) -> bool:
         """
