@@ -85,18 +85,29 @@ See attached CSV for full details."""
         if not attachments:
             attachments = None
 
-        # Send notification via both Telegram and Email
+        # Send notification via Telegram and Email separately
+        # This avoids a race condition where one service marks a multi-channel message
+        # as delivered before the other service can process it.
         try:
-            # Run async notification
+            # 1. Send Telegram alert (handled by Telegram Bot)
             asyncio.run(self._send_async_notification(
                 title=title,
                 message=message,
                 attachments=attachments,
-                channels=['telegram', 'email']
+                channels=['telegram']
             ))
-            _logger.info("Sent Phase 2 alert for %d candidates", count)
+
+            # 2. Send Email alert (handled by Notification Service)
+            asyncio.run(self._send_async_notification(
+                title=title,
+                message=message,
+                attachments=attachments,
+                channels=['email']
+            ))
+
+            _logger.info("Sent Phase 2 alerts for %d candidates (Telegram + Email)", count)
         except Exception:
-            _logger.exception("Failed to send Phase 2 alert")
+            _logger.exception("Failed to send Phase 2 alerts")
 
     async def _send_async_notification(
         self,
@@ -170,15 +181,24 @@ Watchlist updated. See attached CSV for full details."""
         if not attachments:
             attachments = None
 
-        # Send notification via both Telegram and Email
+        # Send notification via Telegram and Email separately
         try:
-            # Run async notification
+            # 1. Send Telegram alert
             asyncio.run(self._send_async_notification(
                 title=title,
                 message=message,
                 attachments=attachments,
-                channels=['telegram', 'email']
+                channels=['telegram']
             ))
-            _logger.info("Sent Phase 1 alert for %d candidates", count)
+
+            # 2. Send Email alert
+            asyncio.run(self._send_async_notification(
+                title=title,
+                message=message,
+                attachments=attachments,
+                channels=['email']
+            ))
+
+            _logger.info("Sent Phase 1 alerts for %d candidates (Telegram + Email)", count)
         except Exception:
-            _logger.exception("Failed to send Phase 1 alert")
+            _logger.exception("Failed to send Phase 1 alerts")

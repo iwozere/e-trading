@@ -21,8 +21,15 @@ Unlike P05 EMPS which scores a pre-defined universe, EMPS2 starts from the compl
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Results Storage                               │
-│                results/emps2/YYYY-MM-DD/                        │
+│  Stage 4: Rolling       →  Stage 5: UOA          →  Stage 6:    │
+│  Memory Analysis           Analysis                  Final Results│
+│  (10-day history)         (EODHD)                   (Merge data) │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Stage 7: Sentiment     →  Stage 8: Send          →  Results     │
+│  Data Collection           Alerts                    Storage     │
+│  (StockTwits+Reddit)      (Telegram+Email)          (results/)   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -144,16 +151,24 @@ Stage 1: Download universe → ~8000 tickers
     ↓
 Stage 2: Fundamental filter → ~500-1000 tickers
     ↓
+Stage 2b: Download TRF data → trf.csv volume correction
+    ↓
 Stage 3: Volatility filter → ~50-200 tickers
     ↓
-Create final results (merge fundamental + volatility data)
+Stage 4: Rolling Memory Analysis → Identify accumulation stages
     ↓
-Generate summary (counts, percentages, timing)
+Stage 5: UOA Analysis → Options flow metrics
+    ↓
+Stage 6: Create final results → Merge fundamental + volatility + phase data
+    ↓
+Stage 7: Sentiment Data Collection → Social momentum metrics
+    ↓
+Stage 8: Send Alerts → Dispatch Telegram and Email notifications
     ↓
 Save all files to results/emps2/YYYY-MM-DD/
 ```
 
-#### 6. CLI Interface (`run_emps2_scan.py`)
+#### 10. CLI Interface (`run_emps2_scan.py`)
 
 **Responsibility:** Provide command-line access to pipeline.
 
@@ -185,6 +200,7 @@ results/emps2/
 │   ├── 07_phase1_watchlist.csv           # Phase 1: Quiet Accumulation
 │   ├── 08_phase2_alerts.csv              # Phase 2: Hot Candidates
 │   ├── 09_final_universe.csv             # Final results
+│   ├── 10_sentiments.csv                 # Social metadata for Phase 2
 │   └── summary.json                      # Pipeline summary
 ├── 2025-12-07/  ← Previous day
 │   └── ...
@@ -212,11 +228,6 @@ results/emps2/
 - Columns: ticker, last_price, atr, atr_ratio, price_range, price_high, price_low, vol_zscore, vol_rv_ratio, bars_count
 - Only tickers passing volatility filters, sorted by ATR ratio (highest volatility first)
 
-**09_final_universe.csv:**
-- Merged fundamental + volatility data with phase information
-- Final output for consumption by trading strategies
-- Includes scan_date, scan_timestamp, in_phase1, in_phase2, alert_priority metadata
-
 **06_rolling_candidates.csv:**
 - Columns: ticker, appearance_count, first_seen, last_seen, avg_vol_zscore, max_vol_zscore, avg_vol_rv_ratio, max_vol_rv_ratio, etc.
 - 10-day historical frequency analysis
@@ -226,6 +237,15 @@ results/emps2/
 
 **08_phase2_alerts.csv:**
 - Phase 1 tickers showing acceleration (high priority alerts)
+
+**09_final_universe.csv:**
+- Merged fundamental + volatility data with phase information
+- Final output for consumption by trading strategies
+- Includes scan_date, scan_timestamp, in_phase1, in_phase2, alert_priority metadata
+
+**10_sentiments.csv:**
+- Social metrics for Phase 2 candidates (mentions, sentiment, virality)
+- Used to enrich alerts and provide context for social momentum
 
 **summary.json:**
 - Pipeline statistics (counts at each stage, timing)

@@ -130,6 +130,13 @@ class VolatilityFilter:
                             'vol_rv_ratio': None,
                             'rv_short': None,
                             'rv_long': None,
+                            'z_vol_delta': None,
+                            'z_intensity': None,
+                            'z_gap': None,
+                            'z_atr': None,
+                            'phase1_flag': False,
+                            'phase2_flag': False,
+                            'entry_flag': False,
                             'bars_count': 0,
                             'trf_correction_factor': None
                         })
@@ -150,6 +157,13 @@ class VolatilityFilter:
                             'vol_rv_ratio': None,
                             'rv_short': None,
                             'rv_long': None,
+                            'z_vol_delta': None,
+                            'z_intensity': None,
+                            'z_gap': None,
+                            'z_atr': None,
+                            'phase1_flag': False,
+                            'phase2_flag': False,
+                            'entry_flag': False,
                             'bars_count': len(df),
                             'trf_correction_factor': None
                         })
@@ -190,6 +204,13 @@ class VolatilityFilter:
                             'vol_rv_ratio': None,
                             'rv_short': None,
                             'rv_long': None,
+                            'z_vol_delta': None,
+                            'z_intensity': None,
+                            'z_gap': None,
+                            'z_atr': None,
+                            'phase1_flag': False,
+                            'phase2_flag': False,
+                            'entry_flag': False,
                             'bars_count': len(df)
                         }
                         diag_entry['status'] = 'FAILED'
@@ -210,6 +231,13 @@ class VolatilityFilter:
                         'vol_rv_ratio': None,
                         'rv_short': None,
                         'rv_long': None,
+                        'z_vol_delta': None,
+                        'z_intensity': None,
+                        'z_gap': None,
+                        'z_atr': None,
+                        'phase1_flag': False,
+                        'phase2_flag': False,
+                        'entry_flag': False,
                         'bars_count': 0
                     })
                     continue
@@ -274,10 +302,18 @@ class VolatilityFilter:
             # Volume/Volatility Ratio - Detects accumulation (high volume + low price volatility)
             vol_rv_ratio, rv_short, rv_long = self._compute_volume_volatility_ratio(df)
 
+            # NEW: Advanced volume delta and phase metrics
+            adv_metrics = self._compute_advanced_metrics(df)
+
             # Build metrics dictionary with all calculated values
             metrics = {
                 'ticker': ticker,
                 'last_price': last_price,
+                'open': df['open'].iloc[-1],
+                'high': df['high'].iloc[-1],
+                'low': df['low'].iloc[-1],
+                'close': df['close'].iloc[-1],
+                'volume': df['volume'].iloc[-1],
                 'atr': atr,
                 'atr_ratio': atr_ratio,
                 'price_range': price_range,
@@ -287,6 +323,7 @@ class VolatilityFilter:
                 'vol_rv_ratio': vol_rv_ratio,
                 'rv_short': rv_short,
                 'rv_long': rv_long,
+                **adv_metrics,
                 'bars_count': len(df)
             }
 
@@ -301,25 +338,17 @@ class VolatilityFilter:
                                 ticker, len(df), price_low, price_high, df[['high', 'low', 'close']].tail())
                 return False, metrics, 'atr_calculation_failed'
 
-            # ATR/Price ratio
-            if atr_ratio < self.config.min_volatility_threshold:
-                return False, metrics, f'atr_ratio_too_low ({atr_ratio:.4f} < {self.config.min_volatility_threshold})'
+            # Define pass criteria based on new flags
+            # A ticker passes if it's in Phase 1 (Accumulation) OR Phase 2 (Breakout)
+            is_phase1 = metrics.get('phase1_flag', False)
+            is_phase2 = metrics.get('phase2_flag', False)
 
-            # Price range filter
-            if price_range < self.config.min_price_range:
-                return False, metrics, f'price_range_too_low ({price_range:.4f} < {self.config.min_price_range})'
-
-            # Volume Z-Score
-            if vol_zscore < self.config.min_vol_zscore:
-                return False, metrics, f'vol_zscore_too_low ({vol_zscore:.2f} < {self.config.min_vol_zscore})'
-
-            # Volume/Volatility Ratio (accumulation detection)
-            if vol_rv_ratio < self.config.min_vol_rv_ratio:
-                return False, metrics, f'vol_rv_ratio_too_low ({vol_rv_ratio:.2f} < {self.config.min_vol_rv_ratio})'
+            if not (is_phase1 or is_phase2):
+                return False, metrics, 'not_in_phase_1_or_2'
 
             # Passed all filters
-            _logger.debug("%s passed: price=$%.2f, ATR/Price=%.3f, range=%.3f, vol_zscore=%.2f, vol_rv_ratio=%.2f",
-                         ticker, last_price, atr_ratio, price_range, vol_zscore, vol_rv_ratio)
+            _logger.debug("%s passed: phase1=%s, phase2=%s, price=$%.2f, ATR/Price=%.3f, range=%.3f, vol_zscore=%.2f, vol_rv_ratio=%.2f",
+                         ticker, is_phase1, is_phase2, last_price, atr_ratio, price_range, vol_zscore, vol_rv_ratio)
 
             return True, metrics, 'all_filters_passed'
 
@@ -505,6 +534,101 @@ class VolatilityFilter:
             _logger.exception("Error computing Volume/Volatility ratio:")
             return 0.0, 0.0, 0.0
 
+    def _compute_advanced_metrics(self, df: pd.DataFrame, lookback: int = 20) -> dict:
+        """
+        Calculate advanced conviction and breakout metrics.
+
+        Metrics:
+        - vol_delta: conviction volume
+        - intensity: market energy
+        - close_pos: bar closing position
+        - gap: price gap from previous close
+
+        Z-Scores for: volume, vol_delta, intensity, gap, atr.
+
+        Args:
+            df: OHLCV DataFrame
+            lookback: Window for Z-score calculation
+
+        Returns:
+            Dictionary of calculated metrics and flags
+        """
+        try:
+            if len(df) < lookback + 1:
+                return {}
+
+            # 1. Base Metrics Calculation
+            eps = 1e-6
+            df = df.copy()
+
+            # vol_delta = volume * (close - open) / (high - low)
+            df['vol_delta'] = df['volume'] * (df['close'] - df['open']) / (df['high'] - df['low'] + eps)
+
+            # intensity = range * volume
+            df['intensity'] = (df['high'] - df['low']) * df['volume']
+
+            # gap = close - prev_close
+            df['gap'] = df['close'].diff()
+
+            # close_pos = (close - low) / (high - low)
+            df['close_pos'] = (df['close'] - df['low']) / (df['high'] - df['low'] + eps)
+
+            # 2. Rolling Z-Scores
+            def z_score(series):
+                return (series - series.rolling(window=lookback).mean()) / (series.rolling(window=lookback).std() + eps)
+
+            df['z_volume'] = z_score(df['volume'])
+            df['z_vol_delta'] = z_score(df['vol_delta'])
+            df['z_intensity'] = z_score(df['intensity'])
+            df['z_gap'] = z_score(df['gap'])
+
+            # ATR Z-score (using the ATR values computed earlier in the pipeline)
+            # We need to compute it here on a rolling basis for the Z-score
+            atr_values = talib.ATR(df['high'].values, df['low'].values, df['close'].values, timeperiod=self.config.atr_period)
+            df['atr_vals'] = atr_values
+            df['z_atr'] = z_score(df['atr_vals'])
+
+            # 3. Phase Logic
+            last = df.iloc[-1]
+            prev = df.iloc[-2] if len(df) > 1 else last
+
+            # Phase 1: Quiet Accumulation
+            phase1_flag = (
+                last['z_volume'] > 1.0 and
+                last['z_gap'] > self.config.min_z_gap
+            )
+
+            # Phase 2: Early Public Signal (Breakout)
+            phase2_flag = (
+                last['z_vol_delta'] > self.config.min_z_vol_delta and
+                (
+                    last['z_intensity'] > self.config.min_z_intensity or
+                    last['z_atr'] > self.config.min_z_atr or
+                    last['close_pos'] > self.config.min_close_pos
+                )
+            )
+
+            # Phase 3: Entry Timing
+            entry_flag = phase2_flag and (last['close'] > prev['high'])
+
+            return {
+                'vol_delta': last['vol_delta'],
+                'z_vol_delta': last['z_vol_delta'],
+                'intensity': last['intensity'],
+                'z_intensity': last['z_intensity'],
+                'gap': last['gap'],
+                'z_gap': last['z_gap'],
+                'z_atr': last['z_atr'],
+                'close_pos': last['close_pos'],
+                'phase1_flag': bool(phase1_flag),
+                'phase2_flag': bool(phase2_flag),
+                'entry_flag': bool(entry_flag)
+            }
+
+        except Exception:
+            _logger.exception("Error computing advanced metrics:")
+            return {}
+
     def _load_trf_volume_corrections(self) -> Dict[str, float]:
         """
         Load TRF data and calculate volume correction factors.
@@ -587,8 +711,14 @@ class VolatilityFilter:
 
             df = pd.DataFrame(results_data)
 
-            # Sort by ATR ratio (highest volatility first)
-            df = df.sort_values('atr_ratio', ascending=False)
+            # Sort by Phase 2 (most explosive) then Phase 1 (accumulation)
+            # Create a sort key
+            df['sort_rank'] = 0
+            df.loc[df['phase1_flag'], 'sort_rank'] = 1
+            df.loc[df['phase2_flag'], 'sort_rank'] = 2
+
+            df = df.sort_values(['sort_rank', 'atr_ratio'], ascending=[False, False])
+            df = df.drop(columns=['sort_rank'])
 
             output_path = self._results_dir / "05_volatility_filtered.csv"
             df.to_csv(output_path, index=False)
@@ -596,10 +726,11 @@ class VolatilityFilter:
             _logger.info("Saved volatility filter results to: %s", output_path)
 
             # Log top candidates
-            _logger.info("Top 10 by ATR/Price ratio:")
+            _logger.info("Top candidates by Phase & ATR/Price:")
             for _, row in df.head(10).iterrows():
-                _logger.info("  %s: ATR/Price=%.3f, Range=%.3f, Price=$%.2f",
-                            row['ticker'], row['atr_ratio'], row['price_range'], row['last_price'])
+                phase = "PH2" if row['phase2_flag'] else "PH1"
+                _logger.info("  %s [%s]: ATR/Price=%.3f, Range=%.3f, Price=$%.2f",
+                            row['ticker'], phase, row['atr_ratio'], row['price_range'], row['last_price'])
 
         except Exception:
             _logger.exception("Error saving volatility filter results:")
@@ -624,8 +755,15 @@ class VolatilityFilter:
             # Reorder columns for better readability
             column_order = [
                 'ticker', 'status', 'reason',
-                'last_price', 'atr', 'atr_ratio', 'price_range',
-                'vol_zscore', 'vol_rv_ratio', 'rv_short', 'rv_long',
+                'phase1_flag', 'phase2_flag', 'entry_flag',
+                'last_price', 'open', 'high', 'low', 'close', 'volume',
+                'atr', 'atr_ratio', 'price_range',
+                'vol_zscore', 'vol_rv_ratio',
+                'vol_delta', 'z_vol_delta',
+                'intensity', 'z_intensity',
+                'gap', 'z_gap',
+                'z_atr', 'close_pos',
+                'rv_short', 'rv_long',
                 'price_high', 'price_low', 'bars_count', 'trf_correction_factor'
             ]
 

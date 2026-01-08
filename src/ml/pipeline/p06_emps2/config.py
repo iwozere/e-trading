@@ -29,6 +29,13 @@ class EMPS2FilterConfig:
     min_vol_zscore: float = 1.2             # Volume Z-Score > 1.2 (early spike detection)
     min_vol_rv_ratio: float = 0.3           # Volume/Volatility Ratio > 0.3
 
+    # Volume Delta and Refined Phase thresholds
+    min_z_vol_delta: float = 1.5
+    min_z_intensity: float = 1.0
+    min_z_gap: float = 0.5
+    min_z_atr: float = 0.5
+    min_close_pos: float = 0.75
+
     # Data parameters
     lookback_days: int = 15
     interval: str = "1h"

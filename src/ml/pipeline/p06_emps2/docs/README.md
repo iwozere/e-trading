@@ -1,8 +1,8 @@
 # P06 EMPS2 Pipeline - Enhanced Explosive Move Pre-Screener
 
-**Version:** 2.2 (Production - Yesterday Model)
-**Status:** ✅ Production Ready with Yesterday-Based Execution
-**Last Updated:** 2025-12-09
+**Version:** 2.3 (Production - Enhanced Alerting)
+**Status:** ✅ Production Ready with Robust Alerts
+**Last Updated:** 2026-01-07
 
 ---
 
@@ -135,35 +135,38 @@ results/emps2/YYYY-MM-DD/  ← Yesterday's date
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 4: UOA Analysis (NEW v2.3)                            │
+│ Stage 5: UOA Analysis (NEW v2.3)                            │
 │ • Source: EODHD Options API                                 │
 │ • Input: 06_rolling_candidates.csv                          │
-│ • Metrics:                                                  │
-│   - Put/Call Ratio                                          │
-│   - Volume Ratios                                           │
-│   - UOA Score (0-100)                                       │
+│ • Metrics: Put/Call Ratio, Volume Ratios, UOA Score         │
 │ • Output: uoa.csv                                           │
 │ • Time: ~30-60 seconds                                      │
-│ • Cost: EODHD API calls (cached 24h)                        │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ Stage 5: Sentiment Filter (OPTIONAL - LAST)                 │
+│ Stage 6: Final Results Generation                           │
+│ • Logic: Merges fundamentals, volatility, and phase data    │
+│ • Output: 09_final_universe.csv                             │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Stage 7: Sentiment Data Collection (Enriched Alerts)        │
 │ • Source: StockTwits + Reddit (async)                       │
-│ • Filters:                                                  │
-│   - Mentions (24h): >= 10                                   │
-│   - Sentiment score: >= 0.5                                 │
-│   - Bot activity: < 30%                                     │
-│   - Virality index: >= 1.2                                  │
-│   - Unique authors: >= 5                                    │
-│ • Output: ~20-50 tickers                                    │
-│ • Time: 30-90 seconds (async, 8 concurrent)                 │
-│ • Cost: API rate-limited (optional)                         │
+│ • Target: Phase 2 candidates only                           │
+│ • Output: 10_sentiments.csv                                 │
+│ • Time: 30-90 seconds (async)                               │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Stage 8: Send Alerts (Robust Multi-Channel)                 │
+│ • Channels: Telegram + Email (with CSV attachments)         │
+│ • Logic: Split notifications to prevent race conditions     │
+│ • Attachments: 08_phase2_alerts.csv + 10_sentiments.csv     │
 └─────────────────────────────────────────────────────────────┘
                            ↓
                     FINAL OUTPUT
                ~20-50 HIGH-CONVICTION CANDIDATES
-               + UOA Analysis in uoa.csv
+               (Enriched with Social Sentiment)
 ```
 
 ### Why This Sequence?
@@ -652,12 +655,25 @@ min_unique_authors = 5
 - 100 tickers in ~60 seconds
 - Caching: 15-minute TTL (social data changes fast)
 
-**Graceful Degradation**:
-- Pipeline works without sentiment module
-- Returns all tickers if sentiment unavailable
-- Logs warning but doesn't fail
-
 ---
+
+### Stage 8: Send Alerts (Robust Multi-Channel)
+
+**Purpose**: Reliable delivery of high-conviction alerts to Telegram and Email.
+
+**Architecture (Split-Channel Logic)**:
+To prevent race conditions where the Telegram Bot and Notification Service compete for the same message, EMPS2 now dispatches **two separate notifications**:
+1.  **Telegram Message**: Handled by the dedicated Telegram Bot service.
+2.  **Email Message**: Handled by the Notification Service, including CSV attachments.
+
+**Attachments**:
+- `08_phase2_alerts.csv`: Full list of Phase 2 candidates.
+- `10_sentiments.csv`: Real-time social momentum metrics for all Phase 2 tickers.
+
+**Reliability Features**:
+- **Independent Lifecycles**: Failure or delivery in one channel does not affect the other.
+- **Robust Parsing**: `EmailChannel` supports nested and "wrapped" attachment formats used during database fallbacks.
+- **Sequential Context**: Alerts are sent strictly AFTER sentiment data collection is complete.
 
 ## Performance
 
@@ -772,6 +788,13 @@ All results saved to: `results/emps2/YYYY-MM-DD/`
     ```csv
     ticker,appearance_count,latest_vol_zscore,latest_vol_rv_ratio,phase,alert_priority
     GME,8,4.2,2.5,"Phase 2: Early Public Signal",HIGH
+    ...
+    ```
+
+11. **10_sentiments.csv** - Social metadata for Phase 2 candidates
+    ```csv
+    ticker,mentions,sentiment,virality,bot_pct,unique_authors
+    GME,150,0.75,1.8,0.12,45
     ...
     ```
 

@@ -14,6 +14,10 @@
 ### Technical Indicators
 - `TA-Lib >= 0.4.0` - Technical analysis library for ATR calculation
 
+### Social & Performance
+- `psutil >= 6.1.1` - System monitoring for batch optimization
+- `aiohttp` - Async HTTP for sentiment collection
+
 ### Project Dependencies
 - `src.data.downloader.finnhub_data_downloader` - Finnhub integration
 - `src.data.downloader.yahoo_data_downloader` - Yahoo Finance integration
@@ -43,6 +47,16 @@
 - **Rate Limits:** Reasonable (supports batch operations)
 - **API Key:** Not required
 - **Data Availability:** Last 60 days of intraday data
+
+### Sentiment Sources (StockTwits + Reddit)
+- **Purpose:** Social momentum and crowd psychology
+- **API Keys:** Required for StockTwits/Reddit (configured in `src/common/sentiments`)
+- **Interaction:** Async/concurrent calls via `NotificationServiceClient`
+
+### EODHD API
+- **Purpose:** Unusual Options Activity (UOA) data
+- **API Key:** Required
+- **Endpoint:** https://eodhistoricaldata.com/api/options-chain/
 - **Intervals Supported:** 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d
 
 ## System Requirements
@@ -154,4 +168,4 @@ No environment variables required. All configuration is in code.
 
 ---
 
-**Last Updated:** 2025-11-27
+**Last Updated:** 2026-01-07

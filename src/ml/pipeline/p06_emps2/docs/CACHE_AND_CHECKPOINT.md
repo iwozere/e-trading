@@ -96,6 +96,21 @@ cache.clear_all()
 
 ---
 
+## Sentiment Data Cache
+
+### Purpose
+Cache social metrics (mentions, sentiment, virality) to avoid redundant requests during high-frequency scans or retries.
+
+### Implementation
+Sentiment data is cached with a **15-minute TTL** by default in the `src/common/sentiments` module. This ensures that while social data stays reasonably fresh, the pipeline can resume or re-run Stage 7 quickly if needed.
+
+### Configuration
+Managed via the `SentimentFilterConfig` in the pipeline config.
+- `cache_enabled: True`
+- `cache_ttl_minutes: 15`
+
+---
+
 ## Checkpoint System
 
 ### Purpose
