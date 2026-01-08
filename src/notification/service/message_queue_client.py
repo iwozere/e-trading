@@ -98,15 +98,9 @@ class MessageQueueClient:
                             break
 
                 if filtered_messages:
-                    self._logger.info(
-                        "Found %s pending messages for channels %s",
-                        len(filtered_messages), channels
-                    )
-                else:
-                    self._logger.debug(
-                        "No pending messages found for channels %s",
-                        channels
-                    )
+                    self._logger.info("Found %s pending messages for channels %s", len(filtered_messages), channels)
+                #else:
+                #    self._logger.debug("No pending messages found for channels %s", channels)
 
                 return filtered_messages
 
