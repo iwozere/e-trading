@@ -73,12 +73,7 @@ class SystemHealthService(BaseDBService):
             metadata=metadata_json
         )
 
-        _logger.debug(
-            "Updated health for %s.%s: %s",
-            system,
-            component or 'main',
-            status.value
-        )
+        #_logger.debug("Updated health for %s.%s: %s", system, component or 'main', status.value)
         return health_record
 
     @with_uow
