@@ -559,7 +559,16 @@ class FinraDataDownloader(BaseDataDownloader):
             )
             response.raise_for_status()
 
-            token_data = response.json()
+            if not response.text.strip():
+                _logger.error("FINRA Auth API returned an empty response body")
+                raise requests.RequestException("Empty response body from Auth API")
+
+            try:
+                token_data = response.json()
+            except requests.exceptions.JSONDecodeError as e:
+                _logger.error("Failed to decode JSON response from FINRA Auth API. Raw response: %s", response.text)
+                raise requests.RequestException(f"Invalid JSON from Auth API: {str(e)}") from e
+
             self._access_token = token_data["access_token"]
 
             # Cache token for 30 minutes (or use expires_in from response)
@@ -643,7 +652,18 @@ class FinraDataDownloader(BaseDataDownloader):
             # Handle other errors
             response.raise_for_status()
 
-            data = response.json()
+            # Check for empty response body
+            if not response.text.strip():
+                _logger.warning("FINRA TRF API returned an empty response body for %s", date_str)
+                return pd.DataFrame()
+
+            try:
+                data = response.json()
+            except requests.exceptions.JSONDecodeError as e:
+                _logger.error("Failed to decode JSON response from FINRA TRF API for %s. Error: %s. Raw response content: %s",
+                             date_str, str(e), response.text)
+                return pd.DataFrame()
+
             if not data:
                 _logger.warning("No data returned from FINRA API for %s", date_str)
                 return pd.DataFrame()
