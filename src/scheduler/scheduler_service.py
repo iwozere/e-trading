@@ -1251,8 +1251,7 @@ class SchedulerService:
 
     def _on_job_submitted(self, event: JobSubmissionEvent) -> None:
         """Handle job submission events."""
-        _logger.debug("Job submitted: %s (scheduled for: %s)",
-                     event.job_id, event.scheduled_run_time)
+        _logger.debug("Job submitted: %s (scheduled for: %s)", event.job_id, event.scheduled_run_times) # here is plural scheduled_run_times
 
     def _on_job_executed(self, event: JobExecutionEvent) -> None:
         """Handle job execution completion events."""
@@ -1264,5 +1263,4 @@ class SchedulerService:
 
     def _on_job_missed(self, event: JobExecutionEvent) -> None:
         """Handle missed job events."""
-        _logger.warning("Job missed: %s (scheduled for: %s)",
-                       event.job_id, event.scheduled_run_time)
+        _logger.warning("Job missed: %s (scheduled for: %s)", event.job_id, event.scheduled_run_time) # Here is scheduled_run_time (singular)
