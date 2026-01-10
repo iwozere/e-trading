@@ -11,43 +11,67 @@ The strategy enters a position when:
 2. Price is below the lower Bollinger Band
 3. Volume is above its moving average
 
-Parameters:
-    rsi_period (int): Period for RSI calculation (default: 14)
-    rsi_oversold (float): Oversold threshold for RSI (default: 30)
-    bb_period (int): Period for Bollinger Bands calculation (default: 20)
-    bb_stddev (float): Standard deviation multiplier for Bollinger Bands (default: 2.0)
-    volume_ma_period (int): Period for volume moving average (default: 20)
-    use_bb_touch (bool): Whether to use Bollinger Band touch for entry (default: True)
-
-This strategy combines mean reversion (RSI and BB) with volume confirmation
-to identify potential reversal points with strong momentum.
+Configuration Example (New TALib Architecture):
+    {
+        "entry_logic": {
+            "name": "RSIBBVolumeEntryMixin",
+            "indicators": [
+                {
+                    "type": "RSI",
+                    "params": {"timeperiod": 14},
+                    "fields_mapping": {"rsi": "entry_rsi"}
+                },
+                {
+                    "type": "BBANDS",
+                    "params": {"timeperiod": 20, "nbdevup": 2.0, "nbdevdn": 2.0},
+                    "fields_mapping": {
+                        "upperband": "entry_bb_upper",
+                        "middleband": "entry_bb_middle",
+                        "lowerband": "entry_bb_lower"
+                    }
+                },
+                {
+                    "type": "SMA",
+                    "data_inputs": ["volume"],
+                    "params": {"timeperiod": 20},
+                    "fields_mapping": {"sma": "entry_volume_ma"}
+                }
+            ],
+            "logic_params": {
+                "oversold": 30,
+                "use_bb_touch": true,
+                "min_volume_ratio": 1.1
+            }
+        }
+    }
 """
 
 from typing import Any, Dict, Optional
 
 import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
-from src.indicators.adapters.backtrader_wrappers import UnifiedRSIIndicator, UnifiedBollingerBandsIndicator
 from src.notification.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
 class RSIBBVolumeEntryMixin(BaseEntryMixin):
-    """Entry mixin based on RSI, Bollinger Bands, and Volume"""
+    """Entry mixin based on RSI, Bollinger Bands, and Volume.
+
+    Supports both new TALib-based architecture (indicators created by strategy)
+    and legacy architecture (indicators created by mixin).
+    """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
+
+        # Legacy architecture support
         self.rsi_name = "entry_rsi"
         self.bb_name = "entry_bb"
         self.vol_ma_name = "entry_volume_ma"
-
         self.rsi = None
         self.bb = None
-        self.bb_bot = None
-        self.bb_mid = None
-        self.bb_top = None
         self.sma = None
 
         # Detect architecture mode
@@ -84,22 +108,20 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
         super().init_entry(strategy, additional_params)
 
     def _init_indicators(self):
-        """Initialize indicators (legacy architecture only).
-
-        In new architecture, indicators are created by the strategy
-        and accessed via get_indicator().
-        """
+        """Initialize indicators (legacy architecture only)."""
         if self.use_new_architecture:
-            # New architecture: indicators already created by strategy
             return
 
-        # Legacy architecture: create indicators in mixin
-        logger.debug("RSIBBVolumeEntryMixin._init_indicators called (legacy architecture)")
         if not hasattr(self, "strategy"):
             logger.error("No strategy available in _init_indicators")
             return
 
         try:
+            from src.indicators.adapters.backtrader_wrappers import (
+                UnifiedRSIIndicator,
+                UnifiedBollingerBandsIndicator
+            )
+
             rsi_period = self.get_param("e_rsi_period")
             bb_period = self.get_param("e_bb_period")
             bb_dev_factor = self.get_param("e_bb_dev")
@@ -133,79 +155,35 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             self.register_indicator(self.bb_name, self.bb)
             self.register_indicator(self.vol_ma_name, self.sma)
 
-            logger.debug("Legacy indicators initialized: RSI(period=%d), BB(period=%d, dev=%s), Volume MA(period=%d)",
-                        rsi_period, bb_period, bb_dev_factor, sma_period)
-
         except Exception:
             logger.exception("Error initializing indicators: ")
             raise
 
-    def are_indicators_ready(self) -> bool:
-        """Check if indicators are ready to be used"""
+    def get_minimum_lookback(self) -> int:
+        """Returns the minimum number of bars required."""
         if self.use_new_architecture:
-            # New architecture: check strategy's indicators
-            if not hasattr(self.strategy, 'indicators') or not self.strategy.indicators:
-                return False
-
-            # Check if required indicators exist
-            required_indicators = ['entry_rsi', 'entry_bb_lower', 'entry_bb_middle', 'entry_volume_ma']
-            for ind_alias in required_indicators:
-                if ind_alias not in self.strategy.indicators:
-                    return False
-
-            # Check if we can access values
-            try:
-                _ = self.get_indicator('entry_rsi')
-                _ = self.get_indicator('entry_bb_lower')
-                _ = self.get_indicator('entry_bb_middle')
-                _ = self.get_indicator('entry_volume_ma')
-                return True
-            except (IndexError, KeyError, AttributeError):
-                return False
-
+            return max(
+                self.get_param("rsi_period", 14),
+                self.get_param("bb_period", 20),
+                self.get_param("vol_ma_period", 20)
+            )
         else:
-            # Legacy architecture: check mixin's indicators
-            if not super().are_indicators_ready():
-                return False
+            return max(
+                self.get_param("e_rsi_period", 14),
+                self.get_param("e_bb_period", 20),
+                self.get_param("e_vol_ma_period", 20)
+            )
 
-            try:
-                # Check if we have enough data points
-                data_length = len(self.strategy.data)
-                required_length = max(
-                    self.get_param("e_rsi_period"),
-                    self.get_param("e_bb_period"),
-                    self.get_param("e_vol_ma_period")
-                )
-                if data_length < required_length:
-                    return False
-
-                # Check if indicators are registered
-                if (
-                    self.rsi_name not in self.indicators
-                    or self.bb_name not in self.indicators
-                    or self.vol_ma_name not in self.indicators
-                ):
-                    return False
-
-                # Check if we can access the first value of each indicator
-                rsi = self.indicators[self.rsi_name]
-                bb = self.indicators[self.bb_name]
-                vol_ma = self.indicators[self.vol_ma_name]
-
-                # Try to access the first value of each indicator using unified access
-                _ = rsi.rsi[0]
-                _ = bb.lower[0]  # Use unified access
-                _ = vol_ma[0]
-
-                return True
-            except (IndexError, AttributeError):
-                return False
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are initialized."""
+        required = ['entry_rsi', 'entry_bb_lower', 'entry_volume_ma']
+        if self.use_new_architecture:
+            return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        else:
+            return all(name in self.indicators for name in [self.rsi_name, self.bb_name, self.vol_ma_name])
 
     def should_enter(self) -> bool:
-        """Check if we should enter a position.
-
-        Works with both new and legacy architectures.
-        """
+        """Check if we should enter a position."""
         if not self.are_indicators_ready():
             return False
 
@@ -213,32 +191,23 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             current_price = self.strategy.data.close[0]
             current_volume = self.strategy.data.volume[0]
 
-            # Get indicator values based on architecture
+            # Standardized parameter retrieval
+            oversold = self.get_param("oversold") or self.get_param("e_rsi_oversold", 30)
+            use_bb_touch = self.get_param("use_bb_touch", self.get_param("e_use_bb_touch", True))
+            min_volume_ratio = self.get_param("min_volume_ratio", self.get_param("e_min_volume_ratio", 1.1))
+
+            # Unified Indicator Access
             if self.use_new_architecture:
-                # New architecture: access via get_indicator()
                 rsi_value = self.get_indicator('entry_rsi')
                 bb_lower = self.get_indicator('entry_bb_lower')
                 vol_ma = self.get_indicator('entry_volume_ma')
-
-                # Get thresholds from logic_params (new) or fallback to legacy params
-                oversold = self.get_param("oversold") or self.get_param("e_rsi_oversold", 30)
-                use_bb_touch = self.get_param("use_bb_touch", self.get_param("e_use_bb_touch", True))
-                min_volume_ratio = self.get_param("min_volume_ratio", self.get_param("e_min_volume_ratio", 1.1))
-
             else:
-                # Legacy architecture: access via mixin's indicators dict
                 rsi = self.indicators[self.rsi_name]
                 bb = self.indicators[self.bb_name]
                 vol_ma_ind = self.indicators[self.vol_ma_name]
-
                 rsi_value = rsi.rsi[0]
                 bb_lower = bb.lower[0]
                 vol_ma = vol_ma_ind[0]
-
-                # Get thresholds from legacy params
-                oversold = self.get_param("e_rsi_oversold", 30)
-                use_bb_touch = self.get_param("e_use_bb_touch", True)
-                min_volume_ratio = self.get_param("e_min_volume_ratio", 1.1)
 
             # Check RSI
             rsi_condition = rsi_value <= oversold
@@ -252,14 +221,14 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             # Check Volume
             volume_condition = current_volume > vol_ma * min_volume_ratio
 
-            return_value = rsi_condition and bb_condition and volume_condition
-            if return_value:
+            entry_signal = rsi_condition and bb_condition and volume_condition
+            if entry_signal:
                 logger.debug(
                     f"ENTRY SIGNAL - Price: {current_price:.2f}, RSI: {rsi_value:.2f} (<= {oversold}), "
                     f"BB Lower: {bb_lower:.2f}, Volume: {current_volume:.0f}, Volume MA: {vol_ma:.0f} "
                     f"(Ratio: {current_volume/vol_ma:.2f} > {min_volume_ratio})"
                 )
-            return return_value
+            return entry_signal
         except Exception:
             logger.exception("Error in should_enter: ")
             return False

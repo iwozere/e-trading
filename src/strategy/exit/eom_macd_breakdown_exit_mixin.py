@@ -13,7 +13,7 @@ Conditions (all must be true):
 3. EOM negative: EOM < 0
 4. Volume > SMA (breakdowns on high volume are more reliable)
 
-Configuration Example:
+Configuration Example (New architecture):
     {
         "exit_logic": {
             "name": "EOMMAcdBreakdownExitMixin",
@@ -48,7 +48,7 @@ Configuration Example:
                 }
             ],
             "logic_params": {
-                "x_support_threshold": 0.002
+                "support_threshold": 0.002
             }
         }
     }
@@ -65,25 +65,16 @@ _logger = setup_logger(__name__)
 
 class EOMMAcdBreakdownExitMixin(BaseExitMixin):
     """
-    Exit mixin for SELL #3: MACD Bearish Turn + Breakdown
+    Exit mixin for SELL #3: MACD Bearish Turn + Breakdown.
 
     Purpose: Combine strong trend shift + structural breakdown.
-
-    Indicators required (provided by strategy):
-        - exit_support: Support level from SupportResistance indicator
-        - exit_macd: MACD line
-        - exit_macd_signal: MACD signal line
-        - exit_macd_hist: MACD histogram
-        - exit_eom: EOM value
-        - exit_volume_sma: Volume SMA for confirmation
-
-    Parameters:
-        x_support_threshold: Support breakdown threshold (default: 0.002 = 0.2%)
+    Supports both new architecture and legacy configurations.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
+        self.use_new_architecture = False
         self._exit_reason = ""
 
     def get_required_params(self) -> list:
@@ -94,19 +85,45 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_support_threshold": 0.002,  # 0.2% support breakdown threshold
+            "x_support_threshold": 0.002,
+            "macd_fast_period": 12,
+            "macd_slow_period": 26,
+            "macd_signal_period": 9,
+            "eom_period": 14,
+            "vol_ma_period": 20,
+            "resistance_lookback": 2,
         }
 
-    def _init_indicators(self):
-        """
-        Initialize indicators (new architecture only).
+    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+        """Standardize architecture detection."""
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+        else:
+            self.use_new_architecture = False
+        super().init_exit(strategy, additional_params)
 
-        In new architecture, indicators are created by the strategy
-        and accessed via get_indicator().
-        """
-        # New architecture: indicators already created by strategy
-        #_logger.debug("EOMMAcdBreakdownExitMixin: indicators provided by strategy")
+    def _init_indicators(self):
+        """Indicators managed by strategy in unified architecture."""
         pass
+
+    def get_minimum_lookback(self) -> int:
+        """Returns the minimum number of bars required."""
+        periods = [
+            self.get_param("macd_slow_period", 26) + self.get_param("macd_signal_period", 9),
+            self.get_param("eom_period", 14),
+            self.get_param("vol_ma_period", 20),
+            self.get_param("resistance_lookback", 2) * 5
+        ]
+        return max(periods)
+
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are initialized."""
+        required = [
+            'exit_support', 'exit_macd', 'exit_macd_signal', 'exit_macd_hist', 'exit_eom', 'exit_volume_sma'
+        ]
+        if hasattr(self.strategy, 'indicators') and self.strategy.indicators:
+            return all(alias in self.strategy.indicators for alias in required)
+        return False
 
     def should_exit(self) -> bool:
         """
@@ -115,6 +132,9 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
         Returns:
             bool: True if all exit conditions are met
         """
+        if not self.strategy.position:
+            return False
+
         if not self.are_indicators_ready():
             return False
 
@@ -123,23 +143,24 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             close = self.strategy.data.close[0]
             volume = self.strategy.data.volume[0]
 
-            # Get indicator values
+            # Unified Indicator Access
             support = self.get_indicator('exit_support')
             macd = self.get_indicator('exit_macd')
             macd_signal = self.get_indicator('exit_macd_signal')
             macd_hist = self.get_indicator('exit_macd_hist')
-            macd_prev = self.get_indicator_prev('exit_macd')
-            macd_signal_prev = self.get_indicator_prev('exit_macd_signal')
-            macd_hist_prev = self.get_indicator_prev('exit_macd_hist')
+
+            macd_prev = self.get_indicator_prev('exit_macd', 1)
+            macd_signal_prev = self.get_indicator_prev('exit_macd_signal', 1)
+            macd_hist_prev = self.get_indicator_prev('exit_macd_hist', 1)
+
             eom = self.get_indicator('exit_eom')
             volume_sma = self.get_indicator('exit_volume_sma')
 
             # Get parameters
-            support_threshold = self.get_param("x_support_threshold")
+            support_threshold = self.get_param("support_threshold") or self.get_param("x_support_threshold", 0.002)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):
-                _logger.debug("No support level found, cannot check breakdown")
                 return False
 
             # 1. MACD bearish cross: MACD line crosses below Signal line AND histogram falling
@@ -147,13 +168,6 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             is_hist_falling = macd_hist < macd_hist_prev
 
             if not (is_macd_crossunder and is_hist_falling):
-                _logger.debug(
-                    "MACD not bearish: macd=%s, signal=%s, hist=%s, hist_prev=%s",
-                    macd,
-                    macd_signal,
-                    macd_hist,
-                    macd_hist_prev
-                )
                 return False
 
             # 2. Breakdown confirmation: Close < Support * (1 - threshold)
@@ -161,36 +175,24 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             is_breakdown = close < breakdown_level
 
             if not is_breakdown:
-                _logger.debug(
-                    "No breakdown: close=%s, breakdown_level=%s",
-                    close,
-                    breakdown_level
-                )
                 return False
 
             # 3. EOM negative: EOM < 0
             is_eom_negative = eom < 0
 
             if not is_eom_negative:
-                _logger.debug("EOM not negative: eom=%s", eom)
                 return False
 
-            # 4. Volume > SMA (breakdowns on high volume are more reliable)
+            # 4. Volume > SMA
             is_volume_confirmed = volume > volume_sma
 
             if not is_volume_confirmed:
-                _logger.debug(
-                    "Volume not confirmed: volume=%s, volume_sma=%s",
-                    volume,
-                    volume_sma
-                )
                 return False
 
             # All conditions met
             self._exit_reason = (
                 f"macd_breakdown: close={close:.2f}, support={support:.2f}, "
-                f"breakdown_level={breakdown_level:.2f}, macd={macd:.4f}, "
-                f"macd_signal={macd_signal:.4f}, eom={eom:.2f}, volume={volume:.0f}"
+                f"macd={macd:.4f}, signal={macd_signal:.4f}, eom={eom:.4f}, vol={volume:.0f}"
             )
             _logger.info("EOM MACD Breakdown Exit signal: %s", self._exit_reason)
             return True
@@ -198,10 +200,10 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
         except KeyError as e:
             _logger.error("Required indicator not found: %s", e)
             return False
-        except Exception as e:
-            _logger.error("Error in should_exit: %s", e, exc_info=True)
+        except Exception:
+            _logger.exception("Error in EOMMAcdBreakdownExitMixin.should_exit")
             return False
 
     def get_exit_reason(self) -> str:
-        """Get the reason for exit (called after should_exit returns True)."""
+        """Get the reason for exit"""
         return self._exit_reason if self._exit_reason else "macd_breakdown"

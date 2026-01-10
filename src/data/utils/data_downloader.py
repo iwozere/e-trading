@@ -49,13 +49,17 @@ _logger.info("Cache directory: %s", DATA_CACHE_DIR)
 # If dates were timezone-naive, they would be interpreted as local timezone (e.g., CET)
 # which would cause data to start at 2019-12-31 23:00:00 UTC instead of 2020-01-01 00:00:00 UTC
 DOWNLOAD_SCENARIOS = {
-    'symbols': ['LTCUSDT', 'BTCUSDT', 'ETHUSDT'],
+    #'symbols': ['LTCUSDT', 'BTCUSDT', 'ETHUSDT', 'XRPUSDT'],
+    'symbols': ['XRPUSDT'],
     'periods': [
-        {'start_date': '20200101', 'end_date': '20251111'}
+        {'start_date': '20220101', 'end_date': '20250707'}
     ],
-    'intervals': ['5m', '15m', '30m', '1h', '4h']
+    'intervals': ['5m', '15m', '30m', '1h', '4h', '1d']
 }
 
+
+# Define output directory for merged CSV files
+DATA_OUTPUT_DIR = PROJECT_ROOT / "data"
 
 def download_all_scenarios():
     """
@@ -122,12 +126,20 @@ def download_all_scenarios():
                         timeframe=interval,
                         start_date=start_dt,
                         end_date=end_dt,
-                        force_refresh=True  # Force download even if cached (to refresh corrupted data)
+                        force_refresh=False  # Use cache if available
                     )
 
                     if df is not None and not df.empty:
-                        _logger.info("✅ Successfully downloaded and cached %s %s: %d rows",
-                                   symbol, interval, len(df))
+                        _logger.info("✅ Successfully downloaded and cached %s %s: %d rows", symbol, interval, len(df))
+
+                        # Save merged data to single CSV file in data/ folder
+                        DATA_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+                        filename = f"{symbol}_{interval}_{period['start_date']}_{period['end_date']}.csv"
+                        filepath = DATA_OUTPUT_DIR / filename
+
+                        df.to_csv(filepath, index=False)
+                        _logger.info("💾 Saved merged data to: %s", filepath)
+
                         successful += 1
                     else:
                         _logger.warning("⚠️ No data returned for %s %s", symbol, interval)

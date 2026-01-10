@@ -13,7 +13,7 @@ Conditions (all must be true):
 3. Volume confirmation: Volume > Volume_SMA
 4. ATR confirmation: ATR rising vs yesterday
 
-Configuration Example:
+Configuration Example (New architecture):
     {
         "exit_logic": {
             "name": "EOMBreakdownExitMixin",
@@ -44,7 +44,7 @@ Configuration Example:
                 }
             ],
             "logic_params": {
-                "x_breakdown_threshold": 0.002
+                "breakdown_threshold": 0.002
             }
         }
     }
@@ -61,23 +61,16 @@ _logger = setup_logger(__name__)
 
 class EOMBreakdownExitMixin(BaseExitMixin):
     """
-    Exit mixin for SELL #1: Breakdown + EOM Negative
+    Exit mixin for SELL #1: Breakdown + EOM Negative.
 
     Purpose: Exit on strong bearish momentum breakdown.
-
-    Indicators required (provided by strategy):
-        - exit_support: Support level from SupportResistance indicator
-        - exit_eom: EOM value
-        - exit_volume_sma: Volume SMA for confirmation
-        - exit_atr: ATR for volatility confirmation
-
-    Parameters:
-        x_breakdown_threshold: Breakdown threshold below support (default: 0.002 = 0.2%)
+    Supports both new architecture and legacy configurations.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
+        self.use_new_architecture = False
         self._exit_reason = ""
 
     def get_required_params(self) -> list:
@@ -88,19 +81,43 @@ class EOMBreakdownExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_breakdown_threshold": 0.002,  # 0.2% breakdown threshold
+            "x_breakdown_threshold": 0.002,
+            "eom_period": 14,
+            "vol_ma_period": 20,
+            "atr_period": 14,
+            "resistance_lookback": 2,
         }
 
-    def _init_indicators(self):
-        """
-        Initialize indicators (new architecture only).
+    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+        """Standardize architecture detection."""
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+        else:
+            self.use_new_architecture = False
+        super().init_exit(strategy, additional_params)
 
-        In new architecture, indicators are created by the strategy
-        and accessed via get_indicator().
-        """
-        # New architecture: indicators already created by strategy
-        #_logger.debug("EOMBreakdownExitMixin: indicators provided by strategy")
+    def _init_indicators(self):
+        """Indicators managed by strategy in unified architecture."""
         pass
+
+    def get_minimum_lookback(self) -> int:
+        """Returns the minimum number of bars required."""
+        periods = [
+            self.get_param("eom_period", 14),
+            self.get_param("vol_ma_period", 20),
+            self.get_param("atr_period", 14),
+            self.get_param("resistance_lookback", 2) * 5
+        ]
+        return max(periods)
+
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are initialized."""
+        required = [
+            'exit_support', 'exit_eom', 'exit_volume_sma', 'exit_atr'
+        ]
+        if hasattr(self.strategy, 'indicators') and self.strategy.indicators:
+            return all(alias in self.strategy.indicators for alias in required)
+        return False  # EOM mixins assume new architecture
 
     def should_exit(self) -> bool:
         """
@@ -109,6 +126,9 @@ class EOMBreakdownExitMixin(BaseExitMixin):
         Returns:
             bool: True if all exit conditions are met
         """
+        if not self.strategy.position:
+            return False
+
         if not self.are_indicators_ready():
             return False
 
@@ -117,20 +137,19 @@ class EOMBreakdownExitMixin(BaseExitMixin):
             close = self.strategy.data.close[0]
             volume = self.strategy.data.volume[0]
 
-            # Get indicator values
+            # Unified Indicator Access
             support = self.get_indicator('exit_support')
             eom = self.get_indicator('exit_eom')
-            eom_prev = self.get_indicator_prev('exit_eom')
+            eom_prev = self.get_indicator_prev('exit_eom', 1)
             volume_sma = self.get_indicator('exit_volume_sma')
             atr = self.get_indicator('exit_atr')
-            atr_prev = self.get_indicator_prev('exit_atr')
+            atr_prev = self.get_indicator_prev('exit_atr', 1)
 
             # Get parameters
-            breakdown_threshold = self.get_param("x_breakdown_threshold")
+            breakdown_threshold = self.get_param("breakdown_threshold") or self.get_param("x_breakdown_threshold", 0.002)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):
-                _logger.debug("No support level found, cannot check breakdown")
                 return False
 
             # 1. Breakdown: Close < Support * (1 - threshold)
@@ -144,40 +163,24 @@ class EOMBreakdownExitMixin(BaseExitMixin):
             is_eom_bearish = eom < 0 and eom < eom_prev
 
             if not is_eom_bearish:
-                _logger.debug(
-                    "EOM not bearish: eom=%s, eom_prev=%s",
-                    eom,
-                    eom_prev
-                )
                 return False
 
             # 3. Volume confirmation: Volume > Volume_SMA
             is_volume_confirmed = volume > volume_sma
 
             if not is_volume_confirmed:
-                _logger.debug(
-                    "Volume not confirmed: volume=%s, volume_sma=%s",
-                    volume,
-                    volume_sma
-                )
                 return False
 
             # 4. ATR confirmation: ATR rising
             is_atr_rising = atr > atr_prev
 
             if not is_atr_rising:
-                _logger.debug(
-                    "ATR not rising: atr=%s, atr_prev=%s",
-                    atr,
-                    atr_prev
-                )
                 return False
 
             # All conditions met
             self._exit_reason = (
                 f"breakdown_momentum: close={close:.2f}, support={support:.2f}, "
-                f"breakdown_level={breakdown_level:.2f}, eom={eom:.2f}, "
-                f"volume={volume:.0f}, volume_sma={volume_sma:.0f}"
+                f"eom={eom:.4f}, volume={volume:.0f}, vol_sma={volume_sma:.0f}"
             )
             _logger.info("EOM Breakdown Exit signal: %s", self._exit_reason)
             return True
@@ -185,10 +188,10 @@ class EOMBreakdownExitMixin(BaseExitMixin):
         except KeyError as e:
             _logger.error("Required indicator not found: %s", e)
             return False
-        except Exception as e:
-            _logger.error("Error in should_exit: %s", e, exc_info=True)
+        except Exception:
+            _logger.exception("Error in EOMBreakdownExitMixin.should_exit")
             return False
 
     def get_exit_reason(self) -> str:
-        """Get the reason for exit (called after should_exit returns True)."""
+        """Get the reason for exit"""
         return self._exit_reason if self._exit_reason else "breakdown_momentum"

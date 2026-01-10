@@ -12,49 +12,6 @@ Conditions (all must be true):
 2. EOM reversal: EOM crosses above 0 (momentum turning positive)
 3. RSI oversold → recovery: RSI < rsi_oversold AND RSI rising (RSI[0] > RSI[-1])
 4. ATR volatility floor: ATR > ATR_SMA * atr_floor_multiplier
-
-Configuration Example:
-    {
-        "entry_logic": {
-            "name": "EOMPullbackEntryMixin",
-            "indicators": [
-                {
-                    "type": "SupportResistance",
-                    "params": {"lookback_bars": 2},
-                    "fields_mapping": {
-                        "resistance": "entry_resistance",
-                        "support": "entry_support"
-                    }
-                },
-                {
-                    "type": "EOM",
-                    "params": {"timeperiod": 14},
-                    "fields_mapping": {"eom": "entry_eom"}
-                },
-                {
-                    "type": "RSI",
-                    "params": {"timeperiod": 14},
-                    "fields_mapping": {"rsi": "entry_rsi"}
-                },
-                {
-                    "type": "ATR",
-                    "params": {"timeperiod": 14},
-                    "fields_mapping": {"atr": "entry_atr"}
-                },
-                {
-                    "type": "SMA",
-                    "params": {"timeperiod": 100},
-                    "data_field": "atr",
-                    "fields_mapping": {"sma": "entry_atr_sma"}
-                }
-            ],
-            "logic_params": {
-                "e_support_threshold": 0.005,
-                "e_rsi_oversold": 40,
-                "e_atr_floor_multiplier": 0.9
-            }
-        }
-    }
 """
 
 from typing import Any, Dict, Optional
@@ -68,26 +25,15 @@ _logger = setup_logger(__name__)
 
 class EOMPullbackEntryMixin(BaseEntryMixin):
     """
-    Entry mixin for BUY #2: Pullback to Support + EOM Reversal
+    Entry mixin for BUY #2: Pullback to Support + EOM Reversal.
 
-    Purpose: Trend-following entry after pullback respecting support.
-
-    Indicators required (provided by strategy):
-        - entry_support: Support level from SupportResistance indicator
-        - entry_eom: EOM value
-        - entry_rsi: RSI for oversold check
-        - entry_atr: ATR for volatility floor
-        - entry_atr_sma: ATR SMA for floor calculation
-
-    Parameters:
-        e_support_threshold: Support bounce threshold (default: 0.005 = 0.5%)
-        e_rsi_oversold: RSI oversold threshold (default: 40)
-        e_atr_floor_multiplier: ATR floor multiplier (default: 0.9)
+    Supports both new TALib-based architecture and legacy configurations.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
+        self.use_new_architecture = False
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -97,21 +43,47 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "e_support_threshold": 0.005,  # 0.5% support bounce threshold
+            "e_support_threshold": 0.005,
             "e_rsi_oversold": 40,
             "e_atr_floor_multiplier": 0.9,
+            "resistance_lookback": 2,
+            "eom_period": 14,
+            "rsi_period": 14,
+            "atr_period": 14,
+            "atr_sma_period": 100,
         }
 
-    def _init_indicators(self):
-        """
-        Initialize indicators (new architecture only).
+    def init_entry(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+        """Standardize architecture detection."""
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+        else:
+            self.use_new_architecture = False
+        super().init_entry(strategy, additional_params)
 
-        In new architecture, indicators are created by the strategy
-        and accessed via get_indicator().
-        """
-        # New architecture: indicators already created by strategy
-        #_logger.debug("EOMPullbackEntryMixin: indicators provided by strategy")
+    def _init_indicators(self):
+        """Indicators managed by strategy in unified architecture."""
         pass
+
+    def get_minimum_lookback(self) -> int:
+        """Returns the minimum number of bars required."""
+        periods = [
+            self.get_param("eom_period", 14),
+            self.get_param("rsi_period", 14),
+            self.get_param("atr_period", 14),
+            self.get_param("atr_sma_period", 100),
+            self.get_param("resistance_lookback", 2) * 5
+        ]
+        return max(periods)
+
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are initialized."""
+        required = [
+            'entry_support', 'entry_eom', 'entry_rsi', 'entry_atr', 'entry_atr_sma'
+        ]
+        if hasattr(self.strategy, 'indicators') and self.strategy.indicators:
+            return all(alias in self.strategy.indicators for alias in required)
+        return len(self.indicators) > 0 or self.use_new_architecture
 
     def should_enter(self) -> bool:
         """
@@ -129,27 +101,25 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             open_price = self.strategy.data.open[0]
             low = self.strategy.data.low[0]
 
-            # Get indicator values
+            # Unified Indicator Access
             support = self.get_indicator('entry_support')
             eom = self.get_indicator('entry_eom')
-            eom_prev = self.get_indicator_prev('entry_eom')
+            eom_prev = self.get_indicator_prev('entry_eom', 1)
             rsi = self.get_indicator('entry_rsi')
-            rsi_prev = self.get_indicator_prev('entry_rsi')
+            rsi_prev = self.get_indicator_prev('entry_rsi', 1)
             atr = self.get_indicator('entry_atr')
             atr_sma = self.get_indicator('entry_atr_sma')
 
             # Get parameters
-            support_threshold = self.get_param("e_support_threshold")
-            rsi_oversold = self.get_param("e_rsi_oversold")
-            atr_floor_multiplier = self.get_param("e_atr_floor_multiplier")
+            support_threshold = self.get_param("e_support_threshold") or self.get_param("support_threshold", 0.005)
+            rsi_oversold = self.get_param("e_rsi_oversold") or self.get_param("rsi_oversold", 40)
+            atr_floor_multiplier = self.get_param("e_atr_floor_multiplier") or self.get_param("atr_floor_multiplier", 0.9)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):
-                _logger.debug("No support level found, cannot check pullback")
                 return False
 
             # 1. Price bounces from support
-            # Low <= Support * (1 + threshold) AND Close > Open (reversal candle)
             support_level = support * (1 + support_threshold)
             is_at_support = low <= support_level
             is_reversal_candle = close > open_price
@@ -161,11 +131,6 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             is_eom_crossing_up = eom > 0 and eom_prev <= 0
 
             if not is_eom_crossing_up:
-                _logger.debug(
-                    "EOM not crossing up: eom=%s, eom_prev=%s",
-                    eom,
-                    eom_prev
-                )
                 return False
 
             # 3. RSI oversold → recovery: RSI < oversold AND RSI rising
@@ -173,37 +138,25 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             is_rsi_rising = rsi > rsi_prev
 
             if not (is_rsi_oversold and is_rsi_rising):
-                _logger.debug(
-                    "RSI conditions not met: rsi=%s (oversold=%s), rsi_prev=%s",
-                    rsi,
-                    rsi_oversold,
-                    rsi_prev
-                )
                 return False
 
-            # 4. ATR volatility floor: ATR > ATR_SMA * floor_multiplier
+            # 4. ATR volatility floor
             atr_floor = atr_sma * atr_floor_multiplier
             is_atr_sufficient = atr > atr_floor
 
             if not is_atr_sufficient:
-                _logger.debug(
-                    "ATR below floor: atr=%s, floor=%s",
-                    atr,
-                    atr_floor
-                )
                 return False
 
             # All conditions met
             _logger.info(
-                "EOM Pullback Entry signal: close=%s, low=%s, support=%s, support_level=%s, "
-                "eom=%s, rsi=%s, atr=%s",
-                close, low, support, support_level, eom, rsi, atr
+                f"EOM Pullback Entry signal: close={close:.2f}, low={low:.2f}, support={support:.2f}, "
+                f"eom={eom:.4f}, rsi={rsi:.2f}, atr={atr:.2f}"
             )
             return True
 
         except KeyError as e:
-            _logger.error("Required indicator not found: %s", e)
+            _logger.warning(f"Required indicator not found: {e}")
             return False
-        except Exception as e:
-            _logger.error("Error in should_enter: %s", e, exc_info=True)
+        except Exception:
+            _logger.exception("Error in EOMPullbackEntryMixin.should_enter")
             return False

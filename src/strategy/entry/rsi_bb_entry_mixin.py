@@ -124,7 +124,6 @@ class RSIBBEntryMixin(BaseEntryMixin):
         """
         if self.use_new_architecture:
             # New architecture: indicators already created by strategy
-            #logger.debug("Skipping indicator initialization (new architecture)")
             return
 
         # Legacy architecture: create indicators in mixin
@@ -188,61 +187,31 @@ class RSIBBEntryMixin(BaseEntryMixin):
             logger.exception("Error initializing indicators: ")
             raise
 
-    def are_indicators_ready(self) -> bool:
-        """Check if indicators are ready to be used"""
+    def get_minimum_lookback(self) -> int:
+        """
+        Returns the minimum number of bars required.
+        """
         if self.use_new_architecture:
-            # New architecture: check strategy's indicators
-            if not hasattr(self.strategy, 'indicators') or not self.strategy.indicators:
-                return False
-
-            # Check if required indicators exist
-            required_indicators = ['entry_rsi', 'entry_bb_lower', 'entry_bb_middle']
-            for ind_alias in required_indicators:
-                if ind_alias not in self.strategy.indicators:
-                    return False
-
-            # Check if we can access values
-            try:
-                _ = self.get_indicator('entry_rsi')
-                _ = self.get_indicator('entry_bb_lower')
-                _ = self.get_indicator('entry_bb_middle')
-                return True
-            except (IndexError, KeyError, AttributeError):
-                return False
-
+            return max(
+                self.get_param("rsi_period", 14),
+                self.get_param("bb_period", 20)
+            )
         else:
-            # Legacy architecture: check mixin's indicators
-            # Use base class implementation first
-            if not super().are_indicators_ready():
-                return False
+            return max(
+                self.get_param("e_rsi_period", 14),
+                self.get_param("e_bb_period", 20)
+            )
 
-            try:
-                # Check if we have enough data points
-                data_length = len(self.strategy.data)
-                required_length = max(self.get_param("e_rsi_period"), self.get_param("e_bb_period"))
-                if data_length < required_length:
-                    return False
-
-                # Check if indicators are registered
-                if (
-                    self.rsi_name not in self.indicators
-                    or self.bb_name not in self.indicators
-                ):
-                    return False
-
-                # Check if we can access the first value of each indicator
-                rsi = self.indicators[self.rsi_name]
-                bb = self.indicators[self.bb_name]
-
-                # Try to access the first value of each indicator using unified access
-                _ = rsi.rsi[0]
-                _ = bb.lower[0]  # Use unified access - works for both TALib and standard
-                _ = bb.middle[0]
-                _ = bb.upper[0]
-
-                return True
-            except (IndexError, AttributeError):
-                return False
+    def are_indicators_ready(self) -> bool:
+        """
+        Check if indicators are initialized.
+        History/Lookback is now handled by BaseStrategy.
+        """
+        if self.use_new_architecture:
+            required = ['entry_rsi', 'entry_bb_lower', 'entry_bb_middle']
+            return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
+        else:
+            return self.rsi_name in self.indicators and self.bb_name in self.indicators
 
     def should_enter(self) -> bool:
         """Check if we should enter a position.
@@ -254,7 +223,7 @@ class RSIBBEntryMixin(BaseEntryMixin):
 
         try:
             # Check cooldown period
-            cooldown_bars = self.get_param("e_cooldown_bars") or self.get_param("cooldown_bars", 0)
+            cooldown_bars = self.get_param("cooldown_bars") or self.get_param("e_cooldown_bars", 0)
             if cooldown_bars > 0:
                 current_bar = len(self.strategy.data)
                 if (self.last_entry_bar is not None and
@@ -263,22 +232,19 @@ class RSIBBEntryMixin(BaseEntryMixin):
 
             current_price = self.strategy.data.close[0]
 
-            # Get indicator values based on architecture
+            # Standardized parameter retrieval
+            oversold = self.get_param("oversold") or self.get_param("e_rsi_oversold", 30)
+            use_bb_touch = self.get_param("use_bb_touch", self.get_param("e_use_bb_touch", True))
+            rsi_cross = self.get_param("rsi_cross", self.get_param("e_rsi_cross", False))
+            bb_reentry = self.get_param("bb_reentry", self.get_param("e_bb_reentry", False))
+
+            # Unified Indicator Access
             if self.use_new_architecture:
-                # New architecture: access via get_indicator()
                 rsi_value = self.get_indicator('entry_rsi')
                 rsi_prev = self.get_indicator_prev('entry_rsi', 1)
                 bb_lower = self.get_indicator('entry_bb_lower')
                 bb_middle = self.get_indicator('entry_bb_middle')
-
-                # Get thresholds from logic_params (new) or fallback to legacy params
-                oversold = self.get_param("oversold") or self.get_param("e_rsi_oversold", 30)
-                use_bb_touch = self.get_param("use_bb_touch", self.get_param("e_use_bb_touch", True))
-                rsi_cross = self.get_param("rsi_cross", self.get_param("e_rsi_cross", False))
-                bb_reentry = self.get_param("bb_reentry", self.get_param("e_bb_reentry", False))
-
             else:
-                # Legacy architecture: access via mixin's indicators dict
                 rsi = self.indicators[self.rsi_name]
                 bb = self.indicators[self.bb_name]
 
@@ -286,12 +252,6 @@ class RSIBBEntryMixin(BaseEntryMixin):
                 rsi_prev = rsi.rsi[-1] if len(rsi.rsi) > 1 else rsi_value
                 bb_lower = bb.lower[0]
                 bb_middle = bb.middle[0]
-
-                # Get thresholds from legacy params
-                oversold = self.get_param("e_rsi_oversold", 30)
-                use_bb_touch = self.get_param("e_use_bb_touch", True)
-                rsi_cross = self.get_param("e_rsi_cross", False)
-                bb_reentry = self.get_param("e_bb_reentry", False)
 
             # Validate indicator values
             if rsi_value is None or rsi_prev is None:
@@ -304,18 +264,14 @@ class RSIBBEntryMixin(BaseEntryMixin):
 
             # RSI condition with optional cross confirmation
             if rsi_cross:
-                # RSI cross upward: require RSI to cross back above oversold threshold
                 rsi_condition = (rsi_prev <= oversold and rsi_value > oversold)
             else:
-                # Original RSI condition
                 rsi_condition = rsi_value <= oversold
 
-            # Bollinger Bands condition with optional re-entry confirmation
+            # Bollinger Bands condition
             if bb_reentry:
-                # BB re-entry: require close > lower BB after touching below
                 bb_condition = current_price > bb_lower
             else:
-                # Original BB condition
                 if use_bb_touch:
                     bb_condition = current_price <= bb_lower
                 else:

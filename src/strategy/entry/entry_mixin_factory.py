@@ -1,4 +1,4 @@
-# entry_mixin_factory.py - Improved version with a new approach
+# entry_mixin_factory.py
 
 from typing import Any, Dict, Optional
 
@@ -11,42 +11,25 @@ from src.strategy.entry.rsi_volume_supertrend_entry_mixin import RSIVolumeSupert
 from src.strategy.entry.eom_breakout_entry_mixin import EOMBreakoutEntryMixin
 from src.strategy.entry.eom_macd_breakout_entry_mixin import EOMMAcdBreakoutEntryMixin
 from src.strategy.entry.eom_pullback_entry_mixin import EOMPullbackEntryMixin
-
-# Import other mixins...
+from src.strategy.entry.hmm_lstm_entry_mixin import HMMLSTMEntryMixin
 
 # Registry of all available entry mixins
 ENTRY_MIXIN_REGISTRY = {
-    "RSIOrBBEntryMixin": RSIOrBBEntryMixin,  # 1
-    "RSIBBEntryMixin": RSIBBEntryMixin,  # 1
+    "RSIBBEntryMixin": RSIBBEntryMixin,
     "RSIIchimokuEntryMixin": RSIIchimokuEntryMixin,
+    "RSIOrBBEntryMixin": RSIOrBBEntryMixin,
     "RSIBBVolumeEntryMixin": RSIBBVolumeEntryMixin,
     "RSIVolumeSupertrendEntryMixin": RSIVolumeSupertrendEntryMixin,
     "BBVolumeSuperTrendEntryMixin": BBVolumeSupertrendEntryMixin,
     "EOMBreakoutEntryMixin": EOMBreakoutEntryMixin,
     "EOMMAcdBreakoutEntryMixin": EOMMAcdBreakoutEntryMixin,
     "EOMPullbackEntryMixin": EOMPullbackEntryMixin,
+    "HMMLSTMEntryMixin": HMMLSTMEntryMixin,
 }
 
 
 def get_entry_mixin(mixin_name: str, params: Optional[Dict[str, Any]] = None):
-    """
-    Factory for creating instances of entry mixins with a new approach
-
-    Args:
-        mixin_name: Name of the mixin
-        params: Dictionary of parameters for the mixin
-
-    Returns:
-        Instance of the mixin class
-
-    Example:
-        # Creating with default parameters
-        mixin = get_entry_mixin("RSIBBEntryMixin")
-
-        # Creating with custom parameters
-        params = {'rsi_period': 21, 'bb_period': 15}
-        mixin = get_entry_mixin("RSIBBEntryMixin", params)
-    """
+    """Factory for creating instances of entry mixins."""
     if mixin_name not in ENTRY_MIXIN_REGISTRY:
         available_mixins = list(ENTRY_MIXIN_REGISTRY.keys())
         raise ValueError(
@@ -58,26 +41,7 @@ def get_entry_mixin(mixin_name: str, params: Optional[Dict[str, Any]] = None):
 
 
 def get_entry_mixin_from_config(config: Dict[str, Any]):
-    """
-    Creating a mixin from a full configuration
-
-    Args:
-        config: Full configuration of the mixin
-                Must contain 'name' and optionally 'params'
-
-    Returns:
-        Instance of the mixin class
-
-    Example:
-        config = {
-            'name': 'RSIBBEntryMixin',
-            'params': {
-                'rsi_period': 21,
-                'bb_period': 15
-            }
-        }
-        mixin = get_entry_mixin_from_config(config)
-    """
+    """Creating a mixin from a full configuration."""
     if "name" not in config:
         raise ValueError("Config must contain 'name' field")
 
@@ -93,61 +57,23 @@ def list_available_entry_mixins():
 
 
 def get_entry_mixin_default_params(mixin_name: str) -> Dict[str, Any]:
-    """
-    Get default parameters for the mixin
-
-    Args:
-        mixin_name: Name of the mixin
-
-    Returns:
-        Dictionary of default parameters
-    """
+    """Get default parameters for the mixin."""
     if mixin_name not in ENTRY_MIXIN_REGISTRY:
         raise ValueError(f"Unknown entry mixin: {mixin_name}")
 
     mixin_class = ENTRY_MIXIN_REGISTRY[mixin_name]
-
-    # Create a temporary instance to get default parameters
     temp_instance = mixin_class()
     return temp_instance.get_default_params()
 
 
 def validate_entry_mixin_params(mixin_name: str, params: Dict[str, Any]) -> bool:
-    """
-    Validation of parameters for the mixin
-
-    Args:
-        mixin_name: Name of the mixin
-        params: Parameters for validation
-
-    Returns:
-        True if parameters are valid
-
-    Raises:
-        ValueError: If parameters are invalid
-    """
+    """Validation of parameters for the mixin."""
     if mixin_name not in ENTRY_MIXIN_REGISTRY:
         raise ValueError(f"Unknown entry mixin: {mixin_name}")
 
     mixin_class = ENTRY_MIXIN_REGISTRY[mixin_name]
-
-    # Create a temporary instance for validation
     try:
         mixin_class(params=params)
         return True
-    except ValueError as e:
+    except Exception as e:
         raise ValueError(f"Invalid parameters for {mixin_name}: {e}")
-
-
-# Convenient functions for working with configurations
-def create_entry_mixin_config(mixin_name: str, **params) -> Dict[str, Any]:
-    """
-    Creating a configuration for the mixin
-
-    Args:
-        mixin_name: Name
-
-    Returns:
-        Dictionary of configuration
-    """
-    return {"name": mixin_name, "params": params}

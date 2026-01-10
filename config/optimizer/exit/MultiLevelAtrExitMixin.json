@@ -1,0 +1,71 @@
+{
+    "name": "MultiLevelAtrExitMixin",
+    "params": {
+        "x_htf_atr_period": {
+            "type": "int",
+            "low": 10,
+            "high": 30,
+            "default": 14
+        },
+        "x_htf_sl_multiplier": {
+            "type": "float",
+            "low": 2.0,
+            "high": 5.0,
+            "default": 2.5
+        },
+        "x_ltf_atr_period": {
+            "type": "int",
+            "low": 10,
+            "high": 30,
+            "default": 14
+        },
+        "x_ltf_sl_multiplier": {
+            "type": "float",
+            "low": 1.5,
+            "high": 3.0,
+            "default": 2.0
+        },
+        "x_micro_atr_period": {
+            "type": "int",
+            "low": 5,
+            "high": 15,
+            "default": 10
+        },
+        "x_be_activation_atr": {
+            "type": "float",
+            "low": 0.5,
+            "high": 2.5,
+            "default": 1.0
+        },
+        "x_be_buffer_multiplier": {
+            "type": "float",
+            "low": 0.1,
+            "high": 1.0,
+            "default": 0.3
+        },
+        "x_use_dynamic_k": {
+            "type": "categorical",
+            "choices": [
+                true,
+                false
+            ],
+            "default": false
+        },
+        "x_vol_sma_period": {
+            "type": "int",
+            "low": 20,
+            "high": 100,
+            "default": 50
+        },
+        "x_htf_compression": {
+            "type": "categorical",
+            "choices": [
+                60,
+                120,
+                240,
+                480
+            ],
+            "default": 240
+        }
+    }
+}

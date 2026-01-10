@@ -97,10 +97,7 @@ class CustomOptimizer:
         else:
             cerebro = bt.Cerebro(optdatas=True, optreturn=True)
 
-                # Add data
-        cerebro.adddata(self.data)
-
-        # Add entry logic parameters
+                # 1. Suggest parameters first so we know if we need resampling
         entry_logic_params = {}
         for param_name, param_config in self.entry_logic["params"].items():
             if trial:
@@ -119,7 +116,6 @@ class CustomOptimizer:
             else:
                 entry_logic_params[param_name] = param_config["default"]
 
-        # Add exit logic parameters
         exit_logic_params = {}
         for param_name, param_config in self.exit_logic["params"].items():
             if trial:
@@ -137,6 +133,9 @@ class CustomOptimizer:
                     )
             else:
                 exit_logic_params[param_name] = param_config["default"]
+
+        # 2. Add data to cerebro
+        cerebro.adddata(self.data)
 
         # Prepare strategy parameters
         strategy_params = {

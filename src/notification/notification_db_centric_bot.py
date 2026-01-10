@@ -98,10 +98,16 @@ class MessagePoller:
             db_service = get_database_service()
 
             with db_service.uow() as uow:
+                # Get enabled channels from the processor
+                enabled_channels = None
+                if message_processor and hasattr(message_processor, '_channel_instances'):
+                    enabled_channels = list(message_processor._channel_instances.keys())
+
                 # Use repository method for atomic locking (this is acceptable at this level)
                 messages = uow.notifications.messages.get_pending_messages_with_lock(
                     limit=10,
-                    lock_instance_id=self.instance_id
+                    lock_instance_id=self.instance_id,
+                    channels=enabled_channels
                 )
 
                 # No manual commit needed - UoW auto-commits on successful exit

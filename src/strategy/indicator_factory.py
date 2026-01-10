@@ -10,6 +10,9 @@ import backtrader as bt
 from typing import Dict, Any, List
 
 from src.notification.logger import setup_logger
+from src.indicators.eom_indicator import EOMIndicator
+from src.indicators.support_resistance_indicator import SupportResistanceIndicator
+from src.indicators.adapters.backtrader_wrappers import UnifiedSuperTrendIndicator
 
 logger = setup_logger(__name__)
 
@@ -65,6 +68,30 @@ class IndicatorFactory:
             'outputs': ['slowk', 'slowd'],
             'required_params': ['fastk_period', 'slowk_period', 'slowd_period'],
             'data_inputs': ['high', 'low', 'close']  # Needs HLC
+        },
+        'ICHIMOKU': {
+            'class': bt.indicators.Ichimoku,
+            'outputs': ['tenkan_sen', 'kijun_sen', 'senkou_span_a', 'senkou_span_b', 'chikou_span'],
+            'required_params': ['tenkan', 'kijun', 'senkou'],
+            'data_inputs': ['data']  # Uses full data feed
+        },
+        'EOM': {
+            'class': EOMIndicator,
+            'outputs': ['eom'],
+            'required_params': ['timeperiod'],
+            'data_inputs': ['data']
+        },
+        'SupportResistance': {
+            'class': SupportResistanceIndicator,
+            'outputs': ['resistance', 'support'],
+            'required_params': ['lookback_bars'],
+            'data_inputs': ['data']
+        },
+        'SUPERTREND': {
+            'class': UnifiedSuperTrendIndicator,
+            'outputs': ['super_trend', 'direction'],
+            'required_params': ['length', 'multiplier'],
+            'data_inputs': ['data']
         }
     }
 
@@ -147,7 +174,10 @@ class IndicatorFactory:
         data_inputs = ind_meta.get('data_inputs', ['close'])  # Default to close if not specified
 
         # Prepare data inputs for the indicator
-        data_args = [getattr(data, field) for field in data_inputs]
+        if data_inputs == ['data']:
+            data_args = [data]
+        else:
+            data_args = [getattr(data, field) for field in data_inputs]
 
         # Create the TALib indicator
         try:

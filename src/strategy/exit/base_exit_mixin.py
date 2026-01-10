@@ -82,6 +82,16 @@ class BaseExitMixin(ABC):
     def should_exit(self) -> bool:
         pass
 
+    def get_minimum_lookback(self) -> int:
+        """
+        Returns the minimum number of bars required for indicators to be ready.
+        Subclasses should override this based on their specific indicator periods.
+
+        Returns:
+            int: Minimum number of bars (default: 1)
+        """
+        return 1
+
     @abstractmethod
     def get_exit_reason(self) -> str:
         """Get the reason for exit (called after should_exit returns True)."""
@@ -163,27 +173,21 @@ class BaseExitMixin(ABC):
         if hasattr(self, "strategy") and self.strategy is not None:
             setattr(self.strategy, name, indicator)
             _logger.debug("Indicator %s set as strategy attribute", name)
+
+            # Unified architecture support: add to strategy's centralized indicator dictionary
+            if not hasattr(self.strategy, 'indicators'):
+                self.strategy.indicators = {}
+
+            # If it's a multi-line indicator object (like BT-TALIB wrapper),
+            # we should also check if we need to alias its sub-lines.
+            # However, for legacy mixins calling register_indicator, they usually register
+            # the whole object. If they use get_indicator('exit_atr_ltf'), that alias
+            # must exist in strategy.indicators.
+            self.strategy.indicators[name] = indicator
         else:
             _logger.warning(
                 f"Cannot set {name} as strategy attribute - strategy not available"
             )
-
-    def are_indicators_ready(self) -> bool:
-        """Check if indicators are ready to be used"""
-        if not self.indicators:
-            return False
-
-        try:
-            # Try to access the first value of each indicator
-            for indicator in self.indicators.values():
-                if hasattr(indicator, "__getitem__"):
-                    _ = indicator[0]
-                elif hasattr(indicator, "lines"):
-                    for line in indicator.lines:
-                        _ = line[0]
-            return True
-        except (IndexError, TypeError):
-            return False
 
     def next(self):
         """Called for each new bar"""

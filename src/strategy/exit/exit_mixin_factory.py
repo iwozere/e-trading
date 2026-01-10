@@ -1,4 +1,4 @@
-# exit_mixin_factory.py - Improved version with a new approach
+# exit_mixin_factory.py
 
 from typing import Any, Dict, Optional
 
@@ -14,8 +14,7 @@ from src.strategy.exit.trailing_stop_exit_mixin import TrailingStopExitMixin
 from src.strategy.exit.eom_breakdown_exit_mixin import EOMBreakdownExitMixin
 from src.strategy.exit.eom_macd_breakdown_exit_mixin import EOMMAcdBreakdownExitMixin
 from src.strategy.exit.eom_rejection_exit_mixin import EOMRejectionExitMixin
-
-# Import other mixins...
+from src.strategy.exit.multi_level_atr_exit_mixin import MultiLevelAtrExitMixin
 
 # Registry of all available exit mixins
 EXIT_MIXIN_REGISTRY = {
@@ -31,29 +30,12 @@ EXIT_MIXIN_REGISTRY = {
     "EOMBreakdownExitMixin": EOMBreakdownExitMixin,
     "EOMMAcdBreakdownExitMixin": EOMMAcdBreakdownExitMixin,
     "EOMRejectionExitMixin": EOMRejectionExitMixin,
-    # Add other mixins...
+    "MultiLevelAtrExitMixin": MultiLevelAtrExitMixin,
 }
 
 
 def get_exit_mixin(mixin_name: str, params: Optional[Dict[str, Any]] = None):
-    """
-    Factory for creating instances of exit mixins with a new approach
-
-    Args:
-        mixin_name: Name of the mixin
-        params: Dictionary of parameters for the mixin
-
-    Returns:
-        Instance of the mixin class
-
-    Example:
-        # Creating with default parameters
-        mixin = get_exit_mixin("AdvancedATRExitMixin")
-
-        # Creating with custom parameters
-        params = {'k_init': 2.5, 'k_run': 2.0}
-        mixin = get_exit_mixin("AdvancedATRExitMixin", params)
-    """
+    """Factory for creating instances of exit mixins."""
     if mixin_name not in EXIT_MIXIN_REGISTRY:
         available_mixins = list(EXIT_MIXIN_REGISTRY.keys())
         raise ValueError(
@@ -65,26 +47,7 @@ def get_exit_mixin(mixin_name: str, params: Optional[Dict[str, Any]] = None):
 
 
 def get_exit_mixin_from_config(config: Dict[str, Any]):
-    """
-    Creating a mixin from a full configuration
-
-    Args:
-        config: Full configuration of the mixin
-                Must contain 'name' and optionally 'params'
-
-    Returns:
-        Instance of the mixin class
-
-    Example:
-        config = {
-            'name': 'AdvancedATRExitMixin',
-            'params': {
-                'k_init': 2.5,
-                'k_run': 2.0
-            }
-        }
-        mixin = get_exit_mixin_from_config(config)
-    """
+    """Creating a mixin from a full configuration."""
     if "name" not in config:
         raise ValueError("Config must contain 'name' field")
 
@@ -100,61 +63,23 @@ def list_available_exit_mixins():
 
 
 def get_exit_mixin_default_params(mixin_name: str) -> Dict[str, Any]:
-    """
-    Get default parameters for the mixin
-
-    Args:
-        mixin_name: Name of the mixin
-
-    Returns:
-        Dictionary of default parameters
-    """
+    """Get default parameters for the mixin."""
     if mixin_name not in EXIT_MIXIN_REGISTRY:
         raise ValueError(f"Unknown exit mixin: {mixin_name}")
 
     mixin_class = EXIT_MIXIN_REGISTRY[mixin_name]
-
-    # Create a temporary instance to get default parameters
     temp_instance = mixin_class()
     return temp_instance.get_default_params()
 
 
 def validate_exit_mixin_params(mixin_name: str, params: Dict[str, Any]) -> bool:
-    """
-    Validation of parameters for the mixin
-
-    Args:
-        mixin_name: Name of the mixin
-        params: Parameters for validation
-
-    Returns:
-        True if parameters are valid
-
-    Raises:
-        ValueError: If parameters are invalid
-    """
+    """Validation of parameters for the mixin."""
     if mixin_name not in EXIT_MIXIN_REGISTRY:
         raise ValueError(f"Unknown exit mixin: {mixin_name}")
 
     mixin_class = EXIT_MIXIN_REGISTRY[mixin_name]
-
-    # Create a temporary instance for validation
     try:
         mixin_class(params=params)
         return True
-    except ValueError as e:
+    except Exception as e:
         raise ValueError(f"Invalid parameters for {mixin_name}: {e}")
-
-
-# Convenient functions for working with configurations
-def create_exit_mixin_config(mixin_name: str, **params) -> Dict[str, Any]:
-    """
-    Creating a configuration for the mixin
-
-    Args:
-        mixin_name: Name
-
-    Returns:
-        Dictionary of configuration
-    """
-    return {"name": mixin_name, "params": params}

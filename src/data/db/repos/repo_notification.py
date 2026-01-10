@@ -155,6 +155,7 @@ class MessageRepository:
         self,
         current_time: datetime,
         priority: Optional[MessagePriority] = None,
+        channels: Optional[List[str]] = None,
         limit: int = 100
     ) -> List[Message]:
         """
@@ -163,6 +164,7 @@ class MessageRepository:
         Args:
             current_time: Current timestamp
             priority: Filter by priority
+            channels: Filter by specific channels
             limit: Maximum number of results
 
         Returns:
@@ -177,6 +179,11 @@ class MessageRepository:
 
         if priority is not None:
             query = query.filter(Message.priority == priority.value)
+
+        if channels:
+            # Filter messages where ANY of the specified channels are present
+            channel_filters = [Message.channels.contains([ch]) for ch in channels]
+            query = query.filter(or_(*channel_filters))
 
         # Order by priority (CRITICAL first) then by scheduled_for
         priority_order = text(
@@ -320,7 +327,8 @@ class MessageRepository:
     def get_pending_messages_with_lock(
         self,
         limit: int = 10,
-        lock_instance_id: str = None
+        lock_instance_id: str = None,
+        channels: Optional[List[str]] = None
     ) -> List[Message]:
         """
         Get pending messages with distributed locking for database-centric processing.
@@ -331,6 +339,7 @@ class MessageRepository:
         Args:
             limit: Maximum number of messages to claim
             lock_instance_id: Unique identifier for the processing instance
+            channels: Filter by specific channels
 
         Returns:
             List of Message objects claimed for processing
@@ -341,9 +350,17 @@ class MessageRepository:
         current_time = datetime.now(timezone.utc)
         stale_lock_threshold = current_time - timedelta(minutes=5)  # Locks older than 5 minutes are stale
 
+        # Build dynamic channel condition for raw SQL
+        channel_condition = ""
+        if channels:
+            # PostgreSQL array overlap operator && or contains @>
+            # We want messages where message.channels contains at least one of the provided channels
+            # SQL: AND channels && ARRAY['ch1', 'ch2']
+            channel_condition = "AND channels && :channels"
+
         try:
             # Use raw SQL for atomic message claiming with PostgreSQL-specific features
-            query = text("""
+            query = text(f"""
                 UPDATE msg_messages
                 SET locked_by = :lock_instance_id,
                     locked_at = :current_time
@@ -351,6 +368,7 @@ class MessageRepository:
                     SELECT id FROM msg_messages
                     WHERE status = 'PENDING'
                     AND scheduled_for <= :current_time
+                    {channel_condition}
                     AND (
                         locked_by IS NULL
                         OR locked_at < :stale_threshold
@@ -369,12 +387,16 @@ class MessageRepository:
                 RETURNING *
             """)
 
-            result = self.session.execute(query, {
+            params = {
                 'lock_instance_id': lock_instance_id,
                 'current_time': current_time,
                 'stale_threshold': stale_lock_threshold,
                 'limit': limit
-            })
+            }
+            if channels:
+                params['channels'] = channels
+
+            result = self.session.execute(query, params)
 
             # Convert result rows to Message objects
             messages = []

@@ -133,6 +133,56 @@ def prepare_data_frame(data_file) -> pd.DataFrame:
 
     return df
 
+def pre_calculate_htf_data(df: pd.DataFrame, intervals: list) -> pd.DataFrame:
+    """
+    Pre-calculate HTF indicators using Pandas once per combination.
+    This replaces expensive Backtrader resampling inside trials.
+    """
+    _logger.info("Pre-calculating HTF data for intervals: %s", intervals)
+    result_df = df.copy()
+
+    for interval in intervals:
+        # intervals are in minutes, e.g., 60, 240
+        rule = f"{interval}min"
+
+        # Resample to HTF
+        # Note: We use 'closed=right', 'label=right' to match standard crypto bar behavior
+        # and prevent look-ahead bias (the 4h bar at 04:00 contains data up to 04:00)
+        htf = df.resample(rule, closed='right', label='right').agg({
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last',
+            'volume': 'sum'
+        })
+
+        # Calculate True Range and ATR
+        # TR = max(high - low, abs(high - prev_close), abs(low - prev_close))
+        htf['prev_close'] = htf['close'].shift(1)
+        tr = pd.concat([
+            htf['high'] - htf['low'],
+            (htf['high'] - htf['prev_close']).abs(),
+            (htf['low'] - htf['prev_close']).abs()
+        ], axis=1).max(axis=1)
+
+        # Standard periods used in config
+        periods = [10, 14, 20, 30]
+        for p in periods:
+            # We use Simple Moving Average of TR to match Backtrader's bt.indicators.ATR default (Simple)
+            # though some use EWMA. Let's use Simple for consistency with our current tests.
+            htf[f'atr_{interval}_{p}'] = tr.rolling(window=p).mean()
+
+        # Aligne (Forward-fill) HTF indicators back to LTF
+        # We reindex to match LTF and then ffill
+        htf_aligned = htf[[f'atr_{interval}_{p}' for p in periods]].reindex(df.index, method='ffill')
+
+        # Add to result_df
+        for p in periods:
+            col_name = f'atr_{interval}_{p}'
+            result_df[col_name] = htf_aligned[col_name]
+
+    return result_df
+
 def prepare_data_feed(df : pd.DataFrame, symbol : str):
     """Prepare data feed from pandas dataframe with robust datetime handling"""
     # Validate DataFrame before creating feed
@@ -142,9 +192,8 @@ def prepare_data_feed(df : pd.DataFrame, symbol : str):
     if not isinstance(df.index, pd.DatetimeIndex):
         raise ValueError(f"DataFrame index is not DatetimeIndex: {type(df.index)}")
 
-    print(f"Creating data feed for {symbol} with {len(df)} rows")
-    print(f"DataFrame columns: {df.columns.tolist()}")
-    print(f"DataFrame index type: {type(df.index)}")
+    _logger.debug("Creating data feed for %s with %s rows", symbol, len(df))
+    _logger.debug("DataFrame columns: %s", df.columns.tolist())
 
     # Create a deep copy to prevent any modifications
     df_copy = df.copy(deep=True)
@@ -152,34 +201,37 @@ def prepare_data_feed(df : pd.DataFrame, symbol : str):
     # Ensure the index is properly formatted
     df_copy.index = pd.to_datetime(df_copy.index)
 
-    # Keep datetime as index - this is the preferred approach for PandasData
-    # Ensure we have the required columns in the right order
-    df_copy = df_copy[["open", "high", "low", "close", "volume"]]
+    # Ensure we have the required columns in the right order, plus our pre-calculated ATRs
+    cols = ["open", "high", "low", "close", "volume"]
+    atr_cols = [c for c in df_copy.columns if c.startswith('atr_')]
+    df_copy = df_copy[cols + atr_cols]
 
-    # Create the data feed with datetime as index (default behavior)
-    data_feed = bt.feeds.PandasData(
+    # Create the data feed with extra columns for HTF ATRs
+    atr_cols = [c for c in df_copy.columns if c.startswith('atr_')]
+
+    # Define a dynamic subclass to handle the extra lines
+    # This avoids "TypeError: PandasData.__init__() got an unexpected keyword argument"
+    class DynamicPandasData(bt.feeds.PandasData):
+        lines = tuple(atr_cols)
+        params = tuple((col, -1) for col in atr_cols)
+
+    data_feed = DynamicPandasData(
         dataname=df_copy,
-        # No datetime parameter needed when datetime is the index
-        open=0,      # open is column 0
-        high=1,      # high is column 1
-        low=2,       # low is column 2
-        close=3,     # close is column 3
-        volume=4,    # volume is column 4
+        # Standard OHLCV mapping
+        open=0,
+        high=1,
+        low=2,
+        close=3,
+        volume=4,
         openinterest=None,
-        fromdate=df_copy.index.min(),  # Use index min/max
-        todate=df_copy.index.max(),    # Use index min/max
+        # HTF ATR mapping
+        fromdate=df_copy.index.min(),
+        todate=df_copy.index.max(),
         name=symbol,
+        **{col: 5 + i for i, col in enumerate(atr_cols)}
     )
 
-        # Debug: Check the created data feed
-    print(f"Created data feed type: {type(data_feed)}")
-    print(f"DataFrame columns: {df_copy.columns.tolist()}")
-    print(f"DataFrame shape: {df_copy.shape}")
-    print(f"DataFrame index type: {type(df_copy.index)}")
-    print(f"DataFrame index length: {len(df_copy.index)}")
-    if len(df_copy.index) > 0:
-        print(f"First index value: {df_copy.index[0]} (type: {type(df_copy.index[0])})")
-        print(f"Last index value: {df_copy.index[-1]} (type: {type(df_copy.index[-1])})")
+    # Debug info removed for performance
 
     # Debug: Check data feed parameters
     print(f"Data feed fromdate: {getattr(data_feed, 'fromdate', 'Not set')}")
@@ -714,7 +766,13 @@ if __name__ == "__main__":
 
     for data_file in data_files:
         _logger.info("Processing data file: %s", data_file)
-        df = prepare_data_frame(data_file)
+        full_data_path = os.path.join("data", data_file)
+        df = prepare_data_frame(full_data_path)
+
+        # Pre-calculate HTF ATRs for the intervals used in configs (60, 120, 240, 480)
+        # This is done ONCE per data file instead of 150 times per combination
+        df = pre_calculate_htf_data(df, [60, 120, 240, 480])
+
         symbol, interval, start_date, end_date = parse_data_file_name(data_file)
 
         for entry_logic_name in ENTRY_MIXIN_REGISTRY.keys():
@@ -740,7 +798,7 @@ if __name__ == "__main__":
 
                     def objective(trial):
                         """Objective function for optimization"""
-                        # Create a new data feed for each trial (important for parallel jobs)
+                        # Create a new data feed for each trial
                         data = prepare_data_feed(df, symbol)
 
                         _optimizer_config = {
@@ -752,6 +810,11 @@ if __name__ == "__main__":
                             "symbol": symbol,
                             "timeframe": interval,
                         }
+
+                        # Log progress every 10 trials
+                        if trial.number % 10 == 0:
+                            _logger.info(f"Trial {trial.number}/{stage1_trials if study.trials == [] else stage2_trials} in progress...")
+
                         optimizer = CustomOptimizer(_optimizer_config)
                         # Disable analyzers for optimization trials to improve performance
                         _, _, result = optimizer.run_optimization(trial, include_analyzers=False)

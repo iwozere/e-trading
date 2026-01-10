@@ -12,7 +12,7 @@ Conditions (all must be true):
 2. EOM crosses below 0: bearish EOM momentum reversal
 3. RSI overbought → falling: RSI > rsi_overbought AND RSI falling (RSI[0] < RSI[-1])
 
-Configuration Example:
+Configuration Example (New architecture):
     {
         "exit_logic": {
             "name": "EOMRejectionExitMixin",
@@ -37,8 +37,8 @@ Configuration Example:
                 }
             ],
             "logic_params": {
-                "x_resistance_threshold": 0.995,
-                "x_rsi_overbought": 60
+                "resistance_threshold": 0.995,
+                "rsi_overbought": 60
             }
         }
     }
@@ -55,23 +55,16 @@ _logger = setup_logger(__name__)
 
 class EOMRejectionExitMixin(BaseExitMixin):
     """
-    Exit mixin for SELL #2: Resistance Reject + EOM Turns Negative
+    Exit mixin for SELL #2: Resistance Reject + EOM Turns Negative.
 
     Purpose: Fade failed breakout / mean reversion down.
-
-    Indicators required (provided by strategy):
-        - exit_resistance: Resistance level from SupportResistance indicator
-        - exit_eom: EOM value
-        - exit_rsi: RSI for overbought check
-
-    Parameters:
-        x_resistance_threshold: Resistance rejection threshold (default: 0.995)
-        x_rsi_overbought: RSI overbought threshold (default: 60)
+    Supports both new architecture and legacy configurations.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
+        self.use_new_architecture = False
         self._exit_reason = ""
 
     def get_required_params(self) -> list:
@@ -84,18 +77,40 @@ class EOMRejectionExitMixin(BaseExitMixin):
         return {
             "x_resistance_threshold": 0.995,
             "x_rsi_overbought": 60,
+            "eom_period": 14,
+            "rsi_period": 14,
+            "resistance_lookback": 2,
         }
 
-    def _init_indicators(self):
-        """
-        Initialize indicators (new architecture only).
+    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
+        """Standardize architecture detection."""
+        if hasattr(strategy, 'indicators') and strategy.indicators:
+            self.use_new_architecture = True
+        else:
+            self.use_new_architecture = False
+        super().init_exit(strategy, additional_params)
 
-        In new architecture, indicators are created by the strategy
-        and accessed via get_indicator().
-        """
-        # New architecture: indicators already created by strategy
-        #_logger.debug("EOMRejectionExitMixin: indicators provided by strategy")
+    def _init_indicators(self):
+        """Indicators managed by strategy in unified architecture."""
         pass
+
+    def get_minimum_lookback(self) -> int:
+        """Returns the minimum number of bars required."""
+        periods = [
+            self.get_param("eom_period", 14),
+            self.get_param("rsi_period", 14),
+            self.get_param("resistance_lookback", 2) * 5
+        ]
+        return max(periods)
+
+    def are_indicators_ready(self) -> bool:
+        """Check if indicators are initialized."""
+        required = [
+            'exit_resistance', 'exit_eom', 'exit_rsi'
+        ]
+        if hasattr(self.strategy, 'indicators') and self.strategy.indicators:
+            return all(alias in self.strategy.indicators for alias in required)
+        return False
 
     def should_exit(self) -> bool:
         """
@@ -104,6 +119,9 @@ class EOMRejectionExitMixin(BaseExitMixin):
         Returns:
             bool: True if all exit conditions are met
         """
+        if not self.strategy.position:
+            return False
+
         if not self.are_indicators_ready():
             return False
 
@@ -113,24 +131,22 @@ class EOMRejectionExitMixin(BaseExitMixin):
             open_price = self.strategy.data.open[0]
             high = self.strategy.data.high[0]
 
-            # Get indicator values
+            # Unified Indicator Access
             resistance = self.get_indicator('exit_resistance')
             eom = self.get_indicator('exit_eom')
-            eom_prev = self.get_indicator_prev('exit_eom')
+            eom_prev = self.get_indicator_prev('exit_eom', 1)
             rsi = self.get_indicator('exit_rsi')
-            rsi_prev = self.get_indicator_prev('exit_rsi')
+            rsi_prev = self.get_indicator_prev('exit_rsi', 1)
 
             # Get parameters
-            resistance_threshold = self.get_param("x_resistance_threshold")
-            rsi_overbought = self.get_param("x_rsi_overbought")
+            resistance_threshold = self.get_param("resistance_threshold") or self.get_param("x_resistance_threshold", 0.995)
+            rsi_overbought = self.get_param("rsi_overbought") or self.get_param("x_rsi_overbought", 60)
 
             # Check if resistance is valid (not NaN)
             if math.isnan(resistance):
-                _logger.debug("No resistance level found, cannot check rejection")
                 return False
 
             # 1. Price rejection at resistance
-            # High >= Resistance * threshold AND Close < Open (bearish rejection candle)
             resistance_level = resistance * resistance_threshold
             is_at_resistance = high >= resistance_level
             is_rejection_candle = close < open_price
@@ -138,35 +154,23 @@ class EOMRejectionExitMixin(BaseExitMixin):
             if not (is_at_resistance and is_rejection_candle):
                 return False
 
-            # 2. EOM crosses below 0: bearish EOM momentum reversal
+            # 2. EOM crosses below 0
             is_eom_crossing_down = eom < 0 and eom_prev >= 0
 
             if not is_eom_crossing_down:
-                _logger.debug(
-                    "EOM not crossing down: eom=%s, eom_prev=%s",
-                    eom,
-                    eom_prev
-                )
                 return False
 
-            # 3. RSI overbought → falling: RSI > overbought AND RSI falling
+            # 3. RSI overbought → falling
             is_rsi_overbought = rsi > rsi_overbought
             is_rsi_falling = rsi < rsi_prev
 
             if not (is_rsi_overbought and is_rsi_falling):
-                _logger.debug(
-                    "RSI conditions not met: rsi=%s (overbought=%s), rsi_prev=%s",
-                    rsi,
-                    rsi_overbought,
-                    rsi_prev
-                )
                 return False
 
             # All conditions met
             self._exit_reason = (
                 f"resistance_rejection: close={close:.2f}, high={high:.2f}, "
-                f"resistance={resistance:.2f}, resistance_level={resistance_level:.2f}, "
-                f"eom={eom:.2f}, rsi={rsi:.2f}"
+                f"resistance={resistance:.2f}, rsi={rsi:.2f}, eom={eom:.4f}"
             )
             _logger.info("EOM Rejection Exit signal: %s", self._exit_reason)
             return True
@@ -174,10 +178,10 @@ class EOMRejectionExitMixin(BaseExitMixin):
         except KeyError as e:
             _logger.error("Required indicator not found: %s", e)
             return False
-        except Exception as e:
-            _logger.error("Error in should_exit: %s", e, exc_info=True)
+        except Exception:
+            _logger.exception("Error in EOMRejectionExitMixin.should_exit")
             return False
 
     def get_exit_reason(self) -> str:
-        """Get the reason for exit (called after should_exit returns True)."""
+        """Get the reason for exit"""
         return self._exit_reason if self._exit_reason else "resistance_rejection"

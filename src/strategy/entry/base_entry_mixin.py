@@ -257,6 +257,16 @@ class BaseEntryMixin(ABC):
             bool: True if the mixin should enter a position
         """
 
+    def get_minimum_lookback(self) -> int:
+        """
+        Returns the minimum number of bars required for indicators to be ready.
+        Subclasses should override this based on their specific indicator periods.
+
+        Returns:
+            int: Minimum number of bars (default: 1)
+        """
+        return 1
+
     def get_param(self, key: str, default=None):
         """Safe parameter retrieval"""
         return self.params.get(key, default)
@@ -289,6 +299,25 @@ class BaseEntryMixin(ABC):
 
         indicator = self.strategy.indicators[alias]
         return indicator[0]  # Current bar value
+
+    def get_indicator_line(self, alias: str) -> Any:
+        """
+        Get indicator line object by alias.
+        Useful for checking length or accessing history directly.
+
+        Args:
+            alias: Field alias from fields_mapping
+
+        Returns:
+            Backtrader line object
+        """
+        if self.strategy is None:
+            raise RuntimeError("Mixin not attached to strategy")
+
+        if not hasattr(self.strategy, 'indicators') or alias not in self.strategy.indicators:
+            raise KeyError(f"Indicator '{alias}' not found in strategy")
+
+        return self.strategy.indicators[alias]
 
     def get_indicator_prev(self, alias: str, offset: int = 1) -> Any:
         """

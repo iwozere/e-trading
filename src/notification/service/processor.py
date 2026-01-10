@@ -258,7 +258,9 @@ class MessageProcessor:
         while self._running:
             try:
                 # Check for high priority messages more frequently
-                messages = self.queue.dequeue_high_priority(limit=5)
+                # Only dequeue messages for channels we are handling
+                enabled_channels = list(self._channel_instances.keys())
+                messages = self.queue.dequeue_high_priority(limit=5, channels=enabled_channels)
 
                 if messages:
                     self._logger.info("Processing %s high priority messages", len(messages))
@@ -283,7 +285,9 @@ class MessageProcessor:
         while self._running:
             try:
                 # Process normal and low priority messages in batches
-                messages = self.queue.dequeue(limit=self.batch_size)
+                # Only dequeue messages for channels we are handling
+                enabled_channels = list(self._channel_instances.keys())
+                messages = self.queue.dequeue(limit=self.batch_size, channels=enabled_channels)
 
                 if messages:
                     self._logger.info("Processing %s normal priority messages", len(messages))

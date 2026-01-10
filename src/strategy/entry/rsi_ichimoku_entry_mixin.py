@@ -122,94 +122,68 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             logger.exception("Error initializing indicators: ")
             raise
 
+    def get_minimum_lookback(self) -> int:
+        """
+        Returns the minimum number of bars required (Kijun period for Ichimoku cloud).
+        """
+        # Get kijun period from params
+        return self.get_param("kijun") or self.get_param("e_kijun", 26)
+
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are ready to be used"""
+        """
+        Check if indicators are initialized.
+        History/Lookback is now handled by BaseStrategy.
+        """
         if self.use_new_architecture:
-            # New architecture: check strategy's indicators
-            if not hasattr(self.strategy, 'indicators') or not self.strategy.indicators:
-                return False
-
-            # Check if required indicators exist
-            required_indicators = ['entry_rsi', 'entry_ichimoku_tenkan', 'entry_ichimoku_senkou_a', 'entry_ichimoku_senkou_b']
-            for ind_alias in required_indicators:
-                if ind_alias not in self.strategy.indicators:
-                    return False
-
-            # Check if we can access values
-            try:
-                _ = self.get_indicator('entry_rsi')
-                _ = self.get_indicator('entry_ichimoku_tenkan')
-                _ = self.get_indicator('entry_ichimoku_senkou_a')
-                _ = self.get_indicator('entry_ichimoku_senkou_b')
-                return True
-            except (IndexError, KeyError, AttributeError):
-                return False
-
+            # Check if required indicators exist in strategy
+            required = ['entry_rsi', 'entry_ichimoku_tenkan', 'entry_ichimoku_senkou_a', 'entry_ichimoku_senkou_b']
+            return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
         else:
-            # Legacy architecture: check mixin's indicators
-            return (self.rsi_name in self.indicators and
-                    self.ichimoku_name in self.indicators)
+            # Legacy: check mixin's indicators dict
+            return self.rsi_name in self.indicators and self.ichimoku_name in self.indicators
 
     def should_enter(self) -> bool:
-        """Check if we should enter a position.
-
-        Works with both new and legacy architectures.
-        """
+        """Check if we should enter a position."""
         if not self.are_indicators_ready():
             return False
 
         try:
             current_price = self.strategy.data.close[0]
 
-            # Get indicator values and params based on architecture
-            if self.use_new_architecture:
-                # New architecture: access via get_indicator()
-                current_rsi = self.get_indicator('entry_rsi')
+            # Standardized parameter retrieval (supports both config styles)
+            rsi_oversold = self.get_param("rsi_oversold") or self.get_param("e_rsi_oversold", 30)
+            kijun_period = self.get_param("kijun") or self.get_param("e_kijun", 26)
 
-                # Get params from logic_params (new) or fallback to legacy params
-                rsi_oversold = self.get_param("rsi_oversold") or self.get_param("e_rsi_oversold", 30)
-                kijun_period = self.get_param("kijun") or self.get_param("e_kijun", 26)
+            # Centralized indicator access via get_indicator/get_indicator_prev
+            # This works for both legacy (mixin-registered) and new (factory-created) indicators
+            current_rsi = self.get_indicator('entry_rsi')
 
-                # Get Ichimoku values - need to handle shifted values for cloud
-                span_a = self.get_indicator('entry_ichimoku_senkou_a', -kijun_period)
-                span_b = self.get_indicator('entry_ichimoku_senkou_b', -kijun_period)
-                tenkan = self.get_indicator('entry_ichimoku_tenkan')
-                prev_price = self.strategy.data.close[-1]
-                prev_tenkan = self.get_indicator('entry_ichimoku_tenkan', -1)
+            span_a = self.get_indicator_prev('entry_ichimoku_senkou_a', kijun_period)
+            span_b = self.get_indicator_prev('entry_ichimoku_senkou_b', kijun_period)
 
-                # Calculate crossover manually for new architecture
-                cross_over_tenkan = (prev_price <= prev_tenkan and current_price > tenkan)
-            else:
-                # Legacy architecture: access via mixin's indicators dict
-                rsi = self.indicators[self.rsi_name]
-                current_rsi = rsi[0]
+            tenkan = self.get_indicator('entry_ichimoku_tenkan')
+            prev_tenkan = self.get_indicator_prev('entry_ichimoku_tenkan', 1)
+            prev_price = self.strategy.data.close[-1]
 
-                # Get params from legacy params
-                rsi_oversold = self.get_param("e_rsi_oversold", 30)
-                kijun_period = self.get_param("e_kijun", 26)
-
-                # Get Ichimoku values from legacy indicators
-                span_a = self.senkou_span_a[-kijun_period]
-                span_b = self.senkou_span_b[-kijun_period]
-
-                # Use legacy crossover indicator
-                cross_over_tenkan = self.cross_over_tenkan[0] > 0
-
+            # Cross-over logic
+            cross_over_tenkan = (prev_price <= prev_tenkan and current_price > tenkan)
             kumo_top = max(span_a, span_b)
 
-            # Price must be above the cloud
-            # RSI oversold and bullish price crossover above Tenkan-sen
-            return_value = (current_price > kumo_top and
-                          current_rsi <= rsi_oversold and
-                          cross_over_tenkan)
+            # Strategy conditions
+            entry_signal = (
+                current_price > kumo_top and
+                current_rsi <= rsi_oversold and
+                cross_over_tenkan
+            )
 
-            if return_value:
+            if entry_signal:
                 logger.debug(
                     f"ENTRY: Price: {current_price}, RSI: {current_rsi}, "
                     f"span_a: {span_a}, span_b: {span_b}, kumo_top: {kumo_top}"
                 )
 
-            return return_value
+            return entry_signal
+
         except Exception:
             logger.exception("Error in should_enter: ")
             return False

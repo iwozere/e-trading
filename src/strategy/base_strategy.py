@@ -105,6 +105,7 @@ class BaseStrategy(bt.Strategy):
         # Indicator management (for new TALib-based architecture)
         self.indicators = {}  # Dict[str, bt.Indicator] - stores indicator line objects by alias
         self.indicator_configs = []  # Store indicator configurations
+        self.warmup_period = 0  # To be calculated from mixins
 
         _logger.debug("BaseBacktraderStrategy initialized")
 
@@ -172,6 +173,10 @@ class BaseStrategy(bt.Strategy):
         """Called once at the start of the strategy."""
         _logger.debug("BaseBacktraderStrategy.start called")
         self._initialize_strategy()
+
+        # Calculate warmup period from mixins
+        self.warmup_period = self._calculate_warmup_period()
+        _logger.info(f"Strategy warmup period: {self.warmup_period} bars")
 
     def _initialize_strategy(self):
         """Initialize strategy-specific components. Override in subclasses."""
@@ -271,6 +276,31 @@ class BaseStrategy(bt.Strategy):
 
         return True
 
+    def _calculate_warmup_period(self) -> int:
+        """
+        Calculate the required warmup period based on all attached mixins.
+
+        Returns:
+            int: Maximum lookback required by any mixin.
+        """
+        warmups = [0]
+
+        # Check entry mixin
+        if hasattr(self, 'entry_mixin') and self.entry_mixin:
+            try:
+                warmups.append(self.entry_mixin.get_minimum_lookback())
+            except Exception as e:
+                _logger.warning(f"Error getting warmup from entry mixin: {e}")
+
+        # Check exit mixin
+        if hasattr(self, 'exit_mixin') and self.exit_mixin:
+            try:
+                warmups.append(self.exit_mixin.get_minimum_lookback())
+            except Exception as e:
+                _logger.warning(f"Error getting warmup from exit mixin: {e}")
+
+        return max(warmups)
+
     def prenext(self):
         """Skip bars until we have enough data."""
         pass
@@ -279,6 +309,10 @@ class BaseStrategy(bt.Strategy):
         """Main strategy logic. Override in subclasses."""
         # Update equity curve
         self._update_equity_curve()
+
+        # Check warmup period
+        if len(self.data) <= self.warmup_period:
+            return
 
         # Call subclass-specific logic
         self._execute_strategy_logic()

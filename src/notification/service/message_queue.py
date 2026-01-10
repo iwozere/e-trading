@@ -175,7 +175,8 @@ class MessageQueue:
     def dequeue(
         self,
         limit: int = 10,
-        priority_filter: Optional[MessagePriority] = None
+        priority_filter: Optional[MessagePriority] = None,
+        channels: Optional[List[str]] = None
     ) -> List[QueuedMessage]:
         """
         Dequeue messages ready for processing.
@@ -183,6 +184,7 @@ class MessageQueue:
         Args:
             limit: Maximum number of messages to dequeue
             priority_filter: Only dequeue messages with this priority
+            channels: Only dequeue messages for these channels
 
         Returns:
             List of QueuedMessage objects
@@ -196,6 +198,7 @@ class MessageQueue:
                 messages = r.notifications.messages.get_pending_messages(
                     current_time=current_time,
                     priority=priority_filter,
+                    channels=channels,
                     limit=limit
                 )
 
@@ -224,12 +227,13 @@ class MessageQueue:
             self._logger.exception("Failed to dequeue messages:")
             raise
 
-    def dequeue_high_priority(self, limit: int = 5) -> List[QueuedMessage]:
+    def dequeue_high_priority(self, limit: int = 5, channels: Optional[List[str]] = None) -> List[QueuedMessage]:
         """
         Dequeue only high priority messages (HIGH and CRITICAL).
 
         Args:
             limit: Maximum number of messages to dequeue
+            channels: Only dequeue messages for these channels
 
         Returns:
             List of high priority QueuedMessage objects
@@ -246,6 +250,7 @@ class MessageQueue:
                 critical_messages = r.notifications.messages.get_pending_messages(
                     current_time=current_time,
                     priority=MessagePriority.CRITICAL,
+                    channels=channels,
                     limit=limit
                 )
                 high_priority_messages.extend(critical_messages)
@@ -256,6 +261,7 @@ class MessageQueue:
                     high_messages = r.notifications.messages.get_pending_messages(
                         current_time=current_time,
                         priority=MessagePriority.HIGH,
+                        channels=channels,
                         limit=remaining_limit
                     )
                     high_priority_messages.extend(high_messages)
