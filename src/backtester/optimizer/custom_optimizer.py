@@ -142,10 +142,12 @@ class CustomOptimizer:
             "entry_logic": {
                 "name": self.entry_logic["name"],
                 "params": entry_logic_params,
+                "indicators": self.entry_logic.get("indicators", [])
             },
             "exit_logic": {
                 "name": self.exit_logic["name"],
                 "params": exit_logic_params,
+                "indicators": self.exit_logic.get("indicators", [])
             },
             "use_talib": self.use_talib,
             "position_size": self.optimizer_settings.get("position_size", 0.10),

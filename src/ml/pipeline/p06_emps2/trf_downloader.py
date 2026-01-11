@@ -7,6 +7,7 @@ This script calls the main FINRA TRF downloader from src/data/downloader.
 
 import sys
 from pathlib import Path
+import pandas as pd
 from datetime import datetime, timedelta, date
 from typing import Optional
 

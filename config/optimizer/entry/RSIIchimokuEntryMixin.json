@@ -1,47 +1,35 @@
 {
     "name": "RSIIchimokuEntryMixin",
-    "params": {
-        "e_rsi_period": {
-            "type": "int",
-            "low": 5,
-            "high": 30,
-            "default": 14
+    "indicators": [
+        {
+            "type": "RSI",
+            "params": {
+                "timeperiod": 14
+            },
+            "fields_mapping": {
+                "rsi": "entry_rsi"
+            }
         },
-        "e_rsi_oversold": {
+        {
+            "type": "ICHIMOKU",
+            "params": {
+                "tenkan": 9,
+                "kijun": 26,
+                "senkou": 52
+            },
+            "fields_mapping": {
+                "tenkan_sen": "entry_ichimoku_tenkan",
+                "senkou_span_a": "entry_ichimoku_senkou_a",
+                "senkou_span_b": "entry_ichimoku_senkou_b"
+            }
+        }
+    ],
+    "params": {
+        "rsi_oversold": {
             "type": "int",
             "low": 20,
             "high": 50,
             "default": 30
-        },
-        "e_tenkan": {
-            "type": "int",
-            "low": 7,
-            "high": 12,
-            "default": 9
-        },
-        "e_kijun": {
-            "type": "int",
-            "low": 22,
-            "high": 30,
-            "default": 26
-        },
-        "e_senkou": {
-            "type": "int",
-            "low": 48,
-            "high": 58,
-            "default": 52
-        },
-        "e_senkou_lead": {
-            "type": "int",
-            "low": 22,
-            "high": 30,
-            "default": 26
-        },
-        "e_chikou": {
-            "type": "int",
-            "low": 22,
-            "high": 30,
-            "default": 26
         }
     }
 }
