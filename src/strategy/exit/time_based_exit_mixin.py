@@ -5,7 +5,7 @@ This module implements an exit strategy based on time duration. The strategy exi
 after a specified number of bars or calendar days have elapsed since entry.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
@@ -14,14 +14,15 @@ logger = setup_logger(__name__)
 
 
 class TimeBasedExitMixin(BaseExitMixin):
-    """Exit mixin based on time."""
+    """Exit mixin based on time.
+    New Architecture only.
+    """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self.entry_bar = None
         self.entry_time = None
-        self.use_new_architecture = False
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -31,22 +32,19 @@ class TimeBasedExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_max_bars": 20,
-            "x_use_time": False,
-            "x_max_minutes": 60,
+            "max_bars": 20,
+            "use_time": False,
+            "max_minutes": 60,
         }
-
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Standardize architecture detection."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-        super().init_exit(strategy, additional_params)
 
     def _init_indicators(self):
         """No indicators required for this mixin."""
         pass
+
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """No indicators to provision automatically."""
+        return []
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required (0 for this mixin)."""

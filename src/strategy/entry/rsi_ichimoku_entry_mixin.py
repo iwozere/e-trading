@@ -39,7 +39,7 @@ Configuration Example (New Unified Architecture):
 Note: This mixin no longer supports legacy internal indicator initialization.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import backtrader as bt
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
@@ -62,8 +62,37 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "rsi_oversold": 30
+            "rsi_oversold": 30,
+            "rsi_period": 14,
+            "tenkan_period": 9,
+            "kijun_period": 26,
+            "senkou_period": 52
         }
+
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        rsi_period = params.get("rsi_period") or params.get("e_rsi_period", 14)
+        tenkan = params.get("tenkan_period") or params.get("e_tenkan", 9)
+        kijun = params.get("kijun_period") or params.get("e_kijun", 26)
+        senkou = params.get("senkou_period") or params.get("e_senkou", 52)
+
+        return [
+            {
+                "type": "RSI",
+                "params": {"timeperiod": rsi_period},
+                "fields_mapping": {"rsi": "entry_rsi"}
+            },
+            {
+                "type": "ICHIMOKU",
+                "params": {"tenkan": tenkan, "kijun": kijun, "senkou": senkou},
+                "fields_mapping": {
+                    "tenkan_sen": "entry_ichimoku_tenkan",
+                    "senkou_span_a": "entry_ichimoku_senkou_a",
+                    "senkou_span_b": "entry_ichimoku_senkou_b"
+                }
+            }
+        ]
 
     def _init_indicators(self):
         """
@@ -76,8 +105,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
         """
         Returns the minimum number of bars required (Kijun period for Ichimoku cloud).
         """
-        # Get kijun period from params
-        return self.get_param("kijun") or self.get_param("e_kijun", 26)
+        return self.get_param("kijun_period") or self.get_param("e_kijun", 26)
 
     def are_indicators_ready(self) -> bool:
         """

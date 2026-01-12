@@ -15,7 +15,7 @@ Conditions (all must be true):
 5. No overbought RSI: RSI < rsi_overbought threshold
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import math
 
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
@@ -27,14 +27,12 @@ _logger = setup_logger(__name__)
 class EOMBreakoutEntryMixin(BaseEntryMixin):
     """
     Entry mixin for BUY #1: Breakout + EOM Confirmation.
-
-    Supports both new TALib-based architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-        self.use_new_architecture = False
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -44,9 +42,9 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "e_breakout_threshold": 0.002,
-            "e_use_atr_filter": True,
-            "e_rsi_overbought": 70,
+            "breakout_threshold": 0.002,
+            "use_atr_filter": True,
+            "rsi_overbought": 70,
             "resistance_lookback": 2,
             "eom_period": 14,
             "volume_sma_period": 20,
@@ -55,18 +53,59 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
             "rsi_period": 14,
         }
 
-    def init_entry(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Standardize architecture detection."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-        super().init_entry(strategy, additional_params)
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        res_lookback = params.get("resistance_lookback", 2)
+        eom_period = params.get("eom_period", 14)
+        vol_sma_period = params.get("volume_sma_period", 20)
+        atr_period = params.get("atr_period", 14)
+        atr_sma_period = params.get("atr_sma_period", 100)
+        rsi_period = params.get("rsi_period", 14)
+
+        config = [
+            {
+                "type": "SupportResistance",
+                "params": {"lookback_bars": res_lookback},
+                "fields_mapping": {"resistance": "entry_resistance", "support": "entry_support"}
+            },
+            {
+                "type": "EOM",
+                "params": {"timeperiod": eom_period},
+                "fields_mapping": {"eom": "entry_eom"}
+            },
+            {
+                "type": "SMA",
+                "params": {"timeperiod": vol_sma_period},
+                "data_field": "volume",
+                "fields_mapping": {"sma": "entry_volume_sma"}
+            },
+            {
+                "type": "RSI",
+                "params": {"timeperiod": rsi_period},
+                "fields_mapping": {"rsi": "entry_rsi"}
+            }
+        ]
+
+        if params.get("use_atr_filter", params.get("e_use_atr_filter", True)):
+            config.extend([
+                {
+                    "type": "ATR",
+                    "params": {"timeperiod": atr_period},
+                    "fields_mapping": {"atr": "entry_atr"}
+                },
+                {
+                    "type": "SMA",
+                    "params": {"timeperiod": atr_sma_period},
+                    "data_field": "entry_atr",
+                    "fields_mapping": {"sma": "entry_atr_sma"}
+                }
+            ])
+
+        return config
 
     def _init_indicators(self):
-        """In legacy mode, this would initialize indicators. For now, we assume strategy provides them."""
-        # If we wanted to support full legacy initialization (where mixin creates its own indicators),
-        # we would do it here. For EOM mixins, they currently rely on the new architecture.
+        """No-op for new architecture."""
         pass
 
     def get_minimum_lookback(self) -> int:
@@ -82,27 +121,17 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are initialized."""
+        """Check if required indicators exist in the strategy registry."""
         required = [
             'entry_resistance', 'entry_eom', 'entry_volume_sma', 'entry_rsi'
         ]
-        if self.get_param("e_use_atr_filter", True):
+        if self.get_param("use_atr_filter") or self.get_param("e_use_atr_filter", True):
             required.extend(['entry_atr', 'entry_atr_sma'])
 
-        if hasattr(self.strategy, 'indicators') and self.strategy.indicators:
-            return all(alias in self.strategy.indicators for alias in required)
-
-        # If legacy indicators were registered in self.indicators, check them here.
-        # But EOM mixins currently mostly use the new architecture.
-        return len(self.indicators) > 0 or self.use_new_architecture
+        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
 
     def should_enter(self) -> bool:
-        """
-        Determines if the mixin should enter a position.
-
-        Returns:
-            bool: True if all entry conditions are met
-        """
+        """Determines if the mixin should enter a position."""
         if not self.are_indicators_ready():
             return False
 
@@ -119,9 +148,9 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
             rsi = self.get_indicator('entry_rsi')
 
             # Get parameters
-            breakout_threshold = self.get_param("e_breakout_threshold") or self.get_param("breakout_threshold", 0.002)
-            use_atr_filter = self.get_param("e_use_atr_filter") or self.get_param("use_atr_filter", True)
-            rsi_overbought = self.get_param("e_rsi_overbought") or self.get_param("rsi_overbought", 70)
+            breakout_threshold = self.get_param("breakout_threshold") or self.get_param("e_breakout_threshold", 0.002)
+            use_atr_filter = self.get_param("use_atr_filter") or self.get_param("e_use_atr_filter", True)
+            rsi_overbought = self.get_param("rsi_overbought") or self.get_param("e_rsi_overbought", 70)
 
             # Check if resistance is valid (not NaN)
             if math.isnan(resistance):
@@ -167,9 +196,6 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
             )
             return True
 
-        except KeyError as e:
-            _logger.warning(f"Required indicator not found: {e}")
-            return False
         except Exception:
             _logger.exception("Error in EOMBreakoutEntryMixin.should_enter")
             return False

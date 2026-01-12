@@ -13,7 +13,7 @@ It also supports dynamic volatility adaptation (ATR-of-ATR) where multipliers ad
 based on current volatility relative to its average.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import backtrader as bt
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
@@ -23,17 +23,7 @@ logger = setup_logger(__name__)
 class MultiLevelAtrExitMixin(BaseExitMixin):
     """
     Hierarchical Multi-TF ATR trailing stop exit strategy.
-
-    Parameters:
-    - x_htf_atr_period: Period for HTF ATR (default: 14)
-    - x_htf_sl_multiplier: Multiplier for HTF stop (default: 2.5)
-    - x_ltf_atr_period: Period for LTF ATR (default: 14)
-    - x_ltf_sl_multiplier: Multiplier for LTF stop (default: 2.0)
-    - x_micro_atr_period: Period for Micro ATR (default: 14)
-    - x_be_activation_atr: Profit in LTF ATR units to activate BE (default: 1.0)
-    - x_be_buffer_multiplier: Multiplier for Micro ATR buffer in BE (default: 0.3)
-    - x_use_dynamic_k: Enable ATR-of-ATR dynamic multipliers (default: False)
-    - x_vol_sma_period: Period for ATR SMA for dynamic K (default: 50)
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
@@ -41,32 +31,19 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
         self.stop_price = -float('inf')
         self.highest_price = -float('inf')
         self.entry_price = None
-
-        # Indicators
-        self.atr_htf = None
-        self.atr_ltf = None
-        self.atr_micro = None
-        self.atr_ltf_sma = None
-
         self.be_activated = False
 
-        # Detect architecture mode
-        self.use_new_architecture = False  # Will be set in init_exit()
+        # Ensure data feeds are always available (needed for should_exit logic)
+        # These will be set in init_exit
+        self.data_ltf = None
+        self.data_htf = None
+        self.data_micro = None
 
     def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Override to detect architecture mode before calling parent."""
-        # Detect architecture: new if strategy has indicators dict with entries
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-            logger.debug("Using new TALib-based architecture")
-        else:
-            self.use_new_architecture = False
-            logger.debug("Using legacy architecture")
-
-        # Call parent init_exit which will call _init_indicators
+        """Override to ensure data feeds are initialized."""
         super().init_exit(strategy, additional_params)
 
-        # Ensure data feeds are always available (needed for should_exit logic)
+        # Ensure data feeds are always available
         self.data_ltf = self.strategy.data0
         self.data_htf = self.strategy.data1 if len(self.strategy.datas) > 1 else self.strategy.data0
         self.data_micro = self.strategy.data0
@@ -74,67 +51,60 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
     def get_required_params(self) -> list:
         return []
 
-    def get_default_params(self) -> Dict[str, Any]:
+    @classmethod
+    def get_default_params(cls) -> Dict[str, Any]:
         return {
-            "x_htf_atr_period": 14,
-            "x_htf_sl_multiplier": 2.5,
-            "x_ltf_atr_period": 14,
-            "x_ltf_sl_multiplier": 2.0,
-            "x_micro_atr_period": 14,
-            "x_be_activation_atr": 1.0,  # Activate BE when profit > 1 * ATR_LTF
-            "x_be_buffer_multiplier": 0.3,
-            "x_use_dynamic_k": False,
-            "x_vol_sma_period": 50,
-            "x_htf_compression": 16,  # Multiplier relative to LTF (e.g. 16 * 15m = 240m = 4H)
+            "htf_atr_period": 14,
+            "htf_sl_multiplier": 2.5,
+            "ltf_atr_period": 14,
+            "ltf_sl_multiplier": 2.0,
+            "micro_atr_period": 14,
+            "be_activation_atr": 1.0,  # Activate BE when profit > 1 * ATR_LTF
+            "be_buffer_multiplier": 0.3,
+            "use_dynamic_k": False,
+            "vol_sma_period": 50,
+            "htf_compression": 16,  # Multiplier relative to LTF (e.g. 15 * 16 = 240m = 4H)
         }
 
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        htf_atr_period = params.get("htf_atr_period") or params.get("x_htf_atr_period", 14)
+        ltf_atr_period = params.get("ltf_atr_period") or params.get("x_ltf_atr_period", 14)
+        micro_atr_period = params.get("micro_atr_period") or params.get("x_micro_atr_period", 14)
+        use_dynamic_k = params.get("use_dynamic_k", params.get("x_use_dynamic_k", False))
+        vol_sma_period = params.get("vol_sma_period") or params.get("x_vol_sma_period", 50)
+
+        configs = [
+            {
+                "type": "ATR",
+                "params": {"timeperiod": ltf_atr_period},
+                "fields_mapping": {"atr": "exit_atr_ltf"}
+            },
+            {
+                "type": "ATR",
+                "params": {"timeperiod": htf_atr_period},
+                "fields_mapping": {"atr": "exit_atr_htf"}
+            },
+            {
+                "type": "ATR",
+                "params": {"timeperiod": micro_atr_period},
+                "fields_mapping": {"atr": "exit_atr_micro"}
+            }
+        ]
+
+        if use_dynamic_k:
+            configs.append({
+                "type": "SMA",
+                "params": {"timeperiod": vol_sma_period},
+                "fields_mapping": {"sma": "exit_atr_ltf_sma"}
+            })
+
+        return configs
+
     def _init_indicators(self):
-        """Initialize indicators for all timeframes."""
-        if self.use_new_architecture:
-            # indicators are managed by the strategy config
-            return
-
-        if not hasattr(self, "strategy"):
-            return
-
-        # data0 = Base TF (LTF)
-        # data1 = Resampled HTF (if exists, otherwise fallback to data0)
-        # data_micro = Optional micro TF (if exists, otherwise fallback to data0)
-
-        # LTF ATR (Tactical)
-        self.atr_ltf = bt.indicators.ATR(self.data_ltf, period=self.params["x_ltf_atr_period"])
-        self.register_indicator("exit_atr_ltf", self.atr_ltf)
-
-        # HTF ATR (Strategic)
-        # 1. Determine base interval from data (default to 15m if undetectable)
-        base_interval = getattr(self.data_ltf, '_compression', 15)
-        # Handle cases where _compression might be None or 0
-        if not base_interval: base_interval = 15
-
-        # 2. Calculate total HTF minutes
-        comp_multiplier = self.params.get("x_htf_compression", 16)
-        comp_minutes = int(comp_multiplier * base_interval)
-        period = self.params.get("x_htf_atr_period", 14)
-        precalc_col = f"atr_{comp_minutes}_{period}"
-
-        if hasattr(self.data_ltf, precalc_col):
-            logger.info("Using pre-calculated HTF ATR: %s", precalc_col)
-            self.atr_htf = getattr(self.data_ltf, precalc_col)
-        else:
-            logger.debug("Calculating HTF ATR on the fly (data1 or fallback): %s", precalc_col)
-            # data_htf is expected to be a resampled feed if not using pre-calculated
-            self.atr_htf = bt.indicators.ATR(self.data_htf, period=period)
-
-        self.register_indicator("exit_atr_htf", self.atr_htf)
-
-        # Micro ATR (Protection)
-        self.atr_micro = bt.indicators.ATR(self.data_micro, period=self.params["x_micro_atr_period"])
-        self.register_indicator("exit_atr_micro", self.atr_micro)
-
-        # ATR-of-ATR indicators
-        if self.params["x_use_dynamic_k"]:
-            self.atr_ltf_sma = bt.indicators.SMA(self.atr_ltf, period=self.params["x_vol_sma_period"])
-            self.register_indicator("exit_atr_ltf_sma", self.atr_ltf_sma)
+        """No-op for new architecture."""
+        pass
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered."""
@@ -145,34 +115,24 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
         logger.debug(f"MultiLevelAtrExitMixin entered at {entry_price}")
 
     def get_minimum_lookback(self) -> int:
-        """
-        Returns the minimum number of bars required.
-        """
+        """Returns the minimum number of bars required."""
         periods = [
-            self.params.get("x_htf_atr_period", 14),
-            self.params.get("x_ltf_atr_period", 14),
-            self.params.get("x_micro_atr_period", 14)
+            self.get_param("htf_atr_period") or self.get_param("x_htf_atr_period", 14),
+            self.get_param("ltf_atr_period") or self.get_param("x_ltf_atr_period", 14),
+            self.get_param("micro_atr_period") or self.get_param("x_micro_atr_period", 14)
         ]
-        if self.params.get("x_use_dynamic_k", False):
-            periods.append(self.params.get("x_vol_sma_period", 50))
+        if self.get_param("use_dynamic_k") or self.get_param("x_use_dynamic_k", False):
+            periods.append(self.get_param("vol_sma_period") or self.get_param("x_vol_sma_period", 50))
 
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
-        """
-        Check if indicators are initialized.
-        History/Lookback is now handled by BaseStrategy.
-        """
+        """Check if required indicators exist in the strategy registry."""
         required = ["exit_atr_ltf", "exit_atr_htf", "exit_atr_micro"]
-        if self.params.get("x_use_dynamic_k", False):
+        if self.get_param("use_dynamic_k") or self.get_param("x_use_dynamic_k", False):
             required.append("exit_atr_ltf_sma")
 
-        if self.use_new_architecture:
-            # Check strategy's central indicators dict
-            return all(name in getattr(self.strategy, 'indicators', {}) for name in required)
-        else:
-            # Legacy: check mixin's own indicators dict
-            return all(name in self.indicators for name in required)
+        return all(name in getattr(self.strategy, 'indicators', {}) for name in required)
 
     def should_exit(self) -> bool:
         if not self.are_indicators_ready() or self.entry_price is None:
@@ -190,13 +150,16 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
 
             # Dynamic K calculation (ATR-of-ATR)
             vol_ratio = 1.0
-            if self.params["x_use_dynamic_k"]:
+            if self.get_param("use_dynamic_k") or self.get_param("x_use_dynamic_k", False):
                 atr_ltf_sma = self.get_indicator("exit_atr_ltf_sma")
                 if atr_ltf_sma > 0:
                     vol_ratio = atr_ltf / atr_ltf_sma
 
-            k_htf = self.params["x_htf_sl_multiplier"] * vol_ratio
-            k_ltf = self.params["x_ltf_sl_multiplier"] * vol_ratio
+            htf_sl_multiplier = self.get_param("htf_sl_multiplier") or self.get_param("x_htf_sl_multiplier", 2.5)
+            ltf_sl_multiplier = self.get_param("ltf_sl_multiplier") or self.get_param("x_ltf_sl_multiplier", 2.0)
+
+            k_htf = htf_sl_multiplier * vol_ratio
+            k_ltf = ltf_sl_multiplier * vol_ratio
 
             # Strategic Stop (S0) - Fixed relative to entry or HTF
             s0 = self.entry_price - atr_htf * k_htf
@@ -208,13 +171,15 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
             s2 = -float('inf')
             profit_in_atr = (current_close - self.entry_price) / atr_ltf if atr_ltf > 0 else 0
 
-            if profit_in_atr >= self.params["x_be_activation_atr"]:
+            be_activation_atr = self.get_param("be_activation_atr") or self.get_param("x_be_activation_atr", 1.0)
+            if profit_in_atr >= be_activation_atr:
                 if not self.be_activated:
                     logger.info(f"Break-even activated at profit {profit_in_atr:.2f} ATR")
                     self.be_activated = True
 
                 # S2 = entry + small buffer based on Micro ATR
-                s2 = self.entry_price + atr_micro * self.params["x_be_buffer_multiplier"]
+                be_buffer_multiplier = self.get_param("be_buffer_multiplier") or self.get_param("x_be_buffer_multiplier", 0.3)
+                s2 = self.entry_price + atr_micro * be_buffer_multiplier
 
             # Final STOP = max(S0, S1, S2) - only moves UP
             new_stop = max(s0, s1, s2)
@@ -230,6 +195,17 @@ class MultiLevelAtrExitMixin(BaseExitMixin):
         except Exception:
             logger.exception("Error in should_exit: ")
             return False
+
+    def get_exit_reason(self) -> str:
+        return getattr(self.strategy, 'current_exit_reason', 'multi_tf_atr_exit')
+
+    def next(self):
+        super().next()
+        if not self.strategy.position:
+            self.entry_price = None
+            self.highest_price = -float('inf')
+            self.stop_price = -float('inf')
+            self.be_activated = False
 
     def get_exit_reason(self) -> str:
         return getattr(self.strategy, 'current_exit_reason', 'multi_tf_atr_exit')

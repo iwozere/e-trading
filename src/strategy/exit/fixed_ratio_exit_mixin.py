@@ -7,7 +7,7 @@ The strategy exits a position when:
 2. Price reaches the stop loss level (entry price * (1 - stop_loss_ratio))
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
 from src.notification.logger import setup_logger
@@ -16,12 +16,13 @@ logger = setup_logger(__name__)
 
 
 class FixedRatioExitMixin(BaseExitMixin):
-    """Exit mixin based on a fixed ratio of profit or loss."""
+    """Exit mixin based on a fixed ratio of profit or loss.
+    New Architecture only.
+    """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-        self.use_new_architecture = False
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -31,17 +32,14 @@ class FixedRatioExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_take_profit": 0.1,
-            "x_stop_loss": 0.05,
+            "take_profit": 0.1,
+            "stop_loss": 0.05,
         }
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Standardize architecture detection."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-        super().init_exit(strategy, additional_params)
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """No indicators required for this mixin."""
+        return []
 
     def _init_indicators(self):
         """No indicators required for this mixin."""

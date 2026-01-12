@@ -6,7 +6,7 @@ This module provides the base class for all entry mixins.
 
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, get_type_hints
+from typing import Any, Dict, Optional, get_type_hints, List
 
 from src.notification.logger import setup_logger
 
@@ -199,6 +199,20 @@ class BaseEntryMixin(ABC):
         """Returns a dictionary of default parameters"""
         return {}
 
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Returns the default indicator configuration for this mixin.
+        Subclasses should override this to define their required indicators.
+
+        Args:
+            params: The parameters (e.g. from config or optimized) to use for indicator setup.
+
+        Returns:
+            List of indicator configurations.
+        """
+        return []
+
     def init_entry(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
         """
         Initialization of the mixin with a strategy
@@ -222,26 +236,19 @@ class BaseEntryMixin(ABC):
 
     def are_indicators_ready(self) -> bool:
         """
-        Check if indicators are ready to be used.
-        Default implementation checks if indicators dictionary exists and has entries.
-        Subclasses can override for more specific checks.
-
-        Returns:
-            bool: True if indicators are ready, False otherwise
+        Check if required indicators exist in the strategy registry.
         """
+        # New Architecture check: if we have a strategy, it should have the indicators
+        if self.strategy and hasattr(self.strategy, 'indicators'):
+            # This is a basic check. Subclasses should override if they have specific aliases.
+            return True
+
+        # Legacy fallback (to be removed after migration)
         if not hasattr(self, "indicators"):
             return False
 
         if not self.indicators:
             return False
-
-        # Check if we have enough data points (basic check)
-        if hasattr(self, "strategy") and self.strategy and hasattr(self.strategy, "data"):
-            try:
-                if len(self.strategy.data) < 2:  # Minimum data requirement
-                    return False
-            except Exception:
-                return False
 
         return True
 
@@ -387,23 +394,6 @@ class BaseEntryMixin(ABC):
                 f"Strategy not set, indicator '{name}' only stored in indicators dictionary"
             )
 
-    def are_indicators_ready(self) -> bool:
-        """Check if indicators are ready to be used"""
-        if not self.indicators:
-            return False
-
-        try:
-            # Try to access the first value of each indicator
-            for indicator in self.indicators.values():
-                if hasattr(indicator, "__getitem__"):
-                    _ = indicator[0]
-                elif hasattr(indicator, "lines"):
-                    for line in indicator.lines:
-                        _ = line[0]
-            return True
-        except (IndexError, TypeError):
-            return False
-
     def next(self):
         """Called for each new bar"""
         # Check if we need to reinitialize indicators
@@ -412,3 +402,10 @@ class BaseEntryMixin(ABC):
 
     def notify_trade(self, trade):
         """Strategy will call this method when BUY order is executed (for long position)"""
+
+    def get_entry_reason(self) -> str:
+        """
+        Returns the reason for the entry.
+        Subclasses should override this to provide specific reasoning.
+        """
+        return f"{self.__class__.__name__} signal"

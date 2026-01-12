@@ -23,7 +23,7 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import backtrader as bt
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -34,21 +34,15 @@ logger = setup_logger(__name__)
 
 class SimpleATRExitMixin(BaseExitMixin):
     """Simple ATR-based trailing stop exit strategy.
-
-    Supports both new TALib-based architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-        self.atr_name = "exit_atr"
-        self.atr = None
         self.initial_stop = None
         self.current_stop = None
         self.breakeven_triggered = False
-
-        # Detect architecture mode
-        self.use_new_architecture = False  # Will be set in init_exit()
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -58,72 +52,43 @@ class SimpleATRExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_atr_period": 14,
-            "x_atr_multiplier": 2.0,
-            "x_breakeven_atr": 1.0,
-            "x_use_breakeven": True,
+            "atr_period": 14,
+            "atr_multiplier": 2.0,
+            "breakeven_atr": 1.0,
+            "use_breakeven": True,
         }
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Override to detect architecture mode before calling parent."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-
-        super().init_exit(strategy, additional_params)
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        atr_period = params.get("atr_period") or params.get("x_atr_period", 14)
+        return [
+            {
+                "type": "ATR",
+                "params": {"timeperiod": atr_period},
+                "fields_mapping": {"atr": "exit_atr"}
+            }
+        ]
 
     def _init_indicators(self):
-        """Initialize indicators (legacy architecture only)."""
-        if self.use_new_architecture:
-            return
-
-        if not hasattr(self, "strategy"):
-            logger.error("No strategy available in _init_indicators")
-            return
-
-        try:
-            from src.indicators.adapters.backtrader_wrappers import UnifiedATRIndicator
-
-            atr_period = self.get_param("x_atr_period")
-            backend = "bt-talib" if self.strategy.use_talib else "bt"
-
-            self.atr = UnifiedATRIndicator(
-                self.strategy.data,
-                period=atr_period,
-                backend=backend
-            )
-            self.register_indicator(self.atr_name, self.atr)
-
-        except Exception:
-            logger.exception("Error initializing indicators: ")
-            raise
+        """No-op for new architecture."""
+        pass
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        if self.use_new_architecture:
-            return self.get_param("atr_period", 14)
-        else:
-            return self.get_param("x_atr_period", 14)
+        return self.get_param("atr_period") or self.get_param("x_atr_period", 14)
 
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are initialized."""
-        if self.use_new_architecture:
-            return 'exit_atr' in getattr(self.strategy, 'indicators', {})
-        else:
-            return self.atr_name in self.indicators
+        """Check if required indicators exist in the strategy registry."""
+        return 'exit_atr' in getattr(self.strategy, 'indicators', {})
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered"""
         self.breakeven_triggered = False
 
         if self.are_indicators_ready():
-            if self.use_new_architecture:
-                atr_value = self.get_indicator('exit_atr')
-                atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
-            else:
-                atr_value = self.indicators[self.atr_name].atr[0]
-                atr_multiplier = self.get_param("x_atr_multiplier", 2.0)
+            atr_value = self.get_indicator('exit_atr')
+            atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
 
             if atr_value is not None and atr_value > 0:
                 if direction.lower() == "long":
@@ -144,16 +109,10 @@ class SimpleATRExitMixin(BaseExitMixin):
         try:
             current_price = self.strategy.data.close[0]
 
-            if self.use_new_architecture:
-                atr_value = self.get_indicator('exit_atr')
-                use_breakeven = self.get_param("use_breakeven") or self.get_param("x_use_breakeven", True)
-                breakeven_atr = self.get_param("breakeven_atr") or self.get_param("x_breakeven_atr", 1.0)
-                atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
-            else:
-                atr_value = self.indicators[self.atr_name].atr[0]
-                use_breakeven = self.get_param("x_use_breakeven", True)
-                breakeven_atr = self.get_param("x_breakeven_atr", 1.0)
-                atr_multiplier = self.get_param("x_atr_multiplier", 2.0)
+            atr_value = self.get_indicator('exit_atr')
+            use_breakeven = self.get_param("use_breakeven") or self.get_param("x_use_breakeven", True)
+            breakeven_atr = self.get_param("breakeven_atr") or self.get_param("x_breakeven_atr", 1.0)
+            atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
 
             if atr_value is None or atr_value <= 0:
                 return False

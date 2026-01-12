@@ -12,9 +12,11 @@ import json
 import talib
 from pathlib import Path
 from collections import deque
-from typing import Dict, Tuple, Any, Optional
+from typing import Dict, Tuple, Any, Optional, List
 import sys
+import os
 
+from src.strategy.entry.base_entry_mixin import BaseEntryMixin
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -53,20 +55,20 @@ class LSTMModel(nn.Module):
         return output
 
 
-class HMMLSTMEntryMixin:
+class HMMLSTMEntryMixin(BaseEntryMixin):
     """
     Entry mixin that uses HMM regime detection and LSTM predictions.
-    Supports both new architecture and legacy configurations.
+    New Architecture only.
     """
 
-    def __init__(self, params: Dict[str, Any]):
-        self.params = params
-        self.symbol = params.get('symbol', 'BTCUSDT')
-        self.timeframe = params.get('timeframe', '1h')
-        self.prediction_threshold = params.get('prediction_threshold', 0.001)
-        self.regime_confidence_threshold = params.get('regime_confidence_threshold', 0.6)
-        self.models_dir = Path(params.get('models_dir', 'src/ml/pipeline/p01_hmm_lstm/models'))
-        self.results_dir = Path(params.get('results_dir', 'results'))
+    def __init__(self, params: Optional[Dict[str, Any]] = None):
+        super().__init__(params)
+        self.symbol = self.get_param('symbol', 'BTCUSDT')
+        self.timeframe = self.get_param('timeframe', '1h')
+        self.prediction_threshold = self.get_param('prediction_threshold', 0.001)
+        self.regime_confidence_threshold = self.get_param('regime_confidence_threshold', 0.6)
+        self.models_dir = Path(self.get_param('models_dir', 'src/ml/pipeline/p01_hmm_lstm/models'))
+        self.results_dir = Path(self.get_param('results_dir', 'results'))
 
         self.hmm_model = None
         self.lstm_model = None
@@ -83,20 +85,40 @@ class HMMLSTMEntryMixin:
         self.current_regime = None
         self.regime_confidence = 0.0
         self.current_prediction = 0.0
-        self.strategy = None
-        self.use_new_architecture = False
+        self.is_initialized = False
+
+    def get_required_params(self) -> list:
+        return []
+
+    @classmethod
+    def get_default_params(cls) -> Dict[str, Any]:
+        return {
+            "symbol": "BTCUSDT",
+            "timeframe": "1h",
+            "prediction_threshold": 0.001,
+            "regime_confidence_threshold": 0.6
+        }
+
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        HMM/LSTM uses custom models, not standard TALib indicators.
+        Returns empty list to signal no auto-provisioning needed.
+        """
+        return []
+
+    def _init_indicators(self):
+        """No-op for new architecture."""
+        pass
 
     def init_entry(self, strategy, additional_params=None):
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-
-        self.strategy = strategy
+        super().init_entry(strategy, additional_params)
         try:
             self._load_models()
+            self.is_initialized = True
         except Exception:
             _logger.exception("Failed to load HMM-LSTM models")
+            self.is_initialized = False
 
     def _load_models(self):
         """Load trained HMM and LSTM models."""
@@ -175,7 +197,7 @@ class HMMLSTMEntryMixin:
 
     def are_indicators_ready(self) -> bool:
         """Check if models and data are ready for predictions."""
-        if not self.hmm_model or not self.lstm_model:
+        if not self.is_initialized or not self.hmm_model or not self.lstm_model:
             return False
         if not self.strategy or len(self.strategy.data) < 100:
             return False

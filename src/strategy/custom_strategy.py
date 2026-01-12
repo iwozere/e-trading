@@ -6,14 +6,14 @@ from BaseBacktraderStrategy, which provides common functionality like trade
 tracking, position management, and performance monitoring.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from src.notification.logger import setup_logger
 from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.strategy.base_strategy import BaseStrategy
 
-_logger = setup_logger(__name__)
+_logger = setup_logger(__name__, use_multiprocessing=True)
 
 
 class CustomStrategy(BaseStrategy):
@@ -33,74 +33,119 @@ class CustomStrategy(BaseStrategy):
     """
 
     def __init__(self):
-        super().__init__()
-        # Initialize mixin attributes to None
+        # Initialize mixin attributes to None BEFORE super().__init__
+        # because super().__init__ calls _initialize_strategy which sets these
         self.entry_mixin = None
         self.exit_mixin = None
         self.entry_logic = None
         self.exit_logic = None
+        super().__init__()
 
     def _initialize_strategy(self):
-        """Initialize indicators and entry/exit mixins."""
+        """Initialize indicators and entry/exit mixins using Unified Architecture."""
         try:
-            _logger.debug("Initializing CustomStrategy...")
+            _logger.info("Initializing CustomStrategy...")
 
-            # Set configuration from params
-            # Note: self.p.strategy_config is already the 'parameters' dict from config['strategy']['parameters']
             if self.p.strategy_config:
                 self.use_talib = self.p.strategy_config.get("use_talib", False)
                 self.entry_logic = self.p.strategy_config.get("entry_logic")
                 self.exit_logic = self.p.strategy_config.get("exit_logic")
 
-                if self.entry_logic and self.exit_logic:
-                    _logger.debug(
-                        f"Strategy config loaded - Entry: {self.entry_logic['name']}, Exit: {self.exit_logic['name']}"
-                    )
+                # Create entry mixin (New Architecture Only) - Create FIRST to get default params
+                if self.entry_logic:
+                    entry_mixin_class = ENTRY_MIXIN_REGISTRY.get(self.entry_logic["name"])
+                    if entry_mixin_class:
+                        mixin_params = self.entry_logic.get("logic_params") or self.entry_logic.get("params", {})
+                        self.entry_mixin = entry_mixin_class(params=mixin_params)
+                        self.entry_mixin.init_entry(self)
 
-                # Check if using new indicator architecture
-                if self.entry_logic and 'indicators' in self.entry_logic:
-                    _logger.debug("Using new TALib-based indicator architecture")
+                # Create exit mixin (New Architecture Only) - Create FIRST to get default params
+                if self.exit_logic:
+                    exit_mixin_class = EXIT_MIXIN_REGISTRY.get(self.exit_logic["name"])
+                    if exit_mixin_class:
+                        mixin_params = self.exit_logic.get("logic_params") or self.exit_logic.get("params", {})
+                        self.exit_mixin = exit_mixin_class(params=mixin_params)
+                        self.exit_mixin.init_exit(self)
 
-                    # Create indicators FIRST (before mixins)
-                    # Wrap self.p.strategy_config in expected format for base method
-                    config_for_indicators = {'parameters': self.p.strategy_config}
-                    self._create_indicators_from_config(config_for_indicators)
-                else:
-                    _logger.debug("Using legacy indicator architecture")
+                # Collect all indicator configurations (prefer JSON, fallback to Mixin Blueprint)
+                all_indicator_configs = []
 
-            # Create entry mixin (with indicators already available)
-            if self.entry_logic:
-                entry_mixin_class = ENTRY_MIXIN_REGISTRY[self.entry_logic["name"]]
-                if entry_mixin_class:
-                    _logger.debug("Creating entry mixin: %s", self.entry_logic['name'])
+                if self.entry_logic:
+                    entry_name = self.entry_logic["name"]
+                    entry_inds = self.entry_logic.get('indicators')
 
-                    # Get logic_params for new architecture, or params for legacy
-                    mixin_params = self.entry_logic.get("logic_params") or self.entry_logic.get("params", {})
+                    if not entry_inds:
+                        # Fallback to Blueprint if None or empty list
+                        entry_mixin_class = ENTRY_MIXIN_REGISTRY.get(entry_name)
+                        if entry_mixin_class:
+                            params = self.entry_logic.get("logic_params") or self.entry_logic.get("params", {})
+                            entry_inds = entry_mixin_class.get_indicator_config(params)
+                            _logger.debug(f"Using blueprint indicators for entry: {entry_name}")
 
-                    self.entry_mixin = entry_mixin_class(params=mixin_params)
-                    self.entry_mixin.init_entry(self)
-                    _logger.debug(
-                        f"Entry mixin created with params: {mixin_params}"
-                    )
+                    if entry_inds:
+                        # Resolve parameter placeholders (e.g., "rsi_period" -> 14)
+                        entry_params = self.entry_logic.get("logic_params") or self.entry_logic.get("params", {})
+                        entry_inds = self._resolve_indicator_params(entry_inds, entry_params)
+                        all_indicator_configs.extend(entry_inds)
 
-            # Create exit mixin (with indicators already available)
-            if self.exit_logic:
-                exit_mixin_class = EXIT_MIXIN_REGISTRY[self.exit_logic["name"]]
-                if exit_mixin_class:
-                    _logger.debug("Creating exit mixin: %s", self.exit_logic['name'])
+                if self.exit_logic:
+                    exit_name = self.exit_logic["name"]
+                    exit_inds = self.exit_logic.get('indicators')
 
-                    # Get logic_params for new architecture, or params for legacy
-                    mixin_params = self.exit_logic.get("logic_params") or self.exit_logic.get("params", {})
+                    if not exit_inds:
+                        # Fallback to Blueprint if None or empty list
+                        exit_mixin_class = EXIT_MIXIN_REGISTRY.get(exit_name)
+                        if exit_mixin_class:
+                            params = self.exit_logic.get("logic_params") or self.exit_logic.get("params", {})
+                            exit_inds = exit_mixin_class.get_indicator_config(params)
+                            _logger.debug(f"Using blueprint indicators for exit: {exit_name}")
 
-                    self.exit_mixin = exit_mixin_class(params=mixin_params)
-                    self.exit_mixin.init_exit(self)
-                    _logger.debug(
-                        f"Exit mixin created with params: {mixin_params}"
-                    )
+                    if exit_inds:
+                        # Resolve parameter placeholders (e.g., "atr_period" -> 10)
+                        exit_params = self.exit_logic.get("logic_params") or self.exit_logic.get("params", {})
+                        exit_inds = self._resolve_indicator_params(exit_inds, exit_params)
+                        all_indicator_configs.extend(exit_inds)
+
+                # Initialize indicators via factory if any found or defined
+                if all_indicator_configs:
+                    _logger.info(f"CustomStrategy initializing {len(all_indicator_configs)} indicators from config")
+                    # Prepare mock config for BaseStrategy._create_indicators_from_config
+                    mock_config = {
+                        'parameters': {
+                            'entry_logic': {'indicators': all_indicator_configs},
+                            'exit_logic': {} # Already combined
+                        }
+                    }
+                    self._create_indicators_from_config(mock_config)
+
+            # Note: Entry/Exit mixins are already created above to ensure combined logic_params are available
+            # We just need to ensure their next() is called in _execute_strategy_logic
 
         except Exception:
             _logger.exception("Error in _initialize_strategy")
             raise
+
+    def _resolve_indicator_params(self, indicator_configs: List[Dict[str, Any]], logic_params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Resolve indicator parameter placeholders with actual values from logic_params.
+
+        Example:
+            indicator_config = {"type": "RSI", "params": {"timeperiod": "rsi_period"}}
+            logic_params = {"rsi_period": 14}
+            Result = {"type": "RSI", "params": {"timeperiod": 14}}
+        """
+        resolved_configs = []
+        for ind in indicator_configs:
+            new_ind = ind.copy()
+            if 'params' in ind:
+                new_params = ind['params'].copy()
+                for k, v in new_params.items():
+                    if isinstance(v, str) and v in logic_params:
+                        new_params[k] = logic_params[v]
+                        _logger.debug(f"Resolved indicator param '{k}': {v} -> {logic_params[v]}")
+                new_ind['params'] = new_params
+            resolved_configs.append(new_ind)
+        return resolved_configs
 
     def _execute_strategy_logic(self):
         """Execute strategy-specific logic."""
@@ -115,19 +160,20 @@ class CustomStrategy(BaseStrategy):
             if (
                 self.position.size == 0
                 and self.entry_mixin
-                and self.entry_mixin.should_enter()
             ):
-                # Use position_size from config if available, else default to 0.10
-                position_size = 0.10
-                if self.p.strategy_config and "position_size" in self.p.strategy_config:
-                    position_size = self.p.strategy_config["position_size"]
+                should_enter = self.entry_mixin.should_enter()
+                if should_enter:
+                    # Use position_size from config if available, else default to 0.10
+                    position_size = 0.10
+                    if self.p.strategy_config and "position_size" in self.p.strategy_config:
+                        position_size = self.p.strategy_config["position_size"]
 
-                # Use base class method for position entry
-                self._enter_position(
-                    direction='long',
-                    confidence=1.0,
-                    reason="Entry mixin signal"
-                )
+                    # Use base class method for position entry
+                    self._enter_position(
+                        direction='long',
+                        confidence=position_size,
+                        reason=self.entry_mixin.get_entry_reason()
+                    )
 
             # Check for exit signals
             if (

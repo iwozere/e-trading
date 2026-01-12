@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from src.notification.logger import setup_logger
 
@@ -35,9 +35,18 @@ class BaseExitMixin(ABC):
     def get_required_params(self) -> list:
         return []
 
+    @classmethod
     @abstractmethod
-    def get_default_params(self) -> Dict[str, Any]:
+    def get_default_params(cls) -> Dict[str, Any]:
         return {}
+
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Returns the default indicator configuration for this mixin.
+        Subclasses should override this to define their required indicators.
+        """
+        return []
 
     def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
         self.strategy = strategy
@@ -55,26 +64,16 @@ class BaseExitMixin(ABC):
 
     def are_indicators_ready(self) -> bool:
         """
-        Check if indicators are ready to be used.
-        Default implementation checks if indicators dictionary exists and has entries.
-        Subclasses can override for more specific checks.
-
-        Returns:
-            bool: True if indicators are ready, False otherwise
+        Check if required indicators exist in the strategy registry.
         """
+        if self.strategy and hasattr(self.strategy, 'indicators'):
+            return True
+
         if not hasattr(self, "indicators"):
             return False
 
         if not self.indicators:
             return False
-
-        # Check if we have enough data points (basic check)
-        if hasattr(self, "strategy") and self.strategy and hasattr(self.strategy, "data"):
-            try:
-                if len(self.strategy.data) < 2:  # Minimum data requirement
-                    return False
-            except Exception:
-                return False
 
         return True
 
@@ -92,10 +91,12 @@ class BaseExitMixin(ABC):
         """
         return 1
 
-    @abstractmethod
     def get_exit_reason(self) -> str:
-        """Get the reason for exit (called after should_exit returns True)."""
-        pass
+        """
+        Get the reason for exit (called after should_exit returns True).
+        Subclasses should override this to provide specific reasoning.
+        """
+        return f"{self.__class__.__name__} exit signal"
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered. Default implementation does nothing."""

@@ -17,7 +17,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 
 from src.notification.logger import setup_logger
-from src.data.data_manager import ProviderSelector
+from src.data.data_manager import get_provider_selector
 
 # Loggers will be set up with multiprocessing support when needed
 # The multiprocessing logging is set up in the optimizer main process
@@ -82,6 +82,7 @@ class BaseStrategy(bt.Strategy):
         self.bot_instance_id = None
         self.enable_database_logging = self.config.get('enable_database_logging', False)
         self.bot_type = self.config.get('bot_type', 'paper')  # paper, live, optimization
+        self.optimization_mode = self.bot_type == 'optimization' or self.config.get('optimization_mode', False)
         self.current_position_id = None  # Track current position ID for partial exits
 
         # Trade history
@@ -107,11 +108,22 @@ class BaseStrategy(bt.Strategy):
         self.indicator_configs = []  # Store indicator configurations
         self.warmup_period = 0  # To be calculated from mixins
 
-        _logger.debug("BaseBacktraderStrategy initialized")
+        if self.optimization_mode:
+            _logger.info("Strategy running in OPTIMIZATION MODE - skipping heavy metrics tracking")
+        else:
+            _logger.debug("BaseBacktraderStrategy initialized")
 
         # Initialize database if enabled
-        if self.enable_database_logging:
+        if self.enable_database_logging and not self.optimization_mode:
             self._initialize_database()
+
+        # Initialize strategy-specific components (indicators, mixins)
+        # MUST BE IN __init__ for Backtrader indicators to register correctly
+        self._initialize_strategy()
+
+        # Calculate warmup period from mixins
+        self.warmup_period = self._calculate_warmup_period()
+        _logger.info(f"Strategy warmup period: {self.warmup_period} bars")
 
     def _detect_asset_type(self) -> str:
         """
@@ -125,7 +137,7 @@ class BaseStrategy(bt.Strategy):
 
         try:
             # Use ProviderSelector for sophisticated symbol classification
-            provider_selector = ProviderSelector()
+            provider_selector = get_provider_selector()
             asset_type = provider_selector.classify_symbol(self.symbol)
 
             # Map 'unknown' to 'stock' for backward compatibility
@@ -172,11 +184,6 @@ class BaseStrategy(bt.Strategy):
     def start(self):
         """Called once at the start of the strategy."""
         _logger.debug("BaseBacktraderStrategy.start called")
-        self._initialize_strategy()
-
-        # Calculate warmup period from mixins
-        self.warmup_period = self._calculate_warmup_period()
-        _logger.info(f"Strategy warmup period: {self.warmup_period} bars")
 
     def _initialize_strategy(self):
         """Initialize strategy-specific components. Override in subclasses."""
@@ -227,7 +234,7 @@ class BaseStrategy(bt.Strategy):
                 self.data,
                 all_indicator_configs
             )
-            _logger.info(f"Successfully created {len(self.indicators)} indicator outputs")
+            _logger.info(f"Successfully created {len(self.indicators)} indicator outputs: {list(self.indicators.keys())}")
         except Exception as e:
             _logger.error(f"Failed to create indicators: {e}")
             raise
@@ -288,14 +295,18 @@ class BaseStrategy(bt.Strategy):
         # Check entry mixin
         if hasattr(self, 'entry_mixin') and self.entry_mixin:
             try:
-                warmups.append(self.entry_mixin.get_minimum_lookback())
+                entry_lookback = self.entry_mixin.get_minimum_lookback()
+                warmups.append(entry_lookback)
+                _logger.info(f"Entry mixin ({type(self.entry_mixin).__name__}) lookback: {entry_lookback} bars")
             except Exception as e:
                 _logger.warning(f"Error getting warmup from entry mixin: {e}")
 
         # Check exit mixin
         if hasattr(self, 'exit_mixin') and self.exit_mixin:
             try:
-                warmups.append(self.exit_mixin.get_minimum_lookback())
+                exit_lookback = self.exit_mixin.get_minimum_lookback()
+                warmups.append(exit_lookback)
+                _logger.info(f"Exit mixin ({type(self.exit_mixin).__name__}) lookback: {exit_lookback} bars")
             except Exception as e:
                 _logger.warning(f"Error getting warmup from exit mixin: {e}")
 
@@ -307,8 +318,9 @@ class BaseStrategy(bt.Strategy):
 
     def next(self):
         """Main strategy logic. Override in subclasses."""
-        # Update equity curve
-        self._update_equity_curve()
+        # Update equity curve (if not in optimization mode)
+        if not self.optimization_mode:
+            self._update_equity_curve()
 
         # Check warmup period
         if len(self.data) <= self.warmup_period:
@@ -323,6 +335,9 @@ class BaseStrategy(bt.Strategy):
 
     def _update_equity_curve(self):
         """Update equity curve tracking."""
+        if self.optimization_mode:
+            return
+
         try:
             current_equity = self.broker.getvalue()
             self.equity_curve.append(current_equity)
@@ -512,12 +527,14 @@ class BaseStrategy(bt.Strategy):
 
             if direction.lower() == 'long':
                 order = self.buy(size=shares)
-                _logger.info("POSITION_ENTRY - %s | Direction: LONG | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
-                            self.symbol, shares, position_size * 100, self.data.close[0], confidence, risk_multiplier, reason)
+                if not self.optimization_mode:
+                    _logger.info("POSITION_ENTRY - %s | Direction: LONG | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
+                                self.symbol, shares, position_size * 100, self.data.close[0], confidence, risk_multiplier, reason)
             elif direction.lower() == 'short':
                 order = self.sell(size=shares)
-                _logger.info("POSITION_ENTRY - %s | Direction: SHORT | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
-                            self.symbol, shares, position_size * 100, self.data.close[0], confidence, risk_multiplier, reason)
+                if not self.optimization_mode:
+                    _logger.info("POSITION_ENTRY - %s | Direction: SHORT | Size: %.6f shares (%.2f%% of capital) | Price: %.4f | Confidence: %.2f | Risk Multiplier: %.2f | Reason: %s",
+                                self.symbol, shares, position_size * 100, self.data.close[0], confidence, risk_multiplier, reason)
             else:
                 _logger.error("Invalid direction: %s", direction)
                 return
@@ -603,8 +620,9 @@ class BaseStrategy(bt.Strategy):
                 current_pnl_pct = 0.0
 
             self.close()
-            _logger.info("POSITION_EXIT - %s | Size: %.6f | Exit Price: %.4f | Unrealized PnL: %.4f (%.2f%%) | Reason: %s",
-                        self.symbol, self.exit_size, self.data.close[0], current_pnl, current_pnl_pct, reason)
+            if not self.optimization_mode:
+                _logger.info("POSITION_EXIT - %s | Size: %.6f | Exit Price: %.4f | Unrealized PnL: %.4f (%.2f%%) | Reason: %s",
+                            self.symbol, self.exit_size, self.data.close[0], current_pnl, current_pnl_pct, reason)
 
             # Note: Don't reset entry_price here - it will be reset in notify_trade after the trade is actually closed
 

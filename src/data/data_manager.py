@@ -124,7 +124,7 @@ class ProviderSelector:
         self.config_path = config_path or "config/data/provider_rules.yaml"
         self.cache_dir = cache_dir
         self.rules = self._load_provider_rules()
-        self._initialize_downloaders()
+        self.downloaders = {}  # Lazy initialization
 
     def _load_provider_rules(self) -> Dict[str, Any]:
         """Load provider selection rules from configuration file."""
@@ -181,11 +181,11 @@ class ProviderSelector:
             }
         }
 
-    def _initialize_downloaders(self):
-        """Initialize available downloaders."""
-        self.downloaders = {}
+    def _initialize_downloader(self, name):
+        """Lazy initialize a specific downloader."""
+        if name in self.downloaders:
+            return self.downloaders[name]
 
-        # Initialize downloaders with error handling
         downloader_classes = {
             'binance': BinanceDataDownloader,
             'yahoo': YahooDataDownloader,
@@ -199,60 +199,61 @@ class ProviderSelector:
             'alpaca': AlpacaDataDownloader,
         }
 
-        for name, downloader_class in downloader_classes.items():
-            try:
-                # Check for required API keys and initialize with appropriate parameters
-                if name == 'binance':
-                    # Binance doesn't require API keys for public data
-                    self.downloaders[name] = downloader_class()
-                elif name == 'yahoo':
-                    # Yahoo Finance doesn't require API keys
-                    self.downloaders[name] = downloader_class()
-                elif name == 'alpha_vantage':
-                    if not ALPHA_VANTAGE_API_KEY:
-                        _logger.warning("Skipping %s downloader: No API key found", name)
-                        continue
-                    self.downloaders[name] = downloader_class(api_key=ALPHA_VANTAGE_API_KEY)
-                elif name == 'fmp':
-                    if not FMP_API_KEY:
-                        _logger.warning("Skipping %s downloader: No API key found", name)
-                        continue
-                    self.downloaders[name] = downloader_class(api_key=FMP_API_KEY)
-                elif name == 'polygon':
-                    if not POLYGON_API_KEY:
-                        _logger.warning("Skipping %s downloader: No API key found", name)
-                        continue
-                    self.downloaders[name] = downloader_class(api_key=POLYGON_API_KEY)
-                elif name == 'coingecko':
-                    # CoinGecko doesn't require API key or data_dir
-                    self.downloaders[name] = downloader_class()
-                elif name == 'twelvedata':
-                    if not TWELVE_DATA_API_KEY:
-                        _logger.warning("Skipping %s downloader: No API key found", name)
-                        continue
-                    self.downloaders[name] = downloader_class(api_key=TWELVE_DATA_API_KEY)
-                elif name == 'finnhub':
-                    if not FINNHUB_API_KEY:
-                        _logger.warning("Skipping %s downloader: No API key found", name)
-                        continue
-                    self.downloaders[name] = downloader_class(api_key=FINNHUB_API_KEY)
-                elif name == 'tiingo':
-                    if not TIINGO_API_KEY:
-                        _logger.warning("Skipping %s downloader: No API key found", name)
-                        continue
-                    self.downloaders[name] = downloader_class(api_key=TIINGO_API_KEY)
-                elif name == 'alpaca':
-                    if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
-                        _logger.warning("Skipping %s downloader: No API key or secret key found", name)
-                        continue
-                    self.downloaders[name] = downloader_class(api_key=ALPACA_API_KEY, secret_key=ALPACA_SECRET_KEY)
-                else:
-                    # For other downloaders, try to initialize without parameters
-                    self.downloaders[name] = downloader_class()
+        if name not in downloader_classes:
+            return None
 
-                _logger.info("Initialized %s downloader", name)
-            except Exception as e:
-                _logger.warning("Failed to initialize %s downloader: %s", name, e)
+        downloader_class = downloader_classes[name]
+        try:
+            # Check for required API keys and initialize with appropriate parameters
+            if name == 'binance':
+                self.downloaders[name] = downloader_class()
+            elif name == 'yahoo':
+                self.downloaders[name] = downloader_class()
+            elif name == 'alpha_vantage':
+                if not ALPHA_VANTAGE_API_KEY:
+                    _logger.debug("Skipping %s downloader: No API key found", name)
+                    return None
+                self.downloaders[name] = downloader_class(api_key=ALPHA_VANTAGE_API_KEY)
+            elif name == 'fmp':
+                if not FMP_API_KEY:
+                    _logger.debug("Skipping %s downloader: No API key found", name)
+                    return None
+                self.downloaders[name] = downloader_class(api_key=FMP_API_KEY)
+            elif name == 'polygon':
+                if not POLYGON_API_KEY:
+                    _logger.debug("Skipping %s downloader: No API key found", name)
+                    return None
+                self.downloaders[name] = downloader_class(api_key=POLYGON_API_KEY)
+            elif name == 'coingecko':
+                self.downloaders[name] = downloader_class()
+            elif name == 'twelvedata':
+                if not TWELVE_DATA_API_KEY:
+                    _logger.debug("Skipping %s downloader: No API key found", name)
+                    return None
+                self.downloaders[name] = downloader_class(api_key=TWELVE_DATA_API_KEY)
+            elif name == 'finnhub':
+                if not FINNHUB_API_KEY:
+                    _logger.debug("Skipping %s downloader: No API key found", name)
+                    return None
+                self.downloaders[name] = downloader_class(api_key=FINNHUB_API_KEY)
+            elif name == 'tiingo':
+                if not TIINGO_API_KEY:
+                    _logger.debug("Skipping %s downloader: No API key found", name)
+                    return None
+                self.downloaders[name] = downloader_class(api_key=TIINGO_API_KEY)
+            elif name == 'alpaca':
+                if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
+                    _logger.debug("Skipping %s downloader: No API key or secret key found", name)
+                    return None
+                self.downloaders[name] = downloader_class(api_key=ALPACA_API_KEY, secret_key=ALPACA_SECRET_KEY)
+            else:
+                self.downloaders[name] = downloader_class()
+
+            _logger.debug("Initialized %s downloader", name)
+            return self.downloaders[name]
+        except Exception as e:
+            _logger.warning("Failed to initialize %s downloader: %s", name, e)
+            return None
 
     def _classify_symbol(self, symbol: str) -> str:
         """
@@ -682,13 +683,16 @@ class ProviderSelector:
 
         # Return primary provider if available
         primary = rules.get('primary')
-        if primary and primary in self.downloaders:
-            return primary
+        if primary:
+            downloader = self._initialize_downloader(primary)
+            if downloader:
+                return primary
 
         # Try backup providers
         backup = rules.get('backup', [])
         for provider in backup:
-            if provider in self.downloaders:
+            downloader = self._initialize_downloader(provider)
+            if downloader:
                 return provider
 
         _logger.error("No suitable provider found for %s (%s)", symbol, timeframe)
@@ -706,8 +710,8 @@ class ProviderSelector:
             Best downloader instance, or None if no suitable provider found
         """
         provider_name = self.get_best_provider(symbol, timeframe)
-        if provider_name and provider_name in self.downloaders:
-            return self.downloaders[provider_name]
+        if provider_name:
+            return self._initialize_downloader(provider_name)
         return None
 
     def get_provider_with_failover(self, symbol: str, timeframe: str) -> List[str]:
@@ -744,14 +748,18 @@ class ProviderSelector:
 
         # Add primary provider
         primary = rules.get('primary')
-        if primary and primary in self.downloaders:
-            providers.append(primary)
+        if primary:
+            downloader = self._initialize_downloader(primary)
+            if downloader:
+                providers.append(primary)
 
         # Add backup providers
         backup = rules.get('backup', [])
         for provider in backup:
-            if provider in self.downloaders and provider not in providers:
-                providers.append(provider)
+            if provider not in providers:
+                downloader = self._initialize_downloader(provider)
+                if downloader:
+                    providers.append(provider)
 
         return providers
 
@@ -2489,7 +2497,26 @@ class DataManager:
         _logger.info("Cache cleared for %s %s", symbol or 'all', timeframe or 'all timeframes')
 
 
-# Convenience function for easy access
+# Convenience functions for easy access
+_provider_selector_cache = None
+
+def get_provider_selector(config_path: Optional[str] = None, cache_dir: Optional[str] = None) -> ProviderSelector:
+    """
+    Get a cached ProviderSelector instance.
+
+    Args:
+        config_path: Path to provider configuration file
+        cache_dir: Cache directory path
+
+    Returns:
+        ProviderSelector instance
+    """
+    global _provider_selector_cache
+    if _provider_selector_cache is None:
+        _provider_selector_cache = ProviderSelector(config_path=config_path, cache_dir=cache_dir)
+    return _provider_selector_cache
+
+
 def get_data_manager(cache_dir: str = DATA_CACHE_DIR, config_path: Optional[str] = None) -> DataManager:
     """
     Get a DataManager instance.

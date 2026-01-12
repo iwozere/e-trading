@@ -14,7 +14,7 @@ Conditions (all must be true):
 4. ATR volatility floor: ATR > ATR_SMA * atr_floor_multiplier
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import math
 
 from src.strategy.entry.base_entry_mixin import BaseEntryMixin
@@ -26,14 +26,12 @@ _logger = setup_logger(__name__)
 class EOMPullbackEntryMixin(BaseEntryMixin):
     """
     Entry mixin for BUY #2: Pullback to Support + EOM Reversal.
-
-    Supports both new TALib-based architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-        self.use_new_architecture = False
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -43,9 +41,9 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "e_support_threshold": 0.005,
-            "e_rsi_oversold": 40,
-            "e_atr_floor_multiplier": 0.9,
+            "support_threshold": 0.005,
+            "rsi_oversold": 40,
+            "atr_floor_multiplier": 0.9,
             "resistance_lookback": 2,
             "eom_period": 14,
             "rsi_period": 14,
@@ -53,16 +51,46 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             "atr_sma_period": 100,
         }
 
-    def init_entry(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Standardize architecture detection."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-        super().init_entry(strategy, additional_params)
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        res_lookback = params.get("resistance_lookback", 2)
+        eom_period = params.get("eom_period", 14)
+        rsi_period = params.get("rsi_period", 14)
+        atr_period = params.get("atr_period", 14)
+        atr_sma_period = params.get("atr_sma_period", 100)
+
+        return [
+            {
+                "type": "SupportResistance",
+                "params": {"lookback_bars": res_lookback},
+                "fields_mapping": {"resistance": "entry_resistance", "support": "entry_support"}
+            },
+            {
+                "type": "EOM",
+                "params": {"timeperiod": eom_period},
+                "fields_mapping": {"eom": "entry_eom"}
+            },
+            {
+                "type": "RSI",
+                "params": {"timeperiod": rsi_period},
+                "fields_mapping": {"rsi": "entry_rsi"}
+            },
+            {
+                "type": "ATR",
+                "params": {"timeperiod": atr_period},
+                "fields_mapping": {"atr": "entry_atr"}
+            },
+            {
+                "type": "SMA",
+                "params": {"timeperiod": atr_sma_period},
+                "data_field": "entry_atr",
+                "fields_mapping": {"sma": "entry_atr_sma"}
+            }
+        ]
 
     def _init_indicators(self):
-        """Indicators managed by strategy in unified architecture."""
+        """No-op for new architecture."""
         pass
 
     def get_minimum_lookback(self) -> int:
@@ -77,21 +105,14 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are initialized."""
+        """Check if required indicators exist in the strategy registry."""
         required = [
             'entry_support', 'entry_eom', 'entry_rsi', 'entry_atr', 'entry_atr_sma'
         ]
-        if hasattr(self.strategy, 'indicators') and self.strategy.indicators:
-            return all(alias in self.strategy.indicators for alias in required)
-        return len(self.indicators) > 0 or self.use_new_architecture
+        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
 
     def should_enter(self) -> bool:
-        """
-        Determines if the mixin should enter a position.
-
-        Returns:
-            bool: True if all entry conditions are met
-        """
+        """Determines if the mixin should enter a position."""
         if not self.are_indicators_ready():
             return False
 
@@ -111,9 +132,9 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             atr_sma = self.get_indicator('entry_atr_sma')
 
             # Get parameters
-            support_threshold = self.get_param("e_support_threshold") or self.get_param("support_threshold", 0.005)
-            rsi_oversold = self.get_param("e_rsi_oversold") or self.get_param("rsi_oversold", 40)
-            atr_floor_multiplier = self.get_param("e_atr_floor_multiplier") or self.get_param("atr_floor_multiplier", 0.9)
+            support_threshold = self.get_param("support_threshold") or self.get_param("e_support_threshold", 0.005)
+            rsi_oversold = self.get_param("rsi_oversold") or self.get_param("e_rsi_oversold", 40)
+            atr_floor_multiplier = self.get_param("atr_floor_multiplier") or self.get_param("e_atr_floor_multiplier", 0.9)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):
@@ -154,9 +175,6 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             )
             return True
 
-        except KeyError as e:
-            _logger.warning(f"Required indicator not found: {e}")
-            return False
         except Exception:
             _logger.exception("Error in EOMPullbackEntryMixin.should_enter")
             return False

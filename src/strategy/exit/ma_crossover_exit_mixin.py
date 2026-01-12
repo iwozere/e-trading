@@ -29,7 +29,7 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import backtrader as bt
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -40,22 +40,12 @@ logger = setup_logger(__name__)
 
 class MACrossoverExitMixin(BaseExitMixin):
     """Exit mixin based on Moving Average crossovers.
-
-    Supports both new TALib-based architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-
-        # Legacy architecture support
-        self.fast_ma_name = "exit_fast_ma"
-        self.slow_ma_name = "exit_slow_ma"
-        self.fast_ma = None
-        self.slow_ma = None
-
-        # Detect architecture mode
-        self.use_new_architecture = False  # Will be set in init_exit()
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -65,67 +55,46 @@ class MACrossoverExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_fast_period": 10,
-            "x_slow_period": 20,
-            "x_ma_type": "sma",
+            "fast_period": 10,
+            "slow_period": 20,
+            "ma_type": "SMA",
         }
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Override to detect architecture mode before calling parent."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        fast_period = params.get("fast_period") or params.get("x_fast_period", 10)
+        slow_period = params.get("slow_period") or params.get("x_slow_period", 20)
+        ma_type = (params.get("ma_type") or params.get("x_ma_type", "SMA")).upper()
 
-        super().init_exit(strategy, additional_params)
+        return [
+            {
+                "type": ma_type,
+                "params": {"timeperiod": fast_period},
+                "fields_mapping": {ma_type.lower(): "exit_fast_ma"}
+            },
+            {
+                "type": ma_type,
+                "params": {"timeperiod": slow_period},
+                "fields_mapping": {ma_type.lower(): "exit_slow_ma"}
+            }
+        ]
 
     def _init_indicators(self):
-        """Initialize indicators (legacy architecture only)."""
-        if self.use_new_architecture:
-            return
-
-        if not hasattr(self, "strategy"):
-            logger.error("No strategy available in _init_indicators")
-            return
-
-        try:
-            fast_period = self.get_param("x_fast_period")
-            slow_period = self.get_param("x_slow_period")
-
-            if self.strategy.use_talib:
-                self.fast_ma = bt.talib.SMA(self.strategy.data.close, fast_period)
-                self.slow_ma = bt.talib.SMA(self.strategy.data.close, slow_period)
-            else:
-                self.fast_ma = bt.indicators.SMA(self.strategy.data.close, period=fast_period)
-                self.slow_ma = bt.indicators.SMA(self.strategy.data.close, period=slow_period)
-
-            self.register_indicator(self.fast_ma_name, self.fast_ma)
-            self.register_indicator(self.slow_ma_name, self.slow_ma)
-
-        except Exception:
-            logger.exception("Error initializing indicators: ")
-            raise
+        """No-op for new architecture."""
+        pass
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        if self.use_new_architecture:
-            return max(
-                self.get_param("fast_period", 10),
-                self.get_param("slow_period", 20)
-            )
-        else:
-            return max(
-                self.get_param("x_fast_period", 10),
-                self.get_param("x_slow_period", 20)
-            )
+        return max(
+            self.get_param("fast_period", 10),
+            self.get_param("slow_period", 20)
+        )
 
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are initialized."""
-        if self.use_new_architecture:
-            required = ['exit_fast_ma', 'exit_slow_ma']
-            return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
-        else:
-            return self.fast_ma_name in self.indicators and self.slow_ma_name in self.indicators
+        """Check if required indicators exist in the strategy registry."""
+        required = ['exit_fast_ma', 'exit_slow_ma']
+        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
 
     def should_exit(self) -> bool:
         """Check if we should exit a position."""
@@ -137,18 +106,10 @@ class MACrossoverExitMixin(BaseExitMixin):
 
         try:
             # Unified Indicator Access
-            if self.use_new_architecture:
-                fast_ma_current = self.get_indicator('exit_fast_ma')
-                slow_ma_current = self.get_indicator('exit_slow_ma')
-                fast_ma_prev = self.get_indicator_prev('exit_fast_ma', 1)
-                slow_ma_prev = self.get_indicator_prev('exit_slow_ma', 1)
-            else:
-                fast_ma = self.indicators[self.fast_ma_name]
-                slow_ma = self.indicators[self.slow_ma_name]
-                fast_ma_current = fast_ma[0]
-                slow_ma_current = slow_ma[0]
-                fast_ma_prev = fast_ma[-1]
-                slow_ma_prev = slow_ma[-1]
+            fast_ma_current = self.get_indicator('exit_fast_ma')
+            slow_ma_current = self.get_indicator('exit_slow_ma')
+            fast_ma_prev = self.get_indicator_prev('exit_fast_ma', 1)
+            slow_ma_prev = self.get_indicator_prev('exit_slow_ma', 1)
 
             # Check for crossover based on position
             if self.strategy.position.size > 0:  # Long position
@@ -161,13 +122,17 @@ class MACrossoverExitMixin(BaseExitMixin):
                     f"EXIT Crossover - Fast: {fast_ma_current:.2f}, Slow: {slow_ma_current:.2f}, "
                     f"Prev Fast: {fast_ma_prev:.2f}, Prev Slow: {slow_ma_prev:.2f}"
                 )
-                ma_type = self.get_param("ma_type") or self.get_param("x_ma_type", "sma")
+                ma_type = self.get_param("ma_type") or self.get_param("x_ma_type", "SMA")
                 self.strategy.current_exit_reason = f"{ma_type.lower()}_crossover"
             return return_value
 
         except Exception:
             logger.exception("Error in MACrossoverExitMixin.should_exit")
             return False
+
+    def get_exit_reason(self) -> str:
+        """Get the reason for exit"""
+        return getattr(self.strategy, 'current_exit_reason', 'ma_crossover')
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""

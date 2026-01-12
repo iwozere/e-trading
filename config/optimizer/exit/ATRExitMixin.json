@@ -1,18 +1,29 @@
 {
     "name": "ATRExitMixin",
     "params": {
-        "x_atr_period": {
+        "atr_period": {
             "type": "int",
             "low": 5,
             "high": 90,
             "default": 14
         },
-        "x_sl_multiplier": {
+        "sl_multiplier": {
             "type": "float",
             "low": 2.2,
             "high": 3.0,
             "default": 2.5
         }
     },
+    "indicators": [
+        {
+            "type": "ATR",
+            "params": {
+                "timeperiod": "atr_period"
+            },
+            "fields_mapping": {
+                "atr": "exit_atr"
+            }
+        }
+    ],
     "description": "ATR-based trailing stop loss strategy. Uses ATR to dynamically adjust stop loss distance, allowing profits to run while protecting against reversals."
-} 
+}

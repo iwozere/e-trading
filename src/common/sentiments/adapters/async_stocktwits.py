@@ -40,7 +40,8 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
         self._analyzer = HeuristicSentimentAnalyzer()
         self.user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ]
 
     async def _get_with_retry(self, path: str, params: Optional[dict] = None, timeout: int = 10) -> Optional[dict]:
@@ -51,9 +52,12 @@ class AsyncStocktwitsAdapter(BaseSentimentAdapter):
                 'User-Agent': self.user_agents[0],
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://stocktwits.com/',
+                'Origin': 'https://stocktwits.com',
                 'Sec-Fetch-Dest': 'empty',
                 'Sec-Fetch-Mode': 'cors',
                 'Sec-Fetch-Site': 'same-site',
+                'Connection': 'keep-alive',
                 'DNT': '1'
             }
             self._session = aiohttp.ClientSession(headers=headers)

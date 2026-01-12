@@ -183,7 +183,11 @@ def pre_calculate_htf_data(df: pd.DataFrame, intervals: list) -> pd.DataFrame:
 
     return result_df
 
-def prepare_data_feed(df : pd.DataFrame, symbol : str):
+# Define DynamicPandasData once at module level to avoid redundant class creation
+class DynamicPandasData(bt.feeds.PandasData):
+    pass
+
+def prepare_data_feed(df: pd.DataFrame, symbol: str):
     """Prepare data feed from pandas dataframe with robust datetime handling"""
     # Validate DataFrame before creating feed
     if df.empty:
@@ -192,30 +196,41 @@ def prepare_data_feed(df : pd.DataFrame, symbol : str):
     if not isinstance(df.index, pd.DatetimeIndex):
         raise ValueError(f"DataFrame index is not DatetimeIndex: {type(df.index)}")
 
-    _logger.debug("Creating data feed for %s with %s rows", symbol, len(df))
-    _logger.debug("DataFrame columns: %s", df.columns.tolist())
+    # Create a shallow copy if possible, or at least avoid deep copy if not needed
+    # Backtrader doesn't strictly require a deep copy if we don't modify the source df
+    df_copy = df.copy(deep=False)
 
-    # Create a deep copy to prevent any modifications
-    df_copy = df.copy(deep=True)
+    # Ensure the required columns are present. Columns are already prepared in prepare_data_frame.
+    # Just filter to what's needed for the feed.
+    atr_cols = [c for c in df.columns if c.startswith('atr_')]
+    cols = ["open", "high", "low", "close", "volume"] + atr_cols
+    df_copy = df_copy[cols]
 
-    # Ensure the index is properly formatted
-    df_copy.index = pd.to_datetime(df_copy.index)
+    # Dynamically update the class lines and params for this specific instance if needed,
+    # or better, just pass the extra columns to the constructor.
+    # We update the class attributes once per data file if they change, but here
+    # we can stick to a simpler approach since atr_cols are consistent per data file.
 
-    # Ensure we have the required columns in the right order, plus our pre-calculated ATRs
-    cols = ["open", "high", "low", "close", "volume"]
-    atr_cols = [c for c in df_copy.columns if c.startswith('atr_')]
-    df_copy = df_copy[cols + atr_cols]
+    # We can use a trick with type() to create the subclass with dynamic lines ONLY IF it changed
+    # to avoid the overhead of creating it 150 times.
 
-    # Create the data feed with extra columns for HTF ATRs
-    atr_cols = [c for c in df_copy.columns if c.startswith('atr_')]
+    cache_key = tuple(sorted(atr_cols))
+    if not hasattr(prepare_data_feed, "_class_cache"):
+        prepare_data_feed._class_cache = {}
 
-    # Define a dynamic subclass to handle the extra lines
-    # This avoids "TypeError: PandasData.__init__() got an unexpected keyword argument"
-    class DynamicPandasData(bt.feeds.PandasData):
-        lines = tuple(atr_cols)
-        params = tuple((col, -1) for col in atr_cols)
+    if cache_key not in prepare_data_feed._class_cache:
+        prepare_data_feed._class_cache[cache_key] = type(
+            'DynamicPandasData',
+            (bt.feeds.PandasData,),
+            {
+                'lines': tuple(atr_cols),
+                'params': tuple((col, -1) for col in atr_cols)
+            }
+        )
 
-    data_feed = DynamicPandasData(
+    DataClass = prepare_data_feed._class_cache[cache_key]
+
+    data_feed = DataClass(
         dataname=df_copy,
         # Standard OHLCV mapping
         open=0,
@@ -230,25 +245,6 @@ def prepare_data_feed(df : pd.DataFrame, symbol : str):
         name=symbol,
         **{col: 5 + i for i, col in enumerate(atr_cols)}
     )
-
-    # Debug info removed for performance
-
-    # Debug: Check data feed parameters
-    print(f"Data feed fromdate: {getattr(data_feed, 'fromdate', 'Not set')}")
-    print(f"Data feed todate: {getattr(data_feed, 'todate', 'Not set')}")
-    print(f"Data feed datetime param: {getattr(data_feed, 'datetime', 'Not set (using index)')}")
-
-    # Debug: Check actual index values
-    print(f"Index min: {df_copy.index.min()}")
-    print(f"Index max: {df_copy.index.max()}")
-    print(f"First few index values: {df_copy.index[:3].tolist()}")
-
-    # Debug: Check original DataFrame (before reset_index)
-    print(f"Original DataFrame index type: {type(df.index)}")
-    print(f"Original DataFrame index length: {len(df.index)}")
-    if len(df.index) > 0:
-        print(f"Original first index value: {df.index[0]} (type: {type(df.index[0])})")
-        print(f"Original last index value: {df.index[-1]} (type: {type(df.index[-1])})")
 
     return data_feed
 

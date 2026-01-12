@@ -59,7 +59,7 @@ class ExitState(Enum):
 class AdvancedATRExitMixin(BaseExitMixin):
     """
     Advanced ATR-based trailing stop exit strategy.
-    Supports both new architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
@@ -116,53 +116,51 @@ class AdvancedATRExitMixin(BaseExitMixin):
         self.pt_levels_hit = set()
         self.direction = "long"
 
-        # Legacy indicators
-        self.atr_fast = None
-        self.atr_slow = None
-        self.atr_htf = None
-
         self.price_history = deque(maxlen=self.swing_lookback * 2)
-        self.use_new_architecture = False
 
     def get_required_params(self) -> list:
         return []
 
-    def get_default_params(self) -> Dict[str, Any]:
+    @classmethod
+    def get_default_params(cls) -> Dict[str, Any]:
         return {
-            "x_k_init": 2.5, "x_k_run": 2.0, "x_k_phase2": 1.5,
-            "x_p_fast": 7, "x_p_slow": 21, "x_use_htf_atr": True,
-            "x_swing_lookback": 10, "x_arm_at_R": 1.0, "x_phase2_at_R": 2.0
+            "k_init": 2.5, "k_run": 2.0, "k_phase2": 1.5,
+            "p_fast": 7, "p_slow": 21, "use_htf_atr": True,
+            "swing_lookback": 10, "arm_at_R": 1.0, "phase2_at_R": 2.0
         }
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-        super().init_exit(strategy, additional_params)
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        p_fast = params.get("p_fast") or params.get("x_p_fast", 7)
+        p_slow = params.get("p_slow") or params.get("x_p_slow", 21)
+        use_htf_atr = params.get("use_htf_atr") or params.get("x_use_htf_atr", True)
+
+        configs = [
+            {
+                "type": "ATR",
+                "params": {"timeperiod": p_fast},
+                "fields_mapping": {"atr": "exit_atr_fast"}
+            },
+            {
+                "type": "ATR",
+                "params": {"timeperiod": p_slow},
+                "fields_mapping": {"atr": "exit_atr_slow"}
+            }
+        ]
+
+        if use_htf_atr:
+            configs.append({
+                "type": "ATR",
+                "params": {"timeperiod": max(p_fast, p_slow)}, # Fallback HTF logic
+                "fields_mapping": {"atr": "exit_atr_htf"}
+            })
+
+        return configs
 
     def _init_indicators(self):
-        """Initialize indicators (legacy architecture only)."""
-        if self.use_new_architecture:
-            return
-
-        if not hasattr(self, "strategy"):
-            return
-
-        try:
-            self.atr_fast = bt.indicators.ATR(self.strategy.data, period=self.p_fast)
-            self.register_indicator("exit_atr_fast", self.atr_fast)
-
-            self.atr_slow = bt.indicators.ATR(self.strategy.data, period=self.p_slow)
-            self.register_indicator("exit_atr_slow", self.atr_slow)
-
-            if self.use_htf_atr:
-                self.atr_htf = bt.indicators.ATR(self.strategy.data, period=max(self.p_fast, self.p_slow))
-                self.register_indicator("exit_atr_htf", self.atr_htf)
-
-        except Exception:
-            logger.exception("Error initializing ATR indicators:")
-            raise
+        """No-op for new architecture."""
+        pass
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
@@ -174,10 +172,7 @@ class AdvancedATRExitMixin(BaseExitMixin):
         if self.use_htf_atr:
             required.append('exit_atr_htf')
 
-        if self.use_new_architecture:
-            return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
-        else:
-            return all(alias in self.indicators for alias in required)
+        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
 
     def on_entry(self, entry_price: float, entry_time, position_size: float, direction: str):
         """Called when a position is entered."""
@@ -206,14 +201,9 @@ class AdvancedATRExitMixin(BaseExitMixin):
     def _get_effective_atr(self) -> float:
         """Calculate effective ATR using multi-timeframe aggregation."""
         try:
-            if self.use_new_architecture:
-                atr_fast_val = self.get_indicator('exit_atr_fast')
-                atr_slow_val = self.get_indicator('exit_atr_slow')
-                atr_htf_val = self.get_indicator('exit_atr_htf') if self.use_htf_atr else 0.0
-            else:
-                atr_fast_val = self.indicators['exit_atr_fast'][0]
-                atr_slow_val = self.indicators['exit_atr_slow'][0]
-                atr_htf_val = self.indicators['exit_atr_htf'][0] if self.use_htf_atr else 0.0
+            atr_fast_val = self.get_indicator('exit_atr_fast')
+            atr_slow_val = self.get_indicator('exit_atr_slow')
+            atr_htf_val = self.get_indicator('exit_atr_htf') if self.use_htf_atr else 0.0
 
             atr_eff = max(
                 self.alpha_fast * (atr_fast_val or 0),

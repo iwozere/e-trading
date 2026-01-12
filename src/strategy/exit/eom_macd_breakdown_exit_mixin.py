@@ -54,7 +54,7 @@ Configuration Example (New architecture):
     }
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import math
 
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -66,15 +66,12 @@ _logger = setup_logger(__name__)
 class EOMMAcdBreakdownExitMixin(BaseExitMixin):
     """
     Exit mixin for SELL #3: MACD Bearish Turn + Breakdown.
-
-    Purpose: Combine strong trend shift + structural breakdown.
-    Supports both new architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-        self.use_new_architecture = False
         self._exit_reason = ""
 
     def get_required_params(self) -> list:
@@ -85,7 +82,7 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_support_threshold": 0.002,
+            "support_threshold": 0.002,
             "macd_fast_period": 12,
             "macd_slow_period": 26,
             "macd_signal_period": 9,
@@ -94,16 +91,42 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             "resistance_lookback": 2,
         }
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Standardize architecture detection."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-        super().init_exit(strategy, additional_params)
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        res_lookback = params.get("resistance_lookback", 2)
+        macd_fast = params.get("macd_fast_period", 12)
+        macd_slow = params.get("macd_slow_period", 26)
+        macd_signal = params.get("macd_signal_period", 9)
+        eom_period = params.get("eom_period", 14)
+        vol_ma_period = params.get("vol_ma_period", 20)
+
+        return [
+            {
+                "type": "SupportResistance",
+                "params": {"lookback_bars": res_lookback},
+                "fields_mapping": {"resistance": "exit_resistance", "support": "exit_support"}
+            },
+            {
+                "type": "MACD",
+                "params": {"fastperiod": macd_fast, "slowperiod": macd_slow, "signalperiod": macd_signal},
+                "fields_mapping": {"macd": "exit_macd", "macdsignal": "exit_macd_signal", "macdhist": "exit_macd_hist"}
+            },
+            {
+                "type": "EOM",
+                "params": {"timeperiod": eom_period},
+                "fields_mapping": {"eom": "exit_eom"}
+            },
+            {
+                "type": "SMA",
+                "params": {"timeperiod": vol_ma_period},
+                "data_field": "volume",
+                "fields_mapping": {"sma": "exit_volume_sma"}
+            }
+        ]
 
     def _init_indicators(self):
-        """Indicators managed by strategy in unified architecture."""
+        """No-op for new architecture."""
         pass
 
     def get_minimum_lookback(self) -> int:
@@ -117,21 +140,14 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are initialized."""
+        """Check if required indicators exist in the strategy registry."""
         required = [
             'exit_support', 'exit_macd', 'exit_macd_signal', 'exit_macd_hist', 'exit_eom', 'exit_volume_sma'
         ]
-        if hasattr(self.strategy, 'indicators') and self.strategy.indicators:
-            return all(alias in self.strategy.indicators for alias in required)
-        return False
+        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
 
     def should_exit(self) -> bool:
-        """
-        Determines if the mixin should exit a position.
-
-        Returns:
-            bool: True if all exit conditions are met
-        """
+        """Determines if the mixin should exit a position."""
         if not self.strategy.position:
             return False
 
@@ -197,12 +213,13 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             _logger.info("EOM MACD Breakdown Exit signal: %s", self._exit_reason)
             return True
 
-        except KeyError as e:
-            _logger.error("Required indicator not found: %s", e)
-            return False
         except Exception:
             _logger.exception("Error in EOMMAcdBreakdownExitMixin.should_exit")
             return False
+
+    def get_exit_reason(self) -> str:
+        """Get the reason for exit"""
+        return self._exit_reason if self._exit_reason else "macd_breakdown"
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""

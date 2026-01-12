@@ -25,7 +25,7 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import backtrader as bt
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -36,19 +36,13 @@ logger = setup_logger(__name__)
 
 class TrailingStopExitMixin(BaseExitMixin):
     """Exit mixin based on trailing stop.
-
-    Supports both new TALib-based architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
         self.highest_price = 0
-        self.atr_name = "exit_atr"
-        self.atr = None
-
-        # Detect architecture mode
-        self.use_new_architecture = False  # Will be set in init_exit()
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -58,70 +52,46 @@ class TrailingStopExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_trail_pct": 0.02,
-            "x_activation_pct": 0.0,
-            "x_use_atr": False,
-            "x_atr_multiplier": 2.0,
-            "x_atr_period": 14,
+            "trail_pct": 0.02,
+            "activation_pct": 0.0,
+            "use_atr": False,
+            "atr_multiplier": 2.0,
+            "atr_period": 14,
         }
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Override to detect architecture mode before calling parent."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        use_atr = params.get("use_atr") or params.get("x_use_atr", False)
+        if not use_atr:
+            return []
 
-        super().init_exit(strategy, additional_params)
+        atr_period = params.get("atr_period") or params.get("x_atr_period", 14)
+        return [
+            {
+                "type": "ATR",
+                "params": {"timeperiod": atr_period},
+                "fields_mapping": {"atr": "exit_atr"}
+            }
+        ]
 
     def _init_indicators(self):
-        """Initialize indicators (legacy architecture only)."""
-        if self.use_new_architecture:
-            return
-
-        if not hasattr(self, "strategy"):
-            logger.error("No strategy available in _init_indicators")
-            return
-
-        try:
-            atr_period = self.get_param("x_atr_period")
-            if self.strategy.use_talib:
-                self.atr = bt.talib.ATR(
-                    self.strategy.data.high,
-                    self.strategy.data.low,
-                    self.strategy.data.close,
-                    timeperiod=atr_period,
-                )
-            else:
-                self.atr = bt.indicators.AverageTrueRange(self.strategy.data, period=atr_period)
-
-            self.register_indicator(self.atr_name, self.atr)
-
-        except Exception:
-            logger.exception("Error initializing indicators: ")
-            raise
+        """No-op for new architecture."""
+        pass
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         use_atr = self.get_param("use_atr") or self.get_param("x_use_atr", False)
         if not use_atr:
             return 0
-
-        if self.use_new_architecture:
-            return self.get_param("atr_period", 14)
-        else:
-            return self.get_param("x_atr_period", 14)
+        return self.get_param("atr_period") or self.get_param("x_atr_period", 14)
 
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are initialized."""
+        """Check if required indicators exist in the strategy registry."""
         use_atr = self.get_param("use_atr") or self.get_param("x_use_atr", False)
         if not use_atr:
             return True
-
-        if self.use_new_architecture:
-            return 'exit_atr' in getattr(self.strategy, 'indicators', {})
-        else:
-            return self.atr_name in self.indicators
+        return 'exit_atr' in getattr(self.strategy, 'indicators', {})
 
     def should_exit(self) -> bool:
         """Check if we should exit a position."""
@@ -146,11 +116,7 @@ class TrailingStopExitMixin(BaseExitMixin):
 
             # Calculate stop level
             if use_atr:
-                if self.use_new_architecture:
-                    atr_val = self.get_indicator('exit_atr')
-                else:
-                    atr = self.indicators[self.atr_name]
-                    atr_val = atr[0] if hasattr(atr, "__getitem__") else atr.lines.atr[0]
+                atr_val = self.get_indicator('exit_atr')
                 stop_level = self.highest_price - (atr_val * atr_multiplier)
             else:
                 stop_level = self.highest_price * (1 - trail_pct)

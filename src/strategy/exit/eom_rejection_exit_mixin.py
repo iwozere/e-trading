@@ -44,7 +44,7 @@ Configuration Example (New architecture):
     }
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import math
 
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -56,15 +56,12 @@ _logger = setup_logger(__name__)
 class EOMRejectionExitMixin(BaseExitMixin):
     """
     Exit mixin for SELL #2: Resistance Reject + EOM Turns Negative.
-
-    Purpose: Fade failed breakout / mean reversion down.
-    Supports both new architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-        self.use_new_architecture = False
         self._exit_reason = ""
 
     def get_required_params(self) -> list:
@@ -75,23 +72,40 @@ class EOMRejectionExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_resistance_threshold": 0.995,
-            "x_rsi_overbought": 60,
+            "resistance_threshold": 0.995,
+            "rsi_overbought": 60,
             "eom_period": 14,
             "rsi_period": 14,
             "resistance_lookback": 2,
         }
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Standardize architecture detection."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
-        super().init_exit(strategy, additional_params)
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        res_lookback = params.get("resistance_lookback", 2)
+        eom_period = params.get("eom_period", 14)
+        rsi_period = params.get("rsi_period", 14)
+
+        return [
+            {
+                "type": "SupportResistance",
+                "params": {"lookback_bars": res_lookback},
+                "fields_mapping": {"resistance": "exit_resistance", "support": "exit_support"}
+            },
+            {
+                "type": "EOM",
+                "params": {"timeperiod": eom_period},
+                "fields_mapping": {"eom": "exit_eom"}
+            },
+            {
+                "type": "RSI",
+                "params": {"timeperiod": rsi_period},
+                "fields_mapping": {"rsi": "exit_rsi"}
+            }
+        ]
 
     def _init_indicators(self):
-        """Indicators managed by strategy in unified architecture."""
+        """No-op for new architecture."""
         pass
 
     def get_minimum_lookback(self) -> int:
@@ -104,21 +118,14 @@ class EOMRejectionExitMixin(BaseExitMixin):
         return max(periods)
 
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are initialized."""
+        """Check if required indicators exist in the strategy registry."""
         required = [
             'exit_resistance', 'exit_eom', 'exit_rsi'
         ]
-        if hasattr(self.strategy, 'indicators') and self.strategy.indicators:
-            return all(alias in self.strategy.indicators for alias in required)
-        return False
+        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
 
     def should_exit(self) -> bool:
-        """
-        Determines if the mixin should exit a position.
-
-        Returns:
-            bool: True if all exit conditions are met
-        """
+        """Determines if the mixin should exit a position."""
         if not self.strategy.position:
             return False
 
@@ -175,12 +182,13 @@ class EOMRejectionExitMixin(BaseExitMixin):
             _logger.info("EOM Rejection Exit signal: %s", self._exit_reason)
             return True
 
-        except KeyError as e:
-            _logger.error("Required indicator not found: %s", e)
-            return False
         except Exception:
             _logger.exception("Error in EOMRejectionExitMixin.should_exit")
             return False
+
+    def get_exit_reason(self) -> str:
+        """Get the reason for exit"""
+        return self._exit_reason if self._exit_reason else "resistance_rejection"
 
     def get_exit_reason(self) -> str:
         """Get the reason for exit"""

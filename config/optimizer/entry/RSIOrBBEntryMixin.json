@@ -1,45 +1,53 @@
 {
     "name": "RSIOrBBEntryMixin",
     "params": {
-        "e_rsi_period": {
+        "rsi_period": {
             "type": "int",
             "low": 10,
             "high": 20,
             "default": 14
         },
-        "e_rsi_oversold": {
+        "rsi_oversold": {
             "type": "int",
             "low": 18,
             "high": 32,
             "default": 25
         },
-        "e_bb_period": {
+        "bb_period": {
             "type": "int",
             "low": 15,
             "high": 25,
             "default": 20
         },
-        "e_bb_dev": {
+        "bb_dev": {
             "type": "float",
             "low": 2.0,
             "high": 3.0,
             "default": 2.5
-        },
-        "e_rsi_cross": {
-            "type": "categorical",
-            "choices": [true, false],
-            "default": true
-        },
-        "e_bb_reentry": {
-            "type": "categorical",
-            "choices": [true, false],
-            "default": true
-        },
-        "e_cooldown_bars": {
-            "type": "int",
-            "low": 2,
-            "high": 8,
-            "default": 3
         }
-    }
-} 
+    },
+    "indicators": [
+        {
+            "type": "RSI",
+            "params": {
+                "timeperiod": "rsi_period"
+            },
+            "fields_mapping": {
+                "rsi": "entry_rsi"
+            }
+        },
+        {
+            "type": "BBANDS",
+            "params": {
+                "timeperiod": "bb_period",
+                "nbdevup": "bb_dev",
+                "nbdevdn": "bb_dev"
+            },
+            "fields_mapping": {
+                "upperband": "entry_bb_upper",
+                "middleband": "entry_bb_middle",
+                "lowerband": "entry_bb_lower"
+            }
+        }
+    ]
+}

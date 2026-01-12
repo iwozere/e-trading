@@ -130,7 +130,7 @@ class IndicatorFactory:
 
             # Create indicator and get mapped outputs
             indicator_outputs = IndicatorFactory._create_single_indicator(
-                data, ind_config
+                data, ind_config, all_indicators
             )
 
             # Check for duplicate aliases
@@ -145,14 +145,16 @@ class IndicatorFactory:
             # Add to result
             all_indicators.update(indicator_outputs)
 
-        logger.info(f"Created {len(all_indicators)} indicator outputs from {len(indicator_configs)} indicators")
+        result_aliases = list(all_indicators.keys())
+        logger.info(f"Created {len(all_indicators)} indicator outputs from {len(indicator_configs)} indicators. Aliases: {result_aliases}")
 
         return all_indicators
 
     @staticmethod
     def _create_single_indicator(
         data: bt.feeds.DataBase,
-        ind_config: Dict[str, Any]
+        ind_config: Dict[str, Any],
+        existing_indicators: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         Create a single indicator and return mapped outputs.
@@ -167,6 +169,7 @@ class IndicatorFactory:
         ind_type = ind_config['type']
         params = ind_config['params']
         fields_mapping = ind_config['fields_mapping']
+        data_field = ind_config.get('data_field')
 
         # Get indicator metadata
         ind_meta = IndicatorFactory.INDICATOR_MAP[ind_type]
@@ -174,7 +177,22 @@ class IndicatorFactory:
         data_inputs = ind_meta.get('data_inputs', ['close'])  # Default to close if not specified
 
         # Prepare data inputs for the indicator
-        if data_inputs == ['data']:
+        if data_field:
+            if existing_indicators and data_field in existing_indicators:
+                # Use the specified indicator line as input
+                data_args = [existing_indicators[data_field]]
+                logger.debug(f"Using derived data field '{data_field}' for {ind_type}")
+            elif hasattr(data, data_field):
+                # Use the specified field from the data feed (e.g., 'volume', 'open', etc.)
+                data_args = [getattr(data, data_field)]
+                logger.debug(f"Using data feed field '{data_field}' for {ind_type}")
+            else:
+                raise ValueError(
+                    f"Data field '{data_field}' not found for {ind_type}. "
+                    "Ensure the field exists on the data feed (open, high, low, close, volume) "
+                    "or is a derived indicator defined earlier in the configuration."
+                )
+        elif data_inputs == ['data']:
             data_args = [data]
         else:
             data_args = [getattr(data, field) for field in data_inputs]
@@ -206,8 +224,13 @@ class IndicatorFactory:
             else:
                 # Multi-output indicator (BBANDS, MACD, STOCH)
                 # Access the specific line by name
-                indicator_line = getattr(indicator, output_field)
-                result[alias] = indicator_line
+                try:
+                    indicator_line = getattr(indicator, output_field)
+                    result[alias] = indicator_line
+                    logger.debug(f"Mapped field '{output_field}' to alias '{alias}'")
+                except AttributeError:
+                    logger.error(f"Failed to find output field '{output_field}' on {ind_type} object. Available lines: {indicator.lines.getlinealias(0)}")
+                    raise
 
         return result
 

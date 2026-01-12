@@ -34,7 +34,7 @@ Configuration Example (New TALib Architecture):
     }
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import backtrader as bt
 from src.strategy.exit.base_exit_mixin import BaseExitMixin
@@ -45,22 +45,12 @@ logger = setup_logger(__name__)
 
 class RSIBBExitMixin(BaseExitMixin):
     """Exit mixin that combines RSI and Bollinger Bands for exit signals.
-
-    Supports both new TALib-based architecture and legacy configurations.
+    New Architecture only.
     """
 
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         """Initialize the mixin with parameters"""
         super().__init__(params)
-
-        # Legacy architecture support
-        self.rsi_name = "exit_rsi"
-        self.bb_name = "exit_bb"
-        self.rsi = None
-        self.bb = None
-
-        # Detect architecture mode
-        self.use_new_architecture = False  # Will be set in init_exit()
 
     def get_required_params(self) -> list:
         """There are no required parameters - all have default values"""
@@ -70,76 +60,49 @@ class RSIBBExitMixin(BaseExitMixin):
     def get_default_params(cls) -> Dict[str, Any]:
         """Default parameters"""
         return {
-            "x_rsi_period": 14,
-            "x_rsi_overbought": 70,
-            "x_bb_period": 20,
-            "x_bb_dev": 2.0,
+            "rsi_period": 14,
+            "rsi_overbought": 70,
+            "bb_period": 20,
+            "bb_dev": 2.0,
         }
 
-    def init_exit(self, strategy, additional_params: Optional[Dict[str, Any]] = None):
-        """Override to detect architecture mode before calling parent."""
-        if hasattr(strategy, 'indicators') and strategy.indicators:
-            self.use_new_architecture = True
-        else:
-            self.use_new_architecture = False
+    @classmethod
+    def get_indicator_config(cls, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Define indicators required by this mixin."""
+        rsi_period = params.get("rsi_period", 14)
+        bb_period = params.get("bb_period", 20)
+        bb_dev = params.get("bb_dev", 2.0)
 
-        super().init_exit(strategy, additional_params)
+        return [
+            {
+                "type": "RSI",
+                "params": {"timeperiod": rsi_period},
+                "fields_mapping": {"rsi": "exit_rsi"}
+            },
+            {
+                "type": "BBANDS",
+                "params": {"timeperiod": bb_period, "nbdevup": bb_dev, "nbdevdn": bb_dev},
+                "fields_mapping": {
+                    "upperband": "exit_bb_upper"
+                }
+            }
+        ]
 
     def _init_indicators(self):
-        """Initialize indicators (legacy architecture only)."""
-        if self.use_new_architecture:
-            return
-
-        if not hasattr(self, "strategy"):
-            logger.error("No strategy available in _init_indicators")
-            return
-
-        try:
-            rsi_period = self.get_param("x_rsi_period")
-            bb_period = self.get_param("x_bb_period")
-            bb_dev_factor = self.get_param("x_bb_dev")
-
-            if self.strategy.use_talib:
-                self.rsi = bt.talib.RSI(self.strategy.data.close, timeperiod=rsi_period)
-                self.bb = bt.talib.BBANDS(
-                    self.strategy.data.close,
-                    timeperiod=bb_period,
-                    nbdevup=bb_dev_factor,
-                    nbdevdn=bb_dev_factor,
-                )
-            else:
-                self.rsi = bt.indicators.RSI(self.strategy.data.close, period=rsi_period)
-                self.bb = bt.indicators.BollingerBands(
-                    self.strategy.data.close, period=bb_period, devfactor=bb_dev_factor
-                )
-
-            self.register_indicator(self.rsi_name, self.rsi)
-            self.register_indicator(self.bb_name, self.bb)
-
-        except Exception:
-            logger.exception("Error initializing indicators: ")
-            raise
+        """No-op for new architecture."""
+        pass
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        if self.use_new_architecture:
-            return max(
-                self.get_param("rsi_period", 14),
-                self.get_param("bb_period", 20)
-            )
-        else:
-            return max(
-                self.get_param("x_rsi_period", 14),
-                self.get_param("x_bb_period", 20)
-            )
+        return max(
+            self.get_param("rsi_period", 14),
+            self.get_param("bb_period", 20)
+        )
 
     def are_indicators_ready(self) -> bool:
-        """Check if indicators are initialized."""
-        if self.use_new_architecture:
-            required = ['exit_rsi', 'exit_bb_upper']
-            return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
-        else:
-            return self.rsi_name in self.indicators and self.bb_name in self.indicators
+        """Check if required indicators exist in the strategy registry."""
+        required = ['exit_rsi', 'exit_bb_upper']
+        return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
 
     def should_exit(self) -> bool:
         """Check if we should exit a position."""
@@ -154,21 +117,10 @@ class RSIBBExitMixin(BaseExitMixin):
             rsi_overbought = self.get_param("rsi_overbought") or self.get_param("x_rsi_overbought", 70)
 
             # Unified Indicator Access
-            if self.use_new_architecture:
-                current_rsi = self.get_indicator('exit_rsi')
-                previous_rsi = self.get_indicator_prev('exit_rsi', 1)
-                current_bb_top = self.get_indicator('exit_bb_upper')
-                previous_bb_top = self.get_indicator_prev('exit_bb_upper', 1)
-            else:
-                current_rsi = self.rsi[0]
-                previous_rsi = self.rsi[-1]
-
-                if self.strategy.use_talib:
-                    current_bb_top = self.bb.upperband[0]
-                    previous_bb_top = self.bb.upperband[-1]
-                else:
-                    current_bb_top = self.bb.top[0]
-                    previous_bb_top = self.bb.top[-1]
+            current_rsi = self.get_indicator('exit_rsi')
+            previous_rsi = self.get_indicator_prev('exit_rsi', 1)
+            current_bb_top = self.get_indicator('exit_bb_upper')
+            previous_bb_top = self.get_indicator_prev('exit_bb_upper', 1)
 
             # Get current and previous prices
             current_price = self.strategy.data.close[0]
