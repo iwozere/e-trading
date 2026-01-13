@@ -280,10 +280,9 @@ class OptimizedMessageRepository:
 
         if channels:
             # Filter messages where ANY of the specified channels are present
-            # For PostgreSQL ARRAY, we use overlap (&&) or contains (@>)
-            # Using overlap operator via text or overlap method if available
-            channel_filters = [Message.channels.contains([ch]) for ch in channels]
-            query = query.filter(or_(*channel_filters))
+            # For PostgreSQL ARRAY, we use overlap (&&) which is more robust
+            # than contains (@>) in an OR loop.
+            query = query.filter(Message.channels.overlap(channels))
 
         # Use the optimized ordering with index hint
         return query.order_by(

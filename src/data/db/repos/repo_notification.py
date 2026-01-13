@@ -182,8 +182,7 @@ class MessageRepository:
 
         if channels:
             # Filter messages where ANY of the specified channels are present
-            channel_filters = [Message.channels.contains([ch]) for ch in channels]
-            query = query.filter(or_(*channel_filters))
+            query = query.filter(Message.channels.overlap(channels))
 
         # Order by priority (CRITICAL first) then by scheduled_for
         priority_order = text(
@@ -283,37 +282,37 @@ class MessageRepository:
                 "stuck_messages": 0
             }
 
-        # Pending count
+        # Build channel filters (messages where ANY of the specified channels are present)
         pending_count = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.PENDING.value,
-            or_(*channel_filters)
+            Message.channels.overlap(channels)
         ).scalar() or 0
 
         # Processing count
         processing_count = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.PROCESSING.value,
-            or_(*channel_filters)
+            Message.channels.overlap(channels)
         ).scalar() or 0
 
         # Failed in last hour
         failed_last_hour = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.FAILED.value,
             Message.updated_at >= one_hour_ago,
-            or_(*channel_filters)
+            Message.channels.overlap(channels)
         ).scalar() or 0
 
         # Delivered in last hour
         delivered_last_hour = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.DELIVERED.value,
             Message.delivered_at >= one_hour_ago,
-            or_(*channel_filters)
+            Message.channels.overlap(channels)
         ).scalar() or 0
 
         # Stuck messages (processing for > 5 minutes)
         stuck_messages = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.PROCESSING.value,
             Message.updated_at < five_min_ago,
-            or_(*channel_filters)
+            Message.channels.overlap(channels)
         ).scalar() or 0
 
         return {
