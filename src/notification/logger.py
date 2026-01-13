@@ -12,12 +12,17 @@ import traceback
 from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
 from pathlib import Path
 from contextvars import ContextVar
-from multiprocessing import Queue
+from multiprocessing import Queue, Manager
 import atexit
 import threading
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+else:
+    # Ensure it's at the front if it was already appended
+    sys.path.remove(str(PROJECT_ROOT))
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import logging.config
 from datetime import datetime as dt
@@ -56,9 +61,9 @@ LOG_CONFIG = {
     "version": 1,
     "formatters": {
         "detailed": {
-            "format": "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+            "format": "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
         },
-        "standard": {"format": "%(asctime)s - %(levelname)s - %(message)s"},
+        "standard": {"format": "%(asctime)s - [PID %(process)d] - %(levelname)s - %(message)s"},
     },
     "handlers": {
         "console": {
@@ -185,19 +190,39 @@ LOG_CONFIG = {
     "root": {"handlers": ["console", "file"], "level": "DEBUG"},
 }
 
-# --- PATCH LOG_CONFIG for UTF-8 encoding on all file handlers ---
+# --- PATCH LOG_CONFIG for UTF-8 encoding and conditional file handlers ---
+# Determine if we are in a main process or a fork/spawn child
+import multiprocessing
+# For Python 3.8+, parent_process() is a reliable way to check if we are the root process
+try:
+    _is_main_process = multiprocessing.parent_process() is None
+except AttributeError:
+    # Fallback for very old Python or unconventional environments
+    _is_main_process = multiprocessing.current_process().name == 'MainProcess'
+
+# These keys are not accepted by logging.NullHandler
+INVALID_NULL_HANDLER_KEYS = ['filename', 'maxBytes', 'backupCount', 'encoding', 'delay']
+
 for handler_name in ["file", "trade_file", "order_file", "telegram_screener_bot_file",
                     "telegram_background_services_file", "telegram_alert_monitor_file",
                     "telegram_schedule_processor_file", "error_file"]:
     if handler_name in LOG_CONFIG["handlers"]:
         LOG_CONFIG["handlers"][handler_name]["encoding"] = "utf-8"
+        # On Windows child processes, don't open file handles automatically
+        if not _is_main_process:
+            LOG_CONFIG["handlers"][handler_name]["class"] = "logging.NullHandler"
+            # Remove keys that NullHandler doesn't support to avoid TypeError in dictConfig
+            for key in INVALID_NULL_HANDLER_KEYS:
+                if key in LOG_CONFIG["handlers"][handler_name]:
+                    del LOG_CONFIG["handlers"][handler_name][key]
 
 logging.config.dictConfig(LOG_CONFIG)
-_logger = logging.getLogger()
+_logger = logging.getLogger(__name__)
 
 # Global queue listener for multiprocessing-safe logging
 _queue_listener = None
 _log_queue = None
+_manager = None
 _listener_lock = threading.Lock()
 
 
@@ -219,7 +244,7 @@ def _create_file_handlers():
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
     ))
     handlers.append(file_handler)
 
@@ -232,7 +257,7 @@ def _create_file_handlers():
     )
     trade_handler.setLevel(logging.DEBUG)
     trade_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
     ))
     handlers.append(trade_handler)
 
@@ -245,7 +270,7 @@ def _create_file_handlers():
     )
     order_handler.setLevel(logging.DEBUG)
     order_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
     ))
     handlers.append(order_handler)
 
@@ -258,7 +283,7 @@ def _create_file_handlers():
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+        "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
     ))
     handlers.append(error_handler)
 
@@ -275,15 +300,17 @@ def setup_multiprocessing_logging():
     Returns:
         Queue: The log queue that worker processes should use
     """
-    global _queue_listener, _log_queue
+    global _queue_listener, _log_queue, _manager
 
     with _listener_lock:
         if _queue_listener is not None:
             # Already set up
             return _log_queue
 
-        # Create a queue for log messages
-        _log_queue = Queue(-1)
+        # Create a manager and a queue for log messages
+        if _manager is None:
+            _manager = Manager()
+        _log_queue = _manager.Queue(-1)
 
         # Create file handlers
         file_handlers = _create_file_handlers()
@@ -292,7 +319,7 @@ def setup_multiprocessing_logging():
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.DEBUG)
         console_handler.setFormatter(logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s"
+            "%(asctime)s - [PID %(process)d] - %(levelname)s - %(message)s"
         ))
 
         # Combine all handlers
@@ -312,29 +339,32 @@ def setup_multiprocessing_logging():
 
 def shutdown_multiprocessing_logging():
     """
-    Shut down the queue listener.
+    Shut down the queue listener and manager.
 
     This is automatically called at exit via atexit.register().
     """
-    global _queue_listener
+    global _queue_listener, _manager
 
     with _listener_lock:
         if _queue_listener is not None:
             _queue_listener.stop()
             _queue_listener = None
-            _logger.info("Multiprocessing-safe logging shut down")
+
+        if _manager is not None:
+            _manager.shutdown()
+            _manager = None
+
+        _logger.info("Multiprocessing-safe logging shut down")
 
 
-def get_multiprocessing_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
+def get_multiprocessing_logger(name: str, level: int = logging.DEBUG, external_queue: Queue = None) -> logging.Logger:
     """
     Get a logger configured for multiprocessing.
-
-    In the main process, this sets up the QueueListener.
-    In worker processes, this configures loggers to use QueueHandler.
 
     Args:
         name: Logger name
         level: Logging level
+        external_queue: Optional shared queue to use (crucial for joblib workers)
 
     Returns:
         logging.Logger: Configured logger
@@ -344,21 +374,21 @@ def get_multiprocessing_logger(name: str, level: int = logging.DEBUG) -> logging
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    # Check if we're in a worker process (no listener set up)
-    # or if we need to set up the main process listener
-    if _log_queue is None:
-        # Try to set up the main process listener
-        setup_multiprocessing_logging()
+    # Use external queue if provided, otherwise fallback to global
+    queue_to_use = external_queue or _log_queue
 
-    # Remove existing handlers to avoid duplicates
+    # Remove existing handlers to avoid duplicates/collisions
     logger.handlers.clear()
 
-    # Add queue handler
-    if _log_queue is not None:
-        queue_handler = QueueHandler(_log_queue)
+    # Add queue handler if we have a queue
+    if queue_to_use is not None:
+        queue_handler = QueueHandler(queue_to_use)
         queue_handler.setLevel(level)
         logger.addHandler(queue_handler)
         logger.propagate = False
+    else:
+        # Fallback to local config but ensure no file handlers in workers (already handled in LOG_CONFIG)
+        pass
 
     return logger
 
@@ -476,7 +506,7 @@ def get_logging_context() -> str:
 
 
 def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
-                inherit_from: str = None, use_multiprocessing: bool = False) -> logging.Logger:
+                inherit_from: str = None, use_multiprocessing: bool = False, **kwargs) -> logging.Logger:
     """
     Set up the logger with custom configuration.
 
@@ -494,7 +524,9 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
     """
     # If multiprocessing mode is requested, use queue-based logging
     if use_multiprocessing:
-        return get_multiprocessing_logger(name, level)
+        # Check if we have an external queue in kwargs (hacky but works for joblib passing)
+        external_queue = kwargs.get('external_queue')
+        return get_multiprocessing_logger(name, level, external_queue=external_queue)
     # Check if we should inherit from a parent logger
     if inherit_from:
         return ContextAwareLogger(name, inherit_from).logger
@@ -523,7 +555,7 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.DEBUG,
         )
         file_handler.setLevel(level)
         file_formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
+            "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
         )
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)

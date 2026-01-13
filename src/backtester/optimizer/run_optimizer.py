@@ -15,7 +15,12 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+else:
+    # Ensure it's at the front if it was already appended
+    sys.path.remove(str(PROJECT_ROOT))
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import json
 from datetime import datetime as dt
@@ -29,8 +34,9 @@ from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.notification.logger import setup_logger, setup_multiprocessing_logging
 from src.backtester.optimizer.custom_optimizer import CustomOptimizer
+from joblib import Parallel, delayed
 
-_logger = setup_logger(__name__)
+_logger = setup_logger(__name__, use_multiprocessing=True)
 
 
 def check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
@@ -714,6 +720,134 @@ def generate_summary_report(
     print("\n")
 
 
+
+def optimize_combination(
+    data_file,
+    entry_logic_name,
+    exit_logic_name,
+    full_data_path,
+    optimizer_config,
+    two_stage_enabled,
+    stage1_trials,
+    stage2_trials,
+    selection_criteria,
+    dry_run_mode,
+    log_queue=None,
+):
+    """
+    Worker function to process a single combination of data + entry + exit logic.
+    """
+    try:
+        # Load and prepare data (Reload per process for safety on Windows spawn)
+        df = prepare_data_frame(full_data_path)
+        df = pre_calculate_htf_data(df, [60, 120, 240, 480])
+
+        # Initialize logger with the shared queue
+        global _logger
+        _logger = setup_logger(__name__, use_multiprocessing=True, external_queue=log_queue)
+
+        symbol, interval, start_date, end_date = parse_data_file_name(data_file)
+
+        # Skip if already processed
+        if check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
+            return None
+
+        # Load configurations
+        entry_logic_config = load_mixin_config(entry_logic_name, "entry", interval)
+        exit_logic_config = load_mixin_config(exit_logic_name, "exit", interval)
+
+        _logger.info("Running parallel optimization: %s + %s + %s", data_file, entry_logic_name, exit_logic_name)
+
+        def objective(trial):
+            """Objective function for optimization"""
+            data = prepare_data_feed(df, symbol)
+            _optimizer_config = {
+                "data": data,
+                "entry_logic": entry_logic_config,
+                "exit_logic": exit_logic_config,
+                "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
+                "visualization_settings": optimizer_config.get("visualization_settings", {}),
+                "symbol": symbol,
+                "timeframe": interval,
+            }
+
+            if trial.number % 10 == 0:
+                _logger.info(f"[{entry_logic_name}+{exit_logic_name}] Trial {trial.number} in progress...")
+
+            optimizer = CustomOptimizer(_optimizer_config)
+            _, _, result = optimizer.run_optimization(trial, include_analyzers=False)
+            return result["total_profit_with_commission"]
+
+        # ========== STAGE 1: SCREENING OPTIMIZATION ==========
+        _logger.info("[%s + %s] STAGE 1: Screening phase (%d trials)", entry_logic_name, exit_logic_name, stage1_trials)
+        study = optuna.create_study(
+            direction="maximize",
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=50, n_warmup_steps=10)
+        )
+
+        study.optimize(
+            objective,
+            n_trials=stage1_trials,
+            n_jobs=1,  # Serial trials within parallel combination
+        )
+
+        metrics = calculate_optimization_metrics(study)
+        if metrics is None:
+            return None
+
+        is_promising, reason = evaluate_combination_promise(metrics, selection_criteria)
+        combination_key = (entry_logic_name, exit_logic_name)
+
+        result_entry = {
+            'key': combination_key,
+            'metrics': metrics,
+            'best_params': study.best_params,
+            'stage': 'screening',
+            'is_promising': is_promising,
+            'reason': reason,
+            'data_file': data_file
+        }
+
+        # ========== STAGE 2: DEEP OPTIMIZATION ==========
+        if two_stage_enabled and is_promising and not dry_run_mode:
+            _logger.info("[%s + %s] STAGE 2: Deep optimization phase", entry_logic_name, exit_logic_name)
+            study.optimize(
+                objective,
+                n_trials=stage2_trials - stage1_trials,
+                n_jobs=1,
+            )
+            metrics = calculate_optimization_metrics(study)
+            if metrics:
+                result_entry.update({
+                    'metrics': metrics,
+                    'best_params': study.best_params,
+                    'stage': 'deep_optimization',
+                })
+
+        # Run final backtest and save if promising or not screening-only
+        if not dry_run_mode and (not two_stage_enabled or is_promising):
+            _logger.info("[%s + %s] Running final backtest and saving results", entry_logic_name, exit_logic_name)
+            data = prepare_data_feed(df, symbol)
+            _optimizer_config = {
+                "data": data,
+                "entry_logic": entry_logic_config,
+                "exit_logic": exit_logic_config,
+                "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
+                "visualization_settings": optimizer_config.get("visualization_settings", {}),
+                "symbol": symbol,
+                "timeframe": interval,
+            }
+            best_optimizer = CustomOptimizer(_optimizer_config)
+            _, _, best_result = best_optimizer.run_optimization(study.best_trial, include_analyzers=True)
+            save_results(best_result, data_file)
+
+        return result_entry
+
+    except Exception as e:
+        _logger.exception("Error in optimize_combination for %s + %s: %s", entry_logic_name, exit_logic_name, e)
+        return None
+
+
 if __name__ == "__main__":
     """Run all optimizers with their respective configurations."""
 
@@ -760,197 +894,59 @@ if __name__ == "__main__":
     _logger.info("Found %d exit mixins", len(EXIT_MIXIN_REGISTRY))
     _logger.info("Total combinations to process: %d", total_combinations)
 
+    # Build task list
+    tasks = []
     for data_file in data_files:
-        _logger.info("Processing data file: %s", data_file)
         full_data_path = os.path.join("data", data_file)
-        df = prepare_data_frame(full_data_path)
-
-        # Pre-calculate HTF ATRs for the intervals used in configs (60, 120, 240, 480)
-        # This is done ONCE per data file instead of 150 times per combination
-        df = pre_calculate_htf_data(df, [60, 120, 240, 480])
-
-        symbol, interval, start_date, end_date = parse_data_file_name(data_file)
-
+        # We parse file name here just to get the interval for loading configs if needed
+        # but the worker will do it properly too.
         for entry_logic_name in ENTRY_MIXIN_REGISTRY.keys():
-            # Load entry logic configuration (timeframe-specific with fallback)
-            entry_logic_config = load_mixin_config(entry_logic_name, "entry", interval)
-
             for exit_logic_name in EXIT_MIXIN_REGISTRY.keys():
-                processed_combinations += 1
+                tasks.append((data_file, entry_logic_name, exit_logic_name, full_data_path))
 
-                # Check if already processed
-                if check_if_already_processed(data_file, entry_logic_name, exit_logic_name):
-                    skipped_combinations += 1
-                    _logger.info("Progress: %d/%d (Skipped: %d)", processed_combinations, total_combinations, skipped_combinations)
-                    continue
+    total_combinations = len(tasks)
+    n_parallel_jobs = optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1)
+    if n_parallel_jobs == -1:
+        import multiprocessing
+        n_parallel_jobs = multiprocessing.cpu_count()
 
-                # Load exit logic configuration (timeframe-specific with fallback)
-                exit_logic_config = load_mixin_config(exit_logic_name, "exit", interval)
+    _logger.info("Starting parallel execution of %d combinations using %d processes", total_combinations, n_parallel_jobs)
 
-                _logger.info("Running optimization %d/%d: %s + %s + %s", processed_combinations, total_combinations, data_file, entry_logic_name, exit_logic_name)
+    # Set up multiprocessing-safe logging
+    log_queue = setup_multiprocessing_logging()
 
-                # Create optimizer configuration
-                try:
+    # Run in parallel
+    results_list = Parallel(n_jobs=n_parallel_jobs, verbose=10, backend="multiprocessing")(
+        delayed(optimize_combination)(
+            data_file,
+            entry_name,
+            exit_name,
+            path,
+            optimizer_config,
+            two_stage_enabled,
+            stage1_trials,
+            stage2_trials,
+            selection_criteria,
+            dry_run_mode,
+            log_queue=log_queue,
+        )
+        for data_file, entry_name, exit_name, path in tasks
+    )
 
-                    def objective(trial):
-                        """Objective function for optimization"""
-                        # Create a new data feed for each trial
-                        data = prepare_data_feed(df, symbol)
+    # Process results
+    for result in results_list:
+        if result is None:
+            skipped_combinations += 1
+            continue
 
-                        _optimizer_config = {
-                            "data": data,
-                            "entry_logic": entry_logic_config,
-                            "exit_logic": exit_logic_config,
-                            "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
-                            "visualization_settings": optimizer_config.get("visualization_settings", {}),
-                            "symbol": symbol,
-                            "timeframe": interval,
-                        }
+        processed_combinations += 1
+        combination_key = result['key']
+        all_results[combination_key] = result
 
-                        # Log progress every 10 trials
-                        if trial.number % 10 == 0:
-                            _logger.info(f"Trial {trial.number}/{stage1_trials if study.trials == [] else stage2_trials} in progress...")
-
-                        optimizer = CustomOptimizer(_optimizer_config)
-                        # Disable analyzers for optimization trials to improve performance
-                        _, _, result = optimizer.run_optimization(trial, include_analyzers=False)
-                        return result["total_profit_with_commission"]
-
-                    # ========== STAGE 1: SCREENING OPTIMIZATION ==========
-                    _logger.info("STAGE 1: Screening phase (%d trials)", stage1_trials)
-
-                    # Create study
-                    study = optuna.create_study(direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=50, n_warmup_steps=10))
-
-                    # Run Stage 1 optimization
-                    try:
-                        study.optimize(
-                            objective,
-                            n_trials=stage1_trials,
-                            n_jobs=optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1),
-                        )
-                    except Exception as e:
-                        _logger.exception("Error during Stage 1 optimization for %s + %s: %s", entry_logic_name, exit_logic_name, e)
-                        raise
-
-                    # Calculate metrics from Stage 1
-                    metrics = calculate_optimization_metrics(study)
-
-                    if metrics is None:
-                        _logger.warning("No valid trials for %s + %s, skipping", entry_logic_name, exit_logic_name)
-                        continue
-
-                    # Log Stage 1 results
-                    _logger.info(
-                        "Stage 1 Results - %s + %s: Best=%.4f, Median=%.4f, Mean=%.4f, Std=%.4f, Top10=%.4f",
-                        entry_logic_name, exit_logic_name,
-                        metrics['best_value'], metrics['median_value'],
-                        metrics['mean_value'], metrics['std_value'], metrics['top_10_avg']
-                    )
-
-                    # Evaluate if combination is promising
-                    is_promising, reason = evaluate_combination_promise(metrics, selection_criteria)
-
-                    # Store Stage 1 results
-                    combination_key = (entry_logic_name, exit_logic_name)
-                    all_results[combination_key] = {
-                        'metrics': metrics,
-                        'best_params': study.best_params,
-                        'study': study if is_promising else None,  # Only save study for promising combinations
-                        'stage': 'screening',
-                        'is_promising': is_promising,
-                        'reason': reason,
-                    }
-
-                    if is_promising:
-                        promising_results[combination_key] = all_results[combination_key]
-                    else:
-                        unpromising_results[combination_key] = all_results[combination_key]
-
-                    # Log decision
-                    if is_promising:
-                        _logger.info("✓ PROMISING - %s + %s: %s", entry_logic_name, exit_logic_name, reason)
-                    else:
-                        _logger.info("✗ FILTERED OUT - %s + %s: %s", entry_logic_name, exit_logic_name, reason)
-
-                    # ========== STAGE 2: DEEP OPTIMIZATION (if enabled and promising) ==========
-                    if two_stage_enabled and is_promising and not dry_run_mode:
-                        _logger.info("STAGE 2: Deep optimization phase (additional %d trials, %d total)",
-                                   stage2_trials - stage1_trials, stage2_trials)
-
-                        # Continue from existing study (warm start)
-                        try:
-                            study.optimize(
-                                objective,
-                                n_trials=stage2_trials - stage1_trials,  # Additional trials
-                                n_jobs=optimizer_config.get("optimizer_settings", {}).get("n_jobs", -1),
-                            )
-                        except Exception as e:
-                            _logger.exception("Error during Stage 2 optimization for %s + %s: %s", entry_logic_name, exit_logic_name, e)
-                            raise
-
-                        # Recalculate metrics with all trials
-                        metrics = calculate_optimization_metrics(study)
-
-                        if metrics is None:
-                            _logger.warning("No valid trials after Stage 2 for %s + %s, skipping", entry_logic_name, exit_logic_name)
-                            continue
-
-                        # Log Stage 2 results
-                        _logger.info(
-                            "Stage 2 Results - %s + %s: Best=%.4f, Median=%.4f, Mean=%.4f, Std=%.4f, Top10=%.4f",
-                            entry_logic_name, exit_logic_name,
-                            metrics['best_value'], metrics['median_value'],
-                            metrics['mean_value'], metrics['std_value'], metrics['top_10_avg']
-                        )
-
-                        # Update results with Stage 2 data
-                        all_results[combination_key].update({
-                            'metrics': metrics,
-                            'best_params': study.best_params,
-                            'study': study,
-                            'stage': 'deep_optimization',
-                        })
-                        promising_results[combination_key] = all_results[combination_key]
-
-                    # Skip full backtest if dry run mode or not promising
-                    if dry_run_mode or (two_stage_enabled and not is_promising):
-                        _logger.info("Skipping full backtest for %s + %s", entry_logic_name, exit_logic_name)
-                        continue
-
-                    # Get best result
-                    if len(study.trials) == 0:
-                        _logger.warning("No successful trials for %s + %s, skipping", entry_logic_name, exit_logic_name)
-                        continue
-
-                    data = prepare_data_feed(df, symbol)
-                    _optimizer_config = {
-                        "data": data,
-                        "entry_logic": entry_logic_config,
-                        "exit_logic": exit_logic_config,
-                        "optimizer_settings": optimizer_config.get("optimizer_settings", {}),
-                        "visualization_settings": optimizer_config.get("visualization_settings", {}),
-                        "symbol": symbol,
-                        "timeframe": interval,
-                    }
-                    best_trial = study.best_trial
-                    best_optimizer = CustomOptimizer(_optimizer_config)
-
-                    # Run full backtest with best parameters
-                    _logger.info("Running full backtest with best parameters")
-                    try:
-                        strategy, cerebro, best_result = best_optimizer.run_optimization(best_trial, include_analyzers=True)
-
-                        # Save results
-                        save_results(best_result, data_file)
-                    except Exception as e:
-                        _logger.exception("Error in final backtest for%s + %s: %s", entry_logic_name, exit_logic_name, e)
-                        raise
-
-                    _logger.info("Completed optimization %d/%d", processed_combinations, total_combinations)
-
-                except Exception as e:
-                    _logger.exception("Error for %s + %s: %s", entry_logic_name, exit_logic_name, e)
+        if result['is_promising']:
+            promising_results[combination_key] = result
+        else:
+            unpromising_results[combination_key] = result
 
     end_time = dt.now()
     duration = end_time - start_time
