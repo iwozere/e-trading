@@ -8,8 +8,8 @@ for the notification service to improve performance under high load.
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import and_, or_, desc, asc, func, text, Index
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import and_, or_, desc, asc, func, text, Index, cast
+from sqlalchemy.dialects.postgresql import insert, ARRAY, TEXT
 
 from src.data.db.models.model_notification import (
     Message, MessageDeliveryStatus, RateLimit, ChannelConfig,
@@ -151,8 +151,8 @@ class OptimizedMessageRepository:
             if channels:
                 # PostgreSQL array overlap operator && or contains @>
                 # We want messages where message.channels contains at least one of the provided channels
-                # SQL: AND channels && ARRAY['ch1', 'ch2']
-                channel_condition = "AND channels && :channels"
+                # SQL: AND channels && :channels::TEXT[]
+                channel_condition = "AND channels && :channels::TEXT[]"
 
             # Use raw SQL for atomic message claiming with PostgreSQL-specific features
             query = text(f"""
@@ -282,7 +282,8 @@ class OptimizedMessageRepository:
             # Filter messages where ANY of the specified channels are present
             # For PostgreSQL ARRAY, we use overlap (&&) which is more robust
             # than contains (@>) in an OR loop.
-            query = query.filter(Message.channels.overlap(channels))
+            # Explicit cast to TEXT[] to avoid character varying[] mismatch
+            query = query.filter(Message.channels.overlap(cast(channels, ARRAY(TEXT))))
 
         # Use the optimized ordering with index hint
         return query.order_by(

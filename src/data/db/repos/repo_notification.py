@@ -8,7 +8,8 @@ Provides data access methods for messages, delivery status, channel health, rate
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc, asc, text
+from sqlalchemy import and_, or_, desc, asc, text, cast
+from sqlalchemy.dialects.postgresql import ARRAY, TEXT
 from sqlalchemy.exc import IntegrityError
 
 from src.data.db.models.model_notification import (
@@ -182,7 +183,7 @@ class MessageRepository:
 
         if channels:
             # Filter messages where ANY of the specified channels are present
-            query = query.filter(Message.channels.overlap(channels))
+            query = query.filter(Message.channels.overlap(cast(channels, ARRAY(TEXT))))
 
         # Order by priority (CRITICAL first) then by scheduled_for
         priority_order = text(
@@ -285,34 +286,34 @@ class MessageRepository:
         # Build channel filters (messages where ANY of the specified channels are present)
         pending_count = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.PENDING.value,
-            Message.channels.overlap(channels)
+            Message.channels.overlap(cast(channels, ARRAY(TEXT)))
         ).scalar() or 0
 
         # Processing count
         processing_count = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.PROCESSING.value,
-            Message.channels.overlap(channels)
+            Message.channels.overlap(cast(channels, ARRAY(TEXT)))
         ).scalar() or 0
 
         # Failed in last hour
         failed_last_hour = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.FAILED.value,
             Message.updated_at >= one_hour_ago,
-            Message.channels.overlap(channels)
+            Message.channels.overlap(cast(channels, ARRAY(TEXT)))
         ).scalar() or 0
 
         # Delivered in last hour
         delivered_last_hour = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.DELIVERED.value,
             Message.delivered_at >= one_hour_ago,
-            Message.channels.overlap(channels)
+            Message.channels.overlap(cast(channels, ARRAY(TEXT)))
         ).scalar() or 0
 
         # Stuck messages (processing for > 5 minutes)
         stuck_messages = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.PROCESSING.value,
             Message.updated_at < five_min_ago,
-            Message.channels.overlap(channels)
+            Message.channels.overlap(cast(channels, ARRAY(TEXT)))
         ).scalar() or 0
 
         return {
