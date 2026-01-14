@@ -354,9 +354,8 @@ class MessageRepository:
         channel_condition = ""
         if channels:
             # PostgreSQL array overlap operator && or contains @>
-            # We want messages where message.channels contains at least one of the provided channels
-            # SQL: AND channels && ARRAY['ch1', 'ch2']
-            channel_condition = "AND channels && :channels"
+            # SQL: AND channels && CAST(:channels AS TEXT[])
+            channel_condition = "AND channels && CAST(:channels AS TEXT[])"
 
         try:
             # Use raw SQL for atomic message claiming with PostgreSQL-specific features

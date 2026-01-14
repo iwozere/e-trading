@@ -151,8 +151,8 @@ class OptimizedMessageRepository:
             if channels:
                 # PostgreSQL array overlap operator && or contains @>
                 # We want messages where message.channels contains at least one of the provided channels
-                # SQL: AND channels && :channels::TEXT[]
-                channel_condition = "AND channels && :channels::TEXT[]"
+                # SQL: AND channels && CAST(:channels AS TEXT[])
+                channel_condition = "AND channels && CAST(:channels AS TEXT[])"
 
             # Use raw SQL for atomic message claiming with PostgreSQL-specific features
             query = text(f"""
