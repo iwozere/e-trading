@@ -167,8 +167,8 @@ Examples:
     rolling_group.add_argument(
         '--lookback-days-rolling',
         type=int,
-        default=10,
-        help='Rolling memory lookback period (default: 10 days)'
+        default=14,
+        help='Rolling memory lookback period (default: 14 days)'
     )
     rolling_group.add_argument(
         '--phase1-threshold',

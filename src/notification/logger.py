@@ -226,18 +226,27 @@ _manager = None
 _listener_lock = threading.Lock()
 
 
-def _create_file_handlers():
+def _create_file_handlers(pid_suffix: str = ""):
     """
     Create all file handlers for multiprocessing-safe logging.
+
+    Args:
+        pid_suffix: Optional suffix to append to filenames (e.g., ".1234")
 
     Returns:
         list: List of configured file handlers
     """
     handlers = []
 
+    def get_log_path(name: str) -> str:
+        base_path = str(PROJECT_ROOT / "logs" / "log" / name)
+        if pid_suffix:
+            return f"{base_path}.{pid_suffix}"
+        return base_path
+
     # Create file handler for main app log
     file_handler = RotatingFileHandler(
-        str(PROJECT_ROOT / "logs" / "log" / "app.log"),
+        get_log_path("app.log"),
         maxBytes=MAX_BYTES,
         backupCount=BACKUP_COUNT,
         encoding="utf-8"
@@ -250,7 +259,7 @@ def _create_file_handlers():
 
     # Create trade log handler
     trade_handler = RotatingFileHandler(
-        str(PROJECT_ROOT / "logs" / "log" / "trades.log"),
+        get_log_path("trades.log"),
         maxBytes=MAX_BYTES,
         backupCount=BACKUP_COUNT,
         encoding="utf-8"
@@ -263,7 +272,7 @@ def _create_file_handlers():
 
     # Create order log handler
     order_handler = RotatingFileHandler(
-        str(PROJECT_ROOT / "logs" / "log" / "orders.log"),
+        get_log_path("orders.log"),
         maxBytes=MAX_BYTES,
         backupCount=BACKUP_COUNT,
         encoding="utf-8"
@@ -276,7 +285,7 @@ def _create_file_handlers():
 
     # Create error log handler
     error_handler = RotatingFileHandler(
-        str(PROJECT_ROOT / "logs" / "log" / "app_errors.log"),
+        get_log_path("app_errors.log"),
         maxBytes=MAX_BYTES,
         backupCount=BACKUP_COUNT,
         encoding="utf-8"
@@ -385,15 +394,30 @@ def get_multiprocessing_logger(name: str, level: int = logging.DEBUG, external_q
         queue_handler = QueueHandler(queue_to_use)
         queue_handler.setLevel(level)
         logger.addHandler(queue_handler)
+
+        if not _is_main_process:
+            # CHILD PROCESS: Also add local file handlers with PID suffix to avoid rollover lock issues
+            # This ensures logs go to the central queue (via main) AND to a local PID-dedicated file.
+            pass
+
         logger.propagate = False
     else:
-        # Fallback to local config but ensure no file handlers in workers (already handled in LOG_CONFIG)
+        # Fallback to local config
         pass
 
+    # For child processes, automatically add PID-suffixed file handlers to the root
+    if not _is_main_process:
+        root = logging.getLogger()
+        # Only add if not already present
+        has_pid_handler = any(isinstance(h, RotatingFileHandler) and str(os.getpid()) in h.baseFilename for h in root.handlers)
+
+        if not has_pid_handler:
+            # Add PID-suffixed file handlers to root so all loggers benefit
+            child_handlers = _create_file_handlers(pid_suffix=str(os.getpid()))
+            for h in child_handlers:
+                root.addHandler(h)
+
     return logger
-
-
-def log_exception(logger, exc_info=None):
     """Log an exception with full stack trace"""
     logger.error("Full traceback:\n" + "".join(traceback.format_exception(*exc_info)))
 
