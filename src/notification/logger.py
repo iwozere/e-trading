@@ -193,28 +193,47 @@ LOG_CONFIG = {
 # --- PATCH LOG_CONFIG for UTF-8 encoding and conditional file handlers ---
 # Determine if we are in a main process or a fork/spawn child
 import multiprocessing
-# For Python 3.8+, parent_process() is a reliable way to check if we are the root process
+import os
+
+# Robust check for main process
+# On Windows/spawn, parent_process() is None only for the true root process
+# But sometimes frameworks mangle this. Let's check the name too.
 try:
-    _is_main_process = multiprocessing.parent_process() is None
-except AttributeError:
-    # Fallback for very old Python or unconventional environments
-    _is_main_process = multiprocessing.current_process().name == 'MainProcess'
+    _current = multiprocessing.current_process()
+    _is_main_process = (_current.name == 'MainProcess')
+
+    # Double check with parent process if available (Python 3.8+)
+    if hasattr(multiprocessing, 'parent_process'):
+        _parent = multiprocessing.parent_process()
+        if _parent is not None:
+             _is_main_process = False
+
+    # Check if we are imported as __main__ vs module? No, logger is imported.
+except Exception:
+    _is_main_process = True
+
 
 # These keys are not accepted by logging.NullHandler
 INVALID_NULL_HANDLER_KEYS = ['filename', 'maxBytes', 'backupCount', 'encoding', 'delay']
 
-for handler_name in ["file", "trade_file", "order_file", "telegram_screener_bot_file",
-                    "telegram_background_services_file", "telegram_alert_monitor_file",
-                    "telegram_schedule_processor_file", "error_file"]:
-    if handler_name in LOG_CONFIG["handlers"]:
-        LOG_CONFIG["handlers"][handler_name]["encoding"] = "utf-8"
-        # On Windows child processes, don't open file handles automatically
+for handler_name in LOG_CONFIG["handlers"]:
+    handler_config = LOG_CONFIG["handlers"][handler_name]
+
+    # Ensure encoding is UTF-8 for all file handlers
+    if "filename" in handler_config:
+        handler_config["encoding"] = "utf-8"
+
+        # If we are in a child process, append PID to filename to avoid locking/rollover issues
         if not _is_main_process:
-            LOG_CONFIG["handlers"][handler_name]["class"] = "logging.NullHandler"
-            # Remove keys that NullHandler doesn't support to avoid TypeError in dictConfig
-            for key in INVALID_NULL_HANDLER_KEYS:
-                if key in LOG_CONFIG["handlers"][handler_name]:
-                    del LOG_CONFIG["handlers"][handler_name][key]
+            import os
+            base_filename = handler_config["filename"]
+            # Check if it already has a PID (avoid double appending if re-imported)
+            pid_suffix = f".{os.getpid()}"
+            if not base_filename.endswith(pid_suffix):
+                new_filename = f"{base_filename}{pid_suffix}"
+                handler_config["filename"] = new_filename
+
+
 
 logging.config.dictConfig(LOG_CONFIG)
 _logger = logging.getLogger(__name__)
