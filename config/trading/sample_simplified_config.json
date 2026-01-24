@@ -37,9 +37,9 @@
   "log_level": "INFO",
   "save_trades": true,
   "save_equity_curve": true,
-  "log_file": "logs/sample_bot_001.log",
+  "log_file": "logs/simulation/sample_bot_001.log",
   "notifications_enabled": true,
   "telegram_enabled": false,
   "email_enabled": false,
   "paper_trading": true
-} 
+}

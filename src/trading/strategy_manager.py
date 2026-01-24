@@ -974,6 +974,8 @@ class StrategyManager:
     async def load_strategies_from_config(self, config_file: str) -> bool:
         """Load strategy configurations from JSON file."""
         try:
+            from src.config.configuration_factory import config_factory
+
             config_path = Path(config_file)
             if not config_path.exists():
                 _logger.error("Configuration file not found: %s", config_path)
@@ -990,6 +992,14 @@ class StrategyManager:
             _logger.info("Loading %d strategy configurations", len(strategies))
 
             for strategy_config in strategies:
+                # Use Factory to Hydrate/Validate
+                try:
+                    # If the strategy config is a manifest, this will expand it
+                    strategy_config = config_factory.load_manifest(strategy_config)
+                except Exception as e:
+                    _logger.error("Strategy factory hydration failed: %s", e)
+                    continue
+
                 instance_id = strategy_config.get('id') or str(uuid.uuid4())
 
                 # Validate required fields
@@ -1350,6 +1360,18 @@ class StrategyManager:
                 # Map db record to StrategyInstance config
                 si_config = self._db_bot_to_strategy_config(bot)
 
+                # Use Factory to Hydrate/Validate
+                try:
+                    from src.config.configuration_factory import config_factory
+                    si_config = config_factory.load_manifest(si_config)
+                except Exception as e:
+                    _logger.error("Bot %s: Factory validation/hydration failed: %s", bot["id"], e)
+                    try:
+                        trading_service.update_bot_status(bot["id"], "error", error_message=f"Config Factory Error: {e}")
+                    except Exception:
+                        pass
+                    continue
+
                 # Recover state if this is a crash recovery
                 if was_crashed:
                     _logger.info("Recovering state for bot %s...", bot["id"])
@@ -1426,6 +1448,8 @@ class StrategyManager:
             "trading": cfg.get("trading", {}),
             "risk_management": cfg.get("risk_management", {}),
             "notifications": cfg.get("notifications", {}),
+            "modules": cfg.get("modules"),
+            "overrides": cfg.get("overrides"),
         }
 
     async def start_db_polling(self, user_id: Optional[int] = None, interval_seconds: int = 60):

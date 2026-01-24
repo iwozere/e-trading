@@ -1,0 +1,13 @@
+{
+    "broker": {
+        "type": "ibkr",
+        "trading_mode": "paper",
+        "name": "ibkr_paper_bot",
+        "cash": 50000.0,
+        "connection_params": {
+            "host": "127.0.0.1",
+            "port": 7497,
+            "client_id": 1
+        }
+    }
+}

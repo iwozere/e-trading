@@ -1,0 +1,14 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: StrategyRiskContract
+type: object
+required: ["strategy_limits"]
+properties:
+  strategy_limits:
+    type: object
+    required: ["capital_allocation", "max_position_size", "risk_per_trade"]
+    properties:
+      capital_allocation: { type: "number", minimum: 0 }
+      max_position_size: { type: "number", minimum: 0 }
+      max_drawdown: { type: "number", minimum: 0, maximum: 1 }
+      risk_per_trade: { type: "number", minimum: 0, maximum: 1 }
+      max_concurrent_trades: { type: "integer", minimum: 1 }

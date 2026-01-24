@@ -1,0 +1,30 @@
+{
+    "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+            "entry_logic": {
+                "name": "RSIOrBBEntryMixin",
+                "params": {
+                    "e_rsi_period": 14,
+                    "e_rsi_oversold": 22,
+                    "e_bb_period": 16,
+                    "e_bb_dev": 2.8649,
+                    "e_use_bb_touch": true,
+                    "e_rsi_cross": false,
+                    "e_bb_reentry": false,
+                    "e_cooldown_bars": 0
+                }
+            },
+            "exit_logic": {
+                "name": "TimeBasedExitMixin",
+                "params": {
+                    "x_max_bars": 20,
+                    "x_max_minutes": 60,
+                    "x_use_time": false
+                }
+            },
+            "use_talib": true,
+            "position_size": 0.1
+        }
+    }
+}

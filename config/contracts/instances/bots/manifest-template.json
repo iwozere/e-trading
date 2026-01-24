@@ -1,0 +1,13 @@
+{
+    "bot_id": "<input data file name>",
+    "name": "<generated name>",
+    "symbol": "<symbol>",
+    "components": {
+        "broker": "config/contracts/instances/brokers/broker-file-sim.json",
+        "strategy_logic": "config/contracts/instances/strategies/<strategy json>",
+        "strategy_risk": "config/contracts/instances/risk-strategy-standard.json",
+        "global_risk": "config/contracts/instances/risk-global-aggressive.json",
+        "portfolio_manager": "config/contracts/instances/portfolio-standard.json",
+        "notifications": "config/contracts/instances/notifications/notifications-file.json"
+    }
+}

@@ -1,0 +1,13 @@
+{
+    "bot_id": "0001",
+    "name": "BTC-RSI-Aggressive-Paper",
+    "symbol": "BTCUSDT",
+    "components": {
+        "broker": "broker-binance-paper.json",
+        "strategy_logic": "strategy-rsi-bb.json",
+        "strategy_risk": "risk-strategy-rsi.json",
+        "global_risk": "risk-global-aggressive.json",
+        "portfolio_manager": "portfolio-standard.json",
+        "notifications": "notifications-paper.json"
+    }
+}

@@ -104,11 +104,11 @@ class FileDataFeed(bt.feed.DataBase):
                 sep=self.p.separator
             )
 
-            # Validate required columns
-            self._validate_columns(df)
-
             # Prepare DataFrame
             df = self._prepare_dataframe(df)
+
+            # Validate required columns
+            self._validate_columns(df)
 
             # Apply date filters
             if self.p.fromdate or self.p.todate:
@@ -162,17 +162,36 @@ class FileDataFeed(bt.feed.DataBase):
 
         # Rename columns to standard names
         column_mapping = {}
-        if self.p.datetime_col and self.p.datetime_col != 'datetime':
-            column_mapping[self.p.datetime_col] = 'datetime'
-        if self.p.open_col and self.p.open_col != 'open':
+
+        # Handle datetime column mapping
+        datetime_col = self.p.datetime_col or 'datetime'
+
+        # If the configured datetime column exists, map it
+        if datetime_col in df.columns:
+            if datetime_col != 'datetime':
+                column_mapping[datetime_col] = 'datetime'
+        # Fallback: check for common timestamp column names
+        elif 'timestamp' in df.columns:
+            column_mapping['timestamp'] = 'datetime'
+        elif 'open_time' in df.columns:
+            column_mapping['open_time'] = 'datetime'
+        elif 'close_time' in df.columns:
+            column_mapping['close_time'] = 'datetime'
+        elif 'Date' in df.columns:
+            column_mapping['Date'] = 'datetime'
+        elif 'Time' in df.columns:
+            column_mapping['Time'] = 'datetime'
+
+        # Map other columns if they differ from standard names
+        if self.p.open_col and self.p.open_col in df.columns and self.p.open_col != 'open':
             column_mapping[self.p.open_col] = 'open'
-        if self.p.high_col and self.p.high_col != 'high':
+        if self.p.high_col and self.p.high_col in df.columns and self.p.high_col != 'high':
             column_mapping[self.p.high_col] = 'high'
-        if self.p.low_col and self.p.low_col != 'low':
+        if self.p.low_col and self.p.low_col in df.columns and self.p.low_col != 'low':
             column_mapping[self.p.low_col] = 'low'
-        if self.p.close_col and self.p.close_col != 'close':
+        if self.p.close_col and self.p.close_col in df.columns and self.p.close_col != 'close':
             column_mapping[self.p.close_col] = 'close'
-        if self.p.volume_col and self.p.volume_col != 'volume':
+        if self.p.volume_col and self.p.volume_col in df.columns and self.p.volume_col != 'volume':
             column_mapping[self.p.volume_col] = 'volume'
 
         if column_mapping:
@@ -180,7 +199,15 @@ class FileDataFeed(bt.feed.DataBase):
 
         # Ensure datetime column is properly parsed
         if 'datetime' in prepared_df.columns:
-            if not pd.api.types.is_datetime64_any_dtype(prepared_df['datetime']):
+            # Check if likely numeric timestamp (milliseconds)
+            if pd.api.types.is_numeric_dtype(prepared_df['datetime']):
+                # Heuristic: if values are very large (valid after 2000 in ms), assume ms
+                # 946684800000 is 2000-01-01 in ms
+                if (prepared_df['datetime'] > 946684800000).all():
+                    prepared_df['datetime'] = pd.to_datetime(prepared_df['datetime'], unit='ms')
+                else:
+                    prepared_df['datetime'] = pd.to_datetime(prepared_df['datetime'], unit='s')
+            elif not pd.api.types.is_datetime64_any_dtype(prepared_df['datetime']):
                 prepared_df['datetime'] = pd.to_datetime(prepared_df['datetime'])
 
             # Apply timezone if specified

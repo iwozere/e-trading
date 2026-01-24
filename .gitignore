@@ -67,6 +67,7 @@ logs/
 !config/*/*.yaml
 !config/*/*.json
 !config/*/*/*.json
+!config/*/*/*/*.json
 *.pt
 *.pth
 *.pkl

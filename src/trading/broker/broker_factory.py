@@ -135,7 +135,7 @@ def validate_broker_config(config: Dict[str, Any]) -> Dict[str, Any]:
     normalized_config.update(config)
 
     # Validate broker type
-    supported_types = ['binance', 'ibkr', 'mock']
+    supported_types = ['binance', 'ibkr', 'mock', 'file_broker']
     broker_type = normalized_config.get('type', '').lower()
     if broker_type not in supported_types:
         raise BrokerConfigurationError(f"Unsupported broker type: {broker_type}. Supported: {supported_types}")
@@ -266,7 +266,7 @@ def get_broker(config: Dict[str, Any]):
                 config=broker_config
             )
 
-        elif broker_type == 'mock':
+        elif broker_type == 'mock' or broker_type == 'file_broker':
             return MockBroker(
                 cash=broker_config.get('cash', 10000.0),
                 config=broker_config

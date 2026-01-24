@@ -1,0 +1,8 @@
+{
+    "portfolio": {
+        "max_total_exposure": 6000,
+        "max_asset_exposure": 2500,
+        "max_daily_loss": 0.05,
+        "prevent_conflicting_positions": true
+    }
+}

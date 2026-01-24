@@ -1,0 +1,8 @@
+{
+    "trading": {
+        "position_size": 0.1,
+        "max_positions": 3,
+        "allow_short": false,
+        "leverage": 1
+    }
+}

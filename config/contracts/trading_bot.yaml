@@ -1,0 +1,47 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: TradingBotManifest
+type: object
+required: ["bot_id", "modules"]
+properties:
+  bot_id:
+    type: string
+    description: "Unique identifier for this bot instance"
+  description:
+    type: string
+    description: "Human-readable description of what this bot does"
+  modules:
+    type: object
+    description: "References to the component configurations"
+    required: ["broker", "strategy"]
+    properties:
+      broker:
+        oneOf:
+          - type: string
+            description: "Path to broker instance JSON"
+          - type: object
+            description: "Inline broker configuration"
+      strategy:
+        oneOf:
+          - type: string
+            description: "Path to strategy instance JSON"
+          - type: object
+            description: "Inline strategy configuration"
+      risk_management:
+        oneOf:
+          - type: string
+            description: "Path to risk management instance JSON"
+          - type: object
+            description: "Inline risk management configuration"
+      notifications:
+        oneOf:
+          - type: string
+            description: "Path to notifications instance JSON"
+          - type: object
+            description: "Inline notifications configuration"
+  overrides:
+    type: object
+    description: "Top-level configuration overrides (e.g. symbol, initial_balance)"
+    properties:
+      symbol: { type: "string" }
+      initial_balance: { type: "number" }
+      timeframe: { type: "string" }

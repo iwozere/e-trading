@@ -1,0 +1,9 @@
+{
+    "notifications": {
+        "telegram_enabled": true,
+        "email_enabled": true,
+        "performance_summaries": "hourly",
+        "risk_alerts": true,
+        "error_notifications": true
+    }
+}

@@ -1,0 +1,26 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: StrategyContract
+type: object
+required: ["strategy"]
+properties:
+  strategy:
+    type: object
+    required: ["type", "parameters"]
+    properties:
+      type: { enum: ["CustomStrategy", "GridStrategy", "MLStrategy"] }
+      parameters:
+        type: object
+        required: ["entry_logic", "exit_logic"]
+        properties:
+          entry_logic:
+            type: object
+            required: ["name", "params"]
+            properties:
+              name: { type: "string" }
+              params: { type: "object" }
+          exit_logic:
+            type: object
+            required: ["name", "params"]
+            properties:
+              name: { type: "string" }
+              params: { type: "object" }

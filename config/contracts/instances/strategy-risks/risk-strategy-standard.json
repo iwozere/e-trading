@@ -1,0 +1,9 @@
+{
+    "strategy_limits": {
+        "capital_allocation": 2000.0,
+        "max_position_size": 800.0,
+        "max_drawdown": 0.15,
+        "risk_per_trade": 0.01,
+        "max_concurrent_trades": 1
+    }
+}

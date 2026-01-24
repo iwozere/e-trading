@@ -1,0 +1,15 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+title: RiskManagementContract
+type: object
+required: ["risk_management"]
+properties:
+  risk_management:
+    type: object
+    required: ["max_daily_loss", "max_daily_trades", "max_portfolio_risk"]
+    properties:
+      max_position_size_usd: { type: "number", minimum: 0 }
+      stop_loss_pct: { type: "number", minimum: 0, maximum: 100 }
+      take_profit_pct: { type: "number", minimum: 0 }
+      max_daily_loss: { type: "number", minimum: 0 }
+      max_daily_trades: { type: "integer", minimum: 1 }
+      max_portfolio_risk: { type: "number", minimum: 0, maximum: 1 }

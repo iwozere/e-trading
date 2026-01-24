@@ -112,10 +112,17 @@ class LiveTradingBot(BaseTradingBot):
         self._load_open_positions()
 
     def _load_configuration(self) -> TradingBotConfig:
-        """Load and validate configuration using new Pydantic models."""
+        """Load and validate configuration using configuration factory."""
         try:
             config_path = f"config/trading/{self.config_file}"
-            config = load_config(config_path)
+
+            # Use Factory to load and resolve manifest
+            from src.config.configuration_factory import config_factory
+            hydrated_config_dict = config_factory.load_manifest(config_path)
+
+            # Convert to TradingBotConfig for internal use
+            config = TradingBotConfig(**hydrated_config_dict)
+
             _logger.info("Loaded and validated configuration from %s", config_path)
             return config
         except Exception:

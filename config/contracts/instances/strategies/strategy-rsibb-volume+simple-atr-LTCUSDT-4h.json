@@ -1,0 +1,30 @@
+{
+    "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+            "entry_logic": {
+                "name": "RSIBBVolumeEntryMixin",
+                "params": {
+                    "e_rsi_period": 14,
+                    "e_rsi_oversold": 30,
+                    "e_bb_period": 20,
+                    "e_bb_dev": 2.0,
+                    "e_vol_ma_period": 20,
+                    "e_min_volume_ratio": 1.1,
+                    "e_use_bb_touch": true
+                }
+            },
+            "exit_logic": {
+                "name": "SimpleATRExitMixin",
+                "params": {
+                    "x_atr_period": 14,
+                    "x_atr_multiplier": 2.0,
+                    "x_breakeven_atr": 1.0,
+                    "x_use_breakeven": true
+                }
+            },
+            "use_talib": true,
+            "position_size": 0.1
+        }
+    }
+}

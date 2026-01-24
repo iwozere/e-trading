@@ -1,0 +1,51 @@
+{
+    "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+            "entry_logic": {
+                "name": "RSIOrBBEntryMixin",
+                "params": {
+                    "e_rsi_period": 13,
+                    "e_rsi_oversold": 30,
+                    "e_bb_period": 17,
+                    "e_bb_dev": 2.861674108893361,
+                    "e_use_bb_touch": true,
+                    "e_rsi_cross": false,
+                    "e_bb_reentry": false,
+                    "e_cooldown_bars": 0
+                }
+            },
+            "exit_logic": {
+                "name": "AdvancedATRExitMixin",
+                "params": {
+                    "x_anchor": "high",
+                    "x_k_init": 1.2070401566662485,
+                    "x_k_run": 1.8427850354964355,
+                    "x_k_phase2": 1.0043541750029539,
+                    "x_p_fast": 12,
+                    "x_p_slow": 90,
+                    "x_use_htf_atr": true,
+                    "x_alpha_fast": 1.7890814700859428,
+                    "x_alpha_slow": 1.82580289910064,
+                    "x_alpha_htf": 1.8714861430393668,
+                    "x_arm_at_R": 0.8994144170083177,
+                    "x_breakeven_offset_atr": 0.10134881389939754,
+                    "x_phase2_at_R": 1.727510706138189,
+                    "x_use_swing_ratchet": false,
+                    "x_swing_lookback": 6,
+                    "x_struct_buffer_atr": 0.4262234293057696,
+                    "x_tighten_if_stagnant_bars": 18,
+                    "x_tighten_k_factor": 0.8278128000164053,
+                    "x_noise_filter_atr": 0.07708080640059257,
+                    "x_atr_floor": 0.006333627548354124,
+                    "x_min_stop_step": 0.028566643087248093,
+                    "x_max_trail_freq": 2,
+                    "x_min_bars_between_tighten": 2,
+                    "x_tick_size": 0.009405275701913865
+                }
+            },
+            "use_talib": true,
+            "position_size": 0.1
+        }
+    }
+}

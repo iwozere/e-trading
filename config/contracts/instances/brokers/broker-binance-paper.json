@@ -1,0 +1,14 @@
+{
+    "broker": {
+        "type": "binance",
+        "trading_mode": "paper",
+        "name": "binance_paper_bot",
+        "cash": 10000.0,
+        "paper_trading_config": {
+            "commission_rate": 0.001,
+            "slippage_model": "linear",
+            "latency_simulation": true,
+            "partial_fill_probability": 0.15
+        }
+    }
+}

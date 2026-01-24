@@ -1,0 +1,30 @@
+{
+    "strategy": {
+        "type": "CustomStrategy",
+        "parameters": {
+            "entry_logic": {
+                "name": "BBVolumeSuperTrendEntryMixin",
+                "params": {
+                    "e_bb_period": 20,
+                    "e_bb_dev": 2.0,
+                    "e_vol_ma_period": 20,
+                    "e_min_volume_ratio": 1.1,
+                    "e_st_period": 10,
+                    "e_st_multiplier": 3.0,
+                    "e_use_bb_touch": true
+                }
+            },
+            "exit_logic": {
+                "name": "RSIBBExitMixin",
+                "params": {
+                    "x_rsi_period": 14,
+                    "x_rsi_overbought": 70,
+                    "x_bb_period": 20,
+                    "x_bb_dev": 2.0
+                }
+            },
+            "use_talib": true,
+            "position_size": 0.1
+        }
+    }
+}

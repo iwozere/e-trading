@@ -1,0 +1,13 @@
+{
+    "broker": {
+        "type": "ibkr",
+        "trading_mode": "live",
+        "name": "ibkr_live_main",
+        "cash": 0.0,
+        "connection_params": {
+            "host": "127.0.0.1",
+            "port": 7496,
+            "client_id": 2
+        }
+    }
+}

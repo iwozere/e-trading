@@ -1,0 +1,17 @@
+{
+    "broker": {
+        "type": "file_broker",
+        "trading_mode": "paper",
+        "name": "backtest_simulator",
+        "cash": 10000.0,
+        "data_source": {
+            "file_path": "./data/historical_btc_15m.csv",
+            "format": "ohlcv"
+        },
+        "paper_trading_config": {
+            "commission_rate": 0.001,
+            "slippage_model": "fixed",
+            "latency_simulation": false
+        }
+    }
+}
