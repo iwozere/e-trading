@@ -13,7 +13,7 @@ from src.strategy.entry.entry_mixin_factory import ENTRY_MIXIN_REGISTRY
 from src.strategy.exit.exit_mixin_factory import EXIT_MIXIN_REGISTRY
 from src.strategy.base_strategy import BaseStrategy
 
-_logger = setup_logger(__name__, use_multiprocessing=True)
+_logger = setup_logger(__name__, use_multiprocessing=False)
 
 
 class CustomStrategy(BaseStrategy):

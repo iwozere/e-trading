@@ -162,20 +162,40 @@ class LiveTradingBot(BaseTradingBot):
         """Create the strategy parameters for BaseTradingBot."""
         try:
             # Build strategy parameters using new config
-            parameters = {
-                "strategy_config": {
-                    "entry_logic": {
-                        "name": "RSIBBVolumeEntryMixin",
-                        "params": self.config.strategy_params.get("entry", {})
-                    },
-                    "exit_logic": {
-                        "name": "RSIBBExitMixin",
-                        "params": self.config.strategy_params.get("exit", {})
-                    },
-                    "position_size": self.config.position_size,
-                    "use_talib": self.config.strategy_params.get("use_talib", False)
+            # Build strategy parameters using new config
+            # Check if strategy_params already has the correct structure (entry_logic/exit_logic)
+            strat_params = self.config.strategy_params
+
+            if "parameters" in strat_params:
+                strat_params = strat_params["parameters"]
+                _logger.info("Unwrapped strategy parameters from 'parameters' key")
+
+            if "entry_logic" in strat_params or "exit_logic" in strat_params:
+                # Use provided params directly
+                parameters = {
+                    "strategy_config": {
+                        "entry_logic": strat_params.get("entry_logic"),
+                        "exit_logic": strat_params.get("exit_logic"),
+                        "position_size": strat_params.get("position_size", self.config.position_size),
+                        "use_talib": strat_params.get("use_talib", False)
+                    }
                 }
-            }
+            else:
+                # Legacy fallback or if params are structured differently
+                parameters = {
+                    "strategy_config": {
+                        "entry_logic": {
+                            "name": "RSIBBVolumeEntryMixin",
+                            "params": strat_params.get("entry", {})
+                        },
+                        "exit_logic": {
+                            "name": "RSIBBExitMixin",
+                            "params": strat_params.get("exit", {})
+                        },
+                        "position_size": self.config.position_size,
+                        "use_talib": strat_params.get("use_talib", False)
+                    }
+                }
 
             _logger.info("Created strategy parameters for: %s", self.config.strategy_type)
             return parameters

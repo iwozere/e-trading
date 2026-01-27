@@ -152,9 +152,9 @@ def pre_calculate_htf_data(df: pd.DataFrame, intervals: list) -> pd.DataFrame:
         rule = f"{interval}min"
 
         # Resample to HTF
-        # Note: We use 'closed=right', 'label=right' to match standard crypto bar behavior
-        # and prevent look-ahead bias (the 4h bar at 04:00 contains data up to 04:00)
-        htf = df.resample(rule, closed='right', label='right').agg({
+        # Note: We use 'closed=left', 'label=left' to match standard crypto bar behavior (e.g. Binance)
+        # and prevent 4-hour shifts when resampling from the same interval.
+        htf = df.resample(rule, closed='left', label='left').agg({
             'open': 'first',
             'high': 'max',
             'low': 'min',

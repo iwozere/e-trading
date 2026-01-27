@@ -192,7 +192,7 @@ class BatchSimulationBot(LiveTradingBot):
         self.monitor_thread = None
         self.trading_pair = self.config.symbol
         self.active_positions = {}
-
+        self.strategy_instance = None
 
     def _load_configuration(self):
         """Override to return our ConfigWrapper."""
@@ -216,6 +216,17 @@ class BatchSimulationBot(LiveTradingBot):
 
         # Run Backtrader directly
         self._run_backtrader()
+
+    def _run_backtrader(self):
+        """Run Backtrader and capture the strategy instance."""
+        try:
+            results = self.cerebro.run()
+            if results and len(results) > 0:
+                self.strategy_instance = results[0]
+            return True
+        except Exception as e:
+            logger.exception(f"Error running Backtrader: {e}")
+            return False
 
     def _setup_backtrader(self):
         """
@@ -250,20 +261,15 @@ class BatchSimulationBot(LiveTradingBot):
 
     def _create_strategy_parameters(self):
         """Override to handle strategy parameters more flexibly."""
-        strategy_config = self.config.get_strategy_config()
+        # Directly pass the loaded strategy configuration to the strategy
+        strat_config = self.config.get_strategy_config()
+
+        # Unwrap parameters if nested
+        if isinstance(strat_config, dict) and "parameters" in strat_config:
+            strat_config = strat_config["parameters"]
+
         return {
-            "strategy_config": {
-                "entry_logic": {
-                    "name": "UnknownEntry",
-                    "params": strategy_config.get("parameters", {})
-                },
-                "exit_logic": {
-                    "name": "UnknownExit",
-                    "params": strategy_config.get("parameters", {})
-                },
-                "position_size": self.config.position_size,
-                "use_talib": False
-            }
+            "strategy_config": strat_config
         }
 
     # Override notification methods to do nothing
@@ -275,6 +281,25 @@ class BatchSimulationBot(LiveTradingBot):
 
     # Helper to get results
     def get_simulation_results(self):
+        if self.strategy_instance is not None:
+            # Extract results from strategy instance
+            stats = self.strategy_instance.get_performance_summary()
+            trades = getattr(self.strategy_instance, 'trades', [])
+
+            # Format results
+            return {
+                "bot_id": self.bot_id,
+                "symbol": self.trading_pair,
+                "initial_balance": self.initial_balance,
+                "final_balance": stats.get("current_equity", self.current_balance),
+                "total_pnl": stats.get("total_pnl", 0.0),
+                "total_trades": stats.get("total_trades", len(trades)),
+                "trades": trades,
+                "win_rate": stats.get("win_rate", 0.0),
+                "max_drawdown": stats.get("max_drawdown", 0.0)
+            }
+
+        # Fallback to local tracking (mostly empty for simulation)
         return {
             "bot_id": self.bot_id,
             "symbol": self.trading_pair,
@@ -332,6 +357,8 @@ def run_batch_simulation():
         for strategy_file in strategy_files:
             strategy_path = Path(strategy_file)
             strategy_name = strategy_path.stem
+
+
 
             logger.info(f"Running simulation: {data_name} + {strategy_name}")
 

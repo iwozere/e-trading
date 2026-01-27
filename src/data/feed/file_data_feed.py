@@ -350,6 +350,7 @@ class FileDataFeed(bt.feed.DataBase):
         Backtrader's _load method - called when Backtrader needs more data.
         """
         if self.df is None or self.df.empty:
+            _logger.debug("FileDataFeed: DataFrame is empty")
             return False
 
         if self.is_realtime:

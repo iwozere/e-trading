@@ -182,10 +182,16 @@ class BaseEntryMixin(ABC):
                 )
 
     def _set_defaults(self):
-        """Setting default values for parameters"""
+        """Setting default values for parameters.
+        Only sets default if the key or its prefixed versions (e_, x_) are not present.
+        """
         defaults = self.__class__.get_default_params()
         for key, value in defaults.items():
-            if key not in self.params:
+            prefixed_e = f"e_{key}"
+            prefixed_x = f"x_{key}"
+
+            # If any of the possible names for this parameter are already present, don't set default
+            if key not in self.params and prefixed_e not in self.params and prefixed_x not in self.params:
                 self.params[key] = value
 
     @abstractmethod

@@ -199,6 +199,11 @@ class IndicatorFactory:
 
         # Create the TALib indicator
         try:
+            logger.debug(f"Creating {ind_type} with args: {[type(x) for x in data_args]}")
+            for i, arg in enumerate(data_args):
+                if arg is None:
+                    logger.error(f"Argument {i} is None for {ind_type}!")
+
             indicator = ind_class(*data_args, **params)
             logger.debug(f"Created {ind_type} indicator with params: {params}")
         except Exception as e:
