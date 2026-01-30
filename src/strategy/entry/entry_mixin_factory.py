@@ -24,7 +24,7 @@ ENTRY_MIXIN_REGISTRY = {
     "EOMBreakoutEntryMixin": EOMBreakoutEntryMixin,
     "EOMMAcdBreakoutEntryMixin": EOMMAcdBreakoutEntryMixin,
     "EOMPullbackEntryMixin": EOMPullbackEntryMixin,
-    "HMMLSTMEntryMixin": HMMLSTMEntryMixin,
+    # "HMMLSTMEntryMixin": HMMLSTMEntryMixin,  # Excluded due to model architectural mismatches/loading errors
 }
 
 

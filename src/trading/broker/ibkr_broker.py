@@ -59,7 +59,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
     """
 
     def __init__(self, host: str = '127.0.0.1', port: Optional[int] = None,
-                 client_id: int = 1, cash: float = 25000.0, config: Dict[str, Any] = None):
+                 client_id: int = 1, cash: float = 10000.0, config: Dict[str, Any] = None):
         # Initialize configuration
         if config is None:
             config = {}

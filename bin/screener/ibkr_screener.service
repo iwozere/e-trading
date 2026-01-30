@@ -1,0 +1,17 @@
+[Unit]
+Description=IBKR Scalable Screener Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/dev/e-trading
+ExecStart=/bin/bash /home/pi/dev/e-trading/bin/screener/run_screener.sh
+Restart=always
+RestartSec=60
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=ibkr-screener
+
+[Install]
+WantedBy=multi-user.target
