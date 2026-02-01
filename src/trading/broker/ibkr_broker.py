@@ -78,7 +78,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         # Set port based on trading mode if not explicitly provided
         if port is None:
             if self.trading_mode == TradingMode.PAPER:
-                self.port = 7497  # Default paper trading port
+                self.port = 4002  # Default paper trading port (Gateway)
             else:
                 self.port = 4001  # Default live trading port (Gateway)
         else:
@@ -110,7 +110,7 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
         """Connect to IBKR TWS/Gateway."""
         try:
             # Connect to IBKR
-            self.ib.connect(self.host, self.port, clientId=self.client_id)
+            await self.ib.connectAsync(self.host, self.port, clientId=self.client_id)
 
             # Wait for connection to stabilize
             await asyncio.sleep(2)

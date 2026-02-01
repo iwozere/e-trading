@@ -15,17 +15,19 @@ from src.screeners.logic.notifier import SignalNotifier
 from src.notification.service.client import NotificationServiceClient
 from src.strategy.custom_strategy import CustomStrategy
 from src.notification.logger import setup_logger
+import config.donotshare.donotshare as donotshare
 
 _logger = setup_logger("ibkr_screener_main")
 
 async def main():
     _logger.info("Initializing IBKR Scalable Screener...")
 
-    # 1. Configuration
-    # In a real scenario, these could be loaded from environment variables or a config file
-    ibkr_host = os.environ.get("IBKR_HOST", "127.0.0.1")
-    ibkr_port = int(os.environ.get("IBKR_PORT", "7497"))
-    ibkr_client_id = int(os.environ.get("IBKR_CLIENT_ID", "100"))
+    # 1. Configuration - Load from donotshare.py
+    ibkr_host = donotshare.IBKR_HOST or "raspberrypi"
+    ibkr_port = donotshare.IBKR_PAPER_PORT or donotshare.IBKR_PORT
+    if ibkr_port:
+        ibkr_port = int(ibkr_port)
+    ibkr_client_id = int(donotshare.IBKR_CLIENT_ID) if donotshare.IBKR_CLIENT_ID else 3
 
     # 2. Setup Broker
     broker = IBKRBroker(
@@ -35,8 +37,7 @@ async def main():
     )
 
     # 3. Setup Notification Client
-    notif_url = os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
-    notif_client = NotificationServiceClient(service_url=notif_url)
+    notif_client = NotificationServiceClient()
     notifier = SignalNotifier(notif_client)
 
     # 4. Strategy Config (Placeholder - should be dynamic or loaded from file)

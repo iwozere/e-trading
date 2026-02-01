@@ -452,23 +452,23 @@ class AlertEngine:
             # Get recent alerts
             recent_alerts = service.repo.alerts.get_recent_alerts(days)
 
-                # Count by level
-                level_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
-                sent_count = 0
+            # Count by level
+            level_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+            sent_count = 0
 
-                for alert in recent_alerts:
-                    level_counts[alert.alert_level] += 1
-                    if alert.sent:
-                        sent_count += 1
+            for alert in recent_alerts:
+                level_counts[alert.alert_level] += 1
+                if alert.sent:
+                    sent_count += 1
 
-                return {
-                    "period_days": days,
-                    "total_alerts": len(recent_alerts),
-                    "alerts_sent": sent_count,
-                    "alerts_pending": len(recent_alerts) - sent_count,
-                    "by_level": level_counts,
-                    "success_rate": sent_count / len(recent_alerts) if recent_alerts else 0.0
-                }
+            return {
+                "period_days": days,
+                "total_alerts": len(recent_alerts),
+                "alerts_sent": sent_count,
+                "alerts_pending": len(recent_alerts) - sent_count,
+                "by_level": level_counts,
+                "success_rate": sent_count / len(recent_alerts) if recent_alerts else 0.0
+            }
 
         except Exception as e:
             self._logger.exception("Error getting alert statistics:")

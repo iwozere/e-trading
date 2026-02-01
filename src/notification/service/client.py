@@ -131,7 +131,7 @@ class NotificationServiceClient:
     """
 
     def __init__(self,
-                 service_url: str = "http://localhost:8000",
+                 service_url: Optional[str] = None,
                  base_url: str = None,  # For backward compatibility
                  timeout: int = 30,
                  max_retries: int = 3):
@@ -142,11 +142,14 @@ class NotificationServiceClient:
         the notification service directly, as part of the database-centric architecture.
 
         Args:
-            service_url: Base URL of the Main API service (default: http://localhost:8000)
+            service_url: Base URL of the Main API service. If None, checks NOTIFICATION_SERVICE_URL env var or defaults to localhost.
             base_url: Deprecated parameter for backward compatibility
             timeout: Request timeout in seconds
             max_retries: Maximum number of retry attempts
         """
+        import os
+        if service_url is None:
+            service_url = os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
         # Handle backward compatibility
         if base_url is not None:
             service_url = base_url

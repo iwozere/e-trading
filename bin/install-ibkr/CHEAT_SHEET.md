@@ -6,11 +6,24 @@ Perfect — here’s the **extended cheat sheet** with **live gateway manual con
 
 ## 🖥 System Overview
 
+* **Software:** **Interactive Brokers Gateway** (not TWS)
 * **Host:** Raspberry Pi 5 (Ubuntu Server)
 * **Paper Service:** `ibgw-paper` (port **4002**, auto-start on boot)
 * **Live Service:** `ibgw-live` (port **4001**, manual start only)
 * **Compose File:** `~/ibkr/docker-compose.yml`
 * **Systemd Unit:** `ibgateway-docker.service` (starts paper only)
+
+---
+
+## 🔌 Port Reference
+
+| Trading Mode      | **IB Gateway (Docker)** | **TWS (Standard)** |
+| ----------------- | ----------------------- | ------------------ |
+| **Paper Trading** | **4002**                | 7497               |
+| **Live Trading**  | **4001**                | 7496               |
+
+> [!NOTE]
+> This project defaults to IB Gateway ports (**4001/4002**) to match the Raspberry Pi Docker deployment. If you switch to using TWS on your local machine, remember to update the ports.
 
 ---
 
