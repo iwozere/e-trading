@@ -33,6 +33,7 @@ trading-api.service
 sudo systemctl status telegram_bot.service
 sudo systemctl status scheduler.service
 sudo systemctl status notification_bot.service
+sudo systemctl status ibgateway-docker.service
 
 sudo journalctl -u telegram_bot.service --since "10 minutes ago"
 sudo journalctl -u scheduler.service --since "10 minutes ago"

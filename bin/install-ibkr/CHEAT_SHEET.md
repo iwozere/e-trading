@@ -25,6 +25,33 @@ Perfect — here’s the **extended cheat sheet** with **live gateway manual con
 > [!NOTE]
 > This project defaults to IB Gateway ports (**4001/4002**) to match the Raspberry Pi Docker deployment. If you switch to using TWS on your local machine, remember to update the ports.
 
+### 📄 Live vs Paper Configuration
+
+| Feature               | **Live Gateway** (`ibgateway-live`) | **Paper Gateway** (`ibgateway-paper`) |
+| --------------------- | ----------------------------------- | ------------------------------------- |
+| **API Port**          | **4001**                            | **4002**                              |
+| **VNC Port**          | **5901**                            | **5902**                              |
+| **Trading Mode**      | `live`                              | `paper`                               |
+| **API Access**        | **Read-Only** (`yes`)               | **Trade/Read/Write** (`no`)           |
+| **Docker Image**      | `gnzsnz/ib-gateway:stable`          | `ghcr.io/gnzsnz/ib-gateway:stable`    |
+| **Settings Volume**   | `./config` -> `/persistent`         | `./config` -> `/persistent`           |
+| **Environment File**  | `.env`                              | `.env`                                |
+
+---
+
+## 🔑 Credentials (`.env`)
+
+Both gateways use a `.env` file in their respective folders for credentials. 
+
+```env
+TWS_USERID=your_username
+TWS_PASSWORD=your_password
+VNC_SERVER_PASSWORD=your_vnc_password
+```
+
+> [!IMPORTANT]
+> The `jts.ini` configuration in `config/` is pre-configured for the respective trading modes and API access levels. Ensure `TrustedAddr` includes your local subnet (e.g., `10.0.0.13`) to allow remote connections.
+
 ---
 
 ## 🚀 Daily Operations
@@ -87,7 +114,36 @@ Use **unique `clientId` per bot/process**.
 
 ---
 
-## 🛠 Maintenance
+## � Connectivity Diagnostics
+
+Several scripts are available in `src/trading/broker/` to troubleshoot connection issues:
+
+### 1. General Connectivity Check
+```bash
+python src/trading/broker/check_ibkr_conn.py
+```
+*   Checks if ports **4001** (Live) and **4002** (Paper) are open on the Pi.
+*   Attempts an `ib_insync` handshake to verify API availability.
+*   Provides specific recommendations if the connection fails.
+
+### 2. Live & Paper Data Test
+```bash
+python src/trading/broker/check_ibkr_conn_live_paper.py
+```
+*   Verifies connection to both instances.
+*   Fetches account management info and current positions.
+*   Tests market data retrieval for sample tickers (e.g., MSFT).
+
+### 3. Read-Only Protection Verification
+```bash
+python src/trading/broker/check_ibkr_live_readonly.py
+```
+*   **Safety Check:** Connects to the Live instance (4001) and attempts to place a dummy market order.
+*   Confirms that the order is blocked by the Gateway's Read-Only settings.
+
+---
+
+## �🛠 Maintenance
 
 ### Stop Paper Gateway
 

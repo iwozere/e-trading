@@ -12,13 +12,11 @@ import config.donotshare.donotshare as donotshare
 
 async def check_connection():
     # Try hostname first, then IP if provided
-    host = donotshare.IBKR_HOST or 'raspberrypi'
-
-    # Try common local IPs if hostname is 'raspberrypi'
-    test_hosts = [host]
+    host = (donotshare.IBKR_HOST or '10.0.0.4').strip("'\"")
     if host == 'raspberrypi':
-        # Add common LAN IPs if known, or just stick to host for now
-        pass
+        host = '10.0.0.4' # Force IP for reliability
+
+    print(f"Diagnostics using host: [{host}]")
 
     ports = [
         ('Paper (Gateway)', 4002),
@@ -48,15 +46,22 @@ async def check_connection():
 
         # 2. IB handshake check
         print(f"  Attempting IBKR handshake on port {port}...")
+        import logging
+        logging.getLogger('ib_insync').setLevel(logging.DEBUG)
+
         ib = IB()
+
+        # We know clientId=10 worked in the other script
+        target_client_id = 10
+
         try:
-            # Use a random higher clientId to avoid any conflicts
-            # and a longer timeout for the first connection
-            await asyncio.wait_for(ib.connectAsync(host, port, clientId=12345), timeout=10)
+            # Use a longer timeout and specific clientId
+            print(f"  Handshaking with clientId={target_client_id}...")
+            # readonly=True is often more stable for connection checks
+            await ib.connectAsync(host, port, clientId=target_client_id, timeout=15, readonly=True)
             print(f"  [SUCCESS] IBKR Handshake successful!")
-            await ib.disconnect()
         except asyncio.TimeoutError:
-            print(f"  [FAILED] IBKR Handshake timed out (Connected to Pi, but Gateway didn't respond).")
+            print(f"  [FAILED] IBKR Handshake timed out (Connected to Pi, but ib_insync negotiation failed).")
         except Exception as e:
             print(f"  [FAILED] IBKR Handshake failed: {e}")
         finally:
