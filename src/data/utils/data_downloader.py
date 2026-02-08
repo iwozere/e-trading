@@ -19,6 +19,7 @@ Features:
 
 import sys
 import os
+import pandas as pd
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -46,17 +47,13 @@ _logger.info("Cache directory: %s", DATA_CACHE_DIR)
 
 # Define download scenarios
 # NOTE: All dates are interpreted as UTC timezone to ensure consistency with Binance API
-# If dates were timezone-naive, they would be interpreted as local timezone (e.g., CET)
-# which would cause data to start at 2019-12-31 23:00:00 UTC instead of 2020-01-01 00:00:00 UTC
 DOWNLOAD_SCENARIOS = {
-    #'symbols': ['LTCUSDT', 'BTCUSDT', 'ETHUSDT', 'XRPUSDT'],
-    'symbols': ['XRPUSDT'],
+    'symbols': ['LTCUSDT', 'BTCUSDT', 'ETHUSDT', 'XRPUSDT'],
     'periods': [
-        {'start_date': '20220101', 'end_date': '20250707'}
+        {'start_date': '20200101', 'end_date': '20260201'}
     ],
-    'intervals': ['5m', '15m', '30m', '1h', '4h', '1d']
+    'intervals': ['4h', '1h', '30m', '15m', '5m']
 }
-
 
 # Define output directory for merged CSV files
 DATA_OUTPUT_DIR = PROJECT_ROOT / "data"
@@ -64,13 +61,6 @@ DATA_OUTPUT_DIR = PROJECT_ROOT / "data"
 def download_all_scenarios():
     """
     Download data for all combinations of symbols, periods, and intervals.
-
-    This uses DataManager which automatically:
-    - Caches to c:/data-cache/ohlcv/
-    - Compresses with gzip
-    - Creates metadata files
-    - Validates data
-    - Handles provider selection and fallback
     """
     # Initialize DataManager (uses unified cache architecture)
     data_manager = DataManager(cache_dir=DATA_CACHE_DIR)
@@ -115,12 +105,6 @@ def download_all_scenarios():
 
                 try:
                     # Use DataManager to get/cache data
-                    # This automatically:
-                    # 1. Checks cache first
-                    # 2. Downloads if not cached (with provider selection)
-                    # 3. Validates data
-                    # 4. Saves to cache with compression
-                    # 5. Creates metadata
                     df = data_manager.get_ohlcv(
                         symbol=symbol,
                         timeframe=interval,
@@ -137,7 +121,14 @@ def download_all_scenarios():
                         filename = f"{symbol}_{interval}_{period['start_date']}_{period['end_date']}.csv"
                         filepath = DATA_OUTPUT_DIR / filename
 
-                        df.to_csv(filepath, index=False)
+                        # Add formatted timestamp column as the first column
+                        df_to_save = df.copy()
+                        if not isinstance(df_to_save.index, pd.DatetimeIndex):
+                            df_to_save.index = pd.to_datetime(df_to_save.index)
+
+                        df_to_save.insert(0, 'timestamp', df_to_save.index.strftime('%Y-%m-%d %H:%M:%S'))
+
+                        df_to_save.to_csv(filepath, index=False)
                         _logger.info("💾 Saved merged data to: %s", filepath)
 
                         successful += 1

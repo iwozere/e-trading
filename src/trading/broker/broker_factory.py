@@ -27,8 +27,7 @@ from src.trading.broker.mock_broker import MockBroker
 
 from config.donotshare.donotshare import (
     BINANCE_KEY, BINANCE_PAPER_KEY, BINANCE_PAPER_SECRET, BINANCE_SECRET,
-    IBKR_CLIENT_ID, IBKR_HOST, IBKR_PORT, IBKR_PAPER_PORT,
-    IBKR_KEY, IBKR_SECRET, IBKR_PAPER_KEY, IBKR_PAPER_SECRET
+    IBKR_CLIENT_ID, IBKR_HOST, IBKR_PORT, IBKR_PAPER_PORT
 )
 
 from src.notification.logger import setup_logger
@@ -82,8 +81,9 @@ class LiveTradingValidator:
         broker_type = config.get("type", "").lower()
         if broker_type == "binance" and (not BINANCE_KEY or not BINANCE_SECRET):
             raise BrokerConfigurationError("Live Binance trading requires valid API credentials")
-        elif broker_type == "ibkr" and (not IBKR_KEY or not IBKR_SECRET):
-            raise BrokerConfigurationError("Live IBKR trading requires valid API credentials")
+        elif broker_type == "ibkr":
+            # IBKR doesn't require API keys in this implementation (connected via Gateway/TWS)
+            pass
 
         _logger.warning("LIVE TRADING MODE ENABLED - Real money will be used!")
 
@@ -188,10 +188,8 @@ def get_broker_credentials(broker_type: str, trading_mode: str) -> Dict[str, Any
         if trading_mode == 'paper':
             credentials = {
                 'host': IBKR_HOST,
-                'port': int(IBKR_PAPER_PORT) if IBKR_PAPER_PORT else 7497,
+                'port': int(IBKR_PAPER_PORT) if IBKR_PAPER_PORT else 4002,
                 'client_id': int(IBKR_CLIENT_ID) if IBKR_CLIENT_ID else 1,
-                'api_key': IBKR_PAPER_KEY,
-                'api_secret': IBKR_PAPER_SECRET,
                 'paper_trading': True
             }
         else:  # live
@@ -199,8 +197,6 @@ def get_broker_credentials(broker_type: str, trading_mode: str) -> Dict[str, Any
                 'host': IBKR_HOST,
                 'port': int(IBKR_PORT) if IBKR_PORT else 4001,
                 'client_id': int(IBKR_CLIENT_ID) if IBKR_CLIENT_ID else 1,
-                'api_key': IBKR_KEY,
-                'api_secret': IBKR_SECRET,
                 'paper_trading': False
             }
 

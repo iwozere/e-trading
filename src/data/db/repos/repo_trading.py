@@ -11,11 +11,14 @@ from src.data.db.models.model_trading import BotInstance, PerformanceMetric, Tra
 
 UTC = timezone.utc
 
-def _ensure_bot(s: Session, bot_id: str = "bot1", type_: str = "paper", status: str = "stopped"):
-    b = s.get(BotInstance, bot_id)
-    if b:
-        return b
-    b = BotInstance(id=bot_id, type=type_, status=status)
+def _ensure_bot(s: Session, status: str = "stopped", bot_id: int | None = None):
+    if bot_id:
+        b = s.get(BotInstance, bot_id)
+        if b:
+            return b
+    b = BotInstance(status=status)
+    if bot_id:
+        b.id = bot_id
     s.add(b); s.flush()
     return b
 
@@ -33,11 +36,15 @@ class BotsRepo:
         self.s = s
 
     def upsert_bot(self, bot: dict) -> BotInstance:
-        obj = self.s.get(BotInstance, bot["id"])
+        bot_id = bot.get("id")
+        obj = self.s.get(BotInstance, bot_id) if bot_id else None
+
         if obj:
             for k, v in bot.items():
-                setattr(obj, k, v)
+                if k != "id":
+                    setattr(obj, k, v)
             return obj
+
         obj = BotInstance(**bot)
         self.s.add(obj); self.s.flush()
         return obj

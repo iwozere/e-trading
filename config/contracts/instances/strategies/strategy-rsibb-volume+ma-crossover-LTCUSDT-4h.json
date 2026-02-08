@@ -3,22 +3,21 @@
         "type": "CustomStrategy",
         "parameters": {
             "entry_logic": {
-                "name": "RSIOrBBEntryMixin",
+                "name": "RSIBBVolumeEntryMixin",
                 "params": {
-                    "e_rsi_period": 14,
-                    "e_rsi_oversold": 30,
-                    "e_bb_period": 20,
-                    "e_bb_dev": 2.0,
-                    "e_rsi_cross": false,
-                    "e_bb_reentry": false,
-                    "e_cooldown_bars": 0,
+                    "e_rsi_period": 17,
+                    "e_rsi_oversold": 27,
+                    "e_bb_period": 42,
+                    "e_bb_dev": 2.91722,
+                    "e_vol_ma_period": 91,
+                    "e_min_volume_ratio": 1.12368,
                     "e_use_bb_touch": true
                 }
             },
             "exit_logic": {
                 "name": "MACrossoverExitMixin",
                 "params": {
-                    "x_ma_period": 42,
+                    "x_ma_period": 6,
                     "x_ma_type": "SMA",
                     "x_fast_period": 10,
                     "x_slow_period": 20

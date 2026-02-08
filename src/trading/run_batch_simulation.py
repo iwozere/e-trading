@@ -13,6 +13,9 @@ import types
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Real imports
+from src.trading.tools.plot_simulation import plot_result_file
+
 # Setup simple logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("batch_simulation")
@@ -296,7 +299,9 @@ class BatchSimulationBot(LiveTradingBot):
                 "total_trades": stats.get("total_trades", len(trades)),
                 "trades": trades,
                 "win_rate": stats.get("win_rate", 0.0),
-                "max_drawdown": stats.get("max_drawdown", 0.0)
+                "max_drawdown": stats.get("max_drawdown", 0.0),
+                "strategy_config": self.config.get_strategy_config(),
+                "data_file": self.config.get_data_config().get("file_path", "")
             }
 
         # Fallback to local tracking (mostly empty for simulation)
@@ -307,7 +312,9 @@ class BatchSimulationBot(LiveTradingBot):
             "final_balance": self.current_balance,
             "total_pnl": self.total_pnl,
             "total_trades": len(self.trade_history),
-            "trades": self.trade_history
+            "trades": self.trade_history,
+            "strategy_config": self.config.get_strategy_config(),
+            "data_file": self.config.get_data_config().get("file_path", "")
         }
 
 
@@ -358,7 +365,11 @@ def run_batch_simulation():
             strategy_path = Path(strategy_file)
             strategy_name = strategy_path.stem
 
-
+            # Check if result already exists to allow resuming (Added Fix)
+            report_path = results_dir / f"{data_name}-{strategy_name}.json"
+            if report_path.exists():
+                logger.info(f"Skipping already completed simulation: {report_path.name}")
+                continue
 
             logger.info(f"Running simulation: {data_name} + {strategy_name}")
 
@@ -369,6 +380,7 @@ def run_batch_simulation():
 
             # Write temp broker
             temp_broker_path = temp_dir / f"{data_name}-broker.json"
+            temp_dir.mkdir(parents=True, exist_ok=True) # Ensure it exists
             with open(temp_broker_path, 'w') as f:
                 json.dump(current_broker, f, indent=2)
 
@@ -405,6 +417,7 @@ def run_batch_simulation():
 
             # Write temp manifest
             temp_manifest_path = temp_dir / f"{manifest['bot_id']}.json"
+            temp_dir.mkdir(parents=True, exist_ok=True) # Ensure it exists
             with open(temp_manifest_path, 'w') as f:
                 json.dump(manifest, f, indent=2)
 
@@ -417,11 +430,18 @@ def run_batch_simulation():
                 results = bot.get_simulation_results()
 
                 # Save Report
-                report_path = results_dir / f"{data_name}-{strategy_name}.json"
                 with open(report_path, 'w') as f:
                     json.dump(results, f, indent=2, default=str)
 
                 logger.info(f"Report saved to {report_path}. PnL: {results['total_pnl']:.2f}%")
+
+                # Generate Plot
+                try:
+                    plot_path = plot_result_file(str(report_path))
+                    if plot_path:
+                        logger.info(f"Plot generated: {plot_path}")
+                except Exception as pe:
+                    logger.error(f"Failed to generate plot for {report_path}: {pe}")
 
             except BaseException as e:
                 logger.exception(f"Error running simulation for {data_name} - {strategy_name}")
@@ -436,3 +456,4 @@ def run_batch_simulation():
 
 if __name__ == "__main__":
     run_batch_simulation()
+    print("Done. Now you can run src/trading/tools/analyze_simulation_results.py")

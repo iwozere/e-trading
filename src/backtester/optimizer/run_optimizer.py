@@ -326,7 +326,7 @@ def get_result_filename(
     return f"{symbol}_{interval}_{start_date}_{end_date}{strategy_part}{timestamp}{suffix}"
 
 
-def save_results(result, data_file):
+def save_results(result, data_file, initial_deposit=None):
     """Save optimization results to a JSON file"""
     try:
         # Create results directory if it doesn't exist
@@ -448,6 +448,7 @@ def save_results(result, data_file):
             "total_profit": float(result.get("total_profit", 0)),  # Gross profit (before commission)
             "total_profit_with_commission": float(result.get("total_profit_with_commission", 0)),  # Net profit (after commission)
             "total_commission": float(result.get("total_commission", 0)),  # Total commission paid
+            "initial_deposit": float(initial_deposit) if initial_deposit is not None else None,
             "best_params": result.get("best_params", {}),
             "analyzers": analyzers,
             "trades": trades,
@@ -839,7 +840,10 @@ def optimize_combination(
             }
             best_optimizer = CustomOptimizer(_optimizer_config)
             _, _, best_result = best_optimizer.run_optimization(study.best_trial, include_analyzers=True)
-            save_results(best_result, data_file)
+
+            # Pass initial_capital from optimizer_config to save_results
+            initial_capital = optimizer_config.get("optimizer_settings", {}).get("initial_capital", 1000.0)
+            save_results(best_result, data_file, initial_deposit=initial_capital)
 
         return result_entry
 

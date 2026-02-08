@@ -5,21 +5,23 @@
             "entry_logic": {
                 "name": "RSIOrBBEntryMixin",
                 "params": {
-                    "e_rsi_period": 14,
-                    "e_rsi_oversold": 30,
-                    "e_bb_period": 20,
-                    "e_bb_dev": 2.0,
+                    "e_rsi_period": 15,
+                    "e_rsi_oversold": 28,
+                    "e_bb_period": 25,
+                    "e_bb_dev": 2.76221,
+                    "e_use_bb_touch": true,
                     "e_rsi_cross": false,
                     "e_bb_reentry": false,
-                    "e_cooldown_bars": 0,
-                    "e_use_bb_touch": true
+                    "e_cooldown_bars": 0
                 }
             },
             "exit_logic": {
-                "name": "FixedRatioExitMixin",
+                "name": "RSIBBExitMixin",
                 "params": {
-                    "x_take_profit": 0.1,
-                    "x_stop_loss": 0.05
+                    "x_rsi_period": 17,
+                    "x_rsi_overbought": 66.58864,
+                    "x_bb_period": 17,
+                    "x_bb_dev": 1.95731
                 }
             },
             "use_talib": true,

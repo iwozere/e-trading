@@ -147,7 +147,7 @@ def convert_optimization_result(input_path: str, output_dir: str, manual_name: O
 
 
 # You can paste the path to your input file here to run the script directly
-DEFAULT_INPUT_FILE = r"results/optimization-jan-2026/30m/LTCUSDT_30m_20250101_20251111_RSIOrBBEntryMixin_TimeBasedExitMixin_20260124_013612.json"
+DEFAULT_INPUT_FILE = r"results/optimization-jan-2026/4h/LTCUSDT_4h_20250101_20251111_RSIBBEntryMixin_MACrossoverExitMixin_20260127_154136.json"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert optimization results to strategy config")

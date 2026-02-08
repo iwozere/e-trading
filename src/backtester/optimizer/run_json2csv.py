@@ -135,6 +135,7 @@ def process_json_file(file_path):
         "total_profit": data.get("total_profit", 0.0),
         "total_profit_with_commission": data.get("total_profit_with_commission", 0.0),
         "total_commission": data.get("total_commission", 0.0),
+        "initial_deposit": data.get("initial_deposit"),
         "symbol": symbol,
         "interval": interval,
         "data_start_date": start_date,
@@ -177,15 +178,16 @@ def main():
     results_dir = "results"
     all_results = []
 
-    for filename in os.listdir(results_dir):
-        if filename.endswith(".json") and not filename.endswith("_summary.csv"):
-            file_path = os.path.join(results_dir, filename)
-            try:
-                result = process_json_file(file_path)
-                if result is not None:
-                    all_results.append(result)
-            except Exception as e:
-                print(f"Error processing {filename}: {str(e)}")
+    for root, dirs, files in os.walk(results_dir):
+        for filename in files:
+            if filename.endswith(".json") and not filename.endswith("_summary.csv"):
+                file_path = os.path.join(root, filename)
+                try:
+                    result = process_json_file(file_path)
+                    if result is not None:
+                        all_results.append(result)
+                except Exception as e:
+                    print(f"Error processing {file_path}: {str(e)}")
 
     df = pd.DataFrame(all_results)
     print("Columns in DataFrame:", df.columns.tolist())

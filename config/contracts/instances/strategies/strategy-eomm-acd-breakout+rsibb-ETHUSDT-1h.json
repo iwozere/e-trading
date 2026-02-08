@@ -5,9 +5,9 @@
             "entry_logic": {
                 "name": "EOMMAcdBreakoutEntryMixin",
                 "params": {
-                    "e_resistance_range_low": 0.995,
-                    "e_resistance_range_high": 1.002,
-                    "e_volume_threshold": 0.8,
+                    "e_resistance_range_low": 0.99771,
+                    "e_resistance_range_high": 1.00785,
+                    "e_volume_threshold": 0.7671,
                     "e_resistance_lookback": 2,
                     "e_macd_fast": 12,
                     "e_macd_slow": 26,
@@ -19,10 +19,10 @@
             "exit_logic": {
                 "name": "RSIBBExitMixin",
                 "params": {
-                    "x_rsi_period": 14,
-                    "x_rsi_overbought": 70,
-                    "x_bb_period": 20,
-                    "x_bb_dev": 2.0
+                    "x_rsi_period": 16,
+                    "x_rsi_overbought": 67.58495,
+                    "x_bb_period": 16,
+                    "x_bb_dev": 2.05744
                 }
             },
             "use_talib": true,

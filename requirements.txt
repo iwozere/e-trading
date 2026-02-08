@@ -41,3 +41,4 @@ dramatiq>=1.15.0
 apscheduler>=3.10.4
 croniter>=2.0.1
 asyncpg>=0.29.0
+vectorbt>=0.28.4
