@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import operator
 from typing import Dict, Any, List, Union, Optional
-from src.shared.indicators.adapters import RSI, BBANDS, EMA, SMA, ATR
+from src.shared.indicators.adapters import RSI, BBANDS, EMA, SMA, ATR, ADX
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__, use_multiprocessing=True)
@@ -15,7 +15,8 @@ class IndicatorRegistry:
         "BBANDS": BBANDS,
         "EMA": EMA,
         "SMA": SMA,
-        "ATR": ATR
+        "ATR": ATR,
+        "ADX": ADX
     }
 
     @classmethod
@@ -142,23 +143,55 @@ class StrategyEngine:
         self.indicators_config = config.get("indicators", {})
         self.logic_config = config.get("logic", {})
 
-    def run(self, close: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
+    def run(self, data: pd.DataFrame, params: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
         """
         Executes the strategy.
 
         Args:
-            close: Price Data
-            params: Parameters from Optuna trial (e.g. {"rsi_main_window": 14})
+            data: Prices DataFrame (should contain Open/High/Low/Close if needed)
+            params: Parameters from Optuna trial
         """
+        # Ensure we have a Close series for base operations
+        if 'column' in data.columns.names and 'Close' in data.columns.get_level_values('column'):
+            close = data.xs('Close', level='column', axis=1)
+            high = data.xs('High', level='column', axis=1)
+            low = data.xs('Low', level='column', axis=1)
+            open_px = data.xs('Open', level='column', axis=1)
+        else:
+            # Fallback if only Close is provided
+            close = data
+            high = data
+            low = data
+            open_px = data
+
         results = {}
 
         # 1. Calculate all indicators
         for ind_id, ind_cfg in self.indicators_config.items():
             ind_type = ind_cfg["type"]
             impl = IndicatorRegistry.get(ind_type)
+            target_tf = ind_cfg.get("timeframe") # e.g. "1h"
+
+            # Prepare data for this indicator (MTF Resampling if needed)
+            if target_tf:
+                _logger.debug(f"Resampling {ind_id} to {target_tf}")
+                # Use vbt resampling to aggregate
+                # Note: vbt.resample(data, '1h').last() etc.
+                # However, for simplicity and TA-Lib compatibility, we'll use pandas resample
+                resampled_high = high.resample(target_tf).max()
+                resampled_low = low.resample(target_tf).min()
+                resampled_close = close.resample(target_tf).last()
+                calc_high, calc_low, calc_close = resampled_high, resampled_low, resampled_close
+            else:
+                calc_high, calc_low, calc_close = high, low, close
 
             # Extract params for this specific instance
             ind_params = {}
+            # Start with hardcoded defaults
+            if "params" in ind_cfg:
+                ind_params.update(ind_cfg["params"])
+
+            # Overwrite with optimization space params
             for p_name in ind_cfg.get("space", {}).keys():
                 param_key = f"{ind_id}_{p_name}"
                 if param_key in params:
@@ -168,10 +201,29 @@ class StrategyEngine:
             try:
                 import inspect
                 sig = inspect.signature(impl.compute)
-                compute_params = {k: v for k, v in ind_params.items() if k in sig.parameters}
 
-                data = impl.compute(close, **compute_params)
-                results[ind_id] = IndicatorResult(data, ind_params)
+                # Map OHLC components based on signature
+                compute_args = {}
+                if 'high' in sig.parameters: compute_args['high'] = calc_high
+                if 'low' in sig.parameters: compute_args['low'] = calc_low
+                if 'close' in sig.parameters: compute_args['close'] = calc_close
+                if 'open_px' in sig.parameters: compute_args['open_px'] = calc_high # fallback or use actual
+
+                # Add other window/optuna params
+                for k, v in ind_params.items():
+                    if k in sig.parameters:
+                        compute_args[k] = v
+
+                data_res = impl.compute(**compute_args)
+
+                # Up-sample back to base timeframe if resampled
+                if target_tf:
+                    if isinstance(data_res, dict):
+                        data_res = {k: v.reindex(close.index).ffill() for k, v in data_res.items()}
+                    else:
+                        data_res = data_res.reindex(close.index).ffill()
+
+                results[ind_id] = IndicatorResult(data_res, ind_params)
             except Exception as e:
                 _logger.error(f"Failed to calculate {ind_id}: {e}")
                 raise
@@ -187,8 +239,11 @@ class StrategyEngine:
                 signals[signal_type] = pd.DataFrame(False, index=close.index, columns=close.columns)
 
         return {
-            "entries": signals.get("long_entry"),
-            "exits": signals.get("long_exit"),
-            "short_entries": signals.get("short_entry"),
-            "short_exits": signals.get("short_exit")
+            "signals": {
+                "entries": signals.get("long_entry"),
+                "exits": signals.get("long_exit"),
+                "short_entries": signals.get("short_entry"),
+                "short_exits": signals.get("short_exits")
+            },
+            "results": results
         }

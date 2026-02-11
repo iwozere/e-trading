@@ -61,12 +61,38 @@ class Objective:
             # CRITICAL: Create a deep copy for thread safety
             # Multiple parallel trials can mutate shared data structures
             data = data.copy(deep=True)
-            close = data.xs('Close', level='column', axis=1)
-
             # 2. Generate signals via Dynamic Engine
-            res = self.engine.run(close, params)
+            # Pass full OHLC for indicators like ADX/ATR
+            close = data.xs('Close', level='column', axis=1)
+            res_full = self.engine.run(data, params)
+            res = res_full["signals"]
+            results = res_full["results"]
 
-            # 3. Simulate portfolio
+            # 3. Trailing Stop Support
+            # Check if strategy config or params has sl_trailing
+            sl_stop = None
+            sl_trail = False
+            if "exits" in self.strategy_config and "sl_trailing" in self.strategy_config["exits"]:
+                sl_cfg = self.strategy_config["exits"]["sl_trailing"]
+                # Resolve multiplier
+                if "multiplier" in sl_cfg.get("space", {}):
+                    multiplier = params.get(f"sl_trailing_multiplier", 2.0)
+                else:
+                    multiplier = sl_cfg.get("params", {}).get("multiplier", 2.0)
+
+                # Dynamic ATR-based stop
+                if "indicator" in sl_cfg:
+                    ind_id = sl_cfg["indicator"]
+                    field = sl_cfg.get("field", "out")
+                    if ind_id in results:
+                        atr_val = results[ind_id].get_field(field)
+                        # vbt sl_stop is often a ratio: distance / price
+                        sl_stop = (atr_val * multiplier) / close
+                        sl_trail = True
+                else:
+                    # Fixed percentage stop
+                    sl_stop = multiplier / 100.0
+                    sl_trail = True
             # Settings for Binance Futures:
             # fees=0.0004 (VIP0 taker), slippage=0.0001
             # cash_sharing=True (cross-margin)
@@ -89,7 +115,9 @@ class Objective:
                 size_type='Value',
                 cash_sharing=True,
                 init_cash=init_cash,
-                freq='1h' # Ensure freq is set for CAGR
+                sl_stop=sl_stop,
+                sl_trail=sl_trail,
+                freq='15m'
             )
 
             # 4. Custom Liquidation Proxy (Senior Architect Requirement)

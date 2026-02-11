@@ -50,7 +50,8 @@ class StudyManager:
         n_jobs: Optional[int] = None,
         study_name: Optional[str] = None,
         symbols: Optional[List[str]] = None,
-        strategy_path: str = "src/vectorbt/configs/default_strategy.json"
+        strategy_path: str = "src/vectorbt/configs/default_strategy.json",
+        strategy_name: str = "default_strategy"
     ):
         """
         Runs the Optuna study with concurrency guardrails and rolling splits.
@@ -67,7 +68,7 @@ class StudyManager:
 
         # 0. Handle Isolation Logic
         symbol_slug = self._get_symbols_slug(symbols) if symbols else "PORTFOLIO"
-        report_dir = f"results/vectorbt/{symbol_slug}/{interval}"
+        report_dir = f"results/vectorbt/{strategy_name}/{symbol_slug}/{interval}"
 
         if study_name is None:
             study_name = f"optimization_{symbol_slug}_{interval}"
@@ -127,7 +128,7 @@ class StudyManager:
         if 'BTC' in data.columns.get_level_values('symbol'):
             benchmark_close = data.xs(('BTC', 'Close'), level=('symbol', 'column'), axis=1)
 
-        self.generate_report(study.best_trial, data, report_dir, strategy_config, benchmark_close)
+        self.generate_report(study.best_trial, data, report_dir, strategy_config, benchmark_close, strategy_name=strategy_name)
 
         # 7. Generate Study Summary
         from src.vectorbt.pipeline.reporter import Reporter
@@ -136,7 +137,7 @@ class StudyManager:
 
         return study
 
-    def generate_report(self, trial, data, report_dir, strategy_config, benchmark_close=None):
+    def generate_report(self, trial, data, report_dir, strategy_config, benchmark_close=None, strategy_name="unknown"):
         """
         Generates detailed report using the Reporter class.
         """
@@ -149,7 +150,8 @@ class StudyManager:
             # Re-run best params via dynamic engine
             _logger.info(f"Generating report with trial params: {trial.params}")
             engine = StrategyEngine(strategy_config)
-            res = engine.run(close, trial.params)
+            res_full = engine.run(data, trial.params)
+            res = res_full["signals"]
 
             # Simulate (vbt-core compatible Value-based sizing)
             leverage = trial.params.get('leverage', 1.0)
@@ -177,7 +179,8 @@ class StudyManager:
                 pf=pf,
                 trial_id=trial.number,
                 params=trial.params,
-                benchmark_close=benchmark_close
+                benchmark_close=benchmark_close,
+                strategy_name=strategy_name
             )
         except Exception as e:
             import traceback

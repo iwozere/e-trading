@@ -24,23 +24,32 @@ def aggregate_results(results_dir: str = "results/vectorbt"):
 
     print(f"🔍 Searching for trial results in {base_path.absolute()}...")
 
-    # Pattern: results/vectorbt/<symbol>/<interval>/trial_<id>.json
+    # Pattern: results/vectorbt/<strategy_name>/<symbol>/<interval>/trial_<id>.json
     for json_file in base_path.glob("**/trial_*.json"):
         # We handle both historical flat reports and the new hierarchical structure
-        # Hierarchical: symbol/interval/trial_X.json
         parts = json_file.relative_to(base_path).parts
 
-        if len(parts) >= 3:
+        strategy_name = "unknown"
+        symbol = "unknown"
+        interval = "unknown"
+
+        if len(parts) >= 4:
+            # New structure: strategy_name/symbol/interval/trial_X.json
+            strategy_name = parts[0]
+            symbol = parts[1]
+            interval = parts[2]
+        elif len(parts) == 3:
+            # Old structure: symbol/interval/trial_X.json
             symbol = parts[0]
             interval = parts[1]
-        else:
-            # Fallback for unexpected paths
-            symbol = "unknown"
-            interval = "unknown"
 
         try:
             with open(json_file, 'r') as f:
                 data = json.load(f)
+
+            # If strategy_name is in the JSON (newly generated), use that
+            if 'strategy_name' in data:
+                strategy_name = data['strategy_name']
 
             # Remove 'trades' list as it's too large for a flat CSV cell
             data.pop('trades', None)
@@ -48,7 +57,8 @@ def aggregate_results(results_dir: str = "results/vectorbt"):
             # Flatten metrics and params
             flat_data = flatten_dict(data)
 
-            # Add metadata
+            # Add metadata (override if already in JSON but ensure it reflects folder structure too)
+            flat_data['strategy_name'] = strategy_name
             flat_data['symbol'] = symbol
             flat_data['interval'] = interval
             flat_data['source_file'] = str(json_file)
@@ -64,10 +74,11 @@ def aggregate_results(results_dir: str = "results/vectorbt"):
     # Create DataFrame
     df = pd.DataFrame(all_data)
 
-    # Reorder columns to put symbols and intervals first
-    cols = ['symbol', 'interval', 'trial_id']
-    other_cols = [c for c in df.columns if c not in cols]
-    df = df[cols + other_cols]
+    # Reorder columns to put metadata first
+    cols = ['strategy_name', 'symbol', 'interval', 'trial_id']
+    actual_cols = [c for c in cols if c in df.columns]
+    other_cols = [c for c in df.columns if c not in actual_cols]
+    df = df[actual_cols + other_cols]
 
     output_path = base_path / "comparison_report.csv"
     df.to_csv(output_path, index=False)

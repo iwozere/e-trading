@@ -19,7 +19,7 @@ class Reporter:
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def generate_full_report(self, pf: vbt.Portfolio, trial_id: int, params: Dict[str, Any], benchmark_close: Optional[pd.Series] = None):
+    def generate_full_report(self, pf: vbt.Portfolio, trial_id: int, params: Dict[str, Any], benchmark_close: Optional[pd.Series] = None, strategy_name: str = "unknown"):
         """
         Generates JSON metrics, PNG snapshots, and HTML interactive dashboards.
         """
@@ -29,7 +29,7 @@ class Reporter:
         metrics = self.calculate_metrics(pf)
 
         _logger.info("Step 2: Saving JSON report...")
-        self.save_json_report(report_dir, trial_id, params, metrics, pf)
+        self.save_json_report(report_dir, trial_id, params, metrics, pf, strategy_name=strategy_name)
 
         _logger.info("Step 3: Generating HTML dashboard...")
         self.generate_html_dashboard(report_dir, trial_id, pf, benchmark_close)
@@ -102,7 +102,7 @@ class Reporter:
 
         return trade_list
 
-    def save_json_report(self, report_dir: str, trial_id: int, params: Dict[str, Any], metrics: Dict[str, Any], pf: vbt.Portfolio):
+    def save_json_report(self, report_dir: str, trial_id: int, params: Dict[str, Any], metrics: Dict[str, Any], pf: vbt.Portfolio, strategy_name: str = "unknown"):
         """
         Saves metrics, pnl data, and detailed trade information to JSON.
         """
@@ -120,6 +120,7 @@ class Reporter:
 
         report_data = {
             "trial_id": trial_id,
+            "strategy_name": strategy_name,
             "params": params,
             "deposit_amount": float(getattr(pf, 'init_cash', 0)),
             "total_profit_after_commission": float(pf.total_profit().sum()) if isinstance(pf.total_profit(), pd.Series) else float(pf.total_profit()),

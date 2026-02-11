@@ -36,7 +36,7 @@ DEBUG_MODE = True # Set to False for production use
 DEFAULT_INTERVALS = "4h,1h,30m,15m,5m"  # Comma-separated
 DEFAULT_SYMBOLS = "BTC,XRP,LTC,ETH"   # Comma-separated
 DEFAULT_TRIALS = 10
-DEFAULT_STRATEGY = "src/vectorbt/configs/default_strategy.json"
+DEFAULT_STRATEGY = "src/vectorbt/configs/triple-filter-trend-rider.json"
 DEFAULT_BATCH = True
 DEFAULT_JOBS = 6
 
@@ -58,7 +58,8 @@ def run_optimization(
     n_jobs: Optional[int] = None,
     study_name: Optional[str] = None,
     symbols: Optional[List[str]] = None,
-    strategy_path: str = "src/vectorbt/configs/default_strategy.json",
+    strategy_path: str = DEFAULT_STRATEGY,
+    strategy_name: str = "triple-filter-trend-rider",
 ):
     """
     Run optimization study.
@@ -71,6 +72,7 @@ def run_optimization(
         study_name=study_name,
         symbols=symbols,
         strategy_path=strategy_path,
+        strategy_name=strategy_name,
     )
 
     if study is None:
@@ -213,6 +215,9 @@ def main():
 
     _logger.info("Initializing Vectorbt Trading Pipeline CLI")
 
+    # 1. Extract clean strategy name from path
+    strategy_name = os.path.basename(args.strategy).replace(".json", "") if hasattr(args, 'strategy') else "default_strategy"
+
     # Execute command
     if args.command == "optimize":
         symbols_list = [s.strip() for s in args.symbols.split(",")] if args.symbols else []
@@ -232,6 +237,7 @@ def main():
                         n_jobs=args.jobs,
                         symbols=[symbol],
                         strategy_path=args.strategy,
+                        strategy_name=strategy_name,
                     )
                     if success and args.auto_promote:
                         study_name = f"optimization_{symbol}_{interval}"
@@ -246,14 +252,32 @@ def main():
                     study_name=args.study_name,
                     symbols=symbols_list,
                     strategy_path=args.strategy,
+                    strategy_name=strategy_name,
                 )
                 if success and args.auto_promote:
                     symbol_slug = "-".join(sorted([s.upper() for s in symbols_list])) if symbols_list else "PORTFOLIO"
                     study_name = args.study_name or f"optimization_{symbol_slug}_{interval}"
                     promote_strategies(study_name=study_name)
 
+    elif args.command == "promote":
+        promote_strategies(
+            study_name=args.study_name,
+            top_n=args.top_n,
+            user_id=args.user_id,
+            min_calmar=args.min_calmar,
+            max_drawdown=args.max_drawdown,
+            min_trades=args.min_trades,
+        )
+
+    elif args.command == "list-studies":
+        list_studies()
+
     else:
         parser.print_help()
+
+    # Explicitly shutdown logging to ensure clean exit of background threads
+    from src.notification.logger import shutdown_multiprocessing_logging
+    shutdown_multiprocessing_logging()
 
 
 if __name__ == "__main__":

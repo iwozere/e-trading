@@ -94,10 +94,39 @@ class EMA:
             return np.apply_along_axis(lambda x: talib.EMA(x, timeperiod=window), 0, close)
         return pd.Series(talib.EMA(close.values, timeperiod=window), index=close.index)
 
+class ADX:
+    @staticmethod
+    def compute(high: Union[pd.Series, pd.DataFrame], low: Union[pd.Series, pd.DataFrame], close: Union[pd.Series, pd.DataFrame], window: int) -> Union[pd.Series, pd.DataFrame]:
+        """
+        Compute Average Directional Index (ADX).
+        """
+        if isinstance(close, pd.DataFrame):
+            # Alignment check: Ensure all inputs are DataFrames with matching columns
+            res = {}
+            for col in close.columns:
+                res[col] = talib.ADX(high[col].values, low[col].values, close[col].values, timeperiod=window)
+            return pd.DataFrame(res, index=close.index)
+
+        # Assume Series
+        return pd.Series(
+            talib.ADX(high.values, low.values, close.values, timeperiod=window),
+            index=close.index
+        )
+
 class ATR:
     @staticmethod
-    def compute(high: pd.Series, low: pd.Series, close: pd.Series, window: int) -> pd.Series:
-        # ATR usually takes 1D inputs in our context, scale to 2D if needed later
+    def compute(high: Union[pd.Series, pd.DataFrame], low: Union[pd.Series, pd.DataFrame], close: Union[pd.Series, pd.DataFrame], window: int) -> Union[pd.Series, pd.DataFrame]:
+        """
+        Compute Average True Range (ATR).
+        Handles multi-symbol DataFrames.
+        """
+        if isinstance(close, pd.DataFrame):
+            res = {}
+            for col in close.columns:
+                res[col] = talib.ATR(high[col].values, low[col].values, close[col].values, timeperiod=window)
+            return pd.DataFrame(res, index=close.index)
+
+        # Assume Series
         return pd.Series(
             talib.ATR(high.values, low.values, close.values, timeperiod=window),
             index=close.index
