@@ -174,6 +174,10 @@ class StrategyEngine:
 
             # Prepare data for this indicator (MTF Resampling if needed)
             if target_tf:
+                # Map 'm' to 'min' to avoid pandas deprecation warnings
+                if target_tf.endswith('m') and not target_tf.endswith('min'):
+                    target_tf = target_tf.replace('m', 'min')
+
                 _logger.debug(f"Resampling {ind_id} to {target_tf}")
                 # Use vbt resampling to aggregate
                 # Note: vbt.resample(data, '1h').last() etc.
@@ -217,11 +221,13 @@ class StrategyEngine:
                 data_res = impl.compute(**compute_args)
 
                 # Up-sample back to base timeframe if resampled
+                # CRITICAL: We MUST shift by 1 to avoid look-ahead bias.
+                # The 'last' value of a 1h bar is only known AFTER the hour closes.
                 if target_tf:
                     if isinstance(data_res, dict):
-                        data_res = {k: v.reindex(close.index).ffill() for k, v in data_res.items()}
+                        data_res = {k: v.shift(1).reindex(close.index).ffill() for k, v in data_res.items()}
                     else:
-                        data_res = data_res.reindex(close.index).ffill()
+                        data_res = data_res.shift(1).reindex(close.index).ffill()
 
                 results[ind_id] = IndicatorResult(data_res, ind_params)
             except Exception as e:

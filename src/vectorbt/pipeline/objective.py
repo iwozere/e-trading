@@ -138,7 +138,10 @@ class Objective:
             if np.isnan(cagr) or np.isnan(calmar) or np.isnan(win_rate):
                 split_scores.append(-1.0)
             else:
-                s = (cagr * calmar * win_rate) / (leverage ** 2)
+                # Senior Architect Update: Use linear leverage penalty.
+                # Linear penalty (L) is less aggressive than squared (L^2) but still
+                # rewards capital efficiency (high return/low leverage).
+                s = (calmar * win_rate) / leverage
                 split_scores.append(s)
 
         # 6. Stability Score (Senior Architect Requirement)

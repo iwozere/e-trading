@@ -33,9 +33,9 @@ from src.notification.logger import setup_logger, setup_multiprocessing_logging
 # This section allows running and debugging from VS Code (F5) without manually
 # entering CLI arguments. These will be used if CLI arguments are omitted.
 DEBUG_MODE = True # Set to False for production use
-DEFAULT_INTERVALS = "4h,1h,30m,15m,5m"  # Comma-separated
+DEFAULT_INTERVALS = "4h,1h,30min,15min,5min"  # Comma-separated
 DEFAULT_SYMBOLS = "BTC,XRP,LTC,ETH"   # Comma-separated
-DEFAULT_TRIALS = 10
+DEFAULT_TRIALS = 200
 DEFAULT_STRATEGY = "src/vectorbt/configs/triple-filter-trend-rider.json"
 DEFAULT_BATCH = True
 DEFAULT_JOBS = 6

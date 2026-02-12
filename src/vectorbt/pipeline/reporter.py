@@ -147,15 +147,17 @@ class Reporter:
                 benchmark_returns = benchmark_returns.replace([np.inf, -np.inf], 0.0).fillna(0.0)
 
             _logger.info("Plotting portfolio subplots...")
+            # Senior Architect: Using native vbt-core subplots for WOW factor
             fig = pf.plot(
                 subplots=[
                     'cum_returns',
-                    'drawdowns',
+                    'underwater',     # Requested: Drawdown Underwater
+                    'orders',   # 'orders' instead of 'trade_signals'
                     'net_exposure',
                     'cash'
                 ],
                 column=None,
-                group_by=True
+                group_by=False
             )
 
             # Add benchmark to cumulative returns subplot (index 1 in 1-based plotly row/col)
@@ -260,7 +262,18 @@ class Reporter:
             fig_history = oviz.plot_optimization_history(study)
             fig_history.write_html(os.path.join(report_dir, "opt_history.html"))
 
-            # 3. Slice Plot (Sensitivity)
+            # 3. Parameter Heatmap (Contour Plot)
+            # Identify top 2 most important parameters for the heatmap
+            attr = study.best_trial.user_attrs.get("stability_score", "Value")
+            importances = oviz._param_importances.get_param_importances(study)
+            top_params = list(importances.keys())[:2]
+
+            if len(top_params) >= 2:
+                fig_contour = oviz.plot_contour(study, params=top_params)
+                fig_contour.write_html(os.path.join(report_dir, "opt_heatmap.html"))
+                _logger.info(f"Generated Heatmap for {top_params}")
+
+            # 4. Slice Plot (Sensitivity)
             # Leverage Sensitivity
             if "leverage" in study.best_params:
                 fig_slice = oviz.plot_slice(study, params=["leverage"])
