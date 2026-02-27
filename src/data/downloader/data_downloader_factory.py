@@ -123,7 +123,10 @@ class DataDownloaderFactory:
         # Santiment
         "san": "santiment",
         "santiment": "santiment",
-        "santiment_net": "santiment"
+        "santiment_net": "santiment",
+
+        # BTC Market Cap (Now handled by CoinGecko)
+        "btc_mc": "coingecko"
     }
 
     @staticmethod

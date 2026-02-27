@@ -152,6 +152,58 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
             _logger.exception("Error processing CoinGecko data for %s: %s", symbol, str(e))
             raise
 
+    def get_market_cap(
+        self,
+        symbol: str,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> pd.DataFrame:
+        """
+        Download historical Market Cap data from CoinGecko.
+        Returns a DataFrame where OHLC columns contain the market cap value.
+        """
+        # Convert dates to UNIX timestamps (seconds)
+        start_timestamp = int(start_date.timestamp())
+        end_timestamp = int(end_date.timestamp())
+
+        url = f"{self.base_url}/coins/{symbol}/market_chart/range"
+        params = {
+            "vs_currency": "usd",
+            "from": start_timestamp,
+            "to": end_timestamp,
+        }
+
+        try:
+            response = requests.get(url, params=params)
+            if response.status_code != 200:
+                _logger.error("CoinGecko API error: %s %s", response.status_code, response.text)
+                return pd.DataFrame()
+
+            data = response.json()
+            market_caps = data.get("market_caps", [])
+
+            if not market_caps:
+                _logger.warning("No market cap data returned from CoinGecko for %s", symbol)
+                return pd.DataFrame()
+
+            df = pd.DataFrame(market_caps, columns=["timestamp", "market_cap"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            df.set_index("timestamp", inplace=True)
+
+            # Return as OHLC for macro pipeline compatibility
+            res = pd.DataFrame(index=df.index)
+            res["open"] = df["market_cap"]
+            res["high"] = df["market_cap"]
+            res["low"] = df["market_cap"]
+            res["close"] = df["market_cap"]
+            res["volume"] = 0
+
+            return res
+
+        except Exception as e:
+            _logger.exception("Error downloading market cap for %s: %s", symbol, str(e))
+            return pd.DataFrame()
+
     def get_periods(self) -> list:
         return ['1d', '7d', '1w', '1mo', '3mo', '6mo', '1y', '2y']
 
