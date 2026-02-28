@@ -1,6 +1,7 @@
 import optuna
 import os
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import sys
@@ -26,11 +27,6 @@ _logger = setup_logger(__name__)
 class P07Pipeline:
     """
     Core Orchestrator for p07_combined.
-    Handles:
-    - Optimization (Optuna)
-    - Stateful recovery (completed.flag)
-    - Batch processing
-    - Macro regime context integration
     """
 
     def __init__(self, result_root: Path = Path("results/p07_combined")):
@@ -51,8 +47,7 @@ class P07Pipeline:
 
         if not macro_df.empty:
             _logger.info("Retraining macro regime model with anchor_date: %s", anchor_date)
-            self.regime_model.train(macro_df, anchor_date=anchor_date)
-            return True
+            return self.regime_model.train(macro_df, anchor_date=anchor_date)
         return False
 
     def enrich_data(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -126,30 +121,35 @@ class P07Pipeline:
 
         model = res["model"]
         pf = res["pf"]
-        signals = res["signals"]
-        X_test = res["X_test"]
-        y_test = res["y_test"]
         ohlcv_test = res["ohlcv_test"]
 
-        # 2. Save Model
+        # 2. Save Model & Data
         model.save_model(str(res_dir / "best_model.json"))
 
-        # 3. Enhanced Signal Mapping for Plotting
-        actual_signals = pd.Series(0, index=signals.index)
-        # VectorBT's .vbt.signals accessor expects a boolean series
-        first_buys = (signals == 1).vbt.signals.first()
-        first_shorts = (signals == -1).vbt.signals.first()
-        actual_signals[first_buys] = 1
-        actual_signals[first_shorts] = -1
+        # Save detailed trades
+        res["trades"].to_json(res_dir / "trades.json", orient="records", indent=4)
+
+        # Save performance metrics
+        res["metrics"].to_json(res_dir / "metrics.json", indent=4)
+
+        # 3. Clean Signal Mapping for Plotting
+        assets = pf.assets()
+        diff = assets.diff()
+        if not diff.empty:
+            diff.iloc[0] = assets.iloc[0]
+
+        plot_sigs = pd.Series(0, index=ohlcv_test.index)
+        plot_sigs[diff > 0] = 1
+        plot_sigs[diff < 0] = -1
 
         # 4. Save Plots
         viz = P07Visualizer(res_dir)
         viz.plot_tbm_hits(res["y_f"])
         viz.plot_prediction_diagnostics(
-            model._map_labels(y_test).values,
-            model.predict_proba(X_test)
+            model._map_labels(res["y_test"]).values,
+            model.predict_proba(res["X_test"])
         )
-        viz.plot_master_overlay(ohlcv_test, actual_signals, pf)
+        viz.plot_master_overlay(ohlcv_test, plot_sigs, pf)
 
         _logger.info("Artifacts saved successfully.")
         return True
@@ -174,6 +174,13 @@ if __name__ == "__main__":
     p = P07Pipeline()
     _logger.info("Starting P07 Pipeline Batch...")
     data_dir = Path("data")
-    ticker_files = list(data_dir.glob("*_*_*.csv"))
+    ticker_files = list(data_dir.glob("*_*_*.csv")) # Process all available data files
     if ticker_files:
         p.run_batch(ticker_files)
+
+    # Also run aggregation at the end
+    try:
+        from src.ml.pipeline.p07_combined.json2csv import aggregate_results
+        aggregate_results()
+    except Exception as e:
+        _logger.error("Failed to aggregate results: %s", e)

@@ -64,9 +64,14 @@ class P07RegimeModel:
         if fit:
             return self.scaler.fit_transform(features)
         else:
-            return self.scaler.transform(features)
+            try:
+                return self.scaler.transform(features)
+            except:
+                # Fallback if scaler not fitted (e.g. training failed)
+                _logger.warning("Scaler not fitted. Returning zeros.")
+                return np.zeros((len(features), features.shape[1]))
 
-    def train(self, macro_df: pd.DataFrame, anchor_date: Optional[pd.Timestamp] = None):
+    def train(self, macro_df: pd.DataFrame, anchor_date: Optional[pd.Timestamp] = None) -> bool:
         """
         Train the HMM on macro historical data.
         If anchor_date is provided, only data up to that date is used (prevents look-ahead bias).
@@ -74,10 +79,14 @@ class P07RegimeModel:
         if anchor_date:
             macro_df = macro_df[macro_df.index <= anchor_date]
 
+        if macro_df.empty:
+            _logger.warning("HMM training data empty for anchor_date %s", anchor_date)
+            return False
+
         X = self.prepare_features(macro_df, fit=True)
         if X.size == 0:
-            _logger.error("No samples available for HMM training.")
-            return
+            _logger.error("No samples available for HMM training (after prep).")
+            return False
 
         _logger.info("Training GaussianHMM with %d components on %d samples.", self.n_components, len(X))
         self.model.fit(X)
@@ -86,6 +95,7 @@ class P07RegimeModel:
         # This is a heuristic: lower VIX + positive BTC MC might be Bull.
         # We can also just store the raw states and let XGBoost learn their value.
         _logger.info("HMM Training complete.")
+        return True
 
     def predict(self, macro_df: pd.DataFrame) -> pd.Series:
         """Predict regime states for given macro data."""
@@ -95,7 +105,11 @@ class P07RegimeModel:
         if X.size == 0:
             return res
 
-        states = self.model.predict(X)
+        try:
+            states = self.model.predict(X)
+        except:
+            _logger.warning("HMM not fitted. Returning default states.")
+            return res
 
         # Align with original index (accounting for dropped NaNs during feature prep)
         features = pd.DataFrame(index=macro_df.index)

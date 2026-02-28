@@ -83,6 +83,10 @@ class P07Evaluator:
             direction='both'
         )
 
+        # Metrics & Trades
+        metrics = pf.stats()
+        trades = pf.trades.records_readable
+
         return {
             "model": model,
             "pf": pf,
@@ -92,5 +96,7 @@ class P07Evaluator:
             "X_train": X_train,
             "y_train": y_train,
             "y_f": y_f,
-            "ohlcv_test": ohlcv_test
+            "ohlcv_test": ohlcv_test,
+            "metrics": metrics,
+            "trades": trades
         }
