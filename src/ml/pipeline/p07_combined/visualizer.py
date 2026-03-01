@@ -73,7 +73,13 @@ class P07Visualizer:
         # 2. Equity Curve (Realized only to avoid mirroring price)
         # VectorBT trades.pnl.to_pd() gives PnL at exit points, indexed by original ohlcv
         # FillNa(0) and cumsum() gives the 'steppy' realized equity Curve
-        realized_pnl = pf.trades.pnl.to_pd().fillna(0.0).cumsum()
+        pnl_series = pf.trades.pnl.to_pd().fillna(0.0)
+
+        # Mask terminal exit PnL (forced close by VectorBT at end of period)
+        if not pnl_series.empty:
+            pnl_series.iloc[-1] = 0.0
+
+        realized_pnl = pnl_series.cumsum()
         realized_equity = realized_pnl + pf.init_cash
 
         ax2.plot(realized_equity.index, realized_equity, label='Realized Equity (Steppy)', color='blue', linewidth=3)

@@ -14,9 +14,11 @@ def objective(trial, ohlcv_clean: pd.DataFrame):
     params = {
         'rsi_period': trial.suggest_int('rsi_period', 7, 21),
         'bb_period': trial.suggest_int('bb_period', 10, 30),
-        'pt_mult': trial.suggest_float('pt_mult', 1.0, 3.0),
-        'sl_mult': trial.suggest_float('sl_mult', 0.5, 2.0),
-        'tpl_bars': trial.suggest_int('tpl_bars', 5, 24),
+        'pt_mult': trial.suggest_float('pt_mult', 0.5, 4.0),
+        'sl_mult': trial.suggest_float('sl_mult', 0.25, 3.0),
+        'tpl_bars': trial.suggest_int('tpl_bars', 5, 150),
+        'buy_prob_min': trial.suggest_float('buy_prob_min', 0.35, 0.65),
+        'sell_prob_min': trial.suggest_float('sell_prob_min', 0.35, 0.65),
         'max_depth': trial.suggest_int('max_depth', 3, 9),
         'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
         'n_estimators': trial.suggest_int('n_estimators', 50, 200)
