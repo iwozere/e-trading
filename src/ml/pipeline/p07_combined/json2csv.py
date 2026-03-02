@@ -37,13 +37,42 @@ def aggregate_results(results_root: str = "results/p07_combined"):
             with open(metrics_file, 'r') as f:
                 data = json.load(f)
 
-            # Add metadata
+            # --- Formatting Logic ---
+            # 1. Start/End (from milliseconds to human readable)
+            for key in ["Start", "End"]:
+                if key in data and isinstance(data[key], (int, float)):
+                    # Convert ms to datetime
+                    dt = pd.to_datetime(data[key], unit='ms')
+                    data[key] = dt.strftime('%Y-%m-%d %H:%M:%S')
+
+            # 2. Period (from milliseconds to duration string)
+            if "Period" in data and isinstance(data["Period"], (int, float)):
+                duration = pd.to_timedelta(data["Period"], unit='ms')
+                # Format: "X days HH:MM:SS"
+                days = duration.days
+                hours, remainder = divmod(duration.seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                data["Period"] = f"{days} days {hours:02d}:{minutes:02d}:{seconds:02d}"
+
+            # 3. Handle ticker/timeframe/dates
+            # file_start/file_end come from the folder name (e.g. 20200101_20250101)
+            f_start, f_end = start_date, end_date
+            if len(f_start) == 8: f_start = f"{f_start[:4]}-{f_start[4:6]}-{f_start[6:8]}"
+            if len(f_end) == 8: f_end = f"{f_end[:4]}-{f_end[4:6]}-{f_end[6:8]}"
+
+            # test_start/test_end come from the JSON (high precision)
+            t_start = data.get("Start", f_start)
+            t_end = data.get("End", f_end)
+
+            # Add metadata and combine with data
             entry = {
                 "ticker": ticker,
                 "timeframe": timeframe,
-                "start_date": start_date,
-                "end_date": end_date,
-                **data
+                "file_start": f_start,
+                "file_end": f_end,
+                "test_start": t_start,
+                "test_end": t_end,
+                **{k: v for k, v in data.items() if k not in ["Start", "End"]}
             }
             all_metrics.append(entry)
 
@@ -53,7 +82,7 @@ def aggregate_results(results_root: str = "results/p07_combined"):
     if all_metrics:
         df = pd.DataFrame(all_metrics)
         # Reorder to put metadata first
-        cols = ["ticker", "timeframe", "start_date", "end_date"]
+        cols = ["ticker", "timeframe", "file_start", "file_end", "test_start", "test_end", "Period"]
         other_cols = [c for c in df.columns if c not in cols]
         df = df[cols + other_cols]
 

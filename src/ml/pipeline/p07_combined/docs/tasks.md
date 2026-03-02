@@ -50,6 +50,7 @@ This document serves as the granular checklist for the Senior Python Developer t
   - [x] XGBoost Classifier with `tree_method='hist'` for CPU efficiency.
 - [x] **Optimization Pipeline (`optimize.py`)**
   - [x] Optuna objective utilizing `vectorbt` for fast backtesting.
+  - [x] **Zero-Trade Fix**: Expanded `tpl_bars` and introduced dynamic probability thresholds for multi-timeframe stability.
 
 ---
 
@@ -57,14 +58,16 @@ This document serves as the granular checklist for the Senior Python Developer t
 - [x] **Suite Generation**
   - [x] `predictions_scatter.png`, `error_distribution.png`, `tbm_barrier_hits.png`.
   - [x] **Master Overlay**: OHLCV + TBM Barriers + Prob Heatmap + Equity Curve (Simplified Overlay).
+  - [x] **Equity Curve Fix**: Masked terminal forced-exits to prevent artificial realized PnL jumps.
 
 ---
 
 ## Phase 5: Realism Layer (Backtrader)
-- [ ] **Live-Ready Backtest (`backtesting_bt.py`)**
-  - [ ] Port best models to Backtrader `Strategy`.
+- [/] **Live-Ready Backtest (`backtesting_bt.py`)** [IN PROGRESS]
+  - [/] Port best models to Backtrader `Strategy` (Infrastructure built, logic pending).
   - [ ] Simulate **100-500ms latency**.
   - [ ] Use `Store` abstractions (Binance/IB) for future live execution compatibility.
+  - [ ] *Note: Currently a standalone module, NOT integrated into main pipeline.py.*
 
 ---
 

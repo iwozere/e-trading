@@ -2,8 +2,7 @@ import backtrader as bt
 import pandas as pd
 import numpy as np
 from typing import Dict, Any
-from pathlib import Path
-import time
+from src.ml.pipeline.p07_combined.features import P07FeatureEngine
 
 class P07Strategy(bt.Strategy):
     """
@@ -21,11 +20,7 @@ class P07Strategy(bt.Strategy):
         self.model = self.p.model
         self.feature_config = self.p.feature_config
         self.thresholds = self.p.thresholds
-
-        # Indicator calculation (needs to match training exactly)
-        # In a real implementation, we'd use a shared preprocessing class
-        # Here we simulate feature vector collection from the data feed
-        pass
+        self.feature_engine = P07FeatureEngine()
 
     def next(self):
         # 1. Collect features from current bar (and history if needed)

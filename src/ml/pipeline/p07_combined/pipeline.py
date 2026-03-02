@@ -96,7 +96,8 @@ class P07Pipeline:
 
         if len(study.trials) < n_trials:
             _logger.info("Starting optimization for %s_%s %s (%d trials)...", ticker, timeframe, f"[{start_date}_{end_date}]" if start_date else "", n_trials)
-            study.optimize(lambda trial: objective(trial, df_enriched), n_trials=n_trials)
+            # Pass timeframe to the objective
+            study.optimize(lambda trial: objective(trial, df_enriched, timeframe=timeframe), n_trials=n_trials)
         else:
             _logger.info("Optimization already sufficient for %s_%s %s (%d trials).", ticker, timeframe, f"[{start_date}_{end_date}]" if start_date else "", len(study.trials))
 
@@ -113,8 +114,8 @@ class P07Pipeline:
 
         _logger.info("Saving artifacts to %s", res_dir)
 
-        # 1. Run Shared Evaluation
-        res = P07Evaluator.run_evaluation(ohlcv_clean, params)
+        # 1. Run Shared Evaluation - PASS TIMEFRAME
+        res = P07Evaluator.run_evaluation(ohlcv_clean, params, timeframe=timeframe)
         if "error" in res:
             _logger.error("Failed to run evaluation for artifacts: %s", res["error"])
             return False
@@ -155,26 +156,74 @@ class P07Pipeline:
         return True
 
     def run_batch(self, ticker_files: List[Path], mode: str = "optimize"):
-        """Process multiple files with recovery logic."""
+        """Process multiple files with Cross-File Validation logic."""
+        # 1. Group files by (ticker, timeframe)
+        groups = {}
         for filepath in ticker_files:
-            ticker, timeframe, start_date, end_date = self.data_loader.parse_filename(filepath)
-            if not ticker or self.is_completed(ticker, timeframe, start_date, end_date):
-                continue
+            ticker, timeframe, start, end = self.data_loader.parse_filename(filepath)
+            if not ticker: continue
+            key = (ticker, timeframe)
+            if key not in groups: groups[key] = []
+            groups[key].append({'path': filepath, 'start': start, 'end': end})
 
-            _logger.info("Processing %s_%s (%s to %s)...", ticker, timeframe, start_date, end_date)
+        # 2. Process each group
+        for (ticker, timeframe), files in groups.items():
+            # Sort by start date to find latest for validation
+            files.sort(key=lambda x: x['start'])
+
+            # If we have multiple files, use all but the last for optimization
+            # and the last one for out-of-sample validation.
+            if len(files) > 1:
+                opt_files = files[:-1]
+                val_file = files[-1]
+                _logger.info("Cross-File Setup for %s %s: Opt on %d files, Val on %s",
+                             ticker, timeframe, len(opt_files), val_file['path'].name)
+            else:
+                opt_files = files
+                val_file = None
+                _logger.info("Single-File Setup for %s %s: Opt on %s",
+                             ticker, timeframe, opt_files[0]['path'].name)
+
+            # --- A. Optimization Phase ---
+            # Combined optimization across all opt_files (simplified here by taking first or merging)
+            # For simplicity in this iteration, we combine the opt data
             try:
-                df_merged = self.data_loader.get_merged_dataset(filepath)
-                df_enriched = self.enrich_data(df_merged)
-                if mode == "optimize":
-                    self.run_optimization(ticker, timeframe, df_enriched, start_date=start_date, end_date=end_date)
+                dfs = []
+                for f in opt_files:
+                    df_merged = self.data_loader.get_merged_dataset(f['path'])
+                    dfs.append(self.enrich_data(df_merged))
+
+                df_opt = pd.concat(dfs).sort_index()
+
+                # Use first opt_file metadata for naming/completion check
+                f0 = opt_files[0]
+                if self.is_completed(ticker, timeframe, f0['start'], f0['end']):
+                    _logger.info("Optimization already completed for %s %s", ticker, timeframe)
+                else:
+                    self.run_optimization(ticker, timeframe, df_opt, start_date=f0['start'], end_date=f0['end'])
+
+                # --- B. Validation Phase (Optional) ---
+                if val_file:
+                    _logger.info("Running Out-of-Sample Validation for %s %s on %s", ticker, timeframe, val_file['path'].name)
+                    # Load best params from the study
+                    study_name = f"p07_{ticker}_{timeframe}_{f0['start']}_{f0['end']}"
+                    study = optuna.load_study(study_name=study_name, storage=self.db_url)
+
+                    df_val = self.data_loader.get_merged_dataset(val_file['path'])
+                    df_val = self.enrich_data(df_val)
+
+                    self.save_artifacts(ticker, timeframe, df_val, study.best_params,
+                                        start_date=f"{val_file['start']}_VAL",
+                                        end_date=val_file['end'])
+
             except Exception as e:
-                _logger.error("Failed to process %s_%s: %s", ticker, timeframe, str(e))
+                _logger.error("Failed to process group %s %s: %s", ticker, timeframe, str(e), exc_info=True)
 
 if __name__ == "__main__":
     p = P07Pipeline()
-    _logger.info("Starting P07 Pipeline Batch...")
+    _logger.info("Starting P07 Pipeline Batch (V2 with Cross-File Val)...")
     data_dir = Path("data")
-    ticker_files = list(data_dir.glob("*_*_*.csv")) # Process all available data files
+    ticker_files = list(data_dir.glob("*_*_*.csv"))
     if ticker_files:
         p.run_batch(ticker_files)
 

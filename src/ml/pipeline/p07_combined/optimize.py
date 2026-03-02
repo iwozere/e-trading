@@ -5,7 +5,7 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-def objective(trial, ohlcv_clean: pd.DataFrame):
+def objective(trial, ohlcv_clean: pd.DataFrame, timeframe: str = "15m"):
     """
     Optuna objective function for p07_combined.
     Matches features, labels, and backtest metrics.
@@ -16,7 +16,7 @@ def objective(trial, ohlcv_clean: pd.DataFrame):
         'bb_period': trial.suggest_int('bb_period', 10, 30),
         'pt_mult': trial.suggest_float('pt_mult', 0.5, 4.0),
         'sl_mult': trial.suggest_float('sl_mult', 0.25, 3.0),
-        'tpl_bars': trial.suggest_int('tpl_bars', 5, 150),
+        'tpl_hours': trial.suggest_float('tpl_hours', 1.0, 96.0), # 1h to 4 days
         'buy_prob_min': trial.suggest_float('buy_prob_min', 0.35, 0.65),
         'sell_prob_min': trial.suggest_float('sell_prob_min', 0.35, 0.65),
         'max_depth': trial.suggest_int('max_depth', 3, 9),
@@ -24,8 +24,8 @@ def objective(trial, ohlcv_clean: pd.DataFrame):
         'n_estimators': trial.suggest_int('n_estimators', 50, 200)
     }
 
-    # 2. Run Centralized Evaluation
-    res = P07Evaluator.run_evaluation(ohlcv_clean, params)
+    # 2. Run Centralized Evaluation with timeframe awareness
+    res = P07Evaluator.run_evaluation(ohlcv_clean, params, timeframe=timeframe)
 
     if "error" in res:
         return -1.0
