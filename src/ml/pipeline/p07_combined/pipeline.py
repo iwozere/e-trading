@@ -193,20 +193,22 @@ class P07Pipeline:
                     df_merged = self.data_loader.get_merged_dataset(f['path'])
                     dfs.append(self.enrich_data(df_merged))
 
-                df_opt = pd.concat(dfs).sort_index()
+                # Use AGGREGATE range for naming/completion check
+                agg_start = min(f['start'] for f in opt_files)
+                agg_end = max(f['end'] for f in opt_files)
 
-                # Use first opt_file metadata for naming/completion check
-                f0 = opt_files[0]
-                if self.is_completed(ticker, timeframe, f0['start'], f0['end']):
-                    _logger.info("Optimization already completed for %s %s", ticker, timeframe)
+                if self.is_completed(ticker, timeframe, agg_start, agg_end):
+                    _logger.info("Optimization already completed for aggregated %s %s (%s_%s)", ticker, timeframe, agg_start, agg_end)
                 else:
-                    self.run_optimization(ticker, timeframe, df_opt, start_date=f0['start'], end_date=f0['end'])
+                    # Pass the LIST of dataframes (dfs) instead of concatenated df_opt
+                    # This allows P07Evaluator and labeling to process segments safely.
+                    self.run_optimization(ticker, timeframe, dfs, start_date=agg_start, end_date=agg_end)
 
                 # --- B. Validation Phase (Optional) ---
                 if val_file:
                     _logger.info("Running Out-of-Sample Validation for %s %s on %s", ticker, timeframe, val_file['path'].name)
                     # Load best params from the study
-                    study_name = f"p07_{ticker}_{timeframe}_{f0['start']}_{f0['end']}"
+                    study_name = f"p07_{ticker}_{timeframe}_{agg_start}_{agg_end}"
                     study = optuna.load_study(study_name=study_name, storage=self.db_url)
 
                     df_val = self.data_loader.get_merged_dataset(val_file['path'])
@@ -221,7 +223,7 @@ class P07Pipeline:
 
 if __name__ == "__main__":
     p = P07Pipeline()
-    _logger.info("Starting P07 Pipeline Batch (V2 with Cross-File Val)...")
+    _logger.info("Starting P07 Pipeline Batch (V3 with Gap-Aware Eval)...")
     data_dir = Path("data")
     ticker_files = list(data_dir.glob("*_*_*.csv"))
     if ticker_files:

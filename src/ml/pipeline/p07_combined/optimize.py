@@ -1,11 +1,13 @@
 import pandas as pd
+import numpy as np
 import optuna
+from typing import Any
 from src.ml.pipeline.p07_combined.evaluator import P07Evaluator
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-def objective(trial, ohlcv_clean: pd.DataFrame, timeframe: str = "15m"):
+def objective(trial, ohlcv_clean: Any, timeframe: str = "15m"):
     """
     Optuna objective function for p07_combined.
     Matches features, labels, and backtest metrics.
@@ -30,9 +32,16 @@ def objective(trial, ohlcv_clean: pd.DataFrame, timeframe: str = "15m"):
     if "error" in res:
         return -1.0
 
-    # 3. Objective Metric (Sharpe Ratio)
+    # 3. Objective Metric (Adjusted Sharpe)
+    # Penalize strategies with too few trades to avoid statistically insignificant "flukes"
     sharpe = res["pf"].sharpe_ratio()
-    if pd.isna(sharpe):
+    total_trades = res["pf"].trades.count().sum()
+
+    if pd.isna(sharpe) or total_trades < 10:
         return -1.0
 
-    return float(sharpe)
+    # Reward more trades (up to a point) using log multiplier
+    # This prevents the model from settling on 1-2 lucky trades with high Sharpe
+    adjusted_score = sharpe * np.log10(total_trades)
+
+    return float(adjusted_score)

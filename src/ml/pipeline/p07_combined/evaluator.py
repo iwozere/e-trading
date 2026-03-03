@@ -18,8 +18,8 @@ class P07Evaluator:
     """
 
     @staticmethod
-    def prepare_data(ohlcv: pd.DataFrame, params: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.Series]:
-        """Align features and labels."""
+    def prepare_data(ohlcv: Any, params: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.Series]:
+        """Align features and labels across potentially multiple continuous segments."""
         feature_config = {
             'rsi_period': params.get('rsi_period', 14),
             'bb_period': params.get('bb_period', 20),
@@ -27,17 +27,28 @@ class P07Evaluator:
             'atr_period': params.get('atr_period', 14)
         }
 
-        X = build_features(ohlcv, feature_config)
-        y = get_triple_barrier_labels(
-            ohlcv,
-            pt_mult=params.get('pt_mult', 2.0),
-            sl_mult=params.get('sl_mult', 1.0),
-            tpl_bars=params.get('tpl_bars', 12),
-            atr_period=params.get('atr_period', 14)
-        )
+        # If ohlcv is a single DF, make it a list for uniform processing
+        segments = [ohlcv] if isinstance(ohlcv, pd.DataFrame) else ohlcv
 
-        common_idx = X.index.intersection(y.index)
-        return X.loc[common_idx], y.loc[common_idx]
+        Xs, ys = [], []
+        for seg in segments:
+            X_seg = build_features(seg, feature_config)
+            y_seg = get_triple_barrier_labels(
+                seg,
+                pt_mult=params.get('pt_mult', 2.0),
+                sl_mult=params.get('sl_mult', 1.0),
+                tpl_bars=params.get('tpl_bars', 12),
+                atr_period=params.get('atr_period', 14)
+            )
+
+            common_idx = X_seg.index.intersection(y_seg.index)
+            Xs.append(X_seg.loc[common_idx])
+            ys.append(y_seg.loc[common_idx])
+
+        if not Xs:
+            return pd.DataFrame(), pd.Series()
+
+        return pd.concat(Xs).sort_index(), pd.concat(ys).sort_index()
 
     @staticmethod
     def hours_to_bars(hours: float, timeframe: str) -> int:
@@ -99,7 +110,15 @@ class P07Evaluator:
         # Map p07 timeframe to VectorBT frequency
         vbt_freq = timeframe if timeframe != "d" else "1D"
 
-        ohlcv_test = ohlcv.loc[X_test.index]
+        # Handle list of segments for indexing
+        if isinstance(ohlcv, list):
+            ohlcv_full = pd.concat(ohlcv).sort_index()
+            # Drop duplicates if any across files
+            ohlcv_full = ohlcv_full.loc[~ohlcv_full.index.duplicated(keep='last')]
+        else:
+            ohlcv_full = ohlcv
+
+        ohlcv_test = ohlcv_full.loc[X_test.index]
         pf = vbt.Portfolio.from_signals(
             ohlcv_test['close'],
             signals == 1,
