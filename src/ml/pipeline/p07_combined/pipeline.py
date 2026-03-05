@@ -20,6 +20,7 @@ from src.ml.pipeline.p07_combined.labeling import get_triple_barrier_labels
 from src.ml.pipeline.p07_combined.features import build_features
 from src.ml.pipeline.p07_combined.models import P07XGBModel
 from src.ml.pipeline.p07_combined.evaluator import P07Evaluator
+from src.ml.pipeline.p07_combined.robustness import P07RobustnessChecker
 import vectorbt as vbt
 
 _logger = setup_logger(__name__)
@@ -30,7 +31,7 @@ class P07Pipeline:
     """
 
     def __init__(self, result_root: Path = Path("results/p07_combined")):
-        self.result_root = result_root
+        self.result_root = Path(result_root)
         self.db_path = Path("src/ml/pipeline/p07_combined/optuna_study.db")
         self.data_loader = P07DataLoader()
         self.regime_model = P07RegimeModel()
@@ -154,6 +155,71 @@ class P07Pipeline:
 
         _logger.info("Artifacts saved successfully.")
         return True
+
+    def run_robustness(self, ticker: str, timeframe: str):
+        """Runs the robustness check for a trained strategy."""
+        _logger.info("Running robustness check for %s %s", ticker, timeframe)
+
+        # 1. Load Data
+        data_dir = Path("data")
+        ticker_files = list(data_dir.glob(f"{ticker}_{timeframe}_*.csv"))
+
+        if not ticker_files:
+            _logger.error("No data files found for %s %s", ticker, timeframe)
+            return
+
+        # For robustness, we collect all available data to have a long enough backtest
+        dfs = []
+        for f in ticker_files:
+            dfs.append(self.data_loader.get_merged_dataset(f))
+
+        ohlcv = pd.concat(dfs).sort_index()
+        ohlcv = ohlcv.loc[~ohlcv.index.duplicated(keep='last')]
+        ohlcv = self.enrich_data(ohlcv)
+
+        # 2. Get Best Params from Study
+        # We need to know the agg_start/agg_end to find the study
+        # For simplicity, we search for the study name pattern
+        all_studies = optuna.get_all_study_summaries(storage=self.db_url)
+        study_name = None
+        for s in all_studies:
+            if s.study_name.startswith(f"p07_{ticker}_{timeframe}"):
+                study_name = s.study_name
+                break
+
+        if not study_name:
+            _logger.error("No study found for %s %s", ticker, timeframe)
+            return
+
+        study = optuna.load_study(study_name=study_name, storage=self.db_url)
+        params = study.best_params
+
+        # 3. Initialize Robustness Checker
+        res_dir = self.get_result_dir(ticker, timeframe) / "robustness"
+        checker = P07RobustnessChecker(ticker, timeframe, res_dir)
+
+        # 4. Run Evaluation to get base result
+        res = P07Evaluator.run_evaluation(ohlcv, params, timeframe=timeframe)
+        if "error" in res:
+            _logger.error("Base evaluation failed for robustness: %s", res["error"])
+            return
+
+        # 5. Execute Checks
+        summary = checker.run_all_checks(ohlcv, params, res)
+
+        # 6. Plot Robustness Artifacts
+        viz = P07Visualizer(res_dir)
+        if 'wfa_equity.json' in [f.name for f in res_dir.iterdir()]:
+            wfa_equity = pd.read_json(res_dir / "wfa_equity.json", typ='series')
+            viz.plot_walk_forward_equity(wfa_equity)
+
+        viz.plot_monte_carlo_distribution(
+            summary['monte_carlo']['shuffled_returns'],
+            summary['monte_carlo']['random_skips']
+        )
+        viz.plot_sensitivity_report(summary['sensitivity']['sensitivity_results'])
+
+        _logger.info("Robustness complete for %s %s. Artifacts in %s", ticker, timeframe, res_dir)
 
     def run_batch(self, ticker_files: List[Path], mode: str = "optimize"):
         """Process multiple files with Cross-File Validation logic."""

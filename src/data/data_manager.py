@@ -1135,6 +1135,34 @@ class DataManager:
                     )
                     return None
 
+                # Coverage check: Does cached data reach the requested end date?
+                # We allow for one bar of tolerance based on timeframe
+                expected_end = end_date_naive
+
+                # Heuristic for bar duration
+                bar_durations = {
+                    '1m': timedelta(minutes=1),
+                    '5m': timedelta(minutes=5),
+                    '15m': timedelta(minutes=15),
+                    '30m': timedelta(minutes=30),
+                    '1h': timedelta(hours=1),
+                    '4h': timedelta(hours=4),
+                    '1d': timedelta(days=1),
+                }
+                tolerance = bar_durations.get(timeframe, timedelta(hours=1))
+
+                # If the gap between latest cached and requested end is larger than one bar,
+                # it means the cache is incomplete at the tail.
+                if (expected_end - latest_cached_date.replace(tzinfo=None)) > tolerance:
+                    # Special case: don't force fetch if the requested end_date is in the future
+                    # and we already have data up to very recently
+                    if not is_requesting_recent_data:
+                        _logger.info(
+                            "Cache for %s %s is incomplete (last bar: %s, requested: %s). Forcing fetch.",
+                            symbol, timeframe, latest_cached_date, expected_end
+                        )
+                        return None
+
                 _logger.info("Cache hit for %s %s: %d rows", symbol, timeframe, len(cached_df))
                 return cached_df
 

@@ -3,7 +3,7 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Dict
 
 # Use Agg backend for headless environments (like Pi)
 import matplotlib
@@ -93,4 +93,45 @@ class P07Visualizer:
 
         plt.tight_layout()
         plt.savefig(self.output_dir / "strategy_overlay.png", dpi=300)
+        plt.close()
+
+    def plot_walk_forward_equity(self, combined_equity: pd.Series):
+        """Plots the combined OOS equity curve from Walk-Forward Analysis."""
+        plt.figure(figsize=(15, 8))
+        combined_equity.plot(color='purple', linewidth=2)
+        plt.title("Walk-Forward Analysis: Combined Out-of-Sample Equity", fontsize=18)
+        plt.ylabel("Portfolio Value")
+        plt.tight_layout()
+        plt.savefig(self.output_dir / "wfa_equity.png", dpi=300)
+        plt.close()
+
+    def plot_monte_carlo_distribution(self, shuffled_results: List[float], skipped_results: List[float]):
+        """Plots the distribution of final equity outcomes from Monte Carlo runs."""
+        plt.figure(figsize=(15, 8))
+
+        plt.subplot(1, 2, 1)
+        sns.histplot(shuffled_results, kde=True, color="blue")
+        plt.axvline(1.0, color='red', linestyle='--')
+        plt.title("MC: Shuffled Returns Outcomes", fontsize=14)
+
+        plt.subplot(1, 2, 2)
+        sns.histplot(skipped_results, kde=True, color="green")
+        plt.axvline(1.0, color='red', linestyle='--')
+        plt.title("MC: Random Skips Outcomes", fontsize=14)
+
+        plt.tight_layout()
+        plt.savefig(self.output_dir / "monte_carlo_dist.png", dpi=300)
+        plt.close()
+
+    def plot_sensitivity_report(self, sensitivity_results: List[Dict[str, Any]]):
+        """Plots a bar chart of Sharpe ratios for different parameter perturbations."""
+        df = pd.DataFrame(sensitivity_results)
+        if df.empty: return
+
+        plt.figure(figsize=(12, 6))
+        sns.barplot(data=df, x='perturbation', y='sharpe', palette='viridis')
+        plt.title("Parameter Sensitivity Analysis (Sharpe Ratio)", fontsize=16)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig(self.output_dir / "sensitivity_report.png", dpi=300)
         plt.close()

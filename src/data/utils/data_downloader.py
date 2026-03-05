@@ -47,16 +47,19 @@ _logger.info("Cache directory: %s", DATA_CACHE_DIR)
 
 # Define download scenarios
 # NOTE: All dates are interpreted as UTC timezone to ensure consistency with Binance API
+# end date will have ALL the bars for this date, for example 20251231 means all bars for 20251231
+# start date will have ALL the bars for this date, for example 20250101 means all bars for 20250101
+# so if we want to download all the bars for 2025, we need to set start_date to 20250101 and end_date to 20251231
 DOWNLOAD_SCENARIOS = {
     'symbols': ['LTCUSDT', 'BTCUSDT', 'ETHUSDT', 'XRPUSDT'],
     'periods': [
-        {'start_date': '20200101', 'end_date': '20260201'}
+        {'start_date': '20250101', 'end_date': '20251231'}
     ],
     'intervals': ['4h', '1h', '30m', '15m', '5m']
 }
 
 # Define output directory for merged CSV files
-DATA_OUTPUT_DIR = PROJECT_ROOT / "data"
+DATA_OUTPUT_DIR = PROJECT_ROOT / "results" / "p07_combined"
 
 def download_all_scenarios():
     """
@@ -89,7 +92,8 @@ def download_all_scenarios():
                 # Convert date strings to datetime objects (UTC timezone-aware)
                 try:
                     start_dt = datetime.strptime(period['start_date'], "%Y%m%d").replace(tzinfo=timezone.utc)
-                    end_dt = datetime.strptime(period['end_date'], "%Y%m%d").replace(tzinfo=timezone.utc)
+                    # Set end_dt to 23:59:59 to ensure all bars for that date are included
+                    end_dt = datetime.strptime(period['end_date'], "%Y%m%d").replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
                 except ValueError as e:
                     _logger.error("Invalid date format: %s", e)
                     failed += 1

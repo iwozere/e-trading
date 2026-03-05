@@ -92,5 +92,42 @@ def aggregate_results(results_root: str = "results/p07_combined"):
     else:
         print("No metrics found to aggregate.")
 
+def aggregate_robustness(results_root: str = "results/p07_combined"):
+    """
+    Scans for robustness_summary.json files and aggregates them.
+    """
+    all_robustness = []
+    root = Path(results_root)
+
+    for rob_file in root.glob("**/robustness_summary.json"):
+        try:
+            # parts[-3] = timeframe, parts[-4] = ticker
+            parts = rob_file.parts
+            if len(parts) < 3: continue
+
+            ticker = parts[-4] if len(parts) >= 4 else "unknown"
+            timeframe = parts[-3] if len(parts) >= 3 else "unknown"
+
+            with open(rob_file, 'r') as f:
+                data = json.load(f)
+
+            entry = {
+                "ticker": ticker,
+                "timeframe": timeframe,
+                "wfa_sharpe": data.get("wfa", {}).get("avg_oos_sharpe"),
+                "mc_positivity_rate": data.get("monte_carlo", {}).get("positivity_rate"),
+                "sensitivity": json.dumps(data.get("sensitivity", {}).get("sensitivity_results", []))
+            }
+            all_robustness.append(entry)
+        except Exception as e:
+            print(f"Error processing robustness {rob_file}: {e}")
+
+    if all_robustness:
+        df = pd.DataFrame(all_robustness)
+        output_path = root / "p07_robustness_aggregated.csv"
+        df.to_csv(output_path, index=False)
+        print(f"Aggregated {len(all_robustness)} robustness results to {output_path}")
+
 if __name__ == "__main__":
     aggregate_results()
+    aggregate_robustness()
