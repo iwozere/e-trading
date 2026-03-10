@@ -58,7 +58,8 @@ class P07FeatureEngine:
 
         # 4. Volume features
         vol = df['volume']
-        X['vol_z'] = (vol - vol.rolling(20).mean()) / (vol.rolling(20).std() + 1e-8)
+        vol_lookback = config.get('vol_lookback', 20)
+        X['vol_z'] = (vol - vol.rolling(vol_lookback).mean()) / (vol.rolling(vol_lookback).std() + 1e-8)
 
         # Debug NaNs
         nan_counts = X.isna().sum()

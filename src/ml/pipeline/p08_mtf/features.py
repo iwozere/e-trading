@@ -50,15 +50,31 @@ class P08FeatureEngine:
         # --- 2. Anchor (Trend) Features ---
         if 'anchor_close' in df.columns:
             a_close = df['anchor_close']
+            a_high = df.get('anchor_high', df['high']) # Fallback if missing
+            a_low = df.get('anchor_low', df['low'])
 
-            # Anchor Trend: EMA Slope proxy
-            a_ema = talib.EMA(a_close, timeperiod=config.get('anchor_ema_period', 20))
+            # Anchor Trend & Regime
+            a_ema_period = config.get('anchor_ema_period', 20)
+            a_ema = talib.EMA(a_close, timeperiod=a_ema_period)
             X['anchor_trend'] = np.log(a_ema / a_ema.shift(1))
+
+            # Anchor Regime (Categorical proxy: 1=Bull, 0=Neutral, -1=Bear)
+            regime_thresh = config.get('regime_threshold', 0.0001)
+            X['anchor_regime'] = 0
+            X.loc[X['anchor_trend'] > regime_thresh, 'anchor_regime'] = 1
+            X.loc[X['anchor_trend'] < -regime_thresh, 'anchor_regime'] = -1
+
+            # MTF Divergence: How far is execution price from anchor trend?
+            X['mtf_divergence'] = (close - a_ema) / (a_ema + 1e-8)
 
             # Anchor RSI (Long-term relative strength)
             X['anchor_rsi'] = talib.RSI(a_close, timeperiod=config.get('anchor_rsi_period', 14))
 
-            # Anchor BB Position (Is the big trend overextended?)
+            # Anchor ATR-based volatility (Sizing/Filter context)
+            a_atr = talib.ATR(a_high, a_low, a_close, timeperiod=config.get('anchor_atr_period', 14))
+            X['anchor_atr_rel'] = a_atr / (a_close + 1e-8)
+
+            # Anchor BB Position
             a_upper, a_middle, a_lower = talib.BBANDS(
                 a_close,
                 timeperiod=config.get('anchor_bb_period', 20)
@@ -71,19 +87,22 @@ class P08FeatureEngine:
         else:
             # Fallback if MTF join failed or anchor not provided
             X['anchor_trend'] = 0.0
+            X['anchor_regime'] = 0
+            X['mtf_divergence'] = 0.0
             X['anchor_rsi'] = 50.0
+            X['anchor_atr_rel'] = 0.01
             X['anchor_bb_pos'] = 0.5
             X['anchor_vol_z'] = 0.0
 
         # --- 3. Macro Features (VIX, BTC_MC) ---
         if 'vix' in df.columns:
-            X['vix'] = df['vix'].fillna(method='ffill').fillna(0)
+            X['vix'] = df['vix'].ffill().fillna(0)
         else:
             X['vix'] = 0.0
 
         if 'btc_mc' in df.columns:
             mc_ret = np.log(df['btc_mc'] / df['btc_mc'].shift(1))
-            X['btc_mc_log_ret'] = mc_ret.fillna(0)
+            X['btc_mc_log_ret'] = mc_ret.ffill().fillna(0)
         else:
             X['btc_mc_log_ret'] = 0.0
 

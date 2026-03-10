@@ -30,14 +30,20 @@ class P07Pipeline:
     Core Orchestrator for p07_combined.
     """
 
-    def __init__(self, result_root: Path = Path("results/p07_combined")):
+    def __init__(self,
+                 result_root: Path = Path("results/p07_combined"),
+                 db_url: Optional[str] = None):
         self.result_root = Path(result_root)
-        self.db_path = Path("src/ml/pipeline/p07_combined/optuna_study.db")
         self.data_loader = P07DataLoader()
         self.regime_model = P07RegimeModel()
 
+        if db_url is None:
+            db_path = (PROJECT_ROOT / "src" / "ml" / "pipeline" / "p07_combined" / "optuna_study.db").as_posix()
+            self.db_url = f"sqlite:///{db_path}"
+        else:
+            self.db_url = db_url
+
         self.result_root.mkdir(parents=True, exist_ok=True)
-        self.db_url = f"sqlite:///{self.db_path}"
 
     def train_macro_regimes(self, anchor_date: Optional[pd.Timestamp] = None):
         """Train or load the global HMM regime model with an anchor date constraint."""
@@ -85,7 +91,7 @@ class P07Pipeline:
         (res_dir / "completed.flag").touch()
         _logger.info("Marked %s_%s (%s_%s) as completed.", ticker, timeframe, start_date, end_date)
 
-    def run_optimization(self, ticker: str, timeframe: str, df_enriched: pd.DataFrame, n_trials: int = 100, start_date: str = "", end_date: str = ""):
+    def run_optimization(self, ticker: str, timeframe: str, df_enriched: pd.DataFrame, n_trials: int = 500, start_date: str = "", end_date: str = ""):
         """Execute the optimization loop using Optuna and save artifacts."""
         study_name = f"p07_{ticker}_{timeframe}_{start_date}_{end_date}" if start_date else f"p07_{ticker}_{timeframe}"
         study = optuna.create_study(
@@ -221,16 +227,23 @@ class P07Pipeline:
 
         _logger.info("Robustness complete for %s %s. Artifacts in %s", ticker, timeframe, res_dir)
 
-    def run_batch(self, ticker_files: List[Path], mode: str = "optimize"):
+    def run_batch(self, ticker_files: List[Path], mode: str = "optimize", train_years: Optional[List[str]] = None):
         """Process multiple files with Cross-File Validation logic."""
         # 1. Group files by (ticker, timeframe)
         groups = {}
         for filepath in ticker_files:
             ticker, timeframe, start, end = self.data_loader.parse_filename(filepath)
             if not ticker: continue
+
+            # (Optional) Filter by year if train_years is specified
+            if train_years:
+                if not any(yr in start or yr in end for yr in train_years):
+                    _logger.debug("Skipping file %s as it doesn't match training years %s", filepath.name, train_years)
+                    continue
+
             key = (ticker, timeframe)
             if key not in groups: groups[key] = []
-            groups[key].append({'path': filepath, 'start': start, 'end': end})
+            groups[key].append({'path': filepath, 'start': start, 'end': end, 'year': start[:4]})
 
         # 2. Process each group
         for (ticker, timeframe), files in groups.items():
@@ -288,12 +301,32 @@ class P07Pipeline:
                 _logger.error("Failed to process group %s %s: %s", ticker, timeframe, str(e), exc_info=True)
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="P07 Combined Pipeline")
+    parser.add_argument("--ticker", type=str, help="Specific ticker to run")
+    parser.add_argument("--tf", type=str, help="Specific timeframe to run")
+    parser.add_argument("--years", type=str, help="Comma-separated years to train on (e.g., 2022,2023,2024)")
+    args = parser.parse_args()
+
     p = P07Pipeline()
-    _logger.info("Starting P07 Pipeline Batch (V3 with Gap-Aware Eval)...")
+    _logger.info("Starting P07 Pipeline Batch...")
     data_dir = Path("data")
-    ticker_files = list(data_dir.glob("*_*_*.csv"))
+
+    # Standard segment files (ticker_tf_start_end.csv)
+    pattern = "*_*_*.csv"
+    if args.ticker and args.tf:
+        pattern = f"{args.ticker}_{args.tf}_*.csv"
+    elif args.ticker:
+        pattern = f"{args.ticker}_*_*.csv"
+
+    ticker_files = list(data_dir.glob(pattern))
+
+    train_years = args.years.split(",") if args.years else None
+
     if ticker_files:
-        p.run_batch(ticker_files)
+        p.run_batch(ticker_files, train_years=train_years)
+    else:
+        _logger.warning("No data files found matching pattern %s", pattern)
 
     # Also run aggregation at the end
     try:

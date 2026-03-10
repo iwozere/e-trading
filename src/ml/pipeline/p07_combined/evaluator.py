@@ -24,7 +24,8 @@ class P07Evaluator:
             'rsi_period': params.get('rsi_period', 14),
             'bb_period': params.get('bb_period', 20),
             'bb_std': params.get('bb_std', 2.0),
-            'atr_period': params.get('atr_period', 14)
+            'atr_period': params.get('atr_period', 14),
+            'vol_lookback': params.get('vol_lookback', 20)
         }
 
         # If ohlcv is a single DF, make it a list for uniform processing
@@ -141,4 +142,53 @@ class P07Evaluator:
             "ohlcv_test": ohlcv_test,
             "metrics": pf.stats(),
             "trades": pf.trades.records_readable
+        }
+
+    @classmethod
+    def evaluate_model(cls, model: P07XGBModel, ohlcv: pd.DataFrame, params: Dict[str, Any], timeframe: str = "15m", init_cash: float = 100.0) -> Dict[str, Any]:
+        """
+        Evaluates a pre-trained model on a dataset without re-training.
+        """
+        # 1. Adaptive Window Calculation
+        tpl_hours = params.get('tpl_hours', params.get('tpl_bars', 12) * 15 / 60)
+        tpl_bars = cls.hours_to_bars(tpl_hours, timeframe)
+
+        params_with_bars = params.copy()
+        params_with_bars['tpl_bars'] = tpl_bars
+
+        # For generalization, we might use the whole OHLCV or just a segment.
+        # We'll use the whole thing as "test" data.
+        X_test, y_test = cls.prepare_data(ohlcv, params_with_bars)
+
+        if len(X_test) < 10:
+            return {"error": "Insufficient data samples for generalization"}
+
+        # Generate Signals
+        thresholds = {
+            'buy_prob_min': params.get('buy_prob_min', 0.5),
+            'sell_prob_min': params.get('sell_prob_min', 0.5)
+        }
+        signals = model.predict_signal(X_test, thresholds=thresholds)
+
+        # Backtest
+        vbt_freq = timeframe if timeframe != "d" else "1D"
+        ohlcv_test = ohlcv.loc[X_test.index]
+
+        pf = vbt.Portfolio.from_signals(
+            ohlcv_test['close'],
+            signals == 1,
+            signals == -1,
+            init_cash=init_cash,
+            fees=0.001,
+            slippage=0.0005,
+            freq=vbt_freq,
+            direction='both'
+        )
+
+        return {
+            "pf": pf,
+            "metrics": pf.stats(),
+            "test_start": str(ohlcv_test.index.min()),
+            "test_end": str(ohlcv_test.index.max()),
+            "num_trades": pf.trades.count().sum()
         }

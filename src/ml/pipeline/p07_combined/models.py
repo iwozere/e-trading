@@ -61,3 +61,8 @@ class P07XGBModel:
 
     def save_model(self, path: str):
         self.model.save_model(path)
+
+    def load_model(self, path: str):
+        """Restore model from JSON file."""
+        self.model = xgb.Booster()
+        self.model.load_model(path)

@@ -179,7 +179,12 @@ class P07RobustnessChecker:
 
         # 1. Walk Forward
         wfa = self.run_walk_forward_analysis(ohlcv, params)
-        results['wfa'] = {k: v for k, v in wfa.items() if k != 'oos_results' and k != 'combined_equity'}
+        results['wfa'] = {k: v for k, v in wfa.items() if k not in ['oos_results', 'combined_equity']}
+        # Keep serializable details for aggregation
+        results['wfa_details'] = [
+            {'window': r['window'], 'sharpe': r['sharpe'], 'return': r['return']}
+            for r in wfa.get('oos_results', [])
+        ]
         if 'combined_equity' in wfa:
             wfa['combined_equity'].to_json(self.res_dir / "wfa_equity.json")
 

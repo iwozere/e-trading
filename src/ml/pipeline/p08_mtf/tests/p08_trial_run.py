@@ -15,7 +15,10 @@ def run_p08_trial():
     print("\n--- Starting P08 MTF Trial Run (ETHUSDT 30m) ---")
 
     # Initialize pipeline with a test database
-    p = P08Pipeline(db_url="sqlite:///src/ml/pipeline/p08_mtf/test_optuna.db")
+    db_path = (PROJECT_ROOT / "src" / "ml" / "pipeline" / "p08_mtf" / "test_optuna.db").as_posix()
+    db_url = f"sqlite:///{db_path}"
+    print(f"DEBUG: Using DB URL {db_url}")
+    p = P08Pipeline(db_url=db_url)
 
     # Select only ETHUSDT 30m files for 2020-2022 to keep it fast
     data_dir = Path("data")

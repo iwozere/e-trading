@@ -86,7 +86,9 @@ def aggregate_results(results_root: str = "results/p07_combined"):
         other_cols = [c for c in df.columns if c not in cols]
         df = df[cols + other_cols]
 
-        output_path = root / "p07_aggregated_results.csv"
+        # Use the folder name as prefix for the CSV
+        prefix = root.name
+        output_path = root / f"{prefix}_aggregated_results.csv"
         df.to_csv(output_path, index=False)
         print(f"Aggregated {len(all_metrics)} results to {output_path}")
     else:
@@ -94,39 +96,73 @@ def aggregate_results(results_root: str = "results/p07_combined"):
 
 def aggregate_robustness(results_root: str = "results/p07_combined"):
     """
-    Scans for robustness_summary.json files and aggregates them.
+    Scans for robustness_summary.json files and aggregates them into flattened CSVs.
     """
-    all_robustness = []
+    summary_data = []
+    sensitivity_data = []
+    wfa_data = []
     root = Path(results_root)
 
     for rob_file in root.glob("**/robustness_summary.json"):
         try:
-            # parts[-3] = timeframe, parts[-4] = ticker
+            # parts mapping: .../ticker/timeframe/robustness/robustness_summary.json
             parts = rob_file.parts
-            if len(parts) < 3: continue
+            if len(parts) < 4: continue
 
-            ticker = parts[-4] if len(parts) >= 4 else "unknown"
-            timeframe = parts[-3] if len(parts) >= 3 else "unknown"
+            ticker = parts[-4]
+            timeframe = parts[-3]
 
             with open(rob_file, 'r') as f:
                 data = json.load(f)
 
-            entry = {
+            # 1. Summary
+            summary_data.append({
                 "ticker": ticker,
                 "timeframe": timeframe,
-                "wfa_sharpe": data.get("wfa", {}).get("avg_oos_sharpe"),
-                "mc_positivity_rate": data.get("monte_carlo", {}).get("positivity_rate"),
-                "sensitivity": json.dumps(data.get("sensitivity", {}).get("sensitivity_results", []))
-            }
-            all_robustness.append(entry)
+                "avg_oos_sharpe": data.get("wfa", {}).get("avg_oos_sharpe"),
+                "mc_positivity_rate": data.get("monte_carlo", {}).get("positivity_rate")
+            })
+
+            # 2. Sensitivity
+            for res in data.get("sensitivity", {}).get("sensitivity_results", []):
+                sensitivity_data.append({
+                    "ticker": ticker,
+                    "timeframe": timeframe,
+                    "perturbation": res.get("perturbation"),
+                    "sharpe": res.get("sharpe"),
+                    "total_return": res.get("return")
+                })
+
+            # 3. WFA (if available in summary or from nested artifacts)
+            # The summary.json might only have avg, but we want detail.
+            # If wfa results were saved individually or nested in the summary:
+            # Note: Current robustness.py saves oos_results in a way that needs coordination.
+            # Assuming we can find details or they are in the JSON.
+            for res in data.get("wfa_details", []): # I will update robustness.py to include this
+                wfa_data.append({
+                    "ticker": ticker,
+                    "timeframe": timeframe,
+                    "window": res.get("window"),
+                    "sharpe": res.get("sharpe"),
+                    "total_return": res.get("return")
+                })
+
         except Exception as e:
             print(f"Error processing robustness {rob_file}: {e}")
 
-    if all_robustness:
-        df = pd.DataFrame(all_robustness)
-        output_path = root / "p07_robustness_aggregated.csv"
-        df.to_csv(output_path, index=False)
-        print(f"Aggregated {len(all_robustness)} robustness results to {output_path}")
+    # Write files
+    prefix = root.name
+    if summary_data:
+        pd.DataFrame(summary_data).to_csv(root / f"{prefix}_robustness_summary.csv", index=False)
+        print(f"Saved {root / f'{prefix}_robustness_summary.csv'}")
+
+    if sensitivity_data:
+        pd.DataFrame(sensitivity_data).to_csv(root / f"{prefix}_robustness_sensitivity.csv", index=False)
+        print(f"Saved {root / f'{prefix}_robustness_sensitivity.csv'}")
+
+    if wfa_data:
+        pd.DataFrame(wfa_data).to_csv(root / f"{prefix}_robustness_wfa.csv", index=False)
+        print(f"Saved {root / f'{prefix}_robustness_wfa.csv'}")
 
 if __name__ == "__main__":
     aggregate_results()

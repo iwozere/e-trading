@@ -51,15 +51,19 @@ _logger.info("Cache directory: %s", DATA_CACHE_DIR)
 # start date will have ALL the bars for this date, for example 20250101 means all bars for 20250101
 # so if we want to download all the bars for 2025, we need to set start_date to 20250101 and end_date to 20251231
 DOWNLOAD_SCENARIOS = {
-    'symbols': ['LTCUSDT', 'BTCUSDT', 'ETHUSDT', 'XRPUSDT'],
+    'symbols': ['XRPUSDT'],
     'periods': [
-        {'start_date': '20250101', 'end_date': '20251231'}
+        {'start_date': '20200101', 'end_date': '20201231'},
+        {'start_date': '20210101', 'end_date': '20211231'},
+        {'start_date': '20220101', 'end_date': '20221231'},
+        {'start_date': '20230101', 'end_date': '20231231'},
+        {'start_date': '20240101', 'end_date': '20241231'}
     ],
     'intervals': ['4h', '1h', '30m', '15m', '5m']
 }
 
 # Define output directory for merged CSV files
-DATA_OUTPUT_DIR = PROJECT_ROOT / "results" / "p07_combined"
+DATA_OUTPUT_DIR = PROJECT_ROOT / "data"
 
 def download_all_scenarios():
     """

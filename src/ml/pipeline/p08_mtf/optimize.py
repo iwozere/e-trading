@@ -21,6 +21,8 @@ def objective(trial, ohlcv_clean: Any, timeframe: str = "15m"):
         # Anchor indicators
         'anchor_ema_period': trial.suggest_int('anchor_ema_period', 10, 50),
         'anchor_rsi_period': trial.suggest_int('anchor_rsi_period', 7, 21),
+        'regime_threshold': trial.suggest_float('regime_threshold', 0.00001, 0.001, log=True),
+        'anchor_atr_period': trial.suggest_int('anchor_atr_period', 7, 28),
 
         # Barriers / Labels
         'pt_mult': trial.suggest_float('pt_mult', 0.5, 4.0),

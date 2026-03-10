@@ -26,8 +26,11 @@ class P08Pipeline(P07Pipeline):
     Uses Anchor TFs for trend-aware context.
     """
 
-    def __init__(self, db_url: str = "sqlite:///src/ml/pipeline/p08_mtf/optuna_study.db"):
-        super().__init__(db_url)
+    def __init__(self, db_url: Optional[str] = None, result_root: Path = Path("results/p08_mtf")):
+        if db_url is None:
+            db_path = (PROJECT_ROOT / "src" / "ml" / "pipeline" / "p08_mtf" / "test_optuna.db").as_posix()
+            db_url = f"sqlite:///{db_path}"
+        super().__init__(result_root=result_root, db_url=db_url)
         self.data_loader = P08DataLoader()
 
     def get_result_dir(self, ticker: str, timeframe: str, start_date: str, end_date: str) -> Path:
@@ -91,27 +94,40 @@ class P08Pipeline(P07Pipeline):
         viz.plot_master_overlay(ohlcv_test, plot_sigs, pf)
         return True
 
-    def run_batch(self, ticker_files: List[Path]):
+    def run_batch(self, ticker_files: List[Path], train_years: Optional[List[str]] = None):
         """MTF version: merges with anchor file before optimization/validation."""
         # 1. Group files by (ticker, timeframe)
         groups = {}
         for filepath in ticker_files:
             ticker, timeframe, start, end = self.data_loader.parse_filename(filepath)
             if not ticker: continue
+
+            # (Optional) Filter by year if train_years is specified
+            if train_years:
+                if not any(yr in start or yr in end for yr in train_years):
+                    _logger.debug("Skipping file %s as it doesn't match training years %s", filepath.name, train_years)
+                    continue
+
             key = (ticker, timeframe)
             if key not in groups: groups[key] = []
-            groups[key].append({'path': filepath, 'start': start, 'end': end})
+            groups[key].append({'path': filepath, 'start': start, 'end': end, 'year': start[:4]})
 
         # 2. Process each group
         for (ticker, timeframe), files in groups.items():
             try:
                 files.sort(key=lambda x: x['start'])
-                if len(files) < 2:
-                    _logger.debug("Skipping %s %s: Need at least 2 years for cross-file validation.", ticker, timeframe)
-                    continue
 
-                opt_files = files[:-1]
-                val_file = files[-1]
+                # Cross-File Validation Logic
+                if len(files) > 1:
+                    opt_files = files[:-1]
+                    val_file = files[-1]
+                    _logger.info("P08 Cross-File Setup for %s %s: Opt on %d files, Val on %s",
+                                 ticker, timeframe, len(opt_files), val_file['path'].name)
+                else:
+                    opt_files = files
+                    val_file = None
+                    _logger.info("P08 Single-File Setup for %s %s: Opt on %s",
+                                 ticker, timeframe, opt_files[0]['path'].name)
 
                 # Use AGGREGATE range for naming
                 agg_start = min(f['start'] for f in opt_files)
@@ -119,40 +135,120 @@ class P08Pipeline(P07Pipeline):
 
                 if self.is_completed(ticker, timeframe, agg_start, agg_end):
                     _logger.info("P08 skipping %s %s: already completed.", ticker, timeframe)
-                    continue
+                else:
+                    # Load and merge MTF for each segment
+                    dfs = []
+                    for f in opt_files:
+                        df_mtf = self.data_loader.get_mtf_dataset(f['path'])
+                        dfs.append(df_mtf)
 
-                # Load and merge MTF for each segment
-                dfs = []
-                for f in opt_files:
-                    df_mtf = self.data_loader.get_mtf_dataset(f['path'])
-                    dfs.append(df_mtf)
+                    # Train/Optimize
+                    best_params = self.run_optimization(ticker, timeframe, dfs, start_date=agg_start, end_date=agg_end)
 
-                # Train/Optimize
-                best_params = self.run_optimization(ticker, timeframe, dfs, start_date=agg_start, end_date=agg_end)
+                # Validate on the Holdout year (if exists)
+                if val_file:
+                    _logger.info("Running P08 Validation for %s on %s", ticker, val_file['path'].name)
+                    # Load best params from study
+                    study_name = f"p08_{ticker}_{timeframe}_{agg_start}_{agg_end}"
+                    study = optuna.load_study(study_name=study_name, storage=self.db_url)
 
-                # Validate on the Holdout year
-                _logger.info("Running P08 Validation for %s on %s", ticker, val_file['path'].name)
-                df_val = self.data_loader.get_mtf_dataset(val_file['path'])
+                    df_val = self.data_loader.get_mtf_dataset(val_file['path'])
 
-                self.save_artifacts(ticker, timeframe, df_val, best_params,
-                                   start_date=f"{val_file['start']}_VAL",
-                                   end_date=val_file['end'])
+                    self.save_artifacts(ticker, timeframe, df_val, study.best_params,
+                                       start_date=f"{val_file['start']}_VAL",
+                                       end_date=val_file['end'])
 
             except Exception as e:
                 _logger.error("P08 Group Error (%s %s): %s", ticker, timeframe, str(e), exc_info=True)
 
+    def run_robustness(self, ticker: str, timeframe: str):
+        """MTF-Aware Robustness: Uses P08RobustnessChecker."""
+        _logger.info("Running P08 MTF robustness check for %s %s", ticker, timeframe)
+        from src.ml.pipeline.p08_mtf.robustness import P08RobustnessChecker
+
+        # 1. Load All Data (MTF merged)
+        files = list(Path("data").glob(f"{ticker}_{timeframe}_*.csv"))
+        if not files:
+            _logger.error("No data files for robustness.")
+            return
+
+        dfs = [self.data_loader.get_mtf_dataset(f) for f in sorted(files)]
+
+        # 2. Get Best Params
+        all_studies = optuna.get_all_study_summaries(storage=self.db_url)
+        study_name = next((s.study_name for s in all_studies if s.study_name.startswith(f"p08_{ticker}_{timeframe}")), None)
+
+        if not study_name:
+            _logger.error("No study found for robustness.")
+            return
+
+        study = optuna.load_study(study_name=study_name, storage=self.db_url)
+        params = study.best_params
+
+        # 3. Checker
+        res_dir = self.result_root / ticker / timeframe / "robustness"
+        checker = P08RobustnessChecker(ticker, timeframe, res_dir)
+
+        # 4. Base Eval
+        res = P08Evaluator.run_evaluation(dfs, params, timeframe=timeframe)
+        if "error" in res:
+             _logger.error("Base eval failed.")
+             return
+
+        # 5. Run Suite
+        checker.run_all_checks(dfs, params, res)
+
+        # 6. Visualization (Reuse P07 Visualizer)
+        from src.ml.pipeline.p07_combined.visualizer import P07Visualizer
+        viz = P07Visualizer(res_dir)
+        if (res_dir / "wfa_equity.json").exists():
+             wfa_equity = pd.read_json(res_dir / "wfa_equity.json", typ='series')
+             viz.plot_walk_forward_equity(wfa_equity)
+        # Monte Carlo & Sensitivity from checker summary
+        summary_path = res_dir / "robustness_summary.json"
+        if summary_path.exists():
+            import json
+            with open(summary_path, "r") as f:
+                summary = json.load(f)
+            viz.plot_monte_carlo_distribution(
+                summary['monte_carlo']['shuffled_returns'],
+                summary['monte_carlo']['random_skips']
+            )
+            viz.plot_sensitivity_report(summary['sensitivity']['sensitivity_results'])
+
+        _logger.info("P08 robustness complete.")
+
 def aggregate_results_p08():
     """Wrapper for json2csv modified for P08 path."""
     from src.ml.pipeline.p07_combined.json2csv import aggregate_results
+    _logger.info("Aggregating P08 MTF results into flattened CSVs...")
     aggregate_results(results_root="results/p08_mtf")
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="P08 MTF Pipeline")
+    parser.add_argument("--ticker", type=str, help="Specific ticker to run")
+    parser.add_argument("--tf", type=str, help="Specific timeframe to run")
+    parser.add_argument("--years", type=str, default="2022,2023,2024", help="Comma-separated years to train on")
+
+    args = parser.parse_args()
+
     p = P08Pipeline()
     _logger.info("--- P08 MTF Pipeline Initiative ---")
     data_dir = Path("data")
-    ticker_files = list(data_dir.glob("BTCUSDT_*.csv")) + list(data_dir.glob("ETHUSDT_*.csv")) \
-                   + list(data_dir.glob("LTCUSDT_*.csv")) + list(data_dir.glob("XRPUSDT_*.csv"))
+
+    # Filter files
+    pattern = "*_*_*.csv"
+    if args.ticker and args.tf:
+        pattern = f"{args.ticker}_{args.tf}_*.csv"
+    elif args.ticker:
+        pattern = f"{args.ticker}_*_*.csv"
+
+    ticker_files = list(data_dir.glob(pattern))
+    train_years = args.years.split(",") if args.years else None
 
     if ticker_files:
-        p.run_batch(ticker_files)
+        p.run_batch(ticker_files, train_years=train_years)
         aggregate_results_p08()
+    else:
+        _logger.warning("No data files found matching pattern %s", pattern)
