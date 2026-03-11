@@ -91,6 +91,13 @@ def aggregate_results(results_root: str = "results/p07_combined"):
         output_path = root / f"{prefix}_aggregated_results.csv"
         df.to_csv(output_path, index=False)
         print(f"Aggregated {len(all_metrics)} results to {output_path}")
+
+        # --- New: Select candidates for robustness ---
+        try:
+            from src.ml.pipeline.p07_combined.select_candidates import select_top_candidates
+            select_top_candidates(results_root=results_root)
+        except Exception as e:
+            print(f"Failed to select candidates: {e}")
     else:
         print("No metrics found to aggregate.")
 

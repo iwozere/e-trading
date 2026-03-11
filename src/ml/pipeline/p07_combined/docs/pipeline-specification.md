@@ -42,3 +42,10 @@ This document details all tunable parameters used in the P07 Combined Pipeline f
 ## Statistical Guardrails
 - **Minimum Trades**: Strategies must take at least **30 trades** during the optimization test window to be considered valid (fails with -1.0 score otherwise). This ensures a frequency of approx 1-2 trades/month.
 - **Complexity Limit**: `max_depth` is hard-capped at **5** to ensure the model captures broad trends rather than memorizing noise.
+
+## Candidate Selection (Automated)
+After results are aggregated, the pipeline automatically identifies the Top 5 most promising strategies for robustness testing based on:
+1. **Minimum Activity**: At least 30 total trades.
+2. **Profitability**: Positive total return and a Profit Factor > 1.1.
+3. **Efficiency**: Sorted by Sharpe Ratio.
+The selected candidates are saved to `results/p07_combined/p07_robustness_candidates.csv`.

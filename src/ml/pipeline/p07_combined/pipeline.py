@@ -215,14 +215,18 @@ class P07Pipeline:
 
         # 6. Plot Robustness Artifacts
         viz = P07Visualizer(res_dir)
-        if 'wfa_equity.json' in [f.name for f in res_dir.iterdir()]:
+        if (res_dir / "wfa_equity.json").exists():
             wfa_equity = pd.read_json(res_dir / "wfa_equity.json", typ='series')
             viz.plot_walk_forward_equity(wfa_equity)
 
-        viz.plot_monte_carlo_distribution(
-            summary['monte_carlo']['shuffled_returns'],
-            summary['monte_carlo']['random_skips']
-        )
+        if 'monte_carlo' in summary and 'shuffled_returns' in summary['monte_carlo'] and 'random_skips' in summary['monte_carlo']:
+            viz.plot_monte_carlo_distribution(
+                summary['monte_carlo']['shuffled_returns'],
+                summary['monte_carlo']['random_skips']
+            )
+        else:
+            _logger.warning("Skipping Monte Carlo plots due to missing data: %s", summary.get('monte_carlo', {}).get('error', 'Unknown error'))
+
         viz.plot_sensitivity_report(summary['sensitivity']['sensitivity_results'])
 
         _logger.info("Robustness complete for %s %s. Artifacts in %s", ticker, timeframe, res_dir)

@@ -1,4 +1,5 @@
 import sys
+import pandas as pd
 from pathlib import Path
 
 # Ensure project root is in sys.path
@@ -14,14 +15,22 @@ _logger = setup_logger(__name__)
 def main():
     pipeline = P07Pipeline()
 
-    strategies = [
-        {"ticker": "ETHUSDT", "timeframe": "30m"},
-        {"ticker": "ETHUSDT", "timeframe": "4h"}
-    ]
+    candidates_path = PROJECT_ROOT / "results" / "p07_combined" / "p07_robustness_candidates.csv"
+    
+    if not candidates_path.exists():
+        _logger.error(f"Candidates file not found: {candidates_path}")
+        return
 
-    for strategy in strategies:
-        ticker = strategy["ticker"]
-        timeframe = strategy["timeframe"]
+    _logger.info(f"Loading robustness candidates from {candidates_path}")
+    df = pd.read_csv(candidates_path)
+    
+    if df.empty:
+        _logger.warning("No candidates found in the CSV.")
+        return
+
+    for _, row in df.iterrows():
+        ticker = row["ticker"]
+        timeframe = row["timeframe"]
         _logger.info(f"=== Starting Robustness Check for {ticker} {timeframe} ===")
         try:
             pipeline.run_robustness(ticker, timeframe)

@@ -129,7 +129,7 @@ class P07Visualizer:
         if df.empty: return
 
         plt.figure(figsize=(12, 6))
-        sns.barplot(data=df, x='perturbation', y='sharpe', palette='viridis')
+        sns.barplot(data=df, x='perturbation', y='sharpe', hue='perturbation', palette='viridis', legend=False)
         plt.title("Parameter Sensitivity Analysis (Sharpe Ratio)", fontsize=16)
         plt.xticks(rotation=45)
         plt.tight_layout()
