@@ -172,7 +172,16 @@ class P07Evaluator:
 
         # Backtest
         vbt_freq = timeframe if timeframe != "d" else "1D"
-        ohlcv_test = ohlcv.loc[X_test.index]
+        
+        # Handle list of segments for indexing
+        if isinstance(ohlcv, list):
+            ohlcv_full = pd.concat(ohlcv).sort_index()
+            # Drop duplicates if any across files
+            ohlcv_full = ohlcv_full.loc[~ohlcv_full.index.duplicated(keep='last')]
+        else:
+            ohlcv_full = ohlcv
+
+        ohlcv_test = ohlcv_full.loc[X_test.index]
 
         pf = vbt.Portfolio.from_signals(
             ohlcv_test['close'],

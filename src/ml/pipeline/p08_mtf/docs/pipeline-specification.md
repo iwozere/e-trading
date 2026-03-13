@@ -43,16 +43,55 @@ The `P08FeatureEngine` generates features that bridge the two timeframes:
 
 ---
 
-## 5. Workflow Execution
+## 5. Workflow Execution & Testing Periods
+P08 uses a multi-stage validation process to ensure strategy robustness:
 
-1.  **Preparation**: Ensure both Execution and Anchor CSV files are available in the `data/` directory.
-2.  **Dataset Construction**: The `P08DataLoader` automatically identifies, loads, and merges the appropriate Anchor file for any given Execution file.
-3.  **Optimization**: Optuna searches for parameters that perform best *within the context of the higher timeframe trend*.
-4.  **Validation**: A holdout year (OOS) is used to verify that the MTF patterns generalize.
+### Data Partitioning
+1.  **Training Set (IS + OOS)**: Formed by the first $N-1$ files in a batch (sorted by date).
+    - **In-Sample (IS - 70%)**: Used to fit the XGBoost model.
+    - **Out-of-Sample (OOS - 30%)**: Used to calculate the "Adjusted Sharpe" used for Optuna optimization.
+2.  **Validation Set (Holdout)**: The final file in the batch (e.g., the most recent year). This data is never seen during optimization.
+
+### Execution Flow
+1.  **Preparation**: Ensure both Execution and Anchor CSV files are in the `data/` directory.
+2.  **Dataset Construction**: The `P08DataLoader` automatically merges the appropriate Anchor file.
+3.  **Optimization**: Optuna searches for parameters that maximize performance on the OOS segment.
+4.  **Automatic Post-Optimization Suite**:
+    - **Step 1: Selection**: `select_candidates.py` identifies top unique ticker/tf pairs from aggregated results.
+    - **Step 2: Robustness**: `run_robustness_checks.py` runs MC and WFA for all selected candidates.
+    - **Step 3: Generalization**: `run_generalization_test.py` validates candidates against all other market regimes/tickers.
+5.  **Winner Analysis**: `run_final_winners.py` identifies the single most robust strategy for high-resolution validation.
 
 ---
 
-## 6. Result Interpretation
+## 6. Real-World Simulation Best Practices
+
+To bridge the gap between backtest and production, the P08 pipeline recommends:
+
+| Parameter | Backtest | Recommended Simulation | Rationale |
+|-----------|----------|------------------------|-----------|
+| **Slippage** | 0.05% | **0.1% - 0.2%** | Accounts for thin order books and high volatility fills. |
+| **Fees** | 0.1% | **0.075% - 0.1%** | Reflects Binance VIP/BNB discounts. |
+| **Latency**| 0ms | **50ms - 200ms** | Simulates signal-to-order execution delay. |
+
+---
+
+## 7. Input Parameters (`pipeline.py`)
+
+When running the pipeline via CLI (`python src/ml/pipeline/p08_mtf/pipeline.py`), the following parameters are available:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `--ticker` | String | None | Specific ticker to run (e.g., `ETHUSDT`). If omitted, processes all matching files. |
+| `--tf`     | String | None | Specific execution timeframe (e.g., `30m`). |
+| `--years`  | String | None | Comma-separated list of years to include in the training batch. |
+| `db_url`   | String (Init) | `test_optuna.db` | SQLite URL for Optuna study storage. |
+| `result_root` | Path (Init) | `results/p08_mtf` | Directory where artifacts and logs are stored. |
+
+---
+
+## 8. Result Interpretation
 
 *   **Trend Alignment**: Robust strategies should show higher win rates when the execution signal aligns with the `anchor_trend`.
 *   **Regime Sensitivity**: The model's performance should be analyzed across different `anchor_regime` states to identify where its edge is strongest.
+*   **Generalization Pass Rate**: A robust strategy should have a >60% PASS rate in cross-ticker/cross-timeframe tests.

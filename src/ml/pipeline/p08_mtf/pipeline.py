@@ -229,7 +229,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="P08 MTF Pipeline")
     parser.add_argument("--ticker", type=str, help="Specific ticker to run")
     parser.add_argument("--tf", type=str, help="Specific timeframe to run")
-    parser.add_argument("--years", type=str, default="2022,2023,2024", help="Comma-separated years to train on")
+    parser.add_argument("--years", type=str, help="Comma-separated years to train on")
 
     args = parser.parse_args()
 
@@ -250,5 +250,31 @@ if __name__ == "__main__":
     if ticker_files:
         p.run_batch(ticker_files, train_years=train_years)
         aggregate_results_p08()
+        
+        # --- Automatic Post-Optimization Suite ---
+        _logger.info("--- Starting Automated Post-Optimization Suite ---")
+        
+        # Move imports here to avoid circular dependencies
+        from src.ml.pipeline.p08_mtf.select_candidates import select_top_candidates
+        from src.ml.pipeline.p08_mtf.run_robustness_checks import run_robustness_batch
+        from src.ml.pipeline.p08_mtf.run_generalization_test import run_generalization
+        
+        # 1. Select Candidates
+        _logger.info("Step 1: Selecting Top Candidates...")
+        select_top_candidates(results_root="results/p08_mtf", top_n=5)
+        
+        # 2. Run Robustness Checks
+        candidates_file = Path("results/p08_mtf/p08_robustness_candidates.csv")
+        if candidates_file.exists():
+            _logger.info("Step 2: Running Robustness Checks for candidates...")
+            run_robustness_batch(candidates_file)
+            
+            # 3. Run Generalization Tests
+            _logger.info("Step 3: Running Generalization Tests for candidates...")
+            run_generalization(candidates_file)
+        else:
+            _logger.warning("No candidates found for robustness/generalization.")
+            
+        _logger.info("--- P08 MTF Pipeline Suite Complete ---")
     else:
         _logger.warning("No data files found matching pattern %s", pattern)

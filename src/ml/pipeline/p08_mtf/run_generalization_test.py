@@ -139,7 +139,29 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="P08 Cross-Robustness (Generalization) Test")
     parser.add_argument("--ticker", type=str, default="ETHUSDT", help="Source model ticker")
     parser.add_argument("--tf", type=str, default="30m", help="Source model timeframe")
+    parser.add_argument("--candidates", default='results/p08_mtf/p08_robustness_candidates.csv', type=str, help="Path to candidates CSV")
     parser.add_argument("--merge", action="store_true", help="Merge all files for a ticker/tf into one test")
 
     args = parser.parse_args()
-    run_generalization(args.ticker, args.tf, merge=args.merge)
+
+    if args.candidates:
+        candidates_path = Path(args.candidates)
+        if not candidates_path.exists():
+            # If default fails silently, just use ticker/tf
+            if args.candidates == 'results/p08_mtf/p08_robustness_candidates.csv':
+                _logger.info(f"No default candidates file found, running for {args.ticker} {args.tf}")
+                run_generalization(args.ticker, args.tf, merge=args.merge)
+            else:
+                _logger.error(f"Candidates file not found: {candidates_path}")
+                sys.exit(1)
+        else:
+            candidates_df = pd.read_csv(candidates_path)
+            _logger.info(f"Loaded {len(candidates_df)} candidates from {candidates_path}")
+
+            for _, row in candidates_df.iterrows():
+                ticker = row['ticker']
+                tf = row['timeframe']
+                _logger.info(f"\n{'='*50}\nStarting generalization for {ticker} {tf}\n{'='*50}")
+                run_generalization(ticker, tf, merge=args.merge)
+    else:
+        run_generalization(args.ticker, args.tf, merge=args.merge)
