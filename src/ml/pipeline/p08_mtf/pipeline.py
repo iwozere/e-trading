@@ -272,8 +272,18 @@ if __name__ == "__main__":
             # 3. Run Generalization Tests
             _logger.info("Step 3: Running Generalization Tests for candidates...")
             run_generalization(candidates_file)
+            
+            # 4. Winners Analysis (identify the best model)
+            _logger.info("Step 4: Identifying Clear Winners...")
+            from src.ml.pipeline.p08_mtf.run_final_winners import run_winner_analysis
+            run_winner_analysis()
+            
+            # 5. Backtrader Simulation (Real-world simulation for ALL winners)
+            _logger.info("Step 5: Running event-driven Backtrader simulations...")
+            from src.ml.pipeline.p08_mtf.run_backtrader import run_backtrader_batch
+            run_backtrader_batch(candidates_file)
         else:
-            _logger.warning("No candidates found for robustness/generalization.")
+            _logger.warning("No candidates found for robustness/generalization suite.")
             
         _logger.info("--- P08 MTF Pipeline Suite Complete ---")
     else:

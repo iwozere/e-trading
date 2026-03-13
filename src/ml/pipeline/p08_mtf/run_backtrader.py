@@ -145,63 +145,58 @@ def run_bt_simulation(ticker: str, timeframe: str, df_full: pd.DataFrame, model:
         "timeframe": timeframe
     }
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="P08 Backtrader Winner Simulation")
-    parser.add_argument("--ticker", type=str, help="Specific ticker to run")
-    parser.add_argument("--tf", type=str, help="Specific timeframe to run")
-    args = parser.parse_args()
-
+def run_backtrader_batch(candidates_path: Path, ticker: str = None, tf: str = None):
+    """
+    Refactored batch logic for automation integration.
+    """
     pipeline = P08Pipeline()
     data_loader = P08DataLoader()
 
-    # 1. Load Winners
-    candidates_path = Path("results/p08_mtf/p08_robustness_candidates.csv")
     if not candidates_path.exists():
-        _logger.error("No candidates file found. Run pipeline or select_candidates first.")
+        _logger.error(f"Candidates file not found: {candidates_path}")
         return
     
     winners_df = pd.read_csv(candidates_path)
-    if args.ticker and args.tf:
-        winners_df = winners_df[(winners_df['ticker'] == args.ticker) & (winners_df['timeframe'] == args.tf)]
+    if ticker and tf:
+        winners_df = winners_df[(winners_df['ticker'] == ticker) & (winners_df['timeframe'] == tf)]
 
     if winners_df.empty:
-        _logger.warning("No winners to simulate.")
+        _logger.warning("No winners to simulate in Backtrader.")
         return
 
     all_bt_results = []
 
     for _, winner in winners_df.iterrows():
-        ticker = winner['ticker']
-        tf = winner['timeframe']
+        t = winner['ticker']
+        itf = winner['timeframe']
         
-        _logger.info(f"--- Processing Backtrader Winner: {ticker} {tf} ---")
+        _logger.info(f"--- Processing Backtrader Winner: {t} {itf} ---")
         
         # A. Find Best Params and Model
         all_studies = optuna.get_all_study_summaries(storage=pipeline.db_url)
-        study_name = next((s.study_name for s in all_studies if s.study_name.startswith(f"p08_{ticker}_{tf}")), None)
+        study_name = next((s.study_name for s in all_studies if s.study_name.startswith(f"p08_{t}_{itf}")), None)
         if not study_name:
-            _logger.error(f"No study found for {ticker} {tf}")
+            _logger.error(f"No study found for {t} {itf}")
             continue
         
         study = optuna.load_study(study_name=study_name, storage=pipeline.db_url)
         params = study.best_params
         
         # Load Model
-        res_base = Path("results/p08_mtf") / ticker / tf
+        res_base = Path("results/p08_mtf") / t / itf
         model_paths = list(res_base.glob("**/best_model.json"))
         if not model_paths:
-            _logger.error(f"No model found for {ticker} {tf}")
+            _logger.error(f"No model found for {t} {itf}")
             continue
         model_paths.sort(key=lambda x: x.parent.name, reverse=True)
         model = P07XGBModel()
         model.load_model(str(model_paths[0]))
 
         # B. Load Full Data (2020-2025)
-        all_files = sorted(list(Path("data").glob(f"{ticker}_{tf}_*.csv")))
+        all_files = sorted(list(Path("data").glob(f"{t}_{itf}_*.csv")))
         if not all_files:
-            _logger.error(f"No data files for {ticker} {tf}")
-            next
+            _logger.error(f"No data files for {t} {itf}")
+            continue
         
         dfs = []
         for f in all_files:
@@ -216,18 +211,28 @@ def main():
         
         # C. Run Simulation
         try:
-            res = run_bt_simulation(ticker, tf, df_full, model, params)
+            res = run_bt_simulation(t, itf, df_full, model, params)
             all_bt_results.append(res)
         except Exception as e:
-            _logger.error(f"Simulation failed for {ticker} {tf}: {e}", exc_info=True)
+            _logger.error(f"Simulation failed for {t} {itf}: {e}", exc_info=True)
 
-    # 2. Save Summary
+    # Save Summary
     if all_bt_results:
         summary_df = pd.DataFrame(all_bt_results)
         output_path = Path("results/p08_mtf/backtrader_winners_summary.csv")
         summary_df.to_csv(output_path, index=False)
         _logger.info(f"Successfully saved Backtrader summary to {output_path}")
         print(summary_df.to_string())
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="P08 Backtrader Winner Simulation")
+    parser.add_argument("--ticker", type=str, help="Specific ticker to run")
+    parser.add_argument("--tf", type=str, help="Specific timeframe to run")
+    args = parser.parse_args()
+
+    candidates_path = Path("results/p08_mtf/p08_robustness_candidates.csv")
+    run_backtrader_batch(candidates_path, ticker=args.ticker, tf=args.tf)
 
 if __name__ == "__main__":
     main()
