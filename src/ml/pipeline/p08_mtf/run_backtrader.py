@@ -130,19 +130,45 @@ def run_bt_simulation(ticker: str, timeframe: str, df_full: pd.DataFrame, model:
     
     # 5. Run
     _logger.info(f"Starting Backtrader Simulation for {ticker} {timeframe}...")
+    
+    # Store value over time to calculate period metrics
+    values = []
+    
+    class ValueObserver(bt.Observer):
+        lines = ('value',)
+        def next(self):
+            self.lines.value[0] = self._owner.broker.getvalue()
+
+    cerebro.addobserver(ValueObserver)
+    
     results = cerebro.run()
     strat = results[0]
     
-    # 6. Extract Metrics
-    final_value = cerebro.broker.getvalue()
-    total_return = ((final_value / 100.0) - 1) * 100.0
+    # 6. Extract Metrics & Slice by Period
+    # Assuming training was 2022-2024
+    v_history = strat.observers.valueobserver.value.get(size=len(df_bt))
+    times = df_bt.index.tolist()
+    perf_df = pd.DataFrame({'value': v_history}, index=times)
     
-    # Use PyFolio or manual calculation if needed, but for now let's use basics
+    # Split by year (approximate training vs validation)
+    unseen_pre = perf_df.loc[perf_df.index < '2022-01-01']
+    training = perf_df.loc[(perf_df.index >= '2022-01-01') & (perf_df.index < '2025-01-01')]
+    unseen_post = perf_df.loc[perf_df.index >= '2025-01-01']
+    
+    def get_ret(df):
+        if len(df) < 2: return 0.0
+        return ((df['value'].iloc[-1] / df['value'].iloc[0]) - 1) * 100.0
+
+    final_value = cerebro.broker.getvalue()
+    
     return {
-        "final_value": final_value,
-        "total_return_pct": total_return,
         "ticker": ticker,
-        "timeframe": timeframe
+        "timeframe": timeframe,
+        "final_value": final_value,
+        "total_return_pct": ((final_value / 100.0) - 1) * 100.0,
+        "unseen_pre_ret_pct": get_ret(unseen_pre),
+        "training_ret_pct": get_ret(training),
+        "unseen_post_ret_pct": get_ret(unseen_post)
     }
 
 def run_backtrader_batch(candidates_path: Path, ticker: str = None, tf: str = None):
@@ -222,7 +248,10 @@ def run_backtrader_batch(candidates_path: Path, ticker: str = None, tf: str = No
         output_path = Path("results/p08_mtf/backtrader_winners_summary.csv")
         summary_df.to_csv(output_path, index=False)
         _logger.info(f"Successfully saved Backtrader summary to {output_path}")
-        print(summary_df.to_string())
+        
+        # Display key metrics
+        display_cols = ["ticker", "timeframe", "training_ret_pct", "unseen_post_ret_pct", "final_value"]
+        print(summary_df[display_cols].to_string())
 
 def main():
     import argparse

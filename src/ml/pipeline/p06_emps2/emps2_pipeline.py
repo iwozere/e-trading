@@ -20,7 +20,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
+from src.data.data_manager import DataManager
 from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig
 from src.ml.pipeline.p06_emps2.universe_downloader import NasdaqUniverseDownloader
 from src.ml.pipeline.p06_emps2.fundamental_filter import FundamentalFilter
@@ -96,9 +97,9 @@ class EMPS2Pipeline:
             checkpoint_interval=self.config.checkpoint_interval
         )
 
-        self.yahoo = YahooDataDownloader()
+        self.data_manager = DataManager()
         self.volatility_filter = VolatilityFilter(
-            self.yahoo,
+            self.data_manager,
             self.config.filter_config,
             target_date=target_date
         )

@@ -372,10 +372,21 @@ class StrategyInstance:
             self.cerebro.adddata(self.data_feed)
             _logger.info("Added data feed to Cerebro for %s", self.name)
 
-            # Add strategy with parameters
-            # Wrap parameters in strategy_config for BaseStrategy compatibility
+            # Note: We need a way to pass the callback to the instantiated strategy
+            # Backtrader's addstrategy only takes the class and kwargs.
+            # We can pass the callback via kwargs, and BaseStrategy can look for it in kwargs.
             strategy_params = self.config['strategy'].get('parameters', {})
-            self.cerebro.addstrategy(strategy_class, strategy_config=strategy_params)
+            # We can't easily pass a bound method via kwargs in Backtrader cleanly sometimes,
+            # so we'll fetch the strategy instance after cerebro.run() starts 
+            # OR pass it in strategy_config and let BaseStrategy pop it.
+            # But the execution happens inside run(), so the safest way is to pass the whole
+            # StrategyInstance reference or a callback to the strategy class via kwargs.
+            # Let's pass the callback via a special kwarg if the strategy accepts kwargs.
+            self.cerebro.addstrategy(
+                strategy_class, 
+                strategy_config=strategy_params, 
+                on_order_executed_callback=self.on_order_executed
+            )
             _logger.info("Added strategy %s to Cerebro with config", strategy_class.__name__)
 
             # Setup broker

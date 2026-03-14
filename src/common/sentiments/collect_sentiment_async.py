@@ -151,6 +151,7 @@ DEFAULT_CONFIG = {
         "twitter": False,
         "finnhub": True,
         "reddit_pushshift": False,
+        "apewisdom": True,
         "hf_enabled": False
     },
     "lookback_hours": 24,
@@ -173,6 +174,7 @@ DEFAULT_CONFIG = {
         "trends": 0.0,  # Trends is strictly for interest volume, not sentiment polarity
         "discord": 0.1,
         "twitter": 0.1,
+        "apewisdom": 0.2,
         "heuristic_vs_hf": 0.5
     },
     "heuristic": {

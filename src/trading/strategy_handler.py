@@ -51,6 +51,15 @@ class StrategyHandler:
             requires_mixins=True
         )
 
+        # Register P08XGBStrategy
+        self.register_strategy(
+            strategy_type="P08XGBStrategy",
+            module_path="src.strategy.p08_xgb_strategy",
+            class_name="P08XGBStrategy",
+            description="P08 MTF Strategy using XGBoost",
+            requires_mixins=False
+        )
+
         # Register AdvancedStrategyFramework (if exists)
         try:
             self.register_strategy(

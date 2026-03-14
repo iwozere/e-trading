@@ -556,3 +556,12 @@ def register_default_adapters() -> None:
         })
     except ImportError as e:
         _logger.warning("Could not register Finnhub sentiment adapter: %s", e)
+
+    try:
+        from src.common.sentiments.adapters.async_apewisdom import AsyncApeWisdomAdapter
+        manager.register_adapter_type("apewisdom", AsyncApeWisdomAdapter, {
+            "concurrency": 3,
+            "rate_limit_delay": 1.0
+        })
+    except ImportError as e:
+        _logger.warning("Could not register ApeWisdom sentiment adapter: %s", e)

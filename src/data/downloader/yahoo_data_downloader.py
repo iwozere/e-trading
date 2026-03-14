@@ -124,7 +124,13 @@ class YahooDataDownloader(BaseDataDownloader):
         _logger.debug("Downloading OHLCV data for %s (%s to %s)", symbol, start_date, end_date)
 
         ticker = yf.Ticker(symbol)
-        df = ticker.history(start=start_date, end=end_date, interval=interval)
+        try:
+            df = ticker.history(start=start_date, end=end_date, interval=interval)
+        except Exception as e:
+            if "YFTzMissingError" in str(type(e)):
+                _logger.warning("Delisted or invalid timezone for %s: returning empty DataFrame.", symbol)
+                return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            raise e
 
         if df.empty:
             _logger.warning("No data returned for %s", symbol)
@@ -206,13 +212,19 @@ class YahooDataDownloader(BaseDataDownloader):
             _logger.info("Downloading batch OHLCV data for %d symbols (%s to %s)", len(symbols), start_date, end_date)
 
             # Use yf.download for batch operation
-            df_batch = yf.download(
-                symbols,
-                start=start_date,
-                end=end_date,
-                interval=interval,
-                group_by='ticker'
-            )
+            try:
+                df_batch = yf.download(
+                    symbols,
+                    start=start_date,
+                    end=end_date,
+                    interval=interval,
+                    group_by='ticker'
+                )
+            except Exception as e:
+                if "YFTzMissingError" in str(type(e)):
+                    _logger.warning("Batch contained a delisted symbol causing YFTzMissingError. Falling back to individual downloads.")
+                    return self._fallback_individual_downloads(symbols, interval, start_date, end_date)
+                raise e
 
             if df_batch.empty:
                 _logger.warning("No data returned for batch download")

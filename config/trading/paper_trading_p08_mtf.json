@@ -1,0 +1,55 @@
+{
+    "name": "P08 XGBoost Paper Trading (BTC)",
+    "description": "Paper trading bot running the P08 XGBoost multi-timeframe strategy on BTCUSDT 4h",
+    "enabled": true,
+    "symbol": "BTCUSDT",
+    "broker": {
+        "type": "binance",
+        "trading_mode": "paper",
+        "name": "p08_btc_paper_broker",
+        "cash": 1000.0,
+        "commission": 0.001
+    },
+    "strategy": {
+        "type": "P08XGBStrategy",
+        "parameters": {
+            "model_path": "models/p08_mtf_BTCUSDT_4h/20250101_VAL_20251231/best_model.json",
+            "buy_prob_min": 0.70,
+            "sell_prob_min": 0.70,
+            "feature_lookback": 150,
+            "position_size": 0.95,
+            "rsi_period": 14,
+            "bb_period": 20,
+            "bb_std": 2.0,
+            "atr_period": 14,
+            "anchor_ema_period": 20,
+            "regime_threshold": 0.0001,
+            "anchor_rsi_period": 14,
+            "anchor_atr_period": 14,
+            "anchor_bb_period": 20
+        }
+    },
+    "data": {
+        "data_source": "binance",
+        "interval": "4h",
+        "lookback_bars": 500
+    },
+    "trading": {
+        "position_size": 0.95,
+        "max_positions": 1
+    },
+    "risk_management": {
+        "max_position_size": 1000.0,
+        "stop_loss_pct": 5.0,
+        "take_profit_pct": 10.0,
+        "max_daily_loss": 200.0,
+        "max_daily_trades": 5
+    },
+    "notifications": {
+        "position_opened": true,
+        "position_closed": true,
+        "email_enabled": false,
+        "telegram_enabled": true,
+        "error_notifications": true
+    }
+}

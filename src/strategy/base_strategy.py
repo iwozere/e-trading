@@ -45,11 +45,15 @@ class BaseStrategy(bt.Strategy):
         ("timeframe", ""),         # Trading timeframe
         ("asset_type", "crypto"),  # Asset type: "crypto" or "stock"
         ("min_order_value", 0.0),  # Minimum order value (for stocks)
+        ("on_order_executed_callback", None), # Strategy manager callback
     )
 
     def __init__(self):
         """Initialize base strategy components."""
         super().__init__()
+
+        # Callback hook from StrategyManager
+        self.on_order_executed_callback = self.p.on_order_executed_callback
 
 
 
@@ -876,6 +880,24 @@ class BaseStrategy(bt.Strategy):
                     order.ref,
                     order.executed.comm or 0.0
                 )
+
+                # Send execution callback up to StrategyManager
+                try:
+                    # Depending on how the Strategy instance is tracked, we can try to find the StrategyInstance reference
+                    # Often in this architecture, the Strategy relies on StrategyManager querying it, or we can pass
+                    # the execution upstream. Since StrategyManager listens if we had a direct callback, we'll
+                    # try to see if strategy_manager is accessible or just let it poll trades.
+                    
+                    # Alternatively, if there's a custom callback injected, we call it
+                    if hasattr(self, 'on_order_executed_callback') and self.on_order_executed_callback:
+                        self.on_order_executed_callback(
+                            order_type, 
+                            order.executed.price, 
+                            order.executed.size, 
+                            self.data.datetime.datetime(0)
+                        )
+                except Exception as e:
+                    _logger.warning(f"Error calling on_order_executed_callback: {e}")
 
                 # Store executed exit price for SELL orders (will be used in notify_trade)
                 if not order.isbuy():

@@ -13,6 +13,7 @@ from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.alpha_vantage_data_downloader import AlphaVantageDataDownloader
 from src.data.downloader.santiment_data_downloader import SantimentDataDownloader
 from src.common.sentiments.adapters.async_news import AsyncNewsAdapter
+from src.common.sentiments.adapters.async_apewisdom import AsyncApeWisdomAdapter
 
 async def verify_downloaders():
     print("\n=== Verifying Sentiment Downloaders ===\n")
@@ -70,9 +71,24 @@ async def verify_adapter():
         print(f"  Bullish/Bearish: {summary.get('bullish')}/{summary.get('bearish')}")
         print(f"  Credibility: {summary.get('avg_credibility'):.2f}")
     except Exception as e:
-        print(f"Adapter Error: {e}")
+        print(f"News Adapter Error: {e}")
     finally:
         await adapter.close()
+
+    print("\n=== Verifying AsyncApeWisdomAdapter ===\n")
+
+    ape_adapter = AsyncApeWisdomAdapter()
+    try:
+        # TSLA is almost always in top 500 trending on ApeWisdom
+        summary = await ape_adapter.fetch_summary("TSLA")
+        print(f"Sentiment Summary for TSLA (ApeWisdom):")
+        print(f"  Mentions: {summary.get('mentions')}")
+        print(f"  Score: {summary.get('sentiment_score')}")
+        print(f"  Bullish/Bearish: {summary.get('bullish')}/{summary.get('bearish')}")
+    except Exception as e:
+        print(f"ApeWisdom Adapter Error: {e}")
+    finally:
+        await ape_adapter.close()
 
 async def main():
     await verify_downloaders()

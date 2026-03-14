@@ -23,7 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.data_manager import DataManager
 from src.ml.pipeline.p06_emps2.config import EMPS2FilterConfig
 from src.ml.pipeline.p06_emps2.trf_downloader import get_trf_correction_factor
 
@@ -42,16 +42,16 @@ class VolatilityFilter:
     Filters for stocks showing early volatility expansion.
     """
 
-    def __init__(self, downloader: YahooDataDownloader, config: EMPS2FilterConfig, target_date: Optional[str] = None):
+    def __init__(self, data_manager: DataManager, config: EMPS2FilterConfig, target_date: Optional[str] = None):
         """
         Initialize volatility filter.
 
         Args:
-            downloader: Yahoo Finance data downloader instance
+            data_manager: DataManager instance for cached batch downloading
             config: Filter configuration
             target_date: Target trading date (YYYY-MM-DD). Defaults to today.
         """
-        self.downloader = downloader
+        self.data_manager = data_manager
         self.config = config
 
         # Store target_date
@@ -93,7 +93,7 @@ class VolatilityFilter:
                         self.config.interval, len(tickers),
                         start_date.date(), end_date.date())
 
-            ohlcv_data = self.downloader.get_ohlcv_batch(
+            ohlcv_data = self.data_manager.get_ohlcv_batch(
                 tickers,
                 self.config.interval,
                 start_date,
@@ -801,17 +801,17 @@ class VolatilityFilter:
 
 
 def create_volatility_filter(
-    downloader: YahooDataDownloader,
+    data_manager: DataManager,
     config: EMPS2FilterConfig
 ) -> VolatilityFilter:
     """
     Factory function to create volatility filter.
 
     Args:
-        downloader: Yahoo Finance data downloader instance
+        data_manager: DataManager instance for cached batch downloading
         config: Filter configuration
 
     Returns:
         VolatilityFilter instance
     """
-    return VolatilityFilter(downloader, config)
+    return VolatilityFilter(data_manager, config)

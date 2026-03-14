@@ -1083,6 +1083,140 @@ class DataManager:
         # All providers failed
         raise RuntimeError(f"All providers failed for {symbol} {timeframe}. Last error: {last_error}")
 
+    def get_ohlcv_batch(self, symbols: List[str], timeframe: str,
+                        start_date: datetime, end_date: datetime,
+                        force_refresh: bool = False) -> Dict[str, pd.DataFrame]:
+        """
+        Retrieve historical OHLCV data for multiple symbols, utilizing cache where possible.
+        
+        This method optimizes for batch retrieval (like daily pipeline runs). It checks the
+        UnifiedCache for each symbol. If a symbol is missing data, it calculates the required
+        delta date range, groups all missing symbols, and downloads them in a single batch
+        using YahooDataDownloader, then caches the newly fetched deltas.
+
+        Args:
+            symbols: List of trading symbols
+            timeframe: Data interval (e.g. '1d')
+            start_date: Request start date
+            end_date: Request end date
+            force_refresh: If True, bypasses cache and forces a full re-download.
+
+        Returns:
+            Dictionary mapping symbol to its historical OHLCV DataFrame.
+        """
+        results = {}
+        missing_ranges = {}  # {symbol: (missing_start, end_date)}
+
+        _logger.info("Batch request for %d symbols (%s) from %s to %s", len(symbols), timeframe, start_date, end_date)
+
+        # 1. Check Cache for all symbols
+        for sym in symbols:
+            if force_refresh:
+                missing_ranges[sym] = (start_date, end_date)
+                continue
+
+            # Ensure start/end are tz-aware for comparison inside Cache
+            safe_start = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
+            safe_end = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
+
+            cached_df = self._get_cached_data(sym, timeframe, safe_start, safe_end)
+            
+            if cached_df is not None and not cached_df.empty:
+                results[sym] = cached_df
+            else:
+                raw_cache = self.cache.get(sym, timeframe, safe_start, safe_end)
+                
+                if raw_cache is not None and not raw_cache.empty:
+                    latest_date = raw_cache.index[-1]
+                    if latest_date.tzinfo is None:
+                        latest_date = latest_date.replace(tzinfo=timezone.utc)
+                    
+                    delta_start = latest_date + timedelta(days=1)
+                    
+                    if delta_start > safe_end:
+                         results[sym] = raw_cache
+                    else:
+                         missing_ranges[sym] = (delta_start, safe_end)
+                         results[sym] = raw_cache
+                else:
+                    missing_ranges[sym] = (safe_start, safe_end)
+        
+        if not missing_ranges:
+            _logger.info("All %d symbols loaded from cache. No batch download required.", len(symbols))
+            return results
+
+        # 2. Group missing symbols by their required start dates to optimize batching
+        # Since Yahoo natively batches best when all symbols share the same range.
+        ranges_to_symbols = {}
+        for sym, (m_start, m_end) in missing_ranges.items():
+            date_key = (m_start.strftime('%Y-%m-%d'), m_end.strftime('%Y-%m-%d'))
+            ranges_to_symbols.setdefault(date_key, []).append(sym)
+
+        # 3. Download and cache deltas
+        _logger.info("Fetching missing data for %d symbols across %d date ranges...", len(missing_ranges), len(ranges_to_symbols))
+        
+        # We explicitly use YahooDataDownloader for batching as it supports yf.download
+        from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+        yahoo_dl = YahooDataDownloader()
+
+        for (start_str, end_str), batch_symbols in ranges_to_symbols.items():
+            b_start = datetime.strptime(start_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            b_end = datetime.strptime(end_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            
+            try:
+                # Download batch via Yahoo
+                _logger.info("Batch downloading %d symbols from %s to %s", len(batch_symbols), b_start, b_end)
+                batch_df = yahoo_dl.get_ohlcv_batch(batch_symbols, timeframe, b_start, b_end)
+                
+                # Yahoo returns MultiIndex if > 1 symbol, or single index if 1 symbol, but get_ohlcv_batch normalizes
+                # it internally and returns a joined dataframe with 'ticker' column, OR a dict depending on implementation.
+                # NOTE: We know YahooDataDownloader.get_ohlcv_batch currently returns a combined flat DataFrame 
+                # if group_by='ticker' wasn't unpacked. Let's unpack it correctly.
+                
+                if isinstance(batch_df, dict):
+                    raw_dict = batch_df
+                else:
+                    # If it's a flat df with a generic multi-index
+                    raise NotImplementedError("Expected YahooDataDownloader.get_ohlcv_batch to return a dict, need to adapt if returns DataFrame")
+
+                for sym, df_data in raw_dict.items():
+                    if df_data is None or df_data.empty:
+                        continue
+                        
+                    # Normalize columns
+                    df_copy = df_data.copy()
+                    if 'timestamp' not in df_copy.columns and isinstance(df_copy.index, pd.DatetimeIndex):
+                        ts_index = df_copy.index
+                        if ts_index.tz is not None:
+                            ts_index = ts_index.tz_localize(None)
+                        df_copy.insert(0, 'timestamp', ts_index)
+
+                    rename_map = {c: c.lower() for c in df_copy.columns}
+                    df_copy = df_copy.rename(columns=rename_map)
+
+                    if 'timestamp' in df_copy.columns:
+                        df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'], errors='coerce')
+                        if df_copy['timestamp'].dt.tz is not None:
+                            df_copy['timestamp'] = df_copy['timestamp'].dt.tz_localize(None)
+                        df_copy = df_copy.set_index('timestamp')
+
+                    # Cache the new delta segment
+                    self._cache_data(df_copy, sym, timeframe, b_start, b_end, 'yahoo')
+                    
+                    # Merge with existing cache if we had a partial hit
+                    if sym in results and not results[sym].empty:
+                        # Append and deduplicate
+                        merged = pd.concat([results[sym], df_copy])
+                        merged = merged[~merged.index.duplicated(keep='last')].sort_index()
+                        results[sym] = merged
+                    else:
+                        results[sym] = df_copy
+            
+            except Exception as e:
+                _logger.error("Failed batch download for a group: %s", e)
+
+        return results
+
     def _get_cached_data(self, symbol: str, timeframe: str,
                         start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
         """
