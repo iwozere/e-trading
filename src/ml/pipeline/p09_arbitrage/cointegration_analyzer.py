@@ -30,7 +30,7 @@ class CointegrationAnalyzer:
         # Calculate Hedge Ratio (Beta) via OLS
         x_const = sm.add_constant(x)
         model = sm.OLS(y, x_const).fit()
-        beta = model.params[1] # hedge ratio
+        beta = model.params.iloc[1] # hedge ratio
         
         # Calculate residuals (spread)
         spread = y - beta * x
@@ -62,7 +62,7 @@ class CointegrationAnalyzer:
         model = sm.OLS(spread_diff, x).fit()
         
         # lambda (mean reversion rate)
-        lambda_val = -model.params[1]
+        lambda_val = -model.params.iloc[1]
         
         if lambda_val <= 0:
             return 999.0 # Non-stationary / Diverging
