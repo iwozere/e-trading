@@ -1217,6 +1217,115 @@ class DataManager:
 
         return results
 
+    def get_funding_rate(self, symbol: str,
+                         start_date: datetime, end_date: datetime,
+                         force_refresh: bool = False) -> pd.DataFrame:
+        """
+        Retrieve historical funding rate data with caching.
+        """
+        data_type = 'funding_rate'
+        timeframe = '8h'  # Funding rates are typically every 8 hours on Binance
+        
+        # Check cache
+        if not force_refresh:
+            cached_data = self.cache.get(symbol, timeframe, start_date, end_date, data_type=data_type)
+            if cached_data is not None and not cached_data.empty:
+                _logger.info("Cache hit for %s %s (%s)", symbol, timeframe, data_type)
+                return cached_data
+
+        # Fetch from Binance
+        _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, timeframe, data_type)
+        downloader = self.provider_selector._initialize_downloader('binance')
+        if not downloader:
+             raise RuntimeError("Binance downloader not available")
+
+        # Download
+        data = downloader.get_funding_rate_history(symbol, start_date, end_date)
+        
+        if data is not None and not data.empty:
+            # Normalize index
+            if not isinstance(data.index, pd.DatetimeIndex) and 'timestamp' in data.columns:
+                data['timestamp'] = pd.to_datetime(data['timestamp'])
+                data = data.set_index('timestamp')
+            
+            # Cache
+            self.cache.put(data, symbol, timeframe, start_date, end_date, 'binance', data_type=data_type)
+            return data
+            
+        return pd.DataFrame()
+
+    def get_open_interest(self, symbol: str, period: str,
+                          start_date: datetime, end_date: datetime,
+                          force_refresh: bool = False) -> pd.DataFrame:
+        """
+        Retrieve historical open interest data with caching.
+        """
+        data_type = 'open_interest'
+        
+        # Check cache
+        if not force_refresh:
+            cached_data = self.cache.get(symbol, period, start_date, end_date, data_type=data_type)
+            if cached_data is not None and not cached_data.empty:
+                _logger.info("Cache hit for %s %s (%s)", symbol, period, data_type)
+                return cached_data
+
+        # Fetch from Binance
+        _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, period, data_type)
+        downloader = self.provider_selector._initialize_downloader('binance')
+        if not downloader:
+             raise RuntimeError("Binance downloader not available")
+
+        # Download
+        data = downloader.get_open_interest_history(symbol, period, start_date, end_date)
+        
+        if data is not None and not data.empty:
+            # Normalize index
+            if not isinstance(data.index, pd.DatetimeIndex) and 'timestamp' in data.columns:
+                data['timestamp'] = pd.to_datetime(data['timestamp'])
+                data = data.set_index('timestamp')
+            
+            # Cache
+            self.cache.put(data, symbol, period, start_date, end_date, 'binance', data_type=data_type)
+            return data
+            
+        return pd.DataFrame()
+
+    def get_long_short_ratio(self, symbol: str, period: str,
+                             start_date: datetime, end_date: datetime,
+                             force_refresh: bool = False) -> pd.DataFrame:
+        """
+        Retrieve historical long/short ratio data with caching.
+        """
+        data_type = 'long_short_ratio'
+        
+        # Check cache
+        if not force_refresh:
+            cached_data = self.cache.get(symbol, period, start_date, end_date, data_type=data_type)
+            if cached_data is not None and not cached_data.empty:
+                _logger.info("Cache hit for %s %s (%s)", symbol, period, data_type)
+                return cached_data
+
+        # Fetch from Binance
+        _logger.info("Cache miss for %s %s (%s), fetching from Binance", symbol, period, data_type)
+        downloader = self.provider_selector._initialize_downloader('binance')
+        if not downloader:
+             raise RuntimeError("Binance downloader not available")
+
+        # Download
+        data = downloader.get_long_short_ratio(symbol, period, start_date, end_date)
+        
+        if data is not None and not data.empty:
+            # Normalize index
+            if not isinstance(data.index, pd.DatetimeIndex) and 'timestamp' in data.columns:
+                data['timestamp'] = pd.to_datetime(data['timestamp'])
+                data = data.set_index('timestamp')
+            
+            # Cache
+            self.cache.put(data, symbol, period, start_date, end_date, 'binance', data_type=data_type)
+            return data
+            
+        return pd.DataFrame()
+
     def _get_cached_data(self, symbol: str, timeframe: str,
                         start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
         """

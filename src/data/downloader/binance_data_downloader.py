@@ -257,3 +257,155 @@ class BinanceDataDownloader(BaseDataDownloader):
             NotImplementedError: Binance doesn't provide fundamental data for stocks
         """
         raise NotImplementedError("Binance doesn't provide fundamental data for stocks")
+
+    def _convert_futures_timestamp(self, df: pd.DataFrame, time_col: str = "fundingTime") -> pd.DataFrame:
+        """Helper to convert Binance timestamp column to datetime."""
+        if len(df) > 0 and time_col in df.columns:
+            df["timestamp"] = pd.to_datetime(df[time_col], unit="ms")
+            df = df.sort_values("timestamp").reset_index(drop=True)
+        return df
+
+    def get_funding_rate_history(
+        self, symbol: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, limit: int = 1000
+    ) -> pd.DataFrame:
+        """
+        Download historical funding rates from Binance Futures.
+
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            start_date: Start date for the data (optional)
+            end_date: End date for the data (optional)
+            limit: Maximum number of results to return (default 1000, max 1000)
+
+        Returns:
+            DataFrame containing the funding rate history
+        """
+        try:
+            client = self._get_client()
+            if client is None:
+                _logger.error("Binance client not available")
+                return pd.DataFrame()
+
+            kwargs = {"symbol": symbol, "limit": min(limit, 1000)}
+            if start_date:
+                kwargs["startTime"] = int(start_date.timestamp() * 1000)
+            if end_date:
+                kwargs["endTime"] = int(end_date.timestamp() * 1000)
+
+            _logger.debug("Downloading funding rate history for %s", symbol)
+            data = client.futures_funding_rate(**kwargs)
+
+            if not data:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(data)
+            df = self._convert_futures_timestamp(df, time_col="fundingTime")
+            
+            # Convert numeric columns
+            if "fundingRate" in df.columns:
+                df["fundingRate"] = df["fundingRate"].astype(float)
+            
+            _logger.info("Successfully downloaded %d funding rate records for %s", len(df), symbol)
+            return df
+
+        except Exception as e:
+            _logger.exception("Error downloading funding rate for %s: %s", symbol, str(e))
+            raise
+
+    def get_open_interest_history(
+        self, symbol: str, period: str = "1d", start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, limit: int = 500
+    ) -> pd.DataFrame:
+        """
+        Download historical open interest statistics from Binance Futures.
+
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            period: Interval (e.g., '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d')
+            start_date: Start date for the data (optional)
+            end_date: End date for the data (optional)
+            limit: Maximum number of results to return (default 500, max 500)
+
+        Returns:
+            DataFrame containing the historical open interest
+        """
+        try:
+            client = self._get_client()
+            if client is None:
+                _logger.error("Binance client not available")
+                return pd.DataFrame()
+
+            kwargs = {"symbol": symbol, "period": period, "limit": min(limit, 500)}
+            if start_date:
+                kwargs["startTime"] = int(start_date.timestamp() * 1000)
+            if end_date:
+                kwargs["endTime"] = int(end_date.timestamp() * 1000)
+
+            _logger.debug("Downloading open interest history for %s", symbol)
+            data = client.futures_open_interest_hist(**kwargs)
+
+            if not data:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(data)
+            df = self._convert_futures_timestamp(df, time_col="timestamp")
+            
+            # Convert numeric columns
+            for col in ["sumOpenInterest", "sumOpenInterestValue"]:
+                if col in df.columns:
+                    df[col] = df[col].astype(float)
+            
+            _logger.info("Successfully downloaded %d open interest records for %s", len(df), symbol)
+            return df
+
+        except Exception as e:
+            _logger.exception("Error downloading open interest for %s: %s", symbol, str(e))
+            raise
+
+    def get_long_short_ratio(
+        self, symbol: str, period: str = "1d", start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, limit: int = 500
+    ) -> pd.DataFrame:
+        """
+        Download global long/short account ratio from Binance Futures.
+
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            period: Interval (e.g., '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d')
+            start_date: Start date for the data (optional)
+            end_date: End date for the data (optional)
+            limit: Maximum number of results to return (default 500, max 500)
+
+        Returns:
+            DataFrame containing the long/short ratio history
+        """
+        try:
+            client = self._get_client()
+            if client is None:
+                _logger.error("Binance client not available")
+                return pd.DataFrame()
+
+            kwargs = {"symbol": symbol, "period": period, "limit": min(limit, 500)}
+            if start_date:
+                kwargs["startTime"] = int(start_date.timestamp() * 1000)
+            if end_date:
+                kwargs["endTime"] = int(end_date.timestamp() * 1000)
+
+            _logger.debug("Downloading long/short ratio history for %s", symbol)
+            data = client.futures_global_longshort_ratio(**kwargs)
+
+            if not data:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(data)
+            df = self._convert_futures_timestamp(df, time_col="timestamp")
+            
+            # Convert numeric columns
+            for col in ["longShortRatio", "longAccount", "shortAccount"]:
+                if col in df.columns:
+                    df[col] = df[col].astype(float)
+                    
+            _logger.info("Successfully downloaded %d long/short records for %s", len(df), symbol)
+            return df
+
+        except Exception as e:
+            _logger.exception("Error downloading long/short ratio for %s: %s", symbol, str(e))
+            raise

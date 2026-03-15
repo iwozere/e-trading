@@ -68,6 +68,12 @@ class UnifiedCache:
 
         # Initialize metadata
         self._init_metadata()
+        
+    def _get_type_dir(self, data_type: str = 'ohlcv') -> Path:
+        """Get the root directory for a specific data type."""
+        type_dir = self.cache_dir / data_type
+        type_dir.mkdir(parents=True, exist_ok=True)
+        return type_dir
 
     def _init_metadata(self):
         """Initialize cache metadata files."""
@@ -88,33 +94,34 @@ class UnifiedCache:
                 with open(filepath, 'w') as f:
                     json.dump(default_data, f, indent=2)
 
-    def _get_cache_path(self, symbol: str, timeframe: str) -> Path:
-        """Get cache path for symbol/timeframe."""
-        return self.ohlcv_dir / symbol / timeframe
+    def _get_cache_path(self, symbol: str, timeframe: str, data_type: str = 'ohlcv') -> Path:
+        """Get cache path for symbol/timeframe/data_type."""
+        return self._get_type_dir(data_type) / symbol / timeframe
 
-    def _get_data_file_path(self, symbol: str, timeframe: str, year: int) -> Path:
+    def _get_data_file_path(self, symbol: str, timeframe: str, year: int, data_type: str = 'ohlcv') -> Path:
         """Get data file path (compressed CSV)."""
-        cache_path = self._get_cache_path(symbol, timeframe)
+        cache_path = self._get_cache_path(symbol, timeframe, data_type)
         return cache_path / f"{year}.csv.gz"
 
-    def _get_metadata_file_path(self, symbol: str, timeframe: str, year: int) -> Path:
+    def _get_metadata_file_path(self, symbol: str, timeframe: str, year: int, data_type: str = 'ohlcv') -> Path:
         """Get metadata file path."""
-        cache_path = self._get_cache_path(symbol, timeframe)
+        cache_path = self._get_cache_path(symbol, timeframe, data_type)
         return cache_path / f"{year}.metadata.json"
 
     def put(self, df: pd.DataFrame, symbol: str, timeframe: str,
             start_date: datetime, end_date: datetime,
-            provider: str = "unknown", **kwargs) -> bool:
+            provider: str = "unknown", data_type: str = 'ohlcv', **kwargs) -> bool:
         """
         Store data in unified cache.
 
         Args:
-            df: DataFrame with OHLCV data
+            df: DataFrame with OHLCV or other data
             symbol: Symbol name
             timeframe: Time interval
             start_date: Start date
             end_date: End date
             provider: Data provider name
+            data_type: the root data folder to use (default ohlcv)
             **kwargs: Additional metadata
 
         Returns:
@@ -130,7 +137,7 @@ class UnifiedCache:
             quality_score = {'quality_score': 1.0}
 
             # Create cache directory
-            cache_path = self._get_cache_path(symbol, timeframe)
+            cache_path = self._get_cache_path(symbol, timeframe, data_type)
             cache_path.mkdir(parents=True, exist_ok=True)
 
             # Split data by year and save each year separately
@@ -143,7 +150,7 @@ class UnifiedCache:
 
                 if not year_data.empty:
                     # Save compressed CSV for this year
-                    data_file = self._get_data_file_path(symbol, timeframe, year)
+                    data_file = self._get_data_file_path(symbol, timeframe, year, data_type)
                     self._save_compressed_csv(year_data, data_file)
                     saved_files.append(year)
 
@@ -177,11 +184,11 @@ class UnifiedCache:
                     }
 
                     # Save metadata for this year
-                    metadata_file = self._get_metadata_file_path(symbol, timeframe, year)
+                    metadata_file = self._get_metadata_file_path(symbol, timeframe, year, data_type)
                     with open(metadata_file, 'w') as f:
                         json.dump(year_metadata, f, indent=2)
 
-                    # Update global metadata for this year
+                    # Update global metadata for this year (still using generic _update_symbol_metadata)
                     self._update_symbol_metadata(symbol, timeframe, year, year_metadata)
 
             print(f"✅ Cached {len(df)} rows for {symbol} {timeframe} across {len(saved_files)} years from {provider}")
@@ -194,7 +201,7 @@ class UnifiedCache:
 
     def get(self, symbol: str, timeframe: str,
             start_date: datetime = None, end_date: datetime = None,
-            format: str = 'csv') -> Optional[pd.DataFrame]:
+            format: str = 'csv', data_type: str = 'ohlcv') -> Optional[pd.DataFrame]:
         """
         Retrieve data from unified cache.
 
@@ -204,6 +211,7 @@ class UnifiedCache:
             start_date: Start date (optional)
             end_date: End date (optional)
             format: Data format (only 'csv' supported for now)
+            data_type: the root data folder to use (default ohlcv)
 
         Returns:
             DataFrame with data or None if not found
@@ -215,7 +223,7 @@ class UnifiedCache:
                 end_date = datetime.now()
 
             # Get all available years
-            available_years = self._get_available_years(symbol, timeframe)
+            available_years = self._get_available_years(symbol, timeframe, data_type)
             if not available_years:
                 return None
 
@@ -231,7 +239,7 @@ class UnifiedCache:
             # Load and combine data from relevant years
             combined_data = []
             for year in relevant_years:
-                year_data = self._load_year_data(symbol, timeframe, year)
+                year_data = self._load_year_data(symbol, timeframe, year, data_type)
                 if year_data is not None and not year_data.empty:
                     combined_data.append(year_data)
 
@@ -266,9 +274,9 @@ class UnifiedCache:
         with gzip.open(filepath, 'wt', encoding='utf-8') as f:
             df.to_csv(f, index=True, lineterminator='\n')
 
-    def _load_year_data(self, symbol: str, timeframe: str, year: int) -> Optional[pd.DataFrame]:
+    def _load_year_data(self, symbol: str, timeframe: str, year: int, data_type: str = 'ohlcv') -> Optional[pd.DataFrame]:
         """Load data for a specific year."""
-        data_file = self._get_data_file_path(symbol, timeframe, year)
+        data_file = self._get_data_file_path(symbol, timeframe, year, data_type)
         if not data_file.exists():
             return None
 
@@ -280,9 +288,9 @@ class UnifiedCache:
             print(f"❌ Error loading data from {data_file}: {str(e)}")
             return None
 
-    def _get_available_years(self, symbol: str, timeframe: str) -> List[int]:
+    def _get_available_years(self, symbol: str, timeframe: str, data_type: str = 'ohlcv') -> List[int]:
         """Get list of available years for symbol/timeframe."""
-        timeframe_dir = self.ohlcv_dir / symbol / timeframe
+        timeframe_dir = self._get_type_dir(data_type) / symbol / timeframe
         if not timeframe_dir.exists():
             return []
 
