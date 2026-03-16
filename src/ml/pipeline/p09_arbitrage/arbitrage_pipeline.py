@@ -30,15 +30,7 @@ class ArbitragePipeline:
         Returns a list of (symbol_a, symbol_b, path_a, path_b).
         Prioritizes files in _full directory.
         """
-        search_dirs = [
-            self.data_dir / "_full" / "2020-2025",
-            self.data_dir
-        ]
-        
-        found_files = []
-        for d in search_dirs:
-            if d.exists():
-                found_files.extend(list(d.glob(f"*_{timeframe}*.csv")))
+        found_files = list(self.data_dir.glob(f"*_{timeframe}*.csv"))
         
         symbol_map = {}
         for f in found_files:

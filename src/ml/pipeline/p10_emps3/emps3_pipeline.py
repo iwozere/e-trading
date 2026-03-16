@@ -54,13 +54,11 @@ class EMPS3Pipeline:
             target_date=target_date
         )
 
-        self.finnhub = FinnhubDataDownloader()
+        self.data_manager = DataManager()
         self.fundamental_filter = FundamentalFilter(
-            self.finnhub,
+            self.data_manager,
             self.config.filter_config, # Will rely on duck typing since EMPS3FilterConfig maps to needed fields min_price, min_avg_volume, etc
-            target_date=target_date,
-            cache_enabled=self.config.fundamental_cache_enabled,
-            cache_ttl_days=self.config.fundamental_cache_ttl_days,
+            results_dir=self._results_dir,
             checkpoint_enabled=self.config.checkpoint_enabled,
             checkpoint_interval=self.config.checkpoint_interval
         )

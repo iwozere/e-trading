@@ -71,11 +71,11 @@ class EMPS2Pipeline:
         self.target_date = target_date
 
         # Results directory (dated for target trading day)
-        self._results_dir = Path("results") / "emps2" / target_date
+        self._results_dir = Path("results") / "p06_emps2" / target_date
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         # Results base path (for rolling memory to access historical data)
-        self._results_base_path = Path("results") / "emps2"
+        self._results_base_path = Path("results") / "p06_emps2"
 
         # Set up per-scan logging to pipeline.log in results directory
         self._setup_pipeline_logging()
@@ -86,13 +86,11 @@ class EMPS2Pipeline:
             target_date=target_date
         )
 
-        self.finnhub = FinnhubDataDownloader()
+        self.data_manager = DataManager()
         self.fundamental_filter = FundamentalFilter(
-            self.finnhub,
+            self.data_manager,
             self.config.filter_config,
-            target_date=target_date,
-            cache_enabled=self.config.fundamental_cache_enabled,
-            cache_ttl_days=self.config.fundamental_cache_ttl_days,
+            results_dir=self._results_dir,
             checkpoint_enabled=self.config.checkpoint_enabled,
             checkpoint_interval=self.config.checkpoint_interval
         )

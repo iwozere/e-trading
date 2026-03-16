@@ -166,7 +166,7 @@ VALUES (
             ]
         }
     }'::jsonb,
-    '0 2 * * 6',
+    '0 14 * * 6',
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP

@@ -27,12 +27,7 @@ def discover_timeframes(data_dir: Path) -> List[str]:
     pattern = re.compile(r'^[A-Z0-9]+_([0-9]+[a-z]+)')
     
     files = list(data_dir.glob("*.csv"))
-    # Also check subdirectories like _full or annual
-    for sub in ["_full", "_full/2020-2025", "annual"]:
-        sub_dir = data_dir / sub
-        if sub_dir.exists():
-            files.extend(list(sub_dir.glob("*.csv")))
-            
+    
     for f in files:
         match = pattern.match(f.name)
         if match:
