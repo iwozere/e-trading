@@ -36,6 +36,10 @@ class SantimentDataDownloader(BaseDataDownloader):
         else:
             _logger.warning("SANTIMENT_API_KEY not found. Some functionality may be limited.")
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "santiment"
+
     def get_supported_intervals(self) -> List[str]:
         """Return supported intervals."""
         return ["1d", "1h"]

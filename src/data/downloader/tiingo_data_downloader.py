@@ -457,6 +457,10 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting available symbols:")
             return []
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "tiingo"
+
     def get_supported_intervals(self) -> List[str]:
         """Get list of supported intervals."""
         return ['1d', '1w', '1m']  # Tiingo supports daily, weekly, monthly

@@ -102,6 +102,10 @@ class FinraTRFDownloader:
             return datetime.strptime(date_str, "%Y-%m-%d")
         return datetime.now() - timedelta(days=1)
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "finra"
+
     def _get_access_token(self) -> str:
         """
         Obtain OAuth 2.0 access token from FINRA Identity Platform.

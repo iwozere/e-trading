@@ -102,7 +102,7 @@ def test_analyze_ticker_business_valid(monkeypatch):
     monkeypatch.setattr('src.telegram.screener.business_logic.calculate_technicals_unified', lambda *args, **kwargs: technicals)
     # Patch TickerAnalysis to always include chart_image=None
     result = TickerAnalysis(
-        ticker='AAPL', provider='yf', period='2y', interval='1d',
+        ticker='AAPL', provider='yahoo', period='2y', interval='1d',
         ohlcv=mock_df, fundamentals=mock_fundamentals, technicals=technicals, error=None, chart_image=None
     )
     assert isinstance(result, TickerAnalysis)
@@ -117,7 +117,7 @@ def test_analyze_ticker_business_invalid_period(monkeypatch):
     monkeypatch.setattr('src.telegram.screener.business_logic.get_ohlcv', mock_get_ohlcv)
     try:
         TickerAnalysis(
-            ticker='AAPL', provider='yf', period='bad', interval='bad',
+            ticker='AAPL', provider='yahoo', period='bad', interval='bad',
             ohlcv=None, fundamentals=None, technicals=None, error='Invalid period/interval combination', chart_image=None
         )
     except Exception:
@@ -129,7 +129,7 @@ def test_analyze_ticker_business_exception(monkeypatch):
     monkeypatch.setattr('src.telegram.screener.business_logic.get_ohlcv', mock_get_ohlcv)
     try:
         TickerAnalysis(
-            ticker='AAPL', provider='yf', period='2y', interval='1d',
+            ticker='AAPL', provider='yahoo', period='2y', interval='1d',
             ohlcv=None, fundamentals=None, technicals=None, error='fail', chart_image=None
         )
     except Exception:

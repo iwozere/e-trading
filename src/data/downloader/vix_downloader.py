@@ -38,7 +38,11 @@ class VIXDataDownloader(BaseDataDownloader):
         """Initialize VIX data downloader."""
         super().__init__()
 
-    def get_supported_intervals(self) -> list:
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "vix"
+
+    def get_supported_intervals(self) -> List[str]:
         """
         Return the list of supported intervals for this data downloader.
 

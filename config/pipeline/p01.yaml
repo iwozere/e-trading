@@ -3,7 +3,7 @@ data_sources:
   binance:
     symbols: [LTCUSDT, BTCUSDT]
     timeframes: [5m, 15m, 1h, 4h]
-  yfinance:
+  yahoo:
     symbols: [VT,PSNY]
     timeframes: [1d]
 
@@ -41,7 +41,7 @@ evaluation:
 
 data:
   period: "2y"  # 2 years of historical data
-  provider: "bnc"  # Binance for crypto pairs
+  provider: "binance"  # Binance for crypto pairs
   save_raw: true
   save_processed: true
 

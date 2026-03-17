@@ -6,11 +6,10 @@ from src.telegram.command_parser import parse_command
     ("/report btcusdt -email", dict(command="report", args={"tickers": "BTCUSDT", "email": True, "indicators": None, "period": None, "interval": None, "provider": None})),
     ("/report AAPL BTCUSDT -email -indicators=RSI,MACD,MA50", dict(command="report", args={"tickers": "AAPL", "email": True, "indicators": "rsi,macd,ma50", "period": None, "interval": None, "provider": None})),
     ("/report tsla -period=3mo -interval=15m", dict(command="report", args={"tickers": "TSLA", "email": False, "indicators": None, "period": "3mo", "interval": "15m", "provider": None})),
-    ("/report btcusdt --provider=bnc --period=1y --interval=1d", dict(command="report", args={"tickers": "BTCUSDT", "email": False, "indicators": None, "period": "1y", "interval": "1d", "provider": "bnc"})),
+    ("/report btcusdt --provider=binance --period=1y --interval=1d", dict(command="report", args={"tickers": "BTCUSDT", "email": False, "indicators": None, "period": "1y", "interval": "1d", "provider": "binance"})),
     ("/report aapl --unknownflag --email", dict(command="report", args={"tickers": "AAPL", "email": True, "indicators": None, "period": None, "interval": None, "provider": None}, extra_flags={"unknownflag": True})),
     ("/report aapl --indicators=RSI", dict(command="report", args={"tickers": "AAPL", "email": False, "indicators": "rsi", "period": None, "interval": None, "provider": None})),
-    ("/report aapl --provider=YF", dict(command="report", args={"tickers": "AAPL", "email": False, "indicators": None, "period": None, "interval": None, "provider": None})),
-    ("/report aapl -period=2y -interval=1d -provider=yf -email -indicators=RSI,MACD", dict(command="report", args={"tickers": "AAPL", "email": True, "indicators": "rsi,macd", "period": "2y", "interval": "1d", "provider": "yf"})),
+    ("/report aapl -period=2y -interval=1d -provider=yahoo -email -indicators=RSI,MACD", dict(command="report", args={"tickers": "AAPL", "email": True, "indicators": "rsi,macd", "period": "2y", "interval": "1d", "provider": "yahoo"})),
     ("/alerts add btcusdt 65000 above", dict(command="alerts", positionals=["ADD", "BTCUSDT", "65000", "ABOVE"])),
     ("/alerts delete 2", dict(command="alerts", positionals=["DELETE", "2"])),
     ("/schedules add aapl 09:00 -email", dict(command="schedules", positionals=["ADD", "AAPL", "09:00"], extra_flags={"email": True})),
@@ -45,7 +44,7 @@ def test_parse_command_case_insensitivity():
     assert result.command == "report"
     assert result.args["tickers"] == "AAPL"
     assert result.args["email"] is True
-    assert result.args["provider"] == "yf"
+    assert result.args["provider"] == "yahoo"
 
 # Test unknown/extra flags
 def test_parse_command_extra_flags():

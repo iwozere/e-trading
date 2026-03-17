@@ -273,7 +273,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 ticker=symbol.upper(),
                 company_name=profile_data.get("name", "Unknown"),
                 current_price=current_price,
-                market_cap=float(profile_data.get("marketCapitalization", 0)) if profile_data.get("marketCapitalization") else 0.0,
+                market_cap=float(profile_data.get("marketCapitalization", 0)) * 1_000_000 if profile_data.get("marketCapitalization") else 0.0,
                 pe_ratio=float(metrics.get("peNormalizedAnnual", 0)) if metrics.get("peNormalizedAnnual") else 0.0,
                 forward_pe=float(metrics.get("peForwardAnnual", 0)) if metrics.get("peForwardAnnual") else 0.0,
                 dividend_yield=float(metrics.get("dividendYieldIndicatedAnnual", 0)) if metrics.get("dividendYieldIndicatedAnnual") else 0.0,
@@ -298,7 +298,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 country=profile_data.get("country", None),
                 exchange=profile_data.get("exchange", None),
                 currency=profile_data.get("currency", None),
-                shares_outstanding=float(profile_data.get("shareOutstanding", 0)) if profile_data.get("shareOutstanding") else None,
+                shares_outstanding=float(profile_data.get("shareOutstanding", 0)) * 1_000_000 if profile_data.get("shareOutstanding") else None,
                 float_shares=None,  # Finnhub doesn't provide float shares
                 avg_volume=avg_volume,  # 10-day average trading volume
                 short_ratio=float(metrics.get("shortInterestRatioAnnual", 0)) if metrics.get("shortInterestRatioAnnual") else None,
@@ -339,6 +339,10 @@ class FinnhubDataDownloader(BaseDataDownloader):
         return super().download_multiple_symbols(
             symbols, download_func, interval, start_date, end_date
         )
+
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "finnhub"
 
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Finnhub."""

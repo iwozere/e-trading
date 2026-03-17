@@ -5,7 +5,7 @@ data_sources:
   binance:
     symbols: [BTCUSDT, LTCUSDT]
     timeframes: [5m, 15m, 1h, 4h]
-  yfinance:
+  yahoo:
     symbols: [AAPL, MSFT]
     timeframes: [1d]
 

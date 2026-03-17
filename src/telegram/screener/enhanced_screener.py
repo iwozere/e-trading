@@ -109,7 +109,7 @@ class EnhancedScreener:
                 fundamentals_data = {}
 
             if config.screener_type in ["technical", "hybrid"]:
-                technical_data = await self.collect_technical_data(tickers, config.period, config.interval, "yf")
+                technical_data = await self.collect_technical_data(tickers, config.period, config.interval, "yahoo")
             else:
                 technical_data = {}
 

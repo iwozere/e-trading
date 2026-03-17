@@ -60,6 +60,10 @@ class YahooDataDownloader(BaseDataDownloader):
         except (ValueError, TypeError):
             return None
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "yahoo"
+
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Yahoo Finance."""
         return ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo']

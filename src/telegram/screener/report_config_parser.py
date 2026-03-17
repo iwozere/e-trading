@@ -21,7 +21,7 @@ _logger = setup_logger(__name__)
 SUPPORTED_REPORT_TYPES = ["analysis", "screener", "custom"]
 SUPPORTED_PERIODS = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
 SUPPORTED_INTERVALS = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
-SUPPORTED_PROVIDERS = ["yf", "alpha_vantage", "polygon"]
+SUPPORTED_PROVIDERS = ["yahoo", "alpha_vantage", "polygon", "binance", "twelvedata", "fmp", "finnhub"]
 SUPPORTED_INDICATORS = ["RSI", "MACD", "BollingerBands", "SMA", "EMA", "ADX", "ATR", "Stochastic", "WilliamsR"]
 SUPPORTED_FUNDAMENTAL_INDICATORS = ["PE", "PB", "ROE", "ROA", "DebtEquity", "CurrentRatio", "EPS", "Revenue", "ProfitMargin"]
 
@@ -33,7 +33,7 @@ class ReportConfig:
     tickers: List[str]
     period: str = "2y"
     interval: str = "1d"
-    provider: str = "yf"
+    provider: str = "yahoo"
     indicators: Optional[List[str]] = None
     fundamental_indicators: Optional[List[str]] = None
     email: bool = False
@@ -139,7 +139,7 @@ class ReportConfigParser:
                 tickers=config.get("tickers", []),
                 period=config.get("period", "2y"),
                 interval=config.get("interval", "1d"),
-                provider=config.get("provider", "yf"),
+                provider=config.get("provider", "yahoo"),
                 indicators=config.get("indicators"),
                 fundamental_indicators=config.get("fundamental_indicators"),
                 email=config.get("email", False),
@@ -171,7 +171,7 @@ class ReportConfigParser:
                 "tickers": config.get("tickers", []),
                 "period": config.get("period", "2y"),
                 "interval": config.get("interval", "1d"),
-                "provider": config.get("provider", "yf"),
+                "provider": config.get("provider", "yahoo"),
                 "email": config.get("email", False)
             }
 
@@ -217,7 +217,7 @@ class ReportConfigParser:
             "tickers": tickers,
             "period": kwargs.get("period", "2y"),
             "interval": kwargs.get("interval", "1d"),
-            "provider": kwargs.get("provider", "yf"),
+            "provider": kwargs.get("provider", "yahoo"),
             "indicators": kwargs.get("indicators", ["RSI", "MACD"]),
             "fundamental_indicators": kwargs.get("fundamental_indicators", ["PE", "PB", "ROE"]),
             "email": kwargs.get("email", False),
@@ -242,7 +242,7 @@ class ReportConfigParser:
                 "tickers": ["AAPL", "MSFT"],
                 "period": "1y",
                 "interval": "1d",
-                "provider": "yf",
+                "provider": "yahoo",
                 "indicators": ["RSI", "MACD"],
                 "email": True
             }, indent=2),
@@ -252,7 +252,7 @@ class ReportConfigParser:
                 "tickers": ["TSLA"],
                 "period": "6mo",
                 "interval": "1h",
-                "provider": "yf",
+                "provider": "yahoo",
                 "indicators": ["RSI", "MACD", "BollingerBands", "SMA"],
                 "include_fundamentals": False,
                 "email": False
@@ -263,7 +263,7 @@ class ReportConfigParser:
                 "tickers": ["AAPL", "GOOGL", "MSFT"],
                 "period": "2y",
                 "interval": "1d",
-                "provider": "yf",
+                "provider": "yahoo",
                 "fundamental_indicators": ["PE", "PB", "ROE", "ROA", "DebtEquity"],
                 "include_technicals": False,
                 "email": True

@@ -293,6 +293,10 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "alpha_vantage"
+
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Alpha Vantage."""
         return ['1m', '5m', '15m', '30m', '60m', '1d', '1wk', '1mo']

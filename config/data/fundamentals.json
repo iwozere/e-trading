@@ -4,46 +4,46 @@
   "provider_sequences": {
     "statements": [
       "fmp",
-      "av",
-      "yf",
-      "td"
+      "alpha_vantage",
+      "yahoo",
+      "twelvedata"
     ],
     "ratios": [
       "finnhub",
-      "yf",
+      "yahoo",
       "fmp",
-      "av",
-      "td"
+      "alpha_vantage",
+      "twelvedata"
     ],
     "profile": [
       "finnhub",
       "fmp",
-      "yf",
-      "av",
-      "td"
+      "yahoo",
+      "alpha_vantage",
+      "twelvedata"
     ],
     "calendar": [
-      "yf",
+      "yahoo",
       "fmp",
-      "av"
+      "alpha_vantage"
     ],
     "dividends": [
-      "yf",
+      "yahoo",
       "fmp",
-      "av"
+      "alpha_vantage"
     ],
     "splits": [
-      "yf",
+      "yahoo",
       "fmp"
     ],
     "insider_trading": [
       "fmp",
-      "av"
+      "alpha_vantage"
     ],
     "analyst_estimates": [
       "fmp",
-      "yf",
-      "av"
+      "yahoo",
+      "alpha_vantage"
     ]
   },
   "refresh_intervals": {
@@ -60,171 +60,176 @@
     "raw_statements": {
       "income_statement": [
         "fmp",
-        "av",
-        "yf"
+        "alpha_vantage",
+        "yahoo"
       ],
       "balance_sheet": [
         "fmp",
-        "av",
-        "yf"
+        "alpha_vantage",
+        "yahoo"
       ],
       "cash_flow": [
         "fmp",
-        "av",
-        "yf"
+        "alpha_vantage",
+        "yahoo"
       ]
     },
     "ttm_metrics": {
       "pe_ratio": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
+      ],
+      "pe_ratio_ttm": [
+        "yahoo",
+        "fmp",
+        "alpha_vantage"
       ],
       "pb_ratio": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "roe": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "roa": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "debt_to_equity": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "current_ratio": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "gross_margin": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "operating_margin": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "net_margin": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ]
     },
     "company_profile": {
       "name": [
         "fmp",
-        "yf",
-        "av"
+        "yahoo",
+        "alpha_vantage"
       ],
       "sector": [
         "fmp",
-        "yf",
-        "av"
+        "yahoo",
+        "alpha_vantage"
       ],
       "industry": [
         "fmp",
-        "yf",
-        "av"
+        "yahoo",
+        "alpha_vantage"
       ],
       "description": [
         "fmp",
-        "yf",
-        "av"
+        "yahoo",
+        "alpha_vantage"
       ],
       "website": [
         "fmp",
-        "yf",
-        "av"
+        "yahoo",
+        "alpha_vantage"
       ],
       "country": [
         "fmp",
-        "yf",
-        "av"
+        "yahoo",
+        "alpha_vantage"
       ],
       "employees": [
         "fmp",
-        "yf",
-        "av"
+        "yahoo",
+        "alpha_vantage"
       ],
       "ceo": [
         "fmp",
-        "yf"
+        "yahoo"
       ],
       "founded": [
         "fmp",
-        "yf"
+        "yahoo"
       ]
     },
     "share_data": {
       "shares_outstanding": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "float_shares": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "insider_ownership": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "institutional_ownership": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "market_cap": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ]
     },
     "calendar_events": {
       "earnings_date": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "ex_dividend_date": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "dividend_payment_date": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ]
     },
     "dividends": {
       "dividend_yield": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "dividend_rate": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ],
       "payout_ratio": [
-        "yf",
+        "yahoo",
         "fmp",
-        "av"
+        "alpha_vantage"
       ]
     }
   },
@@ -251,7 +256,7 @@
         "some_fields_paywalled"
       ]
     },
-    "yf": {
+    "yahoo": {
       "name": "Yahoo Finance",
       "priority": 2,
       "rate_limits": {
@@ -274,7 +279,7 @@
         "occasional_outages"
       ]
     },
-    "av": {
+    "alpha_vantage": {
       "name": "Alpha Vantage",
       "priority": 3,
       "rate_limits": {
@@ -297,7 +302,7 @@
         "thin_historical_depth"
       ]
     },
-    "td": {
+    "twelvedata": {
       "name": "Twelve Data",
       "priority": 4,
       "rate_limits": {

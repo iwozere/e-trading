@@ -183,76 +183,35 @@ class ProviderSelector:
 
     def _initialize_downloader(self, name):
         """Lazy initialize a specific downloader."""
-        if name in self.downloaders:
-            return self.downloaders[name]
-
-        downloader_classes = {
-            'binance': BinanceDataDownloader,
-            'yahoo': YahooDataDownloader,
-            'alpha_vantage': AlphaVantageDataDownloader,
-            'fmp': FMPDataDownloader,
-            'tiingo': TiingoDataDownloader,
-            'polygon': PolygonDataDownloader,
-            'twelvedata': TwelveDataDataDownloader,
-            'finnhub': FinnhubDataDownloader,
-            'coingecko': CoinGeckoDataDownloader,
-            'alpaca': AlpacaDataDownloader,
-        }
-
-        if name not in downloader_classes:
+        # Use DataDownloaderFactory for unified name resolution
+        canonical_name = DataDownloaderFactory.get_provider_by_code(name)
+        if not canonical_name:
+            _logger.error(f"Unknown provider name/alias: {name}")
             return None
 
-        downloader_class = downloader_classes[name]
-        try:
-            # Check for required API keys and initialize with appropriate parameters
-            if name == 'binance':
-                self.downloaders[name] = downloader_class()
-            elif name == 'yahoo':
-                self.downloaders[name] = downloader_class()
-            elif name == 'alpha_vantage':
-                if not ALPHA_VANTAGE_API_KEY:
-                    _logger.debug("Skipping %s downloader: No API key found", name)
-                    return None
-                self.downloaders[name] = downloader_class(api_key=ALPHA_VANTAGE_API_KEY)
-            elif name == 'fmp':
-                if not FMP_API_KEY:
-                    _logger.debug("Skipping %s downloader: No API key found", name)
-                    return None
-                self.downloaders[name] = downloader_class(api_key=FMP_API_KEY)
-            elif name == 'polygon':
-                if not POLYGON_API_KEY:
-                    _logger.debug("Skipping %s downloader: No API key found", name)
-                    return None
-                self.downloaders[name] = downloader_class(api_key=POLYGON_API_KEY)
-            elif name == 'coingecko':
-                self.downloaders[name] = downloader_class()
-            elif name == 'twelvedata':
-                if not TWELVE_DATA_API_KEY:
-                    _logger.debug("Skipping %s downloader: No API key found", name)
-                    return None
-                self.downloaders[name] = downloader_class(api_key=TWELVE_DATA_API_KEY)
-            elif name == 'finnhub':
-                if not FINNHUB_API_KEY:
-                    _logger.debug("Skipping %s downloader: No API key found", name)
-                    return None
-                self.downloaders[name] = downloader_class(api_key=FINNHUB_API_KEY)
-            elif name == 'tiingo':
-                if not TIINGO_API_KEY:
-                    _logger.debug("Skipping %s downloader: No API key found", name)
-                    return None
-                self.downloaders[name] = downloader_class(api_key=TIINGO_API_KEY)
-            elif name == 'alpaca':
-                if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
-                    _logger.debug("Skipping %s downloader: No API key or secret key found", name)
-                    return None
-                self.downloaders[name] = downloader_class(api_key=ALPACA_API_KEY, secret_key=ALPACA_SECRET_KEY)
-            else:
-                self.downloaders[name] = downloader_class()
+        # Check if already initialized under canonical name
+        if canonical_name in self.downloaders:
+            # If requested by alias, also store under alias for quick lookups
+            if name != canonical_name:
+                self.downloaders[name] = self.downloaders[canonical_name]
+            return self.downloaders[canonical_name]
 
-            _logger.debug("Initialized %s downloader", name)
-            return self.downloaders[name]
+        _logger.debug(f"Initializing downloader for {canonical_name} (requested as {name})")
+        
+        # Instantiate using factory
+        try:
+            downloader = DataDownloaderFactory.create_downloader(canonical_name)
+            if downloader:
+                self.downloaders[canonical_name] = downloader
+                # Also store under the name it was requested by if different
+                if name != canonical_name:
+                    self.downloaders[name] = downloader
+                return downloader
+            else:
+                _logger.warning(f"Failed to create downloader for {canonical_name}")
+                return None
         except Exception as e:
-            _logger.warning("Failed to initialize %s downloader: %s", name, e)
+            _logger.warning(f"Error initializing downloader for {canonical_name}: {e}")
             return None
 
     def _classify_symbol(self, symbol: str) -> str:

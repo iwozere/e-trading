@@ -56,43 +56,20 @@ class DataLoader:
 
     def _map_provider_name_to_code(self, provider_name: str) -> str:
         """
-        Map provider name from configuration to provider code for get_ohlcv.
+        Map provider name from configuration to canonical provider name.
 
         Args:
             provider_name: Provider name from config (e.g., 'binance', 'yfinance')
 
         Returns:
-            Provider code for get_ohlcv (e.g., 'bnc', 'yf')
+            Canonical provider name (e.g., 'binance', 'yahoo')
         """
-        # Direct mappings for common provider names
-        provider_mapping = {
-            'binance': 'bnc',
-            'yfinance': 'yf',
-            'yahoo': 'yf',
-            'alphavantage': 'av',
-            'finnhub': 'fh',
-            'polygon': 'pg',
-            'twelvedata': 'td',
-            'coingecko': 'cg'
-        }
+        # Use factory for unified name resolution
+        canonical_name = DataDownloaderFactory.get_provider_by_code(provider_name)
+        if canonical_name:
+            return canonical_name
 
-        # Check direct mapping first
-        if provider_name.lower() in provider_mapping:
-            return provider_mapping[provider_name.lower()]
-
-        # If not found in direct mapping, check if it's already a valid provider code
-        if DataDownloaderFactory._normalize_provider(provider_name):
-            return provider_name
-
-        # If still not found, try to normalize using the factory
-        normalized = DataDownloaderFactory._normalize_provider(provider_name)
-        if normalized:
-            # Find the shortest provider code for this normalized name
-            for code, norm_name in DataDownloaderFactory.PROVIDER_MAP.items():
-                if norm_name == normalized:
-                    return code
-
-        # If all else fails, return the original name and let get_ohlcv handle the error
+        # Fallback if not found
         _logger.warning("Unknown provider name: %s, using as-is", provider_name)
         return provider_name
 

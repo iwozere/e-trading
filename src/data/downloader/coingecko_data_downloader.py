@@ -243,6 +243,10 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
             symbols, download_func, interval, start_date, end_date
         )
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "coingecko"
+
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for CoinGecko."""
         return ['1d']  # CoinGecko only supports daily data

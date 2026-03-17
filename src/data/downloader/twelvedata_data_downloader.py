@@ -286,6 +286,10 @@ class TwelveDataDataDownloader(BaseDataDownloader):
             symbols, download_func, interval, start_date, end_date
         )
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "twelvedata"
+
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Twelve Data."""
         return ['1m', '5m', '15m', '1h', '1d']

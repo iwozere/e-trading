@@ -7,7 +7,7 @@ data_sources:
 #    symbols: [BTCUSDT, ETHUSDT, LTCUSDT]
 #    timeframes: [15m, 1h, 4h]
 #    period: "2y"  # 2 years for crypto data (should give enough data)
-  yfinance:
+  yahoo:
     symbols: [VT, PSNY, GOOG]
     timeframes: [1d]
     period: "4y"  # 4 years for stock data (should give ~1000 trading days)

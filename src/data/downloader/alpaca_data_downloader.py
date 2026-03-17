@@ -147,6 +147,10 @@ class AlpacaDataDownloader(BaseDataDownloader):
             '1d': TimeFrame.Day
         }
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "alpaca"
+
     def get_supported_intervals(self) -> List[str]:
         """
         Return the list of supported intervals for Alpaca.

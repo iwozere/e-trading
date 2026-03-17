@@ -39,7 +39,7 @@ SUPPORTED_TECHNICAL_INDICATORS = [
 # Supported periods and intervals
 SUPPORTED_PERIODS = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
 SUPPORTED_INTERVALS = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
-SUPPORTED_PROVIDERS = ["yf", "alpha_vantage", "polygon"]
+SUPPORTED_PROVIDERS = ["yahoo", "alpha_vantage", "polygon", "binance", "twelvedata", "fmp", "finnhub"]
 
 
 @dataclass
@@ -74,7 +74,7 @@ class ScreenerConfig:
     fmp_strategy: Optional[str] = None  # Predefined FMP strategy name
     period: str = "1y"
     interval: str = "1d"
-    provider: str = "yf"
+    provider: str = "yahoo"
     max_results: int = 10
     min_score: float = 7.0  # Minimum composite score (0-10)
     include_technical_analysis: bool = False
@@ -145,7 +145,7 @@ class ScreenerConfigParser:
             fmp_strategy=fmp_strategy,
             period=config_dict.get("period", "1y"),
             interval=config_dict.get("interval", "1d"),
-            provider=config_dict.get("provider", "yf"),
+            provider=config_dict.get("provider", "yahoo"),
             max_results=config_dict.get("max_results", 10),
             min_score=config_dict.get("min_score", 7.0),
             include_technical_analysis=config_dict.get("include_technical_analysis", False),
@@ -552,7 +552,7 @@ class ScreenerConfigParser:
                 ],
                 "period": "1y",
                 "interval": "1d",
-                "provider": "yf",
+                "provider": "yahoo",
                 "max_results": 12,
                 "min_score": 7.0,
                 "include_technical_analysis": True,

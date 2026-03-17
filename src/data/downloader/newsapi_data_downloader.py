@@ -33,6 +33,10 @@ class NewsAPIDataDownloader(BaseDataDownloader):
         if not self.api_key:
             _logger.warning("NewsAPI API key is missing. Some news features may be disabled.")
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "newsapi"
+
     def get_supported_intervals(self) -> List[str]:
         """NewsAPI doesn't support OHLCV intervals."""
         return []

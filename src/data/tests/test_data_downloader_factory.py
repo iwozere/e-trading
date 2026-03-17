@@ -24,9 +24,9 @@ def test_provider_codes():
     assert DataDownloaderFactory.get_provider_by_code("yf_finance") == "yahoo"
 
     # Test Alpha Vantage codes
-    assert DataDownloaderFactory.get_provider_by_code("av") == "alphavantage"
-    assert DataDownloaderFactory.get_provider_by_code("alphavantage") == "alphavantage"
-    assert DataDownloaderFactory.get_provider_by_code("alpha_vantage") == "alphavantage"
+    assert DataDownloaderFactory.get_provider_by_code("av") == "alpha_vantage"
+    assert DataDownloaderFactory.get_provider_by_code("alphavantage") == "alpha_vantage"
+    assert DataDownloaderFactory.get_provider_by_code("alpha_vantage") == "alpha_vantage"
 
     # Test Binance codes
     assert DataDownloaderFactory.get_provider_by_code("bnc") == "binance"
@@ -76,7 +76,7 @@ def test_provider_info():
 
     info = DataDownloaderFactory.get_provider_info()
     assert "yahoo" in info
-    assert "alphavantage" in info
+    assert "alpha_vantage" in info
     assert "binance" in info
 
     yahoo_info = info["yahoo"]

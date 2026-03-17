@@ -90,6 +90,11 @@ class BaseDataDownloader(ABC):
 
 
     @abstractmethod
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        pass
+
+    @abstractmethod
     def get_supported_intervals(self) -> List[str]:
         """Return the list of supported intervals for this data downloader."""
         pass

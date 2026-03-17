@@ -54,6 +54,10 @@ class EODHDDataDownloader(BaseDataDownloader):
         if not self.api_key:
             _logger.warning("EODHD API key not provided. Some operations may fail.")
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "eodhd"
+
     def get_supported_intervals(self) -> List[str]:
         """
         Return the list of supported intervals for this data downloader.

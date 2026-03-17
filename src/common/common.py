@@ -4,14 +4,12 @@ Common business logic for data provider management and technicals/fundamentals a
 Usage:
     from src.common import get_fundamentals, get_ohlcv, analyze_period_interval
     fundamentals = get_fundamentals('AAPL', provider='yf')
-    df = get_ohlcv('AAPL', '1d', '2y', provider='yf')
-
-Supported providers:
-    'yf' (Yahoo Finance, default), 'av', 'fh', 'td', 'pg', 'bnc', 'cg'
+    df = get_ohlcv('AAPL', '1d', '2y', provider='yahoo')
 """
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
 from src.data.data_manager import ProviderSelector
 
-PROVIDER_CODES = ['yf', 'av', 'fh', 'td', 'pg', 'bnc', 'cg']
+PROVIDER_CODES = list(set(DataDownloaderFactory.PROVIDER_MAP.values()))
 
 # Initialize the provider selector
 _provider_selector = ProviderSelector()
@@ -26,26 +24,16 @@ def determine_provider(ticker: str) -> str:
         ticker: Stock or crypto ticker (e.g., 'AAPL', 'BTCUSDT', 'VUSD.L')
 
     Returns:
-        str: Provider code ('yf' for stocks, 'bnc' for crypto)
+        str: Canonical provider name (e.g., 'yahoo', 'binance')
     """
-    ticker_info = _provider_selector.get_ticker_info(ticker)
-
-    # Map provider names to provider codes
-    provider_mapping = {
-        'binance': 'bnc',
-        'yahoo': 'yf',
-        'alpha_vantage': 'av',
-        'finnhub': 'fh',
-        'twelvedata': 'td',
-        'polygon': 'pg',
-        'coingecko': 'cg'
-    }
-
-    # Get the best provider for this ticker
+    # Get the best provider instance for this ticker
     best_provider = _provider_selector.get_best_provider(ticker, "1d")
-    provider_name = best_provider.__class__.__name__.lower().replace('datadownloader', '')
-
-    return provider_mapping.get(provider_name, "yf")  # Default fallback
+    
+    # Each downloader now implements get_provider_name()
+    if best_provider:
+        return best_provider.get_provider_name()
+        
+    return "yahoo"  # Default fallback
 
 
 def get_ticker_info(ticker: str):

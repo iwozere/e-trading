@@ -53,6 +53,10 @@ class IBKRDownloader(BaseDataDownloader):
                 _logger.error("Failed to connect to IBKR: %s", e)
                 raise
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "ibkr"
+
     def get_supported_intervals(self) -> List[str]:
         return ['1m', '5m', '15m', '30m', '1h', '4h', '1d']
 

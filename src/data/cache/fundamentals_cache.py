@@ -276,11 +276,11 @@ class FundamentalsCache:
                 timestamp_str = '_'.join(parts[1:])  # Rejoin date and time parts
                 file_timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
 
-                # Remove if older than new data
-                if file_timestamp < new_timestamp:
+                # Remove if older than new data (using second-level precision)
+                if file_timestamp < new_timestamp.replace(microsecond=0):
                     file_path.unlink()
                     removed_files.append(str(file_path))
-                    _logger.info("Removed stale cache file: %s", file_path)
+                    _logger.debug("Removed stale cache file: %s", file_path)
 
             except (ValueError, IndexError) as e:
                 _logger.warning("Invalid cache file format during cleanup: %s - %s", file_path, e)

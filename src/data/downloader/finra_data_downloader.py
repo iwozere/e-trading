@@ -108,6 +108,10 @@ class FinraDataDownloader(BaseDataDownloader):
     # BaseDataDownloader abstract method implementations
     # ============================================================================
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "finra"
+
     def get_supported_intervals(self) -> List[str]:
         """
         Return the list of supported intervals for this data downloader.

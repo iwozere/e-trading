@@ -3258,7 +3258,7 @@ def handle_schedules_screener(telegram_user_id: str, list_type: str, time: str,
             'indicators': indicators,
             'period': 'daily',  # Screeners run daily
             'interval': '1d',
-            'provider': 'yf',
+            'provider': 'yahoo',
             'active': True,
             'schedule_type': 'screener',  # New field to distinguish screeners
             'list_type': list_type  # Store the list type

@@ -207,6 +207,10 @@ class FMPDataDownloader(BaseDataDownloader):
         # In practice, you would use common stock symbols
         return []
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "fmp"
+
     def get_supported_intervals(self) -> List[str]:
         """Get list of supported intervals."""
         return ['1m', '5m', '15m', '30m', '1h', '4h', '1d']

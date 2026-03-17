@@ -262,6 +262,10 @@ class PolygonDataDownloader(BaseDataDownloader):
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
 
+    def get_provider_name(self) -> str:
+        """Return the canonical provider name for this downloader."""
+        return "polygon"
+
     def get_supported_intervals(self) -> List[str]:
         """Return list of supported intervals for Polygon.io."""
         return ['1m', '5m', '15m', '1h', '1d']

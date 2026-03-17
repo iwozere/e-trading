@@ -57,7 +57,7 @@ class DataDownloaderFactory:
     - "vix" -> VIX (volatility index data)
     """
 
-    # Provider code mapping
+    # Provider code mapping (Unified Canonical Names as values)
     PROVIDER_MAP = {
         # Yahoo Finance
         "yf": "yahoo",
@@ -66,9 +66,9 @@ class DataDownloaderFactory:
         "yfinance": "yahoo",
 
         # Alpha Vantage
-        "av": "alphavantage",
-        "alphavantage": "alphavantage",
-        "alpha_vantage": "alphavantage",
+        "av": "alpha_vantage",
+        "alphavantage": "alpha_vantage",
+        "alpha_vantage": "alpha_vantage",
 
         # Finnhub
         "fh": "finnhub",
@@ -125,8 +125,11 @@ class DataDownloaderFactory:
         "santiment": "santiment",
         "santiment_net": "santiment",
 
-        # BTC Market Cap (Now handled by CoinGecko)
-        "btc_mc": "coingecko"
+        # IBKR
+        "ibkr": "ibkr",
+
+        # NewsAPI
+        "newsapi": "newsapi"
     }
 
     @staticmethod
@@ -140,17 +143,6 @@ class DataDownloaderFactory:
 
         Returns:
             Data downloader instance, or None if creation fails
-
-        Examples:
-            >>> # Yahoo Finance (no API key needed)
-            >>> downloader = DataDownloaderFactory.create_downloader("yf")
-
-            >>> # Alpha Vantage (API key required)
-            >>> downloader = DataDownloaderFactory.create_downloader("av", api_key="your_key")
-
-            >>> # Binance (API key and secret required)
-            >>> downloader = DataDownloaderFactory.create_downloader("bnc",
-            ...     api_key="your_key", secret_key="your_secret")
         """
         try:
             # Normalize provider code
@@ -198,7 +190,7 @@ class DataDownloaderFactory:
         """
         downloader_classes = {
             "yahoo": YahooDataDownloader,
-            "alphavantage": AlphaVantageDataDownloader,
+            "alpha_vantage": AlphaVantageDataDownloader,
             "finnhub": FinnhubDataDownloader,
             "polygon": PolygonDataDownloader,
             "twelvedata": TwelveDataDataDownloader,
@@ -230,8 +222,10 @@ class DataDownloaderFactory:
             Configured downloader instance
         """
         # Provider-specific parameter extraction
-        if provider == "alphavantage":
+        if provider == "alpha_vantage":
             api_key = kwargs.get("api_key") or os.getenv("ALPHA_VANTAGE_API_KEY")
+            if not api_key:
+                api_key = BaseDataDownloader._get_config_value("ALPHA_VANTAGE_API_KEY")
             if not api_key:
                 raise ValueError("Alpha Vantage API key is required")
             return downloader_class(api_key=api_key)
@@ -239,11 +233,15 @@ class DataDownloaderFactory:
         elif provider == "finnhub":
             api_key = kwargs.get("api_key") or os.getenv("FINNHUB_API_KEY")
             if not api_key:
+                api_key = BaseDataDownloader._get_config_value("FINNHUB_API_KEY")
+            if not api_key:
                 raise ValueError("Finnhub API key is required")
             return downloader_class(api_key=api_key)
 
         elif provider == "polygon":
             api_key = kwargs.get("api_key") or os.getenv("POLYGON_API_KEY")
+            if not api_key:
+                api_key = BaseDataDownloader._get_config_value("POLYGON_API_KEY")
             if not api_key:
                 raise ValueError("Polygon.io API key is required")
             return downloader_class(api_key=api_key)
@@ -251,16 +249,15 @@ class DataDownloaderFactory:
         elif provider == "twelvedata":
             api_key = kwargs.get("api_key") or os.getenv("TWELVE_DATA_API_KEY")
             if not api_key:
+                api_key = BaseDataDownloader._get_config_value("TWELVE_DATA_API_KEY")
+            if not api_key:
                 raise ValueError("Twelve Data API key is required")
             return downloader_class(api_key=api_key)
 
-        elif provider == "binance":
-            api_key = kwargs.get("api_key")
-            api_secret = kwargs.get("api_secret")
-            return downloader_class(api_key=api_key, api_secret=api_secret)
-
         elif provider == "fmp":
             api_key = kwargs.get("api_key") or os.getenv("FMP_API_KEY")
+            if not api_key:
+                api_key = BaseDataDownloader._get_config_value("FMP_API_KEY")
             if not api_key:
                 raise ValueError("FMP API key is required")
             return downloader_class(api_key=api_key)
@@ -268,20 +265,23 @@ class DataDownloaderFactory:
         elif provider == "tiingo":
             api_key = kwargs.get("api_key") or os.getenv("TIINGO_API_KEY")
             if not api_key:
+                api_key = BaseDataDownloader._get_config_value("TIINGO_API_KEY")
+            if not api_key:
                 raise ValueError("Tiingo API key is required")
             return downloader_class(api_key=api_key)
 
         elif provider == "alpaca":
             api_key = kwargs.get("api_key") or os.getenv("ALPACA_API_KEY")
             secret_key = kwargs.get("secret_key") or os.getenv("ALPACA_SECRET_KEY")
-            base_url = kwargs.get("base_url") or os.getenv("ALPACA_BASE_URL")
+            if not api_key or not secret_key:
+                api_key = BaseDataDownloader._get_config_value("ALPACA_API_KEY")
+                secret_key = BaseDataDownloader._get_config_value("ALPACA_SECRET_KEY")
             if not api_key or not secret_key:
                 raise ValueError("Alpaca API key and secret key are required")
+            base_url = kwargs.get("base_url") or os.getenv("ALPACA_BASE_URL")
             return downloader_class(api_key=api_key, secret_key=secret_key, base_url=base_url)
 
         elif provider == "finra":
-            # FINRA can work with or without explicit parameters
-            # It uses OAuth for TRF data and direct API for short interest
             rate_limit_delay = kwargs.get("rate_limit_delay", 1.0)
             date = kwargs.get("date")
             output_dir = kwargs.get("output_dir")
@@ -297,231 +297,116 @@ class DataDownloaderFactory:
 
         elif provider == "eodhd":
             api_key = kwargs.get("api_key") or os.getenv("EODHD_API_KEY")
+            if not api_key:
+                api_key = BaseDataDownloader._get_config_value("EODHD_API_KEY")
             return downloader_class(api_key=api_key)
 
         elif provider == "tradier":
             api_key = kwargs.get("api_key") or os.getenv("TRADIER_API")
+            if not api_key:
+                api_key = BaseDataDownloader._get_config_value("TRADIER_API")
             rate_limit_sleep = kwargs.get("rate_limit_sleep", 0.3)
             return downloader_class(api_key=api_key, rate_limit_sleep=rate_limit_sleep)
 
-        elif provider == "vix":
-            # VIX doesn't require API key
-            return downloader_class()
-
-        elif provider == "santiment":
-            # Santiment uses config internally or falls back to limited access
-            return downloader_class()
-
-        elif provider in ["yahoo", "coingecko"]:
-            # These don't require API keys
-            return downloader_class()
-
-        else:
-            # Fallback for unknown providers
-            return downloader_class()
+        # Providers not requiring API keys or using default initialization
+        return downloader_class()
 
     @staticmethod
     def get_supported_providers() -> list:
-        """
-        Get list of supported provider codes.
-
-        Returns:
-            List of supported provider codes
-        """
+        """Get list of supported provider codes."""
         return list(DataDownloaderFactory.PROVIDER_MAP.keys())
 
     @staticmethod
     def get_provider_info() -> Dict[str, Dict[str, Any]]:
-        """
-        Get information about supported providers.
-
-        Returns:
-            Dictionary with information about each provider
-        """
+        """Get information about supported providers."""
         return {
             "yahoo": {
-                "codes": ["yf", "yahoo", "yf_finance"],
+                "codes": ["yf", "yahoo"],
                 "name": "Yahoo Finance",
-                "description": "Comprehensive fundamental data and global stock coverage",
                 "requires_api_key": False,
-                "rate_limits": "None for basic usage",
-                "cost": "Free",
-                "fundamental_data": "Comprehensive",
-                "coverage": "Global stocks and ETFs"
             },
-            "alphavantage": {
-                "codes": ["av", "alphavantage", "alpha_vantage"],
+            "alpha_vantage": {
+                "codes": ["av", "alpha_vantage"],
                 "name": "Alpha Vantage",
-                "description": "High-quality fundamental data with API key",
                 "requires_api_key": True,
-                "rate_limits": "5 calls/minute, 500/day (free tier)",
-                "cost": "Free tier available",
-                "fundamental_data": "Comprehensive",
-                "coverage": "Global stocks and ETFs"
             },
             "finnhub": {
                 "codes": ["fh", "finnhub"],
                 "name": "Finnhub",
-                "description": "Real-time data and comprehensive fundamentals",
                 "requires_api_key": True,
-                "rate_limits": "60 calls/minute (free tier)",
-                "cost": "Free tier available",
-                "fundamental_data": "Comprehensive",
-                "coverage": "Global stocks and ETFs"
             },
             "polygon": {
-                "codes": ["pg", "polygon", "polygon_io"],
+                "codes": ["pg", "polygon"],
                 "name": "Polygon.io",
-                "description": "US market data with basic fundamentals (free tier)",
                 "requires_api_key": True,
-                "rate_limits": "5 calls/minute (free tier)",
-                "cost": "Free tier available",
-                "fundamental_data": "Basic (free tier)",
-                "coverage": "US stocks and ETFs (free tier)"
             },
             "twelvedata": {
-                "codes": ["td", "twelvedata", "twelve_data"],
+                "codes": ["td", "twelvedata"],
                 "name": "Twelve Data",
-                "description": "Global coverage with basic fundamental data",
                 "requires_api_key": True,
-                "rate_limits": "8 calls/minute, 800/day (free tier)",
-                "cost": "Free tier available",
-                "fundamental_data": "Basic",
-                "coverage": "Global stocks and ETFs"
+            },
+            "fmp": {
+                "codes": ["fmp"],
+                "name": "Financial Modeling Prep",
+                "requires_api_key": True,
             },
             "binance": {
                 "codes": ["bnc", "binance"],
                 "name": "Binance",
-                "description": "Cryptocurrency data only",
                 "requires_api_key": True,
-                "rate_limits": "1200 requests/minute (free tier)",
-                "cost": "Free for public data",
-                "fundamental_data": "Not applicable (crypto)",
-                "coverage": "Cryptocurrencies only"
             },
             "coingecko": {
-                "codes": ["cg", "coingecko", "coin_gecko"],
+                "codes": ["cg", "coingecko"],
                 "name": "CoinGecko",
-                "description": "Cryptocurrency data with no API key required",
                 "requires_api_key": False,
-                "rate_limits": "50 calls/minute (free tier)",
-                "cost": "Free",
-                "fundamental_data": "Not applicable (crypto)",
-                "coverage": "Cryptocurrencies only"
             },
-            "fmp": {
-                "codes": ["fmp", "financial_modeling_prep"],
-                "name": "Financial Modeling Prep",
-                "description": "Comprehensive financial data and fundamentals",
+            "alpaca": {
+                "codes": ["alp", "alpaca"],
+                "name": "Alpaca Markets",
                 "requires_api_key": True,
-                "rate_limits": "3000 calls/minute (free tier)",
-                "cost": "Free tier available",
-                "fundamental_data": "Comprehensive",
-                "coverage": "Global stocks and ETFs"
             },
             "tiingo": {
                 "codes": ["tiingo"],
                 "name": "Tiingo",
-                "description": "Historical data back to 1962 for active tickers",
                 "requires_api_key": True,
-                "rate_limits": "1000 calls/day (free tier)",
-                "cost": "Free tier available",
-                "fundamental_data": "Basic",
-                "coverage": "US stocks and ETFs"
-            },
-            "alpaca": {
-                "codes": ["alpaca", "alp"],
-                "name": "Alpaca Markets",
-                "description": "Professional-grade US market data with comprehensive fundamentals",
-                "requires_api_key": True,
-                "rate_limits": "200 requests/minute (free tier)",
-                "cost": "Free tier available",
-                "fundamental_data": "Comprehensive",
-                "coverage": "US stocks and ETFs"
             },
             "finra": {
                 "codes": ["finra", "finra_trf"],
                 "name": "FINRA",
-                "description": "Official short interest data (bi-weekly) and TRF daily short sale volume data",
                 "requires_api_key": True,
-                "rate_limits": "Respectful rate limiting recommended (1+ second delays)",
-                "cost": "Free",
-                "fundamental_data": "Short interest and TRF data only",
-                "coverage": "US stocks (short interest and TRF data)"
             },
             "eodhd": {
                 "codes": ["eodhd", "eod"],
                 "name": "EODHD",
-                "description": "Options data and historical market data",
                 "requires_api_key": True,
-                "rate_limits": "Varies by plan",
-                "cost": "Free tier available",
-                "fundamental_data": "Options data only",
-                "coverage": "Global stocks (options data)"
             },
             "tradier": {
                 "codes": ["trdr", "tradier"],
                 "name": "Tradier",
-                "description": "Options data and market data",
                 "requires_api_key": True,
-                "rate_limits": "Varies by plan",
-                "cost": "Free tier available",
-                "fundamental_data": "Options data only",
-                "coverage": "US stocks (options data)"
             },
             "vix": {
                 "codes": ["vix"],
                 "name": "VIX",
-                "description": "Volatility Index data from Yahoo Finance",
                 "requires_api_key": False,
-                "rate_limits": "None for basic usage",
-                "cost": "Free",
-                "fundamental_data": "Volatility index data only",
-                "coverage": "VIX volatility index"
             },
             "santiment": {
-                "codes": ["san", "santiment", "santiment_net"],
+                "codes": ["san", "santiment"],
                 "name": "Santiment",
-                "description": "Crypto and stock sentiment/social metrics",
                 "requires_api_key": False,
-                "rate_limits": "100 calls/month (free), varies by plan",
-                "cost": "Free tier available",
-                "fundamental_data": "Sentiment and social metrics",
-                "coverage": "Crypto and Stocks"
             }
         }
 
     @staticmethod
     def get_provider_by_code(provider_code: str) -> Optional[str]:
-        """
-        Get the normalized provider name by code.
-
-        Args:
-            provider_code: Provider code (e.g., "yf", "av")
-
-        Returns:
-            Normalized provider name or None if not found
-        """
+        """Get the normalized provider name by code."""
         return DataDownloaderFactory._normalize_provider(provider_code)
 
     @staticmethod
     def list_providers() -> None:
-        """
-        Print a formatted list of all supported providers and their codes.
-        """
+        """Print a formatted list of all supported providers."""
         print("Supported Data Providers:")
-        print("=" * 80)
-
+        print("=" * 40)
         provider_info = DataDownloaderFactory.get_provider_info()
-
         for provider, info in provider_info.items():
-            codes = ", ".join(info["codes"])
-            print(f"\n{info['name']} ({provider})")
-            print(f"  Codes: {codes}")
-            print(f"  Description: {info['description']}")
-            print(f"  API Key Required: {'Yes' if info['requires_api_key'] else 'No'}")
-            print(f"  Rate Limits: {info['rate_limits']}")
-            print(f"  Cost: {info['cost']}")
-            print(f"  Fundamental Data: {info['fundamental_data']}")
-            print(f"  Coverage: {info['coverage']}")
-            print("-" * 80)
+            print(f"{info['name']} ({provider}) - Codes: {', '.join(info['codes'])}")
