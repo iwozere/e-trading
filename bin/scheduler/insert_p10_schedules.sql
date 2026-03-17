@@ -3,9 +3,9 @@
 -- User ID: 2 (akossyrev@gmail.com)
 
 -- ==============================================================================
--- 1. EMPS3 Morning Scan (Pre-Market)
+-- 1. EMPS3 Morning Scan
 -- ==============================================================================
--- Runs daily at 7:35 AM ET on weekdays (2 hours before EMPS2 Morning Scan)
+-- Runs daily at 07:00 UTC on weekdays and Saturday
 -- Notifies via email for Phase 1, via email+telegram for Phase 2
 -- ==============================================================================
 
@@ -38,16 +38,16 @@ VALUES (
             ]
         }
     }'::jsonb,
-    '0 7 * * 1-5',
+    '0 7 * * 1-6',
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 );
 
 -- ==============================================================================
--- 2. EMPS3 Mid-Day Scan
+-- 2. EMPS3 Evening Scan
 -- ==============================================================================
--- Runs daily at 12:00 PM ET on weekdays (2 hours before EMPS2 Evening Scan)
+-- Runs daily at 18:00 UTC (6:00 PM UTC) on weekdays
 -- Notifies via email for Phase 1, via email+telegram for Phase 2
 -- ==============================================================================
 

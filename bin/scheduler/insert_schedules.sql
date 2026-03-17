@@ -9,7 +9,7 @@
 -- ==============================================================================
 -- 1. VIX Daily Monitor
 -- ==============================================================================
--- Runs daily at 9:30 AM ET (after market open) on weekdays
+-- Runs daily at 9:30 AM UTC on weekdays
 -- Notifies via email if VIX > 20, via email+telegram if VIX > 25
 -- ==============================================================================
 
@@ -49,9 +49,9 @@ VALUES (
 );
 
 -- ==============================================================================
--- 2. EMPS2 Morning Scan (Market Open)
+-- 2. EMPS2 Morning Scan
 -- ==============================================================================
--- Runs daily at 9:35 AM ET on weekdays (5 minutes after market open)
+-- Runs daily at 9:35 AM UTC on weekdays
 -- Notifies via email for Phase 1, via email+telegram for Phase 2
 -- Timeout: 4 hours (data download may take time)
 -- ==============================================================================
@@ -92,14 +92,11 @@ VALUES (
 );
 
 -- ==============================================================================
--- 3. EMPS2 Evening Scan (8 PM CET)
+-- 3. EMPS2 Evening Scan
 -- ==============================================================================
--- Runs daily at 8:00 PM CET on weekdays
+-- Runs daily at 14:00 UTC (2:00 PM UTC) on weekdays
 -- Notifies via email for Phase 1, via email+telegram for Phase 2
 -- Timeout: 4 hours (data download may take time)
---
--- Note: 8 PM CET = 2 PM ET (during standard time) or 1 PM ET (during daylight saving)
--- Using 14:00 ET for simplicity (adjust as needed for DST)
 -- ==============================================================================
 
 INSERT INTO job_schedules (user_id, name, job_type, target, task_params, cron, enabled, created_at, updated_at)
@@ -140,7 +137,7 @@ VALUES (
 -- ==============================================================================
 -- 4. Fundamentals Cache Refresh (Weekend)
 -- ==============================================================================
--- Runs every Saturday at 2:00 AM UTC
+-- Runs every Saturday at 14:00 UTC (2:00 PM UTC)
 -- Notifies via email on completion (success or error)
 -- ==============================================================================
 

@@ -11,7 +11,7 @@ load_dotenv(dotenv_path="config/donotshare/.env")
 
 
 # Data cache directory
-DATA_CACHE_DIR = "c:/data-cache"
+DATA_CACHE_DIR = os.getenv("DATA_CACHE_DIR", "c:/data-cache")
 
 # Database configuration
 #DB_PATH = "db/trading.db"  # Keep for backward compatibility
