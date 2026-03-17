@@ -7,7 +7,7 @@ Coordinates all stages: universe download, fundamental filtering, accumulation a
 
 from pathlib import Path
 import sys
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import json
 import logging
@@ -17,7 +17,8 @@ import pandas as pd
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.data_manager import DataManager
@@ -63,7 +64,6 @@ class EMPS3Pipeline:
             checkpoint_interval=self.config.checkpoint_interval
         )
 
-        self.data_manager = DataManager()
         self.accumulation_analyzer = AccumulationAnalyzer(
             self.data_manager,
             self.config.filter_config,
@@ -105,7 +105,7 @@ class EMPS3Pipeline:
             root_logger.removeHandler(self._pipeline_log_handler)
             self._pipeline_log_handler.close()
 
-    def run(self, force_refresh: bool = False) -> pd.DataFrame:
+    def run(self, force_refresh: bool = False, tickers: Optional[List[str]] = None) -> pd.DataFrame:
         try:
             start_time = datetime.now()
             _logger.info("="*70)
@@ -113,7 +113,12 @@ class EMPS3Pipeline:
             _logger.info("="*70)
 
             # Stage 1: Universe
-            universe_tickers = self.universe_downloader.download_universe(force_refresh)
+            if tickers:
+                _logger.info("Using provided list of %d tickers", len(tickers))
+                universe_tickers = tickers
+            else:
+                universe_tickers = self.universe_downloader.download_universe(force_refresh)
+                
             if not universe_tickers:
                 return pd.DataFrame()
 

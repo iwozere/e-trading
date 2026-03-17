@@ -268,6 +268,7 @@ class Fundamentals:
     This class provides all the fundamental data fields that can be returned
     by data providers, maintaining compatibility with existing code.
     """
+    symbol: Optional[str] = None
     ticker: Optional[str] = None
     company_name: Optional[str] = None
     current_price: Optional[float] = None

@@ -9,12 +9,14 @@
       "td"
     ],
     "ratios": [
+      "finnhub",
       "yf",
       "fmp",
       "av",
       "td"
     ],
     "profile": [
+      "finnhub",
       "fmp",
       "yf",
       "av",
@@ -314,6 +316,27 @@
       "limitations": [
         "limited_free_fundamentals",
         "most_detailed_data_paid"
+      ]
+    },
+    "finnhub": {
+      "name": "Finnhub",
+      "priority": 1,
+      "rate_limits": {
+        "requests_per_minute": 60,
+        "requests_per_day": null
+      },
+      "data_quality": 5,
+      "reliability": 5,
+      "coverage": "excellent",
+      "api_key_required": true,
+      "api_key_env": "FINNHUB_API_KEY",
+      "strengths": [
+        "comprehensive_fundamentals",
+        "real_time_quotes",
+        "global_coverage"
+      ],
+      "limitations": [
+        "free_tier_limits"
       ]
     }
   },

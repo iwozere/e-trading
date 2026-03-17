@@ -1846,8 +1846,8 @@ class DataManager:
                 continue
 
             # Check if provider is initialized and available
-            if provider_name not in self.provider_selector.downloaders:
-                _logger.debug("Provider %s not available (not initialized)", provider_name)
+            if not self.provider_selector._initialize_downloader(provider_name):
+                _logger.debug("Provider %s not available (failed initialization or no keys)", provider_name)
                 continue
 
             downloader = self.provider_selector.downloaders[provider_name]
@@ -1967,8 +1967,8 @@ class DataManager:
         valid_providers = []
 
         for provider in requested_providers:
-            # Check if provider is available
-            if provider not in self.provider_selector.downloaders:
+            # Check if provider is available and initialize if needed
+            if not self.provider_selector._initialize_downloader(provider):
                 _logger.warning("Provider %s not available", provider)
                 continue
 
@@ -2010,8 +2010,8 @@ class DataManager:
         compatible_providers = []
 
         for provider in provider_sequence:
-            # Check availability
-            if provider not in self.provider_selector.downloaders:
+            # Check availability and initialize if needed
+            if not self.provider_selector._initialize_downloader(provider):
                 _logger.debug("Provider %s not available, skipping", provider)
                 continue
 
@@ -2458,7 +2458,8 @@ class DataManager:
         Returns:
             True if provider is available and supports fundamentals
         """
-        if provider_name not in self.provider_selector.downloaders:
+        # Check availability and initialize if needed
+        if not self.provider_selector._initialize_downloader(provider_name):
             _logger.warning("Downloader not available for provider: %s", provider_name)
             return False
 

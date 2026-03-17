@@ -269,6 +269,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
             avg_volume = avg_vol_millions * 1_000_000 if avg_vol_millions else 0.0
 
             return Fundamentals(
+                symbol=symbol.upper(),
                 ticker=symbol.upper(),
                 company_name=profile_data.get("name", "Unknown"),
                 current_price=current_price,
@@ -317,6 +318,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
     def _create_empty_fundamentals(self, symbol: str) -> Fundamentals:
         """Helper to create an empty Fundamentals object."""
         return Fundamentals(
+            symbol=symbol.upper(),
             ticker=symbol.upper(),
             company_name="Unknown",
             current_price=0.0,

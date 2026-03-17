@@ -23,6 +23,7 @@ _logger = setup_logger(__name__)
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="EMPS3 Precursor phase scanner.")
     parser.add_argument('--force-refresh', action='store_true', help='Force refresh caches.')
+    parser.add_argument('--tickers', type=str, help='Comma-separated list of tickers to scan.')
     return parser.parse_args()
 
 def main() -> int:
@@ -33,7 +34,12 @@ def main() -> int:
 
     try:
         pipeline = EMPS3Pipeline(config)
-        final_df = pipeline.run(force_refresh=force_refresh)
+        
+        tickers = None
+        if args.tickers:
+            tickers = [t.strip().upper() for t in args.tickers.split(',')]
+            
+        final_df = pipeline.run(force_refresh=force_refresh, tickers=tickers)
 
         today = datetime.now().strftime('%Y-%m-%d')
         results_dir = PROJECT_ROOT / 'results' / 'p10_emps3' / today
