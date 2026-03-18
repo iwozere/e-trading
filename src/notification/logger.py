@@ -38,6 +38,50 @@ BACKUP_COUNT = 99  # Keep 99 backup files
 # Context variable to track the current logging context
 _logging_context = ContextVar('logging_context', default=None)
 
+import re
+
+class SensitiveDataFilter(logging.Filter):
+    """
+    Filter to mask sensitive data like API keys and tokens in log messages.
+    """
+    SENSITIVE_KEYS = ['apikey', 'api_key', 'token', 'secret', 'api-key', 'app_key', 'app_secret']
+
+    # Regex to match key=value patterns in URLs or strings
+    # Matches: key=value, key:value, "key":"value", 'key':'value'
+    # Supports various delimiters: &, ?, ", ', or space
+    MASK_PATTERN = re.compile(
+        rf'({"|".join(SENSITIVE_KEYS)})[=:]\s*(["\']?)([a-zA-Z0-9.\-_]{{{4,}}})\2',
+        re.IGNORECASE
+    )
+
+    def filter(self, record):
+        if isinstance(record.msg, str):
+            record.msg = self._mask_sensitive_data(record.msg)
+        if record.args:
+            new_args = []
+            for arg in record.args:
+                if isinstance(arg, str):
+                    new_args.append(self._mask_sensitive_data(arg))
+                else:
+                    new_args.append(arg)
+            record.args = tuple(new_args)
+        return True
+
+    def _mask_sensitive_data(self, text: str) -> str:
+        """Replace sensitive values with [MASKED]."""
+        # We keep the first 2 characters for debugging if they are long enough, otherwise just mask all
+        def mask_match(match):
+            key = match.group(1)
+            quote = match.group(2)
+            value = match.group(3)
+
+            if len(value) <= 6:
+                return f"{key}={quote}[MASKED]{quote}"
+            else:
+                return f"{key}={quote}{value[:2]}...[MASKED]{quote}"
+
+        return self.MASK_PATTERN.sub(mask_match, text)
+
 
 ####################################################################
 # Simple logger, which logs to console
@@ -65,11 +109,17 @@ LOG_CONFIG = {
         },
         "standard": {"format": "%(asctime)s - [PID %(process)d] - %(levelname)s - %(message)s"},
     },
+    "filters": {
+        "mask_sensitive": {
+            "()": SensitiveDataFilter
+        }
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "level": "DEBUG",
             "formatter": "standard",  # Less verbose for console
+            "filters": ["mask_sensitive"],
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -78,6 +128,7 @@ LOG_CONFIG = {
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
             "formatter": "detailed",
+            "filters": ["mask_sensitive"],
         },
         "trade_file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -86,6 +137,7 @@ LOG_CONFIG = {
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
             "formatter": "detailed",
+            "filters": ["mask_sensitive"],
         },
         "order_file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -94,6 +146,7 @@ LOG_CONFIG = {
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
             "formatter": "detailed",
+            "filters": ["mask_sensitive"],
         },
 
         "telegram_screener_bot_file": {
@@ -103,6 +156,7 @@ LOG_CONFIG = {
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
             "formatter": "detailed",
+            "filters": ["mask_sensitive"],
         },
         "telegram_background_services_file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -111,6 +165,7 @@ LOG_CONFIG = {
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
             "formatter": "detailed",
+            "filters": ["mask_sensitive"],
         },
         "telegram_alert_monitor_file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -119,6 +174,7 @@ LOG_CONFIG = {
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
             "formatter": "detailed",
+            "filters": ["mask_sensitive"],
         },
         "telegram_schedule_processor_file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -127,6 +183,7 @@ LOG_CONFIG = {
             "backupCount": BACKUP_COUNT,
             "level": "DEBUG",
             "formatter": "detailed",
+            "filters": ["mask_sensitive"],
         },
         "error_file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -135,6 +192,7 @@ LOG_CONFIG = {
             "backupCount": BACKUP_COUNT,
             "level": "ERROR",
             "formatter": "detailed",
+            "filters": ["mask_sensitive"],
         },
     },
     "loggers": {

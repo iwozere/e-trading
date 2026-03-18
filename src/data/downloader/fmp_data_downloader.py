@@ -322,6 +322,9 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.info("Retrieved fundamentals for %s", symbol)
             return fundamentals
 
+        except RateLimitException:
+            # Re-raise to let DataManager handle blacklisting
+            raise
         except Exception:
             _logger.exception("Error getting fundamentals for %s:", symbol)
             return None

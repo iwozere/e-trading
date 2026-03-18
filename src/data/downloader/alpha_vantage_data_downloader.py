@@ -280,18 +280,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
 
         except Exception as e:
             _logger.exception("Failed to get fundamentals for %s: %s", symbol, str(e))
-            return Fundamentals(
-                ticker=symbol.upper(),
-                company_name="Unknown",
-                current_price=0.0,
-                market_cap=0.0,
-                pe_ratio=0.0,
-                forward_pe=0.0,
-                dividend_yield=0.0,
-                earnings_per_share=0.0,
-                data_source="Alpha Vantage",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            )
+            raise
 
     def get_provider_name(self) -> str:
         """Return the canonical provider name for this downloader."""

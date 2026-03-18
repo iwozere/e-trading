@@ -119,6 +119,12 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 if response.status_code == 429:
                     # Rate limit exceeded - exponential backoff
                     wait_time = (2 ** retry) + 1
+                    
+                    if retry == max_retries - 1:
+                        # On last attempt, raise the exception for DataManager to handle
+                        _logger.error("Finnhub rate limit reached after %d attempts", max_retries)
+                        raise RateLimitException(url=url, retry_after=wait_time)
+
                     _logger.warning("Finnhub rate limit exceeded (429). Retrying in %ds... (Attempt %d/%d)",
                                   wait_time, retry + 1, max_retries)
                     time.sleep(wait_time)
@@ -137,6 +143,8 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 return None
 
             except Exception as e:
+                if isinstance(e, RateLimitException):
+                    raise
                 _logger.error("Finnhub connection error: %s. Retrying...", str(e))
                 time.sleep(2 ** retry)
 
