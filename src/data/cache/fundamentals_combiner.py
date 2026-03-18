@@ -112,9 +112,9 @@ class FundamentalsCombiner:
         """Get default configuration when file loading fails."""
         return {
             'provider_sequences': {
-                'statements': ['fmp', 'alphavantage', 'yfinance', 'twelvedata'],
-                'ratios': ['yfinance', 'fmp', 'alphavantage', 'twelvedata'],
-                'profile': ['fmp', 'yfinance', 'alphavantage', 'twelvedata']
+                'statements': ['alpha_vantage', 'yahoo', 'twelvedata', 'fmp'],
+                'ratios': ['finnhub', 'yahoo', 'alpha_vantage', 'twelvedata', 'fmp'],
+                'profile': ['finnhub', 'yahoo', 'alpha_vantage', 'twelvedata', 'fmp']
             },
             'field_priorities': {},
             'combination_strategies': {
@@ -145,13 +145,13 @@ class FundamentalsCombiner:
         # Fallback to default priorities if not configured
         if not priorities:
             priorities = {
-                'fmp': 1,
-                'yfinance': 2,
+                'finnhub': 1,
+                'yahoo': 2,
                 'alpha_vantage': 3,
-                'ibkr': 4,
-                'polygon': 5,
-                'twelvedata': 6,
-                'finnhub': 7,
+                'twelvedata': 4,
+                'fmp': 5,
+                'ibkr': 6,
+                'polygon': 7,
                 'tiingo': 8,
                 'binance': 9,
                 'coingecko': 10

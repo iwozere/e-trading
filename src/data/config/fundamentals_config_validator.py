@@ -39,7 +39,7 @@ class FundamentalsConfigValidator:
             # Shorthand codes (preferred)
             'fmp', 'yf', 'av', 'td', 'fh', 'pg', 'bnc', 'cg',
             # Full names (legacy support)
-            'yfinance', 'alpha_vantage', 'twelvedata', 'ibkr',
+            'yahoo', 'yfinance', 'alpha_vantage', 'twelvedata', 'ibkr',
             'polygon', 'finnhub', 'tiingo', 'binance', 'coingecko'
         ]
 

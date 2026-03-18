@@ -12,7 +12,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
+
 
 import pandas as pd
 import yfinance as yf

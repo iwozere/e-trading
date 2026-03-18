@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.base_data_downloader import BaseDataDownloader
+from src.error_handling.exceptions import RateLimitException
 
 _logger = setup_logger(__name__)
 
@@ -337,6 +338,13 @@ class FMPDataDownloader(BaseDataDownloader):
 
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
+            
+            # Explicitly handle 429 Too Many Requests
+            if response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 60))
+                _logger.warning("FMP Rate limit exceeded for %s, retry after %d seconds", symbol, retry_after)
+                raise RateLimitException(url=url, retry_after=retry_after)
+
             response.raise_for_status()
 
             data = response.json()
@@ -348,6 +356,9 @@ class FMPDataDownloader(BaseDataDownloader):
             else:
                 return None
 
+        except RateLimitException:
+            # Re-raise RateLimitException to be handled by DataManager
+            raise
         except Exception:
             _logger.exception("Error getting company profile for %s:", symbol)
             return None
@@ -366,11 +377,18 @@ class FMPDataDownloader(BaseDataDownloader):
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
 
+            # Explicitly handle 429 Too Many Requests
+            if response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 60))
+                _logger.warning("FMP Rate limit exceeded for %s, retry after %d seconds", symbol, retry_after)
+                raise RateLimitException(url=url, retry_after=retry_after)
+
             # Gracefully handle 402 Payment Required (premium feature)
             if response.status_code == 402:
                 _logger.debug("Key metrics for %s requires premium subscription (402 Payment Required)", symbol)
                 return None
 
+            # Raise for other HTTP errors
             response.raise_for_status()
 
             data = response.json()
@@ -382,6 +400,8 @@ class FMPDataDownloader(BaseDataDownloader):
             else:
                 return None
 
+        except RateLimitException:
+            raise
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 402:
                 _logger.debug("Key metrics for %s requires premium subscription", symbol)
@@ -406,6 +426,12 @@ class FMPDataDownloader(BaseDataDownloader):
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
 
+            # Explicitly handle 429 Too Many Requests
+            if response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 60))
+                _logger.warning("FMP Rate limit exceeded for %s, retry after %d seconds", symbol, retry_after)
+                raise RateLimitException(url=url, retry_after=retry_after)
+
             # Gracefully handle 402 Payment Required (premium feature)
             if response.status_code == 402:
                 _logger.debug("Financial ratios for %s requires premium subscription (402 Payment Required)", symbol)
@@ -422,6 +448,8 @@ class FMPDataDownloader(BaseDataDownloader):
             else:
                 return None
 
+        except RateLimitException:
+            raise
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 402:
                 _logger.debug("Financial ratios for %s requires premium subscription", symbol)

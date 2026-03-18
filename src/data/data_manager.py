@@ -30,21 +30,9 @@ from src.data.cache.fundamentals_cache import get_fundamentals_cache
 from src.data.cache.fundamentals_combiner import get_fundamentals_combiner
 
 
-# Custom exception classes for enhanced error handling
-class RateLimitException(Exception):
-    """Exception raised when rate limits are exceeded."""
-    def __init__(self, message: str, retry_after: Optional[float] = None):
-        super().__init__(message)
-        self.retry_after = retry_after
-
-
+from src.error_handling.exceptions import RateLimitException, NetworkException
 class TimeoutException(Exception):
     """Exception raised when requests timeout."""
-    pass
-
-
-class NetworkException(Exception):
-    """Exception raised for network-related errors."""
     pass
 from src.notification.logger import setup_logger
 
@@ -94,6 +82,8 @@ from src.data.downloader.twelvedata_data_downloader import TwelveDataDataDownloa
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.downloader.coingecko_data_downloader import CoinGeckoDataDownloader
 from src.data.downloader.alpaca_data_downloader import AlpacaDataDownloader
+from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+
 
 
 # Import live feeds
@@ -901,6 +891,7 @@ class DataManager:
         self.cache = UnifiedCache(cache_dir)
         self.provider_selector = ProviderSelector(config_path, cache_dir)
         self.rate_limiters = {}
+        self._rate_limited_providers = set()  # Session-level blacklist for rate-limited providers
 
         # Initialize rate limiters for each provider
         self._initialize_rate_limiters()
@@ -1844,23 +1835,23 @@ class DataManager:
 
         # Select fallback based on data type category (using implementation names)
         if data_type in statement_types:
-            # For statements, prefer FMP and Alpha Vantage
-            fallback_candidates = ['fmp', 'alpha_vantage', 'yahoo', 'twelvedata']
+            # For statements, prefer Alpha Vantage and Yahoo
+            fallback_candidates = ['alpha_vantage', 'yahoo', 'twelvedata', 'fmp']
         elif data_type in ratio_types:
-            # For ratios, prefer Yahoo Finance and FMP
-            fallback_candidates = ['yahoo', 'fmp', 'alpha_vantage', 'twelvedata']
+            # For ratios, prefer Yahoo Finance and Alpha Vantage
+            fallback_candidates = ['yahoo', 'alpha_vantage', 'twelvedata', 'fmp']
         elif data_type in profile_types:
-            # For profiles, prefer FMP and Yahoo Finance
-            fallback_candidates = ['fmp', 'yahoo', 'alpha_vantage', 'twelvedata']
+            # For profiles, prefer Yahoo Finance and Finnhub
+            fallback_candidates = ['yahoo', 'finnhub', 'alpha_vantage', 'twelvedata', 'fmp']
         elif data_type in calendar_types:
             # For calendar events, prefer Yahoo Finance
-            fallback_candidates = ['yahoo', 'fmp', 'alpha_vantage']
+            fallback_candidates = ['yahoo', 'finnhub', 'fmp', 'alpha_vantage']
         elif data_type in dividend_types:
-            # For dividends, prefer Yahoo Finance and FMP
-            fallback_candidates = ['yahoo', 'fmp', 'alpha_vantage']
+            # For dividends, prefer Yahoo Finance
+            fallback_candidates = ['yahoo', 'finnhub', 'fmp', 'alpha_vantage']
         else:
             # Default fallback for unknown data types
-            fallback_candidates = ['yahoo', 'fmp', 'alpha_vantage', 'twelvedata']
+            fallback_candidates = ['yahoo', 'finnhub', 'alpha_vantage', 'twelvedata', 'fmp']
 
         # Validate availability of fallback candidates
         return self._validate_provider_availability(fallback_candidates)
@@ -1969,6 +1960,11 @@ class DataManager:
         compatible_providers = []
 
         for provider in provider_sequence:
+            # Skip if provider is blacklisted for the remainder of the session (e.g. 429 hit)
+            if provider in self._rate_limited_providers:
+                _logger.debug("Skipping provider %s (rate limited in session)", provider)
+                continue
+
             # Check availability and initialize if needed
             if not self.provider_selector._initialize_downloader(provider):
                 _logger.debug("Provider %s not available, skipping", provider)
@@ -2036,32 +2032,32 @@ class DataManager:
 
             # International symbol adjustments
             if international:
-                if provider_info['provider'] in ['yfinance', 'twelvedata', 'alpha_vantage']:
+                if provider_info['provider'] in ['yahoo', 'twelvedata', 'alpha_vantage', 'finnhub']:
                     base_score += 1.0  # Boost for international-friendly providers
                 elif provider_info['provider'] in ['fmp', 'alpaca', 'tiingo']:
                     base_score -= 0.5  # Penalty for US-only providers
             else:
                 # US symbol adjustments
-                if provider_info['provider'] in ['fmp', 'alpaca', 'tiingo']:
+                if provider_info['provider'] in ['fmp', 'alpaca', 'tiingo', 'yahoo', 'finnhub', 'alpha_vantage', 'twelvedata']:
                     base_score += 0.5  # Boost for US-optimized providers
 
             # Symbol type adjustments
             if symbol_type == 'etf':
-                if provider_info['provider'] in ['yfinance', 'fmp']:
+                if provider_info['provider'] in ['yahoo', 'fmp']:
                     base_score += 0.3  # ETFs work well with these providers
             elif symbol_type == 'reit':
-                if provider_info['provider'] in ['yfinance', 'fmp']:
+                if provider_info['provider'] in ['yahoo', 'fmp']:
                     base_score += 0.3  # REITs work well with these providers
 
             # Market-specific adjustments
             if market == 'EU':
-                if provider_info['provider'] in ['yfinance', 'twelvedata']:
+                if provider_info['provider'] in ['yahoo', 'twelvedata']:
                     base_score += 0.5  # Better EU coverage
             elif market == 'UK':
-                if provider_info['provider'] in ['yfinance', 'alpha_vantage']:
+                if provider_info['provider'] in ['yahoo', 'alpha_vantage']:
                     base_score += 0.5  # Better UK coverage
             elif market == 'ASIA':
-                if provider_info['provider'] == 'yfinance':
+                if provider_info['provider'] == 'yahoo':
                     base_score += 0.5  # Yahoo has good Asian coverage
 
             return base_score
@@ -2101,14 +2097,14 @@ class DataManager:
 
         # Enhanced provider-specific compatibility rules
         provider_compatibility = {
-            'yfinance': {
+            'yahoo': {
                 'symbol_types': ['stock', 'etf', 'reit'],
                 'markets': ['US', 'UK', 'EU', 'CANADA', 'ASIA', 'OCEANIA'],
                 'exchanges': ['NYSE', 'NASDAQ', 'LSE', 'TSX', 'AMS', 'EPA', 'XETRA', 'HKEX', 'TSE'],
                 'international_support': True,
                 'strengths': ['international_coverage', 'calculated_ratios', 'ttm_metrics'],
                 'limitations': ['scraping_based', 'occasional_outages'],
-                'quality_score': 4
+                'quality_score': 5
             },
             'fmp': {
                 'symbol_types': ['stock', 'etf', 'reit'],
@@ -2126,7 +2122,7 @@ class DataManager:
                 'international_support': True,
                 'strengths': ['consistent_json', 'reliable_overview'],
                 'limitations': ['strict_rate_limits', 'limited_international'],
-                'quality_score': 4
+                'quality_score': 5
             },
             'alpaca': {
                 'symbol_types': ['stock', 'etf'],
@@ -2162,7 +2158,7 @@ class DataManager:
                 'international_support': True,
                 'strengths': ['good_api_design', 'international_coverage'],
                 'limitations': ['limited_free_fundamentals', 'paid_features'],
-                'quality_score': 4
+                'quality_score': 5
             },
             'finnhub': {
                 'symbol_types': ['stock', 'etf'],
@@ -2171,7 +2167,7 @@ class DataManager:
                 'international_support': True,
                 'strengths': ['real_time_data', 'news_integration'],
                 'limitations': ['limited_fundamentals', 'rate_limits'],
-                'quality_score': 3
+                'quality_score': 5
             }
         }
 
@@ -2327,6 +2323,11 @@ class DataManager:
         }
 
         for provider_name in providers:
+            # Skip if provider is blacklisted for the remainder of the session (e.g. 429 hit)
+            if provider_name in self._rate_limited_providers:
+                _logger.debug("Skipping provider %s (rate limited in this session)", provider_name)
+                continue
+
             success = False
 
             # Validate provider availability first
@@ -2361,6 +2362,13 @@ class DataManager:
                 except RateLimitException as e:
                     # Handle rate limiting with longer delays
                     delay = self._calculate_rate_limit_delay(e, attempt)
+                    
+                    # If it's a daily limit or if we've already tried and failed, blacklist for session
+                    if delay > 30 or attempt >= 1:
+                        _logger.warning("Strong rate limit hit for %s, blacklisting for remainder of session", provider_name)
+                        self._rate_limited_providers.add(provider_name)
+                        break # Stop retrying and move to next provider
+
                     _logger.warning("Rate limit hit for %s %s, waiting %.2f seconds",
                                   provider_name, symbol, delay)
                     self._sleep_with_jitter(delay, retry_config['jitter'])

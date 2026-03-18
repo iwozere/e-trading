@@ -3,24 +3,24 @@
   "description": "Fundamentals cache configuration with provider sequences and refresh intervals",
   "provider_sequences": {
     "statements": [
-      "fmp",
       "alpha_vantage",
       "yahoo",
-      "twelvedata"
+      "twelvedata",
+      "fmp"
     ],
     "ratios": [
       "finnhub",
       "yahoo",
-      "fmp",
       "alpha_vantage",
-      "twelvedata"
+      "twelvedata",
+      "fmp"
     ],
     "profile": [
       "finnhub",
-      "fmp",
       "yahoo",
       "alpha_vantage",
-      "twelvedata"
+      "twelvedata",
+      "fmp"
     ],
     "calendar": [
       "yahoo",
@@ -48,7 +48,7 @@
   },
   "refresh_intervals": {
     "profiles": "14d",
-    "ratios": "3d",
+    "ratios": "7d",
     "statements": "90d",
     "calendar": "7d",
     "dividends": "7d",
