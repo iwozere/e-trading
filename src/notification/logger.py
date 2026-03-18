@@ -50,7 +50,7 @@ class SensitiveDataFilter(logging.Filter):
     # Matches: key=value, key:value, "key":"value", 'key':'value'
     # Supports various delimiters: &, ?, ", ', or space
     MASK_PATTERN = re.compile(
-        rf'({"|".join(SENSITIVE_KEYS)})[=:]\s*(["\']?)([a-zA-Z0-9.\-_]{{{4,}}})\2',
+        rf'({"|".join(SENSITIVE_KEYS)})[=:]\s*(["\']?)([a-zA-Z0-9.\-_]{{4,}})\2',
         re.IGNORECASE
     )
 
@@ -58,13 +58,26 @@ class SensitiveDataFilter(logging.Filter):
         if isinstance(record.msg, str):
             record.msg = self._mask_sensitive_data(record.msg)
         if record.args:
-            new_args = []
-            for arg in record.args:
-                if isinstance(arg, str):
-                    new_args.append(self._mask_sensitive_data(arg))
-                else:
-                    new_args.append(arg)
-            record.args = tuple(new_args)
+            if isinstance(record.args, dict):
+                record.args = {
+                    k: self._mask_sensitive_data(v) if isinstance(v, str) else v
+                    for k, v in record.args.items()
+                }
+            else:
+                record.args = tuple(
+                    self._mask_sensitive_data(v) if isinstance(v, str) else v
+                    for v in record.args
+                )
+        # Also mask the fully-rendered message to catch pre-formatted strings
+        # (e.g. urllib3 passes the full URL with apikey as a single arg)
+        try:
+            rendered = record.getMessage()
+            masked = self._mask_sensitive_data(rendered)
+            if masked != rendered:
+                record.msg = masked
+                record.args = None
+        except Exception:
+            pass
         return True
 
     def _mask_sensitive_data(self, text: str) -> str:

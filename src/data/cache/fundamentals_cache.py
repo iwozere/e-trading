@@ -97,18 +97,20 @@ class FundamentalsCache:
         # Look for JSON files in the symbol directory
         for file_path in symbol_dir.glob("*.json"):
             try:
-                # Parse filename: {provider}_{timestamp}.json
+                # Parse filename: {provider}_{YYYYMMDD}_{HHMMSS}.json
+                # Provider names can contain underscores (e.g. alpha_vantage),
+                # so we identify the timestamp by splitting from the right:
+                # the last two segments are always date and time.
                 filename = file_path.stem
                 if '_' not in filename:
                     continue
 
-                # Split filename: provider_YYYYMMDD_HHMMSS
-                parts = filename.split('_')
+                parts = filename.rsplit('_', 2)  # ['alpha_vantage', '20260318', '141731']
                 if len(parts) < 3:
                     continue
 
-                provider_name = parts[0]
-                timestamp_str = '_'.join(parts[1:])  # Rejoin date and time parts
+                provider_name = parts[0]              # e.g. 'alpha_vantage'
+                timestamp_str = f"{parts[1]}_{parts[2]}"  # e.g. '20260318_141731'
 
                 # Skip if looking for specific provider and this isn't it
                 if provider and provider_name != provider:
@@ -268,12 +270,12 @@ class FundamentalsCache:
         pattern = f"{provider}_*.json"
         for file_path in symbol_dir.glob(pattern):
             try:
-                # Parse timestamp from filename
+                # Parse timestamp from filename (provider name may contain underscores)
                 filename = file_path.stem
-                parts = filename.split('_')
+                parts = filename.rsplit('_', 2)  # ['alpha_vantage', '20260318', '141731']
                 if len(parts) < 3:
                     continue
-                timestamp_str = '_'.join(parts[1:])  # Rejoin date and time parts
+                timestamp_str = f"{parts[1]}_{parts[2]}"
                 file_timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
 
                 # Remove if older than new data (using second-level precision)
@@ -398,15 +400,15 @@ class FundamentalsCache:
             removed_files = 0
             for file_path in symbol_dir.glob("*.json"):
                 try:
-                    # Parse timestamp from filename
+                    # Parse timestamp from filename (provider name may contain underscores)
                     filename = file_path.stem
                     if '_' not in filename:
                         continue
 
-                    parts = filename.split('_')
+                    parts = filename.rsplit('_', 2)  # ['alpha_vantage', '20260318', '141731']
                     if len(parts) < 3:
                         continue
-                    timestamp_str = '_'.join(parts[1:])  # Rejoin date and time parts
+                    timestamp_str = f"{parts[1]}_{parts[2]}"
                     file_timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
 
                     # Remove if expired
