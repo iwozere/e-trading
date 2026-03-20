@@ -10,9 +10,10 @@ import sys
 import argparse
 from pathlib import Path
 
-# Add project root to path
+# Add project root to path if not already present
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.scheduler.main import SchedulerApplication
 from src.scheduler.config import SchedulerServiceConfig
@@ -59,7 +60,7 @@ async def show_status(config: SchedulerServiceConfig) -> None:
         print(f"Environment: {status['environment']}")
         print(f"Database: {status['database_url']}")
         print(f"Max Workers: {status['max_workers']}")
-        print(f"Notification Service: {status['notification_service']}")
+        print(f"Notification Method: {status.get('notification_method', 'N/A')}")
 
         if status['scheduler']:
             scheduler_status = status['scheduler']
@@ -102,7 +103,6 @@ async def validate_config(config: SchedulerServiceConfig) -> None:
         print(f"✓ Environment: {config_dict['service']['environment']}")
         print(f"✓ Database URL: {config_dict['database']['url']}")
         print(f"✓ Max Workers: {config_dict['scheduler']['max_workers']}")
-        print(f"✓ Notification Service: {config_dict['notification']['service_url']}")
         print(f"✓ Alert Schema Dir: {config_dict['alert']['schema_dir']}")
 
         # Check schema directory

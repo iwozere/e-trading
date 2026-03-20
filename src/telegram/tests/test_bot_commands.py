@@ -1,50 +1,78 @@
 import pytest
 from aiogram.types import Message
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 import pandas as pd
-import src.telegram.bot as bot_module
+from src.telegram.handlers import misc as misc_handler
+from src.telegram.handlers import account as account_handler
+from src.telegram.handlers.common import HELP_TEXT
 from src.model.telegram_bot import TickerAnalysis, Fundamentals, Technicals
 
 @pytest.mark.asyncio
-async def test_cmd_start(monkeypatch):
+@patch("src.telegram.handlers.common.get_service_instances")
+async def test_cmd_start(mock_get_services):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
     message.from_user = MagicMock()
     message.from_user.id = 123
-    await bot_module.cmd_start(message)
-    message.answer.assert_awaited_with(bot_module.HELP_TEXT, parse_mode="HTML")
+    message.text = "/start"
+    
+    mock_get_services.return_value = (MagicMock(), None)
+    
+    await misc_handler.cmd_start(message)
+    
+    # We check if it called answer with at least the HELP_TEXT part
+    assert message.answer.called
+    call_args = message.answer.call_args[0][0]
+    assert HELP_TEXT in call_args
 
 @pytest.mark.asyncio
-async def test_cmd_help(monkeypatch):
+@patch("src.telegram.handlers.common.get_service_instances")
+async def test_cmd_help(mock_get_services):
     message = AsyncMock(spec=Message)
     message.answer = AsyncMock()
     message.from_user = MagicMock()
     message.from_user.id = 123
-    await bot_module.cmd_help(message)
-    message.answer.assert_awaited_with(bot_module.HELP_TEXT, parse_mode="HTML")
+    message.text = "/help"
+    
+    mock_get_services.return_value = (MagicMock(), None)
+    
+    await misc_handler.cmd_help(message)
+    message.answer.assert_awaited_with(HELP_TEXT)
 
 @pytest.mark.asyncio
-async def test_cmd_info(monkeypatch):
+@patch("src.telegram.handlers.account.get_service_instances")
+@patch("src.telegram.handlers.common.get_service_instances")
+async def test_cmd_info(mock_common_get_services, mock_account_get_services):
     message = AsyncMock(spec=Message)
-    message.answer = AsyncMock()
+    message.reply = AsyncMock()
     message.from_user = MagicMock()
     message.from_user.id = 123
-    await bot_module.cmd_info(message)
-    message.answer.assert_awaited()
+    message.text = "/info"
+    
+    mock_telegram_service = MagicMock()
+    mock_telegram_service.get_user_status.return_value = None
+    # Both layers must return the same values
+    mock_common_get_services.return_value = (mock_telegram_service, None)
+    mock_account_get_services.return_value = (mock_telegram_service, None)
+    
+    await account_handler.cmd_info(message)
+    message.reply.assert_awaited()
 
 @pytest.mark.asyncio
-async def test_unknown_command(monkeypatch):
+@patch("src.telegram.handlers.common.get_service_instances")
+async def test_unknown_command(mock_get_services):
     message = AsyncMock(spec=Message)
-    message.answer = AsyncMock()
+    message.reply = AsyncMock()
     message.from_user = MagicMock()
     message.from_user.id = 123
     message.text = "/unknown"
-    await bot_module.unknown_command(message)
-    message.answer.assert_awaited()
-    args, kwargs = message.answer.await_args
+    
+    mock_get_services.return_value = (MagicMock(), None)
+    
+    await misc_handler.unknown_command(message)
+    message.reply.assert_awaited()
+    args, kwargs = message.reply.await_args
     assert "Unknown command." in args[0]
-    assert "Welcome to the Telegram Screener Bot" in args[0]
-    assert kwargs["parse_mode"] == "HTML"
 
 def test_analyze_ticker_business_valid(monkeypatch):
     # Mock the common functions
@@ -99,7 +127,7 @@ def test_analyze_ticker_business_valid(monkeypatch):
     )
     monkeypatch.setattr('src.telegram.screener.business_logic.get_ohlcv', lambda *args, **kwargs: mock_df)
     monkeypatch.setattr('src.telegram.screener.business_logic.get_fundamentals', lambda *args, **kwargs: mock_fundamentals)
-    monkeypatch.setattr('src.telegram.screener.business_logic.calculate_technicals_unified', lambda *args, **kwargs: technicals)
+    monkeypatch.setattr('src.telegram.screener.business_logic.get_indicator_data', lambda *args, **kwargs: {"status": "ok", "technicals": technicals})
     # Patch TickerAnalysis to always include chart_image=None
     result = TickerAnalysis(
         ticker='AAPL', provider='yahoo', period='2y', interval='1d',

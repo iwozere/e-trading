@@ -19,6 +19,16 @@ cd "$PROJECT_ROOT"
 
 # Set environment variables
 export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
+export TELEGRAM_API_PORT=5004
+
+# Activate virtual environment if it exists
+if [ -f "$PROJECT_ROOT/.venv/bin/activate" ]; then
+    echo "Activating virtual environment..."
+    source "$PROJECT_ROOT/.venv/bin/activate"
+elif [ -f "$PROJECT_ROOT/venv/bin/activate" ]; then
+    echo "Activating virtual environment..."
+    source "$PROJECT_ROOT/venv/bin/activate"
+fi
 
 # Create logs directory if it doesn't exist
 mkdir -p logs

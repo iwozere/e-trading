@@ -1,0 +1,199 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.1, pytest-9.0.2, pluggy-1.6.0
+rootdir: C:\dev\cursor\e-trading
+configfile: pytest.ini
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 15 items
+
+src\telegram\tests\test_command_parser.py ........F.FFF..                [100%]
+
+================================== FAILURES ===================================
+___ test_parse_command_all_cases[/alerts add btcusdt 65000 above-expected8] ___
+
+text = '/alerts add btcusdt 65000 above'
+expected = {'command': 'alerts', 'positionals': ['ADD', 'BTCUSDT', '65000', 'ABOVE']}
+
+    @pytest.mark.parametrize("text,expected", [
+        ("/report AAPL", dict(command="report", args={"tickers": ["AAPL"], "email": False, "indicators": None, "period": None, "interval": None, "provider": None})),
+        ("/report btcusdt -email", dict(command="report", args={"tickers": ["BTCUSDT"], "email": True, "indicators": None, "period": None, "interval": None, "provider": None})),
+        ("/report AAPL BTCUSDT -email -indicators=RSI,MACD,MA50", dict(command="report", args={"tickers": ["AAPL", "BTCUSDT"], "email": True, "indicators": "rsi,macd,ma50", "period": None, "interval": None, "provider": None})),
+        ("/report tsla -period=3mo -interval=15m", dict(command="report", args={"tickers": ["TSLA"], "email": False, "indicators": None, "period": "3mo", "interval": "15m", "provider": None})),
+        ("/report btcusdt --provider=binance --period=1y --interval=1d", dict(command="report", args={"tickers": ["BTCUSDT"], "email": False, "indicators": None, "period": "1y", "interval": "1d", "provider": "binance"})),
+        ("/report aapl --unknownflag --email", dict(command="report", args={"tickers": ["AAPL"], "email": True, "indicators": None, "period": None, "interval": None, "provider": None}, extra_flags={"unknownflag": True})),
+        ("/report aapl --indicators=RSI", dict(command="report", args={"tickers": ["AAPL"], "email": False, "indicators": "rsi", "period": None, "interval": None, "provider": None})),
+        ("/report aapl -period=2y -interval=1d -provider=yahoo -email -indicators=RSI,MACD", dict(command="report", args={"tickers": ["AAPL"], "email": True, "indicators": "rsi,macd", "period": "2y", "interval": "1d", "provider": "yahoo"})),
+        ("/alerts add btcusdt 65000 above", dict(command="alerts", positionals=["ADD", "BTCUSDT", "65000", "ABOVE"])),
+        ("/alerts delete 2", dict(command="alerts", positionals=["DELETE", "2"])),
+        ("/schedules add aapl 09:00 -email", dict(command="schedules", positionals=["ADD", "AAPL", "09:00"], extra_flags={"email": True})),
+        ("/admin setlimit alerts 10", dict(command="admin", positionals=["SETLIMIT", "ALERTS", "10"])),
+        ("/feedback Please add moving averages!", dict(command="feedback", positionals=["PLEASE", "ADD", "MOVING", "AVERAGES!"]))
+    ])
+    def test_parse_command_all_cases(text, expected):
+        result = parse_command(text)
+        assert result.command == expected["command"]
+        # Check args (tickers always upper, others lower)
+        if "args" in expected:
+            for k, v in expected["args"].items():
+                if k == "tickers":
+                    assert isinstance(result.args[k], list)
+                    for t in result.args[k]:
+                        assert t.isupper()
+                    assert result.args[k] == v
+                elif v is not None:
+                    assert (result.args[k] == v)
+        # Check positionals (tickers always upper)
+        if "positionals" in expected:
+            for idx, val in enumerate(expected["positionals"]):
+                if idx == 1 and result.positionals[idx].isalpha():  # likely ticker
+>                   assert result.positionals[idx].isupper()
+E                   AssertionError: assert False
+E                    +  where False = <built-in method isupper of str object at 0x000002A2251AD350>()
+E                    +    where <built-in method isupper of str object at 0x000002A2251AD350> = 'btcusdt'.isupper
+
+src\telegram\tests\test_command_parser.py:36: AssertionError
+__ test_parse_command_all_cases[/schedules add aapl 09:00 -email-expected10] __
+
+text = '/schedules add aapl 09:00 -email'
+expected = {'command': 'schedules', 'extra_flags': {'email': True}, 'positionals': ['ADD', 'AAPL', '09:00']}
+
+    @pytest.mark.parametrize("text,expected", [
+        ("/report AAPL", dict(command="report", args={"tickers": ["AAPL"], "email": False, "indicators": None, "period": None, "interval": None, "provider": None})),
+        ("/report btcusdt -email", dict(command="report", args={"tickers": ["BTCUSDT"], "email": True, "indicators": None, "period": None, "interval": None, "provider": None})),
+        ("/report AAPL BTCUSDT -email -indicators=RSI,MACD,MA50", dict(command="report", args={"tickers": ["AAPL", "BTCUSDT"], "email": True, "indicators": "rsi,macd,ma50", "period": None, "interval": None, "provider": None})),
+        ("/report tsla -period=3mo -interval=15m", dict(command="report", args={"tickers": ["TSLA"], "email": False, "indicators": None, "period": "3mo", "interval": "15m", "provider": None})),
+        ("/report btcusdt --provider=binance --period=1y --interval=1d", dict(command="report", args={"tickers": ["BTCUSDT"], "email": False, "indicators": None, "period": "1y", "interval": "1d", "provider": "binance"})),
+        ("/report aapl --unknownflag --email", dict(command="report", args={"tickers": ["AAPL"], "email": True, "indicators": None, "period": None, "interval": None, "provider": None}, extra_flags={"unknownflag": True})),
+        ("/report aapl --indicators=RSI", dict(command="report", args={"tickers": ["AAPL"], "email": False, "indicators": "rsi", "period": None, "interval": None, "provider": None})),
+        ("/report aapl -period=2y -interval=1d -provider=yahoo -email -indicators=RSI,MACD", dict(command="report", args={"tickers": ["AAPL"], "email": True, "indicators": "rsi,macd", "period": "2y", "interval": "1d", "provider": "yahoo"})),
+        ("/alerts add btcusdt 65000 above", dict(command="alerts", positionals=["ADD", "BTCUSDT", "65000", "ABOVE"])),
+        ("/alerts delete 2", dict(command="alerts", positionals=["DELETE", "2"])),
+        ("/schedules add aapl 09:00 -email", dict(command="schedules", positionals=["ADD", "AAPL", "09:00"], extra_flags={"email": True})),
+        ("/admin setlimit alerts 10", dict(command="admin", positionals=["SETLIMIT", "ALERTS", "10"])),
+        ("/feedback Please add moving averages!", dict(command="feedback", positionals=["PLEASE", "ADD", "MOVING", "AVERAGES!"]))
+    ])
+    def test_parse_command_all_cases(text, expected):
+        result = parse_command(text)
+        assert result.command == expected["command"]
+        # Check args (tickers always upper, others lower)
+        if "args" in expected:
+            for k, v in expected["args"].items():
+                if k == "tickers":
+                    assert isinstance(result.args[k], list)
+                    for t in result.args[k]:
+                        assert t.isupper()
+                    assert result.args[k] == v
+                elif v is not None:
+                    assert (result.args[k] == v)
+        # Check positionals (tickers always upper)
+        if "positionals" in expected:
+            for idx, val in enumerate(expected["positionals"]):
+                if idx == 1 and result.positionals[idx].isalpha():  # likely ticker
+>                   assert result.positionals[idx].isupper()
+E                   AssertionError: assert False
+E                    +  where False = <built-in method isupper of str object at 0x000002A23A2F2A00>()
+E                    +    where <built-in method isupper of str object at 0x000002A23A2F2A00> = 'aapl'.isupper
+
+src\telegram\tests\test_command_parser.py:36: AssertionError
+_____ test_parse_command_all_cases[/admin setlimit alerts 10-expected11] ______
+
+text = '/admin setlimit alerts 10'
+expected = {'command': 'admin', 'positionals': ['SETLIMIT', 'ALERTS', '10']}
+
+    @pytest.mark.parametrize("text,expected", [
+        ("/report AAPL", dict(command="report", args={"tickers": ["AAPL"], "email": False, "indicators": None, "period": None, "interval": None, "provider": None})),
+        ("/report btcusdt -email", dict(command="report", args={"tickers": ["BTCUSDT"], "email": True, "indicators": None, "period": None, "interval": None, "provider": None})),
+        ("/report AAPL BTCUSDT -email -indicators=RSI,MACD,MA50", dict(command="report", args={"tickers": ["AAPL", "BTCUSDT"], "email": True, "indicators": "rsi,macd,ma50", "period": None, "interval": None, "provider": None})),
+        ("/report tsla -period=3mo -interval=15m", dict(command="report", args={"tickers": ["TSLA"], "email": False, "indicators": None, "period": "3mo", "interval": "15m", "provider": None})),
+        ("/report btcusdt --provider=binance --period=1y --interval=1d", dict(command="report", args={"tickers": ["BTCUSDT"], "email": False, "indicators": None, "period": "1y", "interval": "1d", "provider": "binance"})),
+        ("/report aapl --unknownflag --email", dict(command="report", args={"tickers": ["AAPL"], "email": True, "indicators": None, "period": None, "interval": None, "provider": None}, extra_flags={"unknownflag": True})),
+        ("/report aapl --indicators=RSI", dict(command="report", args={"tickers": ["AAPL"], "email": False, "indicators": "rsi", "period": None, "interval": None, "provider": None})),
+        ("/report aapl -period=2y -interval=1d -provider=yahoo -email -indicators=RSI,MACD", dict(command="report", args={"tickers": ["AAPL"], "email": True, "indicators": "rsi,macd", "period": "2y", "interval": "1d", "provider": "yahoo"})),
+        ("/alerts add btcusdt 65000 above", dict(command="alerts", positionals=["ADD", "BTCUSDT", "65000", "ABOVE"])),
+        ("/alerts delete 2", dict(command="alerts", positionals=["DELETE", "2"])),
+        ("/schedules add aapl 09:00 -email", dict(command="schedules", positionals=["ADD", "AAPL", "09:00"], extra_flags={"email": True})),
+        ("/admin setlimit alerts 10", dict(command="admin", positionals=["SETLIMIT", "ALERTS", "10"])),
+        ("/feedback Please add moving averages!", dict(command="feedback", positionals=["PLEASE", "ADD", "MOVING", "AVERAGES!"]))
+    ])
+    def test_parse_command_all_cases(text, expected):
+        result = parse_command(text)
+        assert result.command == expected["command"]
+        # Check args (tickers always upper, others lower)
+        if "args" in expected:
+            for k, v in expected["args"].items():
+                if k == "tickers":
+                    assert isinstance(result.args[k], list)
+                    for t in result.args[k]:
+                        assert t.isupper()
+                    assert result.args[k] == v
+                elif v is not None:
+                    assert (result.args[k] == v)
+        # Check positionals (tickers always upper)
+        if "positionals" in expected:
+            for idx, val in enumerate(expected["positionals"]):
+                if idx == 1 and result.positionals[idx].isalpha():  # likely ticker
+>                   assert result.positionals[idx].isupper()
+E                   AssertionError: assert False
+E                    +  where False = <built-in method isupper of str object at 0x000002A23A2F2640>()
+E                    +    where <built-in method isupper of str object at 0x000002A23A2F2640> = 'alerts'.isupper
+
+src\telegram\tests\test_command_parser.py:36: AssertionError
+_ test_parse_command_all_cases[/feedback Please add moving averages!-expected12] _
+
+text = '/feedback Please add moving averages!'
+expected = {'command': 'feedback', 'positionals': ['PLEASE', 'ADD', 'MOVING', 'AVERAGES!']}
+
+    @pytest.mark.parametrize("text,expected", [
+        ("/report AAPL", dict(command="report", args={"tickers": ["AAPL"], "email": False, "indicators": None, "period": None, "interval": None, "provider": None})),
+        ("/report btcusdt -email", dict(command="report", args={"tickers": ["BTCUSDT"], "email": True, "indicators": None, "period": None, "interval": None, "provider": None})),
+        ("/report AAPL BTCUSDT -email -indicators=RSI,MACD,MA50", dict(command="report", args={"tickers": ["AAPL", "BTCUSDT"], "email": True, "indicators": "rsi,macd,ma50", "period": None, "interval": None, "provider": None})),
+        ("/report tsla -period=3mo -interval=15m", dict(command="report", args={"tickers": ["TSLA"], "email": False, "indicators": None, "period": "3mo", "interval": "15m", "provider": None})),
+        ("/report btcusdt --provider=binance --period=1y --interval=1d", dict(command="report", args={"tickers": ["BTCUSDT"], "email": False, "indicators": None, "period": "1y", "interval": "1d", "provider": "binance"})),
+        ("/report aapl --unknownflag --email", dict(command="report", args={"tickers": ["AAPL"], "email": True, "indicators": None, "period": None, "interval": None, "provider": None}, extra_flags={"unknownflag": True})),
+        ("/report aapl --indicators=RSI", dict(command="report", args={"tickers": ["AAPL"], "email": False, "indicators": "rsi", "period": None, "interval": None, "provider": None})),
+        ("/report aapl -period=2y -interval=1d -provider=yahoo -email -indicators=RSI,MACD", dict(command="report", args={"tickers": ["AAPL"], "email": True, "indicators": "rsi,macd", "period": "2y", "interval": "1d", "provider": "yahoo"})),
+        ("/alerts add btcusdt 65000 above", dict(command="alerts", positionals=["ADD", "BTCUSDT", "65000", "ABOVE"])),
+        ("/alerts delete 2", dict(command="alerts", positionals=["DELETE", "2"])),
+        ("/schedules add aapl 09:00 -email", dict(command="schedules", positionals=["ADD", "AAPL", "09:00"], extra_flags={"email": True})),
+        ("/admin setlimit alerts 10", dict(command="admin", positionals=["SETLIMIT", "ALERTS", "10"])),
+        ("/feedback Please add moving averages!", dict(command="feedback", positionals=["PLEASE", "ADD", "MOVING", "AVERAGES!"]))
+    ])
+    def test_parse_command_all_cases(text, expected):
+        result = parse_command(text)
+        assert result.command == expected["command"]
+        # Check args (tickers always upper, others lower)
+        if "args" in expected:
+            for k, v in expected["args"].items():
+                if k == "tickers":
+                    assert isinstance(result.args[k], list)
+                    for t in result.args[k]:
+                        assert t.isupper()
+                    assert result.args[k] == v
+                elif v is not None:
+                    assert (result.args[k] == v)
+        # Check positionals (tickers always upper)
+        if "positionals" in expected:
+            for idx, val in enumerate(expected["positionals"]):
+                if idx == 1 and result.positionals[idx].isalpha():  # likely ticker
+>                   assert result.positionals[idx].isupper()
+E                   AssertionError: assert False
+E                    +  where False = <built-in method isupper of str object at 0x000002A23A2F2760>()
+E                    +    where <built-in method isupper of str object at 0x000002A23A2F2760> = 'add'.isupper
+
+src\telegram\tests\test_command_parser.py:36: AssertionError
+============================== warnings summary ===============================
+src/telegram/tests/test_command_parser.py::test_parse_command_all_cases[/report btcusdt --provider=binance --period=1y --interval=1d-expected4]
+  C:\dev\cursor\e-trading\.venv\Lib\site-packages\websockets\legacy\__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+src/telegram/tests/test_command_parser.py::test_parse_command_all_cases[/report btcusdt --provider=binance --period=1y --interval=1d-expected4]
+  C:\dev\cursor\e-trading\.venv\Lib\site-packages\eventkit\util.py:21: DeprecationWarning: There is no current event loop
+    return asyncio.get_event_loop_policy().get_event_loop()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED src/telegram/tests/test_command_parser.py::test_parse_command_all_cases[/alerts add btcusdt 65000 above-expected8]
+FAILED src/telegram/tests/test_command_parser.py::test_parse_command_all_cases[/schedules add aapl 09:00 -email-expected10]
+FAILED src/telegram/tests/test_command_parser.py::test_parse_command_all_cases[/admin setlimit alerts 10-expected11]
+FAILED src/telegram/tests/test_command_parser.py::test_parse_command_all_cases[/feedback Please add moving averages!-expected12]
+================== 4 failed, 11 passed, 2 warnings in 2.12s ===================

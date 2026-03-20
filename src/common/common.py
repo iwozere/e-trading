@@ -26,12 +26,11 @@ def determine_provider(ticker: str) -> str:
     Returns:
         str: Canonical provider name (e.g., 'yahoo', 'binance')
     """
-    # Get the best provider instance for this ticker
-    best_provider = _provider_selector.get_best_provider(ticker, "1d")
+    # Get the best provider canonical name for this ticker
+    best_provider_name = _provider_selector.get_best_provider(ticker, "1d")
     
-    # Each downloader now implements get_provider_name()
-    if best_provider:
-        return best_provider.get_provider_name()
+    if best_provider_name:
+        return best_provider_name
         
     return "yahoo"  # Default fallback
 
@@ -64,29 +63,55 @@ def get_data_provider_config(ticker: str):
 
 def analyze_period_interval(period: str = "2y", interval: str = "1d"):
     """
-    Given a period (e.g., '2y', '6mo', '1w') and interval, return (start_date, end_date) as datetime.datetime objects.
+    Given a period string (e.g. '2y', '6mo', '1w', '30d') return
+    (start_date, end_date) as ``datetime`` objects.
+
+    Supported suffixes (checked longest-first to avoid ambiguity):
+        ``mo`` – calendar months  (30-day approximation)
+        ``y``  – years            (365-day approximation)
+        ``w``  – weeks
+        ``d``  – days
+        ``m``  – months           (alias for ``mo``)
     """
     from datetime import datetime, timedelta
-    start_date = None
     end_date = datetime.now()
 
-    if period.endswith("y"):
-        years = int(period[:-1])
-        start_date = datetime.now() - timedelta(days=365*years)
-    elif period.endswith("m"):
-        months = int(period[:-1])
-        start_date = datetime.now() - timedelta(days=30*months)
-    elif period.endswith("mo"):
-        months = int(period[:-2])
-        start_date = datetime.now() - timedelta(days=30*months)
+    period = period.strip().lower()
+
+    # NOTE: check 'mo' before 'm' – otherwise '6mo' matches 'm' first.
+    if period.endswith("mo"):
+        start_date = end_date - timedelta(days=30 * int(period[:-2]))
+    elif period.endswith("y"):
+        start_date = end_date - timedelta(days=365 * int(period[:-1]))
     elif period.endswith("w"):
-        weeks = int(period[:-1])
-        start_date = datetime.now() - timedelta(days=7*weeks)
+        start_date = end_date - timedelta(weeks=int(period[:-1]))
+    elif period.endswith("d"):
+        start_date = end_date - timedelta(days=int(period[:-1]))
+    elif period.endswith("m"):
+        # 'm' is an alias for 'mo' (months), NOT minutes
+        start_date = end_date - timedelta(days=30 * int(period[:-1]))
     else:
-        # Default to 2 years if period format is not recognized
-        start_date = datetime.now() - timedelta(days=730)
+        # Unrecognised format – default to 2 years
+        start_date = end_date - timedelta(days=730)
 
     return start_date, end_date
+
+
+
+_data_manager = None
+
+
+def _get_data_manager():
+    """Lazy singleton for DataManager. Expensive to construct; create once."""
+    global _data_manager
+    if _data_manager is None:
+        from src.data.data_manager import DataManager
+        try:
+            from config.donotshare.donotshare import DATA_CACHE_DIR
+        except ImportError:
+            DATA_CACHE_DIR = "c:/data-cache"
+        _data_manager = DataManager(cache_dir=DATA_CACHE_DIR)
+    return _data_manager
 
 
 def get_ohlcv(ticker: str, interval: str, period: str, provider: str = None, **kwargs):
@@ -108,18 +133,21 @@ def get_ohlcv(ticker: str, interval: str, period: str, provider: str = None, **k
         ValueError: If period/interval combination is invalid
         RuntimeError: If data retrieval fails
     """
-    from src.data.data_manager import DataManager
-
-    # Calculate date range
     start_date, end_date = analyze_period_interval(period, interval)
+    return _get_data_manager().get_ohlcv(ticker, interval, start_date, end_date, **kwargs)
 
-    # Initialize DataManager with caching
-    try:
-        from config.donotshare.donotshare import DATA_CACHE_DIR
-    except ImportError:
-        DATA_CACHE_DIR = "c:/data-cache"
 
-    data_manager = DataManager(cache_dir=DATA_CACHE_DIR)
+def get_fundamentals(ticker: str, data_type: str = "general", **kwargs):
+    """
+    Retrieve fundamentals data for a ticker using the DataManager with caching support.
 
-    # Get OHLCV data with caching
-    return data_manager.get_ohlcv(ticker, interval, start_date, end_date, **kwargs)
+    Args:
+        ticker: Stock or crypto ticker (e.g., 'AAPL')
+        data_type: Type of fundamental data ('general', 'ratios', 'statements')
+        **kwargs: Additional arguments forwarded to DataManager
+
+    Returns:
+        dict: Fundamentals data, or None if unavailable
+    """
+    return _get_data_manager().get_fundamentals(ticker, data_type=data_type, **kwargs)
+

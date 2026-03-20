@@ -254,4 +254,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Migration example failed (service may not be running): {e}")
         print("To run this example, start the notification service first:")
-        print("  python src/notification/service/main.py")
+        print("  python src/notification/notification_db_centric_bot.py")

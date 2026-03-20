@@ -1,529 +1,246 @@
-# Monitoring Endpoint Design - Channel Health Check
+# Channel Health Monitoring - Database-Centric Design
 
 ## Overview
 
-This document provides a detailed implementation plan for adding a health check endpoint that shows channel ownership and queue status for both Telegram Bot and Notification Service.
+This document describes how the Notification Service monitors and reports the health of its
+notification channels. Unlike a REST-endpoint approach, the system uses **database-centric health
+reporting**: health state is written to the `msg_system_health` table and can be queried via SQL
+or `SystemHealthService`.
+
+There are **no HTTP health endpoints** in the Notification Service or Telegram Bot — both services
+are standalone processes that report health to the shared database.
 
 ---
 
-## Part 3: Detailed Implementation Plan
+## Architecture
 
-### Architecture Decision
-
-**Where to add the endpoint?**
-
-We have **two separate services** that need to report their status:
-
-1. **Telegram Bot** - Runs its own async aiogram application
-2. **Notification Service** - Has its own FastAPI/Flask server
-
-**Recommended Approach: Add endpoint to BOTH services**
-
-Each service exposes its own `/health/channels` endpoint showing what it owns.
+```
+notification_db_centric_bot.py
+│
+├── HealthReporter (reports every 60s)
+│   ├── _report_service_health()      → msg_system_health [system='notification']
+│   └── _report_channel_health()      → msg_system_health [system='notification', component='email']
+│
+└── health_monitor (HealthMonitor)    → in-memory status + configures per-channel checks
+    └── _monitor_channel_health()     → polls channel.check_health() every 60s
+```
 
 ---
 
-## Implementation for Notification Service
+## Components
 
-### File: `src/notification/service/health_endpoints.py` (NEW)
+### 1. HealthReporter (`notification_db_centric_bot.py`)
 
+The `HealthReporter` class runs as a periodic background task that writes health state to the
+database every `health_check_interval_seconds` (default: 60 seconds).
+
+**Service-level health** (`system='notification'`, `component=None`):
 ```python
-"""
-Health check endpoints for notification service.
-Shows channel ownership and queue status.
-"""
-
-from fastapi import APIRouter, Depends
-from typing import Dict, Any
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-
-from src.notification.service.database import get_db
-from src.notification.service.config import get_config
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
-
-router = APIRouter(prefix="/health", tags=["health"])
-
-
-@router.get("/channels")
-async def get_channel_health(db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """
-    Get health status for notification service channels.
-
-    Returns:
-        Channel ownership, queue status, and health metrics
-    """
-    config = get_config()
-
-    # Get enabled channels from config
-    enabled_channels = config.enabled_channels
-
-    # Query database for queue status
-    queue_stats = _get_queue_stats(db, enabled_channels)
-
-    # Get service uptime
-    uptime_seconds = _get_service_uptime()
-
-    return {
-        "service": "notification_service",
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "channels": {
-            "owned": enabled_channels,
-            "telegram_owned_by": "telegram_bot",  # Explicitly state telegram is NOT owned
-            "email_status": "enabled" if "email" in enabled_channels else "disabled",
-            "sms_status": "enabled" if "sms" in enabled_channels else "disabled"
-        },
-        "queue": {
-            "pending": queue_stats["pending"],
-            "processing": queue_stats["processing"],
-            "failed_last_hour": queue_stats["failed_last_hour"],
-            "delivered_last_hour": queue_stats["delivered_last_hour"]
-        },
-        "uptime_seconds": uptime_seconds,
-        "config": {
-            "poll_interval": config.processing.poll_interval,
-            "batch_size": config.processing.batch_size
-        }
+health_service.update_system_health(
+    system='notification',
+    component=None,
+    status=SystemHealthStatus.HEALTHY,  # or DOWN if processor is not running
+    metadata={
+        'service': config.service_name,
+        'message_processor_running': message_processor.is_running,
+        'message_poller_running': message_poller.running,
     }
-
-
-def _get_queue_stats(db: Session, channels: list) -> Dict[str, int]:
-    """
-    Get queue statistics for owned channels.
-
-    Args:
-        db: Database session
-        channels: List of owned channels (e.g., ["email"])
-
-    Returns:
-        Dictionary with queue counts
-    """
-    from src.notification.service.database import Message
-
-    try:
-        # Build query to filter by owned channels
-        # WHERE 'email' = ANY(channels) OR 'sms' = ANY(channels)
-        channel_filters = []
-        for channel in channels:
-            channel_filters.append(Message.channels.contains([channel]))
-
-        # Pending count
-        pending_query = db.query(Message).filter(
-            Message.status == "PENDING"
-        )
-        if channel_filters:
-            from sqlalchemy import or_
-            pending_query = pending_query.filter(or_(*channel_filters))
-        pending_count = pending_query.count()
-
-        # Processing count
-        processing_query = db.query(Message).filter(
-            Message.status == "PROCESSING"
-        )
-        if channel_filters:
-            processing_query = processing_query.filter(or_(*channel_filters))
-        processing_count = processing_query.count()
-
-        # Failed in last hour
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-        failed_query = db.query(Message).filter(
-            Message.status == "FAILED",
-            Message.updated_at >= one_hour_ago
-        )
-        if channel_filters:
-            failed_query = failed_query.filter(or_(*channel_filters))
-        failed_count = failed_query.count()
-
-        # Delivered in last hour
-        delivered_query = db.query(Message).filter(
-            Message.status == "DELIVERED",
-            Message.delivered_at >= one_hour_ago
-        )
-        if channel_filters:
-            delivered_query = delivered_query.filter(or_(*channel_filters))
-        delivered_count = delivered_query.count()
-
-        return {
-            "pending": pending_count,
-            "processing": processing_count,
-            "failed_last_hour": failed_count,
-            "delivered_last_hour": delivered_count
-        }
-
-    except Exception as e:
-        _logger.exception("Error getting queue stats:")
-        return {
-            "pending": -1,
-            "processing": -1,
-            "failed_last_hour": -1,
-            "delivered_last_hour": -1
-        }
-
-
-# Global variable to track service start time
-_service_start_time = datetime.utcnow()
-
-
-def _get_service_uptime() -> int:
-    """Get service uptime in seconds."""
-    return int((datetime.utcnow() - _service_start_time).total_seconds())
+)
 ```
 
-### Integration into Notification Service
-
-**File: `src/notification/notification_db_centric_bot.py`**
-
-Add to the FastAPI app initialization:
-
+**Channel-level health** (`system='notification'`, `component='email'`):
 ```python
-from src.notification.service.health_endpoints import router as health_router
-
-# In the FastAPI app setup:
-app.include_router(health_router)
+health_service.update_notification_channel_health(
+    channel='email',
+    status=SystemHealthStatus.HEALTHY,  # or DOWN
+    response_time_ms=response_time_ms,
+    error_message=error_message,
+    metadata={'last_check': datetime.now(timezone.utc).isoformat()}
+)
 ```
+
+### 2. HealthMonitor (`src/notification/service/health_monitor.py`)
+
+The `HealthMonitor` manages in-memory health state for each active channel. It runs periodic
+background tasks that:
+
+1. Call `channel_instance.check_health()` (connectivity, response time, success rate)
+2. Evaluate results against configurable thresholds
+3. Auto-disable channels after 3 consecutive failures
+4. Auto-enable channels after 2 consecutive successes
+5. Trigger callbacks on status changes (for fallback routing)
+
+Each channel is configured with a `HealthCheckConfig`:
+```python
+from src.notification.service.health_monitor import HealthCheckConfig, HealthCheckType
+
+health_config = HealthCheckConfig(
+    channel='email',
+    check_interval_seconds=60,
+    auto_disable_threshold=3,   # disable after 3 consecutive failures
+    auto_enable_threshold=2,    # re-enable after 2 consecutive successes
+    enabled_checks={HealthCheckType.CONNECTIVITY, HealthCheckType.RESPONSE_TIME}
+)
+health_monitor.configure_channel(health_config)
+```
+
+### 3. Channel Health Checks
+
+Each channel plugin implements `check_health() -> ChannelHealth`:
+
+- **Email**: Tests SMTP connectivity + authentication
+- **Telegram** (future): Tests Telegram Bot API via `get_me()`
+- **SMS** (future): Tests provider API connectivity
+
+Health status levels: `HEALTHY`, `DEGRADED`, `DOWN`
 
 ---
 
-## Implementation for Telegram Bot
+## Database Schema for Health State
 
-### File: `src/telegram/services/health_handler.py` (NEW)
-
-```python
-"""
-Health check handler for telegram bot.
-Shows Telegram channel ownership and queue status.
-"""
-
-from typing import Dict, Any
-from datetime import datetime, timedelta
-
-from src.notification.service.message_queue_client import get_message_queue_client
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
-
-
-class TelegramHealthHandler:
-    """
-    Provides health check information for Telegram bot.
-    """
-
-    def __init__(self, queue_processor):
-        """
-        Initialize health handler.
-
-        Args:
-            queue_processor: TelegramQueueProcessor instance
-        """
-        self.queue_processor = queue_processor
-        self.message_queue_client = get_message_queue_client()
-        self.start_time = datetime.utcnow()
-
-    def get_health_status(self) -> Dict[str, Any]:
-        """
-        Get comprehensive health status for telegram bot.
-
-        Returns:
-            Dictionary with health metrics
-        """
-        try:
-            # Get queue stats from queue processor
-            processor_stats = self.queue_processor.get_stats()
-
-            # Get pending telegram messages from database
-            pending_count = self.message_queue_client.get_pending_count_for_channels(
-                ["telegram"]
-            )
-
-            # Calculate uptime
-            uptime_seconds = int((datetime.utcnow() - self.start_time).total_seconds())
-
-            return {
-                "service": "telegram_bot",
-                "status": "healthy" if processor_stats["running"] else "stopped",
-                "timestamp": datetime.utcnow().isoformat(),
-                "channels": {
-                    "owned": ["telegram"],
-                    "email_owned_by": "notification_service",  # Explicitly state email is NOT owned
-                    "sms_owned_by": "notification_service",
-                    "telegram_status": "enabled"
-                },
-                "queue": {
-                    "pending": pending_count,
-                    "processor_running": processor_stats["running"],
-                    "poll_interval": processor_stats["poll_interval"]
-                },
-                "uptime_seconds": uptime_seconds,
-                "aiogram_version": self._get_aiogram_version()
-            }
-
-        except Exception as e:
-            _logger.exception("Error getting health status:")
-            return {
-                "service": "telegram_bot",
-                "status": "error",
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-
-    def _get_aiogram_version(self) -> str:
-        """Get aiogram version."""
-        try:
-            import aiogram
-            return aiogram.__version__
-        except Exception:
-            return "unknown"
-```
-
-### Integration into Telegram Bot
-
-**File: `src/telegram/telegram_bot.py`**
-
-Add command handler:
-
-```python
-from src.telegram.services.health_handler import TelegramHealthHandler
-
-# After initializing queue processor:
-health_handler = TelegramHealthHandler(queue_processor)
-
-# Add command handler:
-@dp.message(Command("health"))
-async def health_command(message: types.Message):
-    """
-    Show health status of telegram bot.
-    Admin command to check service health.
-    """
-    # Optional: Add admin-only check
-    # if str(message.from_user.id) not in ADMIN_USER_IDS:
-    #     await message.reply("❌ Admin command only")
-    #     return
-
-    health_status = health_handler.get_health_status()
-
-    # Format response
-    status_emoji = "✅" if health_status["status"] == "healthy" else "❌"
-
-    response = f"""
-{status_emoji} **Telegram Bot Health Status**
-
-**Service**: {health_status['service']}
-**Status**: {health_status['status']}
-**Uptime**: {health_status['uptime_seconds']}s
-
-**Owned Channels**: {', '.join(health_status['channels']['owned'])}
-
-**Queue Status**:
-• Pending: {health_status['queue']['pending']}
-• Processor: {"Running" if health_status['queue']['processor_running'] else "Stopped"}
-• Poll interval: {health_status['queue']['poll_interval']}s
-
-**Note**: Email/SMS handled by Notification Service
-    """.strip()
-
-    await message.reply(response, parse_mode="Markdown")
-```
-
----
-
-## Alternative: Web Endpoint for Telegram Bot
-
-If you want an HTTP endpoint (not just Telegram command), you can add a simple Flask/FastAPI server:
-
-### File: `src/telegram/services/health_server.py` (NEW)
-
-```python
-"""
-Lightweight HTTP server for telegram bot health checks.
-Runs alongside the aiogram bot.
-"""
-
-from flask import Flask, jsonify
-import threading
-from src.notification.logger import setup_logger
-
-_logger = setup_logger(__name__)
-
-app = Flask(__name__)
-
-
-class HealthServer:
-    """
-    Simple HTTP server for health checks.
-    Runs on separate thread alongside telegram bot.
-    """
-
-    def __init__(self, health_handler, port=8081):
-        """
-        Initialize health server.
-
-        Args:
-            health_handler: TelegramHealthHandler instance
-            port: Port to listen on (default: 8081)
-        """
-        self.health_handler = health_handler
-        self.port = port
-        self._setup_routes()
-
-    def _setup_routes(self):
-        """Setup Flask routes."""
-
-        @app.route("/health/channels", methods=["GET"])
-        def get_channels():
-            """Get channel health status."""
-            return jsonify(self.health_handler.get_health_status())
-
-        @app.route("/health", methods=["GET"])
-        def get_health():
-            """Simple health check."""
-            return jsonify({"status": "ok"})
-
-    def start(self):
-        """Start the health check server in a background thread."""
-        def run_server():
-            _logger.info("Starting health check server on port %s", self.port)
-            app.run(host="0.0.0.0", port=self.port, debug=False)
-
-        thread = threading.Thread(target=run_server, daemon=True)
-        thread.start()
-        _logger.info("Health check server started")
-```
-
-### Integration
-
-```python
-# In telegram_bot.py startup:
-from src.telegram.services.health_server import HealthServer
-
-health_handler = TelegramHealthHandler(queue_processor)
-health_server = HealthServer(health_handler, port=8081)
-health_server.start()
-```
-
----
-
-## Example Response
-
-### Notification Service (`GET /health/channels`)
-
-```json
-{
-  "service": "notification_service",
-  "status": "healthy",
-  "timestamp": "2025-11-20T21:00:00",
-  "channels": {
-    "owned": ["email"],
-    "telegram_owned_by": "telegram_bot",
-    "email_status": "enabled",
-    "sms_status": "disabled"
-  },
-  "queue": {
-    "pending": 3,
-    "processing": 1,
-    "failed_last_hour": 0,
-    "delivered_last_hour": 45
-  },
-  "uptime_seconds": 86400,
-  "config": {
-    "poll_interval": 5,
-    "batch_size": 10
-  }
-}
-```
-
-### Telegram Bot (`GET http://localhost:8081/health/channels`)
-
-```json
-{
-  "service": "telegram_bot",
-  "status": "healthy",
-  "timestamp": "2025-11-20T21:00:00",
-  "channels": {
-    "owned": ["telegram"],
-    "email_owned_by": "notification_service",
-    "sms_owned_by": "notification_service",
-    "telegram_status": "enabled"
-  },
-  "queue": {
-    "pending": 2,
-    "processor_running": true,
-    "poll_interval": 5
-  },
-  "uptime_seconds": 172800,
-  "aiogram_version": "3.1.1"
-}
-```
-
----
-
-## Dashboard Query
-
-### SQL Query for Operational Dashboard
+Health data is stored in `msg_system_health`:
 
 ```sql
--- Channel distribution and performance metrics (last 24 hours)
+-- Notification service overall health
+SELECT * FROM msg_system_health
+WHERE system = 'notification' AND component IS NULL;
+
+-- Channel-level health (e.g., email)
+SELECT * FROM msg_system_health
+WHERE system = 'notification' AND component = 'email';
+
+-- Backward-compatible view across all notification channels
+SELECT channel, status, last_success, last_failure, failure_count,
+       avg_response_time_ms, error_message, checked_at
+FROM v_channel_health;
+-- (v_channel_health is a view filtering WHERE system='notification' AND component IS NOT NULL)
+```
+
+Status values: `HEALTHY`, `DEGRADED`, `DOWN`, `UNKNOWN`
+
+---
+
+## Querying Health State
+
+### Via SQL (Operational Dashboard)
+
+```sql
+-- Current health status of all managed components
+SELECT system, component, status, failure_count, avg_response_time_ms,
+       last_success, error_message, checked_at
+FROM msg_system_health
+WHERE system = 'notification'
+ORDER BY component NULLS FIRST;
+
+-- Channel message delivery performance (last 24 hours)
 SELECT
     channels,
     status,
-    COUNT(*) as message_count,
-    AVG(EXTRACT(EPOCH FROM (delivered_at - created_at))) as avg_delivery_time_sec,
-    MIN(created_at) as first_message,
-    MAX(created_at) as last_message
+    COUNT(*) AS message_count,
+    AVG(EXTRACT(EPOCH FROM (delivered_at - created_at))) AS avg_delivery_time_sec,
+    MIN(created_at) AS first_message,
+    MAX(created_at) AS last_message
 FROM messages
 WHERE created_at > NOW() - INTERVAL '24 hours'
 GROUP BY channels, status
 ORDER BY channels, status;
 
--- Results will look like:
--- channels        | status     | message_count | avg_delivery_time_sec | first_message | last_message
--- {telegram}      | DELIVERED  | 245           | 6.2                   | ...           | ...
--- {telegram}      | FAILED     | 3             | NULL                  | ...           | ...
--- {email}         | DELIVERED  | 18            | 12.5                  | ...           | ...
--- {email}         | PENDING    | 2             | NULL                  | ...           | ...
--- {telegram,email}| DELIVERED  | 5             | 8.1                   | ...           | ...
+-- Results example:
+-- channels       | status    | msg_count | avg_delivery_time_sec
+-- {email}        | DELIVERED | 45        | 12.5
+-- {email}        | PENDING   | 2         | NULL
+-- {telegram}     | DELIVERED | 245       | 6.2
+-- {telegram}     | FAILED    | 3         | NULL
+```
+
+### Via Python (`SystemHealthService`)
+
+```python
+from src.data.db.services.system_health_service import SystemHealthService
+
+health_service = SystemHealthService()
+
+# Read service health
+# (Low-level DB query — use uow pattern if needed)
+```
+
+### Via In-Memory State (`HealthMonitor`)
+
+```python
+from src.notification.service.health_monitor import health_monitor
+
+# Get status of a specific channel
+status = health_monitor.get_channel_status('email')
+print(f"Email: {status.overall_status.value}, uptime: {status.uptime_percentage:.1f}%")
+
+# Get all channel statuses
+all_statuses = health_monitor.get_all_statuses()
+for channel, status in all_statuses.items():
+    print(f"{channel}: {status.overall_status.value}")
+
+# Get overall health summary
+summary = health_monitor.get_health_summary()
+print(summary)  # total_channels, status_distribution, healthy_percentage, etc.
 ```
 
 ---
 
-## Summary
+## Startup Flow
 
-### What We're Adding
+When `notification_db_centric_bot.py` starts:
 
-1. **Notification Service**:
-   - New file: `src/notification/service/health_endpoints.py`
-   - Endpoint: `GET /health/channels`
-   - Shows: Email/SMS ownership and queue stats
-
-2. **Telegram Bot** (Two Options):
-
-   **Option A - Telegram Command**:
-   - New file: `src/telegram/services/health_handler.py`
-   - Command: `/health` (via Telegram)
-   - Shows: Telegram ownership and queue stats
-
-   **Option B - HTTP Endpoint** (Recommended):
-   - New files: `src/telegram/services/health_handler.py` + `health_server.py`
-   - Endpoint: `GET http://localhost:8081/health/channels`
-   - Shows: Same data, accessible via HTTP
-
-### Benefits
-
-- ✅ **Clear Visibility**: See exactly which service owns which channels
-- ✅ **Queue Monitoring**: Track pending/processing/failed messages per service
-- ✅ **Uptime Tracking**: Monitor how long each service has been running
-- ✅ **Operational Alerts**: Can alert if queues get too large or services go down
-- ✅ **Debugging**: Quickly identify which service is having issues
-
-### Next Steps
-
-1. Implement notification service endpoint (already has FastAPI)
-2. Choose Telegram bot approach (command vs HTTP endpoint)
-3. Add monitoring/alerting based on these endpoints
-4. Create Grafana/dashboard to visualize the metrics
+```
+startup()
+├── init_databases()
+├── _register_channel_plugins()         ← Only registers enabled channels (from config.enabled_channels)
+├── message_processor.start()
+│   └── _initialize_channel_instances() ← Only initializes enabled_channels=['email']
+│       └── health_monitor.configure_channel(HealthCheckConfig(...))
+├── health_monitor.start()              ← Starts periodic checks for each configured channel
+├── MessagePoller.start()               ← Polls DB every 5s for pending messages
+└── HealthReporter.start()              ← Reports health to DB every 60s
+```
 
 ---
 
-**Recommendation**: Use **Option B (HTTP endpoint)** for Telegram Bot so you can easily integrate with monitoring tools like Prometheus, Grafana, or custom dashboards.
+## Channel Ownership and Health Visibility
+
+| Channel  | Owned By             | Health Reported By   | Where Visible                    |
+|----------|----------------------|----------------------|----------------------------------|
+| telegram | Telegram Bot         | Telegram Bot         | `msg_system_health` (future)     |
+| email    | Notification Service | `HealthReporter`     | `msg_system_health`, `v_channel_health` |
+| sms      | Notification Service | `HealthReporter`     | `msg_system_health`, `v_channel_health` |
+
+See [CHANNEL_OWNERSHIP.md](CHANNEL_OWNERSHIP.md) for the full ownership architecture.
+
+---
+
+## Troubleshooting
+
+### Channel Showing as DOWN in database
+
+1. Check if `HealthReporter` is running — look for "Health reporter started" in logs
+2. Check the channel's `check_health()` result in logs: `"Error checking health for channel email"`
+3. Query the raw health record:
+   ```sql
+   SELECT error_message, checked_at FROM msg_system_health
+   WHERE system='notification' AND component='email';
+   ```
+4. Check `HealthMonitor` in-memory status for more context (e.g., consecutive_failures count)
+
+### Health not being written to database
+
+1. Verify `SystemHealthService` can connect to DB
+2. Check `health_check_interval_seconds` in `NotificationServiceConfig` (default: 60)
+3. Look for `"Error reporting channel health"` in notification service logs
+
+### Channel auto-disabled
+
+`HealthMonitor` auto-disables a channel after `auto_disable_threshold=3` consecutive failures.
+The channel remains in `_channel_instances` but `is_enabled=False`. Messages for that channel
+will be routed to fallback channels by `FallbackManager`.
+
+To manually re-enable:
+```python
+health_monitor.manually_enable_channel('email', reason='SMTP issue resolved')
+```

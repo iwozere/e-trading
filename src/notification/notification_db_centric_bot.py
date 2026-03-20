@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.service.config import config
 from src.data.db.services.database_service import get_database_service
@@ -36,13 +37,15 @@ class MessagePoller:
     the message processor for delivery.
     """
 
-    def __init__(self, poll_interval_seconds: int = 5):
+    def __init__(self, processor=None, poll_interval_seconds: int = 5):
         """
         Initialize the message poller.
 
         Args:
+            processor: The message processor instance
             poll_interval_seconds: Seconds between database polls
         """
+        self.processor = processor
         self.poll_interval_seconds = poll_interval_seconds
         self.running = False
         self.instance_id = f"notification_service_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
@@ -76,7 +79,7 @@ class MessagePoller:
                     self._logger.info("Found %s pending messages", len(messages))
 
                     # Process messages through the message processor
-                    if message_processor:
+                    if self.processor:
                         await self._process_messages(messages)
 
                 # Wait before next poll
@@ -100,8 +103,8 @@ class MessagePoller:
             with db_service.uow() as uow:
                 # Get enabled channels from the processor
                 enabled_channels = None
-                if message_processor and hasattr(message_processor, '_channel_instances'):
-                    enabled_channels = list(message_processor._channel_instances.keys())
+                if self.processor and hasattr(self.processor, '_channel_instances'):
+                    enabled_channels = list(self.processor._channel_instances.keys())
 
                 # Use repository method for atomic locking (this is acceptable at this level)
                 messages = uow.notifications.messages.get_pending_messages_with_lock(
@@ -127,8 +130,8 @@ class MessagePoller:
         try:
             # Process each message using the database-centric method
             for message in messages:
-                if hasattr(message_processor, 'process_database_message'):
-                    result = await message_processor.process_database_message(message)
+                if hasattr(self.processor, 'process_database_message'):
+                    result = await self.processor.process_database_message(message)
                     self._logger.debug(
                         "Processed message %s: success=%s",
                         message.id, result.success
@@ -280,19 +283,34 @@ class HealthReporter:
 
 
 async def _register_channel_plugins():
-    """Register available channel plugins."""
+    """Register available channel plugins for enabled channels only.
+
+    Only channels listed in config.enabled_channels are registered.
+    By default this is ['email'] — Telegram is owned by the Telegram Bot.
+    See docs/CHANNEL_OWNERSHIP.md for the ownership architecture.
+    """
     try:
         from src.notification.channels.base import channel_registry
         from src.notification.channels.telegram_channel import TelegramChannel
         from src.notification.channels.email_channel import EmailChannel
         from src.notification.channels.sms_channel import SMSChannel
 
-        # Register channel plugins
-        channel_registry.register_channel('telegram', TelegramChannel)
-        channel_registry.register_channel('email', EmailChannel)
-        channel_registry.register_channel('sms', SMSChannel)
+        # Map of all known channel classes
+        _all_channel_classes = {
+            'telegram': TelegramChannel,
+            'email': EmailChannel,
+            'sms': SMSChannel,
+        }
 
-        _logger.info("Registered channel plugins: %s", channel_registry.list_channels())
+        # Only register channels that are enabled in config
+        for channel_name, channel_cls in _all_channel_classes.items():
+            if channel_name in config.enabled_channels:
+                channel_registry.register_channel(channel_name, channel_cls)
+
+        _logger.info(
+            "Registered channel plugins (enabled_channels=%s): %s",
+            config.enabled_channels, channel_registry.list_channels()
+        )
 
     except Exception:
         _logger.exception("Error registering channel plugins:")
@@ -323,8 +341,11 @@ async def startup():
     await health_monitor.start()
     _logger.info("Health monitor started")
 
-    # Initialize message poller
-    message_poller = MessagePoller(poll_interval_seconds=config.processing.batch_timeout_seconds or 5)
+    # Initialize message poller with processor dependency injection
+    message_poller = MessagePoller(
+        processor=message_processor,
+        poll_interval_seconds=config.processing.batch_timeout_seconds or 5
+    )
     await message_poller.start()
     _logger.info("Message poller started")
 
@@ -361,11 +382,14 @@ async def shutdown():
     _logger.info("Notification Service shutdown complete")
 
 
-def setup_signal_handlers():
-    """Set up signal handlers for graceful shutdown."""
+def setup_signal_handlers(loop: asyncio.AbstractEventLoop):
+    """Set up signal handlers for graceful shutdown.
+    
+    Uses loop.call_soon_threadsafe(loop.stop) to safely trigger shutdown.
+    """
     def signal_handler(signum, frame):
         _logger.info("Received signal %s, initiating shutdown...", signum)
-        asyncio.create_task(shutdown())
+        loop.call_soon_threadsafe(loop.stop)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -373,14 +397,14 @@ def setup_signal_handlers():
 
 async def main():
     """Main application entry point."""
-    try:
-        # Setup signal handlers
-        setup_signal_handlers()
+    loop = asyncio.get_running_loop()
+    setup_signal_handlers(loop)
 
+    try:
         # Start the service
         await startup()
 
-        # Keep running until shutdown
+        # Keep running until loop is stopped by signal handler
         while True:
             await asyncio.sleep(1)
 

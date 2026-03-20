@@ -49,44 +49,30 @@ class BaseDataDownloader(ABC):
     @staticmethod
     def _get_config_value(config_key: str, env_var: Optional[str] = None, default: Optional[str] = None) -> Optional[str]:
         """
-        Get config value from environment variables or config module.
+        Get config value for a provider API key.
 
-        This method provides centralized configuration access that:
-        1. First tries environment variables (if env_var is provided)
-        2. Falls back to config.donotshare.donotshare module
-        3. Returns default value if not found
+        Priority: environment variable → config.donotshare.donotshare → default.
+        Delegates to the central ``src.config.provider_config`` service so the
+        lookup happens at most once per key across the entire process.
 
         Args:
-            config_key: Name of the config variable in config.donotshare.donotshare
-            env_var: Environment variable name (optional, defaults to config_key)
-            default: Default value to return if not found (optional)
+            config_key: Attribute name in config.donotshare.donotshare (also used
+                        as the env-var name when ``env_var`` is not supplied).
+            env_var: Override for the environment variable name (optional).
+            default: Value to return if nothing is found.
 
         Returns:
-            Config value as string, or None/default if not found
-
-        Example:
-            >>> api_key = BaseDataDownloader._get_config_value('POLYGON_API_KEY', 'POLYGON_API_KEY')
-            >>> # Tries POLYGON_API_KEY env var first, then config.donotshare.donotshare.POLYGON_API_KEY
+            Config value as string, or ``default`` if not found.
         """
-        # Use env_var if provided, otherwise use config_key
-        env_var_name = env_var or config_key
+        from src.config.provider_config import get_api_key
 
-        # Try environment variable first
-        value = os.getenv(env_var_name)
-        if value:
-            return value
+        # env_var overrides the lookup key for the environment-variable check
+        if env_var and env_var != config_key:
+            value = get_api_key(env_var) or get_api_key(config_key)
+        else:
+            value = get_api_key(config_key)
 
-        # Fallback to config module
-        try:
-            config_module = __import__('config.donotshare.donotshare', fromlist=[config_key])
-            value = getattr(config_module, config_key, None)
-            if value:
-                return value
-        except (ImportError, AttributeError):
-            pass
-
-        # Return default if nothing found
-        return default
+        return value if value is not None else default
 
 
     @abstractmethod

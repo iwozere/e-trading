@@ -219,25 +219,27 @@ class ProviderSelector:
         # Get classification rules from config
         classification_rules = self.rules.get('symbol_classification', {})
 
-        # Check crypto patterns first
-        crypto_rules = classification_rules.get('crypto', {})
-        crypto_patterns = crypto_rules.get('patterns', [])
-        crypto_suffixes = crypto_rules.get('suffixes', [])
-        crypto_assets = crypto_rules.get('known_assets', [])
+        # Check crypto patterns (only for tickers with 6+ characters)
+        if len(symbol_upper) >= 6:
+            crypto_rules = classification_rules.get('crypto', {})
+            crypto_patterns = crypto_rules.get('patterns', [])
+            crypto_suffixes = crypto_rules.get('suffixes', [])
+            crypto_assets = crypto_rules.get('known_assets', [])
 
-        # Check against crypto patterns
-        for pattern in crypto_patterns:
-            if re.match(pattern, symbol_upper):
+            # Check against crypto patterns
+            for pattern in crypto_patterns:
+                if re.match(pattern, symbol_upper):
+                    return 'crypto'
+
+            # Check against crypto suffixes
+            if any(symbol_upper.endswith(suffix) for suffix in crypto_suffixes):
                 return 'crypto'
 
-        # Check against crypto suffixes
-        if any(symbol_upper.endswith(suffix) for suffix in crypto_suffixes):
-            return 'crypto'
+            # Check if starts with known crypto asset
+            for asset in crypto_assets:
+                if symbol_upper.startswith(asset) and len(symbol_upper) > len(asset):
+                    return 'crypto'
 
-        # Check if starts with known crypto asset
-        for asset in crypto_assets:
-            if symbol_upper.startswith(asset) and len(symbol_upper) > len(asset):
-                return 'crypto'
 
         # Check stock patterns
         stock_rules = classification_rules.get('stock', {})
@@ -891,7 +893,9 @@ class DataManager:
         self.cache = UnifiedCache(cache_dir)
         self.provider_selector = ProviderSelector(config_path, cache_dir)
         self.rate_limiters = {}
-        self._rate_limited_providers = set()  # Session-level blacklist for rate-limited providers
+        self._rate_limited_providers = set()  # Session-level blacklist (legacy)
+        self._provider_cooldowns = {}         # Temporary cooldowns: {provider_name: expiration_time}
+
 
         # Initialize rate limiters for each provider
         self._initialize_rate_limiters()
@@ -1938,6 +1942,33 @@ class DataManager:
 
         return valid_providers
 
+    def _is_provider_on_cooldown(self, provider: str) -> bool:
+        """
+        Check if a provider is currently on cooldown due to rate limiting.
+
+        Args:
+            provider: Provider name
+
+        Returns:
+            True if provider is on cooldown, False otherwise
+        """
+        if provider in self._provider_cooldowns:
+            expiration = self._provider_cooldowns[provider]
+            if datetime.now() < expiration:
+                _logger.debug("Provider %s is on cooldown until %s", provider, expiration)
+                return True
+            else:
+                # Cooldown expired, remove from dictionary
+                _logger.info("Cooldown for provider %s has expired", provider)
+                del self._provider_cooldowns[provider]
+
+        # Also check the legacy session-level blacklist
+        if provider in self._rate_limited_providers:
+            _logger.debug("Provider %s is blacklisted for the session", provider)
+            return True
+
+        return False
+
     def _filter_compatible_providers(self, provider_sequence: List[str],
                                    symbol_classification: Dict[str, Any]) -> List[str]:
         """
@@ -1960,10 +1991,10 @@ class DataManager:
         compatible_providers = []
 
         for provider in provider_sequence:
-            # Skip if provider is blacklisted for the remainder of the session (e.g. 429 hit)
-            if provider in self._rate_limited_providers:
-                _logger.debug("Skipping provider %s (rate limited in session)", provider)
+            # Skip if provider is on cooldown (replaces permanent session blacklist check)
+            if self._is_provider_on_cooldown(provider):
                 continue
+
 
             # Check availability and initialize if needed
             if not self.provider_selector._initialize_downloader(provider):
@@ -1992,8 +2023,9 @@ class DataManager:
                 _logger.debug("Provider %s compatible with %s: %s",
                             provider, symbol_classification['symbol'], compatibility_result['reason'])
             else:
-                _logger.debug("Provider %s not compatible with symbol %s: %s",
+                _logger.info("Provider %s not compatible with %s: %s",
                             provider, symbol_classification['symbol'], compatibility_result['reason'])
+
 
         # Sort providers by suitability for this symbol
         if compatible_providers:
@@ -2323,10 +2355,10 @@ class DataManager:
         }
 
         for provider_name in providers:
-            # Skip if provider is blacklisted for the remainder of the session (e.g. 429 hit)
-            if provider_name in self._rate_limited_providers:
-                _logger.debug("Skipping provider %s (rate limited in this session)", provider_name)
+            # Skip if provider is on cooldown
+            if self._is_provider_on_cooldown(provider_name):
                 continue
+
 
             success = False
 
@@ -2360,14 +2392,18 @@ class DataManager:
                         _logger.warning("No fundamentals data returned from %s for %s", provider_name, symbol)
 
                 except RateLimitException as e:
-                    # Handle rate limiting with longer delays
+                    # Handle rate limiting with temporary cooldowns
                     delay = self._calculate_rate_limit_delay(e, attempt)
                     
-                    # If it's a daily limit or if we've already tried and failed, blacklist for session
-                    if delay > 30 or attempt >= 1:
-                        _logger.warning("Strong rate limit hit for %s, blacklisting for remainder of session", provider_name)
-                        self._rate_limited_providers.add(provider_name)
-                        break # Stop retrying and move to next provider
+                    # Set a cooldown for the provider
+                    # For strong rate limits (long delay) or persistent failures, set a longer cooldown
+                    cooldown_seconds = 3600 if delay > 60 or attempt >= 1 else 60
+                    self._set_provider_cooldown(provider_name, cooldown_seconds)
+                    
+                    _logger.warning("Rate limit hit for %s %s, setting %ds cooldown and moving to next provider",
+                                  provider_name, symbol, cooldown_seconds)
+                    break # Stop retrying and move to next provider
+
 
                     _logger.warning("Rate limit hit for %s %s, waiting %.2f seconds",
                                   provider_name, symbol, delay)
@@ -2414,6 +2450,20 @@ class DataManager:
                             provider_name, symbol, retry_config['max_retries'])
 
         return provider_data
+
+    def _set_provider_cooldown(self, provider: str, seconds: int):
+        """
+        Set a temporary cooldown for a provider.
+
+        Args:
+            provider: Provider name
+            seconds: Cooldown duration in seconds
+        """
+        expiration = datetime.now() + timedelta(seconds=seconds)
+        self._provider_cooldowns[provider] = expiration
+        _logger.info("Provider %s put on cooldown for %d seconds (until %s)",
+                    provider, seconds, expiration.strftime("%H:%M:%S"))
+
 
     def _validate_single_provider_availability(self, provider_name: str) -> bool:
         """

@@ -228,30 +228,34 @@ class NotificationChannel(ABC):
     def split_long_message(self, content: MessageContent) -> List[MessageContent]:
         """
         Split a long message into multiple parts if needed.
-
-        Args:
-            content: Message content to split
-
-        Returns:
-            List of message parts (single item if no splitting needed)
+        
+        P3.1 Fix: Now handles HTML-only messages and ensures 'text' is never empty.
         """
         max_length = self.get_max_message_length()
-        if not max_length or len(content.text) <= max_length:
+        
+        # Check both text and html length
+        content_to_check = content.text or content.html or ""
+        if not max_length or len(content_to_check) <= max_length:
             return [content]
 
-        # Simple text splitting - channels can override for smarter splitting
         parts = []
-        text = content.text
+        source_text = content.text or ""
+        source_html = content.html
+        
+        # If we have HTML but no text, use a snippet of HTML as text placeholder
+        # to satisfy MessageContent validation rules.
+        if not source_text and source_html:
+            source_text = "[HTML Message]"
 
-        while len(text) > max_length:
-            # Find a good break point (space, newline, etc.)
+        while len(source_text) > max_length:
+            # Find a good break point
             break_point = max_length
             for i in range(max_length - 1, max_length - 100, -1):
-                if i < len(text) and text[i] in [' ', '\n', '\t', '.', ',', ';']:
+                if i < len(source_text) and source_text[i] in [' ', '\n', '\t', '.', ',', ';']:
                     break_point = i
                     break
 
-            part_text = text[:break_point].strip()
+            part_text = source_text[:break_point].strip()
             if part_text:
                 parts.append(MessageContent(
                     text=part_text,
@@ -259,14 +263,15 @@ class NotificationChannel(ABC):
                     metadata=content.metadata
                 ))
 
-            text = text[break_point:].strip()
+            source_text = source_text[break_point:].strip()
 
-        if text:
+        # Add the final part with remaining text and the original HTML/attachments
+        if source_text or source_html or content.attachments:
             parts.append(MessageContent(
-                text=text,
+                text=source_text or "[Final Part]",
                 subject=content.subject,
-                html=content.html,  # Only include HTML in last part
-                attachments=content.attachments,  # Only include attachments in last part
+                html=source_html,
+                attachments=content.attachments,
                 metadata=content.metadata
             ))
 
@@ -418,7 +423,13 @@ class ChannelRegistry:
         if channel_name not in self._channels:
             raise ValueError(f"Channel '{channel_name}' is not registered")
 
-        # Create new instance each time to ensure fresh config
+        # P2.1 Fix: Reuse existing instance if config is the same
+        if channel_name in self._instances:
+            existing = self._instances[channel_name]
+            if existing.config == config:
+                return existing
+
+        # Create new instance
         channel_class = self._channels[channel_name]
         instance = channel_class(channel_name, config)
 

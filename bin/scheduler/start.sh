@@ -18,6 +18,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# Activate virtual environment if it exists
+if [ -f "$PROJECT_ROOT/.venv/bin/activate" ]; then
+    echo "Activating virtual environment..."
+    source "$PROJECT_ROOT/.venv/bin/activate"
+elif [ -f "$PROJECT_ROOT/venv/bin/activate" ]; then
+    echo "Activating virtual environment..."
+    source "$PROJECT_ROOT/venv/bin/activate"
+fi
+
 # Load environment if .env exists
 if [ -f ".env" ]; then
     echo "Loading environment from .env"

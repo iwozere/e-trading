@@ -169,6 +169,20 @@ class JobsService(BaseDBService):
         next_run_at = self._calculate_next_run_time(schedule.cron)
         return self.repos.jobs.update_schedule_next_run(schedule_id, next_run_at)
 
+    @with_uow
+    @handle_db_error
+    def update_schedule_state(self, schedule_id: int, state: Dict[str, Any]) -> bool:
+        """Update the persistent state for a schedule."""
+        schedule = self.repos.jobs.update_schedule(schedule_id, {"state_json": state})
+        return schedule is not None
+
+    @with_uow
+    @handle_db_error
+    def get_schedule_state(self, schedule_id: int) -> Optional[Dict[str, Any]]:
+        """Get the persistent state for a schedule."""
+        schedule = self.repos.jobs.get_schedule(schedule_id)
+        return schedule.state_json if schedule else None
+
     # ---------- Run Operations ----------
 
     @with_uow

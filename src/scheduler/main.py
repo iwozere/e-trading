@@ -11,9 +11,10 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Add project root to path
+# Add project root to path if not already present
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.scheduler.scheduler_service import SchedulerService
 from src.scheduler.config import SchedulerServiceConfig
@@ -29,7 +30,6 @@ _logger = setup_logger(__name__)
 
 
 class SchedulerApplication:
-    """Main scheduler application with dependency injection and lifecycle management."""
     """Main scheduler application with dependency injection and lifecycle management."""
 
     def __init__(self, config: SchedulerServiceConfig):
@@ -177,14 +177,18 @@ class SchedulerApplication:
 app: Optional[SchedulerApplication] = None
 
 
-def setup_signal_handlers(application: SchedulerApplication) -> None:
-    """Setup signal handlers for graceful shutdown."""
+def setup_signal_handlers(loop: asyncio.AbstractEventLoop, application: SchedulerApplication) -> None:
+    """Set up signal handlers for graceful shutdown.
 
+    Uses loop.call_soon_threadsafe + asyncio.Event so the shutdown sequence
+    runs safely inside the event loop, not from the OS signal context.
+    """
     def signal_handler(signum, frame):
         _logger.info("Received signal %d, initiating graceful shutdown...", signum)
-        asyncio.create_task(application.stop())
+        # Safely set the shutdown event from the signal handler (sync context).
+        # wait_for_shutdown() will return and then main() will call app.stop().
+        loop.call_soon_threadsafe(application._shutdown_event.set)
 
-    # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
@@ -204,7 +208,8 @@ async def main() -> None:
         app = SchedulerApplication(config)
 
         # Setup signal handlers
-        setup_signal_handlers(app)
+        loop = asyncio.get_running_loop()
+        setup_signal_handlers(loop, app)
 
         # Start application
         await app.start()
@@ -212,7 +217,7 @@ async def main() -> None:
         # Log startup completion
         _logger.info("Scheduler service is running. Press Ctrl+C to stop.")
 
-        # Wait for shutdown
+        # Wait for shutdown event (set by signal handler)
         await app.wait_for_shutdown()
 
     except KeyboardInterrupt:
@@ -221,6 +226,7 @@ async def main() -> None:
         _logger.error("Application error: %s", str(e))
         sys.exit(1)
     finally:
+        # Always attempt a clean stop whether shutdown came from signal or exception
         if app:
             await app.stop()
 

@@ -63,6 +63,7 @@ class Schedule(Base):
     next_run_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now())
     updated_at: Mapped[dt] = mapped_column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    state_json: Mapped[dict] = mapped_column(JsonType(), default={})
 
     # Constraints
     __table_args__ = (
@@ -147,6 +148,7 @@ class ScheduleResponse(BaseModel):
     next_run_at: Optional[dt]
     created_at: dt
     updated_at: dt
+    state_json: Dict[str, Any] = {}
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -271,24 +271,9 @@ enabled_channels = ['email']  # Email only (no telegram)
 
 ---
 
-## Migration History
-
-### Previous Architecture (Duplicate Messages)
-- Both services sent Telegram messages
-- Result: Users received duplicates
-
-### Current Architecture (No Duplicates)
-- **Telegram Bot**: Owns Telegram exclusively
-- **Notification Service**: Owns Email/SMS exclusively
-- **Result**: No duplicates, clear ownership
-
-### Migration completed: Phase 1 and Phase 4 of MIGRATION_PLAN.md
-
----
-
 ## References
 
-- **MIGRATION_PLAN.md**: Full migration plan and rationale
+- **MONITORING_ENDPOINT_DESIGN.md**: Health monitoring architecture and database health reporting
 - **Message Queue Client**: `src/notification/service/message_queue_client.py`
 - **Telegram Queue Processor**: `src/telegram/services/telegram_queue_processor.py`
 - **Notification Processor**: `src/notification/service/processor.py`

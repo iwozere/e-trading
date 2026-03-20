@@ -1,0 +1,359 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.1, pytest-9.0.2, pluggy-1.6.0
+rootdir: C:\dev\cursor\e-trading
+configfile: pytest.ini
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 9 items
+
+src\telegram\tests\test_registration.py FF.FFFFFF                        [100%]
+
+================================== FAILURES ===================================
+__________________________ test_register_valid_email __________________________
+
+self = <Coroutine test_register_valid_email>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:716: in inner
+    runner.run(coro, context=context)
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (), keywargs = {}
+newargs = (<MagicMock name='get_service_instances' id='1769762388832'>, <MagicMock name='get_service_instances' id='1769762389504'>)
+newkeywargs = {}
+
+    @wraps(func)
+    async def patched(*args, **keywargs):
+        with self.decoration_helper(patched,
+                                    args,
+                                    keywargs) as (newargs, newkeywargs):
+>           return await func(*newargs, **newkeywargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: test_register_valid_email() takes 1 positional argument but 2 were given
+
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:1441: TypeError
+__________________________ test_register_rate_limit ___________________________
+
+self = <Coroutine test_register_rate_limit>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:716: in inner
+    runner.run(coro, context=context)
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (), keywargs = {}
+newargs = (<MagicMock name='get_service_instances' id='1769763914144'>, <MagicMock name='get_service_instances' id='1769763915152'>)
+newkeywargs = {}
+
+    @wraps(func)
+    async def patched(*args, **keywargs):
+        with self.decoration_helper(patched,
+                                    args,
+                                    keywargs) as (newargs, newkeywargs):
+>           return await func(*newargs, **newkeywargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: test_register_rate_limit() takes 1 positional argument but 2 were given
+
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:1441: TypeError
+___________________________ test_verify_valid_code ____________________________
+
+self = <Coroutine test_verify_valid_code>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:716: in inner
+    runner.run(coro, context=context)
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (), keywargs = {}
+newargs = (<MagicMock name='get_service_instances' id='1769763918848'>, <MagicMock name='get_service_instances' id='1769763922544'>)
+newkeywargs = {}
+
+    @wraps(func)
+    async def patched(*args, **keywargs):
+        with self.decoration_helper(patched,
+                                    args,
+                                    keywargs) as (newargs, newkeywargs):
+>           return await func(*newargs, **newkeywargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: test_verify_valid_code() takes 1 positional argument but 2 were given
+
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:1441: TypeError
+__________________________ test_verify_invalid_code ___________________________
+
+self = <Coroutine test_verify_invalid_code>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:716: in inner
+    runner.run(coro, context=context)
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (), keywargs = {}
+newargs = (<MagicMock name='get_service_instances' id='1769762388832'>, <MagicMock name='get_service_instances' id='1769762389168'>)
+newkeywargs = {}
+
+    @wraps(func)
+    async def patched(*args, **keywargs):
+        with self.decoration_helper(patched,
+                                    args,
+                                    keywargs) as (newargs, newkeywargs):
+>           return await func(*newargs, **newkeywargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: test_verify_invalid_code() takes 1 positional argument but 2 were given
+
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:1441: TypeError
+_________________________ test_verify_invalid_format __________________________
+
+self = <Coroutine test_verify_invalid_format>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:716: in inner
+    runner.run(coro, context=context)
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (), keywargs = {}
+newargs = (<MagicMock name='get_service_instances' id='1769762389504'>, <MagicMock name='get_service_instances' id='1769762388496'>)
+newkeywargs = {}
+
+    @wraps(func)
+    async def patched(*args, **keywargs):
+        with self.decoration_helper(patched,
+                                    args,
+                                    keywargs) as (newargs, newkeywargs):
+>           return await func(*newargs, **newkeywargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: test_verify_invalid_format() takes 1 positional argument but 2 were given
+
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:1441: TypeError
+___________________________ test_info_verified_user ___________________________
+
+self = <Coroutine test_info_verified_user>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:716: in inner
+    runner.run(coro, context=context)
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (), keywargs = {}
+newargs = (<MagicMock name='get_service_instances' id='1769763914144'>, <MagicMock name='get_service_instances' id='1769763915152'>)
+newkeywargs = {}
+
+    @wraps(func)
+    async def patched(*args, **keywargs):
+        with self.decoration_helper(patched,
+                                    args,
+                                    keywargs) as (newargs, newkeywargs):
+>           return await func(*newargs, **newkeywargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: test_info_verified_user() takes 1 positional argument but 2 were given
+
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:1441: TypeError
+__________________________ test_info_unverified_user __________________________
+
+self = <Coroutine test_info_unverified_user>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:716: in inner
+    runner.run(coro, context=context)
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (), keywargs = {}
+newargs = (<MagicMock name='get_service_instances' id='1769763913808'>, <MagicMock name='get_service_instances' id='1769763922208'>)
+newkeywargs = {}
+
+    @wraps(func)
+    async def patched(*args, **keywargs):
+        with self.decoration_helper(patched,
+                                    args,
+                                    keywargs) as (newargs, newkeywargs):
+>           return await func(*newargs, **newkeywargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: test_info_unverified_user() takes 1 positional argument but 2 were given
+
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:1441: TypeError
+______________________________ test_info_no_user ______________________________
+
+self = <Coroutine test_info_no_user>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\pytest_asyncio\plugin.py:716: in inner
+    runner.run(coro, context=context)
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+args = (), keywargs = {}
+newargs = (<MagicMock name='get_service_instances' id='1769762389504'>, <MagicMock name='get_service_instances' id='1769762388496'>)
+newkeywargs = {}
+
+    @wraps(func)
+    async def patched(*args, **keywargs):
+        with self.decoration_helper(patched,
+                                    args,
+                                    keywargs) as (newargs, newkeywargs):
+>           return await func(*newargs, **newkeywargs)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: test_info_no_user() takes 1 positional argument but 2 were given
+
+C:\Users\akoss\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:1441: TypeError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\websockets\legacy\__init__.py:6
+  C:\dev\cursor\e-trading\.venv\Lib\site-packages\websockets\legacy\__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+.venv\Lib\site-packages\eventkit\util.py:21
+  C:\dev\cursor\e-trading\.venv\Lib\site-packages\eventkit\util.py:21: DeprecationWarning: There is no current event loop
+    return asyncio.get_event_loop_policy().get_event_loop()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED src/telegram/tests/test_registration.py::test_register_valid_email - T...
+FAILED src/telegram/tests/test_registration.py::test_register_rate_limit - Ty...
+FAILED src/telegram/tests/test_registration.py::test_verify_valid_code - Type...
+FAILED src/telegram/tests/test_registration.py::test_verify_invalid_code - Ty...
+FAILED src/telegram/tests/test_registration.py::test_verify_invalid_format - ...
+FAILED src/telegram/tests/test_registration.py::test_info_verified_user - Typ...
+FAILED src/telegram/tests/test_registration.py::test_info_unverified_user - T...
+FAILED src/telegram/tests/test_registration.py::test_info_no_user - TypeError...
+=================== 8 failed, 1 passed, 2 warnings in 6.60s ===================

@@ -92,19 +92,38 @@ class AlertEvaluator:
 
         _logger.info("AlertEvaluator initialized successfully")
 
-    async def evaluate_alert(self, job_run) -> AlertEvaluationResult:
+    async def evaluate_alert(self, job_run: ScheduleRunResponse) -> AlertEvaluationResult:
         """
         Evaluate an alert job and return the result.
 
         Args:
-            job_run: ScheduleRun object containing job details
+            job_run: ScheduleRunResponse object containing job details
 
         Returns:
             AlertEvaluationResult with evaluation outcome
         """
         try:
             # Get job details from the schedule
-            schedule = job_run.schedule
+            # job_run.job_id is used as the schedule_id for SCHEDULE type jobs
+            schedule_id = int(job_run.job_id) if job_run.job_id and str(job_run.job_id).isdigit() else None
+            if not schedule_id:
+                return AlertEvaluationResult(
+                    triggered=False,
+                    rearmed=False,
+                    state_updates={},
+                    notification_data=None,
+                    error="Invalid schedule_id in job_run"
+                )
+
+            schedule = self.jobs_service.get_schedule(schedule_id)
+            if not schedule:
+                return AlertEvaluationResult(
+                    triggered=False,
+                    rearmed=False,
+                    state_updates={},
+                    notification_data=None,
+                    error=f"Schedule {schedule_id} not found"
+                )
 
             # Parse and validate alert configuration
             alert_config = self._parse_alert_config(schedule.task_params)

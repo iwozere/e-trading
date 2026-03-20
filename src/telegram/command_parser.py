@@ -2,7 +2,8 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import re
 import shlex
@@ -37,6 +38,15 @@ class EnterpriseCommandParser:
                 # Always lower case parameter values except for tickers
                 if value is not None:
                     value = value.lower()
+                    # Canonicalize provider names
+                    if flag == "provider":
+                        try:
+                            from src.data.downloader.data_downloader_factory import DataDownloaderFactory
+                            canonical = DataDownloaderFactory.get_provider_by_code(value)
+                            if canonical:
+                                value = canonical
+                        except ImportError:
+                            pass
                 if flag in spec.parameters:
                     try:
                         args[flag] = spec.parameters[flag](value) if value is not None else True

@@ -1,36 +1,43 @@
 """
 BaseDBService: Provides UoW pattern and error handling for DB services.
 """
-from typing import Callable, TypeVar
+from contextvars import ContextVar
+from typing import Callable, Optional, TypeVar
 from functools import wraps
 from src.data.db.services.database_service import get_database_service, ReposBundle
 from src.notification.logger import setup_logger
 
 T = TypeVar('T')
 
+# Per-context (thread / asyncio task) variable holding the current ReposBundle.
+# Each concurrent caller gets its own value; no instance attribute is needed.
+_current_repos: ContextVar[Optional[ReposBundle]] = ContextVar('_current_repos', default=None)
+
+
 def with_uow(func: Callable[..., T]) -> Callable[..., T]:
     """
-    Decorator to wrap methods with UoW context.
-    Automatically handles session management and transactions.
+    Decorator to wrap methods with a UoW context.
+
+    Uses a ``ContextVar`` so that concurrent callers (threads, asyncio tasks)
+    each maintain their own session without interfering with each other.
+    Nested calls reuse the already-open session from the current context.
     """
     @wraps(func)
     def wrapper(self, *args, **kwargs) -> T:
-        # If already in a UoW context, just call the function
-        if hasattr(self, '_repos') and self._repos is not None:
+        # If already inside a UoW for this context, reuse it (no nesting).
+        if _current_repos.get() is not None:
             return func(self, *args, **kwargs)
 
-        # Create a new UoW context
+        # Open a new UoW and store it in the current context.
         with self._db.uow() as repos:
-            # Store repos in the instance
-            old_repos = getattr(self, '_repos', None)
-            self._repos = repos
-
+            token = _current_repos.set(repos)
             try:
                 return func(self, *args, **kwargs)
             finally:
-                # Restore previous repos (for nested calls)
-                self._repos = old_repos
+                _current_repos.reset(token)
+
     return wrapper
+
 
 def handle_db_error(func: Callable[..., T]) -> Callable[..., T]:
     """
@@ -45,24 +52,26 @@ def handle_db_error(func: Callable[..., T]) -> Callable[..., T]:
             raise
     return wrapper
 
+
 class BaseDBService:
     """Base class for all database services with UoW pattern."""
+
     def __init__(self, db_service=None):
         self._db = db_service or get_database_service()
         self._logger = setup_logger(self.__class__.__name__)
-        self._repos = None  # Will be set by the UoW context
 
     @property
-    def repos(self):
-        """Access the current UoW's repositories."""
-        if self._repos is None:
+    def repos(self) -> ReposBundle:
+        """Access the current context's UoW repositories."""
+        repos = _current_repos.get()
+        if repos is None:
             raise RuntimeError(
                 "Repositories not available. This property can only be accessed from methods "
                 "decorated with @with_uow."
             )
-        return self._repos
+        return repos
 
     @property
-    def uow(self):
-        """Alias for self.repos for backward compatibility."""
-        return self.repos
+    def uow(self) -> ReposBundle:
+        """Alias for self.repos (backward compatibility)."""
+        return self.repos

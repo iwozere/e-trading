@@ -13,9 +13,10 @@ from enum import Enum
 from pathlib import Path
 import sys
 
-# Add project root to path
+# Add project root to path if needed (P3.3 Fix)
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 
@@ -59,7 +60,12 @@ class CircuitBreakerState(str, Enum):
 
 
 class CircuitBreaker:
-    """Simple circuit breaker implementation."""
+    """Async-safe circuit breaker implementation.
+
+    Guards a callable against repeated failures by transitioning through
+    CLOSED → OPEN → HALF_OPEN states.  All state mutations are protected
+    by an asyncio.Lock so concurrent tasks do not race on state transitions.
+    """
 
     def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
         self.failure_threshold = failure_threshold
@@ -67,21 +73,33 @@ class CircuitBreaker:
         self.failure_count = 0
         self.last_failure_time = None
         self.state = CircuitBreakerState.CLOSED
+        self._lock = asyncio.Lock()
 
-    def call(self, func, *args, **kwargs):
-        """Call function through circuit breaker."""
-        if self.state == CircuitBreakerState.OPEN:
-            if self._should_attempt_reset():
-                self.state = CircuitBreakerState.HALF_OPEN
-            else:
-                raise NotificationServiceUnavailableError("Circuit breaker is open")
+    async def call(self, func, *args, **kwargs):
+        """Await func through the circuit breaker.
+
+        Args:
+            func: An async callable to protect.
+            *args, **kwargs: Forwarded to func.
+
+        Raises:
+            NotificationServiceUnavailableError: When the breaker is OPEN.
+        """
+        async with self._lock:
+            if self.state == CircuitBreakerState.OPEN:
+                if self._should_attempt_reset():
+                    self.state = CircuitBreakerState.HALF_OPEN
+                else:
+                    raise NotificationServiceUnavailableError("Circuit breaker is open")
 
         try:
-            result = func(*args, **kwargs)
-            self._on_success()
+            result = await func(*args, **kwargs)
+            async with self._lock:
+                self._on_success()
             return result
         except Exception:
-            self._on_failure()
+            async with self._lock:
+                self._on_failure()
             raise
 
     def _should_attempt_reset(self) -> bool:
@@ -161,18 +179,13 @@ class NotificationServiceClient:
             _logger.info("NotificationServiceClient configured for database-only mode (no HTTP API)")
             self.service_url = service_url  # Keep the database:// URL for identification
         else:
-            # Ensure we're using the Main API service, not the notification service
+            # P2.4 Fix: Stop silent URL rewriting. Just warn if ports look incorrect.
             if ":8080" in service_url or ":5003" in service_url:
                 _logger.warning(
-                    "Redirecting notification service client from %s to Main API at http://localhost:8000 "
-                    "(database-centric architecture)", service_url
+                    "Service URL %s uses a legacy port. Database-centric architecture "
+                    "typically uses the Main API at http://localhost:8000.", service_url
                 )
-                service_url = "http://localhost:8000"
-
-            # Always ensure we're pointing to the Main API service for database-centric architecture
-            if not service_url.endswith(":8000") and "localhost" in service_url:
-                service_url = "http://localhost:8000"
-
+            
             self.service_url = service_url.rstrip('/')
 
         self.timeout = aiohttp.ClientTimeout(total=timeout)

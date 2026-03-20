@@ -18,10 +18,7 @@ import threading
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-else:
-    # Ensure it's at the front if it was already appended
-    sys.path.remove(str(PROJECT_ROOT))
+    # Use insert(0) to prioritize project modules, but only if not already present.
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import logging.config
@@ -32,8 +29,8 @@ log_dir = PROJECT_ROOT / "logs" / "log"
 log_dir.mkdir(parents=True, exist_ok=True)
 
 # Constants for log file configuration
-MAX_BYTES = 500 * 1024 * 1024  # 500MB
-BACKUP_COUNT = 99  # Keep 99 backup files
+MAX_BYTES = 50 * 1024 * 1024  # 50MB (Reduced from 500MB for P2.2)
+BACKUP_COUNT = 10  # Keep 10 backup files (Reduced from 99 for P2.2)
 
 # Context variable to track the current logging context
 _logging_context = ContextVar('logging_context', default=None)

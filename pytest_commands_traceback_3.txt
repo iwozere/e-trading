@@ -1,0 +1,28 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.1, pytest-9.0.2, pluggy-1.6.0 -- C:\dev\cursor\e-trading\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\dev\cursor\e-trading
+configfile: pytest.ini
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 7 items
+
+src/telegram/tests/test_bot_commands.py::test_cmd_start PASSED           [ 14%]
+src/telegram/tests/test_bot_commands.py::test_cmd_help PASSED            [ 28%]
+src/telegram/tests/test_bot_commands.py::test_cmd_info PASSED            [ 42%]
+src/telegram/tests/test_bot_commands.py::test_unknown_command PASSED     [ 57%]
+src/telegram/tests/test_bot_commands.py::test_analyze_ticker_business_valid PASSED [ 71%]
+src/telegram/tests/test_bot_commands.py::test_analyze_ticker_business_invalid_period PASSED [ 85%]
+src/telegram/tests/test_bot_commands.py::test_analyze_ticker_business_exception PASSED [100%]
+
+============================== warnings summary ===============================
+.venv\Lib\site-packages\websockets\legacy\__init__.py:6
+  C:\dev\cursor\e-trading\.venv\Lib\site-packages\websockets\legacy\__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+.venv\Lib\site-packages\eventkit\util.py:21
+  C:\dev\cursor\e-trading\.venv\Lib\site-packages\eventkit\util.py:21: DeprecationWarning: There is no current event loop
+    return asyncio.get_event_loop_policy().get_event_loop()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 7 passed, 2 warnings in 8.42s ========================

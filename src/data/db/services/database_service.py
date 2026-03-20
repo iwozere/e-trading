@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 # Engine / session factory
 from src.data.db.core import database as core_db
 SessionLocal = core_db.SessionLocal
-engine = core_db.engine
 
 # Model Bases — used by init_databases()
 from src.data.db.models.model_users import Base as UsersBase
@@ -105,7 +104,7 @@ class DatabaseService:
 
     def init_databases(self) -> None:
         """Create all tables for every model base (idempotent)."""
-        eng = getattr(self, "engine", None) or engine
+        eng = getattr(self, "engine", None) or core_db.get_engine()
         for base in (UsersBase, TelegramBase, TradingBase, WebUIBase, JobsBase, NotificationBase, SystemHealthBase, ShortSqueezeBase):
             base.metadata.create_all(bind=eng)
 

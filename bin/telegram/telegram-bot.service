@@ -17,6 +17,7 @@ WorkingDirectory=/opt/apps/e-trading
 # Environment variables
 Environment="PYTHONPATH=/opt/apps/e-trading"
 Environment="PYTHONUNBUFFERED=1"
+Environment="TELEGRAM_API_PORT=5004"
 
 # Optional: Load environment from file (contains TELEGRAM_BOT_TOKEN)
 EnvironmentFile=/opt/apps/e-trading/config/donotshare/.env

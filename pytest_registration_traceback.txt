@@ -1,0 +1,247 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.1, pytest-9.0.2, pluggy-1.6.0 -- C:\dev\cursor\e-trading\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\dev\cursor\e-trading
+configfile: pytest.ini
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 9 items
+
+src/telegram/tests/test_registration.py::test_register_valid_email FAILED [ 11%]
+src/telegram/tests/test_registration.py::test_register_rate_limit FAILED [ 22%]
+src/telegram/tests/test_registration.py::test_register_invalid_email PASSED [ 33%]
+src/telegram/tests/test_registration.py::test_verify_valid_code FAILED   [ 44%]
+src/telegram/tests/test_registration.py::test_verify_invalid_code FAILED [ 55%]
+src/telegram/tests/test_registration.py::test_verify_invalid_format FAILED [ 66%]
+src/telegram/tests/test_registration.py::test_info_verified_user FAILED  [ 77%]
+src/telegram/tests/test_registration.py::test_info_unverified_user FAILED [ 88%]
+src/telegram/tests/test_registration.py::test_info_no_user FAILED        [100%]
+
+================================== FAILURES ===================================
+__________________________ test_register_valid_email __________________________
+
+mock_get_services = <MagicMock name='get_service_instances' id='1984218310912'>
+
+    @pytest.mark.asyncio
+    @patch("src.telegram.handlers.account.get_service_instances")
+    async def test_register_valid_email(mock_get_services):
+        # Set up the service instance mock
+        mock_telegram_service = MagicMock()
+        mock_telegram_service.count_codes_last_hour.return_value = 0
+        mock_telegram_service.get_user_status.return_value = None
+        mock_get_services.return_value = (mock_telegram_service, None)
+    
+        message = AsyncMock(spec=Message)
+        message.reply = AsyncMock()
+        message.from_user = MagicMock()
+        message.from_user.id = 123
+        message.text = "/register user@example.com"
+    
+        await account_handler.cmd_register(message)
+    
+>       assert message.reply.called
+E       AssertionError: assert False
+E        +  where False = <AsyncMock name='mock.reply' id='1984218313264'>.called
+E        +    where <AsyncMock name='mock.reply' id='1984218313264'> = <AsyncMock spec='Message' id='1984218312592'>.reply
+
+src\telegram\tests\test_registration.py:23: AssertionError
+---------------------------- Captured stderr call -----------------------------
+2026-03-20 08:10:08,250 - [PID 35124] - ERROR - TelegramService not initialised for command /register from user 123
+__________________________ test_register_rate_limit ___________________________
+
+mock_get_services = <MagicMock name='get_service_instances' id='1984218315280'>
+
+    @pytest.mark.asyncio
+    @patch("src.telegram.handlers.account.get_service_instances")
+    async def test_register_rate_limit(mock_get_services):
+        mock_telegram_service = MagicMock()
+        mock_telegram_service.count_codes_last_hour.return_value = 5
+        mock_get_services.return_value = (mock_telegram_service, None)
+    
+        message = AsyncMock(spec=Message)
+        message.reply = AsyncMock()
+        message.from_user = MagicMock()
+        message.from_user.id = 123
+        message.text = "/register user@example.com"
+    
+        await account_handler.cmd_register(message)
+>       assert "Rate Limit Exceeded" in message.reply.call_args[0][0]
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+src\telegram\tests\test_registration.py:41: TypeError
+---------------------------- Captured stderr call -----------------------------
+2026-03-20 08:10:08,632 - [PID 35124] - ERROR - TelegramService not initialised for command /register from user 123
+___________________________ test_verify_valid_code ____________________________
+
+mock_get_services = <MagicMock name='get_service_instances' id='1984219931920'>
+
+    @pytest.mark.asyncio
+    @patch("src.telegram.handlers.account.get_service_instances")
+    async def test_verify_valid_code(mock_get_services):
+        mock_telegram_service = MagicMock()
+        mock_telegram_service.verify_code.return_value = True
+        mock_telegram_service.get_user_status.return_value = {"email": "a@b.com"}
+        mock_get_services.return_value = (mock_telegram_service, None)
+    
+        message = AsyncMock(spec=Message)
+        message.reply = AsyncMock()
+        message.from_user = MagicMock()
+        message.from_user.id = 123
+        message.text = "/verify 123456"
+    
+        await account_handler.cmd_verify(message)
+>       assert "Verified Successfully" in message.reply.call_args[0][0]
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+src\telegram\tests\test_registration.py:74: TypeError
+---------------------------- Captured stderr call -----------------------------
+2026-03-20 08:10:08,646 - [PID 35124] - ERROR - TelegramService not initialised for command /verify from user 123
+__________________________ test_verify_invalid_code ___________________________
+
+mock_get_services = <MagicMock name='get_service_instances' id='1984219930240'>
+
+    @pytest.mark.asyncio
+    @patch("src.telegram.handlers.account.get_service_instances")
+    async def test_verify_invalid_code(mock_get_services):
+        mock_telegram_service = MagicMock()
+        mock_telegram_service.verify_code.return_value = False
+        mock_telegram_service.get_user_status.return_value = {"email": "a@b.com"}
+        mock_get_services.return_value = (mock_telegram_service, None)
+    
+        message = AsyncMock(spec=Message)
+        message.reply = AsyncMock()
+        message.from_user = MagicMock()
+        message.from_user.id = 123
+        message.text = "/verify 654321"
+    
+        await account_handler.cmd_verify(message)
+>       assert "Invalid or Expired" in message.reply.call_args[0][0]
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+src\telegram\tests\test_registration.py:91: TypeError
+---------------------------- Captured stderr call -----------------------------
+2026-03-20 08:10:08,655 - [PID 35124] - ERROR - TelegramService not initialised for command /verify from user 123
+_________________________ test_verify_invalid_format __________________________
+
+mock_get_services = <MagicMock name='get_service_instances' id='1984219927552'>
+
+    @pytest.mark.asyncio
+    @patch("src.telegram.handlers.account.get_service_instances")
+    async def test_verify_invalid_format(mock_get_services):
+        mock_get_services.return_value = (MagicMock(), None)
+        message = AsyncMock(spec=Message)
+        message.reply = AsyncMock()
+        message.from_user = MagicMock()
+        message.from_user.id = 123
+        message.text = "/verify abcdef"
+    
+        await account_handler.cmd_verify(message)
+>       assert "Usage: /verify CODE" in message.reply.call_args[0][0]
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+src\telegram\tests\test_registration.py:104: TypeError
+---------------------------- Captured stderr call -----------------------------
+2026-03-20 08:10:08,663 - [PID 35124] - ERROR - TelegramService not initialised for command /verify from user 123
+___________________________ test_info_verified_user ___________________________
+
+mock_get_services = <MagicMock name='get_service_instances' id='1984219936288'>
+
+    @pytest.mark.asyncio
+    @patch("src.telegram.handlers.account.get_service_instances")
+    async def test_info_verified_user(mock_get_services):
+        mock_telegram_service = MagicMock()
+        mock_telegram_service.get_user_status.return_value = {
+            "email": "user@example.com", "verified": True, "approved": True, "is_admin": False, "language": "en"
+        }
+        mock_get_services.return_value = (mock_telegram_service, None)
+    
+        message = AsyncMock(spec=Message)
+        message.reply = AsyncMock()
+        message.from_user = MagicMock()
+        message.from_user.id = 123
+        message.text = "/info"
+    
+        await account_handler.cmd_info(message)
+>       assert "user@example.com" in message.reply.call_args[0][0]
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+src\telegram\tests\test_registration.py:122: TypeError
+---------------------------- Captured stderr call -----------------------------
+2026-03-20 08:10:08,671 - [PID 35124] - ERROR - TelegramService not initialised for command /info from user 123
+__________________________ test_info_unverified_user __________________________
+
+mock_get_services = <MagicMock name='get_service_instances' id='1984220496960'>
+
+    @pytest.mark.asyncio
+    @patch("src.telegram.handlers.account.get_service_instances")
+    async def test_info_unverified_user(mock_get_services):
+        mock_telegram_service = MagicMock()
+        mock_telegram_service.get_user_status.return_value = {
+            "email": "user@example.com", "verified": False, "approved": False, "is_admin": False, "language": "en"
+        }
+        mock_get_services.return_value = (mock_telegram_service, None)
+    
+        message = AsyncMock(spec=Message)
+        message.reply = AsyncMock()
+        message.from_user = MagicMock()
+        message.from_user.id = 123
+        message.text = "/info"
+    
+        await account_handler.cmd_info(message)
+>       assert "Verified: \u274c No" in message.reply.call_args[0][0]
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+src\telegram\tests\test_registration.py:141: TypeError
+---------------------------- Captured stderr call -----------------------------
+2026-03-20 08:10:08,679 - [PID 35124] - ERROR - TelegramService not initialised for command /info from user 123
+______________________________ test_info_no_user ______________________________
+
+mock_get_services = <MagicMock name='get_service_instances' id='1984220500320'>
+
+    @pytest.mark.asyncio
+    @patch("src.telegram.handlers.account.get_service_instances")
+    async def test_info_no_user(mock_get_services):
+        mock_telegram_service = MagicMock()
+        mock_telegram_service.get_user_status.return_value = None
+        mock_get_services.return_value = (mock_telegram_service, None)
+    
+        message = AsyncMock(spec=Message)
+        message.reply = AsyncMock()
+        message.from_user = MagicMock()
+        message.from_user.id = 123
+        message.text = "/info"
+    
+        await account_handler.cmd_info(message)
+>       assert "Email: (not set)" in message.reply.call_args[0][0]
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+src\telegram\tests\test_registration.py:157: TypeError
+---------------------------- Captured stderr call -----------------------------
+2026-03-20 08:10:08,687 - [PID 35124] - ERROR - TelegramService not initialised for command /info from user 123
+============================== warnings summary ===============================
+.venv\Lib\site-packages\websockets\legacy\__init__.py:6
+  C:\dev\cursor\e-trading\.venv\Lib\site-packages\websockets\legacy\__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+.venv\Lib\site-packages\eventkit\util.py:21
+  C:\dev\cursor\e-trading\.venv\Lib\site-packages\eventkit\util.py:21: DeprecationWarning: There is no current event loop
+    return asyncio.get_event_loop_policy().get_event_loop()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED src/telegram/tests/test_registration.py::test_register_valid_email - A...
+FAILED src/telegram/tests/test_registration.py::test_register_rate_limit - Ty...
+FAILED src/telegram/tests/test_registration.py::test_verify_valid_code - Type...
+FAILED src/telegram/tests/test_registration.py::test_verify_invalid_code - Ty...
+FAILED src/telegram/tests/test_registration.py::test_verify_invalid_format - ...
+FAILED src/telegram/tests/test_registration.py::test_info_verified_user - Typ...
+FAILED src/telegram/tests/test_registration.py::test_info_unverified_user - T...
+FAILED src/telegram/tests/test_registration.py::test_info_no_user - TypeError...
+=================== 8 failed, 1 passed, 2 warnings in 5.48s ===================

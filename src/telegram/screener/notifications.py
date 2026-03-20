@@ -467,7 +467,7 @@ def _get_unified_recommendation(indicator: str, value: float, context: dict = No
 
 
 
-async def process_report_command(message, telegram_user_id, args, notification_client):
+async def process_report_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     """
     Process /report command using service layer for all operations.
 
@@ -779,11 +779,12 @@ async def process_info_command(message, telegram_user_id, notification_client):
             "message": f"Error processing info command: {str(e)}"
         }
 
-async def process_register_command(message, telegram_user_id, args, notification_client):
+async def process_register_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
-        email = args[1].strip() if len(args) > 1 else None
-        language = args[2].strip().lower() if len(args) > 2 else None
-        parsed = ParsedCommand(command="register", args={"telegram_user_id": telegram_user_id, "email": email, "language": language})
+        email = parsed.args.get("email_address")
+        language = parsed.args.get("language")
+        # Ensure telegram_user_id is in args for business_logic
+        parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
 
@@ -817,10 +818,10 @@ async def process_register_command(message, telegram_user_id, args, notification
             "message": f"Error processing register command: {str(e)}"
         }
 
-async def process_verify_command(message, telegram_user_id, args, notification_client):
+async def process_verify_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
-        code = args[1] if len(args) > 1 else None
-        parsed = ParsedCommand(command="verify", args={"telegram_user_id": telegram_user_id, "code": code})
+        # Ensure telegram_user_id is in args for business_logic
+        parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
         if result.get("email", False):
@@ -847,12 +848,10 @@ async def process_verify_command(message, telegram_user_id, args, notification_c
             data={"reply_to_message_id": message.message_id}
         )
 
-async def process_request_approval_command(message, telegram_user_id, args, notification_client):
+async def process_request_approval_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     """Process /request_approval command"""
     try:
-        # Parse command
-        command_text = " ".join(args)
-        parsed = parse_command(command_text)
+        # P2.2: Redundant parsing removed
         parsed.args["telegram_user_id"] = telegram_user_id
 
         # Process command
@@ -903,10 +902,11 @@ async def process_request_approval_command(message, telegram_user_id, args, noti
             reply_to_message_id=message.message_id
         )
 
-async def process_language_command(message, telegram_user_id, args, notification_client):
+async def process_language_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
-        lang = args[1].strip().lower() if len(args) > 1 else None
-        parsed = ParsedCommand(command="language", args={"telegram_user_id": telegram_user_id, "language": lang})
+        lang = parsed.args.get("language_code")
+        # Ensure telegram_user_id is in args for business_logic
+        parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
         if result.get("email", False):
@@ -933,11 +933,9 @@ async def process_language_command(message, telegram_user_id, args, notification
             reply_to_message_id=message.message_id
         )
 
-async def process_admin_command(message, telegram_user_id, args, notification_client):
+async def process_admin_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
-        # Use the proper command parser instead of manually creating ParsedCommand
-        parsed = parse_command(message.text)
-        # Add the telegram_user_id to the args
+        # P2.2: Redundant parsing removed
         parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
@@ -987,11 +985,9 @@ async def process_admin_command(message, telegram_user_id, args, notification_cl
             reply_to_message_id=message.message_id
         )
 
-async def process_alerts_command(message, telegram_user_id, args, notification_client):
+async def process_alerts_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
-        # Use the proper command parser instead of manually creating ParsedCommand
-        parsed = parse_command(message.text)
-        # Add the telegram_user_id to the args
+        # P2.2: Redundant parsing removed
         parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
@@ -1018,11 +1014,9 @@ async def process_alerts_command(message, telegram_user_id, args, notification_c
             reply_to_message_id=message.message_id
         )
 
-async def process_schedules_command(message, telegram_user_id, args, notification_client):
+async def process_schedules_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
-        # Use the proper command parser instead of manually creating ParsedCommand
-        parsed = parse_command(message.text)
-        # Add the telegram_user_id to the args
+        # P2.2: Redundant parsing removed
         parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
@@ -1049,10 +1043,14 @@ async def process_schedules_command(message, telegram_user_id, args, notificatio
             reply_to_message_id=message.message_id
         )
 
-async def process_feedback_command(message, telegram_user_id, args, notification_client):
+async def process_feedback_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     try:
-        feedback_text = args[1] if len(args) > 1 else None
-        parsed = ParsedCommand(command="feedback", args={"telegram_user_id": telegram_user_id, "feedback": feedback_text})
+        # Join positionals for feedback text
+        feedback_text = " ".join(parsed.positionals)
+        # Ensure fields are set for business_logic
+        if "feedback" not in parsed.args:
+            parsed.args["feedback"] = feedback_text
+        parsed.args["telegram_user_id"] = telegram_user_id
         result = await handle_command(parsed)
         channels = ["telegram"]
         if result.get("email", False):
@@ -1078,11 +1076,10 @@ async def process_feedback_command(message, telegram_user_id, args, notification
             reply_to_message_id=message.message_id
         )
 
-async def process_feature_command(message, telegram_user_id, args, notification_client):
+async def process_feature_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     """Process /feature command"""
     try:
-        # Parse command
-        parsed = parse_command(" ".join(args))
+        # P2.2: Redundant parsing removed
         parsed.args["telegram_user_id"] = telegram_user_id
 
         # Execute business logic
@@ -1099,11 +1096,10 @@ async def process_feature_command(message, telegram_user_id, args, notification_
         await message.answer("❌ Error processing feature request. Please try again.")
 
 
-async def process_screener_command(message, telegram_user_id, args, notification_client):
+async def process_screener_command(message, telegram_user_id, parsed: ParsedCommand, notification_client):
     """Process /screener command"""
     try:
-        # Parse command
-        parsed = parse_command(" ".join(args))
+        # P2.2: Redundant parsing removed
         parsed.args["telegram_user_id"] = telegram_user_id
 
         # Execute business logic
@@ -1128,9 +1124,9 @@ async def process_screener_command(message, telegram_user_id, args, notification
         await message.answer("❌ Error processing screener request. Please try again.")
 
 
-async def process_unknown_command(message, telegram_user_id, notification_client, help_text):
+async def process_unknown_command(message, telegram_user_id, parsed: ParsedCommand, notification_client, help_text):
     try:
-        parsed = ParsedCommand(command="unknown", args={"telegram_user_id": telegram_user_id, "text": message.text})
+        # P2.2: Redundant creation of ParsedCommand removed
 
         # Create a user-friendly unknown command message
         unknown_command = message.text.split()[0] if message.text else "unknown"

@@ -10,10 +10,14 @@ import pandas as pd
 
 try:
     import pandas_ta_classic as pta  # type: ignore
-except Exception as e:
-    raise ImportError(
-        "pandas-ta is required for PandasTaAdapter. Install with `pip install pandas_ta`."
-    ) from e
+except ImportError:
+    try:
+        import pandas_ta as pta  # type: ignore
+    except ImportError:
+        raise ImportError(
+            "pandas-ta-classic or pandas-ta is required for PandasTaAdapter. "
+            "Install with `pip install pandas-ta-classic`."
+        )
 
 from src.indicators.adapters.base import BaseAdapter  # optional base
 from src.indicators.registry import INDICATOR_META

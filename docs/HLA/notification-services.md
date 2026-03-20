@@ -27,78 +27,69 @@ graph TB
         TelegramBot[Telegram Bot]
     end
 
+    subgraph "Shared Message Queue (DB)"
+        MQC[MessageQueueClient]
+        Messages[(msg_messages)]
+    end
+
     subgraph "Notification Service"
-        API[REST API]
-        MessageQueue[Message Queue]
+        MessagePoller[Message Poller]
         Processor[Message Processor]
-        RateLimiter[Rate Limiter]
         ChannelManager[Channel Manager]
         HealthMonitor[Health Monitor]
+        HealthReporter[Health Reporter]
     end
 
     subgraph "Channel Plugins"
-        TelegramChannel[Telegram Plugin]
         EmailChannel[Email Plugin]
         SMSChannel[SMS Plugin]
-        SlackChannel[Slack Plugin]
-        WebSocketChannel[WebSocket Plugin]
     end
 
     subgraph "External APIs"
-        TelegramAPI[Telegram Bot API]
         SMTPServer[SMTP Server]
         SMSProvider[SMS Provider]
-        SlackAPI[Slack API]
-        WebSocketMgr[WebSocket Manager]
     end
 
     subgraph "Database"
-        Messages[(msg_messages)]
+        Messages2[(msg_messages)]
         DeliveryStatus[(msg_delivery_status)]
         SystemHealth[(msg_system_health)]
-        RateLimits[(msg_rate_limits)]
     end
 
-    TradingBot --> API
-    StrategyMgr --> API
-    AlertSystem --> API
-    JobScheduler --> API
-    WebAPI --> API
-    TelegramBot --> API
+    TradingBot --> MQC
+    StrategyMgr --> MQC
+    AlertSystem --> MQC
+    JobScheduler --> MQC
+    WebAPI --> MQC
+    TelegramBot --> MQC
 
-    API --> MessageQueue
-    MessageQueue --> Processor
-    Processor --> RateLimiter
-    RateLimiter --> ChannelManager
-    ChannelManager --> TelegramChannel
+    MQC --> Messages
+    Messages --> MessagePoller
+    MessagePoller --> Processor
+    Processor --> ChannelManager
     ChannelManager --> EmailChannel
     ChannelManager --> SMSChannel
-    ChannelManager --> SlackChannel
-    ChannelManager --> WebSocketChannel
 
-    TelegramChannel --> TelegramAPI
     EmailChannel --> SMTPServer
     SMSChannel --> SMSProvider
-    SlackChannel --> SlackAPI
-    WebSocketChannel --> WebSocketMgr
 
-    Processor --> Messages
+    Processor --> Messages2
     Processor --> DeliveryStatus
-    HealthMonitor --> SystemHealth
-    RateLimiter --> RateLimits
+    HealthReporter --> SystemHealth
 
-    %% Styling
     classDef sourceLayer fill:#e3f2fd
+    classDef queueLayer fill:#e8f5e9
     classDef serviceLayer fill:#f1f8e9
     classDef pluginLayer fill:#fff3e0
     classDef endpointLayer fill:#fce4ec
     classDef dataLayer fill:#f3e5f5
 
     class TradingBot,StrategyMgr,AlertSystem,JobScheduler,WebAPI,TelegramBot sourceLayer
-    class API,MessageQueue,Processor,RateLimiter,ChannelManager,HealthMonitor serviceLayer
-    class TelegramChannel,EmailChannel,SMSChannel,SlackChannel,WebSocketChannel pluginLayer
-    class TelegramAPI,SMTPServer,SMSProvider,SlackAPI,WebSocketMgr endpointLayer
-    class Messages,DeliveryStatus,SystemHealth,RateLimits dataLayer
+    class MQC,Messages queueLayer
+    class MessagePoller,Processor,ChannelManager,HealthMonitor,HealthReporter serviceLayer
+    class EmailChannel,SMSChannel pluginLayer
+    class SMTPServer,SMSProvider endpointLayer
+    class Messages2,DeliveryStatus,SystemHealth dataLayer
 ```
 
 ### 2. Core Service Components
@@ -114,28 +105,38 @@ Autonomous service that handles all outbound communications:
 - **Delivery Tracking**: Comprehensive analytics and monitoring
 - **Health Monitoring**: Automatic channel health detection and fallback
 
-#### 2.2 REST API Layer
-HTTP interface for service consumers:
+#### 2.2 DB Queue Integration Layer
+Service consumers write directly to the shared message database using `MessageQueueClient`.
+There is **no REST API** — all integration is via shared database writes:
 
 ```python
-# Message enqueueing endpoint
-POST /api/v1/messages
-{
-    "message_type": "trade_alert",
-    "priority": "HIGH",
-    "channels": ["telegram", "email"],
-    "recipient_id": "user123",
-    "template_name": "trade_alert",
-    "content": {
-        "symbol": "BTCUSDT",
-        "action": "BUY",
-        "price": 65000
-    },
-    "metadata": {
-        "telegram_chat_id": 123456789
-    }
-}
+# Enqueue a message for delivery (direct DB write)
+from src.data.db.services.database_service import get_database_service
+from src.data.db.models.model_notification import Message, MessageStatus
+
+with get_database_service().uow() as uow:
+    message = Message(
+        message_type="trade_alert",
+        priority="HIGH",
+        channels=["telegram", "email"],
+        recipient_id="user123",
+        content={
+            "title": "Trade Alert",
+            "message": "BTCUSDT BUY @ $65,000",
+        },
+        message_metadata={
+            "telegram_chat_id": 123456789,
+            "email_receiver": "trader@example.com"
+        },
+        status=MessageStatus.PENDING.value
+    )
+    uow.s.add(message)
+    uow.commit()
 ```
+
+The `MessagePoller` in `notification_db_centric_bot.py` polls the database every 5 seconds
+and picks up pending messages matching its `enabled_channels` (default: `["email"]`).
+The Telegram Bot polls for messages where `channels` contains `"telegram"`.
 
 #### 2.3 Message Processing Engine
 Core processing system with advanced features:
@@ -447,35 +448,40 @@ class SMSPlugin(NotificationChannel):
 ### 5. Service Integration Patterns
 
 #### 5.1 Service Consumer Integration
-Service consumers interact with the Notification Service via REST API:
+Service consumers write directly to the `msg_messages` table using the ORM `Message` model:
 
 ```python
 # Example: Alert Evaluator sending notification
-async def send_alert_notification(alert_data):
-    message = {
-        "message_type": "trade_alert",
-        "priority": "HIGH",
-        "channels": ["telegram", "email"],
-        "recipient_id": alert_data["user_id"],
-        "template_name": "trade_alert",
-        "content": {
-            "symbol": alert_data["symbol"],
-            "action": alert_data["action"],
-            "price": alert_data["price"]
-        },
-        "metadata": {
-            "alert_id": alert_data["id"],
-            "telegram_chat_id": alert_data["telegram_chat_id"],
-            "email_recipient": alert_data["email"]
-        }
-    }
-    
-    response = await http_client.post(
-        "http://notification-service:8080/api/v1/messages",
-        json=message
-    )
-    return response.json()["message_id"]
+from src.data.db.services.database_service import get_database_service
+from src.data.db.models.model_notification import Message, MessagePriority, MessageStatus
+
+def send_alert_notification(alert_data):
+    db_service = get_database_service()
+
+    with db_service.uow() as uow:
+        message = Message(
+            message_type="trade_alert",
+            priority=MessagePriority.HIGH.value,
+            channels=["telegram", "email"],
+            recipient_id=str(alert_data["telegram_chat_id"]),
+            content={
+                "title": f"{alert_data['symbol']} Alert",
+                "message": f"{alert_data['action']} @ ${alert_data['price']:,.2f}",
+            },
+            message_metadata={
+                "alert_id": alert_data["id"],
+                "telegram_chat_id": alert_data["telegram_chat_id"],
+                "email_receiver": alert_data["email"]
+            },
+            status=MessageStatus.PENDING.value
+        )
+        uow.s.add(message)
+        uow.commit()
+        return message.id
 ```
+
+The Notification Service polls for messages with `channels` overlapping its `enabled_channels`
+(default: `["email"]`). The Telegram Bot polls for messages where `channels` contains `"telegram"`.
 
 #### 5.2 Priority-Based Processing
 Messages are processed based on priority levels:
@@ -687,40 +693,25 @@ class SlackPlugin(NotificationChannel):
 ### 7. Migration Strategy
 
 #### 7.1 Backward Compatibility
-Smooth transition from existing AsyncNotificationManager:
+The `AsyncNotificationManager` is legacy. New service consumers should write directly to the
+`msg_messages` database table using the ORM `Message` model:
 
 ```python
-# Compatibility wrapper for existing code
-class AsyncNotificationManagerCompat:
-    def __init__(self, notification_service_url: str):
-        self.service_url = notification_service_url
-        self.http_client = httpx.AsyncClient()
-    
-    async def send_notification(self, **kwargs):
-        """Proxy method that forwards to notification service"""
-        # Convert old format to new API format
-        message = self._convert_legacy_format(kwargs)
-        
-        # Send to notification service
-        response = await self.http_client.post(
-            f"{self.service_url}/api/v1/messages",
-            json=message
-        )
-        return response.json()["message_id"]
-    
-    def _convert_legacy_format(self, kwargs):
-        """Convert legacy notification format to new API format"""
-        return {
-            "message_type": kwargs.get("notification_type", "info"),
-            "priority": kwargs.get("priority", "NORMAL").upper(),
-            "channels": kwargs.get("channels", ["telegram"]),
-            "recipient_id": kwargs.get("recipient_id"),
-            "content": {
-                "title": kwargs.get("title"),
-                "message": kwargs.get("message")
-            },
-            "metadata": kwargs.get("data", {})
-        }
+# New (recommended) pattern: direct DB write
+from src.data.db.services.database_service import get_database_service
+from src.data.db.models.model_notification import Message, MessageStatus
+
+with get_database_service().uow() as uow:
+    uow.s.add(Message(
+        message_type="info",
+        priority="NORMAL",
+        channels=["telegram"],
+        recipient_id=str(chat_id),
+        content={"title": title, "message": body},
+        message_metadata={"telegram_chat_id": chat_id},
+        status=MessageStatus.PENDING.value
+    ))
+    uow.commit()
 ```
 
 #### 7.2 Gradual Migration Plan
@@ -752,8 +743,6 @@ version: '3.8'
 services:
   notification-service:
     build: ./src/notification
-    ports:
-      - "8080:8080"
     environment:
       - DATABASE_URL=postgresql://user:pass@db:5432/trading_db
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
@@ -762,11 +751,9 @@ services:
     depends_on:
       - db
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # No HTTP port - notification service has no REST endpoints.
+    # Health is reported to the database (msg_system_health table).
+    # Monitor via SQL: SELECT status FROM msg_system_health WHERE system='notification';
 ```
 
 #### 8.2 Monitoring and Alerting

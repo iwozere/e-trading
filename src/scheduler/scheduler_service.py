@@ -9,7 +9,8 @@ from pathlib import Path
 import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
@@ -306,8 +307,13 @@ class SchedulerService:
 
             # Job defaults
             job_defaults = {
+                # coalesce=False: each missed firing is executed individually, not merged.
+                # For trading alerts this is intentional — we want every evaluation run,
+                # not just the latest one, so we don't miss a trigger during downtime.
+                # If downtime could produce many missed runs that aren't useful to replay,
+                # set coalesce=True in the environment config.
                 'coalesce': False,
-                'max_instances': self.max_workers  # Use max_workers here for concurrent job instances
+                'max_instances': self.max_workers
             }
 
             # Create scheduler with jobstore and executor
@@ -553,14 +559,11 @@ class SchedulerService:
         Returns:
             Dictionary with execution results
         """
-        # TODO: Implement screener job execution
-        # This would integrate with the screener service
-        _logger.info("Screener job execution not yet implemented for schedule %d", schedule.id)
-
-        return {
-            "status": "not_implemented",
-            "message": "Screener job execution will be implemented in future version"
-        }
+        # P2.4: Raise so the caller marks the run FAILED, not COMPLETED.
+        raise NotImplementedError(
+            f"Screener job execution is not yet implemented (schedule: {schedule.id}). "
+            "This job type will be supported in a future release."
+        )
 
     async def _execute_report_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
         """
@@ -573,14 +576,11 @@ class SchedulerService:
         Returns:
             Dictionary with execution results
         """
-        # TODO: Implement report job execution
-        # This would integrate with the reporting service
-        _logger.info("Report job execution not yet implemented for schedule %d", schedule.id)
-
-        return {
-            "status": "not_implemented",
-            "message": "Report job execution will be implemented in future version"
-        }
+        # P2.4: Raise so the caller marks the run FAILED, not COMPLETED.
+        raise NotImplementedError(
+            f"Report job execution is not yet implemented (schedule: {schedule.id}). "
+            "This job type will be supported in a future release."
+        )
 
     async def _execute_data_processing_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
         """
@@ -833,8 +833,15 @@ class SchedulerService:
                 # SSL is not required for local network connection, bypassing permission issues with keys
                 conn = await asyncpg.connect(current_db_url, ssl='disable')
 
-                # Add listener
-                await conn.add_listener('scheduler_updates', lambda *args: asyncio.create_task(self.reload_schedules()))
+                # P1.2 Fix: Use call_soon_threadsafe so we schedule the coroutine
+                # from within the event loop thread, not from the asyncpg sync callback.
+                loop = asyncio.get_event_loop()
+                await conn.add_listener(
+                    'scheduler_updates',
+                    lambda *args: loop.call_soon_threadsafe(
+                        asyncio.ensure_future, self.reload_schedules()
+                    )
+                )
 
                 _logger.info("Listening for 'scheduler_updates' notifications")
                 retry_count = 0
@@ -990,13 +997,10 @@ class SchedulerService:
             state_updates: State updates to persist
         """
         try:
-            # TODO: This requires adding state_json field to Schedule model
-            # For now, we'll log the state update
-            _logger.debug("Would update schedule %d state: %s", schedule_id, state_updates)
-
-            # When state_json field is added to Schedule model, this would be:
-            # state_json = json.dumps(state_updates, ensure_ascii=False, default=str)
-            # self.jobs_service.update_schedule_state(schedule_id, state_json)
+            _logger.debug("Updating schedule %d state: %s", schedule_id, state_updates)
+            
+            # Use jobs_service to update the state_json field
+            self.jobs_service.update_schedule_state(schedule_id, state_updates)
 
         except Exception:
             _logger.exception("Error updating schedule state for %d:", schedule_id)

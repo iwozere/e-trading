@@ -102,13 +102,6 @@ class EmailChannel(NotificationChannel):
             description="Sender display name"
         )
 
-        validator.optional_field(
-            "default_recipient",
-            str,
-            description="Default recipient email address",
-            custom_validator=validate_email
-        )
-
         # SMTP options
         validator.optional_field(
             "use_tls",
@@ -216,14 +209,21 @@ class EmailChannel(NotificationChannel):
                             else:
                                 _logger.warning(f"No email found for user_id: {user_id_int}")
                         except (ValueError, TypeError):
-                            # Not an integer user_id, and not an email
-                            _logger.warning(f"Recipient '{recipient}' is not a valid email or user_id")
-
-            # Fallback to config default was REMOVED as per user request
-            # We strictly require a valid resolved email
+                            # Not an email, or integer resolution failed
+                            # Try to resolve as telegram_id
+                            try:
+                                _logger.debug(f"Attempting to resolve email for telegram_id: {recipient}")
+                                user = users_service.get_user_by_telegram_id(recipient)
+                                if user and getattr(user, 'email', None):
+                                    to_email = user.email
+                                    _logger.info(f"Resolved telegram_id {recipient} to email: {to_email}")
+                                else:
+                                    _logger.warning(f"No user or email found for telegram_id: {recipient}")
+                            except Exception as e:
+                                _logger.error(f"Error resolving telegram_id {recipient}: {e}")
 
             if not to_email:
-                raise ValueError(f"No recipient email address provided. Could not resolve '{recipient}' to an email.")
+                raise ValueError(f"No recipient email address provided. Could not resolve '{recipient}' to an email via User ID or Telegram ID.")
 
             # Parse recipients (support comma-separated)
             recipients = [email.strip() for email in to_email.split(",")]
