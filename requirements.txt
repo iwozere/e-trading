@@ -42,3 +42,9 @@ apscheduler>=3.10.4
 croniter>=2.0.1
 asyncpg>=0.29.0
 vectorbt>=0.28.4
+
+# Web UI Backend
+fastapi>=0.103.0
+uvicorn>=0.23.2
+PyJWT>=2.8.0
+python-multipart>=0.0.6

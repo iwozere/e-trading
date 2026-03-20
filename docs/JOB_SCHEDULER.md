@@ -171,7 +171,7 @@ schedule_data = {
     "enabled": True
 }
 
-response = requests.post("http://localhost:8000/api/schedules", json=schedule_data)
+response = requests.post("http://localhost:5003/api/schedules", json=schedule_data)
 ```
 
 ### Run a Report Immediately
@@ -185,18 +185,18 @@ report_data = {
     }
 }
 
-response = requests.post("http://localhost:8000/api/reports/run", json=report_data)
+response = requests.post("http://localhost:5003/api/reports/run", json=report_data)
 run_id = response.json()["run_id"]
 
 # Check status
-status_response = requests.get(f"http://localhost:8000/api/runs/{run_id}")
+status_response = requests.get(f"http://localhost:5003/api/runs/{run_id}")
 print(status_response.json()["status"])
 ```
 
 ### List Available Screener Sets
 
 ```python
-response = requests.get("http://localhost:8000/api/screener-sets")
+response = requests.get("http://localhost:5003/api/screener-sets")
 sets = response.json()
 
 for screener_set in sets:
@@ -229,7 +229,7 @@ The configuration is loaded at startup and can be reloaded without restart.
 Get statistics about job execution:
 
 ```python
-response = requests.get("http://localhost:8000/api/runs/statistics?days=30")
+response = requests.get("http://localhost:5003/api/runs/statistics?days=30")
 stats = response.json()
 
 print(f"Total runs: {stats['total_runs']}")

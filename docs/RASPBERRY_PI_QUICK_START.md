@@ -71,7 +71,7 @@ sudo systemctl status trading-admin.service
 
 **Admin Panel:**
 - Open web browser
-- Navigate to: `http://your-pi-ip:5000`
+- Navigate to: `http://your-pi-ip:5002`
 - Login with credentials from `.env` file
 
 ## Manual Setup (Alternative)
@@ -128,8 +128,8 @@ crontab -e
 ### Troubleshooting
 ```bash
 # Check if ports are in use
-sudo netstat -tlnp | grep :5000
-sudo netstat -tlnp | grep :8080
+sudo netstat -tlnp | grep :5002
+sudo netstat -tlnp | grep :5003
 
 # Check disk space
 df -h
@@ -185,10 +185,10 @@ htop
 3. **Test individual components:**
    ```bash
    # Test bot API
-   curl http://localhost:8080/api/status
+   curl http://localhost:5003/api/status
    
    # Test admin panel
-   curl http://localhost:5000
+   curl http://localhost:5002
    ```
 
 ## What's Running

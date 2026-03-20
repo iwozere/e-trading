@@ -270,7 +270,7 @@ These endpoints still work but return deprecation notices:
 ### Monitoring Dashboard Query
 ```bash
 # Get comprehensive health status
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/health/channels
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5003/api/health/channels
 ```
 
 ### Alerting Integration
@@ -278,7 +278,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/health/channels
 import requests
 
 response = requests.get(
-    "http://localhost:8000/api/health/channels",
+    "http://localhost:5003/api/health/channels",
     headers={"Authorization": f"Bearer {token}"}
 )
 
@@ -311,17 +311,17 @@ notification_queue_pending{service="notification_service"} 2
 
 **Old**:
 ```bash
-curl http://localhost:8000/api/health
-curl http://localhost:8000/api/notifications/channels/health
+curl http://localhost:5003/api/health
+curl http://localhost:5003/api/notifications/channels/health
 ```
 
 **New**:
 ```bash
 # Basic health
-curl http://localhost:8000/api/health
+curl http://localhost:5003/api/health
 
 # Comprehensive channel health (recommended)
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/health/channels
+curl -H "Authorization: Bearer $TOKEN" http://localhost:5003/api/health/channels
 ```
 
 ### For Dashboards

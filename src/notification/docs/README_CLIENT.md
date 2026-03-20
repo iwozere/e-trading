@@ -26,7 +26,7 @@ from src.notification.model import NotificationType, NotificationPriority
 
 # Initialize the client
 client = NotificationServiceClient(
-    base_url="http://localhost:8080",  # Notification service URL
+    base_url="http://localhost:5003",  # Notification service URL
     timeout=30,
     max_retries=3
 )
@@ -49,7 +49,7 @@ import asyncio
 from src.notification.service.client import NotificationServiceClient
 
 async def send_async_notification():
-    client = NotificationServiceClient(base_url="http://localhost:8080")
+    client = NotificationServiceClient(base_url="http://localhost:5003")
     
     try:
         response = await client.send_notification_async(
@@ -76,7 +76,7 @@ The main client class for interacting with the notification service.
 
 ```python
 NotificationServiceClient(
-    base_url: str = "http://localhost:8080",
+    base_url: str = "http://localhost:5003",
     timeout: int = 30,
     max_retries: int = 3,
     retry_backoff_factor: float = 0.3,
@@ -189,7 +189,7 @@ from src.notification.compatibility import AsyncNotificationManagerCompat
 manager = AsyncNotificationManagerCompat(
     telegram_chat_id="123456789",
     email_receiver="trader@example.com",
-    notification_service_url="http://localhost:8080"
+    notification_service_url="http://localhost:5003"
 )
 
 await manager.start()
@@ -211,7 +211,7 @@ The client can be configured using environment variables:
 
 ```bash
 # Notification service URL
-NOTIFICATION_SERVICE_URL=http://notification-service:8080
+NOTIFICATION_SERVICE_URL=http://notification-service:5003
 
 # API key for authentication (optional)
 NOTIFICATION_API_KEY=your-api-key-here
@@ -374,7 +374,7 @@ client.send_notification(
    
    # New
    client = NotificationServiceClient(
-       base_url="http://notification-service:8080"
+       base_url="http://notification-service:5003"
    )
    ```
 

@@ -2043,7 +2043,7 @@ service_registry = {
 ```python
 # Each service configured with other service endpoints
 TELEGRAM_BOT_CONFIG = {
-    "notification_endpoint": "http://localhost:8001/api/notify"
+    "notification_endpoint": "http://localhost:5003/api/notify"
 }
 ```
 
@@ -2142,10 +2142,10 @@ sudo systemctl status trading-scheduler
 sudo journalctl -u trading-scheduler -f
 
 # Check scheduler health
-curl http://localhost:8002/health
+curl http://localhost:5004/health
 
 # View job statistics
-curl http://localhost:8002/stats
+curl http://localhost:5004/stats
 ```
 
 #### 17.2 Configuration Management

@@ -113,7 +113,7 @@ with get_session() as session:
 "
 
 # Check APScheduler job registration
-curl http://localhost:8002/stats | jq '.job_counts'
+curl http://localhost:5004/stats | jq '.job_counts'
 
 # Verify cron expressions
 python -m src.scheduler.cli validate-cron "0 */5 * * * *"
@@ -264,7 +264,7 @@ except Exception as e:
 **Diagnosis:**
 ```bash
 # Check execution times
-curl http://localhost:8002/stats | jq '.execution_stats'
+curl http://localhost:5004/stats | jq '.execution_stats'
 
 # Monitor resource usage
 top -p $(pgrep -f "scheduler")
@@ -380,10 +380,10 @@ except Exception as e:
 "
 
 # Check TelegramBot status
-curl http://localhost:8001/health
+curl http://localhost:5003/health
 
 # Test notification endpoint
-curl -X POST http://localhost:8001/api/notify \
+curl -X POST http://localhost:5003/api/notify \
   -H "Content-Type: application/json" \
   -d '{"user_id": 123, "message": "Test notification"}'
 ```
@@ -417,7 +417,7 @@ print(f'Client config: {client.config}')
 "
 
 # Verify service endpoints
-export NOTIFICATION_SERVICE_URL="http://localhost:8001"
+export NOTIFICATION_SERVICE_URL="http://localhost:5003"
 export NOTIFICATION_TIMEOUT=30
 ```
 
@@ -486,10 +486,10 @@ AND state_change < NOW() - INTERVAL '5 minutes';
 
 ```bash
 # Service health
-curl http://localhost:8002/health | jq '.'
+curl http://localhost:5004/health | jq '.'
 
 # Detailed statistics
-curl http://localhost:8002/stats | jq '.'
+curl http://localhost:5004/stats | jq '.'
 
 # Database connectivity
 python -m src.scheduler.cli test-db
@@ -531,13 +531,13 @@ if ! systemctl is-active --quiet trading-scheduler; then
 fi
 
 # Check health endpoint
-if ! curl -f -s http://localhost:8002/health > /dev/null; then
+if ! curl -f -s http://localhost:5004/health > /dev/null; then
     echo "ERROR: Health endpoint not responding"
     exit 1
 fi
 
 # Check recent job executions
-recent_jobs=$(curl -s http://localhost:8002/stats | jq -r '.execution_stats.runs_24h')
+recent_jobs=$(curl -s http://localhost:5004/stats | jq -r '.execution_stats.runs_24h')
 if [ "$recent_jobs" -eq 0 ]; then
     echo "WARNING: No jobs executed in last 24 hours"
     exit 1
@@ -551,7 +551,7 @@ echo "OK: Scheduler service is healthy"
 #!/bin/bash
 
 # Get performance metrics
-stats=$(curl -s http://localhost:8002/stats)
+stats=$(curl -s http://localhost:5004/stats)
 success_rate=$(echo "$stats" | jq -r '.execution_stats.success_rate')
 avg_duration=$(echo "$stats" | jq -r '.execution_stats.avg_duration')
 failed_runs=$(echo "$stats" | jq -r '.error_stats.failed_runs_24h')

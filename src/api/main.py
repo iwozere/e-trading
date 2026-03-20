@@ -26,10 +26,31 @@ from typing import List, Dict, Any, Optional
 import sys
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+from pathlib import Path
+import sys
+import os
 
-# Setup logger first
+# -----------------------------------------------------------------------------
+# CRITICAL: Path Setup must be at the very top before any src.* imports
+# -----------------------------------------------------------------------------
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = str(PROJECT_ROOT / "src")
+
+# 1. Ensure PROJECT_ROOT is at the absolute top of the path to prevent
+#    shadowing of 'config' by 'src/config'
+if sys.path[0] != str(PROJECT_ROOT):
+    if str(PROJECT_ROOT) in sys.path:
+        sys.path.remove(str(PROJECT_ROOT))
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# 2. Aggressively remove SRC_ROOT from path if it was added by uvicorn reload
+#    This forces all imports to use 'src.config' etc. via the project root.
+if SRC_ROOT in sys.path:
+    sys.path.remove(SRC_ROOT)
+
+# -----------------------------------------------------------------------------
+
+# Now we can safely import logger and others
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
@@ -177,7 +198,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5002"],  # React dev servers
+    allow_origins=["http://localhost:3000", "http://localhost:5003", "http://localhost:5002"],  # React dev servers
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -668,8 +689,8 @@ async def get_performance_history(
 if __name__ == "__main__":
     import uvicorn
 
-    # Get port from config, default to 8000 if not set
-    port = int(TRADING_API_PORT) if TRADING_API_PORT else 8000
+    # Get port from config, default to 5003 if not set
+    port = int(TRADING_API_PORT) if TRADING_API_PORT else 5003
 
     # Run the server
     uvicorn.run(

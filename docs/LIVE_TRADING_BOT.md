@@ -363,7 +363,7 @@ Access bot management via web interface:
 python src/management/webgui/app.py
 ```
 
-Then visit: `http://localhost:5000`
+Then visit: `http://localhost:5002`
 
 ## Performance Considerations
 

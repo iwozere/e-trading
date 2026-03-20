@@ -116,9 +116,18 @@ class LiveTradingBot(BaseTradingBot):
         try:
             config_path = f"config/trading/{self.config_file}"
 
-            # Use Factory to load and resolve manifest
+            # Load raw config to pre-process before factory validation
+            import json
+            with open(config_path, 'r') as f:
+                raw_config = json.load(f)
+            
+            # Ensure bot_id is present at root for factory validation
+            if 'bot_id' not in raw_config:
+                raw_config['bot_id'] = self.config_file.split('.')[0]
+
+            # Use Factory to load and resolve manifest (now handles inline modules)
             from src.config.configuration_factory import config_factory
-            hydrated_config_dict = config_factory.load_manifest(config_path)
+            hydrated_config_dict = config_factory.load_manifest(raw_config)
 
             # Convert to TradingBotConfig for internal use
             config = TradingBotConfig(**hydrated_config_dict)

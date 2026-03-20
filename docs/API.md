@@ -9,7 +9,7 @@ This document provides comprehensive API documentation for the Advanced Trading 
 - WebSocket real-time communication
 
 **API Location**: `src/api/` - Dedicated FastAPI backend module  
-**Base URL**: `http://localhost:8000` (configurable via `TRADING_API_PORT`)  
+**Base URL**: `http://localhost:5003` (configurable via `TRADING_API_PORT`)  
 **Documentation**: Auto-generated OpenAPI/Swagger at `/docs`
 
 ---
@@ -291,7 +291,7 @@ mkdocs build
 ```bash
 mkdocs serve
 ```
-- Visit `http://127.0.0.1:8000/` in your browser.
+- Visit `http://127.0.0.1:5003/` in your browser.
 
 ### Documentation Tips
 

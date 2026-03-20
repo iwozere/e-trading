@@ -64,7 +64,7 @@ The scheduler service supports configuration through environment variables:
 - `SCHEDULER_TIMEZONE`: Scheduler timezone (default: UTC)
 
 ### Notification Configuration
-- `NOTIFICATION_SERVICE_URL`: Notification service URL (default: http://localhost:8000)
+- `NOTIFICATION_SERVICE_URL`: Notification service URL (default: http://localhost:5003)
 - `NOTIFICATION_TIMEOUT`: Notification timeout in seconds (default: 30)
 - `NOTIFICATION_RETRIES`: Maximum notification retries (default: 3)
 - `NOTIFICATION_ENABLED`: Enable notifications (default: true)

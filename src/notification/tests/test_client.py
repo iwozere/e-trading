@@ -127,7 +127,7 @@ class TestNotificationServiceClient:
     def setup_method(self):
         """Setup test client."""
         self.client = NotificationServiceClient(
-            service_url="http://test-service:8000",
+            service_url="http://test-service:5003",
             timeout=10,
             circuit_breaker_enabled=False  # Disable for testing
         )
@@ -348,7 +348,7 @@ class TestNotificationServiceClient:
 
         # Verify request
         mock_get.assert_called_once_with(
-            "http://test-service:8000/api/notifications/123",
+            "http://test-service:5003/api/notifications/123",
             timeout=10
         )
 
@@ -374,7 +374,7 @@ class TestNotificationServiceClient:
 
         # Verify request
         mock_get.assert_called_once_with(
-            "http://test-service:8000/api/notifications/health",
+            "http://test-service:5003/api/notifications/health",
             timeout=10
         )
 
@@ -382,7 +382,7 @@ class TestNotificationServiceClient:
         """Test circuit breaker integration."""
         # Create client with circuit breaker enabled
         client = NotificationServiceClient(
-            service_url="http://test-service:8000",
+            service_url="http://test-service:5003",
             circuit_breaker_enabled=True
         )
 
@@ -407,7 +407,7 @@ class TestAsyncNotificationServiceClient:
     def setup_method(self):
         """Setup test client."""
         self.client = NotificationServiceClient(
-            service_url="http://test-service:8000",
+            service_url="http://test-service:5003",
             timeout=10,
             circuit_breaker_enabled=False
         )
@@ -506,7 +506,7 @@ class TestAsyncNotificationServiceClient:
         async with NotificationServiceClient() as client:
             assert client is not None
             # Client should be properly initialized
-            assert client.service_url == "http://localhost:8000"
+            assert client.service_url == "http://localhost:5003"
 
 
 if __name__ == "__main__":

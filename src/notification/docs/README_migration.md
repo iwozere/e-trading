@@ -87,7 +87,7 @@ await trading_service.start()  # Starts embedded notification manager
 # Initialize shared notification client
 from src.notification.service.client import initialize_notification_client
 
-notification_client = await initialize_notification_client("http://localhost:8000")
+notification_client = await initialize_notification_client("http://localhost:5003")
 
 # Pass client to services
 trading_service = TradingService(config, notification_client)
@@ -197,7 +197,7 @@ notifications:
 ### New Configuration
 ```yaml
 notification_service:
-  url: "http://localhost:8000"
+  url: "http://localhost:5003"
   timeout: 30
   max_retries: 3
 

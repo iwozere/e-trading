@@ -245,7 +245,7 @@ server {
     server_name your-pi-ip-or-domain.com;
 
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://127.0.0.1:5002;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -253,7 +253,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:5003;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -348,17 +348,17 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 ### 10.2 Test Admin Panel
 1. Open web browser
-2. Navigate to `http://your-pi-ip:5000` or `http://your-domain.com`
+2. Navigate to `http://your-pi-ip:5002` or `http://your-domain.com`
 3. Login with admin credentials
 4. Test dashboard and user management
 
 ### 10.3 Test API Endpoints
 ```bash
 # Test bot API health
-curl http://localhost:8080/api/status
+curl http://localhost:5003/api/status
 
 # Test broadcast message
-curl -X POST http://localhost:8080/api/broadcast \
+curl -X POST http://localhost:5003/api/broadcast \
   -H "Content-Type: application/json" \
   -d '{"message": "Test broadcast message", "title": "Test"}'
 ```
@@ -379,7 +379,7 @@ curl -X POST http://localhost:8080/api/broadcast \
 2. **Port already in use**
    ```bash
    # Check what's using the port
-   sudo netstat -tlnp | grep :5000
+   sudo netstat -tlnp | grep :5002
    
    # Kill process if needed
    sudo kill -9 <PID>

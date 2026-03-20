@@ -16,7 +16,9 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.services import telegram_service, users_service
+from src.data.db.services.trading_service import trading_service
+from src.data.db.services.telegram_service import telegram_service
+from src.data.db.services.users_service import users_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

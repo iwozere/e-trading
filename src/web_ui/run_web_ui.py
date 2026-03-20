@@ -25,7 +25,17 @@ import uvicorn
 import time
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.append(str(PROJECT_ROOT))
+# Ensure PROJECT_ROOT is at the absolute top of the path to prevent 
+# shadowing of 'config' by 'src/config'
+if sys.path[0] != str(PROJECT_ROOT):
+    if str(PROJECT_ROOT) in sys.path:
+        sys.path.remove(str(PROJECT_ROOT))
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# Aggressively remove SRC_ROOT from path
+SRC_ROOT = str(PROJECT_ROOT / "src")
+if SRC_ROOT in sys.path:
+    sys.path.remove(SRC_ROOT)
 
 from src.notification.logger import setup_logger
 
@@ -35,7 +45,7 @@ _logger = setup_logger(__name__)
 class WebUIRunner:
     """Manages running the web UI backend and frontend."""
 
-    def __init__(self, dev_mode: bool = False, host: str = "0.0.0.0", port: int = 8000):
+    def __init__(self, dev_mode: bool = False, host: str = "0.0.0.0", port: int = 5003):
         """Initialize the runner."""
         self.dev_mode = dev_mode
         self.host = host
@@ -70,8 +80,9 @@ class WebUIRunner:
 
             # Check if Node.js is available for development mode
             if self.dev_mode:
+                use_shell = os.name == 'nt'
                 result = subprocess.run(['node', '--version'],
-                                      capture_output=True, text=True)
+                                      capture_output=True, text=True, shell=use_shell)
                 if result.returncode == 0:
                     _logger.info("✅ Node.js available: %s", result.stdout.strip())
                 else:
@@ -80,7 +91,7 @@ class WebUIRunner:
 
                 # Check if npm is available
                 result = subprocess.run(['npm', '--version'],
-                                      capture_output=True, text=True)
+                                      capture_output=True, text=True, shell=use_shell)
                 if result.returncode == 0:
                     _logger.info("✅ npm available: %s", result.stdout.strip())
                 else:
@@ -110,7 +121,8 @@ class WebUIRunner:
                     cwd=frontend_dir,
                     check=True,
                     capture_output=True,
-                    text=True
+                    text=True,
+                    shell=os.name == 'nt'
                 )
                 _logger.info("✅ Frontend dependencies installed")
                 return True
@@ -150,7 +162,8 @@ class WebUIRunner:
                 cwd=frontend_dir,
                 check=True,
                 capture_output=True,
-                text=True
+                text=True,
+                shell=os.name == 'nt'
             )
 
             if dist_dir.exists():
@@ -209,9 +222,7 @@ class WebUIRunner:
                 ['npm', 'run', 'dev'],
                 cwd=frontend_dir,
                 env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True
+                shell=os.name == 'nt'
             )
 
             self.processes.append(self.frontend_process)
@@ -282,7 +293,7 @@ class WebUIRunner:
             if self.dev_mode:
                 _logger.info("🔧 Running in DEVELOPMENT mode")
                 _logger.info("Backend: http://%s:%s", self.host, self.port)
-                _logger.info("Frontend: http://localhost:5173 (Vite dev server)")
+                _logger.info("Frontend: http://localhost:5002 (Vite dev server)")
 
                 # Start frontend development server in background
                 self.start_frontend_dev()
@@ -383,8 +394,8 @@ def main():
                        help='Run in development mode with auto-reload')
     parser.add_argument('--host', default='0.0.0.0',
                        help='Host to bind to (default: 0.0.0.0)')
-    parser.add_argument('--port', type=int, default=8000,
-                       help='Port to bind to (default: 8000)')
+    parser.add_argument('--port', type=int, default=5003,
+                        help='Port to bind to (default: 5003)')
 
     args = parser.parse_args()
 

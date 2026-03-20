@@ -1019,14 +1019,14 @@ telegram:
 web_ui:
   backend:
     host: "0.0.0.0"
-    port: 8000
-    cors_origins: ["http://localhost:3000"]
+    port: 5003
+    cors_origins: ["http://localhost:5002"]
     jwt_secret: "${JWT_SECRET_KEY}"
     jwt_expiry_hours: 24
   
   frontend:
-    api_base_url: "http://localhost:8000/api"
-    websocket_url: "ws://localhost:8000/ws"
+    api_base_url: "http://localhost:5003/api"
+    websocket_url: "ws://localhost:5003/ws"
     theme: "dark"
     auto_refresh_interval: 30
 ```

@@ -1708,7 +1708,7 @@ The Telegram bot follows clean architecture principles with proper service layer
 ## Admin Panel Features & UI
 
 ### Web-Based Admin Interface
-- **URL:** `http://localhost:5000` (when running `admin_panel.py`)
+- **URL:** `http://localhost:5002` (when running `admin_panel.py`)
 - **Authentication:** Admin login with username/password (set via environment variables)
 - **Session Management:** Secure login/logout with session tracking
 

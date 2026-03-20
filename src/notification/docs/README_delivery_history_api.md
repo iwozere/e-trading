@@ -306,25 +306,25 @@ Error responses include descriptive messages:
 ### Get recent messages for a user
 
 ```bash
-curl "http://localhost:8080/api/v1/history/messages?user_id=user123&limit=50&order_desc=true"
+curl "http://localhost:5003/api/v1/history/messages?user_id=user123&limit=50&order_desc=true"
 ```
 
 ### Get failed deliveries for troubleshooting
 
 ```bash
-curl "http://localhost:8080/api/v1/history/deliveries?status=FAILED&start_date=2023-10-01T00:00:00Z"
+curl "http://localhost:5003/api/v1/history/deliveries?status=FAILED&start_date=2023-10-01T00:00:00Z"
 ```
 
 ### Export telegram messages as CSV
 
 ```bash
-curl "http://localhost:8080/api/v1/history/export?format=csv&channel=telegram&limit=500"
+curl "http://localhost:5003/api/v1/history/export?format=csv&channel=telegram&limit=500"
 ```
 
 ### Get weekly summary statistics
 
 ```bash
-curl "http://localhost:8080/api/v1/history/summary?days=7"
+curl "http://localhost:5003/api/v1/history/summary?days=7"
 ```
 
 ## Integration

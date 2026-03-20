@@ -10,7 +10,7 @@ api_info:
   title: "Trading Web UI API"
   description: "REST API for managing multi-strategy trading system"
   version: "1.0.0"
-  base_url: "http://localhost:8000"
+  base_url: "http://localhost:5003"
   authentication: "JWT Bearer Token"
 
 # ============================================
@@ -1360,7 +1360,7 @@ development:
   
   cors_origins:
     - "http://localhost:3000"  # React dev server
-    - "http://localhost:5173"  # Vite dev server
+    - "http://localhost:5002"  # Vite dev server
     - "http://localhost:5002"  # Alternative dev server
   
   test_endpoints:

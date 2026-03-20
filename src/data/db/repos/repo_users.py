@@ -103,6 +103,18 @@ class UsersRepo:
         q = select(User).where(User.id == user_id)
         return self.s.execute(q).scalar_one_or_none()
 
+    def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get user by email."""
+        q = select(User).where(User.email == email)
+        return self.s.execute(q).scalar_one_or_none()
+
+    def get_user_by_username(self, username: str) -> Optional[User]:
+        """Get user by username (first part of email)."""
+        # This is a bit tricky with partial match in SQL, but for default users it works
+        # Alternatively, we just look for exact match in email if format is fixed
+        q = select(User).where(User.email.like(f"{username}@%"))
+        return self.s.execute(q).scalar_one_or_none()
+
     def get_user_notification_channels(self, user_id: int) -> Optional[Dict[str, str]]:
         """
         Get user's notification channels (email + telegram_chat_id).

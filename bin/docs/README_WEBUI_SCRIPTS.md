@@ -39,13 +39,13 @@ bin\trading-bot-webui.bat --setup
 3. Installs Python dependencies from `requirements-webui.txt`
 4. Installs frontend npm packages
 5. Runs setup if configuration is missing
-6. Starts backend server on port 8000
+6. Starts backend server on port 5003
 7. Provides instructions for starting frontend
 
 ### Access Points:
-- **Backend API**: http://localhost:8000
-- **Frontend UI**: http://localhost:5173 (separate window)
-- **API Docs**: http://localhost:8000/docs
+- **Backend API**: http://localhost:5003
+- **Frontend UI**: http://localhost:5002 (separate window)
+- **API Docs**: http://localhost:5003/docs
 
 ---
 
@@ -104,7 +104,7 @@ sudo ./bin/svc-trading-bot-webui.sh logs
 
 ### Access Points:
 - **Web UI**: http://your-pi-ip or http://localhost
-- **Direct Backend**: http://your-pi-ip:8080 (if needed)
+- **Direct Backend**: http://your-pi-ip:5003 (if needed)
 
 ---
 
@@ -219,7 +219,7 @@ sudo tail -f /var/log/trading-webui/nginx_error.log
    - Ubuntu: Use `sudo` for service operations
 
 4. **Port already in use**:
-   - Check if another service is using port 8000/8080
+   - Check if another service is using port 5003/5002
    - Kill existing processes or change port
 
 5. **Frontend build fails**:

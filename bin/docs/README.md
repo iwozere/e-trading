@@ -1,4 +1,4 @@
-﻿# Script Launcher & Management System
+# Script Launcher & Management System
 
 This directory contains a comprehensive script management system for the E-Trading Platform, including interactive launchers, individual script runners, and systemd service scripts.
 
@@ -60,7 +60,7 @@ bin\run_script_launcher.bat
 The launcher provides access to the following scripts:
 
 1. **Telegram Bot** - Main Telegram bot for user interactions
-2. **Telegram Admin Panel** - Web-based admin interface (http://localhost:5000)
+2. **Telegram Admin Panel** - Web-based admin interface (http://localhost:5002)
 3. **Telegram Background Services** - Background alert and schedule processing
 4. **JSON to CSV Converter** - Convert optimization results from JSON to CSV
 5. **Optimizer** - Run strategy optimization

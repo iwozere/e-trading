@@ -194,7 +194,7 @@ python src/management/webgui/app.py
 ```
 
 ### b. Access Interface
-Open your browser to `http://localhost:5000`
+Open your browser to `http://localhost:5002`
 
 ### c. Features
 - Strategy configuration

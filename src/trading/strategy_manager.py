@@ -1005,6 +1005,10 @@ class StrategyManager:
             for strategy_config in strategies:
                 # Use Factory to Hydrate/Validate
                 try:
+                    # Provide bot_id at root if missing (for the factory)
+                    if 'bot_id' not in strategy_config:
+                        strategy_config['bot_id'] = strategy_config.get('id') or str(uuid.uuid4())
+                    
                     # If the strategy config is a manifest, this will expand it
                     strategy_config = config_factory.load_manifest(strategy_config)
                 except Exception as e:
@@ -1448,19 +1452,14 @@ class StrategyManager:
         # Enabled if DB status not 'disabled' and config doesn't explicitly disable
         enabled = bot.get("status") != "disabled" and cfg.get("enabled", True)
 
+        # Config is already modular in DB after migration (bot_id and modules are inside cfg)
         return {
+            "bot_id": str(bot.get("id")),
             "id": str(bot.get("id")),
             "name": name,
             "enabled": enabled,
             "symbol": symbol or "BTCUSDT",
-            "broker": broker_cfg,
-            "strategy": strategy_cfg,
-            "data": cfg.get("data", {}),
-            "trading": cfg.get("trading", {}),
-            "risk_management": cfg.get("risk_management", {}),
-            "notifications": cfg.get("notifications", {}),
-            "modules": cfg.get("modules"),
-            "overrides": cfg.get("overrides"),
+            **cfg
         }
 
     async def start_db_polling(self, user_id: Optional[int] = None, interval_seconds: int = 60):

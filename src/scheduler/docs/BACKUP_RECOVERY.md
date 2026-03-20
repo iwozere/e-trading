@@ -589,7 +589,7 @@ else
 fi
 
 # Check health endpoint
-if curl -f -s http://localhost:8002/health > /dev/null; then
+if curl -f -s http://localhost:5004/health > /dev/null; then
     log_message "✓ Health endpoint responding"
 else
     log_message "✗ Health endpoint not responding"
@@ -864,7 +864,7 @@ else
 fi
 
 # Check health
-if curl -f -s http://localhost:8002/health > /dev/null; then
+if curl -f -s http://localhost:5004/health > /dev/null; then
     log_message "✓ Health endpoint responding"
 else
     log_message "⚠ Health endpoint not responding (may need more time)"

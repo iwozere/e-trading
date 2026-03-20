@@ -7,32 +7,39 @@ REM It handles environment setup, dependency checks, and launches both backend a
 setlocal enabledelayedexpansion
 
 REM Colors for output (Windows 10+ with ANSI support)
-set "RED=[91m"
-set "GREEN=[92m"
-set "YELLOW=[93m"
-set "BLUE=[94m"
-set "PURPLE=[95m"
-set "CYAN=[96m"
-set "NC=[0m"
+REM Note: These are set to empty by default for maximum compatibility 
+REM unless the terminal is known to support them.
+set "RED="
+set "GREEN="
+set "YELLOW="
+set "BLUE="
+set "PURPLE="
+set "CYAN="
+set "NC="
+
+
 
 REM Configuration
 set "SCRIPT_DIR=%~dp0"
 set "PROJECT_ROOT=%SCRIPT_DIR%..\\.."
 set "VENV_DIR=%PROJECT_ROOT%\.venv"
 set "LOG_DIR=%PROJECT_ROOT%\logs\webui"
-set "BACKEND_PORT=8000"
-set "FRONTEND_PORT=5173"
+set "BACKEND_PORT=5003"
+set "FRONTEND_PORT=5002"
+
+goto :main
 
 REM Functions
 :print_header
-echo %BLUE%
-echo 🚀 Trading Bot Web UI - Windows Development Mode
-echo ================================================
-echo %NC%
+echo.
+echo ------------------------------------------------
+echo  Trading Bot Web UI - Windows Development Mode
+echo ------------------------------------------------
+echo.
 goto :eof
 
 :print_system_info
-echo %CYAN%📊 System Information:%NC%
+echo [System Information]
 echo Date: %date% %time%
 echo OS: %OS%
 echo Architecture: %PROCESSOR_ARCHITECTURE%
@@ -45,39 +52,39 @@ echo.
 goto :eof
 
 :check_python
-echo %CYAN%🔍 Checking Python...%NC%
-python --version >nul 2>&1
+echo [Checking Python...]
+where python >nul 2>&1
 if %errorlevel% neq 0 (
-    echo %RED%❌ Python not found%NC%
-    echo %YELLOW%💡 Please install Python from https://python.org%NC%
+    echo ERROR: Python not found in path.
+    echo TIP: Please install Python and ensure it is in your PATH.
     pause
     exit /b 1
 )
-echo %GREEN%✅ Python found%NC%
+echo Python found.
 goto :eof
 
 :check_node
-echo %CYAN%🔍 Checking Node.js...%NC%
-node --version >nul 2>&1
+echo [Checking Node.js...]
+where node >nul 2>&1
 if %errorlevel% neq 0 (
-    echo %RED%❌ Node.js not found%NC%
-    echo %YELLOW%💡 Please install Node.js from https://nodejs.org%NC%
+    echo ERROR: Node.js not found in path.
+    echo TIP: Please install Node.js and ensure it is in your PATH.
     pause
     exit /b 1
 )
-echo %GREEN%✅ Node.js found%NC%
+echo Node.js found.
 
-npm --version >nul 2>&1
+where npm >nul 2>&1
 if %errorlevel% neq 0 (
-    echo %RED%❌ npm not found%NC%
+    echo ERROR: npm not found in path.
     pause
     exit /b 1
 )
-echo %GREEN%✅ npm found%NC%
+echo npm found.
 goto :eof
 
 :setup_environment
-echo %CYAN%🔧 Setting up Environment...%NC%
+echo [Setting up Environment...]
 
 REM Create directories
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
@@ -87,11 +94,11 @@ if not exist "%PROJECT_ROOT%\db" mkdir "%PROJECT_ROOT%\db"
 
 REM Check virtual environment
 if not exist "%VENV_DIR%" (
-    echo %YELLOW%⚠️  Virtual environment not found, creating...%NC%
+    echo Virtual environment not found, creating...
     python -m venv "%VENV_DIR%"
-    echo %GREEN%✅ Virtual environment created%NC%
+    echo Virtual environment created.
 ) else (
-    echo %GREEN%✅ Virtual environment found%NC%
+    echo Virtual environment found and verified.
 )
 
 REM Set Python path
@@ -99,27 +106,25 @@ set "PYTHONPATH=%PROJECT_ROOT%;%PYTHONPATH%"
 
 REM Load environment variables if .env exists
 if exist "%PROJECT_ROOT%\.env" (
-    echo %GREEN%✅ Loading .env file%NC%
-    REM Note: Windows batch doesn't have a direct equivalent to source
-    REM Environment variables should be set manually or via Python script
+    echo Loading .env file...
 ) else (
-    echo %YELLOW%⚠️  No .env file found%NC%
+    echo No .env file found in root.
     if exist "%PROJECT_ROOT%\config\donotshare\.env" (
-        echo %YELLOW%📝 Copying .env.example to .env%NC%
-        copy "%PROJECT_ROOT%\.env.example" "%PROJECT_ROOT%\.env"
-        echo %GREEN%✅ .env file created from template%NC%
-        echo %YELLOW%💡 Please edit .env file with your API keys%NC%
+        echo Copying .env from config/donotshare...
+        copy "%PROJECT_ROOT%\config\donotshare\.env" "%PROJECT_ROOT%\.env"
+        echo .env file created.
     )
 )
 
-echo %GREEN%✅ Environment setup complete%NC%
+echo Environment setup complete.
 echo.
 goto :eof
 
 :install_python_deps
-echo %CYAN%📦 Installing Python dependencies...%NC%
+echo [Installing Python dependencies...]
 
 REM Activate virtual environment
+echo Activating virtual environment...
 call "%VENV_DIR%\Scripts\activate.bat"
 
 REM Upgrade pip
@@ -128,9 +133,9 @@ python -m pip install --upgrade pip
 REM Install web UI requirements
 if exist "%PROJECT_ROOT%\requirements-webui.txt" (
     pip install -r "%PROJECT_ROOT%\requirements-webui.txt"
-    echo %GREEN%✅ Python dependencies installed%NC%
+    echo Python dependencies installed.
 ) else (
-    echo %YELLOW%⚠️  requirements-webui.txt not found, installing basic deps%NC%
+    echo requirements-webui.txt not found, installing basic dependencies...
     pip install fastapi uvicorn python-socketio
 )
 
@@ -138,21 +143,21 @@ echo.
 goto :eof
 
 :install_frontend_deps
-echo %CYAN%📦 Installing Frontend dependencies...%NC%
+echo [Installing Frontend dependencies...]
 
 cd /d "%PROJECT_ROOT%\src\web_ui\frontend"
 
 if not exist "node_modules" (
-    echo %YELLOW%📦 Installing npm packages...%NC%
-    npm install
+    echo Installing npm packages...
+    call npm install
     if %errorlevel% neq 0 (
-        echo %RED%❌ Failed to install frontend dependencies%NC%
+        echo ERROR: Failed to install frontend dependencies
         pause
         exit /b 1
     )
-    echo %GREEN%✅ Frontend dependencies installed%NC%
+    echo Frontend dependencies installed.
 ) else (
-    echo %GREEN%✅ Frontend dependencies already installed%NC%
+    echo Frontend dependencies already installed.
 )
 
 cd /d "%PROJECT_ROOT%"
@@ -160,42 +165,42 @@ echo.
 goto :eof
 
 :check_config
-echo %CYAN%🔍 Checking Configuration...%NC%
+echo [Checking Configuration...]
 
 if not exist "%PROJECT_ROOT%\config\enhanced_trading\raspberry_pi_multi_strategy.json" (
-    echo %YELLOW%⚠️  Strategy configuration not found%NC%
-    echo %YELLOW%💡 Running setup...%NC%
+    echo Strategy configuration not found.
+    echo Running setup...
     python "%PROJECT_ROOT%\setup_enhanced_trading.py"
     if %errorlevel% neq 0 (
-        echo %RED%❌ Setup failed%NC%
+        echo ERROR: Setup failed
         pause
         exit /b 1
     )
-    echo %GREEN%✅ Setup completed%NC%
+    echo Setup completed.
 ) else (
-    echo %GREEN%✅ Configuration found%NC%
+    echo Configuration found.
 )
 
 echo.
 goto :eof
 
 :start_backend
-echo %CYAN%🚀 Starting Backend Server...%NC%
-echo Backend will be available at: http://localhost:%BACKEND_PORT%
-echo API docs will be available at: http://localhost:%BACKEND_PORT%/docs
+echo [Starting Backend Server...]
+echo Backend available at: http://localhost:%BACKEND_PORT%
+echo API docs available at: http://localhost:%BACKEND_PORT%/docs
 echo.
 
 REM Activate virtual environment
 call "%VENV_DIR%\Scripts\activate.bat"
 
 REM Start backend in development mode
-python "%PROJECT_ROOT%\start_trading_webui.py" --dev --port %BACKEND_PORT%
+python "%PROJECT_ROOT%\src\web_ui\run_web_ui.py" --dev --port %BACKEND_PORT%
 
 goto :eof
 
 :start_frontend
-echo %CYAN%🎨 Starting Frontend Development Server...%NC%
-echo Frontend will be available at: http://localhost:%FRONTEND_PORT%
+echo [Starting Frontend Development Server...]
+echo Frontend available at: http://localhost:%FRONTEND_PORT%
 echo.
 
 cd /d "%PROJECT_ROOT%\src\web_ui\frontend"
@@ -205,42 +210,36 @@ set "VITE_API_BASE_URL=http://localhost:%BACKEND_PORT%"
 set "VITE_WS_URL=ws://localhost:%BACKEND_PORT%"
 
 REM Start frontend development server
-npm run dev
+call npm run dev
 
 cd /d "%PROJECT_ROOT%"
 goto :eof
 
 :show_usage_info
-echo %PURPLE%🎯 Trading Bot Web UI - Development Mode%NC%
-echo ===============================================
+echo --- Trading Bot Web UI - Development Mode ---
 echo.
-echo %GREEN%🌐 Access Points:%NC%
+echo Access Points:
 echo   Backend API: http://localhost:%BACKEND_PORT%
 echo   Frontend UI: http://localhost:%FRONTEND_PORT%
 echo   API Docs: http://localhost:%BACKEND_PORT%/docs
 echo.
-echo %GREEN%🔐 Default Login:%NC%
+echo Default Login:
 echo   Username: admin ^| Password: admin
 echo   Username: trader ^| Password: trader
 echo.
-echo %GREEN%💡 Development Features:%NC%
-echo   • Auto-reload on code changes
-echo   • Real-time debugging
-echo   • Hot module replacement
-echo.
-echo %YELLOW%🛑 To stop servers, press Ctrl+C in each window%NC%
-echo ===============================================
+echo Note: To stop servers, press Ctrl+C in each window.
+echo ------------------------------------------------
 echo.
 goto :eof
 
 :show_menu
-echo %PURPLE%🎛️  Development Menu:%NC%
-echo 1. 🚀 Start Backend Only
-echo 2. 🎨 Start Frontend Only  
-echo 3. 🔧 Install Dependencies
-echo 4. 📋 Check Configuration
-echo 5. 🔍 System Information
-echo 6. ❌ Exit
+echo --- Development Menu ---
+echo 1. Start Backend Only
+echo 2. Start Frontend Only
+echo 3. Install Dependencies
+echo 4. Check Configuration
+echo 5. System Information
+echo 6. Exit
 echo.
 set /p choice="Select option (1-6): "
 goto :eof
@@ -272,8 +271,8 @@ call :install_frontend_deps
 call :check_config
 call :show_usage_info
 
-echo %YELLOW%🔄 Starting Backend Server...%NC%
-echo %YELLOW%💡 Start Frontend in another window with: %0 --frontend%NC%
+echo Starting Backend Server...
+echo Start Frontend in another window with: %0 --frontend
 echo.
 call :start_backend
 goto :end
@@ -296,7 +295,7 @@ if "%choice%"=="2" (
 if "%choice%"=="3" (
     call :install_python_deps
     call :install_frontend_deps
-    echo %GREEN%✅ Dependencies installed%NC%
+    echo Dependencies installed.
     pause
     goto :menu_loop
 )
@@ -311,24 +310,24 @@ if "%choice%"=="5" (
     goto :menu_loop
 )
 if "%choice%"=="6" (
-    echo %GREEN%👋 Goodbye!%NC%
+    echo Goodbye!
     goto :end
 )
 
-echo %RED%❌ Invalid option%NC%
+echo Invalid option
 pause
 goto :menu_loop
 
 :backend_only
 call :install_python_deps
 call :check_config
-echo %CYAN%🚀 Starting Backend Only...%NC%
+echo Starting Backend Only...
 call :start_backend
 goto :end
 
 :frontend_only
 call :install_frontend_deps
-echo %CYAN%🎨 Starting Frontend Only...%NC%
+echo Starting Frontend Only...
 call :start_frontend
 goto :end
 
@@ -336,13 +335,13 @@ goto :end
 call :install_python_deps
 call :install_frontend_deps
 call :check_config
-echo %GREEN%✅ Setup completed%NC%
+echo Setup completed.
 pause
 goto :end
 
 :end
 echo.
-echo %GREEN%👋 Trading Bot Web UI stopped%NC%
+echo Trading Bot Web UI stopped.
 pause
 exit /b 0
 

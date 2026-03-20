@@ -174,7 +174,7 @@ type logs\scheduler.log
    - Check project root is correct
 
 3. **No Notifications**
-   - Verify notification service is running at `http://localhost:8000`
+   - Verify notification service is running at `http://localhost:5003`
    - Check user has telegram_chat_id in `usr_auth_identities`
    - Check user has email in `usr_users`
 
@@ -233,7 +233,7 @@ Set these in `.env` or export them:
 export TRADING_ENV=development
 export LOG_LEVEL=DEBUG
 export DATABASE_URL=postgresql://user:pass@localhost/e_trading
-export NOTIFICATION_SERVICE_URL=http://localhost:8000
+export NOTIFICATION_SERVICE_URL=http://localhost:5003
 ```
 
 ## Architecture

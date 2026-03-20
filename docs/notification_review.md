@@ -119,9 +119,9 @@ if message_processor:
 ```python
 # client.py  lines 165–174
 if ":8080" in service_url or ":5003" in service_url:
-    service_url = "http://localhost:8000"
-if not service_url.endswith(":8000") and "localhost" in service_url:
-    service_url = "http://localhost:8000"
+    service_url = "http://localhost:5003"
+if not service_url.endswith(":5003") and "localhost" in service_url:
+    service_url = "http://localhost:5003"
 ```
 
 Silently rewriting the caller's URL is surprising and will cause hard-to-debug failures in non-standard deployments.

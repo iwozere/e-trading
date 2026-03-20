@@ -17,7 +17,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.data.db.services import trading_service
+from src.data.db.services.trading_service import trading_service
 from src.trading.services.bot_config_validator import (
     validate_database_bot_record
 )

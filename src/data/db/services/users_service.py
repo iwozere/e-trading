@@ -99,8 +99,40 @@ class UsersService(BaseDBService):
 
     @with_uow
     @handle_db_error
+    def create_user(self, email: str, role: str, is_active: bool = True) -> Dict[str, Any]:
+        """Create a new user."""
+        user = User(email=email, role=role, is_active=is_active)
+        self.repos.users.create_user(user)
+        return user.to_dict()
+
+    @with_uow
+    @handle_db_error
     def get_admin_telegram_user_ids(self) -> List[str]:
         return self.repos.users.get_admin_telegram_user_ids()
+
+    @with_uow
+    @handle_db_error
+    def authenticate_user_by_email(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+        """Authenticate user by email."""
+        user = self.repos.users.get_user_by_email(email)
+        if not user or not user.is_active:
+            return None
+        
+        if user.verify_password(password):
+            return user.to_dict()
+        return None
+
+    @with_uow
+    @handle_db_error
+    def authenticate_user_by_username(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+        """Authenticate user by username."""
+        user = self.repos.users.get_user_by_username(username)
+        if not user or not user.is_active:
+            return None
+        
+        if user.verify_password(password):
+            return user.to_dict()
+        return None
 
     def list_users_for_broadcast(self) -> List[Dict[str, Any]]:
         rows = self.list_telegram_users_dto()

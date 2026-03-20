@@ -113,7 +113,11 @@ class ConfigurationFactory:
                     # "modules": { "broker": "instances/..." }
                     # expected result: "broker": { ... content ... }
                     for module_type, module_ref in value.items():
-                        resolved_module = self._load_instance(module_ref)
+                        if isinstance(module_ref, str) and self._is_reference(module_ref):
+                            resolved_module = self._load_instance(module_ref)
+                        else:
+                            # Support inline dictionaries or non-reference strings
+                            resolved_module = self._resolve_references(module_ref)
 
                         # Auto-unwrap if the instance is wrapped in its own key matching the module type
                         # e.g. module_type="broker", resolved_module={"broker": {...}} -> unwrap to {...}

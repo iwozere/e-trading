@@ -34,7 +34,7 @@ npm run dev
 # In another terminal:
 node src/mock-websocket-server.js
 ```
-App: http://localhost:3000  |  WebSocket: ws://localhost:8080
+App: http://localhost:5002  |  WebSocket: ws://localhost:5003
 
 ### Docker
 ```bash
@@ -48,8 +48,8 @@ docker-compose up --build
 
 ## Real-Time Data
 - WebSocket endpoints:
-  - `ws://localhost:8080/strategies` (mock strategies)
-  - `ws://localhost:8080/portfolio` (mock portfolio)
+  - `ws://localhost:5003/strategies` (mock strategies)
+  - `ws://localhost:5003/portfolio` (mock portfolio)
 - Hooks: `useWebSocket`, `useStrategyData`, `usePortfolioData`
 
 ## Customization

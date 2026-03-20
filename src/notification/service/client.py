@@ -167,7 +167,7 @@ class NotificationServiceClient:
         """
         import os
         if service_url is None:
-            service_url = os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:8000")
+            service_url = os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:5003")
         # Handle backward compatibility
         if base_url is not None:
             service_url = base_url
@@ -183,7 +183,7 @@ class NotificationServiceClient:
             if ":8080" in service_url or ":5003" in service_url:
                 _logger.warning(
                     "Service URL %s uses a legacy port. Database-centric architecture "
-                    "typically uses the Main API at http://localhost:8000.", service_url
+                    "typically uses the Main API at http://localhost:5003.", service_url
                 )
             
             self.service_url = service_url.rstrip('/')
@@ -663,7 +663,7 @@ class NotificationServiceClient:
             }
         """
         try:
-            from src.data.db.services import telegram_service as db
+            from src.data.db.services.telegram_service import telegram_service as db
 
             # Get all admin user IDs
             admin_ids = db.get_admin_user_ids()
@@ -772,7 +772,7 @@ def get_notification_client() -> Optional[NotificationServiceClient]:
     return _notification_client
 
 
-async def initialize_notification_client(service_url: str = "http://localhost:8000", **kwargs) -> NotificationServiceClient:
+async def initialize_notification_client(service_url: str = "http://localhost:5003", **kwargs) -> NotificationServiceClient:
     """
     Initialize the global notification client.
 

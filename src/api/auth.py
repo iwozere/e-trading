@@ -22,7 +22,7 @@ sys.path.append(str(PROJECT_ROOT))
 from src.api.services.webui_app_service import webui_app_service
 from src.data.db.models.model_users import User
 from src.data.db.services.database_service import get_database_service
-from src.data.db.services import users_service
+from src.data.db.services.users_service import users_service
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)

@@ -162,7 +162,7 @@ ORDER BY overdue_seconds DESC;
 #!/bin/bash
 set -e
 
-SCHEDULER_URL="http://localhost:8002"
+SCHEDULER_URL="http://localhost:5004"
 TIMEOUT=10
 
 # Function to check HTTP endpoint
@@ -229,7 +229,7 @@ exit 0
 ```bash
 #!/bin/bash
 
-SCHEDULER_URL="http://localhost:8002"
+SCHEDULER_URL="http://localhost:5004"
 LOG_FILE="/var/log/scheduler_monitor.log"
 ALERT_THRESHOLD_SUCCESS_RATE=0.90
 ALERT_THRESHOLD_AVG_DURATION=15.0
@@ -562,7 +562,7 @@ job_executions = Counter('scheduler_job_executions_total', 'Total job executions
 job_duration = Histogram('scheduler_job_duration_seconds', 'Job execution duration', ['job_type'])
 
 class SchedulerMetricsExporter:
-    def __init__(self, scheduler_url='http://localhost:8002', port=9090):
+    def __init__(self, scheduler_url='http://localhost:5004', port=9090):
         self.scheduler_url = scheduler_url
         self.port = port
     
@@ -704,7 +704,7 @@ Service: trading-scheduler
 
 Please check the scheduler service status and logs.
 
-Health Check: curl http://localhost:8002/health
+Health Check: curl http://localhost:5004/health
 Service Status: systemctl status trading-scheduler
 Recent Logs: journalctl -u trading-scheduler -n 50
 "
