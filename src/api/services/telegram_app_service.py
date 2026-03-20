@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.data.db.services import telegram_service, users_service
