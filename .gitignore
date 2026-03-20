@@ -70,7 +70,7 @@ logs/
 !config/*/*/*/*.json
 
 !src/web_ui/frontend/*.json
-!src/web_ui/frontend/dist/*
+!src/web_ui/frontend/dist
 
 *.pt
 *.pth

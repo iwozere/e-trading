@@ -68,6 +68,17 @@ sudo systemd-analyze verify /etc/systemd/system/telegram_bot.service
 
 sudo systemd-analyze verify /etc/systemd/system/scheduler.service
 
+# Enable and start API
+sudo systemctl enable trading-api.service
+sudo systemctl start trading-api.service
+
+# Enable and start Web UI
+sudo systemctl enable trading-webui.service
+sudo systemctl start trading-webui.service
+
+# Enable and start Bot
+sudo systemctl enable trading.service
+sudo systemctl start trading.service
 
 ###########################################
 # Run manually
