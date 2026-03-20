@@ -68,6 +68,10 @@ logs/
 !config/*/*.json
 !config/*/*/*.json
 !config/*/*/*/*.json
+
+!src/web_ui/frontend/*.json
+!src/web_ui/frontend/dist/*
+
 *.pt
 *.pth
 *.pkl
