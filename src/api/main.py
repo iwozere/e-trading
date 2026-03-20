@@ -16,6 +16,7 @@ Features:
 """
 
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 from contextlib import asynccontextmanager
@@ -201,7 +202,13 @@ app.include_router(notification_router)
 from src.api.trading_bot_routes import router as trading_bot_router
 app.include_router(trading_bot_router)
 
-# Note: Static files and HTML templates removed since using React frontend
+# Mount static files for the React frontend
+dist_path = PROJECT_ROOT / "src/web_ui/frontend/dist"
+if dist_path.exists():
+    _logger.info("Mounting static files from %s", dist_path)
+    app.mount("/", StaticFiles(directory=str(dist_path), html=True), name="static")
+else:
+    _logger.warning("Static files directory not found at %s", dist_path)
 
 # Add unified analytics endpoints
 from src.api.services.unified_analytics_service import unified_analytics_service

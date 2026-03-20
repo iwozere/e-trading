@@ -132,6 +132,11 @@ class WebUIRunner:
         frontend_dir = PROJECT_ROOT / "src/web_ui/frontend"
         dist_dir = frontend_dir / "dist"
 
+        _logger.info("Checking for frontend build...")
+        if dist_dir.exists():
+            _logger.info("✅ Frontend build already exists, skipping build step")
+            return True
+
         _logger.info("Building frontend for production...")
 
         try:
