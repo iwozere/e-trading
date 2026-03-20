@@ -202,10 +202,13 @@ const StrategyForm: React.FC = () => {
     queryKey: ['strategy', id],
     queryFn: () => getStrategy(id!),
     enabled: isEditing,
-    onSuccess: (data) => {
-      reset(data);
-    },
   });
+
+  useEffect(() => {
+    if (existingStrategy) {
+      reset(existingStrategy as any);
+    }
+  }, [existingStrategy, reset]);
 
   // Fetch strategy templates
   const { data: templates } = useQuery({

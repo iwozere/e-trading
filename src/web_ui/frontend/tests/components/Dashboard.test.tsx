@@ -24,7 +24,7 @@ vi.mock('../../src/stores/authStore', () => ({
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal();
   return {
-    ...actual,
+    ...(actual as object),
     useQuery: vi.fn(),
     useQueryClient: vi.fn(() => ({
       invalidateQueries: vi.fn(),

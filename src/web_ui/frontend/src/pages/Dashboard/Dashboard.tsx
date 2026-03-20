@@ -261,7 +261,7 @@ const Dashboard: React.FC = () => {
                 <LinearProgress
                   variant="determinate"
                   value={(systemStatus?.system_metrics.temperature_c || 0) / 80 * 100} // Assume 80°C max
-                  color={systemStatus?.system_metrics.temperature_c > 70 ? 'error' : 'primary'}
+                  color={(systemStatus?.system_metrics?.temperature_c ?? 0) > 70 ? 'error' : 'primary'}
                   sx={{ height: 8, borderRadius: 4 }}
                 />
               </Box>

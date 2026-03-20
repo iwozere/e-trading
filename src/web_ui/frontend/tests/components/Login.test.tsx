@@ -24,7 +24,7 @@ vi.mock('../../src/stores/authStore', () => ({
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal();
   return {
-    ...actual,
+    ...(actual as object),
     useNavigate: () => vi.fn(),
   };
 });

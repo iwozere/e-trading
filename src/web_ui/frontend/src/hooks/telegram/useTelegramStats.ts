@@ -72,10 +72,6 @@ export const useTelegramCombinedStats = (
     staleTime: 30000, // 30 seconds
     gcTime: 300000, // 5 minutes
     refetchInterval: 60000, // Refetch every minute for real-time stats
-    onError: (error: TelegramApiError) => {
-      console.error('Failed to fetch combined Telegram statistics:', error);
-      toast.error(`Failed to load statistics: ${error.message}`);
-    },
     ...options,
   });
 };

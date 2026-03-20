@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { useQuery, useInfiniteQuery, useQueryClient, UseQueryOptions, UseInfiniteQueryOptions } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient, UseQueryOptions, UseInfiniteQueryOptions, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { telegramApi } from '../../api/telegramApi';
 import {
@@ -50,11 +50,7 @@ export const useTelegramAuditLogs = (
     queryFn: () => telegramApi.getAuditLogs(params),
     staleTime: 30000, // 30 seconds
     gcTime: 300000, // 5 minutes
-    keepPreviousData: true, // Keep previous data while fetching new page
-    onError: (error: TelegramApiError) => {
-      console.error('Failed to fetch audit logs:', error);
-      toast.error(`Failed to load audit logs: ${error.message}`);
-    },
+    placeholderData: keepPreviousData, // Keep previous data while fetching new page
     ...options,
   });
 };
@@ -68,18 +64,15 @@ export const useTelegramAuditLogsInfinite = (
 ) => {
   return useInfiniteQuery({
     queryKey: telegramAuditKeys.logsList({ ...params, page: 0, limit: 50 }),
-    queryFn: ({ pageParam = 1 }) => 
-      telegramApi.getAuditLogs({ ...params, page: pageParam, limit: 50 }),
-    getNextPageParam: (lastPage, pages) => {
+    queryFn: ({ pageParam }) => 
+      telegramApi.getAuditLogs({ ...params, page: pageParam as number, limit: 50 }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: any, allPages: any[]) => {
       if (!lastPage.has_more) return undefined;
-      return pages.length + 1;
+      return allPages.length + 1;
     },
     staleTime: 30000, // 30 seconds
     gcTime: 300000, // 5 minutes
-    onError: (error: TelegramApiError) => {
-      console.error('Failed to fetch audit logs:', error);
-      toast.error(`Failed to load audit logs: ${error.message}`);
-    },
     ...options,
   });
 };
@@ -99,11 +92,7 @@ export const useUserAuditLogs = (
     enabled: !!userId,
     staleTime: 60000, // 1 minute
     gcTime: 300000, // 5 minutes
-    keepPreviousData: true,
-    onError: (error: TelegramApiError) => {
-      console.error(`Failed to fetch user audit logs for ${userId}:`, error);
-      toast.error(`Failed to load user audit logs: ${error.message}`);
-    },
+    placeholderData: keepPreviousData,
     ...options,
   });
 };
@@ -120,10 +109,6 @@ export const useTelegramAuditStats = (
     staleTime: 30000, // 30 seconds
     gcTime: 300000, // 5 minutes
     refetchInterval: 60000, // Refetch every minute for real-time stats
-    onError: (error: TelegramApiError) => {
-      console.error('Failed to fetch audit statistics:', error);
-      toast.error(`Failed to load audit statistics: ${error.message}`);
-    },
     ...options,
   });
 };
@@ -147,7 +132,7 @@ export const useRealtimeAuditLogs = (params?: AuditLogParams) => {
     // Update relevant queries
     queryClient.setQueriesData<any>(
       { queryKey: telegramAuditKeys.logs() },
-      (old) => {
+      (old: any) => {
         if (!old?.data) return old;
         
         return {
@@ -162,7 +147,7 @@ export const useRealtimeAuditLogs = (params?: AuditLogParams) => {
     if (params?.user_id === newLog.telegram_user_id) {
       queryClient.setQueriesData<any>(
         { queryKey: telegramAuditKeys.userLogs(newLog.telegram_user_id) },
-        (old) => {
+        (old: any) => {
           if (!old?.data) return old;
           
           return {
@@ -237,43 +222,43 @@ export const useAuditAnalytics = (timeRange: '24h' | '7d' | '30d' = '24h') => {
     const stats = statsQuery.data;
     
     // Calculate success/failure rates
-    const successfulCommands = logs.filter(log => log.success).length;
+    const successfulCommands = logs.filter((log: any) => log.success).length;
     const totalCommands = logs.length;
     const successRate = totalCommands > 0 ? (successfulCommands / totalCommands) * 100 : 0;
     const failureRate = 100 - successRate;
 
     // Analyze command patterns
-    const commandCounts = logs.reduce((acc, log) => {
+    const commandCounts = logs.reduce((acc: any, log: any) => {
       acc[log.command] = (acc[log.command] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
     const topCommands = Object.entries(commandCounts)
-      .sort(([, a], [, b]) => b - a)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
       .slice(0, 10)
       .map(([command, count]) => ({ command, count }));
 
     // Analyze error patterns
-    const errorLogs = logs.filter(log => !log.success && log.error_message);
-    const errorCounts = errorLogs.reduce((acc, log) => {
+    const errorLogs = logs.filter((log: any) => !log.success && log.error_message);
+    const errorCounts = errorLogs.reduce((acc: any, log: any) => {
       const error = log.error_message || 'Unknown error';
       acc[error] = (acc[error] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
     const errorPatterns = Object.entries(errorCounts)
-      .sort(([, a], [, b]) => b - a)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
       .slice(0, 5)
       .map(([error, count]) => ({ error, count }));
 
     // Analyze user activity
-    const userCounts = logs.reduce((acc, log) => {
+    const userCounts = logs.reduce((acc: any, log: any) => {
       acc[log.telegram_user_id] = (acc[log.telegram_user_id] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
     const userActivity = Object.entries(userCounts)
-      .sort(([, a], [, b]) => b - a)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
       .slice(0, 10)
       .map(([userId, count]) => ({ userId, count }));
 
@@ -318,11 +303,11 @@ export const useCommandPerformanceMetrics = () => {
     const logs = logsQuery.data.data;
     
     // Calculate average execution time
-    const totalExecutionTime = logs.reduce((sum, log) => sum + log.execution_time_ms, 0);
+    const totalExecutionTime = logs.reduce((sum: any, log: any) => sum + log.execution_time_ms, 0);
     const averageExecutionTime = logs.length > 0 ? totalExecutionTime / logs.length : 0;
 
     // Find slowest and fastest commands
-    const commandPerformance = logs.reduce((acc, log) => {
+    const commandPerformance = logs.reduce((acc: any, log: any) => {
       if (!acc[log.command]) {
         acc[log.command] = { times: [], count: 0 };
       }
@@ -333,8 +318,8 @@ export const useCommandPerformanceMetrics = () => {
 
     const commandAverages = Object.entries(commandPerformance).map(([command, data]) => ({
       command,
-      averageTime: data.times.reduce((sum, time) => sum + time, 0) / data.times.length,
-      count: data.count,
+      averageTime: (data as any).times.reduce((sum: number, time: number) => sum + time, 0) / (data as any).times.length,
+      count: (data as any).count,
     }));
 
     const slowestCommands = commandAverages
@@ -380,7 +365,7 @@ function generateCommandTrends(logs: CommandAudit[], timeRange: '24h' | '7d' | '
       hourStart.setMinutes(0, 0, 0);
       const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
 
-      const count = logs.filter(log => {
+      const count = logs.filter((log: any) => {
         const logTime = new Date(log.timestamp);
         return logTime >= hourStart && logTime < hourEnd;
       }).length;
@@ -399,7 +384,7 @@ function generateCommandTrends(logs: CommandAudit[], timeRange: '24h' | '7d' | '
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-      const count = logs.filter(log => {
+      const count = logs.filter((log: any) => {
         const logTime = new Date(log.timestamp);
         return logTime >= dayStart && logTime < dayEnd;
       }).length;

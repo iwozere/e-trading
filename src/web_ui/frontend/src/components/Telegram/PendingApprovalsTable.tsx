@@ -37,7 +37,7 @@ import { TelegramUser } from '../../types/telegram';
 
 const PendingApprovalsTable: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { data: users, isLoading, isError, error } = useTelegramUsers('pending');
+  const { data: users, isLoading, isError, error } = useTelegramUsers({ status: 'pending' });
   const approveMutation = useApproveTelegramUser();
 
   const handleApprove = async (userId: string) => {
@@ -53,7 +53,7 @@ const PendingApprovalsTable: React.FC = () => {
     console.log('Reject user:', userId);
   };
 
-  const filteredUsers = users?.filter((user: TelegramUser) => {
+  const filteredUsers = users?.data?.filter((user: TelegramUser) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -178,7 +178,7 @@ const PendingApprovalsTable: React.FC = () => {
                             size="small"
                             color="success"
                             onClick={() => handleApprove(user.telegram_user_id)}
-                            disabled={approveMutation.isLoading}
+                            disabled={approveMutation.isPending}
                           >
                             <ApproveIcon fontSize="small" />
                           </IconButton>
