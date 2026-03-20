@@ -56,10 +56,6 @@ class WebUIAppService:
         This replaces the old init_database() function from database.py
         """
         try:
-            # Create database directory if it doesn't exist
-            db_dir = PROJECT_ROOT / "db"
-            db_dir.mkdir(parents=True, exist_ok=True)
-
             # Use the database service to initialize tables
             db_service = get_database_service()
             db_service.init_databases()
