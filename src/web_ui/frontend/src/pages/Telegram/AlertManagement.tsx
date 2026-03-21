@@ -27,20 +27,35 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Tooltip
+  Tooltip,
+  Dialog
 } from '@mui/material';
 import {
   PlayArrow as ActivateIcon,
   Pause as DeactivateIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
-  Settings as ConfigIcon
+  Add as AddIcon
 } from '@mui/icons-material';
 import TelegramBreadcrumbs from '../../components/Telegram/TelegramBreadcrumbs';
 import { useTelegramAlerts } from '../../hooks/telegram/useTelegramAlerts';
+import ConfigBuilder from '../../components/Telegram/ConfigBuilder';
+
+const flattenConditionList = (alert: any) => {
+  if (alert.condition) return alert.condition;
+  if (!alert.config || !alert.config.rule) return 'Unknown';
+  
+  const rule = alert.config.rule;
+  if (rule.operator && rule.conditions) {
+    return `${rule.operator.toUpperCase()} (${rule.conditions.length} conditions)`;
+  }
+  
+  return `${rule.indicator} ${rule.comparison} ${rule.value}`;
+};
 
 const AlertManagement: React.FC = () => {
   const [filter, setFilter] = useState<string>('all');
+  const [builderOpen, setBuilderOpen] = useState(false);
 
   // Query for alerts
   const { data: alertsResponse, isLoading, isError, error, refetch } = useTelegramAlerts({ 
@@ -54,6 +69,13 @@ const AlertManagement: React.FC = () => {
       return <Chip label="Active" color="success" size="small" />;
     }
     return <Chip label="Inactive" color="default" size="small" />;
+  };
+
+  const handleSaveConfig = (config: any, mode: 'alert' | 'schedule') => {
+    // TODO: Connect to backend API `useCreateTelegramAlert` mutation
+    console.log('Saving config to API:', { mode, config });
+    alert('Config generated successfully. Ready to link to backend API.');
+    setBuilderOpen(false);
   };
 
   if (isError) {
@@ -78,6 +100,13 @@ const AlertManagement: React.FC = () => {
           Alert Management
         </Typography>
         <Box display="flex" gap={2} alignItems="center">
+          <Button 
+            variant="contained" 
+            startIcon={<AddIcon />}
+            onClick={() => setBuilderOpen(true)}
+          >
+            Create Complex Alert
+          </Button>
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Filter</InputLabel>
             <Select
@@ -146,7 +175,7 @@ const AlertManagement: React.FC = () => {
                         <TableCell>
                           <Chip label={alert.ticker} variant="outlined" size="small" />
                         </TableCell>
-                        <TableCell>{alert.condition}</TableCell>
+                        <TableCell>{flattenConditionList(alert)}</TableCell>
                         <TableCell>
                           {alert.price ? `$${alert.price}` : 'N/A'}
                         </TableCell>
@@ -161,23 +190,10 @@ const AlertManagement: React.FC = () => {
                                 size="small"
                                 color={alert.active ? "warning" : "success"}
                                 onClick={() => {
-                                  // TODO: Implement toggle functionality
                                   console.log('Toggle alert', alert.id);
                                 }}
                               >
                                 {alert.active ? <DeactivateIcon /> : <ActivateIcon />}
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Configure">
-                              <IconButton
-                                size="small"
-                                color="info"
-                                onClick={() => {
-                                  // TODO: Implement config functionality
-                                  console.log('Configure alert', alert.id);
-                                }}
-                              >
-                                <ConfigIcon />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Delete">
@@ -185,7 +201,6 @@ const AlertManagement: React.FC = () => {
                                 size="small"
                                 color="error"
                                 onClick={() => {
-                                  // TODO: Implement delete functionality
                                   console.log('Delete alert', alert.id);
                                 }}
                               >
@@ -203,8 +218,21 @@ const AlertManagement: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      <Dialog 
+        open={builderOpen} 
+        onClose={() => setBuilderOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <ConfigBuilder 
+          onSave={handleSaveConfig} 
+          onCancel={() => setBuilderOpen(false)} 
+          initialMode="alert"
+        />
+      </Dialog>
     </Box>
   );
 };
 
-export default AlertManagement;
+export default AlertManagement;

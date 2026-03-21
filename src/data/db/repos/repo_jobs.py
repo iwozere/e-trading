@@ -116,6 +116,18 @@ class JobsRepository:
 
         return query.order_by(desc(Schedule.created_at)).offset(offset).limit(limit).all()
 
+    def active_alerts(self, limit: int = 1000) -> List[Schedule]:
+        """
+        Get all active (enabled) alert-type schedules.
+
+        Args:
+            limit: Maximum number of results
+
+        Returns:
+            List of active Schedule objects of type ALERT
+        """
+        return self.list_schedules(job_type=JobType.ALERT, enabled=True, limit=limit)
+
     def update_schedule(self, schedule_id: int, update_data: Dict[str, Any]) -> Optional[Schedule]:
         """
         Update a schedule.

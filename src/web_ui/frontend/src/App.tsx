@@ -22,7 +22,8 @@ import {
   AlertManagement,
   ScheduleManagement,
   BroadcastCenter,
-  AuditLogs
+  AuditLogs,
+  ConfigBuilderPage
 } from './pages/Telegram';
 import { TelegramRouteGuard } from './components/Telegram';
 
@@ -239,6 +240,16 @@ const App: React.FC = () => {
                         <ProtectedRoute>
                           <TelegramRouteGuard requiredPermission="view_audit_logs">
                             <AuditLogs />
+                          </TelegramRouteGuard>
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/telegram/builder"
+                      element={
+                        <ProtectedRoute>
+                          <TelegramRouteGuard requiredPermission="manage_alerts">
+                            <ConfigBuilderPage />
                           </TelegramRouteGuard>
                         </ProtectedRoute>
                       }

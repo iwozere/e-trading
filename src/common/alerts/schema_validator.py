@@ -12,7 +12,10 @@ from dataclasses import dataclass
 import jsonschema
 from jsonschema import Draft7Validator
 
+from jsonschema import Draft7Validator
+
 from src.notification.logger import setup_logger
+from src.common.alerts.plugins import registry as plugin_registry
 
 _logger = setup_logger(__name__)
 
@@ -131,6 +134,11 @@ class AlertSchemaValidator:
             # Check for warnings (optional fields, deprecated usage, etc.)
             warnings.extend(self._check_warnings(task_params, schema_type))
 
+            # Recursively check plugin-specific schemas if it is an alert
+            if schema_type == "alert" and "rule" in task_params:
+                plugin_errors = self._validate_plugin_nodes(task_params["rule"])
+                errors.extend(plugin_errors)
+
             is_valid = len(errors) == 0
 
             if is_valid:
@@ -152,6 +160,40 @@ class AlertSchemaValidator:
                 errors=[f"Validation error: {str(e)}"],
                 warnings=[]
             )
+
+    def _validate_plugin_nodes(self, expr: Dict[str, Any]) -> List[str]:
+        """
+        Recursively find 'plugin' nodes in the rule AST and validate their 'params'
+        against the schema exported by the specific plugin.
+        """
+        errors = []
+        if not expr:
+            return errors
+
+        if "and" in expr:
+            for sub in expr["and"]:
+                errors.extend(self._validate_plugin_nodes(sub))
+        elif "or" in expr:
+            for sub in expr["or"]:
+                errors.extend(self._validate_plugin_nodes(sub))
+        elif "not" in expr:
+            errors.extend(self._validate_plugin_nodes(expr["not"]))
+        elif "plugin" in expr:
+            plugin_name = expr["plugin"]
+            plugin = plugin_registry.get_plugin(plugin_name)
+            if not plugin:
+                errors.append(f"Plugin '{plugin_name}' is not registered.")
+            else:
+                plugin_schema = plugin.schema()
+                if plugin_schema:
+                    try:
+                        validator = Draft7Validator(plugin_schema)
+                        for error in validator.iter_errors(expr.get("params", {})):
+                            errors.append(f"Plugin '{plugin_name}' param error: {error.message}")
+                    except Exception as e:
+                        errors.append(f"Plugin '{plugin_name}' schema validation crashed: {str(e)}")
+        
+        return errors
 
     def load_schema(self, job_type: str) -> Optional[Dict[str, Any]]:
         """

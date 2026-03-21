@@ -82,6 +82,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const telegramMenuItems = [
     { text: 'Dashboard', icon: <Dashboard />, path: '/telegram/dashboard', permission: 'view' },
+    { text: 'Config Builder', icon: <Settings />, path: '/telegram/builder', permission: 'manage_alerts' },
     { text: 'User Management', icon: <People />, path: '/telegram/users', permission: 'manage_users' },
     { text: 'Alert Management', icon: <NotificationsActive />, path: '/telegram/alerts', permission: 'manage_alerts' },
     { text: 'Schedule Management', icon: <Schedule />, path: '/telegram/schedules', permission: 'manage_alerts' },

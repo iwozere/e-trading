@@ -318,7 +318,7 @@ class TestTelegramAppService:
             {'id': 2, 'active': True},
             {'id': 3, 'active': False}
         ]
-        mock_telegram_service.list_active_alerts.return_value = mock_alerts
+        mock_telegram_service.get_active_alerts.return_value = mock_alerts
 
         result = self.service.get_alert_stats()
 

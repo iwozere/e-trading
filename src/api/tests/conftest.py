@@ -199,7 +199,7 @@ def mock_telegram_service():
     ]
 
     # Mock alert data
-    mock_service.list_active_alerts.return_value = [
+    mock_service.get_active_alerts.return_value = [
         {
             'id': 1,
             'user_id': '123456789',

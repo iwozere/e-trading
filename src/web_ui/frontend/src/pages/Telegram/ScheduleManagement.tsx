@@ -27,20 +27,23 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Tooltip
+  Tooltip,
+  Dialog
 } from '@mui/material';
 import {
   PlayArrow as ActivateIcon,
   Pause as DeactivateIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
-  Edit as EditIcon
+  Add as AddIcon
 } from '@mui/icons-material';
 import TelegramBreadcrumbs from '../../components/Telegram/TelegramBreadcrumbs';
 import { useTelegramSchedules } from '../../hooks/telegram/useTelegramSchedules';
+import ConfigBuilder from '../../components/Telegram/ConfigBuilder';
 
 const ScheduleManagement: React.FC = () => {
   const [filter, setFilter] = useState<string>('all');
+  const [builderOpen, setBuilderOpen] = useState(false);
 
   // Query for schedules
   const { data: schedulesResponse, isLoading, isError, error, refetch } = useTelegramSchedules({ 
@@ -54,6 +57,13 @@ const ScheduleManagement: React.FC = () => {
       return <Chip label="Active" color="success" size="small" />;
     }
     return <Chip label="Inactive" color="default" size="small" />;
+  };
+
+  const handleSaveConfig = (config: any, mode: 'alert' | 'schedule') => {
+    // TODO: Connect to backend API `useCreateTelegramSchedule` mutation
+    console.log('Saving config to API:', { mode, config });
+    alert('Config generated successfully. Ready to link to backend API.');
+    setBuilderOpen(false);
   };
 
   if (isError) {
@@ -78,6 +88,13 @@ const ScheduleManagement: React.FC = () => {
           Schedule Management
         </Typography>
         <Box display="flex" gap={2} alignItems="center">
+          <Button 
+            variant="contained" 
+            startIcon={<AddIcon />}
+            onClick={() => setBuilderOpen(true)}
+          >
+            Create Complex Schedule
+          </Button>
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Filter</InputLabel>
             <Select
@@ -144,7 +161,7 @@ const ScheduleManagement: React.FC = () => {
                         <TableCell>{schedule.id}</TableCell>
                         <TableCell>{schedule.user_id}</TableCell>
                         <TableCell>
-                          <Chip label={schedule.ticker} variant="outlined" size="small" />
+                          <Chip label={schedule.ticker || 'N/A'} variant="outlined" size="small" />
                         </TableCell>
                         <TableCell>{schedule.scheduled_time}</TableCell>
                         <TableCell>
@@ -172,18 +189,6 @@ const ScheduleManagement: React.FC = () => {
                                 {schedule.active ? <DeactivateIcon /> : <ActivateIcon />}
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Edit">
-                              <IconButton
-                                size="small"
-                                color="info"
-                                onClick={() => {
-                                  // TODO: Implement edit functionality
-                                  console.log('Edit schedule', schedule.id);
-                                }}
-                              >
-                                <EditIcon />
-                              </IconButton>
-                            </Tooltip>
                             <Tooltip title="Delete">
                               <IconButton
                                 size="small"
@@ -207,8 +212,21 @@ const ScheduleManagement: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      <Dialog 
+        open={builderOpen} 
+        onClose={() => setBuilderOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <ConfigBuilder 
+          onSave={handleSaveConfig} 
+          onCancel={() => setBuilderOpen(false)} 
+          initialMode="schedule"
+        />
+      </Dialog>
     </Box>
   );
 };
 
-export default ScheduleManagement;
+export default ScheduleManagement;

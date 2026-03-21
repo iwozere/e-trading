@@ -135,7 +135,7 @@ class TelegramAppService:
         try:
             # Use telegram_service domain methods
             # Note: telegram_service methods are user-specific, so we'll get basic stats
-            active_alerts = telegram_service.list_active_alerts(limit=1000)  # Get all active alerts
+            active_alerts = telegram_service.get_active_alerts()  # Get all active alerts
 
             return {
                 "total_alerts": len(active_alerts),  # Simplified - only active alerts for now
@@ -151,7 +151,7 @@ class TelegramAppService:
         """Get filtered and paginated list of alerts."""
         try:
             # Get all active alerts (telegram_service methods are user-specific)
-            alerts = telegram_service.list_active_alerts(limit=1000)  # Get all active alerts
+            alerts = telegram_service.get_active_alerts()  # Get all active alerts
 
             # Filter if needed
             if filter_type == "inactive":

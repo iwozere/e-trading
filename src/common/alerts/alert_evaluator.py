@@ -22,6 +22,7 @@ from src.indicators.service import IndicatorService
 from src.data.db.services.jobs_service import JobsService
 from src.common.alerts.schema_validator import AlertSchemaValidator
 from src.notification.logger import setup_logger
+from src.common.alerts.plugins import registry as plugin_registry
 
 _logger = setup_logger(__name__)
 
@@ -89,6 +90,7 @@ class AlertEvaluator:
         self.indicator_service = indicator_service
         self.jobs_service = jobs_service
         self.schema_validator = schema_validator
+        self.plugin_registry = plugin_registry
 
         _logger.info("AlertEvaluator initialized successfully")
 
@@ -535,6 +537,9 @@ class AlertEvaluator:
             return max(self._calculate_expression_lookback(sub) for sub in expr["or"])
         if "not" in expr:
             return self._calculate_expression_lookback(expr["not"])
+        if "plugin" in expr:
+            # Conservative default lookback for plugins. We can enhance SignalPlugin to provide lookback dynamically later.
+            return 100
 
         # Handle comparison operators
         for op in ("gt", "gte", "lt", "lte", "eq", "ne", "between", "outside",
@@ -705,6 +710,15 @@ class AlertEvaluator:
                 self._extract_indicator_specs(sub, specs)
         elif "not" in expr:
             self._extract_indicator_specs(expr["not"], specs)
+        elif "plugin" in expr:
+            plugin = self.plugin_registry.get_plugin(expr["plugin"])
+            if plugin:
+                requireds = plugin.get_required_indicators(expr.get("params", {}))
+                for req in requireds:
+                    if req not in specs:
+                        specs.append(req)
+            else:
+                _logger.warning("Plugin %s not found in registry during indicator extraction.", expr["plugin"])
         else:
             # Handle comparison operators
             for op in ("gt", "gte", "lt", "lte", "eq", "ne", "between", "outside",
@@ -781,6 +795,23 @@ class AlertEvaluator:
                 rule["not"], market_data, indicators, sides_state
             )
             return not result, sides, snapshot
+
+        if "plugin" in rule:
+            plugin_name = rule["plugin"]
+            plugin = self.plugin_registry.get_plugin(plugin_name)
+            if plugin:
+                try:
+                    params = rule.get("params", {})
+                    # Add side states specific to this plugin node context if we want to support crossing states inside plugins natively:
+                    plugin_side_key = f"{plugin_name}_{str(params)}"
+                    result = plugin.evaluate(params, market_data, indicators)
+                    return result, {}, {}
+                except Exception as e:
+                    _logger.exception("Error evaluating plugin %s:", plugin_name)
+                    return False, {}, {}
+            else:
+                _logger.warning("Plugin %s not found during evaluation.", plugin_name)
+                return False, {}, {}
 
         # Handle leaf nodes (comparison operators)
         for op in ("gt", "gte", "lt", "lte", "eq", "ne", "between", "outside",

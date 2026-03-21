@@ -10,3 +10,4 @@ export { default as AlertManagement } from './AlertManagement';
 export { default as ScheduleManagement } from './ScheduleManagement';
 export { default as BroadcastCenter } from './BroadcastCenter';
 export { default as AuditLogs } from './AuditLogs';
+export { default as ConfigBuilderPage } from './ConfigBuilderPage';
