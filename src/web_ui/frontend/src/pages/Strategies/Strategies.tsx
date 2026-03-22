@@ -15,6 +15,9 @@ import {
   DialogContent,
   DialogActions,
   DialogContentText,
+  Skeleton,
+  alpha,
+  useTheme,
 } from '@mui/material';
 import {
   Add,
@@ -25,9 +28,11 @@ import {
   Edit,
   Delete,
   Warning,
+  RocketLaunch,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 // API functions
@@ -40,8 +45,26 @@ import {
 } from '../../api/tradingApi';
 import type { StrategyStatus } from '../../api/tradingApi';
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: { type: 'spring' as const, stiffness: 100 }
+  }
+};
+
 const Strategies: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
   const queryClient = useQueryClient();
   
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -61,7 +84,7 @@ const Strategies: React.FC = () => {
   } = useQuery<StrategyStatus[]>({
     queryKey: ['strategies'],
     queryFn: getStrategies,
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 10000,
   });
 
   // Mutations
@@ -69,22 +92,19 @@ const Strategies: React.FC = () => {
     mutationFn: ({ id, confirmLive }: { id: string; confirmLive: boolean }) =>
       startStrategy(id, confirmLive),
     onSuccess: () => {
-      toast.success('Strategy started successfully');
+      toast.success('Strategy ignited');
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to start strategy');
+      toast.error(error.response?.data?.detail || 'Ignition failed');
     },
   });
 
   const stopMutation = useMutation({
     mutationFn: stopStrategy,
     onSuccess: () => {
-      toast.success('Strategy stopped successfully');
+      toast.success('Strategy suspended');
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to stop strategy');
     },
   });
 
@@ -92,22 +112,16 @@ const Strategies: React.FC = () => {
     mutationFn: ({ id, confirmLive }: { id: string; confirmLive: boolean }) =>
       restartStrategy(id, confirmLive),
     onSuccess: () => {
-      toast.success('Strategy restarted successfully');
+      toast.success('Strategy rebooted');
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to restart strategy');
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteStrategy,
     onSuccess: () => {
-      toast.success('Strategy deleted successfully');
+      toast.success('Fleet data purged');
       queryClient.invalidateQueries({ queryKey: ['strategies'] });
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to delete strategy');
     },
   });
 
@@ -158,9 +172,7 @@ const Strategies: React.FC = () => {
   };
 
   const confirmDelete = () => {
-    if (selectedStrategy) {
-      deleteMutation.mutate(selectedStrategy);
-    }
+    if (selectedStrategy) deleteMutation.mutate(selectedStrategy);
     setDeleteDialogOpen(false);
     setSelectedStrategy(null);
   };
@@ -179,14 +191,10 @@ const Strategies: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'running':
-        return 'success';
-      case 'stopped':
-        return 'default';
-      case 'error':
-        return 'error';
-      default:
-        return 'default';
+      case 'running': return theme.palette.success.main;
+      case 'stopped': return theme.palette.text.disabled;
+      case 'error': return theme.palette.error.main;
+      default: return theme.palette.text.disabled;
     }
   };
 
@@ -196,120 +204,159 @@ const Strategies: React.FC = () => {
     return `${hours}h ${minutes}m`;
   };
 
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 4, maxWidth: 1600, mx: 'auto' }}>
+        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between' }}>
+           <Skeleton variant="text" width={300} height={60} />
+           <Skeleton variant="rectangular" width={150} height={40} />
+        </Box>
+        <Grid container spacing={4}>
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <Grid item xs={12} sm={6} md={4} key={i}>
+              <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 3 }} />
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    );
+  }
+
   return (
-    <Box sx={{ p: 3 }}>
+    <Box 
+        component={motion.div}
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        sx={{ p: 4, maxWidth: 1600, mx: 'auto' }}
+    >
       {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" component="h1">
-          Trading Strategies
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={() => refetch()}
-            disabled={isLoading}
-          >
-            Refresh
-          </Button>
+      <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, fontFamily: 'Outfit' }}>
+            Active Fleet
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Command and control your trading strategies
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <IconButton onClick={() => refetch()} sx={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+            <Refresh />
+          </IconButton>
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => navigate('/strategies/new')}
+            sx={{ px: 3, fontWeight: 700 }}
           >
-            New Strategy
+            Deploy New Unit
           </Button>
         </Box>
       </Box>
 
       {/* Strategy Grid */}
-      <Grid container spacing={3}>
-        {strategies.map((strategy) => (
-          <Grid item xs={12} sm={6} md={4} key={strategy.instance_id}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Typography variant="h6" component="div">
-                    {strategy.name}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip
-                      label={strategy.status}
-                      color={getStatusColor(strategy.status) as any}
-                      size="small"
-                    />
-                    <IconButton
-                      size="small"
-                      onClick={(e) => handleMenuClick(e, strategy.instance_id)}
-                    >
+      <Grid container spacing={4}>
+        <AnimatePresence>
+          {strategies.map((strategy) => (
+            <Grid item xs={12} sm={6} md={4} key={strategy.instance_id} component={motion.div} variants={itemVariants} layout>
+              <Card sx={{ 
+                  height: '100%', 
+                  position: 'relative', 
+                  overflow: 'hidden',
+                  transition: 'transform 0.2s',
+                  '&:hover': { transform: 'translateY(-4px)' }
+              }}>
+                <Box sx={{ 
+                    position: 'absolute', 
+                    top: 0, 
+                    left: 0, 
+                    width: 4, 
+                    height: '100%', 
+                    bgcolor: getStatusColor(strategy.status) 
+                }} />
+                
+                <CardContent sx={{ p: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                        {strategy.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: 1 }}>
+                            {strategy.symbol || 'N/A'} • {strategy.strategy_type || 'Custom'}
+                        </Typography>
+                    </Box>
+                    <IconButton size="small" onClick={(e) => handleMenuClick(e, strategy.instance_id)}>
                       <MoreVert />
                     </IconButton>
                   </Box>
-                </Box>
 
-                <Typography variant="body2" color="textSecondary" gutterBottom>
-                  {strategy.symbol} • {strategy.broker_type} • {strategy.trading_mode}
-                  {strategy.trading_mode === 'live' && (
+                  <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     <Chip
-                      label="LIVE"
-                      color="warning"
+                      label={strategy.status.toUpperCase()}
+                      sx={{ 
+                          bgcolor: alpha(getStatusColor(strategy.status), 0.1), 
+                          color: getStatusColor(strategy.status),
+                          fontWeight: 800,
+                          fontSize: '0.65rem'
+                      }}
                       size="small"
-                      sx={{ ml: 1 }}
                     />
-                  )}
-                </Typography>
+                    <Chip
+                      label={strategy.trading_mode?.toUpperCase() || 'SANDBOX'}
+                      color={strategy.trading_mode === 'live' ? 'warning' : 'default'}
+                      size="small"
+                      sx={{ fontWeight: 800, fontSize: '0.65rem' }}
+                    />
+                  </Box>
 
-                <Typography variant="body2" gutterBottom>
-                  Uptime: {formatUptime(strategy.uptime_seconds)}
-                </Typography>
+                  <Grid container spacing={2} sx={{ mb: 3 }}>
+                      <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary" display="block">UPTIME</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatUptime(strategy.uptime_seconds)}</Typography>
+                      </Grid>
+                      <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary" display="block">INSTABILITY</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: strategy.error_count > 0 ? 'error.main' : 'text.primary' }}>
+                              {strategy.error_count} Errors
+                          </Typography>
+                      </Grid>
+                  </Grid>
 
-                {strategy.error_count > 0 && (
-                  <Typography variant="body2" color="error" gutterBottom>
-                    Errors: {strategy.error_count}
-                  </Typography>
-                )}
-
-                {strategy.last_error && (
-                  <Typography variant="body2" color="error" gutterBottom>
-                    Last Error: {strategy.last_error}
-                  </Typography>
-                )}
-
-                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                  <Button
-                    size="small"
-                    startIcon={<PlayArrow />}
-                    onClick={() => handleStart(strategy.instance_id)}
-                    disabled={strategy.status === 'running' || startMutation.isPending}
-                    variant="contained"
-                    color="success"
-                  >
-                    Start
-                  </Button>
-                  <Button
-                    size="small"
-                    startIcon={<Stop />}
-                    onClick={() => handleStop(strategy.instance_id)}
-                    disabled={strategy.status !== 'running' || stopMutation.isPending}
-                    variant="contained"
-                    color="error"
-                  >
-                    Stop
-                  </Button>
-                  <Button
-                    size="small"
-                    startIcon={<Refresh />}
-                    onClick={() => handleRestart(strategy.instance_id)}
-                    disabled={restartMutation.isPending}
-                    variant="outlined"
-                  >
-                    Restart
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
+                  <Box sx={{ display: 'flex', gap: 1.5, mt: 'auto' }}>
+                    <Button
+                      fullWidth
+                      size="small"
+                      startIcon={<RocketLaunch />}
+                      onClick={() => handleStart(strategy.instance_id)}
+                      disabled={strategy.status === 'running' || startMutation.isPending}
+                      variant="contained"
+                      sx={{ 
+                          bgcolor: 'success.main', 
+                          '&:hover': { bgcolor: 'success.dark' },
+                          fontWeight: 800
+                      }}
+                    >
+                      Launch
+                    </Button>
+                    <Button
+                      fullWidth
+                      size="small"
+                      startIcon={<Stop />}
+                      onClick={() => handleStop(strategy.instance_id)}
+                      disabled={strategy.status !== 'running' || stopMutation.isPending}
+                      variant="outlined"
+                      color="error"
+                      sx={{ fontWeight: 800 }}
+                    >
+                      Suspend
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </AnimatePresence>
       </Grid>
 
       {/* Context Menu */}
@@ -317,58 +364,51 @@ const Strategies: React.FC = () => {
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
+        PaperProps={{
+            sx: { 
+                bgcolor: 'rgba(26, 29, 58, 0.9)', 
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                minWidth: 150
+            }
+        }}
       >
         <MenuItem onClick={() => selectedStrategy && handleEdit(selectedStrategy)}>
-          <Edit sx={{ mr: 1 }} />
-          Edit
+          <Edit sx={{ mr: 1.5, fontSize: '1.2rem' }} />
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>Modify Unit</Typography>
         </MenuItem>
-        <MenuItem onClick={() => selectedStrategy && handleDelete(selectedStrategy)}>
-          <Delete sx={{ mr: 1 }} />
-          Delete
+        <MenuItem onClick={() => selectedStrategy && handleDelete(selectedStrategy)} sx={{ color: 'error.main' }}>
+          <Delete sx={{ mr: 1.5, fontSize: '1.2rem' }} />
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>Purge Data</Typography>
         </MenuItem>
       </Menu>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-      >
-        <DialogTitle>Delete Strategy</DialogTitle>
+      {/* Dialogs with Premium Styling */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} PaperProps={{ sx: { borderRadius: 3, p: 1 } }}>
+        <DialogTitle sx={{ fontWeight: 800 }}>Purge Strategy Unit?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to delete this strategy? This action cannot be undone.
+            This will permanently decommission the strategy unit and purge all local state. This action is irreversible.
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={confirmDelete} color="error" autoFocus>
-            Delete
-          </Button>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setDeleteDialogOpen(false)} color="inherit">Abort</Button>
+          <Button onClick={confirmDelete} variant="contained" color="error" sx={{ fontWeight: 800 }}>Purge</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Live Trading Confirmation Dialog */}
-      <Dialog
-        open={liveConfirmDialogOpen}
-        onClose={() => setLiveConfirmDialogOpen(false)}
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Warning color="warning" sx={{ mr: 1 }} />
-            Live Trading Confirmation
-          </Box>
+      <Dialog open={liveConfirmDialogOpen} onClose={() => setLiveConfirmDialogOpen(false)} PaperProps={{ sx: { borderRadius: 3, p: 1, border: '1px solid #ed6c02' } }}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', fontWeight: 800, color: 'warning.main' }}>
+            <Warning sx={{ mr: 1 }} /> LIVE IGNITION WARNING
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            <strong>WARNING:</strong> You are about to {pendingAction?.action} a strategy in LIVE TRADING mode. 
-            This will use real money. Please confirm that you want to proceed.
+            You are about to engage real capital on live markets. Ensure all parameters have been validated.
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLiveConfirmDialogOpen(false)}>Cancel</Button>
-          <Button onClick={confirmLiveTrading} color="warning" autoFocus>
-            Confirm Live Trading
-          </Button>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setLiveConfirmDialogOpen(false)} color="inherit">Abort Mission</Button>
+          <Button onClick={confirmLiveTrading} variant="contained" color="warning" sx={{ fontWeight: 800 }}>Confirm Ignition</Button>
         </DialogActions>
       </Dialog>
     </Box>

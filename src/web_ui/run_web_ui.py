@@ -215,8 +215,9 @@ class WebUIRunner:
         try:
             # Set environment variables for frontend
             env = os.environ.copy()
-            env['VITE_API_BASE_URL'] = f'http://{self.host}:{self.port}'
-            env['VITE_WS_URL'] = f'ws://{self.host}:{self.port}'
+            frontend_host = self.host if self.host != "0.0.0.0" else "localhost"
+            env['VITE_API_BASE_URL'] = f'http://{frontend_host}:{self.port}'
+            env['VITE_WS_URL'] = f'ws://{frontend_host}:{self.port}'
 
             self.frontend_process = subprocess.Popen(
                 ['npm', 'run', 'dev'],

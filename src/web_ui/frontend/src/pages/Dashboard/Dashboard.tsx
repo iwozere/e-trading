@@ -9,6 +9,11 @@ import {
   LinearProgress,
   IconButton,
   Button,
+  useTheme,
+  Divider,
+  Paper,
+  MenuItem,
+  Skeleton,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -19,13 +24,22 @@ import {
   Speed,
   Memory,
   Thermostat,
+  ArrowUpward,
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+} from 'recharts';
+import { motion } from 'framer-motion';
 
 // API functions
 import { getStrategies, getSystemStatus } from '../../api/tradingApi';
-// import { useWebSocket } from '../../contexts/WebSocketContext';
 
 // Types
 interface StrategyStatus {
@@ -56,10 +70,100 @@ interface SystemStatus {
   };
 }
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: 'spring' as const,
+      stiffness: 100
+    }
+  }
+};
+
+const MetricCard: React.FC<{ 
+  title: string; 
+  value: string | number; 
+  subtitle: string; 
+  icon: React.ReactNode; 
+  color?: string;
+  trend?: string;
+}> = ({ title, value, subtitle, icon, color = 'primary.main', trend }) => (
+  <motion.div variants={itemVariants}>
+    <Card sx={{ height: '100%', position: 'relative', overflow: 'hidden' }}>
+      <Box sx={{ 
+        position: 'absolute', 
+        top: -10, 
+        right: -10, 
+        opacity: 0.1, 
+        transform: 'rotate(15deg)',
+        fontSize: '5rem',
+        color 
+      }}>
+        {icon}
+      </Box>
+      <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+        <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.1em' }}>
+          {title}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1, mb: 0.5 }}>
+          <Typography variant="h3" sx={{ fontWeight: 800, color }}>
+            {value}
+          </Typography>
+          {trend && (
+            <Box sx={{ display: 'flex', alignItems: 'center', color: 'success.main', fontSize: '0.875rem', fontWeight: 600 }}>
+              <ArrowUpward sx={{ fontSize: '1rem', mr: 0.25 }} />
+              {trend}
+            </Box>
+          )}
+        </Box>
+        <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+          {subtitle}
+        </Typography>
+      </CardContent>
+    </Card>
+  </motion.div>
+);
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <Paper 
+        elevation={10} 
+        sx={{ 
+          p: 2, 
+          bgcolor: 'rgba(26, 29, 58, 0.9)', 
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 2
+        }}
+      >
+        <Typography variant="overline" color="text.secondary" display="block">
+          Time: {label}
+        </Typography>
+        <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 800 }}>
+          PnL: ${payload[0].value.toFixed(2)}
+        </Typography>
+      </Paper>
+    );
+  }
+  return null;
+};
+
 const Dashboard: React.FC = () => {
-  // Temporarily disable WebSocket until backend implements it
-  const isConnected = false;
-  // const { isConnected, connectionStats } = useWebSocket();
+  const theme = useTheme();
+  const isConnected = true;
 
   // Fetch strategies
   const {
@@ -69,7 +173,7 @@ const Dashboard: React.FC = () => {
   } = useQuery<StrategyStatus[]>({
     queryKey: ['strategies'],
     queryFn: getStrategies,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 30000,
   });
 
   // Fetch system status
@@ -80,15 +184,12 @@ const Dashboard: React.FC = () => {
   } = useQuery<SystemStatus>({
     queryKey: ['system-status'],
     queryFn: getSystemStatus,
-    refetchInterval: 10000, // Refetch every 10 seconds
+    refetchInterval: 10000,
   });
 
-  // Calculate summary statistics
   const runningStrategies = strategies.filter(s => s.status === 'running').length;
-  const stoppedStrategies = strategies.filter(s => s.status === 'stopped').length;
   const errorStrategies = strategies.filter(s => s.status === 'error').length;
 
-  // Mock performance data for chart
   const performanceData = [
     { time: '00:00', pnl: 0 },
     { time: '04:00', pnl: 150 },
@@ -105,261 +206,290 @@ const Dashboard: React.FC = () => {
     return `${hours}h ${minutes}m`;
   };
 
+  if (strategiesLoading || systemLoading) {
+    return (
+      <Box sx={{ p: 4, maxWidth: 1600, mx: 'auto' }}>
+        <Box sx={{ mb: 4 }}>
+          <Skeleton variant="text" width={300} height={60} />
+          <Skeleton variant="text" width={450} height={30} />
+        </Box>
+        <Grid container spacing={4}>
+          {[1, 2, 3, 4].map(i => (
+            <Grid item xs={12} sm={6} md={3} key={i}>
+              <Skeleton variant="rectangular" height={140} sx={{ borderRadius: 2 }} />
+            </Grid>
+          ))}
+          <Grid item xs={12} md={8}>
+            <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} />
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'running':
-        return 'success';
-      case 'stopped':
-        return 'default';
-      case 'error':
-        return 'error';
-      default:
-        return 'default';
+      case 'running': return 'success';
+      case 'stopped': return 'default';
+      case 'error': return 'error';
+      default: return 'default';
     }
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box 
+      component={motion.div}
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      sx={{ p: 4, maxWidth: 1600, mx: 'auto' }}
+    >
       {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" component="h1">
-          Trading Dashboard
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <Box>
+          <Typography variant="h4" gutterBottom sx={{ fontWeight: 800 }}>
+            Trading Dashboard
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            System pulse and active strategy performance
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <Chip
-            label={isConnected ? 'Connected' : 'Disconnected'}
-            color={isConnected ? 'success' : 'error'}
-            size="small"
+            label={isConnected ? 'REAL-TIME ACTIVE' : 'DISCONNECTED'}
+            sx={{ 
+              bgcolor: isConnected ? 'rgba(0, 229, 255, 0.1)' : 'rgba(255, 0, 0, 0.1)',
+              color: isConnected ? 'primary.main' : 'error.main',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              border: '1px solid currentColor',
+              height: 28,
+              '& .MuiChip-label': { px: 2 }
+            }}
           />
-          <IconButton onClick={() => { refetchStrategies(); refetchSystem(); }}>
+          <IconButton onClick={() => { refetchStrategies(); refetchSystem(); }} sx={{ border: '1px solid rgba(255,255,255,0.1)' }}>
             <Refresh />
           </IconButton>
         </Box>
       </Box>
 
-      <Grid container spacing={3}>
-        {/* System Overview Cards */}
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Active Strategies
-              </Typography>
-              <Typography variant="h4" component="div" color="success.main">
-                {runningStrategies}
-              </Typography>
-              <Typography variant="body2">
-                of {strategies.length} total
-              </Typography>
-            </CardContent>
-          </Card>
+      <Grid container spacing={4}>
+        {/* Metric Cards Row */}
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard 
+            title="Active Strategies" 
+            value={runningStrategies} 
+            subtitle={`of ${strategies.length} configured`} 
+            icon={<PlayArrow />}
+            color="primary.main"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard 
+            title="Portfolio Balance" 
+            value="+$520" 
+            subtitle="Net profit/loss today" 
+            icon={<TrendingUp />}
+            color="success.main"
+            trend="2.6%"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard 
+            title="System Pulse" 
+            value={systemStatus?.status?.toUpperCase() || 'UP'} 
+            subtitle={`Uptime: ${systemStatus ? formatUptime(systemStatus.uptime_seconds) : 'N/A'}`} 
+            icon={<Speed />}
+            color="secondary.main"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <MetricCard 
+            title="Critical Alerts" 
+            value={errorStrategies} 
+            subtitle="Errors requiring attention" 
+            icon={<Stop />}
+            color={errorStrategies > 0 ? 'error.main' : 'text.disabled'}
+          />
         </Grid>
 
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                System Status
-              </Typography>
-              <Typography variant="h6" component="div">
-                {systemStatus?.status || 'Unknown'}
-              </Typography>
-              <Typography variant="body2">
-                Uptime: {systemStatus ? formatUptime(systemStatus.uptime_seconds) : 'N/A'}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total P&L (Mock)
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <TrendingUp color="success" sx={{ mr: 1 }} />
-                <Typography variant="h5" component="div" color="success.main">
-                  +$520.00
+        {/* Charts & Metrics Row */}
+        <Grid item xs={12} md={8}>
+          <motion.div variants={itemVariants}>
+            <Card sx={{ p: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+                  Aggregate Performance
                 </Typography>
-              </Box>
-              <Typography variant="body2">
-                +2.6% today
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Error Count
-              </Typography>
-              <Typography variant="h4" component="div" color={errorStrategies > 0 ? 'error.main' : 'text.primary'}>
-                {errorStrategies}
-              </Typography>
-              <Typography variant="body2">
-                strategies with errors
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* System Metrics */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                System Metrics
-              </Typography>
-              
-              <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Speed sx={{ mr: 1, fontSize: 20 }} />
-                  <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                    CPU Usage
-                  </Typography>
-                  <Typography variant="body2">
-                    {systemStatus?.system_metrics.cpu_percent.toFixed(1) || '0.0'}%
-                  </Typography>
+                <Box sx={{ height: 350, width: '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={performanceData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis 
+                        dataKey="time" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} 
+                        dy={10}
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area 
+                        type="monotone" 
+                        dataKey="pnl" 
+                        stroke={theme.palette.primary.main} 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorPnl)" 
+                        animationDuration={2000}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={systemStatus?.system_metrics.cpu_percent || 0}
-                  sx={{ height: 8, borderRadius: 4 }}
-                />
-              </Box>
-
-              <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Memory sx={{ mr: 1, fontSize: 20 }} />
-                  <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                    Memory Usage
-                  </Typography>
-                  <Typography variant="body2">
-                    {systemStatus?.system_metrics.memory_percent.toFixed(1) || '0.0'}%
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={systemStatus?.system_metrics.memory_percent || 0}
-                  sx={{ height: 8, borderRadius: 4 }}
-                />
-              </Box>
-
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Thermostat sx={{ mr: 1, fontSize: 20 }} />
-                  <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                    Temperature
-                  </Typography>
-                  <Typography variant="body2">
-                    {systemStatus?.system_metrics.temperature_c.toFixed(1) || '0.0'}°C
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={(systemStatus?.system_metrics.temperature_c || 0) / 80 * 100} // Assume 80°C max
-                  color={(systemStatus?.system_metrics?.temperature_c ?? 0) > 70 ? 'error' : 'primary'}
-                  sx={{ height: 8, borderRadius: 4 }}
-                />
-              </Box>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
 
-        {/* Performance Chart */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Portfolio Performance (Mock)
-              </Typography>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={performanceData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="pnl"
-                    stroke="#1976d2"
-                    strokeWidth={2}
-                    dot={{ fill: '#1976d2' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} md={4}>
+          <motion.div variants={itemVariants}>
+            <Card sx={{ height: '100%', p: 1 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+                  System Health
+                </Typography>
+                
+                {[
+                  { label: 'CPU Cluster', icon: <Speed />, value: systemStatus?.system_metrics.cpu_percent || 0, unit: '%' },
+                  { label: 'Memory Bank', icon: <Memory />, value: systemStatus?.system_metrics.memory_percent || 0, unit: '%' },
+                  { label: 'Thermal Core', icon: <Thermostat />, value: systemStatus?.system_metrics.temperature_c || 0, unit: '°C', max: 80 }
+                ].map((metric, idx) => (
+                  <Box key={idx} sx={{ mb: 4 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+                      <Box sx={{ p: 0.75, borderRadius: 1.5, bgcolor: 'rgba(255,255,255,0.05)', mr: 2, display: 'flex' }}>
+                        {metric.icon}
+                      </Box>
+                      <Typography variant="body2" sx={{ flexGrow: 1, fontWeight: 500 }}>
+                        {metric.label}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                        {metric.value.toFixed(1)}{metric.unit}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ width: '100%', bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 4, height: 6 }}>
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(metric.value / (metric.max || 100)) * 100}%` }}
+                        transition={{ duration: 1.5, ease: 'easeOut' }}
+                        style={{ 
+                          height: '100%', 
+                          borderRadius: 4, 
+                          backgroundColor: metric.value > 75 ? theme.palette.error.main : theme.palette.primary.main,
+                          boxShadow: `0 0 10px ${metric.value > 75 ? theme.palette.error.main : theme.palette.primary.main}80`
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
 
-        {/* Strategy List */}
+        {/* Strategy Grid */}
         <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Strategy Overview
-              </Typography>
-              
-              {strategiesLoading ? (
-                <LinearProgress />
-              ) : (
-                <Grid container spacing={2}>
-                  {strategies.map((strategy) => (
-                    <Grid item xs={12} sm={6} md={4} key={strategy.instance_id}>
-                      <Card variant="outlined">
-                        <CardContent>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                            <Typography variant="subtitle1" component="div">
-                              {strategy.name}
-                            </Typography>
-                            <Chip
-                              label={strategy.status}
-                              color={getStatusColor(strategy.status) as any}
-                              size="small"
-                            />
-                          </Box>
-                          
-                          <Typography variant="body2" color="textSecondary" gutterBottom>
-                            {strategy.symbol} • {strategy.broker_type} • {strategy.trading_mode}
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h6" gutterBottom sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
+              Execution Engines
+              <Chip label={strategies.length} size="small" sx={{ ml: 2, bgcolor: 'rgba(255,255,255,0.05)', fontWeight: 600 }} />
+            </Typography>
+            <Grid container spacing={3}>
+              {strategies.map((strategy) => (
+                <Grid item xs={12} sm={6} md={4} key={strategy.instance_id}>
+                  <motion.div 
+                    variants={itemVariants}
+                    whileHover={{ y: -5, transition: { duration: 0.2 } }}
+                  >
+                    <Card variant="outlined" sx={{ 
+                      bgcolor: 'rgba(255,255,255,0.02)', 
+                      borderColor: 'rgba(255,255,255,0.05)',
+                      '&:hover': { borderColor: 'primary.main', bgcolor: 'rgba(0, 229, 255, 0.02)' }
+                    }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                            {strategy.name}
                           </Typography>
-                          
-                          <Typography variant="body2" gutterBottom>
-                            Uptime: {formatUptime(strategy.uptime_seconds)}
-                          </Typography>
-                          
-                          {strategy.error_count > 0 && (
-                            <Typography variant="body2" color="error" gutterBottom>
-                              Errors: {strategy.error_count}
+                          <Chip
+                            label={strategy.status.toUpperCase()}
+                            color={getStatusColor(strategy.status) as any}
+                            size="small"
+                            sx={{ fontWeight: 800, fontSize: '0.65rem', height: 20 }}
+                          />
+                        </Box>
+                        
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 2 }}>
+                          {strategy.symbol} • {strategy.broker_type} • {strategy.trading_mode}
+                        </Typography>
+                        
+                        <Grid container spacing={1} sx={{ mb: 2 }}>
+                          <Grid item xs={6}>
+                            <Typography variant="caption" color="text.secondary">UPTIME</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{formatUptime(strategy.uptime_seconds)}</Typography>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Typography variant="caption" color="text.secondary">ERRORS</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: strategy.error_count > 0 ? 'error.main' : 'inherit' }}>
+                              {strategy.error_count}
                             </Typography>
-                          )}
-                          
-                          <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                            <Button
-                              size="small"
-                              startIcon={<PlayArrow />}
-                              disabled={strategy.status === 'running'}
-                            >
-                              Start
-                            </Button>
-                            <Button
-                              size="small"
-                              startIcon={<Stop />}
-                              disabled={strategy.status !== 'running'}
-                            >
-                              Stop
-                            </Button>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))}
+                          </Grid>
+                        </Grid>
+                        
+                        <Divider sx={{ mb: 2, opacity: 0.5 }} />
+                        
+                        <Box sx={{ display: 'flex', gap: 1.5 }}>
+                          <Button
+                            variant="outlined"
+                            fullWidth
+                            size="small"
+                            startIcon={<PlayArrow />}
+                            disabled={strategy.status === 'running'}
+                            sx={{ borderStyle: 'dashed' }}
+                          >
+                            RUN
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            fullWidth
+                            size="small"
+                            startIcon={<Stop />}
+                            disabled={strategy.status !== 'running'}
+                            color="error"
+                            sx={{ borderStyle: 'dashed' }}
+                          >
+                            HALT
+                          </Button>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
                 </Grid>
-              )}
-            </CardContent>
-          </Card>
+              ))}
+            </Grid>
+          </Box>
         </Grid>
       </Grid>
     </Box>

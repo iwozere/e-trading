@@ -25,7 +25,8 @@ import {
 import { useSystemHealth, useChannelsHealth } from '../../hooks/system/useSystemHealth';
 
 const StatusIcon = ({ status }: { status: string }) => {
-  return status === 'ok' ? 
+  const isHealthy = ['ok', 'healthy', 'connected', 'operational', 'running'].includes(status?.toLowerCase());
+  return isHealthy ? 
     <CheckCircleIcon color="success" /> : 
     <ErrorIcon color="error" />;
 };
@@ -79,7 +80,7 @@ const Administration: React.FC = () => {
                     <ListItemText primary="Overall Status" />
                     <Chip 
                       label={healthData.status?.toUpperCase() || 'UNKNOWN'} 
-                      color={healthData.status === 'ok' ? 'success' : 'error'} 
+                      color={['ok', 'healthy', 'operational'].includes(healthData.status?.toLowerCase()) ? 'success' : 'error'} 
                       size="small" 
                     />
                   </ListItem>

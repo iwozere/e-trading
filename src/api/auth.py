@@ -30,7 +30,7 @@ _logger = setup_logger(__name__)
 # JWT Configuration
 SECRET_KEY = "your-secret-key-change-in-production"  # TODO: Move to environment variable
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # Security scheme

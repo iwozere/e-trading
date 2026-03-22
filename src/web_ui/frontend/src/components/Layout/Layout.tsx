@@ -108,9 +108,39 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <ListItemButton
               selected={location.pathname === item.path}
               onClick={() => navigate(item.path)}
+              sx={{
+                mb: 0.5,
+                mx: 1,
+                borderRadius: '8px',
+                '&.Mui-selected': {
+                  backgroundColor: 'rgba(0, 229, 255, 0.08)',
+                  '&:before': {
+                    content: '""',
+                    position: 'absolute',
+                    left: -8,
+                    top: '20%',
+                    bottom: '20%',
+                    width: 4,
+                    backgroundColor: 'primary.main',
+                    borderRadius: '0 4px 4px 0',
+                    boxShadow: '0 0 10px rgba(0, 229, 255, 0.5)',
+                  }
+                },
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                }
+              }}
             >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
+              <ListItemIcon sx={{ color: location.pathname === item.path ? 'primary.main' : 'inherit', minWidth: 40 }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText 
+                primary={item.text} 
+                primaryTypographyProps={{ 
+                  fontSize: '0.9rem', 
+                  fontWeight: location.pathname === item.path ? 600 : 400 
+                }} 
+              />
             </ListItemButton>
           </ListItem>
         ))}
@@ -140,9 +170,39 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <ListItemButton
                     selected={location.pathname === item.path}
                     onClick={() => navigate(item.path)}
+                    sx={{
+                      mb: 0.5,
+                      mx: 1,
+                      borderRadius: '8px',
+                      '&.Mui-selected': {
+                        backgroundColor: 'rgba(0, 229, 255, 0.08)',
+                        '&:before': {
+                          content: '""',
+                          position: 'absolute',
+                          left: -8,
+                          top: '20%',
+                          bottom: '20%',
+                          width: 4,
+                          backgroundColor: 'primary.main',
+                          borderRadius: '0 4px 4px 0',
+                          boxShadow: '0 0 10px rgba(0, 229, 255, 0.5)',
+                        }
+                      },
+                      '&:hover': {
+                        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                      }
+                    }}
                   >
-                    <ListItemIcon>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.text} />
+                    <ListItemIcon sx={{ color: location.pathname === item.path ? 'primary.main' : 'inherit', minWidth: 40 }}>
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={item.text} 
+                      primaryTypographyProps={{ 
+                        fontSize: '0.85rem', 
+                        fontWeight: location.pathname === item.path ? 600 : 400 
+                      }} 
+                    />
                   </ListItemButton>
                 </ListItem>
               );
@@ -157,6 +217,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <Box sx={{ display: 'flex' }}>
       <AppBar
         position="fixed"
+        elevation={0}
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
@@ -172,7 +233,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              flexGrow: 1,
+              fontFamily: 'Outfit, sans-serif',
+              fontWeight: 600,
+              background: 'linear-gradient(90deg, #fff 0%, rgba(255,255,255,0.7) 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
             Enhanced Multi-Strategy Trading System
           </Typography>
           <div>
