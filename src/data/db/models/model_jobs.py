@@ -151,6 +151,17 @@ class ScheduleResponse(BaseModel):
     state_json: Dict[str, Any] = {}
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator('task_params', 'state_json', mode='before')
+    @classmethod
+    def parse_json_strings(cls, v):
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except Exception:
+                pass
+        return v
+
 
 class ScheduleRunCreate(BaseModel):
     """Pydantic model for creating a run."""
@@ -184,6 +195,17 @@ class ScheduleRunResponse(BaseModel):
     result: Optional[Dict[str, Any]]
     error: Optional[str]
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator('job_snapshot', 'result', mode='before')
+    @classmethod
+    def parse_json_strings(cls, v):
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except Exception:
+                pass
+        return v
 
 class ReportRequest(BaseModel):
     """Pydantic model for report execution requests."""
