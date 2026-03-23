@@ -88,8 +88,13 @@ class ConfigurationFactory:
         hydrated_config = self._resolve_references(manifest)
 
         # 3. Apply Overrides (if any)
-        # TODO: Implement deep merge override logic if needed
-        # For now, simple top-level overrides are handled by the manifest structure usually
+        if "overrides" in hydrated_config and isinstance(hydrated_config["overrides"], dict):
+            overrides = hydrated_config.pop("overrides")
+            for k, v in overrides.items():
+                if k == "initial_balance" and "broker" in hydrated_config:
+                    hydrated_config["broker"]["cash"] = v
+                else:
+                    hydrated_config[k] = v
 
         # 4. Validate
         self.validate(hydrated_config)
