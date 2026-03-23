@@ -156,6 +156,7 @@ class SystemMonitoringService:
             # Get disk usage for all mounted drives
             for partition in psutil.disk_partitions():
                 try:
+                    usage = psutil.disk_usage(partition.mountpoint)
                     total_gb = usage.total / (1024**3)
                     used_gb = usage.used / (1024**3)
                     usage_percent = round((usage.used / usage.total) * 100, 2) if usage.total > 0 else 0.0
