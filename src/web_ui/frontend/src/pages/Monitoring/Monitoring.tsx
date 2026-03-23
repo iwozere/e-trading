@@ -63,8 +63,8 @@ const Monitoring: React.FC = () => {
     return `${h}h ${m}m`;
   };
 
-  const cpuUsage = metricsData?.system_metrics?.cpu_percent || 0;
-  const memUsage = metricsData?.system_metrics?.memory_percent || 0;
+  const cpuUsage = metricsData?.cpu?.usage_percent || statusData?.system_metrics?.cpu_percent || 0;
+  const memUsage = metricsData?.memory?.usage_percent || statusData?.system_metrics?.memory_percent || 0;
 
   return (
     <Box sx={{ p: 3 }}>

@@ -119,8 +119,8 @@ const Analytics: React.FC = () => {
     );
   }
 
-  const notifStats = data?.analytics?.notifications || {};
-  const sysStats = data?.analytics?.system || {};
+  const notifStats = data?.notifications || {};
+  const sysStats = data?.trading || {};
 
   const trendData = [
     { name: 'Mon', sent: 45, success: 42 },

@@ -18,6 +18,7 @@ Features:
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.security import HTTPBearer
 from contextlib import asynccontextmanager
 import asyncio
@@ -677,8 +678,29 @@ async def get_performance_history(
         _logger.exception("Error getting performance history:")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Mount static files for the React frontend
-# CRITICAL: This must be the VERY LAST thing in the file to avoid shadowing API routes
+
+# SPA Catch-all: Route all non-API paths to index.html
+# CRITICAL: This serves index.html for reloads/direct links to /dashboard, /monitoring etc.
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    # Skip if it is an API call
+    if full_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"detail": "API endpoint not found"})
+        
+    # Check if a static file exists (e.g. for assets/...)
+    dist_path = PROJECT_ROOT / "src/web_ui/frontend/dist"
+    local_path = dist_path / full_path
+    if local_path.is_file():
+        return FileResponse(local_path)
+        
+    # Standard SPA behavior: serve index.html for all other paths
+    index_file = dist_path / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+        
+    return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
+
+# Mount static files for the React frontend (fallback for root / and static assets)
 dist_path = PROJECT_ROOT / "src/web_ui/frontend/dist"
 if dist_path.exists():
     _logger.info("Mounting static files from %s", dist_path)
