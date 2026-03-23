@@ -330,10 +330,7 @@ class StrategyAction(BaseModel):
 
 # API Routes
 
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {"message": "Trading Web UI API", "version": "1.0.0"}
+
 
 @app.get("/api/health/legacy")
 async def health_check_legacy():
