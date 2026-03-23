@@ -65,8 +65,13 @@ class ProviderSpec:
 def _build_registry() -> List[ProviderSpec]:
     # IBKR and NewsAPI are imported lazily to avoid hard dependency at module load.
     try:
+        import asyncio
+        try:
+            asyncio.get_event_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
         from src.data.downloader.ibkr_downloader import IBKRDownloader as _IBKR
-    except ImportError:
+    except Exception:
         _IBKR = None  # type: ignore
 
     try:
