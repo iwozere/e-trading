@@ -223,13 +223,7 @@ app.include_router(notification_router)
 from src.api.trading_bot_routes import router as trading_bot_router
 app.include_router(trading_bot_router)
 
-# Mount static files for the React frontend
-dist_path = PROJECT_ROOT / "src/web_ui/frontend/dist"
-if dist_path.exists():
-    _logger.info("Mounting static files from %s", dist_path)
-    app.mount("/", StaticFiles(directory=str(dist_path), html=True), name="static")
-else:
-    _logger.warning("Static files directory not found at %s", dist_path)
+
 
 # Add unified analytics endpoints
 from src.api.services.unified_analytics_service import unified_analytics_service
@@ -685,6 +679,15 @@ async def get_performance_history(
     except Exception as e:
         _logger.exception("Error getting performance history:")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Mount static files for the React frontend
+# CRITICAL: This must be the VERY LAST thing in the file to avoid shadowing API routes
+dist_path = PROJECT_ROOT / "src/web_ui/frontend/dist"
+if dist_path.exists():
+    _logger.info("Mounting static files from %s", dist_path)
+    app.mount("/", StaticFiles(directory=str(dist_path), html=True), name="static")
+else:
+    _logger.warning("Static files directory not found at %s", dist_path)
 
 if __name__ == "__main__":
     import uvicorn
