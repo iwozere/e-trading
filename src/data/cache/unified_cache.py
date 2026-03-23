@@ -57,12 +57,26 @@ class UnifiedCache:
             max_size_gb: Maximum cache size in GB
         """
         self.cache_dir = Path(cache_dir)
+        
+        # Check if primary cache directory is writable, fallback if read-only
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            test_file = self.cache_dir / ".write_test"
+            with open(test_file, 'w') as f:
+                f.write("test")
+            if test_file.exists():
+                test_file.unlink()
+        except OSError as e:
+            fallback_dir = Path("data/cache")
+            print(f"⚠️ Primary cache dir {self.cache_dir} is unavailable ({e}). Falling back to local: {fallback_dir.absolute()}")
+            self.cache_dir = fallback_dir
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+
         self.ohlcv_dir = self.cache_dir / "ohlcv"
         self.max_size_gb = max_size_gb
         self.metadata_dir = self.ohlcv_dir / "_metadata"
 
         # Create directories
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.ohlcv_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_dir.mkdir(exist_ok=True)
 
