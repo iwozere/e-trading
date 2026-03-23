@@ -156,14 +156,17 @@ class SystemMonitoringService:
             # Get disk usage for all mounted drives
             for partition in psutil.disk_partitions():
                 try:
-                    usage = psutil.disk_usage(partition.mountpoint)
+                    total_gb = usage.total / (1024**3)
+                    used_gb = usage.used / (1024**3)
+                    usage_percent = round((usage.used / usage.total) * 100, 2) if usage.total > 0 else 0.0
+                    
                     disk_usage[partition.device] = {
                         'mountpoint': partition.mountpoint,
                         'filesystem': partition.fstype,
-                        'total_gb': round(usage.total / (1024**3), 2),
-                        'used_gb': round(usage.used / (1024**3), 2),
+                        'total_gb': round(total_gb, 2),
+                        'used_gb': round(used_gb, 2),
                         'free_gb': round(usage.free / (1024**3), 2),
-                        'usage_percent': round((usage.used / usage.total) * 100, 2)
+                        'usage_percent': usage_percent
                     }
                 except (PermissionError, OSError):
                     # Skip drives that can't be accessed

@@ -198,7 +198,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5003", "http://localhost:5002"],  # React dev servers
+    allow_origins=["*"], # Allow all origins for easier Pi access (hostname/IP)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -566,7 +566,7 @@ async def get_system_status(current_user: User = Depends(get_current_user)):
             service_name="Enhanced Multi-Strategy Trading System",
             version="2.0.0",
             status="running" if service_status_info["available"] else "unavailable",
-            uptime_seconds=0.0,  # TODO: Calculate actual uptime
+            uptime_seconds=metrics.get('uptime_seconds', 0.0),
             active_strategies=service_status_info["active_strategies"],
             total_strategies=service_status_info["total_strategies"],
             system_metrics=system_metrics
