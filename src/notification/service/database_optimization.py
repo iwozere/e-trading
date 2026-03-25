@@ -6,7 +6,7 @@ for the notification service to improve performance under high load.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_, or_, desc, asc, func, text, Index, cast
 from sqlalchemy.dialects.postgresql import insert, ARRAY, TEXT
@@ -447,7 +447,6 @@ class OptimizedMessageRepository:
         Returns:
             List of failed Message objects ready for retry
         """
-        from datetime import timedelta
         retry_cutoff = current_time - timedelta(minutes=retry_delay_minutes)
 
         return self.session.query(Message).filter(
@@ -460,6 +459,155 @@ class OptimizedMessageRepository:
                 )
             )
         ).order_by(asc(Message.processed_at)).limit(limit).all()
+
+    def get_queue_health_for_channels(self, channels: List[str]) -> Dict[str, Any]:
+        """
+        Get queue health metrics for specific channels.
+
+        Args:
+            channels: List of channel names to monitor (e.g., ["telegram"], ["email", "sms"])
+
+        Returns:
+            Dictionary with queue health metrics
+        """
+        current_time = datetime.now(timezone.utc)
+        one_hour_ago = current_time - timedelta(hours=1)
+        five_min_ago = current_time - timedelta(minutes=5)
+
+        if not channels:
+            return {
+                "pending": 0,
+                "processing": 0,
+                "failed_last_hour": 0,
+                "delivered_last_hour": 0,
+                "stuck_messages": 0
+            }
+
+        # Use ARRAY overlap (&&) for PostgreSQL performance
+        channel_array = cast(channels, ARRAY(TEXT))
+
+        pending_count = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.PENDING.value,
+            Message.channels.overlap(channel_array)
+        ).scalar() or 0
+
+        processing_count = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.PROCESSING.value,
+            Message.channels.overlap(channel_array)
+        ).scalar() or 0
+
+        failed_last_hour = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.FAILED.value,
+            Message.updated_at >= one_hour_ago,
+            Message.channels.overlap(channel_array)
+        ).scalar() or 0
+
+        delivered_last_hour = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.DELIVERED.value,
+            Message.delivered_at >= one_hour_ago,
+            Message.channels.overlap(channel_array)
+        ).scalar() or 0
+
+        stuck_messages = self.session.query(func.count(Message.id)).filter(
+            Message.status == MessageStatus.PROCESSING.value,
+            Message.updated_at < five_min_ago,
+            Message.channels.overlap(channel_array)
+        ).scalar() or 0
+
+        return {
+            "pending": pending_count,
+            "processing": processing_count,
+            "failed_last_hour": failed_last_hour,
+            "delivered_last_hour": delivered_last_hour,
+            "stuck_messages": stuck_messages
+        }
+
+    def cleanup_old_messages(self, days_to_keep: int = 30) -> int:
+        """
+        Clean up old delivered messages.
+
+        Args:
+            days_to_keep: Number of days of messages to keep
+
+        Returns:
+            Number of messages deleted
+        """
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+
+        deleted_count = self.session.query(Message).filter(
+            and_(
+                Message.created_at < cutoff_date,
+                Message.status == MessageStatus.DELIVERED.value
+            )
+        ).delete()
+
+        _logger.info("Cleaned up %s old messages", deleted_count)
+        return deleted_count
+
+    def release_message_lock(self, message_id: int, lock_instance_id: str) -> bool:
+        """
+        Release the lock on a message after processing.
+
+        Args:
+            message_id: Message ID to unlock
+            lock_instance_id: Instance ID that owns the lock
+
+        Returns:
+            True if lock was released, False otherwise
+        """
+        try:
+            updated_rows = self.session.query(Message).filter(
+                and_(
+                    Message.id == message_id,
+                    Message.locked_by == lock_instance_id
+                )
+            ).update({
+                'locked_by': None,
+                'locked_at': None
+            }, synchronize_session=False)
+
+            if updated_rows > 0:
+                _logger.debug("Released lock on message %s", message_id)
+                return True
+            else:
+                _logger.warning("Could not release lock on message %s (not owned by %s)", message_id, lock_instance_id)
+                return False
+
+        except Exception as e:
+            _logger.error("Error releasing lock on message %s: %s", message_id, e)
+            return False
+
+    def cleanup_stale_locks(self, stale_threshold_minutes: int = 5) -> int:
+        """
+        Clean up stale message locks from failed or crashed instances.
+
+        Args:
+            stale_threshold_minutes: Minutes after which a lock is considered stale
+
+        Returns:
+            Number of stale locks cleaned up
+        """
+        try:
+            stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=stale_threshold_minutes)
+
+            updated_rows = self.session.query(Message).filter(
+                and_(
+                    Message.locked_by.isnot(None),
+                    Message.locked_at < stale_threshold
+                )
+            ).update({
+                'locked_by': None,
+                'locked_at': None
+            }, synchronize_session=False)
+
+            if updated_rows > 0:
+                _logger.info("Cleaned up %s stale message locks", updated_rows)
+
+            return updated_rows
+
+        except Exception:
+            _logger.exception("Error cleaning up stale locks:")
+            return 0
 
 
 class OptimizedDeliveryStatusRepository:

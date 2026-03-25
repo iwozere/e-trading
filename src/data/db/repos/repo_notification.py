@@ -22,6 +22,8 @@ from src.notification.service.database_optimization import (
     OptimizedDeliveryStatusRepository,
     OptimizedRateLimitRepository
 )
+from src.data.db.repos.repo_system_health import SystemHealthRepository
+from src.notification.channels.base import ChannelHealth, ChannelHealthStatus
 
 _logger = setup_logger(__name__)
 
@@ -1085,6 +1087,104 @@ class NotificationRepository:
             self.delivery_status = DeliveryStatusRepository(session)
             self.rate_limits = RateLimitRepository(session)
             self.channel_configs = ChannelConfigRepository(session)
+
+        # Always include system health for channel health monitoring
+        self.system_health = SystemHealthRepository(session)
+
+    # ---------- Message Delegation ----------
+    def create_message(self, message_data: Dict[str, Any]) -> Message:
+        return self.messages.create_message(message_data)
+
+    def get_message(self, message_id: int) -> Optional[Message]:
+        return self.messages.get_message(message_id)
+
+    def list_messages(self, **kwargs) -> List[Message]:
+        return self.messages.list_messages(**kwargs)
+
+    def update_message(self, message_id: int, update_data: Dict[str, Any]) -> Optional[Message]:
+        return self.messages.update_message(message_id, update_data)
+
+    def get_pending_messages(self, current_time: datetime, **kwargs) -> List[Message]:
+        return self.messages.get_pending_messages(current_time, **kwargs)
+
+    def get_failed_messages_for_retry(self, current_time: datetime, **kwargs) -> List[Message]:
+        return self.messages.get_failed_messages_for_retry(current_time, **kwargs)
+
+    def cleanup_old_messages(self, days_to_keep: int = 30) -> int:
+        return self.messages.cleanup_old_messages(days_to_keep)
+
+    def release_message_lock(self, message_id: int, lock_instance_id: str) -> bool:
+        return self.messages.release_message_lock(message_id, lock_instance_id)
+
+    def cleanup_stale_locks(self, stale_threshold_minutes: int = 5) -> int:
+        return self.messages.cleanup_stale_locks(stale_threshold_minutes)
+
+    def get_pending_messages_with_lock(self, **kwargs) -> List[Message]:
+        return self.messages.get_pending_messages_with_lock(**kwargs)
+
+    # ---------- Delivery Status Delegation ----------
+    def create_delivery_status(self, status_data: Dict[str, Any]) -> MessageDeliveryStatus:
+        return self.delivery_status.create_delivery_status(status_data)
+
+    def get_delivery_statuses_by_message(self, message_id: int) -> List[MessageDeliveryStatus]:
+        return self.delivery_status.get_delivery_statuses_by_message(message_id)
+
+    def update_delivery_status(self, status_id: int, update_data: Dict[str, Any]) -> Optional[MessageDeliveryStatus]:
+        return self.delivery_status.update_delivery_status(status_id, update_data)
+
+    def get_delivery_statistics(self, **kwargs) -> Dict[str, Any]:
+        return self.delivery_status.get_delivery_statistics(**kwargs)
+
+    # ---------- Rate Limit Delegation ----------
+    def check_and_consume_token(self, user_id: str, channel: str, default_config: Dict[str, Any]) -> bool:
+        return self.rate_limits.check_and_consume_token(user_id, channel, default_config)
+
+    # ---------- Channel Health (System Health Delegation) ----------
+    def list_channel_health(self) -> List[ChannelHealth]:
+        """Get health status for all notification channels."""
+        system_health_records = self.system_health.get_notification_channels_health()
+        
+        # Convert SystemHealth model to ChannelHealth dataclass
+        results = []
+        for record in system_health_records:
+            results.append(ChannelHealth(
+                status=ChannelHealthStatus(record.status),
+                last_check=record.checked_at,
+                response_time_ms=record.avg_response_time_ms,
+                error_message=record.error_message,
+                failure_count=record.failure_count,
+                metadata=record.metadata
+            ))
+        return results
+
+    def create_or_update_channel_health(self, health_data: Dict[str, Any]) -> ChannelHealth:
+        """Update notification channel health in system health repository."""
+        from src.data.db.models.model_system_health import SystemHealthStatus as DBHealthStatus
+        
+        # Map incoming status string to SystemHealthStatus enum
+        status_value = health_data.get('status', 'UNKNOWN').upper()
+        try:
+            db_status = DBHealthStatus(status_value)
+        except ValueError:
+            db_status = DBHealthStatus.UNKNOWN
+
+        record = self.system_health.update_system_status(
+            system='notification',
+            component=health_data.get('channel'),
+            status=db_status,
+            response_time_ms=health_data.get('response_time_ms'),
+            error_message=health_data.get('error_message'),
+            metadata=health_data.get('metadata')
+        )
+
+        return ChannelHealth(
+            status=ChannelHealthStatus(record.status),
+            last_check=record.checked_at,
+            response_time_ms=record.avg_response_time_ms,
+            error_message=record.error_message,
+            failure_count=record.failure_count,
+            metadata=record.metadata
+        )
 
     def commit(self):
         """Commit the current transaction."""
