@@ -144,7 +144,7 @@ class EMPS2PipelineConfig:
 
     # Cache parameters
     fundamental_cache_enabled: bool = True
-    fundamental_cache_ttl_days: int = 3  # Cache TTL for profile2 data
+    fundamental_cache_ttl_days: int = 14  # Cache TTL for profile2 data
 
     # Checkpoint parameters
     checkpoint_enabled: bool = True

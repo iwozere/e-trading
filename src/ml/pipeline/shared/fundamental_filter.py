@@ -55,6 +55,7 @@ class FundamentalFilter:
         self._results_dir = results_dir
         self.checkpoint_enabled = checkpoint_enabled
         self.checkpoint_interval = checkpoint_interval
+        self.ttl_days = getattr(config, 'fundamental_cache_ttl_days', 14)
 
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -191,7 +192,11 @@ class FundamentalFilter:
         try:
             # Use DataManager to get combined fundamentals (includes profile, metrics, quote)
             # This uses the centralized cache in c:\data-cache
-            data = self.data_manager.get_fundamentals(ticker, force_refresh=force_refresh)
+            data = self.data_manager.get_fundamentals(
+                ticker, 
+                force_refresh=force_refresh,
+                max_age_days=self.ttl_days
+            )
             
             if not data:
                 return None

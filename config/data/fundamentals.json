@@ -48,7 +48,7 @@
   },
   "refresh_intervals": {
     "profiles": "14d",
-    "ratios": "7d",
+    "ratios": "14d",
     "statements": "90d",
     "calendar": "7d",
     "dividends": "7d",

@@ -1436,7 +1436,7 @@ class DataManager:
 
     def get_fundamentals(self, symbol: str, providers: Optional[List[str]] = None,
                         force_refresh: bool = False, combination_strategy: str = "priority_based",
-                        data_type: str = "general") -> Dict[str, Any]:
+                        data_type: str = "general", max_age_days: Optional[int] = None) -> Dict[str, Any]:
         """
         Retrieve fundamentals data with caching and multi-provider combination.
 
@@ -1469,9 +1469,9 @@ class DataManager:
             combiner = get_fundamentals_combiner()
             fundamentals_cache = get_fundamentals_cache(self.cache.cache_dir, combiner)
 
-            # 2. Cache validation with data-type specific TTL
+            # 2. Cache validation with data-type specific TTL (or override)
             if not force_refresh:
-                cached_data = self._get_cached_fundamentals(normalized_symbol, data_type, fundamentals_cache)
+                cached_data = self._get_cached_fundamentals(normalized_symbol, data_type, fundamentals_cache, max_age_days=max_age_days)
                 if cached_data:
                     return cached_data
 
@@ -1489,7 +1489,9 @@ class DataManager:
             if not provider_data:
                 _logger.error("No fundamentals data available for %s from any provider", normalized_symbol)
                 # Try to return cached data as fallback
-                cached_fallback = fundamentals_cache.find_latest_json(normalized_symbol, data_type=data_type)
+                # Try to return cached data as fallback (ignore TTL if we are in fallback mode?)
+                # Actually let's use the provided max_age_days if any
+                cached_fallback = fundamentals_cache.find_latest_json(normalized_symbol, data_type=data_type, max_age_days=max_age_days)
                 if cached_fallback:
                     _logger.info("Returning stale cached data as fallback for %s", normalized_symbol)
                     return fundamentals_cache.read_json(cached_fallback.file_path) or {}
@@ -1543,7 +1545,7 @@ class DataManager:
 
         return symbol_mappings.get(normalized, normalized)
 
-    def _get_cached_fundamentals(self, symbol: str, data_type: str, fundamentals_cache) -> Optional[Dict[str, Any]]:
+    def _get_cached_fundamentals(self, symbol: str, data_type: str, fundamentals_cache, max_age_days: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
         Get cached fundamentals data with data-type specific TTL validation.
 
@@ -1556,9 +1558,9 @@ class DataManager:
             Cached data if valid, None otherwise
         """
         try:
-            cached_metadata = fundamentals_cache.find_latest_json(symbol, data_type=data_type)
+            cached_metadata = fundamentals_cache.find_latest_json(symbol, data_type=data_type, max_age_days=max_age_days)
             if not cached_metadata:
-                _logger.debug("No cached data found for %s %s", symbol, data_type)
+                _logger.debug("No cached data found for %s %s (max_age=%s)", symbol, data_type, max_age_days)
                 return None
 
             # Load cached data

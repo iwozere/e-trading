@@ -83,7 +83,7 @@ class EMPS3PipelineConfig:
 
     # Cache parameters
     fundamental_cache_enabled: bool = True
-    fundamental_cache_ttl_days: int = 7
+    fundamental_cache_ttl_days: int = 14
     checkpoint_enabled: bool = True
     checkpoint_interval: int = 100
 

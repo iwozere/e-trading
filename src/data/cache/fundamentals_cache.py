@@ -9,7 +9,7 @@ Cache Structure:
 - Example: c:/data-cache/fundamentals/AAPL/yfinance_20250106_143022.json
 
 Features:
-- Configurable TTL based on data type (profiles: 14d, ratios: 3d, statements: 90d)
+- Configurable TTL based on data type (profiles: 14d, ratios: 14d, statements: 90d)
 - Multi-provider support
 - Automatic stale data cleanup
 - Provider priority-based data combination
@@ -74,7 +74,7 @@ class FundamentalsCache:
         _logger.info("Fundamentals cache initialized at %s", self.fundamentals_dir)
 
     def find_latest_json(self, symbol: str, provider: Optional[str] = None,
-                        data_type: str = "general") -> Optional[CacheMetadata]:
+                        data_type: str = "general", max_age_days: Optional[int] = None) -> Optional[CacheMetadata]:
         """
         Find the most recent cached fundamentals data for a symbol.
 
@@ -121,8 +121,8 @@ class FundamentalsCache:
 
                 # Check if this is the latest
                 if latest_timestamp is None or timestamp > latest_timestamp:
-                    # Check if cache is still valid with data-type specific TTL
-                    if self.is_cache_valid(timestamp, data_type=data_type):
+                    # Check if cache is still valid with data-type specific TTL (or override)
+                    if self.is_cache_valid(timestamp, max_age_days=max_age_days, data_type=data_type):
                         latest_timestamp = timestamp
                         latest_metadata = CacheMetadata(
                             provider=provider_name,
