@@ -19,15 +19,14 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
-from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.data_manager import DataManager
-from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig
-from src.ml.pipeline.p06_emps2.universe_downloader import NasdaqUniverseDownloader
-from src.ml.pipeline.p06_emps2.fundamental_filter import FundamentalFilter
-from src.ml.pipeline.p06_emps2.volatility_filter import VolatilityFilter
+from .config import EMPS2PipelineConfig
+from src.ml.pipeline.shared.universe_downloader import NasdaqUniverseDownloader
+from src.ml.pipeline.shared.fundamental_filter import FundamentalFilter
+from src.ml.pipeline.shared.volatility_filter import VolatilityFilter
+from src.ml.pipeline.shared.sentiment_filter import SentimentFilter
+from src.ml.pipeline.shared.trf_downloader import download_trf
 from src.ml.pipeline.p06_emps2.rolling_memory import RollingMemoryScanner
-from src.ml.pipeline.p06_emps2.sentiment_filter import SentimentFilter
 from src.ml.pipeline.p06_emps2.alerts import EMPS2AlertSender
 from src.ml.pipeline.p06_emps2.uoa_analyzer import UOAAnalyzer
 
@@ -95,7 +94,6 @@ class EMPS2Pipeline:
             checkpoint_interval=self.config.checkpoint_interval
         )
 
-        self.data_manager = DataManager()
         self.volatility_filter = VolatilityFilter(
             self.data_manager,
             self.config.filter_config,
@@ -116,8 +114,11 @@ class EMPS2Pipeline:
         # Sentiment filter
         self.sentiment_filter = SentimentFilter(
             self.config.sentiment_config,
+            results_dir=self._results_dir,
             target_date=target_date
         ) if self.config.sentiment_config.enabled else None
+
+        self._output_files = {}  # Initialize to avoid AttributeError in alerts stage
 
         _logger.info("EMPS2 Pipeline initialized (target_date: %s, results: %s)",
                     self.target_date, self._results_dir)
@@ -146,9 +147,11 @@ class EMPS2Pipeline:
         )
         file_handler.setFormatter(formatter)
 
-        # Add handler to root logger so all modules log to this file
-        root_logger = logging.getLogger()
-        root_logger.addHandler(file_handler)
+        # Add handler to the pipeline's own logger instead of root
+        # This prevents polluting other modules while still capturing pipeline activity
+        self._pipeline_logger = logging.getLogger("src.ml.pipeline") # Parent of p06 and p10
+        self._pipeline_logger.addHandler(file_handler)
+        self._pipeline_logger.setLevel(logging.DEBUG)
 
         # Store handler reference for cleanup
         self._pipeline_log_handler = file_handler
@@ -163,8 +166,7 @@ class EMPS2Pipeline:
         logs from subsequent scans being written to this scan's log file.
         """
         if hasattr(self, '_pipeline_log_handler'):
-            root_logger = logging.getLogger()
-            root_logger.removeHandler(self._pipeline_log_handler)
+            self._pipeline_logger.removeHandler(self._pipeline_log_handler)
             self._pipeline_log_handler.close()
             _logger.debug("Per-scan logging handler cleaned up")
 
@@ -300,70 +302,19 @@ class EMPS2Pipeline:
     def _stage2b_download_trf_data(self) -> None:
         """
         Stage 2b: Download TRF data for volume correction.
-
-        Downloads FINRA TRF data for yesterday to provide dark pool volume
-        corrections for the volatility filter stage.
-
-        Smart behavior:
-        - Checks if TRF file already exists in today's results folder
-        - If exists: Uses existing data (no re-download)
-        - If missing: Downloads from FINRA API
-        - This allows daily pipeline runs to accumulate historical TRF data
-          without redundant downloads
+        Uses shared utility to maintain a central TRF data repository.
         """
         _logger.info("-"*70)
         _logger.info("Stage 2b: TRF Data Acquisition")
         _logger.info("-"*70)
 
         try:
-            from src.data.downloader.finra_data_downloader import FinraDataDownloader
-            from datetime import timedelta
-
-            # TRF data should match our target_date (already yesterday)
-            trf_dir = self._results_dir  # Use same directory as pipeline target
-            trf_file = trf_dir / "trf.csv"
-
-            if trf_file.exists():
-                _logger.info("TRF data already exists for %s: %s", self.target_date, trf_file)
-
-                # Validate the existing file
-                try:
-                    import pandas as pd
-                    trf_df = pd.read_csv(trf_file)
-
-                    if trf_df.empty:
-                        _logger.warning("Existing TRF file is empty, will re-download")
-                        trf_file.unlink()  # Delete empty file
-                    else:
-                        ticker_count = len(trf_df["ticker"].unique())
-                        _logger.info("Using existing TRF data: %d tickers", ticker_count)
-                        _logger.info("Stage 2b complete: Using cached TRF data")
-                        return
-
-                except Exception as e:
-                    _logger.warning("Failed to read existing TRF file: %s, will re-download", str(e))
-                    trf_file.unlink()  # Delete corrupted file
-
-            # TRF file doesn't exist or was invalid, download it
-            _logger.info("Downloading TRF data for %s", self.target_date)
-
-            downloader = FinraDataDownloader(
-                date=self.target_date,
-                output_dir=str(trf_dir),  # Save in target date's directory
-                output_filename="trf.csv",
-                fetch_yfinance_data=True  # Include yfinance validation
-            )
-
-            result_df = downloader.run()
-
-            if result_df.empty:
-                _logger.warning("No TRF data downloaded for %s (market may be closed)", self.target_date)
-                _logger.info("Stage 2b complete: No TRF data available")
-            else:
-                ticker_count = len(result_df["ticker"].unique())
-                _logger.info("Successfully downloaded TRF data for %s: %d tickers",
-                           self.target_date, ticker_count)
-                _logger.info("Stage 2b complete: TRF data ready for volume correction")
+            # Convert target_date string to datetime
+            target_dt = datetime.strptime(self.target_date, '%Y-%m-%d')
+            
+            # Use shared utility which handles pathing (results/trf_data/...)
+            trf_file = download_trf(target_date=target_dt)
+            _logger.info("TRF acquisition complete: %s", trf_file)
 
         except Exception:
             _logger.exception("Error in TRF data acquisition:")
@@ -383,16 +334,8 @@ class EMPS2Pipeline:
         _logger.info("Stage 3: Applying Volatility Filters")
         _logger.info("-"*70)
 
-        # Apply volatility filter (saves to 04_volatility_filtered.csv)
-        filtered_tickers = self.volatility_filter.apply_filters(tickers)
-
-        # Read back the saved CSV to get the full DataFrame with metrics
-        volatility_csv = self._results_dir / "05_volatility_filtered.csv"
-        if volatility_csv.exists():
-            filtered_df = pd.read_csv(volatility_csv)
-        else:
-            # Fallback: create simple DataFrame from tickers
-            filtered_df = pd.DataFrame({'ticker': filtered_tickers})
+        # Apply volatility filter (now returns DataFrame directly)
+        filtered_df = self.volatility_filter.apply_filters(tickers)
 
         _logger.info("Stage 3 complete: %d tickers", len(filtered_df))
         return filtered_df
@@ -460,107 +403,27 @@ class EMPS2Pipeline:
 
         return phase1_df, phase2_df
 
-    def _stage7_sentiment_data_collection(self, phase2_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Stage 7: Sentiment Data Collection.
-
-        Collects sentiment data for all Phase 2 candidates without filtering.
-        Saves social momentum metrics to separate file: 10_sentiments.csv
-
-        Args:
-            phase2_df: Phase 2 alerts DataFrame
-
-        Returns:
-            DataFrame with sentiment metrics for all tickers
-        """
+    def _stage5_uoa_analysis(self) -> None:
+        """Stage 5: Perform UOA analysis on rolling candidates"""
         _logger.info("-"*70)
-        _logger.info("Stage 7: Sentiment Data Collection")
+        _logger.info("Stage 5: UOA Analysis")
         _logger.info("-"*70)
 
-        # Check if sentiment is enabled
-        if not self.config.sentiment_config.enabled:
-            _logger.info("Sentiment data collection is disabled in config")
-            return pd.DataFrame()
-
-        if phase2_df.empty:
-            _logger.info("No Phase 2 candidates to collect sentiment data for")
-            return pd.DataFrame()
-
-        # Extract tickers from Phase 2
-        tickers = phase2_df['ticker'].tolist()
-        _logger.info("Collecting sentiment data for %d Phase 2 candidates", len(tickers))
-
-        try:
-            # Create a new SentimentFilter instance with minimal filtering
-            from src.ml.pipeline.p06_emps2.sentiment_filter import SentimentFilter
-            from src.ml.pipeline.p06_emps2.config import SentimentFilterConfig
-
-            # Configure to collect all data without filtering
-            config = SentimentFilterConfig(
-                min_mentions_24h=0,      # No minimum mentions
-                min_sentiment_score=-1.0,  # Include all sentiment scores
-                max_bot_pct=1.0,         # Include all bot percentages
-                min_virality_index=0.0,   # No minimum virality
-                min_unique_authors=0,     # No minimum authors
-                enabled=True
-            )
-
-            # Initialize a temporary sentiment filter with the permissive config
-            sentiment_filter = SentimentFilter(config)
-
-            # Apply the filter to collect data (won't filter anything out with these settings)
-            sentiment_df = sentiment_filter.apply_filters(tickers)
-
-            _logger.info("Collected sentiment data for %d/%d tickers", len(sentiment_df), len(tickers))
-
-            # Save sentiment data to separate file
-            if not sentiment_df.empty:
-                sentiment_output_path = self._results_dir / "10_sentiments.csv"
-                sentiment_df.to_csv(sentiment_output_path, index=False)
-                self._sentiment_csv_path = sentiment_output_path
-                _logger.info("Saved sentiment data to: %s (%d tickers)", sentiment_output_path, len(sentiment_df))
-            else:
-                self._sentiment_csv_path = None
-                _logger.warning("No sentiment data collected to save")
-
-            return sentiment_df
-
-        except Exception as e:
-            _logger.exception("Error collecting sentiment data:")
-            return pd.DataFrame()
-
-
-    def _stage8_send_alerts(self, phase1_df: pd.DataFrame, phase2_df: pd.DataFrame) -> None:
-        """
-        Stage 8: Send alerts with all collected data (including sentiment).
-        """
-        if not self.alert_sender:
+        if not self.config.enable_uoa_analysis:
+            _logger.info("UOA analysis is disabled in config")
             return
 
-        _logger.info("-" * 70)
-        _logger.info("Stage 8: Sending Alerts")
-        _logger.info("-" * 70)
+        try:
+            uoa_analyzer = UOAAnalyzer(self._results_dir.parent)
+            uoa_file = uoa_analyzer.run()
 
-        # Send Phase 2 alerts (with sentiment CSV)
-        if not phase2_df.empty and self.config.rolling_memory_config.alert_on_phase2:
-            sentiment_path = getattr(self, "_sentiment_csv_path", None)
-            phase2_path = self._output_files.get("phase2_alerts")
+            if uoa_file and uoa_file.exists():
+                _logger.info("UOA analysis complete. Results saved to: %s", uoa_file)
+            else:
+                _logger.warning("No UOA data was generated")
 
-            self.alert_sender.send_phase2_alert(
-                phase2_df=phase2_df,
-                phase2_csv_path=phase2_path,
-                sentiment_csv_path=sentiment_path,
-            )
-
-        # Send Phase 1 alerts
-        if not phase1_df.empty and self.config.rolling_memory_config.alert_on_phase1:
-            phase1_path = self._output_files.get("phase1_watchlist")
-            self.alert_sender.send_phase1_alert(
-                phase1_df=phase1_df,
-                phase1_csv_path=phase1_path,
-            )
-
-        _logger.info("Stage 8 complete: Alerts sent")
+        except Exception as e:
+            _logger.exception("UOA analysis failed")
 
     def _stage6_create_final_results(
         self,
@@ -617,27 +480,90 @@ class EMPS2Pipeline:
         _logger.info("Stage 6 complete: %d tickers in final universe", len(final_df))
         return final_df
 
-    def _stage5_uoa_analysis(self) -> None:
-        """Stage 5: Perform UOA analysis on rolling candidates"""
+    def _stage7_sentiment_data_collection(self, phase2_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Stage 7: Sentiment Data Collection.
+
+        Collects sentiment data for all Phase 2 candidates without filtering.
+        Saves social momentum metrics to separate file: 10_sentiments.csv
+
+        Args:
+            phase2_df: Phase 2 alerts DataFrame
+
+        Returns:
+            DataFrame with sentiment metrics for all tickers
+        """
         _logger.info("-"*70)
-        _logger.info("Stage 5: UOA Analysis")
+        _logger.info("Stage 7: Sentiment Data Collection")
         _logger.info("-"*70)
 
-        if not self.config.enable_uoa_analysis:
-            _logger.info("UOA analysis is disabled in config")
-            return
+        # Check if sentiment is enabled
+        if not self.config.sentiment_config.enabled:
+            _logger.info("Sentiment data collection is disabled in config")
+            return pd.DataFrame()
+
+        if phase2_df.empty:
+            _logger.info("No Phase 2 candidates to collect sentiment data for")
+            return pd.DataFrame()
+
+        # Extract tickers from Phase 2
+        tickers = phase2_df['ticker'].tolist()
+        _logger.info("Collecting sentiment data for %d Phase 2 candidates", len(tickers))
 
         try:
-            uoa_analyzer = UOAAnalyzer(self._results_dir.parent)
-            uoa_file = uoa_analyzer.run()
+            # Call injected sentiment filter
+            sentiment_df = self.sentiment_filter.apply_filters(tickers)
 
-            if uoa_file and uoa_file.exists():
-                _logger.info("UOA analysis complete. Results saved to: %s", uoa_file)
+            _logger.info("Collected sentiment data for %d/%d tickers", len(sentiment_df), len(tickers))
+
+            # Save sentiment data to separate file
+            if not sentiment_df.empty:
+                sentiment_output_path = self._results_dir / "10_sentiments.csv"
+                sentiment_df.to_csv(sentiment_output_path, index=False)
+                self._sentiment_csv_path = sentiment_output_path
+                _logger.info("Saved sentiment data to: %s (%d tickers)", sentiment_output_path, len(sentiment_df))
             else:
-                _logger.warning("No UOA data was generated")
+                self._sentiment_csv_path = None
+                _logger.warning("No sentiment data collected to save")
+
+            return sentiment_df
 
         except Exception as e:
-            _logger.exception("UOA analysis failed")
+            _logger.exception("Error collecting sentiment data:")
+            return pd.DataFrame()
+
+
+    def _stage8_send_alerts(self, phase1_df: pd.DataFrame, phase2_df: pd.DataFrame) -> None:
+        """
+        Stage 8: Send alerts with all collected data (including sentiment).
+        """
+        if not self.alert_sender:
+            return
+
+        _logger.info("-" * 70)
+        _logger.info("Stage 8: Sending Alerts")
+        _logger.info("-" * 70)
+
+        # Send Phase 2 alerts (with sentiment CSV)
+        if not phase2_df.empty and self.config.rolling_memory_config.alert_on_phase2:
+            sentiment_path = getattr(self, "_sentiment_csv_path", None)
+            phase2_path = self._output_files.get("phase2_alerts")
+
+            self.alert_sender.send_phase2_alert(
+                phase2_df=phase2_df,
+                phase2_csv_path=phase2_path,
+                sentiment_csv_path=sentiment_path,
+            )
+
+        # Send Phase 1 alerts
+        if not phase1_df.empty and self.config.rolling_memory_config.alert_on_phase1:
+            phase1_path = self._output_files.get("phase1_watchlist")
+            self.alert_sender.send_phase1_alert(
+                phase1_df=phase1_df,
+                phase1_csv_path=phase1_path,
+            )
+
+        _logger.info("Stage 8 complete: Alerts sent")
 
     def _generate_summary(
         self,

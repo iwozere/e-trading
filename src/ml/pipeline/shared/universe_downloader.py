@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.ml.pipeline.p06_emps2.config import EMPS2UniverseConfig
+from .config import UniverseConfig
 
 _logger = setup_logger(__name__)
 
@@ -32,27 +32,29 @@ class NasdaqUniverseDownloader:
     Fetches from:
     - NASDAQ listed stocks
     - NYSE, AMEX, and other exchange listings
-
-    Results are cached in results/emps2/YYYY-MM-DD/ folder.
     """
 
-    def __init__(self, config: Optional[EMPS2UniverseConfig] = None, target_date: Optional[str] = None):
+    def __init__(self, config: Optional[UniverseConfig] = None, results_dir: Optional[Path] = None, target_date: Optional[str] = None):
         """
         Initialize NASDAQ universe downloader.
 
         Args:
             config: Optional universe configuration (uses defaults if None)
+            results_dir: Optional results directory.
             target_date: Target date for results folder (YYYY-MM-DD)
         """
-        self.config = config or EMPS2UniverseConfig()
+        self.config = config or UniverseConfig()
 
-        # Cache in results folder with target date (defaults to yesterday)
+        # Cache in results folder with target date
         if target_date is None:
             from datetime import timedelta
-            yesterday = datetime.now() - timedelta(days=1)
-            target_date = yesterday.strftime('%Y-%m-%d')
+            target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
-        self._cache_dir = Path("results") / "emps2" / target_date
+        if results_dir:
+            self._cache_dir = results_dir
+        else:
+            self._cache_dir = Path("results") / "shared" / target_date
+            
         self._cache_dir.mkdir(parents=True, exist_ok=True)
 
         _logger.info("NASDAQ Universe Downloader initialized (cache: %s)", self._cache_dir)
@@ -307,16 +309,8 @@ class NasdaqUniverseDownloader:
             _logger.exception("Error clearing cache:")
 
 
-def create_universe_downloader(config: Optional[EMPS2UniverseConfig] = None,
-                              target_date: Optional[str] = None) -> NasdaqUniverseDownloader:
-    """
-    Factory function to create NASDAQ universe downloader.
-
-    Args:
-        config: Optional universe configuration
-        target_date: Optional target date (YYYY-MM-DD)
-
-    Returns:
-        NasdaqUniverseDownloader instance
-    """
-    return NasdaqUniverseDownloader(config, target_date)
+def create_universe_downloader(config: Optional[UniverseConfig] = None,
+                               results_dir: Optional[Path] = None,
+                               target_date: Optional[str] = None) -> NasdaqUniverseDownloader:
+    """Factory function."""
+    return NasdaqUniverseDownloader(config, results_dir, target_date)

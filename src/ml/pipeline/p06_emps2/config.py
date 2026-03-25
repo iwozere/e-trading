@@ -7,10 +7,14 @@ Configuration dataclasses for the EMPS2 (Enhanced Explosive Move Pre-Screener) p
 from dataclasses import dataclass
 from typing import List, Optional
 
-# ... (rest of imports)
+from src.ml.pipeline.shared.config import (
+    FundamentalFilterConfig, 
+    SentimentFilterConfig as SharedSentimentConfig, 
+    UniverseConfig as SharedUniverseConfig
+)
 
 @dataclass
-class EMPS2FilterConfig:
+class EMPS2FilterConfig(FundamentalFilterConfig):
     """
     Configuration for Stage 2 & 3 filters.
 
@@ -43,7 +47,7 @@ class EMPS2FilterConfig:
 
 
 @dataclass
-class EMPS2UniverseConfig:
+class EMPS2UniverseConfig(SharedUniverseConfig):
     """
     Configuration for universe downloading.
 
@@ -98,7 +102,7 @@ class RollingMemoryConfig:
 
 
 @dataclass
-class SentimentFilterConfig:
+class SentimentFilterConfig(SharedSentimentConfig):
     """
     Sentiment filtering parameters.
 

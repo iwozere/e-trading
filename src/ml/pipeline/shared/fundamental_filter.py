@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.notification.logger import setup_logger
 from src.data.data_manager import DataManager
-from src.ml.pipeline.p06_emps2.config import EMPS2FilterConfig
+from .config import FundamentalFilterConfig
 
 _logger = setup_logger(__name__)
 
@@ -36,7 +36,7 @@ class FundamentalFilter:
 
     def __init__(self,
                  data_manager: DataManager,
-                 config: EMPS2FilterConfig,
+                 config: FundamentalFilterConfig,
                  results_dir: Path,
                  checkpoint_enabled: bool = True,
                  checkpoint_interval: int = 100):
@@ -292,7 +292,7 @@ class FundamentalFilter:
 
 def create_fundamental_filter(
     data_manager: DataManager,
-    config: EMPS2FilterConfig,
+    config: FundamentalFilterConfig,
     results_dir: Path
 ) -> FundamentalFilter:
     """Factory function to create fundamental filter."""

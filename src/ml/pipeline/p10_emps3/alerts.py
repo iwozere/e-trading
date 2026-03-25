@@ -54,23 +54,25 @@ See attached CSV."""
             attachments[csv_path.name] = str(csv_path)
 
         try:
-            asyncio.run(self._send_async_notification(title, message, attachments, ['telegram']))
-            asyncio.run(self._send_async_notification(title, message, attachments, ['email']))
+            # Send to both channels in one run
+            asyncio.run(self._send_notifications(title, message, attachments))
             _logger.info("Sent Phase 1.5 alerts for %d candidates", count)
         except Exception:
             _logger.exception("Failed to send Phase 1.5 alerts")
 
-    async def _send_async_notification(self, title: str, message: str, attachments: dict, channels: list):
+    async def _send_notifications(self, title: str, message: str, attachments: dict):
         try:
-            await self.client.send_notification(
-                notification_type="alert",
-                title=title,
-                message=message,
-                priority="high",
-                channels=channels,
-                recipient_id=self.user_id,
-                attachments=attachments or None,
-                source="emps3_pipeline"
-            )
+            # Map channels and send
+            for channel in ['telegram', 'email']:
+                await self.client.send_notification(
+                    notification_type="alert",
+                    title=title,
+                    message=message,
+                    priority="high",
+                    channels=[channel],
+                    recipient_id=self.user_id,
+                    attachments=attachments or None,
+                    source="emps3_pipeline"
+                )
         finally:
             await self.client.close()

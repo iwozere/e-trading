@@ -13,7 +13,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p06_emps2.sentiment_filter import SentimentFilter, SentimentFilterConfig
+from src.ml.pipeline.shared.sentiment_filter import SentimentFilter, SentimentFilterConfig
 
 
 def test_sentiment_single_ticker():

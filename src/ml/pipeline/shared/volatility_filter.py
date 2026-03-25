@@ -24,8 +24,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 from src.data.data_manager import DataManager
-from src.ml.pipeline.p06_emps2.config import EMPS2FilterConfig
-from src.ml.pipeline.p06_emps2.trf_downloader import get_trf_correction_factor
+from .config import VolatilityFilterConfig
+from .trf_downloader import get_trf_correction_factor
 
 _logger = setup_logger(__name__)
 
@@ -42,13 +42,14 @@ class VolatilityFilter:
     Filters for stocks showing early volatility expansion.
     """
 
-    def __init__(self, data_manager: DataManager, config: EMPS2FilterConfig, target_date: Optional[str] = None):
+    def __init__(self, data_manager: DataManager, config: VolatilityFilterConfig, results_dir: Optional[Path] = None, target_date: Optional[str] = None):
         """
         Initialize volatility filter.
 
         Args:
             data_manager: DataManager instance for cached batch downloading
             config: Filter configuration
+            results_dir: Optional directory to save results.
             target_date: Target trading date (YYYY-MM-DD). Defaults to today.
         """
         self.data_manager = data_manager
@@ -59,8 +60,11 @@ class VolatilityFilter:
             target_date = datetime.now().strftime('%Y-%m-%d')
         self.target_date = target_date
 
-        # Results directory (dated)
-        self._results_dir = Path("results") / "emps2" / target_date
+        if results_dir:
+            self._results_dir = results_dir
+        else:
+            self._results_dir = Path("results") / "shared" / target_date
+            
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         _logger.info("Volatility Filter initialized: ATR/Price>%.1f%%, range>%.1f%%, lookback=%dd, vol_zscore>%.1f, vol_rv_ratio>%.1f",
@@ -70,7 +74,7 @@ class VolatilityFilter:
                     config.min_vol_zscore,
                     config.min_vol_rv_ratio)
 
-    def apply_filters(self, tickers: List[str]) -> List[str]:
+    def apply_filters(self, tickers: List[str]) -> pd.DataFrame:
         """
         Apply volatility filters to ticker list.
 
@@ -78,7 +82,7 @@ class VolatilityFilter:
             tickers: List of ticker symbols
 
         Returns:
-            List of tickers passing volatility filters
+            DataFrame with passed tickers and their metrics
         """
         try:
             _logger.info("Applying volatility filters to %d tickers", len(tickers))
@@ -252,7 +256,8 @@ class VolatilityFilter:
             # Save results (passing tickers only)
             self._save_results(results_data)
 
-            return passed_tickers
+            # Return the DataFrame of results
+            return pd.DataFrame(results_data)
 
         except Exception:
             _logger.exception("Error applying volatility filters:")
@@ -802,7 +807,7 @@ class VolatilityFilter:
 
 def create_volatility_filter(
     data_manager: DataManager,
-    config: EMPS2FilterConfig
+    config: VolatilityFilterConfig
 ) -> VolatilityFilter:
     """
     Factory function to create volatility filter.

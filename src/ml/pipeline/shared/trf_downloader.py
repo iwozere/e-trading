@@ -51,7 +51,8 @@ def download_trf(target_date: Optional[datetime] = None, force_download: bool = 
         trf_date = target_date
 
     date_str = trf_date.strftime('%Y-%m-%d')
-    trf_dir = Path("results") / "emps2" / date_str
+    # Default to a shared location if no parent context
+    trf_dir = Path("results") / "trf_data" / date_str
     output_file = trf_dir / "trf.csv"
 
     # Check if file already exists
@@ -90,7 +91,19 @@ def get_trf_correction_factor(ticker: str, date: datetime) -> float:
         Correction factor (1.0 if no data available)
     """
     date_str = date.strftime('%Y-%m-%d')
-    trf_file = Path("results") / "emps2" / date_str / "trf.csv"
+    # Check multiple possible locations (shared or pipeline specific)
+    possible_paths = [
+        Path("results") / "trf_data" / date_str / "trf.csv",
+        Path("results") / "p06_emps2" / date_str / "trf.csv",
+        Path("results") / "p10_emps3" / date_str / "trf.csv",
+        Path("results") / "emps2" / date_str / "trf.csv" # Legacy
+    ]
+    
+    trf_file = possible_paths[0] # Default for download
+    for p in possible_paths:
+        if p.exists():
+            trf_file = p
+            break
 
     # If file doesn't exist, try to download it
     if not trf_file.exists():
@@ -105,7 +118,12 @@ def get_trf_correction_factor(ticker: str, date: datetime) -> float:
     while not trf_file.exists() and max_days_back > 0:
         current_date = current_date - timedelta(days=1)
         date_str = current_date.strftime('%Y-%m-%d')
-        trf_file = Path("results") / "emps2" / date_str / "trf.csv"
+        # Check all possible paths for previous day too
+        for p_base in ["trf_data", "p06_emps2", "p10_emps3", "emps2"]:
+            p = Path("results") / p_base / date_str / "trf.csv"
+            if p.exists():
+                trf_file = p
+                break
         max_days_back -= 1
 
     # If we found a file, read it and get the correction factor

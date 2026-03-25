@@ -25,7 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.ml.pipeline.p06_emps2.config import SentimentFilterConfig
+from .config import SentimentFilterConfig
 
 _logger = setup_logger(__name__)
 
@@ -42,23 +42,26 @@ class SentimentFilter:
     Filters for stocks with genuine social momentum and positive sentiment.
     """
 
-    def __init__(self, config: SentimentFilterConfig, target_date: Optional[str] = None):
+    def __init__(self, config: SentimentFilterConfig, results_dir: Optional[Path] = None, target_date: Optional[str] = None):
         """
         Initialize sentiment filter.
 
         Args:
-            config: Sentiment filter configuration
-            target_date: Target date for results folder (YYYY-MM-DD)
+            config: Filter configuration
+            results_dir: Optional directory to save results. If None, uses default.
+            target_date: Target trading date (YYYY-MM-DD). Defaults to today.
         """
         self.config = config
-
-        # Results directory (dated for target trading day)
+        
         if target_date is None:
-            from datetime import timedelta
-            yesterday = datetime.now() - timedelta(days=1)
-            target_date = yesterday.strftime('%Y-%m-%d')
+            target_date = datetime.now().strftime('%Y-%m-%d')
+        self.target_date = target_date
 
-        self._results_dir = Path("results") / "emps2" / target_date
+        if results_dir:
+            self._results_dir = results_dir
+        else:
+            self._results_dir = Path("results") / "p06_emps2" / target_date
+            
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         # Try to import sentiment collection (graceful degradation)

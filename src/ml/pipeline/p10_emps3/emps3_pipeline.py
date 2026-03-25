@@ -23,12 +23,13 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.data.downloader.finnhub_data_downloader import FinnhubDataDownloader
 from src.data.data_manager import DataManager
 from src.ml.pipeline.p10_emps3.config import EMPS3PipelineConfig
-from src.ml.pipeline.p06_emps2.universe_downloader import NasdaqUniverseDownloader
-from src.ml.pipeline.p06_emps2.fundamental_filter import FundamentalFilter
+from src.ml.pipeline.shared.universe_downloader import NasdaqUniverseDownloader
+from src.ml.pipeline.shared.fundamental_filter import FundamentalFilter
 from src.ml.pipeline.p10_emps3.accumulation_analyzer import AccumulationAnalyzer
 from src.ml.pipeline.p10_emps3.rolling_memory import EMPS3RollingMemoryScanner
 from src.ml.pipeline.p10_emps3.alerts import EMPS3AlertSender
-from src.ml.pipeline.p06_emps2.sentiment_filter import SentimentFilter
+from src.ml.pipeline.shared.sentiment_filter import SentimentFilter
+from src.ml.pipeline.shared.trf_downloader import download_trf
 
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
@@ -67,6 +68,7 @@ class EMPS3Pipeline:
         self.accumulation_analyzer = AccumulationAnalyzer(
             self.data_manager,
             self.config.filter_config,
+            results_dir=self._results_dir,
             target_date=target_date
         )
 
@@ -79,10 +81,9 @@ class EMPS3Pipeline:
 
         self.sentiment_filter = SentimentFilter(
             self.config.sentiment_config,
-            target_date=target_date
+            target_date=target_date,
+            results_dir=self._results_dir  # Passing it at construction (SentimentFilter needs update)
         )
-        # Override results directory so sentiment output goes to the p10_emps3 folder
-        self.sentiment_filter._results_dir = self._results_dir
 
         self.alert_sender = EMPS3AlertSender(user_id=self.config.user_id) if self.config.rolling_memory_config.send_alerts else None
 
@@ -95,14 +96,17 @@ class EMPS3Pipeline:
         file_handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s")
         file_handler.setFormatter(formatter)
-        root_logger = logging.getLogger()
-        root_logger.addHandler(file_handler)
+        
+        # Use module-specific logger to avoid root logger pollution
+        self._pipeline_logger = logging.getLogger("src.ml.pipeline")
+        self._pipeline_logger.addHandler(file_handler)
+        self._pipeline_logger.setLevel(logging.DEBUG)
+        
         self._pipeline_log_handler = file_handler
 
     def _cleanup_pipeline_logging(self) -> None:
         if hasattr(self, '_pipeline_log_handler'):
-            root_logger = logging.getLogger()
-            root_logger.removeHandler(self._pipeline_log_handler)
+            self._pipeline_logger.removeHandler(self._pipeline_log_handler)
             self._pipeline_log_handler.close()
 
     def run(self, force_refresh: bool = False, tickers: Optional[List[str]] = None) -> pd.DataFrame:
@@ -131,13 +135,7 @@ class EMPS3Pipeline:
             self._stage2b_download_trf_data()
 
             # Stage 3: Accumulation Analysis (Coiled Spring effect)
-            accum_tickers = self.accumulation_analyzer.apply_filters(fundamental_df['ticker'].tolist())
-
-            accumulation_csv = self._results_dir / "07_prebreakout_watchlist.csv"
-            if accumulation_csv.exists():
-                accum_df = pd.read_csv(accumulation_csv)
-            else:
-                accum_df = pd.DataFrame({'ticker': accum_tickers})
+            accum_df = self.accumulation_analyzer.apply_filters(fundamental_df['ticker'].tolist())
             
             # Stage 4: Sentiment Filter (Final filtering step before alerts/memory)
             # Fetch sentiment only for the highly filtered accum_tickers (expected ~10)
@@ -183,21 +181,22 @@ class EMPS3Pipeline:
             self._cleanup_pipeline_logging()
 
     def _stage2b_download_trf_data(self) -> None:
+        """
+        Stage 2b: Download TRF data for volume correction.
+        Uses shared utility for consistent data storage.
+        """
+        _logger.info("-"*70)
+        _logger.info("Stage 2b: TRF Data Acquisition")
+        _logger.info("-"*70)
+
         try:
-            from src.data.downloader.finra_data_downloader import FinraDataDownloader
-            trf_file = self._results_dir / "trf.csv"
+            # Convert target_date string to datetime
+            target_dt = datetime.strptime(self.target_date, '%Y-%m-%d')
+            
+            # Use shared utility
+            trf_file = download_trf(target_date=target_dt)
+            _logger.info("TRF acquisition complete: %s", trf_file)
 
-            if trf_file.exists():
-                _logger.info("TRF data exists.")
-                return
-
-            _logger.info("Downloading TRF data for %s", self.target_date)
-            downloader = FinraDataDownloader(
-                date=self.target_date,
-                output_dir=str(self._results_dir),
-                output_filename="trf.csv",
-                fetch_yfinance_data=True
-            )
-            downloader.run()
         except Exception:
             _logger.exception("Error in TRF data acquisition:")
+            _logger.warning("Continuing without TRF volume corrections")

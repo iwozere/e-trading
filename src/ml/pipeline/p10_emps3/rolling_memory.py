@@ -103,7 +103,7 @@ class EMPS3RollingMemoryScanner:
             atr_slope, _ = np.polyfit(x, atr_ratios, 1) if len(x) > 1 else (0, 0)
             vol_slope, _ = np.polyfit(x, vol_zscores, 1) if len(x) > 1 else (0, 0)
             
-            if atr_slope < 0 and vol_slope > 0:
+            if atr_slope < self.config.max_atr_slope and vol_slope > self.config.min_vol_slope:
                 # Meets trending criteria
                 candidate = {
                     'ticker': ticker,

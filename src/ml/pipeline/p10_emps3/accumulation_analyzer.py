@@ -21,7 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 from src.data.data_manager import DataManager
 from src.ml.pipeline.p10_emps3.config import EMPS3FilterConfig
-from src.ml.pipeline.p06_emps2.trf_downloader import get_trf_correction_factor
+from src.ml.pipeline.shared.trf_downloader import download_trf, get_trf_correction_factor
 
 _logger = setup_logger(__name__)
 
@@ -32,7 +32,7 @@ class AccumulationAnalyzer:
     High volume buying hidden by low price volatility.
     """
 
-    def __init__(self, data_manager: DataManager, config: EMPS3FilterConfig, target_date: Optional[str] = None):
+    def __init__(self, data_manager: DataManager, config: EMPS3FilterConfig, results_dir: Path, target_date: Optional[str] = None):
         self.data_manager = data_manager
         self.config = config
         
@@ -40,13 +40,13 @@ class AccumulationAnalyzer:
             target_date = datetime.now().strftime('%Y-%m-%d')
         self.target_date = target_date
 
-        self._results_dir = Path("results") / "p10_emps3" / target_date
+        self._results_dir = results_dir
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
         _logger.info("Accumulation Analyzer initialized: AR>%.1f, Vol Z-Score>%.1f",
                      config.min_vol_rv_ratio, config.min_vol_zscore)
 
-    def apply_filters(self, tickers: List[str]) -> List[str]:
+    def apply_filters(self, tickers: List[str]) -> pd.DataFrame:
         try:
             _logger.info("Applying Accumulation Analyzer to %d tickers", len(tickers))
 
@@ -71,7 +71,8 @@ class AccumulationAnalyzer:
             start_date_daily = end_date - timedelta(days=365)
             ohlcv_daily = self.data_manager.get_ohlcv_batch(tickers, "1d", start_date_daily, end_date)
             
-            trf_corrections = self._load_trf_volume_corrections()
+            # target_date for TRF is usually yesterday
+            trf_date = dt.strptime(self.target_date, '%Y-%m-%d')
             
             passed_tickers = []
             results_data = []
@@ -91,8 +92,8 @@ class AccumulationAnalyzer:
                         diagnostic_data.append({'ticker': ticker, 'status': 'FAILED', 'reason': 'insufficient_bars'})
                         continue
 
-                    if ticker in trf_corrections:
-                        trf_factor = trf_corrections[ticker]
+                    trf_factor = get_trf_correction_factor(ticker, trf_date)
+                    if trf_factor != 1.0:
                         df_intra = self._apply_trf_volume_correction(df_intra, trf_factor)
                         df_daily = self._apply_trf_volume_correction(df_daily, trf_factor)
                     else:
@@ -122,7 +123,8 @@ class AccumulationAnalyzer:
             self._save_diagnostics(diagnostic_data)
             self._save_results(results_data)
 
-            return passed_tickers
+            # Return the DataFrame of results
+            return pd.DataFrame(results_data)
 
         except Exception:
             _logger.exception("Error applying accumulation filters:")
@@ -285,8 +287,8 @@ class AccumulationAnalyzer:
         if not results_data: return
         df = pd.DataFrame(results_data)
         out = self._results_dir / "07_prebreakout_watchlist.csv"
-        # Only output tickers with high score or simply all that passed the hard filters.
-        # Requirements: "Any ticker with score > 70 must be dispatched to 07_prebreakout_watchlist.csv"
-        filtered_df = df[df.get('prebreakout_score', 0) > 70]
-        filtered_df.to_csv(out, index=False)
-        _logger.info("Saved high priority watchlist to %s", out)
+        # Save full results - don't silently drop rows here
+        df.to_csv(out, index=False)
+        
+        high_priority_count = len(df[df.get('prebreakout_score', 0) > 70])
+        _logger.info("Saved %d candidates to %s (%d high priority)", len(df), out, high_priority_count)
