@@ -924,14 +924,13 @@ class DataManager:
                   start_date: datetime, end_date: datetime,
                   force_refresh: bool = False) -> pd.DataFrame:
         """
-        Retrieve historical OHLCV data with caching and provider selection.
+        Retrieve historical OHLCV data with caching, gap detection, and provider selection.
 
         This method implements the main data retrieval flow:
-        1. Check cache for existing data
-        2. If cache miss or force_refresh, select best provider
-        3. Download data from provider with rate limiting
-        4. Validate and cache the data
-        5. Return combined data
+        1. Load whatever cache exists for the requested range
+        2. Detect prefix, suffix, and intermediate gaps
+        3. Fetch only the missing segments from providers
+        4. Cache new data (merge-safe) and return the combined result
 
         Args:
             symbol: Trading symbol (e.g., 'BTCUSDT', 'AAPL')
@@ -956,86 +955,108 @@ class DataManager:
 
         _logger.info("Requesting data for %s %s from %s to %s", symbol, timeframe, start_date, end_date)
 
-        # Check cache first (unless force refresh)
+        # --- Step 1: Load cache and detect gaps ---
+        missing_segments = []  # list of (start, end) tuples
+        cached_data = None
+
         if not force_refresh:
-            cached_data = self._get_cached_data(symbol, timeframe, start_date, end_date)
-            if cached_data is not None and not cached_data.empty:
-                _logger.info("Cache hit for %s %s", symbol, timeframe)
-                return cached_data
+            cached_data = self.cache.get(symbol, timeframe, start_date, end_date)
 
-        # Cache miss or force refresh - get from provider
-        _logger.info("Cache miss for %s %s, fetching from provider", symbol, timeframe)
+        if force_refresh or cached_data is None or cached_data.empty:
+            # No cache at all — fetch the entire range
+            missing_segments.append((start_date, end_date))
+            cached_data = None
+        else:
+            # Cache exists — detect gaps
+            bar_duration = self._get_bar_duration(timeframe)
+            tolerance_factor = 4.0 if timeframe == '1d' else 1.5
 
-        # Get providers with failover support
+            cache_start = cached_data.index[0]
+            cache_end = cached_data.index[-1]
+
+            # Make timezone-aware for comparison
+            safe_start = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
+            safe_end = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
+            if cache_start.tzinfo is None:
+                cache_start = cache_start.replace(tzinfo=timezone.utc)
+            if cache_end.tzinfo is None:
+                cache_end = cache_end.replace(tzinfo=timezone.utc)
+
+            # Prefix gap
+            if (cache_start - safe_start) > (bar_duration * tolerance_factor):
+                missing_segments.append((safe_start, cache_start - bar_duration))
+                _logger.info("Gap detected: PREFIX for %s (%s to %s)", symbol, safe_start, cache_start)
+
+            # Suffix gap (stale data)
+            if (safe_end - cache_end) > (bar_duration * tolerance_factor):
+                missing_segments.append((cache_end + bar_duration, safe_end))
+                _logger.info("Gap detected: SUFFIX for %s (%s to %s)", symbol, cache_end, safe_end)
+
+            # Intermediate gaps
+            diffs = cached_data.index.to_series().diff().dropna()
+            large_gaps = diffs[diffs > (bar_duration * tolerance_factor)]
+            for gap_end_ts, duration in large_gaps.items():
+                gap_start_ts = gap_end_ts - duration + bar_duration
+                missing_segments.append((gap_start_ts.to_pydatetime(), gap_end_ts.to_pydatetime() - bar_duration))
+                _logger.info("Gap detected: INTERMEDIATE for %s (%s to %s)", symbol, gap_start_ts, gap_end_ts)
+
+        # --- Step 2: If no gaps, return cache ---
+        if not missing_segments:
+            _logger.info("Cache hit for %s %s (no gaps): %d rows", symbol, timeframe, len(cached_data))
+            return cached_data
+
+        # --- Step 3: Fetch missing segments from providers ---
+        _logger.info("Fetching %d missing segment(s) for %s %s", len(missing_segments), symbol, timeframe)
+
         providers = self.provider_selector.get_provider_with_failover(symbol, timeframe)
         if not providers:
+            if cached_data is not None and not cached_data.empty:
+                _logger.warning("No providers available for %s, returning partial cache", symbol)
+                return cached_data
             raise RuntimeError(f"No suitable provider found for {symbol} {timeframe}")
 
-        # Try providers in order with failover
-        last_error = None
-        for provider in providers:
-            try:
-                _logger.info("Trying provider: %s", provider)
+        fetched_frames = []
+        for seg_start, seg_end in missing_segments:
+            segment_fetched = False
+            for provider in providers:
+                try:
+                    if provider in self.rate_limiters:
+                        self.rate_limiters[provider].wait_if_needed()
 
-                # Apply rate limiting
-                if provider in self.rate_limiters:
-                    self.rate_limiters[provider].wait_if_needed()
+                    downloader = self.provider_selector.downloaders[provider]
+                    data = downloader.get_ohlcv(symbol, timeframe, seg_start, seg_end)
 
-                # Get downloader
-                downloader = self.provider_selector.downloaders[provider]
+                    if data is not None and not data.empty:
+                        data_copy = self._normalize_ohlcv(data)
+                        # Cache the segment (put now merges safely)
+                        self._cache_data(data_copy, symbol, timeframe, seg_start, seg_end, provider)
+                        fetched_frames.append(data_copy)
+                        segment_fetched = True
+                        _logger.info("Filled gap for %s from %s (%s to %s, %d rows)",
+                                     symbol, provider, seg_start, seg_end, len(data_copy))
+                        break
+                    else:
+                        _logger.warning("Provider %s returned empty data for gap %s-%s", provider, seg_start, seg_end)
+                except Exception as e:
+                    _logger.warning("Provider %s failed for gap %s-%s: %s", provider, seg_start, seg_end, e)
+                    continue
 
-                # Download data
-                data = downloader.get_ohlcv(symbol, timeframe, start_date, end_date)
+            if not segment_fetched:
+                _logger.warning("Could not fill gap %s-%s for %s from any provider", seg_start, seg_end, symbol)
 
-                if data is not None and not data.empty:
-                    # Normalize schema: lowercase columns, ensure 'timestamp' column and tz-naive
-                    data_copy = data.copy()
+        # --- Step 4: Merge cache + newly fetched data ---
+        all_frames = []
+        if cached_data is not None and not cached_data.empty:
+            all_frames.append(cached_data)
+        all_frames.extend(fetched_frames)
 
-                    # If index is datetime and no 'timestamp' column, create it from index
-                    if 'timestamp' not in data_copy.columns and isinstance(data_copy.index, pd.DatetimeIndex):
-                        ts_index = data_copy.index
-                        if ts_index.tz is not None:
-                            ts_index = ts_index.tz_localize(None)
-                        data_copy.insert(0, 'timestamp', ts_index)
+        if not all_frames:
+            raise RuntimeError(f"All providers failed for {symbol} {timeframe} and no cache available.")
 
-                    # Lowercase known OHLCV columns
-                    rename_map = {c: c.lower() for c in data_copy.columns}
-                    data_copy = data_copy.rename(columns=rename_map)
-
-                    # Ensure required columns exist
-                    required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
-                    missing = [c for c in required_cols if c not in data_copy.columns]
-                    if missing:
-                        _logger.warning("Missing required columns after normalization: %s", missing)
-
-                    # Make timestamp tz-naive and set as index for downstream consumers
-                    if 'timestamp' in data_copy.columns:
-                        data_copy['timestamp'] = pd.to_datetime(data_copy['timestamp'], errors='coerce')
-                        if data_copy['timestamp'].dt.tz is not None:
-                            data_copy['timestamp'] = data_copy['timestamp'].dt.tz_localize(None)
-                        data_copy = data_copy.set_index('timestamp')
-
-                    # Validate data
-                    is_valid, errors = validate_ohlcv_data(data_copy, symbol=symbol, interval=timeframe)
-                    if not is_valid:
-                        _logger.warning("Data validation failed for %s %s: %s", symbol, timeframe, errors)
-                        # Continue with invalid data but log warning
-
-                    # Cache the data
-                    self._cache_data(data_copy, symbol, timeframe, start_date, end_date, provider)
-
-                    _logger.info("Successfully retrieved data from %s", provider)
-                    return data_copy
-                else:
-                    _logger.warning("Provider %s returned empty data", provider)
-
-            except Exception as e:
-                _logger.warning("Provider %s failed: %s", provider, e)
-                last_error = e
-                continue
-
-        # All providers failed
-        raise RuntimeError(f"All providers failed for {symbol} {timeframe}. Last error: {last_error}")
+        result = pd.concat(all_frames)
+        result = result[~result.index.duplicated(keep='last')].sort_index()
+        _logger.info("Returning %d rows for %s %s (gaps filled)", len(result), symbol, timeframe)
+        return result
 
     def get_ohlcv_batch(self, symbols: List[str], timeframe: str,
                         start_date: datetime, end_date: datetime,
@@ -1064,54 +1085,68 @@ class DataManager:
         _logger.info("Batch request for %d symbols (%s) from %s to %s", len(symbols), timeframe, start_date, end_date)
 
         # 1. Check Cache for all symbols
+        # 1. Check Cache and Identify Gaps for all symbols
         for sym in symbols:
-            if force_refresh:
-                missing_ranges[sym] = (start_date, end_date)
-                continue
-
-            # Ensure start/end are tz-aware for comparison inside Cache
-            safe_start = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
-            safe_end = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
-
-            cached_df = self._get_cached_data(sym, timeframe, safe_start, safe_end)
+            # Step A: Load whatever we have in cache for the full requested range
+            # Note: UnifiedCache.get already handles multiple years
+            cached_df = self.cache.get(sym, timeframe, start_date, end_date)
             
-            if cached_df is not None and not cached_df.empty:
-                results[sym] = cached_df
-            else:
-                raw_cache = self.cache.get(sym, timeframe, safe_start, safe_end)
+            if force_refresh or cached_df is None or cached_df.empty:
+                missing_ranges.setdefault(sym, []).append((start_date, end_date))
+                results[sym] = pd.DataFrame()
+                continue
+            
+            results[sym] = cached_df
+            
+            # Step B: Identify Prefix Gap (missing data at start)
+            cache_start = cached_df.index[0]
+            if cache_start.tzinfo is None:
+                cache_start = cache_start.replace(tzinfo=timezone.utc)
+            
+            safe_start = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
+            
+            # Tolerance: if missing more than 1.5 bars at the start
+            bar_duration = self._get_bar_duration(timeframe)
+            tolerance_factor = 4.0 if timeframe == '1d' else 1.5
+            
+            if (cache_start - safe_start) > (bar_duration * tolerance_factor):
+                missing_ranges.setdefault(sym, []).append((safe_start, cache_start - bar_duration))
+            
+            # Step C: Identify Suffix Gap (missing data at end)
+            cache_end = cached_df.index[-1]
+            if cache_end.tzinfo is None:
+                cache_end = cache_end.replace(tzinfo=timezone.utc)
+            
+            safe_end = end_date.replace(tzinfo=timezone.utc) if end_date.tzinfo is None else end_date
+            
+            if (safe_end - cache_end) > (bar_duration * tolerance_factor):
+                missing_ranges.setdefault(sym, []).append((cache_end + bar_duration, safe_end))
                 
-                if raw_cache is not None and not raw_cache.empty:
-                    latest_date = raw_cache.index[-1]
-                    if latest_date.tzinfo is None:
-                        latest_date = latest_date.replace(tzinfo=timezone.utc)
-                    
-                    delta_start = latest_date + timedelta(days=1)
-                    
-                    if delta_start > safe_end:
-                         results[sym] = raw_cache
-                    else:
-                         missing_ranges[sym] = (delta_start, safe_end)
-                         results[sym] = raw_cache
-                else:
-                    missing_ranges[sym] = (safe_start, safe_end)
-        
+            # Step D: Identify Intermediate Gaps (gaps in the middle)
+            # Use diff() to find gaps > tolerance_factor * bar_duration
+            diffs = cached_df.index.to_series().diff().dropna()
+            large_gaps = diffs[diffs > (bar_duration * tolerance_factor)]
+            for gap_end_ts, duration in large_gaps.items():
+                gap_start_ts = gap_end_ts - duration + bar_duration
+                # Groups these for later batch download
+                missing_ranges.setdefault(sym, []).append((gap_start_ts.to_pydatetime(), gap_end_ts.to_pydatetime() - bar_duration))
+
         if not missing_ranges:
             _logger.info("All %d symbols loaded from cache. No batch download required.", len(symbols))
             return results
 
-        # 2. Group missing symbols by their required start dates to optimize batching
-        # Since Yahoo natively batches best when all symbols share the same range.
+        # 2. Group missing ranges by their dates to optimize batching
         ranges_to_symbols = {}
-        for sym, (m_start, m_end) in missing_ranges.items():
-            date_key = (m_start.strftime('%Y-%m-%d'), m_end.strftime('%Y-%m-%d'))
-            ranges_to_symbols.setdefault(date_key, []).append(sym)
+        for sym, segments in missing_ranges.items():
+            for m_start, m_end in segments:
+                date_key = (m_start.strftime('%Y-%m-%d'), m_end.strftime('%Y-%m-%d'))
+                ranges_to_symbols.setdefault(date_key, []).append(sym)
 
         # 3. Download and cache deltas
         _logger.info("Fetching missing data for %d symbols across %d date ranges...", len(missing_ranges), len(ranges_to_symbols))
         
         # We explicitly use YahooDataDownloader for batching as it supports yf.download
-        from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
-        yahoo_dl = YahooDataDownloader()
+        yahoo_dl = self.provider_selector._initialize_downloader("yahoo")
 
         for (start_str, end_str), batch_symbols in ranges_to_symbols.items():
             b_start = datetime.strptime(start_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
@@ -1137,22 +1172,8 @@ class DataManager:
                     if df_data is None or df_data.empty:
                         continue
                         
-                    # Normalize columns
-                    df_copy = df_data.copy()
-                    if 'timestamp' not in df_copy.columns and isinstance(df_copy.index, pd.DatetimeIndex):
-                        ts_index = df_copy.index
-                        if ts_index.tz is not None:
-                            ts_index = ts_index.tz_localize(None)
-                        df_copy.insert(0, 'timestamp', ts_index)
-
-                    rename_map = {c: c.lower() for c in df_copy.columns}
-                    df_copy = df_copy.rename(columns=rename_map)
-
-                    if 'timestamp' in df_copy.columns:
-                        df_copy['timestamp'] = pd.to_datetime(df_copy['timestamp'], errors='coerce')
-                        if df_copy['timestamp'].dt.tz is not None:
-                            df_copy['timestamp'] = df_copy['timestamp'].dt.tz_localize(None)
-                        df_copy = df_copy.set_index('timestamp')
+                    # Normalize columns using shared helper
+                    df_copy = self._normalize_ohlcv(df_data)
 
                     # Cache the new delta segment
                     self._cache_data(df_copy, sym, timeframe, b_start, b_end, 'yahoo')
@@ -1280,6 +1301,21 @@ class DataManager:
             
         return pd.DataFrame()
 
+    def _get_bar_duration(self, timeframe: str) -> timedelta:
+        """Helper to get expected duration of one bar."""
+        bar_durations = {
+            '1m': timedelta(minutes=1),
+            '5m': timedelta(minutes=5),
+            '15m': timedelta(minutes=15),
+            '30m': timedelta(minutes=30),
+            '1h': timedelta(hours=1),
+            '4h': timedelta(hours=4),
+            '1d': timedelta(days=1),
+            '1w': timedelta(days=7),
+            '1M': timedelta(days=30),
+        }
+        return bar_durations.get(timeframe, timedelta(hours=24))
+
     def _get_cached_data(self, symbol: str, timeframe: str,
                         start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
         """
@@ -1367,6 +1403,47 @@ class DataManager:
             _logger.warning("Error retrieving cached data: %s", e)
 
         return None
+
+    def _normalize_ohlcv(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalize raw OHLCV data from any provider into a standard format.
+
+        Ensures lowercase columns, tz-naive DatetimeIndex, and validates required fields.
+        This is a shared helper used by both get_ohlcv and get_ohlcv_batch.
+
+        Args:
+            data: Raw DataFrame from a provider
+
+        Returns:
+            Normalized DataFrame with DatetimeIndex
+        """
+        data_copy = data.copy()
+
+        # If index is datetime and no 'timestamp' column, create it from index
+        if 'timestamp' not in data_copy.columns and isinstance(data_copy.index, pd.DatetimeIndex):
+            ts_index = data_copy.index
+            if ts_index.tz is not None:
+                ts_index = ts_index.tz_localize(None)
+            data_copy.insert(0, 'timestamp', ts_index)
+
+        # Lowercase all columns
+        rename_map = {c: c.lower() for c in data_copy.columns}
+        data_copy = data_copy.rename(columns=rename_map)
+
+        # Ensure required columns exist
+        required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+        missing = [c for c in required_cols if c not in data_copy.columns]
+        if missing:
+            _logger.warning("Missing required columns after normalization: %s", missing)
+
+        # Make timestamp tz-naive and set as index
+        if 'timestamp' in data_copy.columns:
+            data_copy['timestamp'] = pd.to_datetime(data_copy['timestamp'], errors='coerce')
+            if data_copy['timestamp'].dt.tz is not None:
+                data_copy['timestamp'] = data_copy['timestamp'].dt.tz_localize(None)
+            data_copy = data_copy.set_index('timestamp')
+
+        return data_copy
 
     def _cache_data(self, data: pd.DataFrame, symbol: str, timeframe: str,
                    start_date: datetime, end_date: datetime, provider: str):

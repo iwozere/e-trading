@@ -163,8 +163,15 @@ class UnifiedCache:
                 year_data = df[df.index.year == year]
 
                 if not year_data.empty:
-                    # Save compressed CSV for this year
                     data_file = self._get_data_file_path(symbol, timeframe, year, data_type)
+
+                    # Merge with existing year data to avoid overwriting
+                    existing = self._load_year_data(symbol, timeframe, year, data_type)
+                    if existing is not None and not existing.empty:
+                        year_data = pd.concat([existing, year_data])
+                        year_data = year_data[~year_data.index.duplicated(keep='last')].sort_index()
+
+                    # Save compressed CSV for this year
                     self._save_compressed_csv(year_data, data_file)
                     saved_files.append(year)
 

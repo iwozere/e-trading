@@ -89,43 +89,46 @@ class ATHPipeline:
         for date, price in prices.items():
             if price > global_ath_price:
                 # We found a NEW High that breaks the previous ATH
-                # If we had a previous ATH, record the results for that window
-                if current_ath_date is not None:
+                # Record result for previous window ONLY if we found a drawdown on a DIFFERENT day
+                # AND it must be more than 1% as requested to reduce clutter
+                if current_ath_date is not None and drawdown_min_date is not None:
                     drop_pct = round(((drawdown_min_price - current_ath_price) / current_ath_price) * 100, 2)
-                    results.append({
-                        'Ticker': ticker,
-                        'ATH_Date': current_ath_date.strftime('%Y-%m-%d'),
-                        'ATH_Price': round(float(current_ath_price), 2),
-                        'Max_Drop_Date': drawdown_min_date.strftime('%Y-%m-%d'),
-                        'Max_Drop_Price': round(float(drawdown_min_price), 2),
-                        'Drop_Percent': drop_pct,
-                        'Days_To_Drop': (drawdown_min_date - current_ath_date).days
-                    })
+                    if drop_pct < -1.0: # Restriction 1: More than 1% drop
+                        results.append({
+                            'Ticker': ticker,
+                            'ATH_Date': current_ath_date.strftime('%Y-%m-%d'),
+                            'ATH_Price': round(float(current_ath_price), 2),
+                            'Max_Drop_Date': drawdown_min_date.strftime('%Y-%m-%d'),
+                            'Max_Drop_Price': round(float(drawdown_min_price), 2),
+                            'Drop_Percent': drop_pct,
+                            'Days_To_Drop': (drawdown_min_date - current_ath_date).days
+                        })
                 
                 # Reset for the new window starting at this new ATH
                 global_ath_price = price
                 current_ath_date = date
                 current_ath_price = price
-                drawdown_min_price = price 
-                drawdown_min_date = date
+                drawdown_min_price = float('inf')
+                drawdown_min_date = None
             else:
                 # Continue monitoring drawdown in the current window
                 if price < drawdown_min_price:
                     drawdown_min_price = price
                     drawdown_min_date = date
                     
-        # Record the final ATH window if it exists
-        if current_ath_date is not None:
+        # Record the final ATH window if it exists, found on different day, and > 1% drop
+        if current_ath_date is not None and drawdown_min_date is not None:
             drop_pct = round(((drawdown_min_price - current_ath_price) / current_ath_price) * 100, 2)
-            results.append({
-                'Ticker': ticker,
-                'ATH_Date': current_ath_date.strftime('%Y-%m-%d'),
-                'ATH_Price': round(float(current_ath_price), 2),
-                'Max_Drop_Date': drawdown_min_date.strftime('%Y-%m-%d'),
-                'Max_Drop_Price': round(float(drawdown_min_price), 2),
-                'Drop_Percent': drop_pct,
-                'Days_To_Drop': (drawdown_min_date - current_ath_date).days
-            })
+            if drop_pct < -1.0: # Restriction 1: More than 1% drop
+                results.append({
+                    'Ticker': ticker,
+                    'ATH_Date': current_ath_date.strftime('%Y-%m-%d'),
+                    'ATH_Price': round(float(current_ath_price), 2),
+                    'Max_Drop_Date': drawdown_min_date.strftime('%Y-%m-%d'),
+                    'Max_Drop_Price': round(float(drawdown_min_price), 2),
+                    'Drop_Percent': drop_pct,
+                    'Days_To_Drop': (drawdown_min_date - current_ath_date).days
+                })
             
         results_df = pd.DataFrame(results)
         
@@ -144,7 +147,8 @@ class ATHPipeline:
     def _plot_results(self, ticker: str, df: pd.DataFrame, results_df: pd.DataFrame):
         """Generate and save analysis plot."""
         try:
-            plt.figure(figsize=(14, 7))
+            # Increase resolution 4x for each axis: 14*4=56, 7*4=28
+            plt.figure(figsize=(56, 28))
             plt.plot(df.index, df['close'], label='Close Price', color='royalblue', alpha=0.7)
             
             if self.config.plot_markers:
@@ -152,24 +156,27 @@ class ATHPipeline:
                 ath_dates = pd.to_datetime(results_df['ATH_Date'])
                 drop_dates = pd.to_datetime(results_df['Max_Drop_Date'])
                 
+                # Markers (triangles) kept at s=100 as requested (not scaled)
                 plt.scatter(ath_dates, results_df['ATH_Price'], 
                             marker='^', color='green', s=100, label='Sequential ATH', zorder=5)
                 plt.scatter(drop_dates, results_df['Max_Drop_Price'], 
                             marker='v', color='red', s=100, label='Max Drawdown Trough', zorder=5)
                 
-            plt.title(f"{ticker} Sequential ATH & Drawdown Analysis (10-Year View)", fontsize=14)
-            plt.xlabel("Date", fontsize=12)
-            plt.ylabel("Price (USD)", fontsize=12)
+            plt.title(f"{ticker} Sequential ATH & Drawdown Analysis (10-Year View)", fontsize=48)
+            plt.xlabel("Date", fontsize=36)
+            plt.ylabel("Price (USD)", fontsize=36)
+            plt.tick_params(axis='both', labelsize=28)
             
             if self.config.log_scale:
                 plt.yscale('log')
                 
             plt.grid(True, which="both", ls="--", alpha=0.3)
-            plt.legend(loc='best')
+            plt.legend(loc='best', fontsize=28)
             plt.tight_layout()
             
             plot_path = self.results_dir / f"{ticker}_ath_analysis.png"
-            plt.savefig(plot_path, dpi=150)
+            # Increased DPI for even better resolution (4x axes + high DPI)
+            plt.savefig(plot_path, dpi=300)
             plt.close()
             _logger.info("Saved plot for %s to %s", ticker, plot_path)
         except Exception as e:

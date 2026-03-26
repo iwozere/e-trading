@@ -119,18 +119,34 @@ class FundamentalsCache:
                 # Parse timestamp
                 timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
 
-                # Check if this is the latest
-                if latest_timestamp is None or timestamp > latest_timestamp:
-                    # Check if cache is still valid with data-type specific TTL (or override)
-                    if self.is_cache_valid(timestamp, max_age_days=max_age_days, data_type=data_type):
-                        latest_timestamp = timestamp
-                        latest_metadata = CacheMetadata(
-                            provider=provider_name,
-                            timestamp=timestamp,
-                            symbol=symbol.upper(),
-                            data_quality_score=1.0,  # Default score
-                            file_path=str(file_path)
-                        )
+                # Check if cache is still valid with data-type specific TTL
+                if not self.is_cache_valid(timestamp, max_age_days=max_age_days, data_type=data_type):
+                    continue
+
+                # Determine if this candidate is better than the current best:
+                # 1. Newer timestamp always wins
+                # 2. At same timestamp, prefer 'combined' files (they merge all providers)
+                is_better = False
+                if latest_timestamp is None:
+                    is_better = True
+                elif timestamp > latest_timestamp:
+                    is_better = True
+                elif timestamp == latest_timestamp:
+                    # Tie-break: prefer combined > individual provider
+                    current_is_combined = (latest_metadata and latest_metadata.provider == 'combined')
+                    candidate_is_combined = (provider_name == 'combined')
+                    if candidate_is_combined and not current_is_combined:
+                        is_better = True
+
+                if is_better:
+                    latest_timestamp = timestamp
+                    latest_metadata = CacheMetadata(
+                        provider=provider_name,
+                        timestamp=timestamp,
+                        symbol=symbol.upper(),
+                        data_quality_score=1.0,  # Default score
+                        file_path=str(file_path)
+                    )
 
             except (ValueError, IndexError) as e:
                 _logger.warning("Invalid cache file format: %s - %s", file_path, e)

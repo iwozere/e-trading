@@ -201,12 +201,32 @@ class FundamentalFilter:
             if not data:
                 return None
 
+            # The combined data may contain a nested 'profile' dict from FMP
+            # with additional fields not present at the top level
+            profile = data.get('profile', {}) or {}
+
             # Map DataManager fields to FundamentalFilter expected format
+            # with fallbacks from nested profile dict
+            # Use explicit None/zero checks — 0.0 from a bad provider should fall back
             market_cap = data.get('market_cap')
+            if not market_cap:  # None or 0.0
+                market_cap = profile.get('marketCap')
+
             shares = data.get('shares_outstanding')
+            if not shares:
+                shares = profile.get('sharesOutstanding')
+
             avg_vol = data.get('avg_volume')
+            if not avg_vol:
+                avg_vol = profile.get('averageVolume') or profile.get('volume')
+
             current_price = data.get('current_price')
+            if not current_price:
+                current_price = profile.get('price')
+
             sector = data.get('sector')
+            if not sector:
+                sector = profile.get('sector')
             
             # Fallbacks and calculations if some fields are missing but derivable
             if not market_cap and shares and current_price:
