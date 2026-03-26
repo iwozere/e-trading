@@ -54,7 +54,12 @@ class MessageRepository:
             IntegrityError: If message creation fails
         """
         try:
-            message = Message(**message_data)
+            # Filter message_data for valid model attributes
+            import sqlalchemy as sa
+            valid_attrs = {c.key for c in sa.inspect(Message).mapper.column_attrs}
+            filtered_data = {k: v for k, v in message_data.items() if k in valid_attrs}
+            
+            message = Message(**filtered_data)
             self.session.add(message)
             self.session.flush()  # Get the ID without committing
             _logger.info("Created message %s with type %s", message.id, message.message_type)

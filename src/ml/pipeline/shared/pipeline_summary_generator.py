@@ -40,29 +40,54 @@ class PipelineSummaryGenerator:
         # 1. Scan folders for detections
         folders = sorted([f for f in results_base_dir.iterdir() if f.is_dir() and self._is_date_folder(f.name)])
         
+        # High priority "winner" files according to pipeline logic
+        winner_filenames = [
+            "08_phase2_alerts.csv",              # p06_emps2 Phase 2 Alerts (Hot Candidates)
+            "07_phase1_5_alerts.csv",            # p10_emps3 Early Warning
+            "09_final_sentiment_watchlist.csv",  # p10_emps3 Final Results
+            "10_final_watchlist.csv"             # Potential future final list
+        ]
+
         for folder in folders:
             date_str = folder.name
-            winners_file = folder / "09_final_universe.csv"
-            raw_data_file = folder / "02_fundamental_raw_data.csv"
             
-            if not winners_file.exists() or not raw_data_file.exists():
+            # Find the first winner file that exists in this folder
+            winner_file = None
+            for fname in winner_filenames:
+                if (folder / fname).exists():
+                    winner_file = folder / fname
+                    break
+            
+            if not winner_file:
+                # If no high-priority alert/winner file exists, skip this day
+                # (e.g., p06 only reports Phase 2 alerts as "winners")
                 continue
                 
+            raw_data_file = folder / "02_fundamental_raw_data.csv"
+            
             try:
-                winners_df = pd.read_csv(winners_file)
-                raw_df = pd.read_csv(raw_data_file)
-                
+                winners_df = pd.read_csv(winner_file)
                 if winners_df.empty:
                     continue
-                    
-                # Map ticker to price
-                # Try 'current_price' first, then 'Price'
-                price_col = 'current_price' if 'current_price' in raw_df.columns else 'Price'
-                if price_col not in raw_df.columns:
-                    logger.warning(f"Price column not found in {raw_data_file}")
-                    continue
-                    
-                price_map = dict(zip(raw_df['ticker'], raw_df[price_col]))
+                
+                # Fetch detection prices from raw fundamental data if available, 
+                # or from the winner file if it has a price column
+                raw_df = pd.read_csv(raw_data_file) if raw_data_file.exists() else pd.DataFrame()
+                
+                # Create a map for prices. Priority: winners_df price cols -> raw_df price cols
+                price_map = {}
+                
+                # Try to get prices from raw data
+                if not raw_df.empty:
+                    p_col = 'current_price' if 'current_price' in raw_df.columns else 'Price'
+                    if p_col in raw_df.columns:
+                        price_map.update(dict(zip(raw_df['ticker'], raw_df[p_col])))
+                
+                # Overwrite/Add from winners_df if it has price columns (like 'last_price' or 'current_price')
+                for p_col in ['last_price', 'current_price', 'close', 'price']:
+                    if p_col in winners_df.columns:
+                        price_map.update(dict(zip(winners_df['ticker'], winners_df[p_col])))
+                        break
                 
                 for ticker in winners_df['ticker']:
                     if ticker not in all_winners:

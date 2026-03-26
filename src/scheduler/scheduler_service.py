@@ -799,7 +799,9 @@ class SchedulerService:
                     "metadata": notification_data
                 },
                 "priority": "NORMAL",
-                "source": "scheduler_data_processing"
+                "message_metadata": {
+                    "source": "scheduler_data_processing"
+                }
             }
 
             message = self.notification_db_service.create_message(message_data)
