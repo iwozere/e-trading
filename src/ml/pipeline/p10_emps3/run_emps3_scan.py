@@ -17,6 +17,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 from src.ml.pipeline.p10_emps3.config import EMPS3PipelineConfig
 from src.ml.pipeline.p10_emps3.emps3_pipeline import EMPS3Pipeline
+from src.ml.pipeline.shared.pipeline_summary_generator import PipelineSummaryGenerator
 
 _logger = setup_logger(__name__)
 
@@ -46,6 +47,14 @@ def main() -> int:
 
         print(f"Pipeline complete. Found {len(final_df)} passing candidates.")
         
+        # Generate/Update historical performance summary
+        try:
+            print("\n" + "="*70 + "\n Historical Summary \n" + "="*70)
+            summary_gen = PipelineSummaryGenerator()
+            summary_gen.generate_historical_summary(results_dir.parent)
+        except Exception as e:
+            _logger.warning(f"Failed to generate historical summary: {e}")
+
         result = {
             "success": True,
             "total_candidates": len(final_df),

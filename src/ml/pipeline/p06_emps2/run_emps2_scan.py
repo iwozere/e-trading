@@ -32,6 +32,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig, EMPS2FilterConfig
 from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
+from src.ml.pipeline.shared.pipeline_summary_generator import PipelineSummaryGenerator
 
 
 _logger = setup_logger(__name__)
@@ -380,7 +381,7 @@ def main() -> int:
 
         # Results location
         today = datetime.now().strftime('%Y-%m-%d')
-        results_dir = PROJECT_ROOT / 'results' / 'emps2' / today
+        results_dir = PROJECT_ROOT / 'results' / 'p06_emps2' / today
 
         print_header("Output Files")
         print(f"Results saved to: {results_dir}\n")
@@ -432,6 +433,14 @@ def main() -> int:
 
             result["phase1_count"] = phase1_count
             result["phase2_count"] = phase2_count
+
+        # 8. Generate/Update historical performance summary
+        try:
+            print_header("Historical Summary")
+            summary_gen = PipelineSummaryGenerator()
+            summary_gen.generate_historical_summary(results_dir.parent)
+        except Exception as e:
+            _logger.warning(f"Failed to generate historical summary: {e}")
 
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
 
