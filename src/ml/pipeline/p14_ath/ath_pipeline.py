@@ -39,33 +39,35 @@ class ATHPipeline:
         
         _logger.info("ATH Pipeline initialized (results_dir: %s)", self.results_dir)
 
-    def analyze_ticker(self, ticker: str) -> pd.DataFrame:
+    def analyze_ticker(self, ticker: str, df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
         Analyze a single ticker for sequential ATHs and drawdowns.
         
         Args:
             ticker: Stock symbol.
+            df: Optional pre-fetched OHLCV data.
             
         Returns:
             DataFrame with analysis results.
         """
         _logger.info("Analyzing ticker: %s", ticker)
         
-        # Calculate dates
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=365 * self.config.lookback_years)
-        
-        # Fetch historical data using DataManager
-        try:
-            df = self.data_manager.get_ohlcv(
-                symbol=ticker,
-                timeframe=self.config.interval,
-                start_date=start_date,
-                end_date=end_date
-            )
-        except Exception as e:
-            _logger.error("Failed to fetch data for %s: %s", ticker, e)
-            return pd.DataFrame()
+        # Fetch historical data using DataManager if not provided
+        if df is None:
+            # Calculate dates
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365 * self.config.lookback_years)
+            
+            try:
+                df = self.data_manager.get_ohlcv(
+                    symbol=ticker,
+                    timeframe=self.config.interval,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            except Exception as e:
+                _logger.error("Failed to fetch data for %s: %s", ticker, e)
+                return pd.DataFrame()
         
         if df is None or df.empty:
             _logger.warning("No data found for %s", ticker)
@@ -186,11 +188,26 @@ class ATHPipeline:
         tickers_to_process = tickers or self.config.tickers
         _logger.info("Starting ATH Pipeline run for %d tickers", len(tickers_to_process))
         
+        # Calculate dates for batch fetch
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365 * self.config.lookback_years)
+        
+        # 1. Batch fetch all data at once (optimizes for deltas and Yahoo batching)
+        _logger.info("Prefetching data for %d symbols in batch...", len(tickers_to_process))
+        all_data = self.data_manager.get_ohlcv_batch(
+            symbols=tickers_to_process,
+            timeframe=self.config.interval,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
         all_results = []
         
+        # 2. Process each ticker using prefetched data
         for ticker in tickers_to_process:
             try:
-                res = self.analyze_ticker(ticker)
+                ticker_df = all_data.get(ticker)
+                res = self.analyze_ticker(ticker, df=ticker_df)
                 if not res.empty:
                     all_results.append(res)
             except Exception as e:

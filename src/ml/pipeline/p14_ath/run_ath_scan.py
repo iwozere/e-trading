@@ -18,9 +18,12 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+# List of tickers to analyze (overrides config defaults if set)
+TICKERS = ["SPY", "VT", "ORCL", "QQQ", "IWM", "TLT", "GLD", "SLV", "VXX", "TLT", "USO", "UNG", "DXY", "BTC-USD", "ETH-USD", "XAUUSD=X", "XAGUSD=X", "XRP-USD", "LTC-USD", "BCH-USD", "ADA-USD", "XLM-USD"]
+
 def main():
     parser = argparse.ArgumentParser(description="Run Sequential ATH & Drawdown Analysis Pipeline")
-    parser.add_argument("--tickers", nargs="+", default="SPY,VT,ORCL,QQQ,IWM,TLT,GLD,SLV,VXX,TLT,USO,UNG,DXY,BTC-USD,ETH-USD,XAUUSD=X,XAGUSD=X,XRP-USD,LTC-USD,BCH-USD,ADA-USD,XLM-USD", help="List of tickers to analyze")
+    parser.add_argument("--tickers", nargs="+", help="List of tickers to analyze (space or comma separated)")
     parser.add_argument("--lookback", type=int, default=10, help="Lookback period in years (default: 10)")
     parser.add_argument("--no-plots", action="store_true", help="Disable plot generation")
 
@@ -28,8 +31,17 @@ def main():
 
     # Create configuration
     config = ATHPipelineConfig.create_default()
+    
+    if TICKERS:
+        config.tickers = TICKERS
+    
     if args.tickers:
-        config.tickers = args.tickers
+        # Handle both comma-separated and space-separated inputs
+        ticker_list = []
+        for arg in args.tickers:
+            # Each arg could be "SPY" or "SPY,VT"
+            ticker_list.extend([t.strip() for t in arg.split(',') if t.strip()])
+        config.tickers = ticker_list
     config.lookback_years = args.lookback
     if args.no_plots:
         config.generate_plots = False

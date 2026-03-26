@@ -192,6 +192,11 @@ Try to keep all __init__.py files empty for all packages unless it is absolutely
 
   * Function names: `test_<functionality>`
   * Example: `test_add_two_numbers`
+* **Temporary Test Scripts**:
+  * Create temporary test scripts for debugging, reproduction, or one-off checks in the `tests/` directory of the project root.
+  * ❌ **Do NOT** use the system `/tmp/` directory for these files.
+  * ✅ **Always** prefix temporary test scripts with `tmp_` (e.g., `tests/tmp_repro_issue.py`).
+  * These `tmp_*` files should generally not be committed to the repository.
 
 ---
 
