@@ -487,9 +487,37 @@ class IBKRBroker(BaseBroker, PaperTradingMixin):
                 if order_id in self.ibkr_orders:
                     trade = self.ibkr_orders[order_id]
 
-                    # Convert IBKR order status to our format
-                    # This would need proper mapping implementation
-                    return None  # Placeholder
+                    # Get the most recent status from the ib_insync Trade object
+                    # ib_insync automatically updates trade status in the background
+                    ib_status = trade.status
+                    
+                    status_map = {
+                        'Submitted': OrderStatus.PENDING,
+                        'PreSubmitted': OrderStatus.PENDING,
+                        'PendingSubmit': OrderStatus.PENDING,
+                        'PendingCancel': OrderStatus.PENDING,
+                        'Filled': OrderStatus.FILLED,
+                        'Cancelled': OrderStatus.CANCELLED,
+                        'Inactive': OrderStatus.REJECTED
+                    }
+                    
+                    # Create Order object
+                    order = Order(
+                        symbol=trade.contract.symbol,
+                        side=OrderSide.BUY if trade.order.action == 'BUY' else OrderSide.SELL,
+                        quantity=float(trade.order.totalQuantity),
+                        price=float(trade.order.lmtPrice) if trade.order.lmtPrice > 0 else None,
+                        order_id=order_id,
+                        status=status_map.get(ib_status, OrderStatus.PENDING)
+                    )
+                    
+                    # Add execution details
+                    order.metadata['ibkr_status'] = ib_status
+                    order.metadata['filled_quantity'] = trade.filled()
+                    order.metadata['remaining_quantity'] = trade.remaining()
+                    order.metadata['average_fill_price'] = trade.avgFillPrice()
+                    
+                    return order
                 else:
                     return None
 

@@ -41,47 +41,47 @@ class StrategyType(str, Enum):
     RSI_VOLUME_SUPERTREND = "rsi_volume_supertrend"
     BB_VOLUME_SUPERTREND = "bb_volume_supertrend"
 
+class BrokerConfig(BaseModel):
+    """Configuration for a broker."""
+    type: str = Field(..., description="Broker type (binance, ibkr, mock)")
+    trading_mode: str = Field("paper", description="Trading mode (paper, live)")
+    cash: float = Field(10000.0, description="Initial balance")
+    live_trading_confirmed: bool = Field(False, description="Explicit confirmation for live trading")
+    paper_trading_config: Dict[str, Any] = Field(default_factory=dict, description="Paper trading specific settings")
+    risk_management: Dict[str, Any] = Field(default_factory=dict, description="Broker-level risk settings")
+
+class StrategyParamsConfig(BaseModel):
+    """Configuration for strategy parameters."""
+    type: str = Field(..., description="Strategy type name")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Strategy parameters")
+
 class TradingBotConfig(BaseModel):
-    """Configuration for a trading bot."""
+    """
+    Modernized configuration for a trading bot.
+    Aligns with StrategyManager Nested structure.
+    """
     bot_id: str = Field(..., description="Unique bot identifier")
-    name: str = Field(..., description="Bot name")
-    description: Optional[str] = Field(None, description="Bot description")
-    # Trading parameters
-    symbol: str = Field(..., description="Trading symbol (e.g., 'BTCUSDT')")
-    broker_type: BrokerType = Field(..., description="Broker type")
-    data_source: DataSourceType = Field(..., description="Data source type")
-    # Risk management
-    initial_balance: float = Field(10000.0, description="Initial account balance")
-    risk_per_trade: float = Field(2.0, description="Risk per trade as percentage")
-    max_positions: int = Field(5, description="Maximum concurrent positions")
-    # Strategy parameters
-    strategy_name: str = Field(..., description="Strategy name")
-    strategy_params: Dict[str, Any] = Field(default_factory=dict, description="Strategy parameters")
-    # Data parameters
-    interval: str = Field("1h", description="Data interval (1m, 5m, 15m, 1h, 1d)")
-    lookback: int = Field(1000, description="Number of historical bars to load")
-    # Logging and notifications
-    log_level: str = Field("INFO", description="Logging level")
-    log_file: Optional[str] = Field(None, description="Log file path")
-    enable_notifications: bool = Field(True, description="Enable notifications")
+    name: str = Field("TradingBot", description="Bot name")
+    symbol: str = Field(..., description="Trading symbol")
+    
+    broker: BrokerConfig = Field(..., description="Broker configuration")
+    strategy: StrategyParamsConfig = Field(..., description="Strategy configuration")
+    
+    data: Dict[str, Any] = Field(default_factory=dict, description="Data feed configuration")
+    risk: Dict[str, Any] = Field(default_factory=dict, description="Risk management configuration")
+    notifications: Dict[str, Any] = Field(default_factory=dict, description="Notification settings")
+    logging: Dict[str, Any] = Field(default_factory=dict, description="Logging settings")
+    trading: Dict[str, Any] = Field(default_factory=dict, description="General trading settings")
+    
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
-    updated_at: datetime = Field(default_factory=datetime.now, description="Last update timestamp")
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
     @field_validator('bot_id')
     def validate_bot_id(cls, v):
         if not v or not v.strip():
             raise ValueError('Bot ID cannot be empty')
         return v.strip()
-    @field_validator('risk_per_trade')
-    def validate_risk_per_trade(cls, v):
-        if v <= 0 or v > 100:
-            raise ValueError('Risk per trade must be between 0 and 100')
-        return v
-    @field_validator('initial_balance')
-    def validate_initial_balance(cls, v):
-        if v <= 0:
-            raise ValueError('Initial balance must be positive')
-        return v
 
 class OptimizerConfig(BaseModel):
     """Configuration for strategy optimization."""

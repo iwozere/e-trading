@@ -20,6 +20,7 @@ from typing import Dict, Any, Type, Optional, List, Tuple
 from pathlib import Path
 
 from src.notification.logger import setup_logger
+from src.trading.strategy_registry import strategy_registry
 
 _logger = setup_logger(__name__)
 
@@ -138,6 +139,10 @@ class StrategyHandler:
                 module = importlib.import_module(strategy_info["module_path"])
                 strategy_class = getattr(module, strategy_info["class_name"])
                 strategy_info["class_ref"] = strategy_class
+                
+                # Register in the global registry
+                strategy_registry.register(strategy_type, strategy_class)
+                
                 _logger.debug("Loaded strategy class: %s.%s",
                              strategy_info["module_path"],
                              strategy_info["class_name"])

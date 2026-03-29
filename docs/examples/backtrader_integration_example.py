@@ -11,15 +11,49 @@ import sys
 from pathlib import Path
 
 # Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
     import backtrader as bt
 
-    # Import directly from the broker module to avoid dependency issues
-    sys.path.append(str(PROJECT_ROOT / "src" / "trading" / "broker"))
-    from base_broker import BaseBroker
+    from src.trading.broker.base_broker import BaseBroker, Portfolio
+    from src.trading.broker.backtrader_broker_bridge import wrap_broker_for_cerebro
+
+    class _ExampleBroker(BaseBroker):
+        """Concrete broker for this example (``BaseBroker`` is abstract)."""
+
+        async def connect(self) -> bool:
+            self.is_connected = True
+            return True
+
+        async def disconnect(self) -> bool:
+            self.is_connected = False
+            return True
+
+        async def place_order(self, order) -> str:
+            return order.order_id or "ex"
+
+        async def cancel_order(self, order_id: str) -> bool:
+            return True
+
+        async def get_order_status(self, order_id: str):
+            return None
+
+        async def get_positions(self):
+            return {}
+
+        async def get_portfolio(self):
+            return Portfolio(
+                total_value=float(self.paper_trading_config.initial_balance),
+                cash=float(self.paper_trading_config.initial_balance),
+                positions={},
+                unrealized_pnl=0.0,
+                realized_pnl=0.0,
+            )
+
+        async def get_account_info(self) -> dict:
+            return {}
 
     class SimpleStrategy(bt.Strategy):
         """Simple backtrader strategy using BaseBroker."""
@@ -110,7 +144,7 @@ try:
             'trading_mode': 'paper'
         }
 
-        broker = BaseBroker(broker_config)
+        broker = _ExampleBroker(broker_config)
         print("\nBroker Features:")
         print(f"- Name: {broker.get_name()}")
         print(f"- Trading Mode: {broker.get_trading_mode().value}")

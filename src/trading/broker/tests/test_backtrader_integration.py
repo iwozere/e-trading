@@ -2,7 +2,7 @@
 """
 Test module for backtrader integration with BaseBroker.
 
-This module tests the conditional inheritance mechanism and backtrader compatibility
+This module tests composition (``BacktraderBrokerBridge``) and backtrader compatibility
 of the BaseBroker class.
 """
 
@@ -24,12 +24,49 @@ from src.trading.broker.base_broker import (
     OrderSide,
     OrderType,
     OrderStatus,
-    TradingMode
+    TradingMode,
+    Portfolio,
 )
 
 
+class _TestableBroker(BaseBroker):
+    """Minimal concrete broker so tests can instantiate ``BaseBroker`` logic."""
+
+    async def connect(self) -> bool:
+        self.is_connected = True
+        return True
+
+    async def disconnect(self) -> bool:
+        self.is_connected = False
+        return True
+
+    async def place_order(self, order) -> str:
+        return order.order_id or "test-order"
+
+    async def cancel_order(self, order_id: str) -> bool:
+        return True
+
+    async def get_order_status(self, order_id: str):
+        return None
+
+    async def get_positions(self):
+        return {}
+
+    async def get_portfolio(self):
+        return Portfolio(
+            total_value=float(self.paper_trading_config.initial_balance),
+            cash=float(self.paper_trading_config.initial_balance),
+            positions={},
+            unrealized_pnl=0.0,
+            realized_pnl=0.0,
+        )
+
+    async def get_account_info(self) -> dict:
+        return {}
+
+
 class TestConditionalInheritance(unittest.TestCase):
-    """Test conditional inheritance mechanism."""
+    """Test ABC base + bridge vs Backtrader ``BrokerBase``."""
 
     def test_backtrader_availability_check(self):
         """Test backtrader availability check function."""
@@ -53,24 +90,25 @@ class TestConditionalInheritance(unittest.TestCase):
             self.assertIn("backtrader", str(context.exception).lower())
 
     def test_enhanced_broker_inheritance_with_backtrader(self):
-        """Test BaseBroker inheritance when backtrader is available."""
+        """BaseBroker is always ABC; bridge is BrokerBase when backtrader is installed."""
+        from abc import ABC
+
         config = {
             'name': 'test_broker',
             'trading_mode': 'paper'
         }
 
-        broker = BaseBroker(config)
+        broker = _TestableBroker(config)
+        self.assertTrue(isinstance(broker, ABC))
+        self.assertFalse(broker.is_backtrader_mode())
 
         if BACKTRADER_AVAILABLE:
-            # Should inherit from bt.broker.BrokerBase
             import backtrader as bt
-            self.assertTrue(isinstance(broker, bt.broker.BrokerBase))
+            from src.trading.broker.backtrader_broker_bridge import wrap_broker_for_cerebro
+
+            bridge = wrap_broker_for_cerebro(broker)
+            self.assertTrue(isinstance(bridge, bt.broker.BrokerBase))
             self.assertTrue(broker.is_backtrader_mode())
-        else:
-            # Should inherit from ABC
-            from abc import ABC
-            self.assertTrue(isinstance(broker, ABC))
-            self.assertFalse(broker.is_backtrader_mode())
 
     def test_enhanced_broker_initialization(self):
         """Test BaseBroker initialization in both modes."""
@@ -83,15 +121,14 @@ class TestConditionalInheritance(unittest.TestCase):
             }
         }
 
-        broker = BaseBroker(config)
+        broker = _TestableBroker(config)
 
         # Test common properties
         self.assertEqual(broker.get_name(), 'test_broker')
         self.assertEqual(broker.get_trading_mode(), TradingMode.PAPER)
         self.assertTrue(broker.is_paper_trading())
 
-        # Test backtrader mode detection
-        self.assertEqual(broker.is_backtrader_mode(), BACKTRADER_AVAILABLE)
+        self.assertFalse(broker.is_backtrader_mode())
 
         # Test paper trading config
         self.assertEqual(broker.paper_trading_config.initial_balance, 5000.0)
@@ -110,7 +147,8 @@ class TestBacktraderInterfaceCompatibility(unittest.TestCase):
                 'initial_balance': 10000.0
             }
         }
-        self.broker = BaseBroker(self.config)
+        self.broker = _TestableBroker(self.config)
+        self.broker.enable_backtrader_trading_mode()
 
     @unittest.skipUnless(BACKTRADER_AVAILABLE, "Backtrader not available")
     def test_backtrader_buy_method(self):
@@ -226,7 +264,7 @@ class TestBackwardCompatibility(unittest.TestCase):
             'name': 'test_broker',
             'trading_mode': 'paper'
         }
-        self.broker = BaseBroker(self.config)
+        self.broker = _TestableBroker(self.config)
 
     def test_existing_broker_methods(self):
         """Test that existing broker methods still work."""

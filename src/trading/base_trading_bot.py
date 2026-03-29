@@ -18,13 +18,16 @@ Classes:
 import asyncio
 import json
 import os
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
 from src.trading.services.trading_bot_service import trading_bot_service
+from src.trading.constants import TRADING_STATE_DIR
 from src.trading.risk.controller import RiskController
 from src.notification.service.client import NotificationServiceClient, NotificationServiceError, MessagePriority
 from src.notification.model import NotificationType, NotificationPriority
@@ -32,6 +35,38 @@ from src.trading.broker.base_broker import PositionNotificationManager
 
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
+
+from src.trading.execution_persistence import execution_persistence
+from src.trading.metrics_tracker import metrics_registry
+
+# Keys that must be redacted from notification/log messages
+_SENSITIVE_KEYS = {"key", "secret", "token", "password", "api_key", "api_secret"}
+
+
+def _sanitize_params(params: dict) -> dict:
+    """Recursively redact values whose keys match known sensitive patterns."""
+    sanitized = {}
+    for k, v in params.items():
+        if any(s in k.lower() for s in _SENSITIVE_KEYS):
+            sanitized[k] = "***REDACTED***"
+        elif isinstance(v, dict):
+            sanitized[k] = _sanitize_params(v)
+        else:
+            sanitized[k] = v
+    return sanitized
+
+
+def _run_async(coro) -> None:
+    """
+    Fire-and-forget a coroutine safely from both sync and async contexts.
+    - Inside a running event loop: schedules the coroutine as a task.
+    - Outside a running event loop: runs it in a background daemon thread.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        loop.call_soon_threadsafe(asyncio.ensure_future, coro)
+    except RuntimeError:
+        threading.Thread(target=lambda: asyncio.run(coro), daemon=True).start()
 
 
 class BaseTradingBot:
@@ -48,6 +83,7 @@ class BaseTradingBot:
         broker: Any = None,
         paper_trading: bool = True,
         bot_id: str = None,
+        trade_repository: Any = None,
     ) -> None:
         """
         Initialize the trading bot with config, strategy, broker, and mode.
@@ -66,16 +102,24 @@ class BaseTradingBot:
         self.parameters = parameters
         self.is_running = False
         self.active_positions = {}
+        self._positions_lock = threading.RLock()  # P2-4: thread-safe position access
         self.trade_history = []
         self.current_balance = self.initial_balance
         self.total_pnl = 0.0
+        self._signal_queue = []  # Thread-safe signal queue for decoupled strategies
+        self._signal_lock = threading.Lock()
         self.broker = broker
         self.paper_trading = paper_trading
 
         # Database integration
         self.bot_id = bot_id or f"bot_{uuid.uuid4().hex[:8]}"
         self.trade_type = "paper" if paper_trading else "live"
-        self.trade_repository = trading_bot_service
+        self.trade_repository = trade_repository or trading_bot_service
+
+        # P1-1: Derive absolute state file path from repo root
+        _state_dir = TRADING_STATE_DIR / str(self.bot_id)
+        _state_dir.mkdir(parents=True, exist_ok=True)
+        self.state_file = str(_state_dir / "state.json")
 
         # Enhanced notification setup using new notification service
         self.notification_client = None
@@ -197,11 +241,34 @@ class BaseTradingBot:
 
     def get_signals(self) -> List[Dict[str, Any]]:
         """
-        Get trading signals from the strategy for the current trading pair.
+        Get trading signals from both the internal strategy class and the external signal queue.
         Returns:
             List of signal dictionaries
         """
-        return self.strategy_class.get_signals(self.trading_pair)
+        combined_signals = []
+        
+        # 1. Get signals from internal strategy class (if it has get_signals method)
+        if hasattr(self.strategy_class, 'get_signals'):
+            try:
+                combined_signals.extend(self.strategy_class.get_signals(self.trading_pair))
+            except Exception:
+                _logger.exception("Error getting signals from strategy class")
+                
+        # 2. Get signals from external queue (e.g., from Backtrader)
+        with self._signal_lock:
+            if self._signal_queue:
+                combined_signals.extend(self._signal_queue)
+                self._signal_queue.clear()
+                
+        return combined_signals
+
+    def add_signal(self, signal: Dict[str, Any]) -> None:
+        """
+        Add a signal to the internal queue. Called by external signal sources.
+        """
+        with self._signal_lock:
+            self._signal_queue.append(signal)
+            _logger.debug("Added signal to bot queue: %s", signal)
 
     def process_signals(self, signals: List[Dict[str, Any]]) -> None:
         """
@@ -223,9 +290,60 @@ class BaseTradingBot:
     def execute_trade(self, trade_type: str, price: float, size: float) -> None:
         """
         Generic trade execution logic for buy/sell with database integration.
+        Runs pre-trade risk checks before placing any order.
         """
+        # P2-3: Pre-trade risk gate — block trades that breach limits
+        if trade_type == "buy" and hasattr(self, 'risk_controller') and self.risk_controller:
+            with self._positions_lock:
+                current_exposures = {
+                    pair: pos['entry_price'] * pos['size']
+                    for pair, pos in self.active_positions.items()
+                }
+            stop_loss_pct = self.config.get('stop_loss_pct', 0.02)
+            approved_size = self.risk_controller.pre_trade_checks(
+                account_equity=self.current_balance,
+                stop_loss_pct=stop_loss_pct,
+                current_exposures=current_exposures,
+            )
+            if approved_size == 0.0:
+                _logger.warning(
+                    "Risk controller blocked BUY trade for %s (balance=%.2f)",
+                    self.trading_pair, self.current_balance
+                )
+                return
+            size = min(size, approved_size)
+
         timestamp = datetime.now(timezone.utc)
         order = None
+
+        sell_position: Optional[Dict[str, Any]] = None
+        if trade_type == "sell":
+            with self._positions_lock:
+                sell_position = self.active_positions.get(self.trading_pair)
+            if sell_position is None:
+                _logger.warning("No active position found for SELL on %s", self.trading_pair)
+                return
+            if self.risk_controller:
+                with self._positions_lock:
+                    current_exposures = {
+                        pair: pos["entry_price"] * pos["size"]
+                        for pair, pos in self.active_positions.items()
+                    }
+                eff_size = min(size, sell_position["size"])
+                if not self.risk_controller.pre_exit_checks(
+                    account_equity=self.current_balance,
+                    current_exposures=current_exposures,
+                    symbol=self.trading_pair,
+                    exit_size=eff_size,
+                    exit_price=price,
+                ):
+                    _logger.warning(
+                        "Risk controller blocked SELL for %s (size=%s price=%s)",
+                        self.trading_pair,
+                        eff_size,
+                        price,
+                    )
+                    return
 
         try:
             if not self.paper_trading and self.broker:
@@ -259,19 +377,21 @@ class BaseTradingBot:
 
                 # Create trade in database
                 trade = self.trade_repository.create_trade(trade_data)
+                new_trade_id = str(trade.id) if trade else None  # P1-2: defined before use
 
-                # Update local state
-                self.active_positions[self.trading_pair] = {
-                    "entry_price": price,
-                    "size": size,
-                    "entry_time": timestamp,
-                    "trade_id": str(trade.id) if trade else None
-                }
+                # Update local state (P2-4: lock)
+                with self._positions_lock:
+                    self.active_positions[self.trading_pair] = {
+                        "entry_price": price,
+                        "size": size,
+                        "entry_time": timestamp,
+                        "trade_id": new_trade_id
+                    }
 
                 # Send both legacy and enhanced notifications
                 self.notify_trade_event("BUY", price, size, timestamp)
 
-                # Enhanced position notification
+                # Enhanced position notification (P1-3: _run_async)
                 if self.position_notification_manager:
                     position_data = {
                         'symbol': self.trading_pair,
@@ -281,109 +401,116 @@ class BaseTradingBot:
                         'timestamp': timestamp,
                         'bot_id': self.bot_id,
                         'trading_mode': 'paper' if self.paper_trading else 'live',
-                        'order_id': str(order) if order else trade_id,
+                        'order_id': str(order) if order else new_trade_id,  # P1-2: fixed
                         'strategy': self.strategy_class.__name__ if hasattr(self.strategy_class, '__name__') else 'Unknown'
                     }
-                    asyncio.run(self.position_notification_manager.notify_position_opened(position_data))
+                    _run_async(self.position_notification_manager.notify_position_opened(position_data))
 
             else:  # sell
-                if self.trading_pair in self.active_positions:
-                    position = self.active_positions[self.trading_pair]
-                    trade_id = position.get("trade_id")
+                position = sell_position
+                trade_id = position.get("trade_id")
 
-                    # Calculate PnL
-                    pnl = ((price - position["entry_price"]) / position["entry_price"]) * 100
-                    gross_pnl = (price - position["entry_price"]) * position["size"]
-                    commission = gross_pnl * 0.001  # 0.1% commission
-                    net_pnl = gross_pnl - commission
+                # Calculate PnL
+                pnl = ((price - position["entry_price"]) / position["entry_price"]) * 100
+                gross_pnl = (price - position["entry_price"]) * position["size"]
+                commission = gross_pnl * 0.001  # 0.1% commission
+                net_pnl = gross_pnl - commission
 
-                    # Update trade in database
-                    if trade_id:
-                        update_data = {
-                            'exit_time': timestamp,
-                            'sell_order_created': timestamp,
-                            'sell_order_closed': timestamp,
-                            'exit_price': price,
-                            'exit_value': price * position["size"],
-                            'commission': commission,
-                            'gross_pnl': gross_pnl,
-                            'net_pnl': net_pnl,
-                            'pnl_percentage': pnl,
-                            'exit_reason': 'signal',
-                            'status': 'closed',
-                            'extra_metadata': {
-                                'order_id': str(order) if order else None,
-                                'paper_trading': self.paper_trading
-                            }
+                # Update trade in database
+                if trade_id:
+                    update_data = {
+                        'exit_time': timestamp,
+                        'sell_order_created': timestamp,
+                        'sell_order_closed': timestamp,
+                        'exit_price': price,
+                        'exit_value': price * position["size"],
+                        'commission': commission,
+                        'gross_pnl': gross_pnl,
+                        'net_pnl': net_pnl,
+                        'pnl_percentage': pnl,
+                        'exit_reason': 'signal',
+                        'status': 'closed',
+                        'extra_metadata': {
+                            'order_id': str(order) if order else None,
+                            'paper_trading': self.paper_trading
                         }
-                        self.trade_repository.update_trade(trade_id, update_data)
-
-                    # Update local state
-                    trade_record = {
-                        "bot_id": self.bot_id,
-                        "pair": self.trading_pair,
-                        "type": "long",
-                        "entry_price": position["entry_price"],
-                        "exit_price": price,
-                        "size": position["size"],
-                        "pl": pnl,
-                        "time": timestamp.isoformat(),
                     }
-                    self.trade_history.append(trade_record)
+                    self.trade_repository.update_trade(trade_id, update_data)
 
-                    # Legacy JSON logging (for backward compatibility)
-                    self.log_trade(trade_record)
+                # Update local state (P2-4: lock)
+                trade_record = {
+                    "bot_id": self.bot_id,
+                    "pair": self.trading_pair,
+                    "type": "long",
+                    "entry_price": position["entry_price"],
+                    "exit_price": price,
+                    "size": position["size"],
+                    "pl": pnl,
+                    "time": timestamp.isoformat(),
+                }
+                self.trade_history.append(trade_record)
 
-                    # Update balance
-                    self.current_balance *= 1 + pnl / 100
-                    self.total_pnl += pnl
+                # Legacy JSON logging (for backward compatibility)
+                self.log_trade(trade_record)
 
-                    # Remove from active positions
-                    del self.active_positions[self.trading_pair]
+                # Update balance
+                self.current_balance *= 1 + pnl / 100
+                self.total_pnl += pnl
 
-                    # Send both legacy and enhanced notifications
-                    self.notify_trade_event(
-                        "SELL",
-                        price,
-                        size,
-                        timestamp,
-                        entry_price=position["entry_price"],
-                        pnl=pnl,
-                    )
+                # Update metrics registry
+                metrics_registry.record_trade(
+                    bot_id=self.bot_id,
+                    symbol=self.trading_pair,
+                    trade_pnl=net_pnl,
+                    trade_pnl_pct=pnl,
+                    current_balance=self.current_balance
+                )
 
-                    # Enhanced position notification
-                    if self.position_notification_manager:
-                        # Calculate hold duration
-                        hold_duration = "Unknown"
-                        if position.get("entry_time"):
-                            duration = timestamp - position["entry_time"]
-                            days = duration.days
-                            hours, remainder = divmod(duration.seconds, 3600)
-                            minutes, seconds = divmod(remainder, 60)
+                # Remove from active positions (P2-4: lock)
+                with self._positions_lock:
+                    self.active_positions.pop(self.trading_pair, None)
 
-                            if days > 0:
-                                hold_duration = f"{days}d {hours}h {minutes}m"
-                            elif hours > 0:
-                                hold_duration = f"{hours}h {minutes}m {seconds}s"
-                            else:
-                                hold_duration = f"{minutes}m {seconds}s"
+                # Send both legacy and enhanced notifications
+                self.notify_trade_event(
+                    "SELL",
+                    price,
+                    size,
+                    timestamp,
+                    entry_price=position["entry_price"],
+                    pnl=pnl,
+                )
 
-                        position_data = {
-                            'symbol': self.trading_pair,
-                            'side': 'SELL',
-                            'entry_price': position["entry_price"],
-                            'exit_price': price,
-                            'size': size,
-                            'pnl': gross_pnl,
-                            'pnl_percentage': pnl,
-                            'timestamp': timestamp,
-                            'bot_id': self.bot_id,
-                            'trading_mode': 'paper' if self.paper_trading else 'live',
-                            'order_id': str(order) if order else trade_id,
-                            'strategy': self.strategy_class.__name__ if hasattr(self.strategy_class, '__name__') else 'Unknown',
-                            'hold_duration': hold_duration
-                        }
-                        asyncio.run(self.position_notification_manager.notify_position_closed(position_data))
+                # Enhanced position notification (P1-3: _run_async)
+                if self.position_notification_manager:
+                    hold_duration = "Unknown"
+                    if position.get("entry_time"):
+                        duration = timestamp - position["entry_time"]
+                        days = duration.days
+                        hours, remainder = divmod(duration.seconds, 3600)
+                        minutes, seconds = divmod(remainder, 60)
+                        if days > 0:
+                            hold_duration = f"{days}d {hours}h {minutes}m"
+                        elif hours > 0:
+                            hold_duration = f"{hours}h {minutes}m {seconds}s"
+                        else:
+                            hold_duration = f"{minutes}m {seconds}s"
+
+                    position_data = {
+                        'symbol': self.trading_pair,
+                        'side': 'SELL',
+                        'entry_price': position["entry_price"],
+                        'exit_price': price,
+                        'size': size,
+                        'pnl': gross_pnl,
+                        'pnl_percentage': pnl,
+                        'timestamp': timestamp,
+                        'bot_id': self.bot_id,
+                        'trading_mode': 'paper' if self.paper_trading else 'live',
+                        'order_id': str(order) if order else trade_id,
+                        'strategy': self.strategy_class.__name__ if hasattr(self.strategy_class, '__name__') else 'Unknown',
+                        'hold_duration': hold_duration
+                    }
+                    _run_async(self.position_notification_manager.notify_position_closed(position_data))
 
         except Exception as e:
             _logger.exception("Error executing trade: %s")
@@ -391,55 +518,27 @@ class BaseTradingBot:
 
     def log_order(self, order: Any) -> None:
         """
-        Persist order details to logs/json/orders.json.
+        Persist order details to orders.json using the persistence service.
         Args:
             order: Order object or dictionary
         """
-        folder = os.path.join("logs", "json")
-        os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, "orders.json")
         try:
-            if os.path.exists(path):
-                with open(path, "r+", encoding="utf-8") as f:
-                    try:
-                        all_orders = json.load(f)
-                    except Exception:
-                        all_orders = []
-                    all_orders.append(order)
-                    f.seek(0)
-                    json.dump(all_orders, f, default=str, indent=2)
-                    f.truncate()
-            else:
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump([order], f, default=str, indent=2)
+            # Ensure it is a dict for the persistence service
+            order_data = order if isinstance(order, dict) else vars(order)
+            execution_persistence.save_order(self.bot_id, order_data)
         except Exception:
-            _logger.exception("Failed to log order: %s")
+            _logger.exception("Failed to log order for bot %s", self.bot_id)
 
     def log_trade(self, trade: Dict[str, Any]) -> None:
         """
-        Persist trade details to logs/json/trades.json.
+        Persist trade details to trades.json using the persistence service.
         Args:
             trade: Trade dictionary
         """
-        folder = os.path.join("logs", "json")
-        os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, "trades.json")
         try:
-            if os.path.exists(path):
-                with open(path, "r+", encoding="utf-8") as f:
-                    try:
-                        all_trades = json.load(f)
-                    except Exception:
-                        all_trades = []
-                    all_trades.append(trade)
-                    f.seek(0)
-                    json.dump(all_trades, f, default=str, indent=2)
-                    f.truncate()
-            else:
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump([trade], f, default=str, indent=2)
+            execution_persistence.save_trade(self.bot_id, trade)
         except Exception:
-            _logger.exception("Failed to log trade: %s")
+            _logger.exception("Failed to log trade for bot %s", self.bot_id)
 
     def save_state(self) -> None:
         """
@@ -484,6 +583,7 @@ class BaseTradingBot:
     def _load_open_positions_from_db(self) -> None:
         """
         Load open positions from database for this bot.
+        Supports both ORM model instances and plain dicts returned by the service.
         """
         try:
             open_trades = self.trade_repository.get_open_trades(
@@ -491,20 +591,35 @@ class BaseTradingBot:
                 symbol=self.trading_pair
             )
 
-            for trade in open_trades:
-                self.active_positions[trade.symbol] = {
-                    "entry_price": float(trade.entry_price) if trade.entry_price else 0.0,
-                    "size": float(trade.size) if trade.size else 0.0,
-                    "entry_time": trade.entry_time,
-                    "trade_id": str(trade.id)
-                }
+            # P1-4: Support both ORM objects (attribute access) and plain dicts
+            def _get(trade, key):
+                return getattr(trade, key, None) if hasattr(trade, key) else trade.get(key)
+
+            with self._positions_lock:
+                for trade in open_trades:
+                    symbol      = _get(trade, 'symbol')
+                    entry_price = _get(trade, 'entry_price')
+                    size        = _get(trade, 'size')
+                    entry_time  = _get(trade, 'entry_time')
+                    trade_id    = _get(trade, 'id')
+
+                    if not symbol:
+                        _logger.warning("Skipping trade with missing symbol: %s", trade)
+                        continue
+
+                    self.active_positions[symbol] = {
+                        "entry_price": float(entry_price) if entry_price else 0.0,
+                        "size":        float(size)        if size        else 0.0,
+                        "entry_time":  entry_time,
+                        "trade_id":    str(trade_id)      if trade_id   else None,
+                    }
 
             _logger.info("Loaded %d open positions from database for %s", len(open_trades), self.bot_id)
 
         except Exception:
             _logger.exception("Error loading open positions from database: %s")
-            # Fall back to empty active positions
-            self.active_positions = {}
+            with self._positions_lock:
+                self.active_positions = {}
 
     def notify_error(self, error_msg: str) -> None:
         """
@@ -526,8 +641,8 @@ class BaseTradingBot:
                 f"Please check the bot configuration and system logs."
             )
 
-            # Send to admins via notification service
-            asyncio.run(self.notification_client.send_to_admins(
+            # P1-3: fire-and-forget via _run_async
+            _run_async(self.notification_client.send_to_admins(
                 title="Trading Bot Error",
                 message=error_message,
                 priority=MessagePriority.HIGH,
@@ -582,8 +697,8 @@ class BaseTradingBot:
                 f"Time: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
             )
 
-            # Send to admins via notification service
-            asyncio.run(self.notification_client.send_to_admins(
+            # P1-3: fire-and-forget via _run_async
+            _run_async(self.notification_client.send_to_admins(
                 title=f"Trading Bot - {side}",
                 message=trade_message,
                 priority=MessagePriority.NORMAL,
@@ -609,7 +724,10 @@ class BaseTradingBot:
         """
         Generic position update logic for stop loss/take profit. Subclasses can override for custom behavior.
         """
-        for pair, position in list(self.active_positions.items()):
+        with self._positions_lock:  # P2-4: snapshot under lock to avoid mutation during iteration
+            positions_snapshot = list(self.active_positions.items())
+
+        for pair, position in positions_snapshot:
             # Assumes the strategy instance is available and has get_current_price, sl_atr_mult, tp_atr_mult
             # If running in Backtrader, you may need to adapt this for live/real-time bots
             current_price = None
@@ -654,8 +772,11 @@ class BaseTradingBot:
         except Exception:
             _logger.exception("Error updating bot status on stop: %s")
 
-        # Close all open positions
-        for pair in list(self.active_positions.keys()):
+        # Close all open positions (P2-4: snapshot under lock)
+        with self._positions_lock:
+            pairs_to_close = list(self.active_positions.keys())
+
+        for pair in pairs_to_close:
             current_price = None
             if (
                 hasattr(self, "strategy")
@@ -664,27 +785,31 @@ class BaseTradingBot:
             ):
                 current_price = self.strategy.get_current_price(pair)
             if current_price is not None:
-                self.execute_trade(
-                    "sell", current_price, self.active_positions[pair]["size"]
-                )
+                with self._positions_lock:
+                    pos_size = self.active_positions.get(pair, {}).get("size")
+                if pos_size:
+                    self.execute_trade("sell", current_price, pos_size)
 
     def log_bot_event(self, event: str):
         _logger.info("%s: %s", event, self.__class__.__name__)
         _logger.info("Trading pair: %s", self.trading_pair)
         _logger.info("Initial balance: %s", self.initial_balance)
-        _logger.info("Strategy parameters: %s", getattr(self, 'parameters', {}))
+        # P2-2: sanitize parameters before logging
+        _logger.info("Strategy parameters: %s", _sanitize_params(getattr(self, 'parameters', {})))
         _logger.info("Broker: %s", self.broker.__class__.__name__ if self.broker else 'None')
         timestamp = datetime.now(timezone.utc)
         _logger.info("Timestamp: %s", timestamp)
 
     def notify_bot_event(self, event: str, emoji: str):
+        # P2-2: sanitize parameters before including in notifications
+        safe_params = _sanitize_params(getattr(self, 'parameters', {}))
         msg = (
             f"{emoji} Bot {event.lower()}\n\n"
             f"Class: {self.__class__.__name__}\n"
             f"Pair: {self.trading_pair}\n"
             f"Initial balance: {self.initial_balance}\n"
             f"Strategy: {getattr(self, 'strategy_class', type(self.strategy_class).__name__)}\n"
-            f"Parameters: {getattr(self, 'parameters', {})}\n"
+            f"Parameters: {safe_params}\n"
             f"Broker: {self.broker.__class__.__name__ if self.broker else 'None'}"
         )
         try:
@@ -700,8 +825,8 @@ class BaseTradingBot:
             else:
                 priority = MessagePriority.NORMAL
 
-            # Send to admins via notification service
-            asyncio.run(self.notification_client.send_to_admins(
+            # P1-3: fire-and-forget via _run_async
+            _run_async(self.notification_client.send_to_admins(
                 title=f"Trading Bot - {event.title()}",
                 message=msg,
                 priority=priority,
@@ -743,9 +868,12 @@ class BaseTradingBot:
         cerebro = bt.Cerebro()
         cerebro.adddata(data_feed)
         _logger.info("Added data feed for %s", self.trading_pair)
-        cerebro.broker.setcash(self.initial_balance)
         if self.broker:
-            cerebro.setbroker(self.broker)
+            from src.trading.broker.backtrader_broker_bridge import wrap_broker_for_cerebro
+
+            cerebro.setbroker(wrap_broker_for_cerebro(self.broker))
+        else:
+            cerebro.broker.setcash(self.initial_balance)
         cerebro.addstrategy(
             getattr(self, "strategy_class"), params=getattr(self, "parameters", {})
         )

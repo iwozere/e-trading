@@ -46,6 +46,7 @@ class BaseStrategy(bt.Strategy):
         ("asset_type", "crypto"),  # Asset type: "crypto" or "stock"
         ("min_order_value", 0.0),  # Minimum order value (for stocks)
         ("on_order_executed_callback", None), # Strategy manager callback
+        ("on_signal_callback", None),          # Signal generation callback
     )
 
     def __init__(self):
@@ -529,6 +530,22 @@ class BaseStrategy(bt.Strategy):
             # Store entry reason for order logging
             self.current_entry_reason = reason
 
+            if self.p.on_signal_callback:
+                # DECOUPLED MODE: Send signal to external handler instead of placing order
+                signal = {
+                    'symbol': self.symbol,
+                    'direction': direction.lower(),
+                    'side': 'buy' if direction.lower() == 'long' else 'sell',
+                    'quantity': shares,
+                    'price': self.data.close[0],
+                    'confidence': confidence,
+                    'reason': reason,
+                    'timestamp': self.data.datetime[0]
+                }
+                self.p.on_signal_callback(signal)
+                _logger.info("SIGNAL_GENERATED - %s | %s | Reason: %s", self.symbol, direction.upper(), reason)
+                return
+
             if direction.lower() == 'long':
                 order = self.buy(size=shares)
                 if not self.optimization_mode:
@@ -622,6 +639,21 @@ class BaseStrategy(bt.Strategy):
             else:
                 current_pnl = 0.0
                 current_pnl_pct = 0.0
+
+            if self.p.on_signal_callback:
+                # DECOUPLED MODE: Send signal to external handler instead of placing order
+                signal = {
+                    'symbol': self.symbol,
+                    'direction': 'exit',
+                    'side': 'sell' if self.position.size > 0 else 'buy',
+                    'quantity': abs(self.position.size),
+                    'price': self.data.close[0],
+                    'reason': reason,
+                    'timestamp': self.data.datetime[0]
+                }
+                self.p.on_signal_callback(signal)
+                _logger.info("SIGNAL_GENERATED - %s | EXIT | Reason: %s", self.symbol, reason)
+                return
 
             self.close()
             if not self.optimization_mode:

@@ -34,8 +34,8 @@ class MockBroker(BaseBroker):
         self.orders = []
         self.positions = {}
 
-    def buy(self, symbol: str, qty: float, price: float = None) -> dict:
-        """Simulate a buy order."""
+    def simulate_market_buy(self, symbol: str, qty: float, price: float = None) -> dict:
+        """Simulate a simple buy (dict result). Does not implement Backtrader ``buy``."""
         order = {
             "type": "buy",
             "symbol": symbol,
@@ -49,8 +49,8 @@ class MockBroker(BaseBroker):
         self._notify_order(order)
         return order
 
-    def sell(self, symbol: str, qty: float, price: float = None) -> dict:
-        """Simulate a sell order."""
+    def simulate_market_sell(self, symbol: str, qty: float, price: float = None) -> dict:
+        """Simulate a simple sell (dict result). Does not implement Backtrader ``sell``."""
         order = {
             "type": "sell",
             "symbol": symbol,

@@ -28,7 +28,15 @@ import websocket
 import threading
 
 from binance.client import Client
-from binance.enums import *
+from binance.enums import (
+    ORDER_TYPE_LIMIT,
+    ORDER_TYPE_MARKET,
+    ORDER_TYPE_STOP_LOSS,
+    ORDER_TYPE_STOP_LOSS_LIMIT,
+    SIDE_BUY,
+    SIDE_SELL,
+    TIME_IN_FORCE_GTC,
+)
 from binance.exceptions import BinanceAPIException
 
 from src.trading.broker.base_broker import (
@@ -462,17 +470,50 @@ class BinanceBroker(BaseBroker, PaperTradingMixin):
                     symbol = binance_order['symbol']
                     binance_order_id = binance_order['orderId']
 
-                    response = self.client.get_order(
-                        symbol=symbol,
-                        orderId=binance_order_id
-                    )
-
-                    # Convert Binance status to our format
-                    # This would need proper mapping implementation
-                    return None  # Placeholder
+                    # Fetch live order status from Binance API
+                    try:
+                        binance_order = self.client.get_order(
+                            symbol=symbol,
+                            orderId=binance_order_id
+                        )
+                        
+                        # Map Binance status to OrderStatus
+                        status_map = {
+                            'NEW': OrderStatus.PENDING,
+                            'PARTIALLY_FILLED': OrderStatus.PARTIAL,
+                            'FILLED': OrderStatus.FILLED,
+                            'CANCELED': OrderStatus.CANCELLED,
+                            'REJECTED': OrderStatus.REJECTED,
+                            'EXPIRED': OrderStatus.REJECTED
+                        }
+                        
+                        # Create Order object
+                        order = Order(
+                            symbol=symbol,
+                            side=OrderSide.BUY if binance_order['side'] == 'BUY' else OrderSide.SELL,
+                            quantity=float(binance_order['origQty']),
+                            price=float(binance_order['price']) if float(binance_order['price']) > 0 else None,
+                            order_type=OrderType.MARKET if binance_order['type'] == 'MARKET' else OrderType.LIMIT,
+                            order_id=order_id,
+                            status=status_map.get(binance_order['status'], OrderStatus.PENDING),
+                            client_order_id=binance_order.get('clientOrderId')
+                        )
+                        
+                        # Add metadata
+                        order.metadata['binance_response'] = binance_order
+                        order.metadata['filled_quantity'] = float(binance_order['executedQty'])
+                        order.metadata['average_fill_price'] = float(binance_order['cummulativeQuoteQty']) / float(binance_order['executedQty']) if float(binance_order['executedQty']) > 0 else 0.0
+                        
+                        return order
+                        
+                    except BinanceAPIException as e:
+                        _logger.error("Binance API error getting status for %s: %s", order_id, e.message)
+                        return None
                 else:
                     return None
 
+        except NotImplementedError:
+            raise
         except Exception:
             _logger.exception("Error getting order status for %s:", order_id)
             return None

@@ -16,32 +16,21 @@ Features:
 - Multi-broker support (Binance, IBKR) with automatic credential selection
 - Risk management and position tracking
 - Database integration for trade history and analytics
-- Optional backtrader framework integration with conditional inheritance
+- Optional backtrader integration via ``BacktraderBrokerBridge`` (see ``backtrader_broker_bridge``)
 
 Classes:
-- BaseBroker: Enhanced base class for all brokers (inherits from bt.Broker or ABC)
+- BaseBroker: Enhanced base class for all brokers (always ``abc.ABC``; use ``wrap_broker_for_cerebro`` for Cerebro)
 - PaperTradingConfig: Configuration for paper trading simulation
 - ExecutionMetrics: Execution quality metrics for analysis
 - PositionNotificationManager: Notification system for position events
 
 Backtrader Integration:
-- Automatically inherits from bt.Broker when backtrader is available
-- Falls back to ABC inheritance when backtrader is not installed
-- Provides seamless integration with backtrader strategies and backtesting
+- Use ``wrap_broker_for_cerebro(core)`` which returns a ``bt.broker.BrokerBase`` adapter; do not pass ``BaseBroker`` to ``cerebro.setbroker`` directly.
 """
 
-# Conditional import for backtrader support
-try:
-    import backtrader as bt
-    BACKTRADER_AVAILABLE = True
-    # Use the correct backtrader broker base class
-    BaseBrokerClass = bt.broker.BrokerBase
-except ImportError:
-    BACKTRADER_AVAILABLE = False
-    from abc import ABC
-    BaseBrokerClass = ABC
+from abc import ABC, abstractmethod
 
-from abc import abstractmethod
+from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -667,14 +656,13 @@ class PositionNotificationManager:
             _logger.exception("Error sending notifications:")
 
 
-class BaseBroker(BaseBrokerClass):
+class BaseBroker(ABC):
     """
     Enhanced base class for all brokers with comprehensive paper trading support
     and optional backtrader integration.
 
-    Inheritance:
-    - Inherits from bt.Broker when backtrader is available (for backtrader integration)
-    - Inherits from ABC when backtrader is not available (standalone usage)
+    For ``bt.Cerebro``, wrap instances with ``wrap_broker_for_cerebro`` from
+    ``backtrader_broker_bridge`` so the engine receives a real ``BrokerBase`` subclass.
 
     Features:
     - Seamless paper/live trading mode switching via configuration
@@ -687,14 +675,9 @@ class BaseBroker(BaseBrokerClass):
     """
 
     def __init__(self, config: Dict[str, Any], notification_client=None):
-        # Initialize based on base class type
-        if BACKTRADER_AVAILABLE and isinstance(self, bt.broker.BrokerBase):
-            # We're inheriting from bt.broker.BrokerBack
-            super().__init__()
-            self._backtrader_mode = True
-        else:
-            # We're inheriting from ABC or not in backtrader context
-            self._backtrader_mode = False
+        super().__init__()
+        # Set True only by enable_backtrader_trading_mode() (used by BacktraderBrokerBridge)
+        self._backtrader_mode = False
 
         self.config = config
         self.name = config.get('name', 'unknown')
@@ -741,11 +724,6 @@ class BaseBroker(BaseBrokerClass):
             ExecutionQuality.FAIR: 0,
             ExecutionQuality.POOR: 0
         }
-
-        # Backtrader-specific state
-        if self._backtrader_mode:
-            self._bt_notification_queue: List[Order] = []
-            self._bt_processed_orders: Dict[str, Order] = {}
 
         # Paper trading state (if enabled)
         if self.paper_trading_enabled:
@@ -830,6 +808,37 @@ class BaseBroker(BaseBrokerClass):
     def is_backtrader_mode(self) -> bool:
         """Check if this broker is running in backtrader mode."""
         return self._backtrader_mode
+
+    def enable_backtrader_trading_mode(self) -> None:
+        """
+        Activate buy/sell/cancel/next adapters for Backtrader. Called by
+        ``BacktraderBrokerBridge``; do not use for standalone live brokers.
+        """
+        self._backtrader_mode = True
+        self._bt_notification_queue = []
+        self._bt_processed_orders = {}
+
+    def _bt_getcash(self) -> float:
+        """Cash for Backtrader ``getcash`` (paper portfolio or configured initial)."""
+        if self.paper_trading_enabled and self.paper_portfolio is not None:
+            return float(self.paper_portfolio.cash)
+        return float(self.paper_trading_config.initial_balance)
+
+    def _bt_getvalue(self, datas=None) -> float:
+        """Portfolio value for Backtrader ``getvalue``."""
+        if self.paper_trading_enabled and self.paper_portfolio is not None:
+            return float(self.paper_portfolio.total_value)
+        return float(self.paper_trading_config.initial_balance)
+
+    def _bt_getposition(self, data):
+        """Build a ``backtrader.position.Position`` from paper state."""
+        import backtrader as bt
+
+        symbol = getattr(data, "_name", "UNKNOWN") if data else "UNKNOWN"
+        if self.paper_trading_enabled and self.paper_portfolio and symbol in self.paper_portfolio.positions:
+            pos = self.paper_portfolio.positions[symbol]
+            return bt.position.Position(size=pos.quantity, price=pos.average_price)
+        return bt.position.Position(size=0, price=0.0)
 
     def is_paper_trading(self) -> bool:
         """Check if this is a paper trading broker."""

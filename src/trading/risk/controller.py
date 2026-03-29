@@ -49,6 +49,35 @@ class RiskController:
             return size
         return 0.0
 
+    def pre_exit_checks(
+        self,
+        account_equity: float,
+        current_exposures: Dict[str, float],
+        symbol: str,
+        exit_size: float,
+        exit_price: float,
+    ) -> bool:
+        """
+        Light-weight risk gate before closing a position (symmetric with pre-trade).
+        Blocks obvious errors (size/price), fat-finger exits vs. recorded exposure,
+        and portfolio exposure sanity checks.
+        """
+        if exit_size <= 0 or exit_price <= 0 or account_equity <= 0:
+            return False
+        sym_exp = float(current_exposures.get(symbol) or 0.0)
+        if sym_exp <= 0:
+            return False
+        notional = exit_size * exit_price
+        if notional > sym_exp * 1.01 + 1e-6:
+            return False
+        max_frac = float(self.config.get("max_single_trade_notional_fraction", 1.0))
+        if max_frac < 1.0 and notional > max_frac * account_equity + 1e-9:
+            return False
+        return exposure_limits.check_portfolio_limit(
+            current_exposures=current_exposures,
+            max_portfolio_exposure=self.config.get("max_portfolio_exposure", 1e7),
+        )
+
     # --- REAL-TIME PHASE ---
     def real_time_adjustments(
         self,

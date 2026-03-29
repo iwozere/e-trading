@@ -25,10 +25,27 @@ from src.trading.broker.binance_broker import BinanceBroker
 from src.trading.broker.ibkr_broker import IBKRBroker
 from src.trading.broker.mock_broker import MockBroker
 
-from config.donotshare.donotshare import (
-    BINANCE_KEY, BINANCE_PAPER_KEY, BINANCE_PAPER_SECRET, BINANCE_SECRET,
-    IBKR_CLIENT_ID, IBKR_HOST, IBKR_PORT, IBKR_PAPER_PORT
-)
+import os as _os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
+
+def _env(key: str, default: str = "") -> str:
+    """Read a credential from the environment (``os.environ`` / ``.env`` via ``load_dotenv``)."""
+    val = _os.getenv(key)
+    if val is not None and val.strip():
+        return val.strip()
+    return default
+
+def _get_binance_key(): return _env("BINANCE_API_KEY")
+def _get_binance_secret(): return _env("BINANCE_API_SECRET")
+def _get_binance_paper_key(): return _env("BINANCE_TESTNET_API_KEY")
+def _get_binance_paper_secret(): return _env("BINANCE_TESTNET_API_SECRET")
+def _get_ibkr_host(): return _env("IBKR_HOST", "127.0.0.1")
+def _get_ibkr_port(): return _env("IBKR_PORT", "4001")
+def _get_ibkr_paper_port(): return _env("IBKR_PAPER_PORT", "4002")
+def _get_ibkr_client_id(): return _env("IBKR_CLIENT_ID", "1")
 
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
@@ -79,7 +96,7 @@ class LiveTradingValidator:
 
         # Validate broker credentials are available
         broker_type = config.get("type", "").lower()
-        if broker_type == "binance" and (not BINANCE_KEY or not BINANCE_SECRET):
+        if broker_type == "binance" and (not _get_binance_key() or not _get_binance_secret()):
             raise BrokerConfigurationError("Live Binance trading requires valid API credentials")
         elif broker_type == "ibkr":
             # IBKR doesn't require API keys in this implementation (connected via Gateway/TWS)
@@ -171,15 +188,15 @@ def get_broker_credentials(broker_type: str, trading_mode: str) -> Dict[str, Any
     if broker_type == 'binance':
         if trading_mode == 'paper':
             credentials = {
-                'api_key': BINANCE_PAPER_KEY,
-                'api_secret': BINANCE_PAPER_SECRET,
+                'api_key': _get_binance_paper_key(),
+                'api_secret': _get_binance_paper_secret(),
                 'base_url': 'https://testnet.binance.vision',
                 'testnet': True
             }
         else:  # live
             credentials = {
-                'api_key': BINANCE_KEY,
-                'api_secret': BINANCE_SECRET,
+                'api_key': _get_binance_key(),
+                'api_secret': _get_binance_secret(),
                 'base_url': 'https://api.binance.com',
                 'testnet': False
             }
@@ -187,16 +204,16 @@ def get_broker_credentials(broker_type: str, trading_mode: str) -> Dict[str, Any
     elif broker_type == 'ibkr':
         if trading_mode == 'paper':
             credentials = {
-                'host': IBKR_HOST,
-                'port': int(IBKR_PAPER_PORT) if IBKR_PAPER_PORT else 4002,
-                'client_id': int(IBKR_CLIENT_ID) if IBKR_CLIENT_ID else 1,
+                'host': _get_ibkr_host(),
+                'port': int(_get_ibkr_paper_port()),
+                'client_id': int(_get_ibkr_client_id()),
                 'paper_trading': True
             }
         else:  # live
             credentials = {
-                'host': IBKR_HOST,
-                'port': int(IBKR_PORT) if IBKR_PORT else 4001,
-                'client_id': int(IBKR_CLIENT_ID) if IBKR_CLIENT_ID else 1,
+                'host': _get_ibkr_host(),
+                'port': int(_get_ibkr_port()),
+                'client_id': int(_get_ibkr_client_id()),
                 'paper_trading': False
             }
 
@@ -208,6 +225,11 @@ def get_broker(config: Dict[str, Any]):
     Enhanced factory function to instantiate the correct broker based on configuration.
 
     Supports seamless paper-to-live trading mode switching via configuration.
+
+    **Backtrader / Cerebro:** instances returned here subclass ``BaseBroker`` (``abc.ABC``),
+    not ``bt.broker.BrokerBase``. Pass the instance to
+    ``wrap_broker_for_cerebro(broker)`` from ``backtrader_broker_bridge``, then
+    ``cerebro.setbroker(...)``. Do not assign the raw core to ``cerebro.broker``.
 
     Args:
         config: Broker configuration dictionary with the following structure:
@@ -341,9 +363,9 @@ def list_available_brokers() -> List[Dict[str, Any]]:
         # Check if credentials are available
         credentials_available = True
         if broker_type == 'binance':
-            credentials_available = bool(BINANCE_KEY and BINANCE_SECRET and BINANCE_PAPER_KEY and BINANCE_PAPER_SECRET)
+            credentials_available = bool(_get_binance_key() and _get_binance_secret() and _get_binance_paper_key() and _get_binance_paper_secret())
         elif broker_type == 'ibkr':
-            credentials_available = bool(IBKR_HOST and IBKR_PORT and IBKR_CLIENT_ID)
+            credentials_available = bool(_get_ibkr_host() and _get_ibkr_port() and _get_ibkr_client_id())
 
         brokers.append({
             'type': broker_type,
