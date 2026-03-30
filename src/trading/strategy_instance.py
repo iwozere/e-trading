@@ -12,8 +12,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
-import backtrader as bt
-
+from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
 from src.trading.broker.broker_factory import get_broker
 from src.trading.strategy_handler import strategy_handler
 from src.data.feed.data_feed_factory import DataFeedFactory
@@ -287,6 +286,14 @@ class StrategyInstance:
     def _setup_backtrader(self, strategy_class) -> bool:
         """Setup Backtrader engine."""
         try:
+            if not BACKTRADER_AVAILABLE:
+                _logger.error(
+                    "backtrader is not installed; cannot create Cerebro for instance %s",
+                    self.name,
+                )
+                return False
+            import backtrader as bt
+
             self.cerebro = bt.Cerebro()
             self.cerebro.adddata(self.data_feed)
             

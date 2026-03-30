@@ -18,6 +18,9 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+# Minimum denominator for drawdown % vs peak (avoids div-by-zero / unstable FP when peak is ~0)
+_PEAK_DRAWDOWN_EPS = 1e-12
+
 @dataclass
 class PerformanceMetrics:
     """Dataclass for storing performance metrics for a bot."""
@@ -48,15 +51,19 @@ class PerformanceMetrics:
         self.total_pnl_pct += trade_pnl_pct
         self.current_balance = current_balance
         
-        # Update drawdown
+        # Update drawdown (guard peak_balance ~= 0)
         if self.current_balance > self.peak_balance:
             self.peak_balance = self.current_balance
             self.current_drawdown = 0.0
         else:
-            dd = (self.peak_balance - self.current_balance) / self.peak_balance * 100
-            self.current_drawdown = dd
-            if dd > self.max_drawdown:
-                self.max_drawdown = dd
+            peak = float(self.peak_balance)
+            if peak <= _PEAK_DRAWDOWN_EPS:
+                self.current_drawdown = 0.0
+            else:
+                dd = (peak - float(self.current_balance)) / peak * 100.0
+                self.current_drawdown = dd
+                if dd > self.max_drawdown:
+                    self.max_drawdown = dd
                 
         self.last_updated = datetime.now().isoformat()
 

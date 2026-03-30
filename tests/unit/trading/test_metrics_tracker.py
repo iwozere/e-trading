@@ -30,6 +30,13 @@ class TestPerformanceMetrics:
         assert metrics.win_rate == 0.0
         assert metrics.total_pnl == -50.0
 
+    def test_update_zero_peak_balance_no_division_error(self):
+        """peak_balance 0 (e.g. initial_balance 0) must not raise in update()."""
+        metrics = PerformanceMetrics(bot_id="bot_z", symbol="BTCUSDT", current_balance=0.0, peak_balance=0.0)
+        metrics.update(-10.0, 0.0, 0.0)
+        assert metrics.total_trades == 1
+        assert metrics.current_drawdown == 0.0
+
     def test_drawdown_calculation(self):
         metrics = PerformanceMetrics(bot_id="bot_1", symbol="BTCUSDT", current_balance=10000.0, peak_balance=10000.0)
         

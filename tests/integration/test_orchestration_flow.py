@@ -3,6 +3,13 @@ import asyncio
 from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime, timezone
 
+from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
+
+pytestmark = pytest.mark.skipif(
+    not BACKTRADER_AVAILABLE,
+    reason="StrategyInstance._setup_backtrader requires backtrader",
+)
+
 from src.trading.strategy_manager import StrategyManager
 from src.trading.instance_service import InstanceService
 from src.trading.strategy_instance import StrategyInstance
