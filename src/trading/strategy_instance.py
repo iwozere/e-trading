@@ -16,10 +16,11 @@ from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
 from src.trading.broker.broker_factory import get_broker
 from src.trading.strategy_handler import strategy_handler
 from src.data.feed.data_feed_factory import DataFeedFactory
-from src.trading.base_trading_bot import BaseTradingBot
+from src.trading.base_trading_bot import BaseTradingBot, _run_async
 from src.notification.logger import setup_logger
 from src.data.db.services.trading_service import trading_service
 from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
+from src.trading.trading_notification_recipient import get_trading_bot_notification_recipient
 
 _logger = setup_logger(__name__)
 
@@ -220,6 +221,7 @@ class StrategyInstance:
             'trading_pair': self.config.get('symbol', 'BTCUSDT'),
             'initial_balance': self.config['broker'].get('cash', 10000.0),
             'notifications': self.config.get('notifications', {}),
+            'user_id': self.config.get('user_id'),
             'risk_management': self.config.get('risk_management', {}),
             'logging': self.config.get('logging', {}),
             'data': self.config.get('data', {}),
@@ -241,7 +243,8 @@ class StrategyInstance:
                 broker=self.broker,
                 paper_trading=paper,
                 bot_id=str(self.instance_id),
-                trade_repository=self.trade_repository
+                trade_repository=self.trade_repository,
+                trade_notification_hook=self._schedule_user_trade_notification,
             )
             return True
         except Exception:
@@ -299,9 +302,10 @@ class StrategyInstance:
             
             strategy_params = self.config['strategy'].get('parameters', {})
             self.cerebro.addstrategy(
-                strategy_class, 
+                strategy_class,
                 strategy_config=strategy_params,
-                on_signal_callback=self.trading_bot.add_signal if self.trading_bot else None
+                on_signal_callback=self.trading_bot.add_signal if self.trading_bot else None,
+                on_order_executed_callback=self._on_bt_order_filled,
             )
 
             # Setup broker
@@ -424,23 +428,16 @@ class StrategyInstance:
 
     async def _send_error_notification(self, error_message: str, error_type: str = "ERROR"):
         """
-        Send notification for bot errors (async fire-and-forget).
+        Admins always receive bot errors. The owner receives them only when
+        ``notifications.error_notifications`` is true.
         """
         try:
             if not self.notification_client:
                 return
 
-            # Get user notification details
-            user_details = self._get_user_notification_details()
-            if not user_details:
-                return
-
-            # Check if error notifications are enabled
             notif_config = self.config.get('notifications', {})
-            if not notif_config.get('error_notifications', False):
-                return
+            notify_owner = notif_config.get('error_notifications', False)
 
-            # Format message
             symbol = self.config.get('symbol', 'UNKNOWN')
             trading_mode = self.config['broker'].get('trading_mode', 'paper')
 
@@ -449,26 +446,45 @@ class StrategyInstance:
             if trading_mode == 'paper':
                 message += " (Paper Trading)"
 
-            # Send notification (fire-and-forget)
-            await self.notification_client.send_notification(
-                notification_type=MessageType.ERROR,
-                title=title,
+            payload_data = {
+                'bot_id': self.instance_id,
+                'bot_name': self.name,
+                'symbol': symbol,
+                'error_type': error_type,
+                'error_message': error_message,
+                'trading_mode': trading_mode,
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+            }
+
+            if notify_owner:
+                user_details = self._get_user_notification_details()
+                if user_details:
+                    tg_raw = user_details.get('telegram_user_id')
+                    tg_id = None
+                    if tg_raw is not None:
+                        s = str(tg_raw).strip()
+                        tg_id = int(s) if s.isdigit() else None
+
+                    await self.notification_client.send_notification(
+                        notification_type=MessageType.ERROR,
+                        title=title,
+                        message=message,
+                        priority=MessagePriority.CRITICAL,
+                        channels=user_details['channels'],
+                        recipient_id=user_details['recipient_id'],
+                        email_receiver=user_details['email'],
+                        telegram_chat_id=tg_id,
+                        data=payload_data,
+                        source="trading_bot",
+                    )
+
+            await self.notification_client.send_to_admins(
+                title=f"{title} (admin)",
                 message=message,
+                notification_type=MessageType.ERROR,
                 priority=MessagePriority.CRITICAL,
-                channels=user_details['channels'],
-                recipient_id=user_details['recipient_id'],
-                email_receiver=user_details['email'],
-                telegram_chat_id=user_details.get('telegram_user_id'),
-                data={
-                    'bot_id': self.instance_id,
-                    'bot_name': self.name,
-                    'symbol': symbol,
-                    'error_type': error_type,
-                    'error_message': error_message,
-                    'trading_mode': trading_mode,
-                    'timestamp': datetime.now(timezone.utc).isoformat()
-                },
-                source="trading_bot"
+                data={**payload_data, 'admin_notification': True},
+                channels=["telegram", "email"],
             )
 
             _logger.info("Sent error notification for %s", self.name)
@@ -477,70 +493,38 @@ class StrategyInstance:
             _logger.exception("Error sending error notification for %s:", self.name)
 
     def _get_user_notification_details(self) -> Optional[Dict[str, Any]]:
-        """
-        Fetch user notification details from database.
-        """
+        """Resolve the sole bot owner's Telegram/email targets."""
         try:
-            # Get user_id from bot config
-            user_id = self.config.get('user_id')
-            if not user_id:
-                _logger.debug("No user_id in bot config for %s, skipping notification", self.name)
-                return None
-
-            # Check if notifications are enabled for this bot
-            notif_config = self.config.get('notifications', {})
-            if not (notif_config.get('position_opened') or notif_config.get('position_closed') or notif_config.get('error_notifications')):
-                _logger.debug("Notifications disabled for bot %s", self.name)
-                return None
-
-            # Import here to avoid circular dependencies
-            from src.data.db.services.database_service import get_database_service
-            from src.data.db.models.model_users import User, AuthIdentity
-
-            db_service = get_database_service()
-            with db_service.uow() as uow:
-                # Get user by ID
-                user = uow.s.get(User, user_id)
-                if not user:
-                    _logger.warning("User %s not found for bot %s", user_id, self.name)
-                    return None
-
-                # Get telegram identity
-                from sqlalchemy import select
-                telegram_identity = uow.s.execute(
-                    select(AuthIdentity)
-                    .where(AuthIdentity.user_id == user_id)
-                    .where(AuthIdentity.provider == 'telegram')
-                ).scalar_one_or_none()
-
-                # Determine channels to use
-                channels = []
-                if notif_config.get('email_enabled') and user.email:
-                    channels.append('email')
-                if notif_config.get('telegram_enabled') and telegram_identity:
-                    channels.append('telegram')
-
-                if not channels:
-                    _logger.debug("No notification channels enabled for bot %s", self.name)
-                    return None
-
-                return {
-                    'user_id': user_id,
-                    'email': user.email,
-                    'telegram_user_id': telegram_identity.external_id if telegram_identity else None,
-                    'recipient_id': str(user_id),
-                    'channels': channels
-                }
-
+            return get_trading_bot_notification_recipient(
+                self.config,
+                self.instance_id,
+                purpose="any",
+                log_name=self.name,
+            )
         except Exception:
             _logger.exception("Error fetching user notification details for bot %s:", self.name)
             return None
 
-    def on_order_executed(self, order):
-        """Callback for order execution from strategy."""
-        _logger.info("[%s] Order executed: %s", self.name, order)
-        # Wire up notifications here as well
-        side = "buy" if order.isbuy() else "sell"
-        # Since BT order might not have easy PnL access here without refinement,
-        # we'll use a placeholder or enhance later.
-        asyncio.create_task(self._send_trade_notification(side, order.executed.price, order.executed.size))
+    def _schedule_user_trade_notification(
+        self,
+        side: str,
+        price: float,
+        size: float,
+        pnl: Optional[float] = None,
+    ) -> None:
+        """Notify configured user channels after BaseTradingBot executes a trade."""
+        _run_async(self._send_trade_notification(side, price, size, pnl))
+
+    def _on_bt_order_filled(
+        self,
+        order_type: str,
+        price: float,
+        size: float,
+        dt=None,
+    ) -> None:
+        """Backtrader order.Completed callback (may run on the BT thread)."""
+        try:
+            side = "buy" if str(order_type).upper() == "BUY" else "sell"
+            _run_async(self._send_trade_notification(side, price, size))
+        except Exception:
+            _logger.exception("Error scheduling trade notification for %s:", self.name)

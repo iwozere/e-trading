@@ -23,13 +23,18 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 
 from src.trading.services.trading_bot_service import trading_bot_service
 from src.trading.constants import TRADING_STATE_DIR
 from src.trading.risk.controller import RiskController
-from src.notification.service.client import NotificationServiceClient, NotificationServiceError, MessagePriority
+from src.notification.service.client import (
+    NotificationServiceClient,
+    NotificationServiceError,
+    MessagePriority,
+    MessageType,
+)
 from src.notification.model import NotificationType, NotificationPriority
 from src.trading.broker.base_broker import PositionNotificationManager
 
@@ -38,6 +43,7 @@ _logger = setup_logger(__name__)
 
 from src.trading.execution_persistence import execution_persistence
 from src.trading.metrics_tracker import metrics_registry
+from src.trading.trading_notification_recipient import get_trading_bot_notification_recipient
 
 # Keys that must be redacted from notification/log messages
 _SENSITIVE_KEYS = {"key", "secret", "token", "password", "api_key", "api_secret"}
@@ -84,6 +90,7 @@ class BaseTradingBot:
         paper_trading: bool = True,
         bot_id: str = None,
         trade_repository: Any = None,
+        trade_notification_hook: Optional[Callable[[str, float, float, Optional[float]], None]] = None,
     ) -> None:
         """
         Initialize the trading bot with config, strategy, broker, and mode.
@@ -94,6 +101,8 @@ class BaseTradingBot:
             broker: Broker instance (optional)
             paper_trading: Whether to use paper trading mode
             bot_id: Bot identifier (config filename or optimization result filename)
+            trade_notification_hook: Optional callback after a successful paper/sim trade
+                ``(side: 'buy'|'sell', price, size, pnl_or_none)`` for user-targeted alerts.
         """
         self.config = config
         self.trading_pair = config.get("trading_pair", "BTCUSDT")
@@ -110,6 +119,7 @@ class BaseTradingBot:
         self._signal_lock = threading.Lock()
         self.broker = broker
         self.paper_trading = paper_trading
+        self.trade_notification_hook = trade_notification_hook
 
         # Database integration
         self.bot_id = bot_id or f"bot_{uuid.uuid4().hex[:8]}"
@@ -161,6 +171,51 @@ class BaseTradingBot:
 
         self.risk_controller = RiskController(config.get("risk", {}))
 
+    def _schedule_notification_to_owner(
+        self,
+        *,
+        purpose: str,
+        title: str,
+        message: str,
+        notification_type: MessageType,
+        priority: MessagePriority,
+        data: Optional[Dict[str, Any]] = None,
+        source: str = "trading_bot",
+    ) -> None:
+        """Queue notification to this bot's sole owner (never admins)."""
+        if not self.notification_client:
+            _logger.warning("Notification client not available")
+            return
+
+        async def _send() -> None:
+            recipient = get_trading_bot_notification_recipient(
+                self.config,
+                str(self.bot_id),
+                purpose=purpose,
+                log_name=str(self.bot_id),
+            )
+            if not recipient:
+                return
+            tg_raw = recipient.get("telegram_user_id")
+            tg_id = None
+            if tg_raw is not None:
+                s = str(tg_raw).strip()
+                tg_id = int(s) if s.isdigit() else None
+
+            await self.notification_client.send_notification(
+                notification_type=notification_type,
+                title=title,
+                message=message,
+                priority=priority,
+                data=data or {},
+                source=source,
+                channels=recipient["channels"],
+                recipient_id=recipient["recipient_id"],
+                email_receiver=recipient.get("email"),
+                telegram_chat_id=tg_id,
+            )
+
+        _run_async(_send())
 
     def _initialize_bot_instance(self):
         """Initialize bot instance in database."""
@@ -277,15 +332,26 @@ class BaseTradingBot:
             signals: List of signal dictionaries
         """
         for signal in signals:
+            side = (signal.get("type") or signal.get("side") or "").strip().lower()
+            if not side:
+                continue
+            sym = (signal.get("symbol") or signal.get("pair") or self.trading_pair)
+            if str(sym).upper() != str(self.trading_pair).upper():
+                continue
+            try:
+                price = float(signal.get("price") or 0.0)
+                size = float(signal.get("size") if signal.get("size") is not None else signal.get("quantity") or 0.0)
+            except (TypeError, ValueError):
+                continue
             if (
-                signal["type"] == "buy"
+                side == "buy"
                 and self.trading_pair not in self.active_positions
             ):
-                self.execute_trade("buy", signal["price"], signal["size"])
+                self.execute_trade("buy", price, size)
             elif (
-                signal["type"] == "sell" and self.trading_pair in self.active_positions
+                side == "sell" and self.trading_pair in self.active_positions
             ):
-                self.execute_trade("sell", signal["price"], signal["size"])
+                self.execute_trade("sell", price, size)
 
     def execute_trade(self, trade_type: str, price: float, size: float) -> None:
         """
@@ -406,6 +472,12 @@ class BaseTradingBot:
                     }
                     _run_async(self.position_notification_manager.notify_position_opened(position_data))
 
+                if self.trade_notification_hook:
+                    try:
+                        self.trade_notification_hook("buy", price, size, None)
+                    except Exception:
+                        _logger.exception("trade_notification_hook failed (buy)")
+
             else:  # sell
                 position = sell_position
                 trade_id = position.get("trade_id")
@@ -511,6 +583,12 @@ class BaseTradingBot:
                         'hold_duration': hold_duration
                     }
                     _run_async(self.position_notification_manager.notify_position_closed(position_data))
+
+                if self.trade_notification_hook:
+                    try:
+                        self.trade_notification_hook("sell", price, size, net_pnl)
+                    except Exception:
+                        _logger.exception("trade_notification_hook failed (sell)")
 
         except Exception as e:
             _logger.exception("Error executing trade: %s")
@@ -623,16 +701,12 @@ class BaseTradingBot:
 
     def notify_error(self, error_msg: str) -> None:
         """
-        Send error notification to admin users via notification service.
+        Send error notification to admin users always, and to the bot owner when
+        ``notifications.error_notifications`` is enabled.
         Args:
             error_msg: Error message string
         """
         try:
-            if not self.notification_client:
-                _logger.warning("Notification client not available for error notification")
-                return
-
-            # Create error message
             error_message = (
                 f"⚠️ Trading Bot Error\n\n"
                 f"Bot ID: {self.bot_id}\n"
@@ -641,18 +715,32 @@ class BaseTradingBot:
                 f"Please check the bot configuration and system logs."
             )
 
-            # P1-3: fire-and-forget via _run_async
-            _run_async(self.notification_client.send_to_admins(
+            err_data = {
+                "bot_id": self.bot_id,
+                "trading_pair": self.trading_pair,
+                "error_type": "trading_bot_error",
+            }
+
+            self._schedule_notification_to_owner(
+                purpose="error",
                 title="Trading Bot Error",
                 message=error_message,
+                notification_type=MessageType.ERROR,
                 priority=MessagePriority.HIGH,
-                data={
-                    "bot_id": self.bot_id,
-                    "trading_pair": self.trading_pair,
-                    "error_type": "trading_bot_error"
-                },
-                channels=["telegram", "email"]
-            ))
+                data=err_data,
+            )
+
+            if self.notification_client:
+                _run_async(
+                    self.notification_client.send_to_admins(
+                        title="Trading Bot Error (admin)",
+                        message=error_message,
+                        notification_type=MessageType.ERROR,
+                        priority=MessagePriority.HIGH,
+                        data={**err_data, "admin_notification": True},
+                        channels=["telegram", "email"],
+                    )
+                )
 
         except NotificationServiceError:
             _logger.exception("Failed to send error notification via service:")
@@ -669,21 +757,14 @@ class BaseTradingBot:
         pnl: Optional[float] = None,
     ) -> None:
         """
-        Send trade event notification to admin users via notification service.
-        Args:
-            side: 'BUY' or 'SELL'
-            price: Trade price
-            size: Trade size
-            timestamp: Trade timestamp
-            entry_price: Entry price (optional)
-            pnl: Profit/loss (optional)
+        Send trade event to this bot's owner (skipped when StrategyInstance uses
+        ``trade_notification_hook`` to avoid duplicate alerts).
         """
         try:
-            if not self.notification_client:
-                _logger.warning("Notification client not available for trade notification")
+            if self.trade_notification_hook is not None:
                 return
 
-            # Create trade message
+            purpose = "trade_buy" if side.upper() == "BUY" else "trade_sell"
             emoji = "🟢" if side == "BUY" else "🔴"
             pnl_text = f"PnL: {pnl:.2f}%" if pnl is not None else ""
 
@@ -697,10 +778,13 @@ class BaseTradingBot:
                 f"Time: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
             )
 
-            # P1-3: fire-and-forget via _run_async
-            _run_async(self.notification_client.send_to_admins(
+            msg_type = MessageType.TRADE_ENTRY if side.upper() == "BUY" else MessageType.TRADE_EXIT
+
+            self._schedule_notification_to_owner(
+                purpose=purpose,
                 title=f"Trading Bot - {side}",
                 message=trade_message,
+                notification_type=msg_type,
                 priority=MessagePriority.NORMAL,
                 data={
                     "bot_id": self.bot_id,
@@ -710,10 +794,9 @@ class BaseTradingBot:
                     "size": size,
                     "entry_price": entry_price,
                     "pnl": pnl,
-                    "timestamp": timestamp.isoformat()
+                    "timestamp": timestamp.isoformat(),
                 },
-                channels=["telegram", "email"]
-            ))
+            )
 
         except NotificationServiceError:
             _logger.exception("Failed to send trade notification via service:")
@@ -817,7 +900,6 @@ class BaseTradingBot:
                 _logger.warning("Notification client not available for bot event notification")
                 return
 
-            # Determine notification priority based on event
             if event.lower() in ["error", "failed", "stopped"]:
                 priority = MessagePriority.HIGH
             elif event.lower() in ["started", "resumed"]:
@@ -825,19 +907,20 @@ class BaseTradingBot:
             else:
                 priority = MessagePriority.NORMAL
 
-            # P1-3: fire-and-forget via _run_async
-            _run_async(self.notification_client.send_to_admins(
+            self._schedule_notification_to_owner(
+                purpose="bot_event",
                 title=f"Trading Bot - {event.title()}",
                 message=msg,
+                notification_type=MessageType.SYSTEM,
                 priority=priority,
                 data={
                     "bot_id": self.bot_id,
                     "trading_pair": self.trading_pair,
                     "event": event,
-                    "bot_class": self.__class__.__name__
+                    "bot_class": self.__class__.__name__,
                 },
-                channels=["telegram", "email"]
-            ))
+                source="trading_bot_lifecycle",
+            )
 
         except NotificationServiceError:
             _logger.exception("Failed to send bot event notification via service:")

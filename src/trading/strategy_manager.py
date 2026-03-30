@@ -121,6 +121,27 @@ class StrategyManager:
         # Crash recovery marker
         self._marker_path = PROJECT_ROOT / ".trading_service_running"
 
+    def add_instance(self, config: Dict[str, Any]) -> str:
+        """Register one hydrated strategy manifest (CLI / LiveTradingBot / Web UI)."""
+        instance_id = str(config.get("id") or config.get("bot_id") or uuid.uuid4())
+        if instance_id in self.strategy_instances:
+            self.strategy_instances[instance_id].config = config
+        else:
+            self.instance_service.create_instance(instance_id, config)
+        return instance_id
+
+    async def start_instance(self, instance_id: str) -> bool:
+        return await self.start_strategy(instance_id)
+
+    async def stop_instance(self, instance_id: str) -> bool:
+        return await self.stop_strategy(instance_id)
+
+    async def restart_instance(self, instance_id: str) -> bool:
+        return await self.restart_strategy(instance_id)
+
+    def get_instance_status(self, instance_id: str) -> Optional[Dict[str, Any]]:
+        return self.get_strategy_status(instance_id)
+
     @property
     def strategy_instances(self):
         """Maintain backward compatibility for components accessing instances directly."""

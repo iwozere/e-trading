@@ -70,6 +70,12 @@ class TelegramService(BaseDBService):
 
     @with_uow
     @handle_db_error
+    def get_admin_user_ids(self) -> List[str]:
+        """Telegram external IDs marked as admin (for broadcast / trading alerts)."""
+        return users_service.get_admin_telegram_user_ids()
+
+    @with_uow
+    @handle_db_error
     def get_user_status(self, telegram_user_id: str) -> Optional[Dict[str, Any]]:
         """
         Get user status including approval, verification, and limit information.

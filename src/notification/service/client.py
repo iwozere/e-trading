@@ -692,6 +692,15 @@ class NotificationServiceClient:
                     notification_data["admin_notification"] = True
                     notification_data["telegram_chat_id"] = admin_id
 
+                    email_receiver = None
+                    if "email" in notification_channels:
+                        try:
+                            st = db.get_user_status(str(admin_id))
+                            if st and st.get("email"):
+                                email_receiver = st["email"]
+                        except Exception:
+                            _logger.debug("Could not resolve admin email for %s", admin_id)
+
                     success = await self.send_notification(
                         notification_type=notification_type,
                         title=title,
@@ -700,7 +709,8 @@ class NotificationServiceClient:
                         data=notification_data,
                         channels=notification_channels,
                         telegram_chat_id=admin_id,
-                        recipient_id=str(admin_id)
+                        recipient_id=str(admin_id),
+                        email_receiver=email_receiver,
                     )
 
                     if success:
