@@ -1,0 +1,67 @@
+{
+  "id": "example-live-ibkr-bot-001",
+  "name": "Example Live IBKR Bot",
+  "description": "Current runtime example: IBKR live trading. Requires explicit live confirmation and risk limits.",
+  "version": "1.0",
+  "user_id": 12,
+  "enabled": false,
+  "symbol": "AAPL",
+  "broker": {
+    "type": "ibkr",
+    "trading_mode": "live",
+    "name": "example_ibkr_live",
+    "cash": 25000.0,
+    "live_trading_confirmed": false,
+    "risk_management": {
+      "max_position_size": 1000.0,
+      "max_daily_loss": 200.0
+    }
+  },
+  "strategy": {
+    "type": "CustomStrategy",
+    "parameters": {
+      "strategy_config": {
+        "asset_type": "stock"
+      }
+    }
+  },
+  "data": {
+    "data_source": "ibkr",
+    "symbol": "AAPL",
+    "interval": "1h",
+    "lookback_bars": 500,
+    "retry_interval": 60
+  },
+  "notifications": {
+    "position_opened": true,
+    "position_closed": true,
+    "error_notifications": true,
+    "email_enabled": true,
+    "telegram_enabled": true,
+    "notify_email": null,
+    "notify_telegram_chat_id": null
+  },
+  "risk_management": {
+    "max_position_size": 1000.0,
+    "max_daily_loss": 200.0,
+    "max_portfolio_risk": 0.02,
+    "position_sizing_method": "fixed_dollar",
+    "stop_loss_enabled": true,
+    "take_profit_enabled": true,
+    "stop_loss_pct": 2.0,
+    "take_profit_pct": 4.0,
+    "max_daily_trades": 10
+  },
+  "logging": {
+    "level": "INFO",
+    "save_trades": true,
+    "save_equity_curve": true,
+    "log_file": "logs/live/example_current_live_ibkr_bot.log"
+  },
+  "trading": {
+    "position_size": 0.05,
+    "max_positions": 1,
+    "max_drawdown_pct": 10.0,
+    "max_exposure": 1.0
+  }
+}

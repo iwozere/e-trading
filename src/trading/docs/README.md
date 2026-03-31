@@ -1,66 +1,41 @@
-# Trading Bot Documentation
+# Trading Docs
 
-This documentation provides comprehensive guidance for running the live trading bot with CustomStrategy using RSIOrBBEntryMixin and ATRExitMixin with Binance paper broker.
+This folder contains the current documentation for the trading runtime.
 
-## Overview
+## Current docs
 
-The trading bot system consists of:
-- **CustomStrategy**: Modular strategy framework using entry and exit mixins
-- **RSIOrBBEntryMixin**: Entry logic based on RSI and Bollinger Bands
-- **ATRExitMixin**: Exit logic using Average True Range trailing stop loss
-- **BinancePaperBroker**: Paper trading broker using Binance testnet
+- `ibkr-gateway-config.md`: IBKR Gateway deployment and remote API checklist
+- `configuration.md`: bot configuration structure used by the runtime
+- `startup-plan.md`: startup and operating plan for paper/live services
 
-## Quick Start
+## Runtime structure
 
-1. **Setup Environment Variables** (see Requirements.md)
-2. **Create Configuration** (see Design.md)
-3. **Run the Bot**:
-   ```bash
-   python src/trading/trading_bot.py paper_trading_rsi_atr.json
-   ```
+Primary execution path:
 
-## Documentation Structure
+1. `src/trading/trading_runner.py` (DB-driven service runner)
+2. `src/trading/strategy_manager.py` (loads bots, starts/stops instances)
+3. `src/trading/strategy_instance.py` (broker + data feed + strategy loop)
+4. `src/trading/base_trading_bot.py` (signals, orders, persistence, notifications)
 
-- **[Requirements.md](Requirements.md)**: System requirements and environment setup
-- **[Design.md](Design.md)**: Architecture and configuration design
-- **[Tasks.md](Tasks.md)**: Step-by-step implementation tasks
+Single-config wrappers:
 
-## Key Features
+- `src/trading/trading_bot.py`
+- `src/trading/live_trading_bot.py`
 
-### Strategy Components
-- **Entry Logic**: RSI oversold + Bollinger Band lower touch
-- **Exit Logic**: ATR-based trailing stop loss
-- **Risk Management**: Position sizing, stop loss, take profit
-- **Paper Trading**: Safe testing on Binance testnet
+## Notification behavior
 
-### Monitoring & Logging
-- Real-time trade execution logs
-- Database persistence of all trades
-- Performance metrics and analytics
-- Error handling and recovery
+- Trade/lifecycle notifications: bot owner only
+- Error notifications:
+  - bot owner when `notifications.error_notifications` is enabled
+  - admins always
 
-### Configuration
-- JSON-based configuration files
-- Environment-specific settings
-- Parameter validation and testing
+Owner resolution priority:
 
-## Getting Started
+1. explicit config override (`notify_email` / `notify_telegram_chat_id`)
+2. environment override (`TRADING_NOTIFY_EMAIL` / `TRADING_NOTIFY_TELEGRAM_CHAT_ID`)
+3. DB user mapping from `user_id` + linked identities
 
-1. Read [Requirements.md](Requirements.md) for setup prerequisites
-2. Follow [Tasks.md](Tasks.md) for step-by-step implementation
-3. Review [Design.md](Design.md) for architecture understanding
+## Safety reminder
 
-## Support
-
-For issues or questions:
-1. Check the logs in `logs/` directory
-2. Review configuration validation errors
-3. Consult the troubleshooting section in Tasks.md
-
-## Safety Notice
-
-⚠️ **Always test with paper trading first!**
-- This system supports both paper and live trading
-- Paper trading uses Binance testnet (no real money)
-- Live trading executes real orders with real money
-- Always validate strategies thoroughly before live trading
+- Use paper mode first: `broker.trading_mode: "paper"`
+- Validate each config before enabling live trading

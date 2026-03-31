@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
+from src.notification.logger import setup_logger # noqa: E402
 
 _logger = setup_logger(__name__)
 
@@ -185,7 +185,7 @@ class NotificationServiceClient:
                     "Service URL %s uses a legacy port. Database-centric architecture "
                     "typically uses the Main API at http://localhost:5003.", service_url
                 )
-            
+
             self.service_url = service_url.rstrip('/')
 
         self.timeout = aiohttp.ClientTimeout(total=timeout)
