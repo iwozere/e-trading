@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 
+from src.trading.dto.created_trade import CreatedTrade
 from src.trading.services.trading_bot_service import trading_bot_service
 from src.trading.constants import TRADING_STATE_DIR
 from src.trading.risk.controller import RiskController
@@ -47,6 +48,12 @@ from src.trading.trading_notification_recipient import get_trading_bot_notificat
 
 # Keys that must be redacted from notification/log messages
 _SENSITIVE_KEYS = {"key", "secret", "token", "password", "api_key", "api_secret"}
+
+
+def is_file_based_simulation_config(config: Dict[str, Any]) -> bool:
+    """True when the bot runs on CSV/file data — no owner or admin notifications."""
+    data = config.get("data") or {}
+    return str(data.get("data_source", "")).lower() == "file"
 
 
 def _sanitize_params(params: dict) -> dict:
@@ -101,6 +108,8 @@ class BaseTradingBot:
             broker: Broker instance (optional)
             paper_trading: Whether to use paper trading mode
             bot_id: Bot identifier (config filename or optimization result filename)
+            trade_repository: Optional persistence adapter; ``create_trade`` must return
+                :class:`~src.trading.dto.created_trade.CreatedTrade`.
             trade_notification_hook: Optional callback after a successful paper/sim trade
                 ``(side: 'buy'|'sell', price, size, pnl_or_none)`` for user-targeted alerts.
         """
@@ -131,33 +140,34 @@ class BaseTradingBot:
         _state_dir.mkdir(parents=True, exist_ok=True)
         self.state_file = str(_state_dir / "state.json")
 
-        # Enhanced notification setup using new notification service
+        self._file_based_simulation = is_file_based_simulation_config(config)
+
+        # Enhanced notification setup (skipped for CSV/file backtests — no alerts)
         self.notification_client = None
         self.position_notification_manager = None
 
-        try:
-            # Initialize notification service client with direct database queuing
-            notification_service_url = config.get('notification_service_url', 'database://direct')
-            self.notification_client = NotificationServiceClient(
-                service_url=notification_service_url,
-                timeout=5,  # Shorter timeout since we're using direct DB
-                max_retries=1  # No need for retries with direct DB
-            )
+        if not self._file_based_simulation:
+            try:
+                notification_service_url = config.get('notification_service_url', 'database://direct')
+                self.notification_client = NotificationServiceClient(
+                    service_url=notification_service_url,
+                    timeout=5,
+                    max_retries=1,
+                )
 
-            # Initialize enhanced position notification manager
-            notification_config = config.get('notifications', {
-                'position_opened': True,
-                'position_closed': True,
-                'email_enabled': True,
-                'telegram_enabled': True,
-                'error_notifications': True
-            })
-            self.position_notification_manager = PositionNotificationManager({
-                'notifications': notification_config
-            })
+                notification_config = config.get('notifications', {
+                    'position_opened': True,
+                    'position_closed': True,
+                    'email_enabled': True,
+                    'telegram_enabled': True,
+                    'error_notifications': True
+                })
+                self.position_notification_manager = PositionNotificationManager({
+                    'notifications': notification_config
+                })
 
-        except Exception as e:
-            _logger.exception("Notification client not initialized: %s", e)
+            except Exception as e:
+                _logger.exception("Notification client not initialized: %s", e)
 
         self.max_drawdown_pct = config.get("max_drawdown_pct", 20.0)
         self.max_exposure = config.get("max_exposure", 1.0)  # 1.0 = 100% of balance
@@ -183,6 +193,8 @@ class BaseTradingBot:
         source: str = "trading_bot",
     ) -> None:
         """Queue notification to this bot's sole owner (never admins)."""
+        if self._file_based_simulation:
+            return
         if not self.notification_client:
             _logger.warning("Notification client not available")
             return
@@ -443,7 +455,12 @@ class BaseTradingBot:
 
                 # Create trade in database
                 trade = self.trade_repository.create_trade(trade_data)
-                new_trade_id = str(trade.id) if trade else None  # P1-2: defined before use
+                if not isinstance(trade, CreatedTrade):
+                    raise TypeError(
+                        "trade_repository.create_trade must return CreatedTrade, "
+                        f"got {type(trade).__name__}"
+                    )
+                new_trade_id = trade.id
 
                 # Update local state (P2-4: lock)
                 with self._positions_lock:
@@ -591,7 +608,7 @@ class BaseTradingBot:
                         _logger.exception("trade_notification_hook failed (sell)")
 
         except Exception as e:
-            _logger.exception("Error executing trade: %s")
+            _logger.exception("Error executing trade: %s", e)
             self.notify_error(str(e))
 
     def log_order(self, order: Any) -> None:
@@ -706,6 +723,8 @@ class BaseTradingBot:
         Args:
             error_msg: Error message string
         """
+        if self._file_based_simulation:
+            return
         try:
             error_message = (
                 f"⚠️ Trading Bot Error\n\n"
@@ -760,6 +779,8 @@ class BaseTradingBot:
         Send trade event to this bot's owner (skipped when StrategyInstance uses
         ``trade_notification_hook`` to avoid duplicate alerts).
         """
+        if self._file_based_simulation:
+            return
         try:
             if self.trade_notification_hook is not None:
                 return
@@ -884,6 +905,8 @@ class BaseTradingBot:
         _logger.info("Timestamp: %s", timestamp)
 
     def notify_bot_event(self, event: str, emoji: str):
+        if self._file_based_simulation:
+            return
         # P2-2: sanitize parameters before including in notifications
         safe_params = _sanitize_params(getattr(self, 'parameters', {}))
         msg = (

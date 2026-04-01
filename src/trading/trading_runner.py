@@ -38,8 +38,8 @@ import argparse
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.trading.strategy_manager import StrategyManager
-from src.notification.logger import setup_logger
+from src.trading.strategy_manager import StrategyManager #noqa: E402
+from src.notification.logger import setup_logger #noqa: E402
 
 _logger = setup_logger(__name__)
 

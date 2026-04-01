@@ -4,11 +4,17 @@ description: "Root schema for trading bot configuration stored in database confi
 type: object
 
 required:
+  - bot_id
   - symbol
   - broker
   - strategy
 
 properties:
+  bot_id:
+    type: string
+    minLength: 1
+    description: "Unique bot identifier"
+
   symbol:
     type: string
     pattern: "^[A-Z0-9]{3,20}$"

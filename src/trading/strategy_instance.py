@@ -16,7 +16,7 @@ from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
 from src.trading.broker.broker_factory import get_broker
 from src.trading.strategy_handler import strategy_handler
 from src.data.feed.data_feed_factory import DataFeedFactory
-from src.trading.base_trading_bot import BaseTradingBot, _run_async
+from src.trading.base_trading_bot import BaseTradingBot, _run_async, is_file_based_simulation_config
 from src.notification.logger import setup_logger
 from src.data.db.services.trading_service import trading_service
 from src.notification.service.client import NotificationServiceClient, MessageType, MessagePriority
@@ -236,6 +236,11 @@ class StrategyInstance:
             parameters = self.config['strategy'].get('parameters', {})
             paper = (self.config['broker'].get('trading_mode', 'paper') == 'paper')
 
+            trade_hook = (
+                None
+                if is_file_based_simulation_config(self.config)
+                else self._schedule_user_trade_notification
+            )
             self.trading_bot = BaseTradingBot(
                 config=bot_config,
                 strategy_class=strategy_class,
@@ -244,7 +249,7 @@ class StrategyInstance:
                 paper_trading=paper,
                 bot_id=str(self.instance_id),
                 trade_repository=self.trade_repository,
-                trade_notification_hook=self._schedule_user_trade_notification,
+                trade_notification_hook=trade_hook,
             )
             return True
         except Exception:
@@ -269,12 +274,22 @@ class StrategyInstance:
     def _create_data_feed(self) -> bool:
         """Create and initialize the data feed."""
         try:
-            data_config = self.config.get('data', {
+            data_config = dict(self.config.get('data', {
                 'data_source': self.config['broker'].get('type', 'binance'),
                 'symbol': self.config.get('symbol', 'BTCUSDT'),
                 'interval': '1h',
                 'lookback_bars': 500
-            })
+            }))
+
+            # Ensure required fields for DataFeedFactory when config.data is partial.
+            if not data_config.get("data_source"):
+                data_config["data_source"] = self.config['broker'].get('type', 'binance')
+            if not data_config.get("symbol"):
+                data_config["symbol"] = self.config.get('symbol', 'BTCUSDT')
+            if not data_config.get("interval"):
+                data_config["interval"] = "1h"
+            if data_config.get("lookback_bars") is None:
+                data_config["lookback_bars"] = 500
 
             def on_new_bar(symbol, timestamp, data):
                 _logger.debug("New %s bar for %s", symbol, self.name)
@@ -358,6 +373,8 @@ class StrategyInstance:
         Send notification for trade execution (async fire-and-forget).
         """
         try:
+            if is_file_based_simulation_config(self.config):
+                return
             if not self.notification_client:
                 return
 
@@ -432,6 +449,8 @@ class StrategyInstance:
         ``notifications.error_notifications`` is true.
         """
         try:
+            if is_file_based_simulation_config(self.config):
+                return
             if not self.notification_client:
                 return
 

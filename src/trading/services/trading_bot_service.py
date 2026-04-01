@@ -13,6 +13,7 @@ from datetime import datetime
 
 from src.data.db.services.trading_service import trading_service
 from src.notification.logger import setup_logger
+from src.trading.dto.created_trade import CreatedTrade
 
 _logger = setup_logger(__name__)
 
@@ -67,10 +68,11 @@ class TradingBotService:
 
     # ---------- Trade Methods ----------
 
-    def create_trade(self, trade_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_trade(self, trade_data: Dict[str, Any]) -> CreatedTrade:
         """Create a new trade."""
         try:
-            return trading_service.add_trade(trade_data)
+            row = trading_service.add_trade(trade_data)
+            return CreatedTrade.from_row(row)
         except Exception:
             _logger.exception("Error creating trade:")
             raise
@@ -177,13 +179,14 @@ class TradingBotService:
             _logger.exception("Error getting trade by ID %s:", trade_id)
             return None
 
-    def create_partial_exit_trade(self, trade_data: Dict[str, Any], original_trade_id: str) -> Dict[str, Any]:
+    def create_partial_exit_trade(self, trade_data: Dict[str, Any], original_trade_id: str) -> CreatedTrade:
         """Create partial exit trade."""
         try:
             # Add reference to original trade
             trade_data["original_trade_id"] = original_trade_id
             trade_data["is_partial_exit"] = True
-            return trading_service.add_trade(trade_data)
+            row = trading_service.add_trade(trade_data)
+            return CreatedTrade.from_row(row)
         except Exception:
             _logger.exception("Error creating partial exit trade:")
             raise

@@ -138,7 +138,12 @@ class BaseLiveDataFeed(bt.feed.DataBase):
 
     def __getattr__(self, name):
         """Delegate attribute access to PandasData instance for Backtrader compatibility."""
-        return getattr(self.pandas_data, name)
+        # During Backtrader object construction, __getattr__ may be called before
+        # pandas_data is initialized. Guard this path to prevent recursive lookup.
+        pandas_data = self.__dict__.get("pandas_data")
+        if pandas_data is None:
+            raise AttributeError(name)
+        return getattr(pandas_data, name)
 
     @property
     def df(self):

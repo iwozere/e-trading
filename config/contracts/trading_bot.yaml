@@ -1,47 +1,42 @@
 $schema: "http://json-schema.org/draft-07/schema#"
 title: TradingBotManifest
 type: object
-required: ["bot_id", "modules"]
+required: ["bot_id", "symbol", "broker", "strategy"]
 properties:
   bot_id:
     type: string
     description: "Unique identifier for this bot instance"
+  symbol:
+    type: string
+    description: "Trading symbol"
   description:
     type: string
     description: "Human-readable description of what this bot does"
-  modules:
+  broker:
     type: object
-    description: "References to the component configurations"
-    required: ["broker", "strategy"]
+    required: ["type", "trading_mode"]
     properties:
-      broker:
-        oneOf:
-          - type: string
-            description: "Path to broker instance JSON"
-          - type: object
-            description: "Inline broker configuration"
-      strategy:
-        oneOf:
-          - type: string
-            description: "Path to strategy instance JSON"
-          - type: object
-            description: "Inline strategy configuration"
-      risk_management:
-        oneOf:
-          - type: string
-            description: "Path to risk management instance JSON"
-          - type: object
-            description: "Inline risk management configuration"
-      notifications:
-        oneOf:
-          - type: string
-            description: "Path to notifications instance JSON"
-          - type: object
-            description: "Inline notifications configuration"
-  overrides:
+      type:
+        type: string
+      trading_mode:
+        type: string
+        enum: ["paper", "live"]
+    additionalProperties: true
+  strategy:
     type: object
-    description: "Top-level configuration overrides (e.g. symbol, initial_balance)"
+    required: ["type"]
     properties:
-      symbol: { type: "string" }
-      initial_balance: { type: "number" }
-      timeframe: { type: "string" }
+      type:
+        type: string
+      parameters:
+        type: object
+    additionalProperties: true
+  data:
+    type: object
+  risk_management:
+    type: object
+  notifications:
+    type: object
+  trading:
+    type: object
+additionalProperties: true

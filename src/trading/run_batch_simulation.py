@@ -15,6 +15,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Real imports
 from src.trading.tools.plot_simulation import plot_result_file
 from src.model.config_models import TradingBotConfig
+from src.trading.dto.created_trade import CreatedTrade
 
 # Setup simple logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,10 +31,10 @@ class MockRepository:
     def update_bot_instance(self, bot_id, data): return None
     def get_open_trades(self, bot_id, symbol): return []
     def create_trade(self, data):
-        # Return a dummy object with an id
-        class DummyTrade:
-            id = str(uuid.uuid4())
-        return DummyTrade()
+        return CreatedTrade.synthetic(str(uuid.uuid4()))
+
+    def create_partial_exit_trade(self, trade_data, original_trade_id):
+        return CreatedTrade.synthetic(str(uuid.uuid4()), {"original_trade_id": original_trade_id})
     def update_trade(self, trade_id, data): return None
     def ensure_open_position(self, *args, **kwargs): return None
     def get_open_positions(self, *args, **kwargs): return []

@@ -31,7 +31,7 @@ import backtrader as bt
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.append(str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
+from src.notification.logger import setup_logger #noqa: E402
 
 _logger = setup_logger(__name__)
 
@@ -137,23 +137,16 @@ class FileDataFeed(bt.feed.DataBase):
             return pd.to_datetime(date_str)
 
     def _validate_columns(self, df):
-        """Validate that required columns exist in the DataFrame."""
-        required_cols = {
-            'datetime': self.p.datetime_col,
-            'open': self.p.open_col,
-            'high': self.p.high_col,
-            'low': self.p.low_col,
-            'close': self.p.close_col,
-            'volume': self.p.volume_col,
-        }
-
-        missing_cols = []
-        for col_type, col_name in required_cols.items():
-            if col_name and col_name not in df.columns:
-                missing_cols.append(f"{col_type} ({col_name})")
-
-        if missing_cols:
-            raise ValueError(f"Missing required columns: {', '.join(missing_cols)}")
+        """Validate canonical OHLCV columns exist after _prepare_dataframe normalization."""
+        # _prepare_dataframe renames configured/alias columns to datetime, open, high, low, close, volume.
+        # Do not validate using self.p.datetime_col etc. here — e.g. datetime_col=timestamp becomes 'datetime'.
+        required = ("datetime", "open", "high", "low", "close", "volume")
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            raise ValueError(
+                f"Missing required columns after normalization: {', '.join(missing)}. "
+                f"CSV columns: {list(df.columns)}"
+            )
 
     def _prepare_dataframe(self, df):
         """Prepare DataFrame with proper column names and types."""

@@ -17,6 +17,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 
 from src.notification.logger import setup_logger
+from src.trading.dto.created_trade import CreatedTrade
 from src.data.data_manager import get_provider_selector
 
 # Loggers will be set up with multiprocessing support when needed
@@ -835,7 +836,12 @@ class BaseStrategy(bt.Strategy):
                 }
 
                 trade = self.trade_repository.create_trade(trade_data)
-                self.current_position_id = trade.get("id")
+                if not isinstance(trade, CreatedTrade):
+                    raise TypeError(
+                        "trade_repository.create_trade must return CreatedTrade, "
+                        f"got {type(trade).__name__}"
+                    )
+                self.current_position_id = trade.id
 
             _logger.debug("Stored trade in database: %s", trade_data.get('id', 'unknown'))
 
