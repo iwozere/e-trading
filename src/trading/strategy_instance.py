@@ -1,7 +1,7 @@
 """
 Strategy Instance
 -----------------
-Represents a single running instance of a trading strategy with its own 
+Represents a single running instance of a trading strategy with its own
 broker connection, data feed, and Backtrader engine.
 """
 
@@ -9,8 +9,7 @@ import asyncio
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
-from pathlib import Path
+from typing import Dict, Optional, Any
 
 from src.trading.broker.backtrader_availability import BACKTRADER_AVAILABLE
 from src.trading.broker.broker_factory import get_broker
@@ -27,8 +26,8 @@ _logger = setup_logger(__name__)
 class StrategyInstance:
     """Represents a single strategy instance with its own configuration and broker."""
 
-    def __init__(self, instance_id: str, config: Dict[str, Any], 
-                 notification_client: Optional[NotificationServiceClient] = None, 
+    def __init__(self, instance_id: str, config: Dict[str, Any],
+                 notification_client: Optional[NotificationServiceClient] = None,
                  trade_repository: Any = None):
         """Initialize strategy instance."""
         self.instance_id = instance_id
@@ -126,7 +125,7 @@ class StrategyInstance:
             self.error_count += 1
             self.last_error = str(e)
             _logger.exception("❌ Failed to start strategy instance %s:", self.name)
-            
+
             try:
                 trading_service.update_bot_status(self.instance_id, "error", error_message=str(e))
                 await self._send_error_notification(f"Failed to start bot: {str(e)}", error_type="START_ERROR")
@@ -142,7 +141,7 @@ class StrategyInstance:
             name=f"Monitor-{self.name}"
         )
         self.monitor_thread.start()
-        
+
         self.heartbeat_thread = threading.Thread(
             target=self._heartbeat_loop,
             daemon=True,
@@ -158,25 +157,33 @@ class StrategyInstance:
             self.is_running = False
 
             if self.data_feed:
-                try: self.data_feed.stop()
-                except Exception: pass
+                try:
+                    self.data_feed.stop()
+                    _logger.info("Data feed stopped for %s", self.name)
+                except Exception:
+                    _logger.exception("Error stopping data feed for %s:", self.name)
 
             await self._stop_trading_bot()
 
             if self.broker:
-                try: await self.broker.disconnect()
-                except Exception: pass
+                try:
+                    await self.broker.disconnect()
+                    _logger.info("Broker disconnected for %s", self.name)
+                except Exception:
+                    _logger.exception("Error disconnecting broker for %s:", self.name)
 
             self.status = 'stopped'
             try:
                 trading_service.update_bot_status(self.instance_id, "stopped")
-            except Exception: pass
+                _logger.info("Bot status updated to stopped for %s", self.name)
+            except Exception:
+                _logger.exception("Error updating bot status for %s:", self.name)
 
             _logger.info("✅ Strategy instance %s stopped successfully", self.name)
             return True
-        except Exception as e:
+        except Exception:
             self.status = 'error'
-            _logger.exception("❌ Failed to stop strategy instance %s:", self.name)
+            _logger.exception("❌ Failed to stop strategy instance %s: %s", self.name)
             return False
 
     async def restart(self) -> bool:
@@ -258,7 +265,10 @@ class StrategyInstance:
 
     async def _start_trading_bot_loop(self):
         """Run the BaseTradingBot heartbeat/execution loop."""
-        if not self.trading_bot: return
+        if not self.trading_bot:
+            _logger.warning("Trading bot not found for %s", self.name)
+            return
+        _logger.info("Starting trading bot loop for %s", self.name)
         try:
             await asyncio.get_event_loop().run_in_executor(None, self.trading_bot.run)
         except Exception:
@@ -268,8 +278,11 @@ class StrategyInstance:
     async def _stop_trading_bot(self):
         """Stop the trading bot gracefully."""
         if self.trading_bot:
-            try: self.trading_bot.stop()
-            except Exception: pass
+            try:
+                self.trading_bot.stop()
+                _logger.info("Trading bot stopped for %s", self.name)
+            except Exception:
+                _logger.exception("Error stopping trading bot for %s:", self.name)
 
     def _create_data_feed(self) -> bool:
         """Create and initialize the data feed."""
@@ -293,7 +306,7 @@ class StrategyInstance:
 
             def on_new_bar(symbol, timestamp, data):
                 _logger.debug("New %s bar for %s", symbol, self.name)
-                
+
             data_config["on_new_bar"] = on_new_bar
             self.data_feed = DataFeedFactory.create_data_feed(data_config)
             return self.data_feed is not None
@@ -314,7 +327,7 @@ class StrategyInstance:
 
             self.cerebro = bt.Cerebro()
             self.cerebro.adddata(self.data_feed)
-            
+
             strategy_params = self.config['strategy'].get('parameters', {})
             self.cerebro.addstrategy(
                 strategy_class,
@@ -342,8 +355,8 @@ class StrategyInstance:
         """Run Backtrader engine in background."""
         try:
             await asyncio.get_event_loop().run_in_executor(None, self.cerebro.run)
-        except Exception as e:
-            _logger.exception("Error in Backtrader engine for %s:", self.name)
+        except Exception:
+            _logger.exception("Error in Backtrader engine for %s: %s", self.name)
             self.status = 'error'
 
     def _monitor_data_feed(self):
