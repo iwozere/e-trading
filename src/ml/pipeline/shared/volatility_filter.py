@@ -25,6 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 from src.data.data_manager import DataManager
 from .config import VolatilityFilterConfig
+from .ohlcv_timestamp import coerce_ohlcv_timestamp_column
 from .trf_downloader import get_trf_correction_factor
 
 _logger = setup_logger(__name__)
@@ -118,7 +119,7 @@ class VolatilityFilter:
 
             for ticker in tickers:
                 try:
-                    df = ohlcv_data.get(ticker)
+                    df = coerce_ohlcv_timestamp_column(ohlcv_data.get(ticker))
 
                     if df is None or df.empty:
                         _logger.debug("No data for %s", ticker)
@@ -173,9 +174,9 @@ class VolatilityFilter:
                         })
                         continue
 
-                    # Apply TRF volume correction if available
-                    if ticker in trf_corrections:
-                        trf_factor = trf_corrections[ticker]
+                    # Apply TRF volume correction if available (wildcard "*" from _load_trf_volume_corrections)
+                    trf_factor = trf_corrections.get(ticker) or trf_corrections.get("*")
+                    if trf_factor is not None:
                         df = self._apply_trf_volume_correction(df, trf_factor)
                         _logger.debug("%s: Applied TRF correction factor %.3f", ticker, trf_factor)
                     else:
@@ -680,11 +681,13 @@ class VolatilityFilter:
             DataFrame with corrected volume
         """
         try:
-            df = df.copy()
+            df = coerce_ohlcv_timestamp_column(df.copy())
+            if df is None or df.empty or "timestamp" not in df.columns:
+                return df if df is not None else pd.DataFrame()
             today = datetime.now().date()
 
-            # Only apply correction to historical bars (not today's)
-            historical_mask = df['timestamp'].dt.date < today
+            ts = pd.to_datetime(df["timestamp"], errors="coerce")
+            historical_mask = ts.dt.date < today
 
             if historical_mask.any():
                 df.loc[historical_mask, 'volume'] = df.loc[historical_mask, 'volume'] * correction_factor

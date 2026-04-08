@@ -21,6 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.notification.logger import setup_logger
 from src.data.data_manager import DataManager
 from src.ml.pipeline.p10_emps3.config import EMPS3FilterConfig
+from src.ml.pipeline.shared.ohlcv_timestamp import coerce_ohlcv_timestamp_column
 from src.ml.pipeline.shared.trf_downloader import download_trf, get_trf_correction_factor
 
 _logger = setup_logger(__name__)
@@ -80,8 +81,8 @@ class AccumulationAnalyzer:
 
             for ticker in tickers:
                 try:
-                    df_intra = ohlcv_intraday.get(ticker)
-                    df_daily = ohlcv_daily.get(ticker)
+                    df_intra = self._coerce_ohlcv_timestamp_column(ohlcv_intraday.get(ticker))
+                    df_daily = self._coerce_ohlcv_timestamp_column(ohlcv_daily.get(ticker))
 
                     if df_intra is None or df_intra.empty or df_daily is None or df_daily.empty:
                         # Log failure
@@ -268,11 +269,14 @@ class AccumulationAnalyzer:
             return {}
 
     def _apply_trf_volume_correction(self, df: pd.DataFrame, correction_factor: float) -> pd.DataFrame:
-        df = df.copy()
+        df = coerce_ohlcv_timestamp_column(df.copy())
+        if df is None or df.empty or "timestamp" not in df.columns:
+            return df
         today = datetime.now().date()
-        historical_mask = df['timestamp'].dt.date < today
+        ts = pd.to_datetime(df["timestamp"], errors="coerce")
+        historical_mask = ts.dt.date < today
         if historical_mask.any():
-            df.loc[historical_mask, 'volume'] = df.loc[historical_mask, 'volume'] * correction_factor
+            df.loc[historical_mask, "volume"] = df.loc[historical_mask, "volume"] * correction_factor
         return df
 
     def _save_diagnostics(self, diagnostic_data: list):

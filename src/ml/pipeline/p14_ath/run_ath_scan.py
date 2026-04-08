@@ -12,9 +12,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.ml.pipeline.p14_ath.config import ATHPipelineConfig
-from src.ml.pipeline.p14_ath.ath_pipeline import ATHPipeline
-from src.notification.logger import setup_logger
+from src.ml.pipeline.p14_ath.config import ATHPipelineConfig  # noqa: E402
+from src.ml.pipeline.p14_ath.ath_pipeline import ATHPipeline  # noqa: E402
+from src.notification.logger import setup_logger  # noqa: E402
 
 _logger = setup_logger(__name__)
 
@@ -31,10 +31,10 @@ def main():
 
     # Create configuration
     config = ATHPipelineConfig.create_default()
-    
+
     if TICKERS:
         config.tickers = TICKERS
-    
+
     if args.tickers:
         # Handle both comma-separated and space-separated inputs
         ticker_list = []

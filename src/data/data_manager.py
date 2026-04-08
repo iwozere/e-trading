@@ -15,6 +15,11 @@ The DataManager implements the architecture described in REFACTOR.md:
 
 Classes:
 - DataManager: Main facade for all data operations
+
+OHLCV contract (see ``src.data.ohlcv_contract``): ``get_ohlcv`` / ``get_ohlcv_batch`` return
+time on a **tz-naive DatetimeIndex** with columns ``open``, ``high``, ``low``, ``close``, ``volume``
+(lowercase). There is **no** ``timestamp`` column after normalization—the index *is* the time axis.
+Some call sites reset_index locally or use ``coerce_ohlcv_timestamp_column`` when they need a column.
 """
 
 import os
@@ -940,7 +945,8 @@ class DataManager:
             force_refresh: Force refresh from provider, bypassing cache
 
         Returns:
-            DataFrame with OHLCV data
+            Normalized OHLCV (``src.data.ohlcv_contract``): tz-naive ``DatetimeIndex`` and
+            columns ``open`` … ``volume``. Cache-only, download-only, and merged paths share this shape.
 
         Raises:
             ValueError: If invalid parameters provided
@@ -1077,7 +1083,9 @@ class DataManager:
             force_refresh: If True, bypasses cache and forces a full re-download.
 
         Returns:
-            Dictionary mapping symbol to its historical OHLCV DataFrame.
+            Dictionary mapping symbol to OHLCV DataFrames in the **normalized contract**
+            (tz-naive ``DatetimeIndex``; columns ``open`` … ``volume``). Cache hits return the
+            same shape as freshly merged downloads. See ``src.data.ohlcv_contract``.
         """
         results = {}
         missing_ranges = {}  # {symbol: (missing_start, end_date)}
@@ -1406,16 +1414,24 @@ class DataManager:
 
     def _normalize_ohlcv(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        Normalize raw OHLCV data from any provider into a standard format.
+        Normalize raw OHLCV from any provider into the **single in-memory contract** used for
+        cache read/write and merged batches (same shape for downloaded vs cached rows).
 
-        Ensures lowercase columns, tz-naive DatetimeIndex, and validates required fields.
-        This is a shared helper used by both get_ohlcv and get_ohlcv_batch.
+        Output shape:
+            - Index: tz-naive ``DatetimeIndex`` (time axis; not a ``timestamp`` column).
+            - Columns: ``open``, ``high``, ``low``, ``close``, ``volume`` (lowercased).
+
+        Callers that need a ``timestamp`` column (e.g. legacy sorting / TRF masks) should use
+        ``src.ml.pipeline.shared.ohlcv_timestamp.coerce_ohlcv_timestamp_column`` or
+        ``df.reset_index(names="timestamp")`` at the point of use.
+
+        Used by ``get_ohlcv`` gap fills and ``get_ohlcv_batch`` after downloads.
 
         Args:
-            data: Raw DataFrame from a provider
+            data: Raw DataFrame from a provider (column or index time).
 
         Returns:
-            Normalized DataFrame with DatetimeIndex
+            DataFrame indexed by normalized time; see ``src.data.ohlcv_contract``.
         """
         data_copy = data.copy()
 
