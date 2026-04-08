@@ -29,10 +29,10 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.notification.logger import setup_logger
-from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig, EMPS2FilterConfig
-from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline
-from src.ml.pipeline.shared.pipeline_summary_generator import PipelineSummaryGenerator
+from src.notification.logger import setup_logger  # noqa: E402
+from src.ml.pipeline.p06_emps2.config import EMPS2PipelineConfig  # noqa: E402
+from src.ml.pipeline.p06_emps2.emps2_pipeline import EMPS2Pipeline  # noqa: E402
+from src.ml.pipeline.shared.pipeline_summary_generator import PipelineSummaryGenerator  # noqa: E402
 
 
 _logger = setup_logger(__name__)
@@ -216,21 +216,6 @@ Examples:
     return parser.parse_args()
 
 
-# ... (skipping to main function body)
-
-    # Update config flags
-    if args.quiet:
-        config.verbose_logging = False
-    if args.no_summary:
-        config.generate_summary = False
-    if args.no_sentiment:
-        config.sentiment_config.enabled = False
-    if args.user_id:
-        config.user_id = args.user_id
-
-    # Determine force_refresh (default is False, use cache unless --force-refresh is specified)
-    force_refresh = args.force_refresh
-
 def print_results_summary(final_df, config: EMPS2PipelineConfig):
     """
     Print formatted results summary.
@@ -357,13 +342,13 @@ def main() -> int:
     print(f"  Lookback: {config.filter_config.lookback_days} days")
     print(f"  Interval: {config.filter_config.interval}")
     print(f"  Force Refresh: {force_refresh}")
-    print(f"\nRolling Memory:")
+    print("\nRolling Memory:")
     print(f"  Enabled: {config.rolling_memory_config.enabled}")
     if config.rolling_memory_config.enabled:
         print(f"  Lookback Days: {config.rolling_memory_config.lookback_days}")
         print(f"  Phase 1 Threshold: {config.rolling_memory_config.phase1_min_appearances} appearances")
         print(f"  Send Alerts: {config.rolling_memory_config.send_alerts}")
-    print(f"\nSentiment Filtering:")
+    print("\nSentiment Filtering:")
     print(f"  Enabled: {config.sentiment_config.enabled}")
     if config.sentiment_config.enabled:
         print(f"  Min Mentions: {config.sentiment_config.min_mentions_24h}")
@@ -387,21 +372,21 @@ def main() -> int:
         print_header("Output Files")
         print(f"Results saved to: {results_dir} (target_date={pipeline.target_date})\n")
         print("Files:")
-        print(f"  - pipeline.log                    (Full scan log)")
-        print(f"  - 01_nasdaq_universe.csv          (Full NASDAQ universe)")
-        print(f"  - 02_fundamental_raw_data.csv     (Raw fundamental data)")
-        print(f"  - 03_fundamental_filtered.csv     (After fundamental filters)")
-        print(f"  - 04_volatility_diagnostics.csv   (ALL tickers with metrics & failure reasons)")
-        print(f"  - 05_volatility_filtered.csv      (After volatility filters)")
+        print("  - pipeline.log                    (Full scan log)")
+        print("  - 01_nasdaq_universe.csv          (Full NASDAQ universe)")
+        print("  - 02_fundamental_raw_data.csv     (Raw fundamental data)")
+        print("  - 03_fundamental_filtered.csv     (After fundamental filters)")
+        print("  - 04_volatility_diagnostics.csv   (ALL tickers with metrics & failure reasons)")
+        print("  - 05_volatility_filtered.csv      (After volatility filters)")
         if config.rolling_memory_config.enabled:
-            print(f"  - 06_rolling_candidates.csv       (14-day rolling memory)")
-            print(f"  - 07_phase1_watchlist.csv         (Phase 1: Quiet Accumulation)")
-            print(f"  - 08_phase2_alerts.csv            (Phase 2: Hot Candidates 🔥)")
-        print(f"  - 09_final_universe.csv           (Final results)")
+            print("  - 06_rolling_candidates.csv       (14-day rolling memory)")
+            print("  - 07_phase1_watchlist.csv         (Phase 1: Quiet Accumulation)")
+            print("  - 08_phase2_alerts.csv            (Phase 2: Hot Candidates 🔥)")
+        print("  - 09_final_universe.csv           (Final results)")
         if config.sentiment_config.enabled:
-            print(f"  - 10_sentiments.csv               (Social sentiment data)")
+            print("  - 10_sentiments.csv               (Social sentiment data)")
         if config.generate_summary:
-            print(f"  - summary.json                    (Pipeline summary)")
+            print("  - summary.json                    (Pipeline summary)")
         print()
 
         print_header("Scan Complete")
