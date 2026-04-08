@@ -25,12 +25,20 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="EMPS3 Precursor phase scanner.")
     parser.add_argument('--force-refresh', action='store_true', help='Force refresh caches.')
     parser.add_argument('--tickers', type=str, help='Comma-separated list of tickers to scan.')
+    # Scheduler (_execute_data_processing_job) always appends this when job_schedules.user_id is set.
+    parser.add_argument(
+        '--user-id',
+        type=str,
+        help='User ID for alerts (same contract as p06 run_emps2_scan)',
+    )
     return parser.parse_args()
 
 def main() -> int:
     args = parse_args()
 
     config = EMPS3PipelineConfig.create_default()
+    if args.user_id:
+        config.user_id = args.user_id
     force_refresh = args.force_refresh
 
     try:
