@@ -21,6 +21,17 @@ from src.ml.pipeline.shared.pipeline_summary_generator import PipelineSummaryGen
 
 _logger = setup_logger(__name__)
 
+
+def _csv_row_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    try:
+        return len(pd.read_csv(path))
+    except Exception:
+        _logger.warning("Could not count rows in %s", path, exc_info=True)
+        return 0
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="EMPS3 Precursor phase scanner.")
     parser.add_argument('--force-refresh', action='store_true', help='Force refresh caches.')
@@ -50,11 +61,14 @@ def main() -> int:
             
         final_df = pipeline.run(force_refresh=force_refresh, tickers=tickers)
 
-        today = datetime.now().strftime('%Y-%m-%d')
-        results_dir = PROJECT_ROOT / 'results' / 'p10_emps3' / today
+        # Same contract as p06: pipeline writes under target_date (default yesterday), not calendar today.
+        results_dir = PROJECT_ROOT / "results" / "p10_emps3" / pipeline.target_date
 
-        print(f"Pipeline complete. Found {len(final_df)} passing candidates.")
-        
+        print(
+            f"Pipeline complete. Found {len(final_df)} passing candidates. "
+            f"results_dir={results_dir} (target_date={pipeline.target_date})"
+        )
+
         # Generate/Update historical performance summary
         try:
             print("\n" + "="*70 + "\n Historical Summary \n" + "="*70)
@@ -63,18 +77,25 @@ def main() -> int:
         except Exception as e:
             _logger.warning(f"Failed to generate historical summary: {e}")
 
+        # job_schedules.notification_rules expect phase1_count / phase2_count (insert_p10_schedules.sql).
+        prebreakout_n = _csv_row_count(results_dir / "07_prebreakout_watchlist.csv")
+        phase1_count = max(len(final_df), prebreakout_n)
+        phase2_count = _csv_row_count(results_dir / "07_phase1_5_alerts.csv")
+
         result = {
             "success": True,
             "total_candidates": len(final_df),
+            "phase1_count": phase1_count,
+            "phase2_count": phase2_count,
             "results_dir": str(results_dir),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
 
         return 0
 
     except Exception as e:
-        _logger.exception("Error running pipeline:", e)
+        _logger.exception("Error running pipeline: %s", e)
         print("\n[ERROR] Pipeline failed.\n")
         
         result = {

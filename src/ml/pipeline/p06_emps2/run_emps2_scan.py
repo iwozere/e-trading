@@ -379,12 +379,13 @@ def main() -> int:
         # Print results
         print_results_summary(final_df, config)
 
-        # Results location
-        today = datetime.now().strftime('%Y-%m-%d')
-        results_dir = PROJECT_ROOT / 'results' / 'p06_emps2' / today
+        # Must match EMPS2Pipeline._results_dir (target_date defaults to yesterday for EOD data).
+        # Using "today" here broke scheduler notifications: phase CSVs were read from the wrong folder
+        # so phase1_count/phase2_count were always 0.
+        results_dir = PROJECT_ROOT / 'results' / 'p06_emps2' / pipeline.target_date
 
         print_header("Output Files")
-        print(f"Results saved to: {results_dir}\n")
+        print(f"Results saved to: {results_dir} (target_date={pipeline.target_date})\n")
         print("Files:")
         print(f"  - pipeline.log                    (Full scan log)")
         print(f"  - 01_nasdaq_universe.csv          (Full NASDAQ universe)")
