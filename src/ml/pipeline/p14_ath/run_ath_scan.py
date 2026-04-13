@@ -19,7 +19,7 @@ from src.notification.logger import setup_logger  # noqa: E402
 _logger = setup_logger(__name__)
 
 # List of tickers to analyze (overrides config defaults if set)
-TICKERS = ["SPY", "VT", "ORCL", "QQQ", "IWM", "TLT", "GLD", "SLV", "VXX", "TLT", "USO", "UNG", "DXY", "BTC-USD", "ETH-USD", "XAUUSD=X", "XAGUSD=X", "XRP-USD", "LTC-USD", "BCH-USD", "ADA-USD", "XLM-USD"]
+TICKERS = ["SPY", "VT", "ORCL", "QQQ", "IWM", "TLT", "GLD", "SLV", "VXX", "TLT", "USO", "UNG", "DXY", "TSLA", "NVDA", "META", "AMZN", "GOOGL", "AAPL", "MSFT", "INTC", "BTC-USD", "ETH-USD", "XAUUSD=X", "XAGUSD=X", "XRP-USD", "LTC-USD", "BCH-USD", "ADA-USD", "XLM-USD"]
 
 def main():
     parser = argparse.ArgumentParser(description="Run Sequential ATH & Drawdown Analysis Pipeline")
