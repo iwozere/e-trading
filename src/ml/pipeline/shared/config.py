@@ -47,4 +47,5 @@ class UniverseConfig(BaseFilterConfig):
     cache_enabled: bool = True
     cache_ttl_hours: int = 24
     exclude_test_issues: bool = True
+    exclude_etfs: bool = False
     alphabetic_only: bool = True

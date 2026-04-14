@@ -60,6 +60,7 @@ class EMPS2UniverseConfig(SharedUniverseConfig):
 
     # Filtering
     exclude_test_issues: bool = True
+    exclude_etfs: bool = True
     alphabetic_only: bool = True  # Remove tickers with numbers/special chars
 
     # Caching (in results folder, not data/cache)

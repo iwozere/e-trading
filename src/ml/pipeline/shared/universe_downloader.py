@@ -143,6 +143,18 @@ class NasdaqUniverseDownloader:
                 df = df[df["Test Issue"] == "N"]
                 _logger.info("Excluded %d test issues", initial_count - len(df))
 
+            # Optionally exclude ETFs early to reduce unnecessary downstream
+            # fundamentals lookups and related debug noise.
+            if getattr(self.config, "exclude_etfs", False):
+                etf_col = next((col for col in df.columns if str(col).strip().upper() == "ETF"), None)
+                if etf_col:
+                    initial_count = len(df)
+                    etf_flags = df[etf_col].astype(str).str.strip().str.upper()
+                    df = df[~etf_flags.isin({"Y", "YES", "TRUE", "1", "T"})]
+                    _logger.info("Excluded %d ETFs (column: %s)", initial_count - len(df), etf_col)
+                else:
+                    _logger.debug("ETF exclusion requested but ETF column is missing")
+
             # Extract ticker symbols
             if "Symbol" in df.columns:
                 tickers = df["Symbol"].dropna().tolist()
@@ -286,6 +298,7 @@ class NasdaqUniverseDownloader:
                 'created_at': datetime.now().isoformat(),
                 'config': {
                     'exclude_test_issues': self.config.exclude_test_issues,
+                    'exclude_etfs': getattr(self.config, "exclude_etfs", False),
                     'alphabetic_only': self.config.alphabetic_only
                 }
             }

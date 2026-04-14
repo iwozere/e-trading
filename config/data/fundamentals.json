@@ -16,8 +16,8 @@
       "fmp"
     ],
     "profile": [
-      "finnhub",
       "yahoo",
+      "finnhub",
       "alpha_vantage",
       "twelvedata",
       "fmp"

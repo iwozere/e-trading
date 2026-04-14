@@ -258,6 +258,10 @@ class AccumulationAnalyzer:
         if std == 0: return 0.0
         return (series[-1] - mean) / std
 
+    def _coerce_ohlcv_timestamp_column(self, df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+        """Normalize OHLCV DataFrame to include a canonical timestamp column."""
+        return coerce_ohlcv_timestamp_column(df)
+
     def _load_trf_volume_corrections(self) -> Dict[str, float]:
         try:
             target_date = datetime.now() - timedelta(days=self.config.lookback_days)
