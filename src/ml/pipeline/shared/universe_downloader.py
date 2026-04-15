@@ -270,6 +270,23 @@ class NasdaqUniverseDownloader:
                 _logger.warning("Invalid cache structure")
                 return None
 
+            # Invalidate cache when filtering-related config changes.
+            # This avoids reusing old universes generated before new filters
+            # (e.g. ETF exclusion) were introduced or toggled.
+            cached_config = cache_data.get('config') if isinstance(cache_data.get('config'), dict) else {}
+            expected_config = {
+                'exclude_test_issues': self.config.exclude_test_issues,
+                'exclude_etfs': getattr(self.config, "exclude_etfs", False),
+                'alphabetic_only': self.config.alphabetic_only,
+            }
+            if cached_config != expected_config:
+                _logger.info(
+                    "Universe cache invalidated due to config mismatch (cached=%s, current=%s)",
+                    cached_config,
+                    expected_config
+                )
+                return None
+
             tickers = cache_data['tickers']
             if not isinstance(tickers, list):
                 _logger.warning("Invalid ticker list in cache")

@@ -29,6 +29,8 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any
 import time
+import random
+from datetime import datetime
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
@@ -98,6 +100,69 @@ def load_symbols_from_file(file_path: str) -> List[str]:
     except Exception as e:
         _logger.error("Error loading symbols from %s: %s", file_path, e)
         return []
+
+
+def _get_symbol_cache_age_days(cache, symbol: str, data_type: str = "general") -> float | None:
+    """Return age of latest cached symbol snapshot in days, or None if missing."""
+    try:
+        # Use a large max_age_days so we can inspect even very old cache entries.
+        metadata = cache.find_latest_json(symbol=symbol, data_type=data_type, max_age_days=36500)
+        if not metadata:
+            return None
+        age = datetime.now() - metadata.timestamp
+        return age.total_seconds() / 86400.0
+    except Exception:
+        _logger.debug("Failed to determine cache age for %s", symbol, exc_info=True)
+        return None
+
+
+def _filter_symbols_by_staleness(
+    symbols: List[str],
+    cache_dir: str,
+    data_type: str = "general",
+    stale_min_days: float | None = None,
+    stale_fraction: float | None = None,
+    ttl_days: int = 14
+) -> List[str]:
+    """
+    Keep only symbols whose latest cache age exceeds the stale threshold.
+
+    Threshold can be explicit days or fraction of TTL.
+    """
+    if stale_min_days is None and stale_fraction is None:
+        return symbols
+
+    if stale_min_days is not None:
+        threshold_days = stale_min_days
+    else:
+        threshold_days = ttl_days * float(stale_fraction)
+
+    combiner = get_fundamentals_combiner()
+    cache = get_fundamentals_cache(cache_dir, combiner)
+
+    eligible: List[str] = []
+    ages: Dict[str, float] = {}
+    missing_count = 0
+
+    for symbol in symbols:
+        age_days = _get_symbol_cache_age_days(cache, symbol, data_type=data_type)
+        if age_days is None:
+            # Missing cache should be treated as stale and refreshed.
+            eligible.append(symbol)
+            missing_count += 1
+            continue
+        if age_days >= threshold_days:
+            eligible.append(symbol)
+            ages[symbol] = age_days
+
+    # Prefer oldest symbols first when not explicitly shuffled.
+    eligible.sort(key=lambda s: ages.get(s, float("inf")), reverse=True)
+
+    _logger.info(
+        "Staleness filter: threshold=%.2f days, eligible=%d/%d (missing=%d)",
+        threshold_days, len(eligible), len(symbols), missing_count
+    )
+    return eligible
 
 def refresh_symbol_fundamentals(dm: DataManager, symbol: str, data_types: List[str],
                                force_refresh: bool = False) -> Dict[str, Any]:
@@ -226,6 +291,18 @@ Examples:
                        help=f'Cache directory path (default: {DATA_CACHE_DIR})')
     parser.add_argument('--delay', type=float, default=1.0,
                        help='Delay between symbol refreshes in seconds (default: 1.0)')
+    parser.add_argument('--max-symbols', type=int, default=0,
+                       help='Maximum number of symbols to process (0 = all)')
+    parser.add_argument('--shuffle', action='store_true',
+                       help='Shuffle symbol order before processing')
+    parser.add_argument('--seed', type=int,
+                       help='Optional random seed for deterministic shuffling')
+    parser.add_argument('--stale-min-days', type=float, default=None,
+                       help='Refresh only symbols older than this many days')
+    parser.add_argument('--stale-fraction', type=float, default=None,
+                       help='Refresh only symbols older than TTL * fraction (e.g. 0.7)')
+    parser.add_argument('--stale-ttl-days', type=int, default=14,
+                       help='TTL used with --stale-fraction (default: 14)')
     parser.add_argument('--dry-run', action='store_true',
                        help='Show what would be done without actually doing it')
 
@@ -238,6 +315,8 @@ Examples:
     _logger.info("Cache directory: %s", args.cache_dir)
     _logger.info("Data types: %s", data_types)
     _logger.info("Force refresh: %s", args.force_refresh)
+    _logger.info("Max symbols: %s", args.max_symbols if args.max_symbols > 0 else "all")
+    _logger.info("Shuffle: %s", args.shuffle)
     _logger.info("Dry run: %s", args.dry_run)
 
     if args.dry_run:
@@ -288,6 +367,32 @@ Examples:
         if not symbols:
             _logger.warning("No symbols to refresh")
             return
+
+        # Optional stale-only filtering for staggered refresh schedules
+        if args.stale_min_days is not None or args.stale_fraction is not None:
+            symbols = _filter_symbols_by_staleness(
+                symbols=symbols,
+                cache_dir=args.cache_dir,
+                data_type='general',
+                stale_min_days=args.stale_min_days,
+                stale_fraction=args.stale_fraction,
+                ttl_days=args.stale_ttl_days
+            )
+            if not symbols:
+                _logger.info("No symbols meet stale threshold; nothing to refresh")
+                return
+
+        # Optional randomization to avoid deterministic hotspot ordering
+        if args.shuffle:
+            seed = args.seed if args.seed is not None else int(datetime.now().strftime("%Y%m%d"))
+            random.Random(seed).shuffle(symbols)
+            _logger.info("Shuffled symbol order using seed=%d", seed)
+
+        # Optional hard cap for daily/periodic chunks
+        if args.max_symbols > 0:
+            original_count = len(symbols)
+            symbols = symbols[:args.max_symbols]
+            _logger.info("Limiting processing to %d/%d symbols", len(symbols), original_count)
 
         # Refresh fundamentals for each symbol
         results = []
