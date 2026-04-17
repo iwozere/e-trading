@@ -18,9 +18,12 @@ import pandas as pd
 
 # Import cache directory setting
 from config.donotshare.donotshare import DATA_CACHE_DIR
+from src.notification.logger import setup_logger
 
 # Validation removed - data is cached as-is without validation
 # Validation will be handled by validate_and_fill_gaps.py script
+
+_logger = setup_logger(__name__)
 
 
 class UnifiedCache:
@@ -68,7 +71,12 @@ class UnifiedCache:
                 test_file.unlink()
         except OSError as e:
             fallback_dir = Path("data/cache")
-            print(f"⚠️ Primary cache dir {self.cache_dir} is unavailable ({e}). Falling back to local: {fallback_dir.absolute()}")
+            _logger.warning(
+                "Primary cache dir %s is unavailable (%s). Falling back to local: %s",
+                self.cache_dir,
+                e,
+                fallback_dir.absolute(),
+            )
             self.cache_dir = fallback_dir
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -212,12 +220,19 @@ class UnifiedCache:
                     # Update global metadata for this year (still using generic _update_symbol_metadata)
                     self._update_symbol_metadata(symbol, timeframe, year, year_metadata)
 
-            print(f"✅ Cached {len(df)} rows for {symbol} {timeframe} across {len(saved_files)} years from {provider}")
-            print(f"   Years saved: {sorted(saved_files)}")
+            _logger.info(
+                "Cached %d rows for %s %s across %d years from %s",
+                len(df),
+                symbol,
+                timeframe,
+                len(saved_files),
+                provider,
+            )
+            _logger.debug("Years saved for %s %s: %s", symbol, timeframe, sorted(saved_files))
             return True
 
         except Exception as e:
-            print(f"❌ Error caching data for {symbol} {timeframe}: {str(e)}")
+            _logger.error("Error caching data for %s %s: %s", symbol, timeframe, e)
             return False
 
     def get(self, symbol: str, timeframe: str,
@@ -287,7 +302,7 @@ class UnifiedCache:
             return df
 
         except Exception as e:
-            print(f"❌ Error retrieving data for {symbol} {timeframe}: {str(e)}")
+            _logger.error("Error retrieving data for %s %s: %s", symbol, timeframe, e)
             return None
 
     def _save_compressed_csv(self, df: pd.DataFrame, filepath: Path):
@@ -306,7 +321,7 @@ class UnifiedCache:
                 df = pd.read_csv(f, index_col=0, parse_dates=True)
             return df
         except Exception as e:
-            print(f"❌ Error loading data from {data_file}: {str(e)}")
+            _logger.error("Error loading data from %s: %s", data_file, e)
             return None
 
     def _get_available_years(self, symbol: str, timeframe: str, data_type: str = 'ohlcv') -> List[int]:
@@ -381,7 +396,7 @@ class UnifiedCache:
             return stats
 
         except Exception as e:
-            print(f"❌ Error getting cache stats: {str(e)}")
+            _logger.error("Error getting cache stats: %s", e)
             return {}
 
     def list_symbols(self) -> List[str]:
@@ -436,7 +451,7 @@ class UnifiedCache:
                 except Exception:
                     continue
 
-        print(f"🧹 Cleaned up {removed_files} old files")
+        _logger.info("Cleaned up %d old files", removed_files)
         return removed_files
 
 

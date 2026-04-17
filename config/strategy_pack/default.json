@@ -1,0 +1,59 @@
+{
+  "results_dir": "results/signals",
+  "strategy_1": {
+    "symbols": ["SPY", "QQQ", "VTI", "BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    "timeframe": "1d",
+    "lookback_days": 400,
+    "top_k": 5,
+    "momentum_long_days": 126,
+    "momentum_short_days": 63,
+    "use_vol_scaled": false
+  },
+  "strategy_2": {
+    "symbols": ["SPY", "QQQ", "VTI", "BTCUSDT", "ETHUSDT"],
+    "timeframe": "1d",
+    "lookback_days": 400,
+    "sma_slow": 200,
+    "sma_fast": 50,
+    "use_sma_fast_confirm": false
+  },
+  "strategy_3": {
+    "symbols": ["SPY", "QQQ", "VTI", "BTCUSDT", "ETHUSDT"],
+    "timeframe": "1d",
+    "lookback_days": 800,
+    "weekly_sma": 52,
+    "weekly_sma_fast": 26
+  },
+  "strategy_4": {
+    "timeframe": "1d",
+    "lookback_days": 260,
+    "targets": {
+      "SPY": 0.35,
+      "QQQ": 0.25,
+      "BTCUSDT": 0.2,
+      "ETHUSDT": 0.2
+    },
+    "sma_trend_filter": 200,
+    "skip_add_if_below_sma": true
+  },
+  "strategy_5": {
+    "symbol": "BTCUSDT",
+    "timeframe": "4h",
+    "lookback_days": 120,
+    "donchian": 20,
+    "volume_ma": 20,
+    "atr_period": 14,
+    "risk_reward": 1.5
+  },
+  "strategy_6": {
+    "symbol": "BTCUSDT",
+    "timeframe": "4h",
+    "lookback_days": 240,
+    "ema_period": 50,
+    "supertrend_atr_period": 10,
+    "supertrend_multiplier": 3.0,
+    "long_only": true,
+    "atr_stop_period": 14,
+    "atr_stop_multiplier": 2.0
+  }
+}

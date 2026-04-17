@@ -45,6 +45,33 @@ class YahooDataDownloader(BaseDataDownloader):
         """Initialize Yahoo Finance data downloader."""
         super().__init__()
 
+    @staticmethod
+    def _avg_volume_from_yf_info(info: Dict[str, Any]) -> Optional[float]:
+        """
+        Extract a usable average daily volume from yfinance ``info`` payload.
+
+        Yahoo field names vary by asset class and API version; missing volume
+        here previously caused combined fundamentals to have ``market_cap`` but
+        ``avg_volume=None`` whenever higher-priority providers failed.
+        """
+        if not info:
+            return None
+        for key in (
+            "averageVolume",
+            "averageVolume10days",
+            "averageDailyVolume10Day",
+        ):
+            raw = info.get(key)
+            if raw is None:
+                continue
+            try:
+                val = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if val > 0:
+                return val
+        return None
+
     def _convert_debt_to_equity_ratio(self, value) -> Optional[float]:
         """Convert Yahoo Finance debt/equity percentage to ratio format.
 
@@ -352,6 +379,7 @@ class YahooDataDownloader(BaseDataDownloader):
 
             _logger.debug("Retrieved fundamentals for %s: %s", symbol, info.get('shortName', 'Unknown'))
 
+            avg_volume = self._avg_volume_from_yf_info(info)
             fundamentals = Fundamentals(
                 ticker=symbol.upper(),
                 company_name=info.get("longName", "Unknown"),
@@ -361,6 +389,7 @@ class YahooDataDownloader(BaseDataDownloader):
                 forward_pe=info.get("forwardPE", 0.0),
                 dividend_yield=info.get("dividendYield", 0.0),
                 earnings_per_share=info.get("trailingEps", 0.0),
+                avg_volume=avg_volume,
                 # Additional fields
                 price_to_book=info.get("priceToBook", None),
                 return_on_equity=info.get("returnOnEquity", None),
@@ -441,6 +470,7 @@ class YahooDataDownloader(BaseDataDownloader):
 
                         # Create Fundamentals object with only the data available from batch call
                         # Avoid individual API calls for financial statements unless absolutely necessary
+                        avg_volume = self._avg_volume_from_yf_info(info)
                         results[symbol] = Fundamentals(
                             ticker=symbol.upper(),
                             company_name=info.get("longName", "Unknown"),
@@ -450,6 +480,7 @@ class YahooDataDownloader(BaseDataDownloader):
                             forward_pe=info.get("forwardPE", 0.0),
                             dividend_yield=info.get("dividendYield", 0.0),
                             earnings_per_share=info.get("trailingEps", 0.0),
+                            avg_volume=avg_volume,
                             # Additional fields from batch call
                             price_to_book=info.get("priceToBook", None),
                             return_on_equity=info.get("returnOnEquity", None),
@@ -562,6 +593,7 @@ class YahooDataDownloader(BaseDataDownloader):
                                 pass  # Use price from info if basic data extraction fails
 
                         # Create Fundamentals object with all available data
+                        avg_volume = self._avg_volume_from_yf_info(info)
                         results[symbol] = Fundamentals(
                             ticker=symbol.upper(),
                             company_name=info.get("longName", "Unknown"),
@@ -571,6 +603,7 @@ class YahooDataDownloader(BaseDataDownloader):
                             forward_pe=info.get("forwardPE", 0.0),
                             dividend_yield=info.get("dividendYield", 0.0),
                             earnings_per_share=info.get("trailingEps", 0.0),
+                            avg_volume=avg_volume,
                             # Additional fields from batch call
                             price_to_book=info.get("priceToBook", None),
                             return_on_equity=info.get("returnOnEquity", None),

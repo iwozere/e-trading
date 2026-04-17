@@ -217,8 +217,16 @@ class FundamentalFilter:
                 shares = profile.get('sharesOutstanding')
 
             avg_vol = data.get('avg_volume')
-            if not avg_vol:
-                avg_vol = profile.get('averageVolume') or profile.get('volume')
+            if avg_vol is None or avg_vol == 0:
+                avg_vol = data.get('average_volume')
+            if avg_vol is None or avg_vol == 0:
+                avg_vol = (
+                    profile.get('averageVolume')
+                    or profile.get('averageVolume10days')
+                    or profile.get('avgVolume')
+                    or profile.get('volAvg')
+                    or profile.get('volume')
+                )
 
             current_price = data.get('current_price')
             if not current_price:
