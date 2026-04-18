@@ -1,6 +1,6 @@
 from pathlib import Path
 import sys
-from typing import List, Optional, Set, Dict, Any
+from typing import Any, Dict, List, Optional, Set
 from datetime import datetime
 import time
 
@@ -16,6 +16,13 @@ from src.data.data_manager import DataManager
 from .config import FundamentalFilterConfig
 
 _logger = setup_logger(__name__)
+
+
+def _positive_scalar(value: Any) -> bool:
+    try:
+        return value is not None and float(value) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 class FundamentalFilter:
@@ -209,8 +216,9 @@ class FundamentalFilter:
             # with fallbacks from nested profile dict
             # Use explicit None/zero checks — 0.0 from a bad provider should fall back
             market_cap = data.get('market_cap')
-            if not market_cap:  # None or 0.0
-                market_cap = profile.get('marketCap')
+            # Yahoo often returns 0.0 when marketCap is unknown; still read nested profile.
+            if not _positive_scalar(market_cap):
+                market_cap = profile.get('marketCap') or profile.get('market_cap')
 
             shares = data.get('shares_outstanding')
             if not shares:

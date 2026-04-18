@@ -1566,7 +1566,13 @@ class DataManager:
             if not force_refresh:
                 cached_data = self._get_cached_fundamentals(normalized_symbol, data_type, fundamentals_cache, max_age_days=max_age_days)
                 if cached_data:
-                    return cached_data
+                    return self._enrich_combined_fundamentals_output(
+                        cached_data,
+                        provider_data=None,
+                        symbol=normalized_symbol,
+                        fundamentals_cache=fundamentals_cache,
+                        max_age_days=max_age_days,
+                    )
 
             # 3. Enhanced provider selection
             selected_providers = self._select_fundamentals_providers(normalized_symbol, providers, data_type, combiner)
@@ -1596,6 +1602,14 @@ class DataManager:
             if not combined_data:
                 _logger.error("Failed to combine fundamentals data for %s", normalized_symbol)
                 return {}
+
+            combined_data = self._enrich_combined_fundamentals_output(
+                combined_data,
+                provider_data=provider_data,
+                symbol=normalized_symbol,
+                fundamentals_cache=fundamentals_cache,
+                max_age_days=max_age_days,
+            )
 
             # 6. Cache management and cleanup
             self._cache_fundamentals_data(normalized_symbol, provider_data, combined_data, fundamentals_cache)
@@ -2803,6 +2817,133 @@ class DataManager:
         except Exception:
             _logger.exception("Error combining fundamentals data:")
             return {}
+
+    @staticmethod
+    def _is_positive_fundamental_scalar(value: Any) -> bool:
+        try:
+            return value is not None and float(value) > 0
+        except (TypeError, ValueError):
+            return False
+
+    def _market_cap_from_fundamentals_payload(self, payload: Dict[str, Any]) -> Optional[float]:
+        """Resolve market cap from flat or FMP-style nested fundamentals dict."""
+        if not isinstance(payload, dict):
+            return None
+        for key in ("market_cap", "marketCap"):
+            v = payload.get(key)
+            if self._is_positive_fundamental_scalar(v):
+                return float(v)
+        profile = payload.get("profile")
+        if isinstance(profile, dict):
+            for key in ("marketCap", "market_cap", "mktCap"):
+                v = profile.get(key)
+                if self._is_positive_fundamental_scalar(v):
+                    return float(v)
+        metrics = payload.get("metrics")
+        if isinstance(metrics, dict):
+            v = metrics.get("marketCap")
+            if self._is_positive_fundamental_scalar(v):
+                return float(v)
+        return None
+
+    def _avg_volume_from_fundamentals_payload(self, payload: Dict[str, Any]) -> Optional[float]:
+        """Resolve average daily volume from flat or nested profile/metrics."""
+        if not isinstance(payload, dict):
+            return None
+        for key in ("avg_volume", "average_volume", "averageVolume", "avgVolume"):
+            v = payload.get(key)
+            if v is not None and self._is_positive_fundamental_scalar(v):
+                return float(v)
+        profile = payload.get("profile")
+        if isinstance(profile, dict):
+            for key in ("averageVolume", "averageVolume10days", "avgVolume", "volAvg"):
+                v = profile.get(key)
+                if v is not None and self._is_positive_fundamental_scalar(v):
+                    return float(v)
+        metrics = payload.get("metrics")
+        if isinstance(metrics, dict):
+            for key in ("averageVolume", "averageVolume10days"):
+                v = metrics.get(key)
+                if v is not None and self._is_positive_fundamental_scalar(v):
+                    return float(v)
+        return None
+
+    def _enrich_combined_fundamentals_output(
+        self,
+        combined: Dict[str, Any],
+        provider_data: Optional[Dict[str, Dict[str, Any]]] = None,
+        symbol: Optional[str] = None,
+        fundamentals_cache=None,
+        max_age_days: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Fill missing/invalid market_cap or avg_volume after combine or on cache read.
+
+        Yahoo often emits market_cap=0 for thin ETFs; FMP stores cap under profile.marketCap.
+        FundamentalsCombiner rejects non-positive market_cap, so combined snapshots can omit cap
+        even when a provider payload still contains a valid nested value.
+        """
+        if not combined or not isinstance(combined, dict):
+            return combined
+
+        meta = combined.setdefault("_metadata", {})
+        sources = meta.setdefault("field_sources", {})
+
+        if not self._is_positive_fundamental_scalar(combined.get("market_cap")):
+            cap_val: Optional[float] = None
+            cap_src = None
+            if provider_data:
+                for pname, pdata in provider_data.items():
+                    if not isinstance(pdata, dict):
+                        continue
+                    c = self._market_cap_from_fundamentals_payload(pdata)
+                    if c is not None:
+                        cap_val, cap_src = c, pname
+                        break
+            if cap_val is None and symbol and fundamentals_cache is not None:
+                for pname in ("fmp", "yahoo", "finnhub", "alpha_vantage", "twelvedata"):
+                    meta_file = fundamentals_cache.find_latest_json(
+                        symbol, provider=pname, data_type="general", max_age_days=max_age_days
+                    )
+                    if not meta_file:
+                        continue
+                    payload = fundamentals_cache.read_json(meta_file.file_path)
+                    c = self._market_cap_from_fundamentals_payload(payload or {})
+                    if c is not None:
+                        cap_val, cap_src = c, f"{pname}_cache"
+                        break
+            if cap_val is not None:
+                combined["market_cap"] = cap_val
+                sources["market_cap"] = cap_src or "enrichment"
+
+        if combined.get("avg_volume") is None or not self._is_positive_fundamental_scalar(combined.get("avg_volume")):
+            vol_val: Optional[float] = None
+            vol_src = None
+            if provider_data:
+                for pname, pdata in provider_data.items():
+                    if not isinstance(pdata, dict):
+                        continue
+                    v = self._avg_volume_from_fundamentals_payload(pdata)
+                    if v is not None:
+                        vol_val, vol_src = v, pname
+                        break
+            if vol_val is None and symbol and fundamentals_cache is not None:
+                for pname in ("yahoo", "fmp", "finnhub", "alpha_vantage", "twelvedata"):
+                    meta_file = fundamentals_cache.find_latest_json(
+                        symbol, provider=pname, data_type="general", max_age_days=max_age_days
+                    )
+                    if not meta_file:
+                        continue
+                    payload = fundamentals_cache.read_json(meta_file.file_path)
+                    v = self._avg_volume_from_fundamentals_payload(payload or {})
+                    if v is not None:
+                        vol_val, vol_src = v, f"{pname}_cache"
+                        break
+            if vol_val is not None:
+                combined["avg_volume"] = vol_val
+                sources["avg_volume"] = vol_src or "enrichment"
+
+        return combined
 
     def _validate_combined_fundamentals(self, data: Dict[str, Any]) -> bool:
         """
