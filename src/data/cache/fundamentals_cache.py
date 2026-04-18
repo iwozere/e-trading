@@ -7,6 +7,7 @@ It supports multiple providers and automatic stale data cleanup.
 Cache Structure:
 - {cache_dir}/fundamentals/{symbol}/{provider}_{timestamp}.json
 - Example: c:/data-cache/fundamentals/AAPL/yfinance_20250106_143022.json
+- ``cache_dir`` comes from ``DATA_CACHE_DIR`` in ``config/donotshare/donotshare.py`` (e.g. ``C:\\data-cache`` on a dev box, ``R:\\data-cache`` on production); only that setting differs between environments.
 
 Features:
 - Configurable TTL based on data type (profiles: 14d, ratios: 14d, statements: 90d)
