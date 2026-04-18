@@ -2996,7 +2996,14 @@ class DataManager:
 
         # Cache combined data
         try:
-            fundamentals_cache.write_json(symbol, 'combined', combined_data, timestamp)
+            fundamentals_cache.write_json(symbol, "combined", combined_data, timestamp)
+            removed_combined = fundamentals_cache.cleanup_stale_data(symbol, "combined", timestamp)
+            if removed_combined:
+                _logger.debug(
+                    "Cleaned up %d stale combined files for %s",
+                    len(removed_combined),
+                    symbol,
+                )
         except Exception:
             _logger.exception("Failed to cache combined data for %s:", symbol)
 
