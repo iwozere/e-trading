@@ -90,7 +90,8 @@ class EMPS3PipelineConfig:
     @classmethod
     def create_default(cls) -> "EMPS3PipelineConfig":
         universe_config = UniverseConfig()
-        universe_config.cache_ttl_hours = 168 # 7 Days
+        universe_config.cache_ttl_hours = 168  # 7 days
+        universe_config.exclude_etfs = True  # match p06: equities only from NASDAQ Trader ETF flag
 
         return cls(
             filter_config=EMPS3FilterConfig(),
