@@ -63,9 +63,9 @@ class EMPS2UniverseConfig(SharedUniverseConfig):
     exclude_etfs: bool = True
     alphabetic_only: bool = True  # Remove tickers with numbers/special chars
 
-    # Caching (in results folder, not data/cache)
+    # Caching (in results folder, not data/cache); same default as p10 (1 week)
     cache_enabled: bool = True
-    cache_ttl_hours: int = 24
+    cache_ttl_hours: int = 168
 
 
 @dataclass
