@@ -28,16 +28,20 @@ class EMPS3FilterConfig(FundamentalFilterConfig):
 
     # Accumulation Analyzer Config (Stage C)
     min_vol_zscore: float = 1.5
-    max_price_impact: float = 0.025
-    min_vol_rv_ratio: float = 2.0
+    max_price_impact: float = 0.03 # was - 0.025
+    min_vol_rv_ratio: float = 1.5 # was - 2.0
     lookback_days: int = 10
     require_dark_pool_surge: bool = True
-    max_distance_from_resistance: float = 0.03 # 3% from 52w High
+    max_distance_from_resistance: float = 0.05 # was - 3% from 52w High
     max_distance_from_sma20: float = 0.10      # 10% from SMA20
 
     # Data parameters
     interval: str = "1h"
     atr_period: int = 14
+
+    # Chunking for OHLCV download (keeps peak memory bounded on Pi; also
+    # the checkpoint granularity — diagnostics are persisted after each chunk).
+    ohlcv_chunk_size: int = 50
 
 
 @dataclass

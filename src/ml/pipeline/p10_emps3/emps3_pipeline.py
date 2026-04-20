@@ -69,7 +69,9 @@ class EMPS3Pipeline:
             self.data_manager,
             self.config.filter_config,
             results_dir=self._results_dir,
-            target_date=target_date
+            target_date=target_date,
+            chunk_size=self.config.filter_config.ohlcv_chunk_size,
+            checkpoint_enabled=self.config.checkpoint_enabled,
         )
 
         self.rolling_memory = EMPS3RollingMemoryScanner(

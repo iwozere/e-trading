@@ -83,7 +83,7 @@ def backfill_trf_data(dates: list[datetime]) -> dict:
                 date=date_str,
                 output_dir=output_dir,
                 output_filename="trf.csv",
-                fetch_yfinance_data=True
+                fetch_yfinance_data=False,  # unused downstream; skip to save ~10min/date
             )
 
             result_df = downloader.run()

@@ -20,9 +20,6 @@ entries:
     notes: "long-term hold"
   # `U` (Unity Software, NYSE) occasionally 404s on Yahoo due to single-
   # letter ticker routing; it usually resolves on the next run.
-  - symbol: U
-    avg_price: 18.5
-    notes: "short-term hold (Unity Software, NYSE)"
   - symbol: SRPT
     avg_price: 16.72
     notes: "short-term hold"
@@ -70,9 +67,6 @@ entries:
     notes: "short-term hold"
   - symbol: CRSP
     avg_price: 55.79
-    notes: "short-term hold"
-  - symbol: BEAM
-    avg_price: 25.12
     notes: "short-term hold"
   - symbol: AI
     avg_price: 12.76

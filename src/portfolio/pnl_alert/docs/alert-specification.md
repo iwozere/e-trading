@@ -1,7 +1,7 @@
 # Portfolio PnL Alert - Specification
 
 Owner: portfolio monitoring
-Status: Draft (planning phase, not yet implemented)
+Status: Implemented
 Last updated: 2026-04-20
 
 ## 1. Purpose

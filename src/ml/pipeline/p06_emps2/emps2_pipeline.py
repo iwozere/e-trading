@@ -97,7 +97,8 @@ class EMPS2Pipeline:
         self.volatility_filter = VolatilityFilter(
             self.data_manager,
             self.config.filter_config,
-            target_date=target_date
+            results_dir=self._results_dir,
+            target_date=target_date,
         )
 
         # Rolling memory scanner

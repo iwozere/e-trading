@@ -64,11 +64,17 @@ def download_trf(target_date: Optional[datetime] = None, force_download: bool = 
     trf_dir.mkdir(parents=True, exist_ok=True)
 
     # Download the TRF data
+    # NOTE: fetch_yfinance_data=False is important — the downstream consumer
+    # (get_trf_correction_factor below, plus volatility_filter / accumulation_analyzer)
+    # only reads FINRA's own total_volume / short_volume columns. The default
+    # yfinance merge would download ~9k tickers of daily bars (serial, batched)
+    # which takes ~10 minutes on a Raspberry Pi and is entirely unused.
     _logger.info(f"Downloading TRF data for {date_str}")
     downloader = FinraDataDownloader(
         date=date_str,
         output_dir=str(trf_dir),  # Use the TRF date directory
-        output_filename="trf.csv"
+        output_filename="trf.csv",
+        fetch_yfinance_data=False,
     )
 
     try:

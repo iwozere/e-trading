@@ -33,10 +33,23 @@ class AccumulationAnalyzer:
     High volume buying hidden by low price volatility.
     """
 
-    def __init__(self, data_manager: DataManager, config: EMPS3FilterConfig, results_dir: Path, target_date: Optional[str] = None):
+    def __init__(self, data_manager: DataManager, config: EMPS3FilterConfig, results_dir: Path,
+                 target_date: Optional[str] = None,
+                 chunk_size: int = 50,
+                 checkpoint_enabled: bool = True):
+        """
+        Args:
+            chunk_size: number of tickers to download+process per chunk. Keeps
+                peak memory bounded on constrained hosts (Pi) and allows
+                incremental checkpointing after every chunk.
+            checkpoint_enabled: if True, diagnostics are persisted after each
+                chunk to ``accumulation_checkpoint.csv`` so an interrupted run
+                (OOM-kill, SIGTERM, crash) can resume and skip already-processed
+                tickers on the next run.
+        """
         self.data_manager = data_manager
         self.config = config
-        
+
         if target_date is None:
             target_date = datetime.now().strftime('%Y-%m-%d')
         self.target_date = target_date
@@ -44,92 +57,174 @@ class AccumulationAnalyzer:
         self._results_dir = results_dir
         self._results_dir.mkdir(parents=True, exist_ok=True)
 
-        _logger.info("Accumulation Analyzer initialized: AR>%.1f, Vol Z-Score>%.1f",
-                     config.min_vol_rv_ratio, config.min_vol_zscore)
+        self.chunk_size = max(1, int(chunk_size))
+        self.checkpoint_enabled = bool(checkpoint_enabled)
+        self._checkpoint_path = self._results_dir / "accumulation_checkpoint.csv"
+
+        _logger.info(
+            "Accumulation Analyzer initialized: AR>%.1f, Vol Z-Score>%.1f, "
+            "chunk_size=%d, checkpoint=%s",
+            config.min_vol_rv_ratio, config.min_vol_zscore,
+            self.chunk_size, self.checkpoint_enabled,
+        )
 
     def apply_filters(self, tickers: List[str]) -> pd.DataFrame:
+        _logger.info("Applying Accumulation Analyzer to %d tickers", len(tickers))
+
+        end_date = datetime.strptime(self.target_date, '%Y-%m-%d') + timedelta(days=1)
+        # Intraday (5m/15m/30m/1h) is typically capped to ~60 days on Yahoo.
+        start_date_intraday = end_date - timedelta(days=60)
+        # Daily needs ~1y for 52w high and 12m BB min.
+        start_date_daily = end_date - timedelta(days=365)
+        trf_date = datetime.strptime(self.target_date, '%Y-%m-%d')
+
+        # Resume from checkpoint if present.
+        diagnostic_data, processed_tickers = self._load_checkpoint()
+        if processed_tickers:
+            _logger.info(
+                "Resuming from checkpoint: %d tickers already processed (%d remaining)",
+                len(processed_tickers), len(tickers) - len(processed_tickers),
+            )
+        remaining = [t for t in tickers if t not in processed_tickers]
+
+        total = len(tickers)
+        chunks = [remaining[i:i + self.chunk_size] for i in range(0, len(remaining), self.chunk_size)]
+
         try:
-            _logger.info("Applying Accumulation Analyzer to %d tickers", len(tickers))
+            for chunk_idx, chunk in enumerate(chunks, start=1):
+                _logger.info(
+                    "Chunk %d/%d: processing %d tickers (%d/%d done so far)",
+                    chunk_idx, len(chunks), len(chunk), len(processed_tickers), total,
+                )
 
-            from datetime import datetime as dt
-            # Need a longer lookback for 52w high and 20d SMA, and 12-m BB minimum.
-            # Intraday data won't cover 52 weeks. For 52w high and SMA20, we may need daily data, 
-            # but we can try to get it via Yahoo downloader.
-            # However, the downloader.get_ohlcv_batch interval is 1h usually. 
-            # We will use intraday for recent logic and rely on the downloaded data.
-            # Since 12-month BB Width minimum requires 1 year of daily data, let's fetch daily data as well.
-            
-            # Fetch intraday data for recent metrics
-            end_date = dt.strptime(self.target_date, '%Y-%m-%d') + timedelta(days=1)
-            # Intraday 15m/1h limited to 60 days usually in yfinance. 
-            # We will use 60 days for intraday.
-            start_date_intraday = end_date - timedelta(days=60)
-            
-            _logger.info("Downloading %s data for %d tickers", self.config.interval, len(tickers))
-            ohlcv_intraday = self.data_manager.get_ohlcv_batch(tickers, self.config.interval, start_date_intraday, end_date)
-            
-            # Fetch daily data for 52-week High, 20-day SMA, 12-month BB
-            start_date_daily = end_date - timedelta(days=365)
-            ohlcv_daily = self.data_manager.get_ohlcv_batch(tickers, "1d", start_date_daily, end_date)
-            
-            # target_date for TRF is usually yesterday
-            trf_date = dt.strptime(self.target_date, '%Y-%m-%d')
-            
-            passed_tickers = []
-            results_data = []
-            diagnostic_data = []
-
-            for ticker in tickers:
+                # Download OHLCV for just this chunk. A chunk failure is
+                # contained: all of its tickers are marked ERROR, pipeline
+                # continues.
                 try:
-                    df_intra = self._coerce_ohlcv_timestamp_column(ohlcv_intraday.get(ticker))
-                    df_daily = self._coerce_ohlcv_timestamp_column(ohlcv_daily.get(ticker))
-
-                    if df_intra is None or df_intra.empty or df_daily is None or df_daily.empty:
-                        # Log failure
-                        diagnostic_data.append({'ticker': ticker, 'status': 'FAILED', 'reason': 'no_data'})
-                        continue
-
-                    if len(df_intra) < 20 or len(df_daily) < 20:
-                        diagnostic_data.append({'ticker': ticker, 'status': 'FAILED', 'reason': 'insufficient_bars'})
-                        continue
-
-                    trf_factor = get_trf_correction_factor(ticker, trf_date)
-                    if trf_factor != 1.0:
-                        df_intra = self._apply_trf_volume_correction(df_intra, trf_factor)
-                        df_daily = self._apply_trf_volume_correction(df_daily, trf_factor)
-                    else:
-                        trf_factor = None
-
-                    passed, metrics, reason = self._check_accumulation(ticker, df_intra, df_daily)
-                    metrics['trf_correction_factor'] = trf_factor
-
-                    if passed:
-                        passed_tickers.append(ticker)
-                        results_data.append(metrics)
-                        diag_entry = metrics.copy()
-                        diag_entry['status'] = 'PASSED'
-                        diag_entry['reason'] = 'all_filters_passed'
-                        diagnostic_data.append(diag_entry)
-                    else:
-                        diag_entry = metrics.copy()
-                        diag_entry['status'] = 'FAILED'
-                        diag_entry['reason'] = reason
-                        diagnostic_data.append(diag_entry)
-                        
+                    ohlcv_intraday = self.data_manager.get_ohlcv_batch(
+                        chunk, self.config.interval, start_date_intraday, end_date,
+                    )
+                    ohlcv_daily = self.data_manager.get_ohlcv_batch(
+                        chunk, "1d", start_date_daily, end_date,
+                    )
                 except Exception as e:
-                    _logger.exception("Error processing %s", ticker)
-                    diagnostic_data.append({'ticker': ticker, 'status': 'ERROR', 'reason': str(e)})
+                    _logger.exception(
+                        "OHLCV batch download failed for chunk %d (size=%d); marking as errors",
+                        chunk_idx, len(chunk),
+                    )
+                    for ticker in chunk:
+                        diagnostic_data.append({
+                            'ticker': ticker,
+                            'status': 'ERROR',
+                            'reason': f'ohlcv_download_failed: {e.__class__.__name__}',
+                        })
+                        processed_tickers.add(ticker)
+                    self._save_checkpoint(diagnostic_data)
+                    continue
 
-            # Save results
-            self._save_diagnostics(diagnostic_data)
-            self._save_results(results_data)
+                for ticker in chunk:
+                    try:
+                        df_intra = self._coerce_ohlcv_timestamp_column(ohlcv_intraday.get(ticker))
+                        df_daily = self._coerce_ohlcv_timestamp_column(ohlcv_daily.get(ticker))
 
-            # Return the DataFrame of results
-            return pd.DataFrame(results_data)
+                        if df_intra is None or df_intra.empty or df_daily is None or df_daily.empty:
+                            diagnostic_data.append({'ticker': ticker, 'status': 'FAILED', 'reason': 'no_data'})
+                            continue
 
+                        if len(df_intra) < 20 or len(df_daily) < 20:
+                            diagnostic_data.append({'ticker': ticker, 'status': 'FAILED', 'reason': 'insufficient_bars'})
+                            continue
+
+                        trf_factor = get_trf_correction_factor(ticker, trf_date)
+                        if trf_factor != 1.0:
+                            df_intra = self._apply_trf_volume_correction(df_intra, trf_factor)
+                            df_daily = self._apply_trf_volume_correction(df_daily, trf_factor)
+                        else:
+                            trf_factor = None
+
+                        passed, metrics, reason = self._check_accumulation(ticker, df_intra, df_daily)
+                        metrics['trf_correction_factor'] = trf_factor
+
+                        diag_entry = metrics.copy()
+                        if passed:
+                            diag_entry['status'] = 'PASSED'
+                            diag_entry['reason'] = 'all_filters_passed'
+                        else:
+                            diag_entry['status'] = 'FAILED'
+                            diag_entry['reason'] = reason
+                        diagnostic_data.append(diag_entry)
+
+                    except Exception as e:
+                        _logger.exception("Error processing %s", ticker)
+                        diagnostic_data.append({'ticker': ticker, 'status': 'ERROR', 'reason': str(e)})
+                    finally:
+                        processed_tickers.add(ticker)
+
+                # Release chunk-scoped references before next iteration (Pi RAM hygiene).
+                ohlcv_intraday = None
+                ohlcv_daily = None
+
+                # Per-chunk checkpoint + progress log.
+                self._save_checkpoint(diagnostic_data)
+                passed_so_far = sum(1 for d in diagnostic_data if d.get('status') == 'PASSED')
+                _logger.info(
+                    "Progress: %d/%d tickers (%.1f%%), passed so far: %d",
+                    len(processed_tickers), total,
+                    100.0 * len(processed_tickers) / max(1, total),
+                    passed_so_far,
+                )
+
+        except KeyboardInterrupt:
+            _logger.warning("Interrupted by user; flushing checkpoint so the next run can resume.")
+            self._save_checkpoint(diagnostic_data)
+            raise
         except Exception:
-            _logger.exception("Error applying accumulation filters:")
-            return []
+            _logger.exception("Unhandled error in accumulation analyzer; flushing checkpoint.")
+            self._save_checkpoint(diagnostic_data)
+            raise
+
+        # Normal completion — persist final outputs, then clear checkpoint.
+        results_data = [d for d in diagnostic_data if d.get('status') == 'PASSED']
+        self._save_diagnostics(diagnostic_data)
+        self._save_results(results_data)
+        self._clear_checkpoint()
+
+        return pd.DataFrame(results_data)
+
+    # ------------------------------------------------------------------
+    # Checkpoint helpers
+    # ------------------------------------------------------------------
+    def _save_checkpoint(self, diagnostic_data: list) -> None:
+        if not self.checkpoint_enabled or not diagnostic_data:
+            return
+        try:
+            pd.DataFrame(diagnostic_data).to_csv(self._checkpoint_path, index=False)
+        except Exception:
+            _logger.exception("Failed to write accumulation checkpoint (non-fatal)")
+
+    def _load_checkpoint(self) -> tuple:
+        """Return (diagnostic_data list, processed_tickers set)."""
+        if not self.checkpoint_enabled or not self._checkpoint_path.exists():
+            return [], set()
+        try:
+            df = pd.read_csv(self._checkpoint_path)
+            if df.empty or 'ticker' not in df.columns:
+                return [], set()
+            records = df.to_dict(orient='records')
+            processed = {str(t).upper() for t in df['ticker'].dropna().astype(str)}
+            return records, processed
+        except Exception:
+            _logger.exception("Failed to read accumulation checkpoint; starting fresh")
+            return [], set()
+
+    def _clear_checkpoint(self) -> None:
+        if not self.checkpoint_enabled:
+            return
+        try:
+            if self._checkpoint_path.exists():
+                self._checkpoint_path.unlink()
+        except Exception:
+            _logger.exception("Failed to remove accumulation checkpoint (non-fatal)")
 
     def _check_accumulation(self, ticker: str, df_intra: pd.DataFrame, df_daily: pd.DataFrame) -> tuple:
         df_intra = df_intra.sort_values('timestamp').copy()
