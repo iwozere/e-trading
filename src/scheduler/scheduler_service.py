@@ -485,7 +485,11 @@ class SchedulerService:
             # Execute based on job type
             result = None
             if schedule.job_type == JobType.ALERT.value:
-                result = await self._execute_alert_job(schedule, run_record)
+                target = (schedule.target or "").strip()
+                if target.startswith("portfolio."):
+                    result = await self._execute_portfolio_job(schedule, run_record)
+                else:
+                    result = await self._execute_alert_job(schedule, run_record)
             elif schedule.job_type == JobType.SCREENER.value:
                 result = await self._execute_screener_job(schedule, run_record)
             elif schedule.job_type == JobType.REPORT.value:
@@ -547,6 +551,42 @@ class SchedulerService:
         except Exception:
             _logger.exception("Error executing alert job:")
             raise
+
+    async def _execute_portfolio_job(
+        self,
+        schedule: ScheduleResponse,
+        run_record: ScheduleRunResponse,
+    ) -> Dict[str, Any]:
+        """
+        Execute a portfolio.* job.
+
+        Dispatches schedules whose `target` starts with `"portfolio."` to the
+        matching Python handler. Today only `"portfolio.pnl_alert"` is
+        supported (see `src.portfolio.pnl_alert.runner.run_once`).
+
+        Args:
+            schedule: Schedule object (with `target` and `task_params`).
+            run_record: ScheduleRun object (unused today, kept for parity).
+
+        Returns:
+            Dictionary with execution results, stored as the run's result JSON.
+        """
+        target = (schedule.target or "").strip()
+        task_params = schedule.task_params or {}
+
+        if target == "portfolio.pnl_alert":
+            from src.portfolio.pnl_alert.config import DEFAULT_CONFIG_PATH, load_config
+            from src.portfolio.pnl_alert.runner import run_once, summary_to_dict
+
+            config_path = task_params.get("config_path", DEFAULT_CONFIG_PATH)
+            cfg = load_config(config_path)
+            summary = await run_once(cfg)
+            return {
+                "target": target,
+                "summary": summary_to_dict(summary),
+            }
+
+        raise ValueError(f"Unsupported portfolio target: {target!r}")
 
     async def _execute_screener_job(self, schedule: ScheduleResponse, run_record: ScheduleRunResponse) -> Dict[str, Any]:
         """

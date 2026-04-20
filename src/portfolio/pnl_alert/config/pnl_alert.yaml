@@ -1,0 +1,25 @@
+# Portfolio PnL Alert - Pipeline configuration.
+
+# Notify when current price is at least this fraction above the average buy price.
+# 0.10 means +10%.
+threshold_pct: 0.10
+
+# Channels to notify (any subset of: telegram, email).
+channels:
+  - telegram
+  - email
+
+# Cron expression for scheduled execution (UTC).
+# Default: 21:30 UTC on weekdays (~ US cash close).
+cron: "30 21 * * 1-5"
+
+# Path (relative to project root) to the user-editable watchlist YAML.
+watchlist_path: src/portfolio/pnl_alert/config/watchlist.yaml
+
+# Whether to connect to IBKR and merge live positions into the alert.
+# Set to false if you only want to monitor the YAML watchlist.
+include_ibkr: true
+
+# Restrict IBKR positions to stock (STK) sec-types only. Options / FX
+# positions are filtered out.
+ibkr_stk_only: true

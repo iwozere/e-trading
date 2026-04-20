@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.ml.pipeline.shared.config import (
-    FundamentalFilterConfig, 
-    SentimentFilterConfig, 
+    FundamentalFilterConfig,
+    SentimentFilterConfig,
     UniverseConfig
 )
 
@@ -47,12 +47,12 @@ class EMPS3RollingMemoryConfig:
     """
     enabled: bool = True
     lookback_days: int = 5
-    
+
     # Phase 1.5 detection (Early Warning)
     phase1_5_min_appearances: int = 3
     min_vol_slope: float = 0.05      # Minimum volume acceleration slope
     max_atr_slope: float = -0.0001   # Maximum ATR contraction slope (must be negative)
-    
+
     # Alert settings
     send_alerts: bool = True
     alert_on_phase_1_5: bool = True
@@ -72,7 +72,7 @@ class EMPS3PipelineConfig:
     rolling_memory_config: EMPS3RollingMemoryConfig
     # We can reuse sentiment config if we want to run sentiment stage
     sentiment_config: SentimentFilterConfig
-    
+
     mode: str = "precursor"
 
     # Output settings

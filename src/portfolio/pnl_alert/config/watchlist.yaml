@@ -1,0 +1,79 @@
+# Portfolio PnL Alert - User watchlist.
+#
+# Add positions held outside IBKR, or manually tracked entries, here.
+# Each entry needs a symbol and your average buy price in USD.
+#
+# If a symbol also exists in IBKR, the IBKR average cost wins and a
+# warning is logged.
+#
+# Symbols are passed to Yahoo Finance (via the shared DataManager). For
+# non-US listings use the Yahoo exchange suffix, e.g. VUSD.L for the
+# London-listed Vanguard ETF. Symbols that cannot be priced are simply
+# skipped with a WARNING (they do not fail the whole run).
+
+entries:
+  - symbol: VUSD.L
+    avg_price: 124.93
+    notes: "long-term hold (Vanguard S&P 500 UCITS ETF, LSE USD line)"
+  - symbol: VT
+    avg_price: 112.6
+    notes: "long-term hold"
+  # `U` (Unity Software, NYSE) occasionally 404s on Yahoo due to single-
+  # letter ticker routing; it usually resolves on the next run.
+  - symbol: U
+    avg_price: 18.5
+    notes: "short-term hold (Unity Software, NYSE)"
+  - symbol: SRPT
+    avg_price: 16.72
+    notes: "short-term hold"
+  - symbol: RPD
+    avg_price: 13.47
+    notes: "short-term hold"
+  - symbol: RGNX
+    avg_price: 8.78
+    notes: "short-term hold"
+  - symbol: PINS
+    avg_price: 27.02
+    notes: "short-term hold"
+  - symbol: ORCL
+    avg_price: 198.05
+    notes: "short-term hold"
+  - symbol: OMDA
+    avg_price: 10.82
+    notes: "short-term hold"
+  - symbol: NVDA
+    avg_price: 179.19
+    notes: "short-term hold"
+  - symbol: MELI
+    avg_price: 1854.25
+    notes: "short-term hold"
+  - symbol: IOVA
+    avg_price: 2.21
+    notes: "short-term hold"
+  - symbol: IONQ
+    avg_price: 48.79
+    notes: "short-term hold"
+  - symbol: FIVN
+    avg_price: 20.44
+    notes: "short-term hold"
+  - symbol: ESTC
+    avg_price: 79
+    notes: "short-term hold"
+  - symbol: DXCM
+    avg_price: 65.45
+    notes: "short-term hold"
+  - symbol: DKNG
+    avg_price: 29.86
+    notes: "short-term hold"
+  - symbol: DCTH
+    avg_price: 10.52
+    notes: "short-term hold"
+  - symbol: CRSP
+    avg_price: 55.79
+    notes: "short-term hold"
+  - symbol: BEAM
+    avg_price: 25.12
+    notes: "short-term hold"
+  - symbol: AI
+    avg_price: 12.76
+    notes: "short-term hold"

@@ -31,7 +31,7 @@ symbol_classification:
   
   stock:
     patterns:
-      - "^[A-Z]{2,5}$"          # GOOGL, AAPL, MSFT, etc. (2-5 letters)
+      - "^[A-Z]{1,5}$"          # F, U, GOOGL, AAPL, MSFT, etc. (1-5 letters)
       - "^[A-Z]{1,4}\\.[A-Z]$"  # BRK.A, BRK.B, etc.
       - "^\\^[A-Z]{1,10}$"      # ^VIX, ^GSPC, etc. (Indices)
     exchange_suffixes:
