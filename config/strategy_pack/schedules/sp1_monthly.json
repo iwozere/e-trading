@@ -1,0 +1,12 @@
+{
+  "results_dir": "results/signals",
+  "strategy_1": {
+    "symbols": ["SPY", "QQQ", "VTI", "BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    "timeframe": "1d",
+    "lookback_days": 400,
+    "top_k": 5,
+    "momentum_long_days": 126,
+    "momentum_short_days": 63,
+    "use_vol_scaled": false
+  }
+}

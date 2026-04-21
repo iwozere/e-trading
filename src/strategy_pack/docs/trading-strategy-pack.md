@@ -545,8 +545,8 @@ If out-of-sample Sharpe drops by more than ~30% relative to in-sample, the param
 | CLI runner | Done | `python src/strategy_pack/run.py ...` (`__main__.py` is intentionally empty) |
 | Logging | Done | `setup_logger` on all modules |
 | Notifications | Done | `NotificationServiceClient` + `src/strategy_pack/notify.py` (`MessageType.ALERT`); `recipient_id` routed from `--user-id` |
-| APScheduler / DB job registration (SP-1..4) | Done | `bin/scheduler/insert_strategy_pack_schedules.sql` registers SP-1/2/3/4 as `data_processing` jobs; scheduler auto-injects `--user-id`. |
-| APScheduler / DB job registration (SP-5, SP-6) | Deferred | Live-feed-ish strategies — integrate later once the intraday cadence story is settled (4h / per-timeframe bar close). |
+| APScheduler / DB job registration (SP-1..4) | Done | `bin/scheduler/insert_strategy_pack_schedules.sql` registers SP-1/2/3/4 as `data_processing` jobs; each uses its own per-schedule config under `config/strategy_pack/schedules/` (`sp1_monthly.json`, `sp2_daily.json`, `sp3_weekly.json`, `sp4_quarterly.json`). Scheduler auto-injects `--user-id`. |
+| APScheduler / DB job registration (SP-5, SP-6) | Done | `bin/scheduler/insert_strategy_pack_intraday_schedules.sql` registers SP-5 (BTC 4h, BTC 1h, SPY 1h) and SP-6 (BTC 4h, BTC 1d) as `data_processing` jobs; configs under `config/strategy_pack/schedules/sp5_*.json` and `sp6_*.json`. |
 | Vectorbt / Optuna wiring for pack | Not done | Still use existing `src/vectorbt/` pipelines separately; Strategy 6 Optuna search not duplicated here. |
 | Unit tests | Partial | `tests/test_strategy_pack_models.py` |
 
@@ -590,56 +590,62 @@ python src/strategy_pack/run.py [flags...]
 - `DataManager` providers (e.g. Yahoo / Binance) must work for your symbols; see `config/data/provider_rules.yaml`.
 - Notifications: set `NOTIFICATION_SERVICE_URL` if not using default `http://localhost:5003`, or rely on client DB fallback as elsewhere in the project.
 
+All scheduled strategies live in `config/strategy_pack/schedules/` and are referenced by the DB `job_schedules` rows via `-c <path>`. `config/strategy_pack/default.json` is kept as a playground / fallback for ad-hoc runs.
+
 **Strategy 1 — Momentum-Growth (SP-1)**
 
 ```bash
-python src/strategy_pack/run.py run -s 1 -v A --user-id 2
+python src/strategy_pack/run.py run -s 1 -v A -c config/strategy_pack/schedules/sp1_monthly.json --user-id 2
 ```
 
-Edit `strategy_1` in `config/strategy_pack/default.json` (`symbols`, `top_k`, `lookback_days`, `use_vol_scaled`).
+Edit `strategy_1` in `config/strategy_pack/schedules/sp1_monthly.json` (`symbols`, `top_k`, `lookback_days`, `use_vol_scaled`).
 
 **Strategy 2 — Daily SMA trend (SP-2)**
 
 ```bash
-python src/strategy_pack/run.py run -s 2 -v A --user-id 2
-python src/strategy_pack/run.py run --dry-run -s 2
+python src/strategy_pack/run.py run -s 2 -v A -c config/strategy_pack/schedules/sp2_daily.json --user-id 2
+python src/strategy_pack/run.py run --dry-run -s 2 -c config/strategy_pack/schedules/sp2_daily.json
 ```
 
-Edit `strategy_2` (`symbols`, `sma_slow`, `sma_fast`, `use_sma_fast_confirm`).
+Edit `strategy_2` in `sp2_daily.json` (`symbols`, `sma_slow`, `sma_fast`, `use_sma_fast_confirm`).
 
 **Strategy 3 — Weekly lazy trend (SP-3)**
 
 ```bash
-python src/strategy_pack/run.py run -s 3 -v A --user-id 2
+python src/strategy_pack/run.py run -s 3 -v A -c config/strategy_pack/schedules/sp3_weekly.json --user-id 2
 ```
 
-Edit `strategy_3` (`weekly_sma`, `weekly_sma_fast`, `symbols`).
+Edit `strategy_3` in `sp3_weekly.json` (`weekly_sma`, `weekly_sma_fast`, `symbols`).
 
 **Strategy 4 — Rebalance advisory (SP-4)**
 
 ```bash
-python src/strategy_pack/run.py run -s 4 -v A --user-id 2
+python src/strategy_pack/run.py run -s 4 -v A -c config/strategy_pack/schedules/sp4_quarterly.json --user-id 2
 ```
 
-Edit `strategy_4.targets` and optional `current_weights` object (same keys as targets) when you track a real portfolio.
+Edit `strategy_4.targets` (and optional `current_weights`) in `sp4_quarterly.json` when you track a real portfolio.
 
-**Strategy 5 — Swing (SP-5)** — _scheduler integration deferred; run manually for now_
+**Strategy 5 — Swing (SP-5)**
+
+Scheduled variants live in `config/strategy_pack/schedules/sp5_*.json` (BTC 4h, BTC 1h, SPY 1h). Manual invocation:
 
 ```bash
-python src/strategy_pack/run.py run -s 5 -v A --user-id 2
+python src/strategy_pack/run.py run -s 5 -v A -c config/strategy_pack/schedules/sp5_btc_4h.json --user-id 2
 python src/strategy_pack/run.py run -s 5 -v B --user-id 2
 python src/strategy_pack/run.py run -s 5 -v C --user-id 2
 ```
 
-Edit `strategy_5` (`symbol`, `timeframe`, `donchian`, etc.).
+Edit the relevant per-schedule file (or `strategy_5` block in `default.json`) to change `symbol`, `timeframe`, `donchian`, etc.
 
-**Strategy 6 — EMA + SuperTrend (SP-6)** — _scheduler integration deferred; run manually for now_
+**Strategy 6 — EMA + SuperTrend (SP-6)**
+
+Scheduled variants live in `config/strategy_pack/schedules/sp6_*.json` (BTC 4h, BTC 1d). Manual invocation:
 
 ```bash
-python src/strategy_pack/run.py run -s 6 -v A --user-id 2
+python src/strategy_pack/run.py run -s 6 -v A -c config/strategy_pack/schedules/sp6_btc_4h.json --user-id 2
 ```
 
-Edit `strategy_6` (`timeframe`, `ema_period`, `supertrend_*`, `long_only`, ATR stop fields).
+Edit the relevant per-schedule file to change `timeframe`, `ema_period`, `supertrend_*`, `long_only`, ATR stop fields.
 
 **Run several at once**
 
@@ -655,25 +661,41 @@ Set-Location c:\dev\cursor\e-trading
 python src\strategy_pack\run.py run -s 2 --dry-run
 ```
 
-**Scheduler (DB-backed, SP-1..SP-4)**
+**Scheduler (DB-backed)**
 
-SP-1, SP-2, SP-3, and SP-4 are registered via `job_schedules` rows, executed by `src/scheduler/scheduler_service.py` as `data_processing` jobs. Apply once against your env:
+All six strategies are registered via `job_schedules` rows, executed by `src/scheduler/scheduler_service.py` as `data_processing` jobs. Two SQL files:
 
 ```bash
+# SP-1..SP-4 — daily / weekly / monthly / quarterly, use default.json
 psql "$DATABASE_URL" -f bin/scheduler/insert_strategy_pack_schedules.sql
+
+# SP-5 (BTC 4h, BTC 1h, SPY 1h) + SP-6 (BTC 4h, BTC 1d) — each uses
+# a dedicated config under config/strategy_pack/schedules/
+psql "$DATABASE_URL" -f bin/scheduler/insert_strategy_pack_intraday_schedules.sql
 ```
 
-Then either wait for the `scheduler_updates` LISTEN/NOTIFY reload or restart the scheduler service. The scheduler runs:
+After applying, either wait for the `scheduler_updates` LISTEN/NOTIFY reload or restart the scheduler service. The scheduler runs:
 
 ```
-python <PROJECT_ROOT>/src/strategy_pack/run.py run -s <N> -v A --user-id <job_schedules.user_id>
+python <PROJECT_ROOT>/src/strategy_pack/run.py run -s <N> -v <V> \
+       [-c <per-schedule-config.json>] --user-id <job_schedules.user_id>
 ```
 
-The runner emits a `__SCHEDULER_RESULT__:` JSON line (parsed into `job_schedule_runs.result`) with `signal_rows`, `notifiable_signals`, `notifications_sent`, `dry_run`, `user_id`. Notifications are sent in-process by the pack (deduped via `DedupStore`), so the schedule rows intentionally **omit** `task_params.notification_rules` to avoid double-delivery.
+The runner emits a `__SCHEDULER_RESULT__:` JSON line (parsed into `job_schedule_runs.result`) with `signal_rows`, `notifiable_signals`, `notifications_sent`, `dry_run`, `user_id`, `strategies_requested`, `variant`. Notifications are sent in-process by the pack (deduped via `DedupStore`), so the schedule rows intentionally **omit** `task_params.notification_rules` to avoid double-delivery.
 
-**Scheduler (SP-5, SP-6 — deferred)**
+Cadence summary (all UTC, scheduled 2 min after bar close so the candle is final):
 
-Live-feed-ish strategies (SP-5 swing on 1h/4h, SP-6 per-timeframe EMA+SuperTrend) are not yet in the DB schedule set. Run them manually at the cadence described in **Operational model** above, or integrate later with a cron that matches the chosen bar close (e.g. `0 */4 * * *` for 4h).
+| Schedule | Cron | Notes |
+|---|---|---|
+| SP-1 Monthly Momentum | `0 1 1 * *` | — |
+| SP-2 Daily Trend | `30 22 * * *` | Post US RTH close |
+| SP-3 Weekly Lazy | `0 22 * * 0` | Sunday |
+| SP-4 Quarterly Rebalance | `0 2 1 1,4,7,10 *` | — |
+| SP-5 Swing BTC 4h | `2 0,4,8,12,16,20 * * *` | Binance |
+| SP-5 Swing BTC 1h | `2 * * * *` | Binance |
+| SP-5 Swing SPY 1h | `2 14-22 * * 1-5` | yfinance; covers US RTH across DST/winter |
+| SP-6 EMA+SuperTrend BTC 4h | `2 0,4,8,12,16,20 * * *` | Binance |
+| SP-6 EMA+SuperTrend BTC 1d | `5 0 * * *` | Binance daily close (00:00 UTC) |
 
 ---
 
@@ -691,7 +713,7 @@ Phased work so scheduling, logging, notifications, data, and research stay align
 ### Phase 1 — Scheduling
 
 - **Persisted cron (SP-1..4)** — Done: `bin/scheduler/insert_strategy_pack_schedules.sql` registers four `data_processing` jobs in `job_schedules`; executed by `src/scheduler/scheduler_service.py`.
-- **Persisted cron (SP-5, SP-6)** — Deferred until the intraday cadence is decided.
+- **Persisted cron (SP-5, SP-6)** — Done: `bin/scheduler/insert_strategy_pack_intraday_schedules.sql` registers SP-5 (BTC 4h/1h, SPY 1h) and SP-6 (BTC 4h/1d). Each schedule uses a dedicated file under `config/strategy_pack/schedules/` so symbol/timeframe are per-schedule and not coupled to `default.json`.
 - **CLI entrypoint** — Done: `python src/strategy_pack/run.py run ...` (the script is self-bootstrapping; `__main__.py` is intentionally empty).
 - **Cadence table** — Documented above; operator maps cron to `-s` values.
 - **Scheduler hand-off** — Done: runner accepts `--user-id` (auto-injected by `SchedulerService`, plumbed into `NotificationServiceClient.recipient_id`) and prints a `__SCHEDULER_RESULT__:` JSON summary for `job_schedule_runs.result`.

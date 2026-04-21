@@ -1,0 +1,14 @@
+{
+  "results_dir": "results/signals",
+  "strategy_6": {
+    "symbol": "BTCUSDT",
+    "timeframe": "1d",
+    "lookback_days": 800,
+    "ema_period": 100,
+    "supertrend_atr_period": 10,
+    "supertrend_multiplier": 3.0,
+    "long_only": true,
+    "atr_stop_period": 14,
+    "atr_stop_multiplier": 2.0
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "results_dir": "results/signals",
+  "strategy_2": {
+    "symbols": ["SPY", "QQQ", "VTI", "BTCUSDT", "ETHUSDT"],
+    "timeframe": "1d",
+    "lookback_days": 400,
+    "sma_slow": 200,
+    "sma_fast": 50,
+    "use_sma_fast_confirm": false
+  }
+}

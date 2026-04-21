@@ -1,0 +1,12 @@
+{
+  "results_dir": "results/signals",
+  "strategy_5": {
+    "symbol": "SPY",
+    "timeframe": "1h",
+    "lookback_days": 45,
+    "donchian": 20,
+    "volume_ma": 20,
+    "atr_period": 14,
+    "risk_reward": 1.5
+  }
+}

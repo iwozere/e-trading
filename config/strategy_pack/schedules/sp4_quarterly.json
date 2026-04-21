@@ -1,0 +1,15 @@
+{
+  "results_dir": "results/signals",
+  "strategy_4": {
+    "timeframe": "1d",
+    "lookback_days": 260,
+    "targets": {
+      "SPY": 0.35,
+      "QQQ": 0.25,
+      "BTCUSDT": 0.2,
+      "ETHUSDT": 0.2
+    },
+    "sma_trend_filter": 200,
+    "skip_add_if_below_sma": true
+  }
+}
