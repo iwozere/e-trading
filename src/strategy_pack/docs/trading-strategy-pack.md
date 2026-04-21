@@ -542,10 +542,11 @@ If out-of-sample Sharpe drops by more than ~30% relative to in-sample, the param
 | Default universes / parameters | Done | `config/strategy_pack/default.json` |
 | Data loading | Done | `DataManager.get_ohlcv` via `src/strategy_pack/strategies.py` |
 | Strategies 1–6 signal rules (v1) | Done | `src/strategy_pack/strategies.py` (simplified vs prose spec; see per-strategy notes below) |
-| CLI runner | Done | `python -m src.strategy_pack` → `src/strategy_pack/run.py` |
+| CLI runner | Done | `python src/strategy_pack/run.py ...` (`__main__.py` is intentionally empty) |
 | Logging | Done | `setup_logger` on all modules |
-| Notifications | Done | `NotificationServiceClient` + `src/strategy_pack/notify.py` (`MessageType.ALERT`) |
-| APScheduler / DB job registration | Not done | Wire `run` subcommand from `src/scheduler/scheduler_service.py` when you are ready (same pattern as other batch jobs). |
+| Notifications | Done | `NotificationServiceClient` + `src/strategy_pack/notify.py` (`MessageType.ALERT`); `recipient_id` routed from `--user-id` |
+| APScheduler / DB job registration (SP-1..4) | Done | `bin/scheduler/insert_strategy_pack_schedules.sql` registers SP-1/2/3/4 as `data_processing` jobs; scheduler auto-injects `--user-id`. |
+| APScheduler / DB job registration (SP-5, SP-6) | Deferred | Live-feed-ish strategies — integrate later once the intraday cadence story is settled (4h / per-timeframe bar close). |
 | Vectorbt / Optuna wiring for pack | Not done | Still use existing `src/vectorbt/` pipelines separately; Strategy 6 Optuna search not duplicated here. |
 | Unit tests | Partial | `tests/test_strategy_pack_models.py` |
 
@@ -565,10 +566,12 @@ If out-of-sample Sharpe drops by more than ~30% relative to in-sample, the param
 From the **repository root** (`e-trading`), with Python env activated and data keys / cache paths configured like the rest of the app:
 
 ```bash
-python -m src.strategy_pack run [flags...]
-# equivalent:
-python -m src.strategy_pack [flags...]
+python src/strategy_pack/run.py run [flags...]
+# 'run' is also the default command and can be omitted:
+python src/strategy_pack/run.py [flags...]
 ```
+
+> `src/strategy_pack/__main__.py` is intentionally empty — there is no `python -m src.strategy_pack` entrypoint. The scheduler and the shell both invoke `src/strategy_pack/run.py` as a file (it bootstraps `sys.path` to `PROJECT_ROOT` on startup).
 
 **Global flags**
 
@@ -577,6 +580,7 @@ python -m src.strategy_pack [flags...]
 | `--config` / `-c` | JSON config (default: `config/strategy_pack/default.json`) |
 | `--strategy` / `-s` | `1`–`6`, comma list (`2,3`), or `all` |
 | `--variant` / `-v` | Variant label; for Strategy 5 use `A`, `B`, or `C` |
+| `--user-id` | Owner `user_id` for this run. Auto-injected by `SchedulerService` from `job_schedules.user_id`; passed as `recipient_id` when sending notifications. Supply manually (`--user-id 2`) when invoking from the shell. |
 | `--dry-run` | Log signals only; no JSONL, no notifications |
 | `--no-notify` | Write JSONL but skip `NotificationServiceClient` |
 | `--no-jsonl` | Skip append to JSONL |
@@ -589,7 +593,7 @@ python -m src.strategy_pack [flags...]
 **Strategy 1 — Momentum-Growth (SP-1)**
 
 ```bash
-python -m src.strategy_pack run -s 1 -v A
+python src/strategy_pack/run.py run -s 1 -v A --user-id 2
 ```
 
 Edit `strategy_1` in `config/strategy_pack/default.json` (`symbols`, `top_k`, `lookback_days`, `use_vol_scaled`).
@@ -597,8 +601,8 @@ Edit `strategy_1` in `config/strategy_pack/default.json` (`symbols`, `top_k`, `l
 **Strategy 2 — Daily SMA trend (SP-2)**
 
 ```bash
-python -m src.strategy_pack run -s 2 -v A
-python -m src.strategy_pack run --dry-run -s 2
+python src/strategy_pack/run.py run -s 2 -v A --user-id 2
+python src/strategy_pack/run.py run --dry-run -s 2
 ```
 
 Edit `strategy_2` (`symbols`, `sma_slow`, `sma_fast`, `use_sma_fast_confirm`).
@@ -606,7 +610,7 @@ Edit `strategy_2` (`symbols`, `sma_slow`, `sma_fast`, `use_sma_fast_confirm`).
 **Strategy 3 — Weekly lazy trend (SP-3)**
 
 ```bash
-python -m src.strategy_pack run -s 3 -v A
+python src/strategy_pack/run.py run -s 3 -v A --user-id 2
 ```
 
 Edit `strategy_3` (`weekly_sma`, `weekly_sma_fast`, `symbols`).
@@ -614,25 +618,25 @@ Edit `strategy_3` (`weekly_sma`, `weekly_sma_fast`, `symbols`).
 **Strategy 4 — Rebalance advisory (SP-4)**
 
 ```bash
-python -m src.strategy_pack run -s 4 -v A
+python src/strategy_pack/run.py run -s 4 -v A --user-id 2
 ```
 
 Edit `strategy_4.targets` and optional `current_weights` object (same keys as targets) when you track a real portfolio.
 
-**Strategy 5 — Swing (SP-5)**
+**Strategy 5 — Swing (SP-5)** — _scheduler integration deferred; run manually for now_
 
 ```bash
-python -m src.strategy_pack run -s 5 -v A
-python -m src.strategy_pack run -s 5 -v B
-python -m src.strategy_pack run -s 5 -v C
+python src/strategy_pack/run.py run -s 5 -v A --user-id 2
+python src/strategy_pack/run.py run -s 5 -v B --user-id 2
+python src/strategy_pack/run.py run -s 5 -v C --user-id 2
 ```
 
 Edit `strategy_5` (`symbol`, `timeframe`, `donchian`, etc.).
 
-**Strategy 6 — EMA + SuperTrend (SP-6)**
+**Strategy 6 — EMA + SuperTrend (SP-6)** — _scheduler integration deferred; run manually for now_
 
 ```bash
-python -m src.strategy_pack run -s 6 -v A
+python src/strategy_pack/run.py run -s 6 -v A --user-id 2
 ```
 
 Edit `strategy_6` (`timeframe`, `ema_period`, `supertrend_*`, `long_only`, ATR stop fields).
@@ -640,20 +644,36 @@ Edit `strategy_6` (`timeframe`, `ema_period`, `supertrend_*`, `long_only`, ATR s
 **Run several at once**
 
 ```bash
-python -m src.strategy_pack run -s 2,3,6 -v A
-python -m src.strategy_pack run -s all --no-notify
+python src/strategy_pack/run.py run -s 2,3,6 -v A --user-id 2
+python src/strategy_pack/run.py run -s all --no-notify
 ```
 
 **Windows PowerShell (same commands)**
 
 ```powershell
 Set-Location c:\dev\cursor\e-trading
-python -m src.strategy_pack run -s 2 --dry-run
+python src\strategy_pack\run.py run -s 2 --dry-run
 ```
 
-**Scheduler (manual integration)**
+**Scheduler (DB-backed, SP-1..SP-4)**
 
-Until a DB schedule exists, use Windows Task Scheduler or cron to invoke the same `python -m src.strategy_pack run ...` line at the cadence described in **Operational model** above. For in-app scheduling, register a job that runs this module with the desired `-s` / `-v` flags.
+SP-1, SP-2, SP-3, and SP-4 are registered via `job_schedules` rows, executed by `src/scheduler/scheduler_service.py` as `data_processing` jobs. Apply once against your env:
+
+```bash
+psql "$DATABASE_URL" -f bin/scheduler/insert_strategy_pack_schedules.sql
+```
+
+Then either wait for the `scheduler_updates` LISTEN/NOTIFY reload or restart the scheduler service. The scheduler runs:
+
+```
+python <PROJECT_ROOT>/src/strategy_pack/run.py run -s <N> -v A --user-id <job_schedules.user_id>
+```
+
+The runner emits a `__SCHEDULER_RESULT__:` JSON line (parsed into `job_schedule_runs.result`) with `signal_rows`, `notifiable_signals`, `notifications_sent`, `dry_run`, `user_id`. Notifications are sent in-process by the pack (deduped via `DedupStore`), so the schedule rows intentionally **omit** `task_params.notification_rules` to avoid double-delivery.
+
+**Scheduler (SP-5, SP-6 — deferred)**
+
+Live-feed-ish strategies (SP-5 swing on 1h/4h, SP-6 per-timeframe EMA+SuperTrend) are not yet in the DB schedule set. Run them manually at the cadence described in **Operational model** above, or integrate later with a cron that matches the chosen bar close (e.g. `0 */4 * * *` for 4h).
 
 ---
 
@@ -670,9 +690,11 @@ Phased work so scheduling, logging, notifications, data, and research stay align
 
 ### Phase 1 — Scheduling
 
-- **Persisted cron** — Register jobs via `src/scheduler/scheduler_service.py` / DB schedules (todo).
-- **CLI entrypoint** — Done: `python -m src.strategy_pack run ...` (`src/strategy_pack/run.py`, `__main__.py`).
+- **Persisted cron (SP-1..4)** — Done: `bin/scheduler/insert_strategy_pack_schedules.sql` registers four `data_processing` jobs in `job_schedules`; executed by `src/scheduler/scheduler_service.py`.
+- **Persisted cron (SP-5, SP-6)** — Deferred until the intraday cadence is decided.
+- **CLI entrypoint** — Done: `python src/strategy_pack/run.py run ...` (the script is self-bootstrapping; `__main__.py` is intentionally empty).
 - **Cadence table** — Documented above; operator maps cron to `-s` values.
+- **Scheduler hand-off** — Done: runner accepts `--user-id` (auto-injected by `SchedulerService`, plumbed into `NotificationServiceClient.recipient_id`) and prints a `__SCHEDULER_RESULT__:` JSON summary for `job_schedule_runs.result`.
 
 ### Phase 2 — Data + signal computation
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from src.notification.logger import setup_logger
 from src.notification.service.client import MessagePriority, MessageType, NotificationServiceClient
@@ -35,8 +35,22 @@ async def send_pack_notifications(
     dedup: DedupStore,
     *,
     source: str = "strategy_pack",
+    recipient_id: Optional[str] = None,
 ) -> int:
-    """Send alerts for signals with ``notify_recommended`` and passing dedup. Returns send count."""
+    """Send alerts for signals with ``notify_recommended`` and passing dedup.
+
+    Args:
+        client: Configured notification service client.
+        signals: Signal rows produced by the strategy runners.
+        dedup: Persistent store used to suppress already-delivered alerts.
+        source: Source tag recorded on the notification (default ``strategy_pack``).
+        recipient_id: Owner of this run (``job_schedules.user_id`` as string). When
+            set, routes notifications to that user's configured channels via the
+            notification service.
+
+    Returns:
+        Number of notifications successfully dispatched.
+    """
     sent = 0
     for sig in signals:
         if not sig.notify_recommended:
@@ -53,6 +67,7 @@ async def send_pack_notifications(
             priority=MessagePriority.HIGH,
             source=source,
             data=sig.to_jsonl_dict(),
+            recipient_id=recipient_id,
         )
         if ok:
             dedup.mark_sent(sig.idempotency_key)

@@ -20,9 +20,6 @@ entries:
     notes: "long-term hold"
   # `U` (Unity Software, NYSE) occasionally 404s on Yahoo due to single-
   # letter ticker routing; it usually resolves on the next run.
-  - symbol: SRPT
-    avg_price: 16.72
-    notes: "short-term hold"
   - symbol: RPD
     avg_price: 13.47
     notes: "short-term hold"
@@ -34,9 +31,6 @@ entries:
     notes: "short-term hold"
   - symbol: ORCL
     avg_price: 198.05
-    notes: "short-term hold"
-  - symbol: OMDA
-    avg_price: 10.82
     notes: "short-term hold"
   - symbol: NVDA
     avg_price: 179.19
