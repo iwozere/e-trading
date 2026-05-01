@@ -31,6 +31,7 @@ class PnLAlertConfig:
         watchlist_path: Path, relative to project root, of the user watchlist.
         include_ibkr: Whether to pull live IBKR positions.
         ibkr_stk_only: Restrict IBKR positions to STK sec-types.
+        recipient_id: User ID whose email and Telegram are used for delivery.
     """
 
     threshold_pct: float = 0.10
@@ -39,6 +40,7 @@ class PnLAlertConfig:
     watchlist_path: str = "src/portfolio/pnl_alert/config/watchlist.yaml"
     include_ibkr: bool = True
     ibkr_stk_only: bool = True
+    recipient_id: Optional[int] = None
 
     def validate(self) -> None:
         """
@@ -94,6 +96,7 @@ def load_config(path: Optional[str] = None) -> PnLAlertConfig:
     if not isinstance(raw, dict):
         raise ValueError(f"PnL alert config must be a mapping, got {type(raw).__name__}")
 
+    raw_recipient = raw.get("recipient_id")
     config = PnLAlertConfig(
         threshold_pct=float(raw.get("threshold_pct", 0.10)),
         channels=list(raw.get("channels", ["telegram", "email"])),
@@ -101,6 +104,7 @@ def load_config(path: Optional[str] = None) -> PnLAlertConfig:
         watchlist_path=str(raw.get("watchlist_path", "src/portfolio/pnl_alert/config/watchlist.yaml")),
         include_ibkr=bool(raw.get("include_ibkr", True)),
         ibkr_stk_only=bool(raw.get("ibkr_stk_only", True)),
+        recipient_id=int(raw_recipient) if raw_recipient is not None else None,
     )
     config.validate()
 

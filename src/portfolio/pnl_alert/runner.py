@@ -174,6 +174,7 @@ async def run_once(
         rows=rows,
         channels=cfg.channels,
         threshold_pct=threshold,
+        recipient_id=cfg.recipient_id,
         client=client,
         dry_run=dry_run,
         as_of=ran_at,

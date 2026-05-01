@@ -187,37 +187,82 @@ For each symbol/timeframe group, windows are generated according to the `window_
 }
 ```
 
-## Running Walk-Forward Optimization
+## Full Walk-Forward Workflow (4 Steps)
 
-### Command
+### Step 1 — In-Sample Optimization
 
 ```bash
 python src/backtester/optimizer/walk_forward_optimizer.py
 ```
 
-### Execution Flow
+Loads training data, runs Optuna optimization (default 100 trials) for every entry/exit combination, saves best parameters.
 
-1. **Load Configuration**
-   - Read `walk_forward_config.json`
-   - Check if `auto_discover_data` is enabled
-   - Auto-generate windows or use manual configuration
+Output: `results/optimization/{year}/*.json`
 
-2. **Validate Data**
-   - Ensure all referenced files exist
-   - Check temporal continuity
-   - Validate symbol/timeframe combinations
+### Step 2 — Out-of-Sample Validation
 
-3. **Optimize Windows**
-   - For each window:
-     - For each symbol/timeframe combination:
-       - For each entry/exit strategy pair:
-         - Run Optuna optimization (default: 100 trials)
-         - Save best parameters and results
+```bash
+python src/backtester/validator/walk_forward_validator.py
+```
 
-4. **Save Results**
-   - Results saved to `results/walk_forward_reports/{year}/`
-   - One JSON file per strategy combination
-   - Includes best parameters, trades, and performance metrics
+Loads IS results from Step 1, runs backtests on OOS data **without re-optimization**, saves OOS results.
+
+Output: `results/walk_forward_reports/validation/{year}/*.json`
+
+### Step 3 — Performance Comparison & Reports
+
+```bash
+python src/backtester/validator/performance_comparer.py
+```
+
+Compares IS vs OOS across all strategies. Generates three files:
+
+| File | Contents |
+|------|---------|
+| `results/walk_forward_reports/performance_comparison.csv` | Side-by-side IS/OOS per strategy |
+| `results/walk_forward_reports/degradation_analysis.json` | Aggregate stats, top performers, warning flags |
+| `results/walk_forward_reports/robustness_summary.csv` | Per-strategy robustness across windows |
+
+#### Reading the Reports
+
+**Degradation Ratio** (`oos_profit / is_profit`):
+
+| Range | Verdict | Action |
+|-------|---------|--------|
+| 0.8 – 1.2 | Excellent | Use with confidence |
+| 0.6 – 0.8 | Good | Consider using |
+| 0.4 – 0.6 | Fair | Use cautiously |
+| < 0.4 | Poor | Avoid — likely overfit |
+| Negative | Failed | Reject |
+
+**Robustness Score** (0–1):
+
+| Range | Verdict |
+|-------|---------|
+| > 0.7 | Highly robust |
+| 0.5 – 0.7 | Moderately robust |
+| < 0.3 | Not robust (overfit) |
+
+### Step 4 — Visualize Top Strategies (Optional)
+
+```bash
+# Recommended: top 5 by IS profit + top 5 by robustness
+python src/backtester/plotter/plot_top_strategies.py
+
+# All results (hundreds of files — use sparingly)
+python src/backtester/plotter/run_plotter.py
+```
+
+Output: `results/plots/top_strategies/{top_is_profit,top_robustness}/*.png`
+
+---
+
+## Execution Flow Detail
+
+1. **Load Configuration** — read `walk_forward_config.json`, detect auto-discovery mode
+2. **Validate Data** — check files exist, temporal continuity, symbol/timeframe pairs
+3. **Optimize Windows** — per window × symbol × timeframe × strategy pair: run Optuna, save best params
+4. **Save Results** — `results/walk_forward_reports/{year}/` one JSON per strategy combination
 
 ## Output Structure
 

@@ -514,11 +514,156 @@ data_manager = DataManager(
 - **Data Freshness**: Monitoring of data age and update frequencies
 - **System Resources**: Memory usage, disk space, network connectivity
 
+## Provider Quick-Reference Table
+
+| Provider | Class | API Key | Intervals | Max History (intraday) | Rate Limit |
+|----------|-------|---------|-----------|------------------------|------------|
+| Binance | `BinanceDataDownloader` | No | 1m–1M (15 options) | Full history | 1200 req/min |
+| CoinGecko | `CoinGeckoDataDownloader` | No | 1m–1mo (resampled) | ~2 years | Public limits |
+| Yahoo Finance | `YahooDataDownloader` | No | 1m–3mo | **60 days** intraday | Public limits |
+| Alpha Vantage | `AlphaVantageDataDownloader` | Yes | 1m–1mo | Full history | 5 req/min, 500/day |
+| Polygon.io | `PolygonDataDownloader` | Yes | 1m–1d | 2 months (1m), 2 years (1d) | 5 req/min |
+| Finnhub | `FinnhubDataDownloader` | Yes | 1m–1d | 30 days (1m), 5 years (1d) | 60 req/min |
+| Twelve Data | `TwelveDataDataDownloader` | Yes | 1m–1d | 1 month (1m), 10 years (1d) | 8 req/min, 800/day |
+| FMP | `FMPDataDownloader` | Yes | 1m–1d | Full history (paid) | 3000 req/min (paid) |
+| Alpaca | `AlpacaDataDownloader` | Yes | 1m–1d | Full US market history | 200 req/min |
+| Tiingo | `TiingoDataDownloader` | Yes | 1d | Full history | 50 req/hour |
+
+All downloaders share the same `BaseDataDownloader` interface:
+```python
+downloader.get_ohlcv(symbol, interval, start_date, end_date) -> pd.DataFrame
+# Returns: timestamp | open | high | low | close | volume  (all lowercase)
+```
+
 ---
 
-**Module Version**: 1.3.0  
-**Last Updated**: January 15, 2025  
-**Next Review**: February 15, 2025  
-**Owner**: Data Team  
-**Dependencies**: [Infrastructure](infrastructure.md), [Configuration](configuration.md)  
+## Cache Management — Refresh Scripts
+
+The cache lives at `c:/data-cache/` (configured in `config/donotshare/donotshare.py`).
+
+### Full directory layout
+
+```
+c:/data-cache/
+└── ohlcv/
+    ├── BTCUSDT/
+    │   ├── 1h/
+    │   │   ├── 2022.csv.gz          # ~90% smaller than uncompressed
+    │   │   ├── 2022.metadata.json   # provider, date range, row count, quality score
+    │   │   ├── 2023.csv.gz
+    │   │   └── 2023.metadata.json
+    │   ├── 4h/
+    │   └── 5m/
+    ├── ETHUSDT/
+    └── _metadata/
+        ├── symbols.json             # all cached symbols
+        ├── providers.json           # provider statistics
+        └── cache_stats.json         # cache size and hit metrics
+```
+
+### Two refresh commands
+
+**Option A — Full force refresh** (re-downloads everything, overwrites corrupted files):
+
+```bash
+python src/util/data_downloader.py
+```
+
+Defaults: symbols `[LTCUSDT, BTCUSDT, ETHUSDT]`, intervals `[5m, 15m, 30m, 1h, 4h]`, 2020-01-01 → present. Edit `DOWNLOAD_SCENARIOS` at the top of the file to change.
+
+**Option B — Smart corruption detection** (only downloads missing/broken data):
+
+```bash
+python src/data/utils/populate_cache.py --start-date 2020-01-01
+```
+
+Detects corrupted files, skips valid ones, validates metadata. Typical runtime: 5–30 min vs 30–60 min for Option A.
+
+---
+
+## YFinance Batch Operations
+
+Use `YahooDataDownloader` batch methods when fetching data for multiple tickers in one call:
+
+```python
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from datetime import datetime
+
+downloader = YahooDataDownloader()
+
+# Batch OHLCV — one API call, returns Dict[str, pd.DataFrame]
+ohlcv_data = downloader.get_ohlcv_batch(
+    ["AAPL", "MSFT", "GOOGL"],
+    "1d",
+    datetime(2023, 1, 1),
+    datetime(2023, 12, 31)
+)
+
+# Batch fundamentals — uses yf.Tickers() under the hood
+fundamentals = downloader.get_fundamentals_batch(["AAPL", "MSFT", "GOOGL"])
+```
+
+Direct `yfinance` equivalents:
+```python
+import yfinance as yf
+df   = yf.download(tickers, start="2023-01-01", end="2023-12-31", interval="1d")
+tkrs = yf.Tickers("AAPL MSFT GOOGL")
+info = tkrs.tickers["AAPL"].info
+```
+
+---
+
+## Live Feed Configuration Reference
+
+### BinanceLiveDataFeed (WebSocket)
+
+```json
+{
+    "data_source": "binance",
+    "symbol": "BTCUSDT",
+    "interval": "1h",
+    "lookback_bars": 1000,
+    "retry_interval": 60,
+    "testnet": false
+}
+```
+
+Auto-reconnects on connection loss. Supports `testnet: true` for paper trading.
+
+### YahooLiveDataFeed (Polling)
+
+```json
+{
+    "data_source": "yahoo",
+    "symbol": "AAPL",
+    "interval": "5m",
+    "lookback_bars": 500,
+    "polling_interval": 60
+}
+```
+
+No API key required. Updates via polling every `polling_interval` seconds.
+
+### IBKRLiveDataFeed (Native API)
+
+```json
+{
+    "data_source": "ibkr",
+    "symbol": "AAPL",
+    "interval": "5m",
+    "lookback_bars": 500,
+    "host": "127.0.0.1",
+    "port": 7497,
+    "client_id": 1
+}
+```
+
+Requires TWS or IB Gateway running locally. Port `7497` = paper, `7496` = live.
+
+---
+
+**Module Version**: 1.4.0
+**Last Updated**: 2026-04-30
+**Owner**: Data Team
+**Dependencies**: [Infrastructure](infrastructure.md), [Configuration](configuration.md)
 **Used By**: [Trading Engine](trading-engine.md), [ML & Analytics](ml-analytics.md), [Communication](communication.md)

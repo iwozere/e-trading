@@ -757,11 +757,196 @@ training:
 - **Storage Usage**: Model artifact and data storage monitoring
 - **API Performance**: ML service API latency and throughput metrics
 
+## Analytics — Metric Targets & Composite Scoring
+
+### Performance Metric Targets
+
+| Category | Metric | Target |
+|----------|--------|--------|
+| Trade stats | Win Rate | > 50% |
+| Trade stats | Profit Factor | > 1.5 |
+| Trade stats | Min trades (reliability) | ≥ 30 |
+| Risk-adjusted | Sharpe Ratio | > 1.0 |
+| Risk-adjusted | Sortino Ratio | > 1.0 |
+| Risk-adjusted | Calmar Ratio | > 1.0 |
+| Risk-adjusted | Recovery Factor | > 1.0 |
+| Risk | Max Drawdown | < 20% |
+| Risk | VaR (95%) | < $100 per unit |
+| Risk | CVaR (95%) | < $150 per unit |
+| Sizing | Kelly Criterion | 0.1 – 0.3 |
+
+### Strategy Comparison — Composite Score Formula
+
+```python
+score = (
+    win_rate                          * 0.2 +
+    min(profit_factor, 5.0) * 20      * 0.2 +
+    sharpe_ratio * 10                 * 0.2 +
+    (100 - max_drawdown_pct)          * 0.2 +
+    calmar_ratio * 10                 * 0.2
+)
+```
+
+Use `StrategyComparator` to compare multiple strategy analytics objects:
+
+```python
+from src.analytics.advanced_analytics import StrategyComparator
+
+comparator = StrategyComparator()
+comparator.add_strategy("RSI_BB", analytics_a)
+comparator.add_strategy("HMM_LSTM", analytics_b)
+
+comparison_df = comparator.compare_strategies()
+rankings = comparator.rank_strategies()
+```
+
+### Monte Carlo Output Format
+
+```python
+{
+    "mean_return":  1250.50,
+    "std_return":    450.25,
+    "var_95":        -850.00,   # 95% Value at Risk
+    "cvar_95":      -1200.00,   # Expected loss beyond VaR
+    "prob_profit":    78.5,     # % of simulations ending positive
+    "percentiles": {
+        "10": -500.00,
+        "25":  200.00,
+        "50": 1200.00,
+        "75": 2200.00,
+        "90": 3000.00
+    }
+}
+```
+
+### Report Dependencies
+
+| Format | Required package |
+|--------|-----------------|
+| PDF | `reportlab` |
+| Excel | `openpyxl` |
+| JSON | stdlib only |
+
 ---
 
-**Module Version**: 1.2.0  
-**Last Updated**: January 15, 2025  
-**Next Review**: February 15, 2025  
-**Owner**: ML Team  
-**Dependencies**: [Data Management](data-management.md), [Trading Engine](trading-engine.md), [Infrastructure](infrastructure.md)  
+## HMM-LSTM Backtesting — Parameters & Integration
+
+The HMM-LSTM backtesting system integrates regime detection (HMM) with log-return price prediction (LSTM) into a single Backtrader strategy.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `config/optimizer/p01_hmm_lstm.json` | Main backtesting config |
+| `src/backtester/optimizer/hmm_lstm.py` | Backtesting entry point |
+| `src/strategy/hmm_lstm_strategy.py` | Enhanced strategy with log-return support |
+| `bin/run_hmm_lstm_backtest.bat` / `.sh` | Execution scripts |
+
+### Log Return Scale Configuration
+
+LSTM models trained on log returns output values in the range `[-0.003, +0.003]`. Use these calibrated defaults:
+
+```json
+{
+  "entry_threshold":    0.001,   // 0.1% predicted log return
+  "regime_confidence":  0.4,     // 40% HMM posterior required
+  "stop_loss_pct":      0.005,   // 0.5%
+  "take_profit_pct":    0.010    // 1.0%
+}
+```
+
+### Log Return Helpers
+
+```python
+# In HMMLSTMStrategy
+log_return = math.log(price_t1 / price_t0)
+pct_change = math.exp(log_return) - 1.0   # convert back to %
+```
+
+### Debugging Checkpoints
+
+- **HMM regime debug**: logs regime predictions and posteriors every 100 bars
+- **Signal check debug**: logs why trades aren't triggered every 50 bars
+
+---
+
+## Knowledge Base — Regime Detection Approaches
+
+### Why Regime Detection Matters
+
+Different strategies perform better in different regimes. Detecting the current regime lets you adapt parameters, switch entry/exit logic, or halt trading entirely in unfavourable conditions.
+
+### Three Approaches
+
+#### 1. Rule-Based (No Training Required)
+
+| Signal | Regime indicator |
+|--------|-----------------|
+| Short MA > Long MA | Bull |
+| Short MA < Long MA | Bear |
+| ATR below threshold | Low-volatility / sideways |
+| Price breaks support/resistance | Regime change |
+
+#### 2. HMM (Unsupervised, Probabilistic)
+
+HMMs infer hidden market states from observable returns. No labeled data required.
+
+```python
+import numpy as np
+from hmmlearn.hmm import GaussianHMM
+
+# Fit on log returns
+X = np.log(prices / prices.shift(1)).dropna().values.reshape(-1, 1)
+model = GaussianHMM(n_components=3, covariance_type="full", n_iter=1000)
+model.fit(X)
+
+hidden_states = model.predict(X)        # Most-likely regime sequence
+posteriors    = model.predict_proba(X)  # Regime probability at each bar
+```
+
+Typical 3-state interpretation: **Bull** (high positive returns) / **Bear** (negative returns) / **Sideways** (returns ≈ 0, low vol).
+
+Use `src/ml/hmm_regime_detector.py`:
+
+```python
+from src.ml.hmm_regime_detector import HMMRegimeDetector
+
+detector = HMMRegimeDetector(n_regimes=3)
+detector.fit(df["close"])
+df["regime"] = detector.predict(df["close"])
+```
+
+#### 3. Neural Network (Supervised, Sequence-Aware)
+
+Use labeled regimes from Step 2 (or manual labeling) to train an LSTM classifier:
+
+```python
+from src.ml.future.nn_regime_detector import NNRegimeDetector
+
+nn = NNRegimeDetector(input_size=4, n_regimes=3, hidden_size=64, num_layers=2)
+nn.fit(features, labels, epochs=100, batch_size=32)
+predictions = nn.predict(live_features)
+```
+
+**Advantages over HMM:** Captures complex temporal patterns; processes multi-dimensional feature sets (price + volume + indicators); GPU-accelerated.
+
+### Regime-Aware Strategy Pattern
+
+```python
+regime = detector.predict_current(bar_features)
+if regime == BULL:
+    use_trend_following_entry()
+elif regime == BEAR:
+    skip_long_entries()
+elif regime == SIDEWAYS:
+    use_mean_reversion_entry()
+```
+
+---
+
+**Module Version**: 1.4.0
+**Last Updated**: 2026-04-30
+**Owner**: ML Team
+**Dependencies**: [Data Management](data-management.md), [Trading Engine](trading-engine.md), [Infrastructure](infrastructure.md)
 **Used By**: [Trading Engine](trading-engine.md), [Communication](communication.md)
+**Related**: [Walk-Forward Optimization](../WALK_FORWARD_OPTIMIZATION.md)

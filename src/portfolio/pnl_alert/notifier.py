@@ -141,6 +141,7 @@ async def send_alert(
     rows: List[AlertRow],
     channels: Sequence[str],
     threshold_pct: float,
+    recipient_id: Optional[int] = None,
     client: Optional["object"] = None,
     dry_run: bool = False,
     as_of: Optional[datetime] = None,
@@ -152,6 +153,8 @@ async def send_alert(
         rows: Rows from the evaluator.
         channels: Channels to notify (any subset of "telegram", "email").
         threshold_pct: Threshold used, for the header text.
+        recipient_id: User ID used to resolve both the email address and
+            Telegram chat ID for delivery.
         client: Optional pre-built `NotificationServiceClient`. A default one
             is created when not supplied.
         dry_run: If True, format the message and log it but don't send.
@@ -184,6 +187,7 @@ async def send_alert(
         channels=list(channels),
         source="portfolio.pnl_alert",
         data={"html": html, "row_count": len(rows), "threshold_pct": threshold_pct},
+        recipient_id=str(recipient_id) if recipient_id is not None else None,
     )
 
     if ok:

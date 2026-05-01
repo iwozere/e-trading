@@ -16,6 +16,9 @@ cron: "30 21 * * 1-5"
 # Path (relative to project root) to the user-editable watchlist YAML.
 watchlist_path: src/portfolio/pnl_alert/config/watchlist.yaml
 
+# User ID whose email address and Telegram chat ID will receive the alert.
+recipient_id: 2
+
 # Whether to connect to IBKR and merge live positions into the alert.
 # Set to false if you only want to monitor the YAML watchlist.
 include_ibkr: true

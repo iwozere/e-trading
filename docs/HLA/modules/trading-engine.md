@@ -695,11 +695,275 @@ risk_management:
 - **Risk Alerts**: Position limit breaches, exposure warnings
 - **Trade Alerts**: Significant wins/losses, unusual trading patterns
 
+## AdvancedATRExitMixin — Deep Dive
+
+The `AdvancedATRExitMixin` is the primary production exit strategy. It implements a volatility-adaptive trailing stop with a full state machine, structural ratcheting, and time-based tightening.
+
+### State Machine
+
+| State | Description |
+|-------|-------------|
+| **INIT** | Initial stop placement at entry |
+| **ARMED** | Break-even trigger reached |
+| **PHASE1** | Running trail at standard `k_run` multiplier |
+| **PHASE2** | Tighter trail after profit target (`phase2_at_R`) |
+| **LOCKED** | Parabolic-style tightening near peak |
+| **EXIT** | Position closed |
+
+### Multi-Timeframe ATR
+
+```python
+# Three ATR layers are aggregated into one effective ATR
+effective_atr = (alpha_fast * fast_atr) + (alpha_slow * slow_atr) + (alpha_htf * htf_atr)
+```
+
+- **Fast ATR** (`p_fast=7`): short-term noise filter
+- **Slow ATR** (`p_slow=21`): trend-level volatility
+- **HTF ATR** (`htf="4h"`): regime-level volatility (optional)
+
+### Complete Parameter Reference
+
+```json
+{
+  "anchor": "high",             // Price reference: high | close | mid
+  "k_init": 2.5,                // Initial ATR multiplier (1.0–6.0)
+  "k_run": 2.0,                 // Running trail multiplier (1.0–5.0)
+  "k_phase2": 1.5,              // Phase 2 multiplier (0.8–3.0)
+  "p_fast": 7,                  // Fast ATR period (5–21)
+  "p_slow": 21,                 // Slow ATR period (14–100)
+  "use_htf_atr": true,          // Enable higher-timeframe ATR
+  "htf": "4h",                  // Higher timeframe
+  "alpha_fast": 1.0,            // Fast ATR weight (0.25–2.0)
+  "alpha_slow": 1.0,            // Slow ATR weight
+  "alpha_htf": 1.0,             // HTF ATR weight
+  "arm_at_R": 1.0,              // Break-even trigger in R multiples (0.5–2.0)
+  "breakeven_offset_atr": 0.0,  // Extra cushion at break-even (ATR units)
+  "phase2_at_R": 2.0,           // Phase 2 trigger (1.0–4.0)
+  "use_swing_ratchet": true,    // Enable structural ratcheting
+  "swing_lookback": 10,         // Swing detection lookback (5–30)
+  "struct_buffer_atr": 0.25,    // Buffer beyond swing level (0.0–0.6)
+  "tighten_if_stagnant_bars": 20, // Stagnation threshold (10–60)
+  "tighten_k_factor": 0.8,      // Tightening factor (0.6–0.95)
+  "min_bars_between_tighten": 5, // Tightening cooldown (1–10)
+  "min_stop_step": 0.0,         // Minimum stop movement
+  "noise_filter_atr": 0.0,      // Noise filter threshold (0.0–0.4)
+  "pt_levels_R": [1.0, 2.0],    // Partial TP levels in R multiples
+  "pt_sizes": [0.33, 0.33],     // Fraction of position to exit at each level
+  "retune_after_pt": true       // Retune multipliers after partial TP
+}
+```
+
+### Optimization Sequence
+
+Optimize in three stages to avoid overfitting:
+
+- **Stage A** — Core: `k_init`, `k_run`, `p_fast`, `p_slow`, `use_htf_atr`
+- **Stage B** — Risk: `arm_at_R`, `phase2_at_R`, `k_phase2`, `use_swing_ratchet`, `struct_buffer_atr`
+- **Stage C** — Tuning: `tighten_if_stagnant_bars`, `tighten_k_factor`, `noise_filter_atr`, alpha weights
+
+### Market-Condition Guidance
+
+| Condition | Recommendation |
+|-----------|---------------|
+| Strong trend | Higher `k_init` / `k_run` |
+| Ranging market | Enable time-based tightening |
+| High volatility (crypto) | Raise `atr_floor`, `noise_filter_atr`, enable HTF ATR |
+| Intraday | Shorter ATR periods (5–14) |
+| Daily / swing | Longer ATR periods (14–50) |
+
 ---
 
-**Module Version**: 1.3.0  
-**Last Updated**: January 15, 2025  
-**Next Review**: February 15, 2025  
-**Owner**: Trading Team  
-**Dependencies**: [Data Management](data-management.md), [Infrastructure](infrastructure.md), [Configuration](configuration.md)  
+## Risk Management — Three-Stage Framework
+
+Risk controls operate in three sequential stages around each trade.
+
+### Module Layout
+
+```
+src/trading/risk/
+├── pre_trade/
+│   ├── position_sizing.py     # Kelly Criterion, Fixed Fractional
+│   ├── exposure_limits.py     # Position and portfolio concentration limits
+│   └── correlation_check.py  # Prevents over-exposure to correlated assets
+├── real_time/
+│   ├── stop_loss_manager.py  # Dynamic trailing stop adjustment
+│   ├── drawdown_control.py   # Circuit breakers on drawdown thresholds
+│   └── volatility_scaling.py # Vol-adjusted position sizing
+└── post_trade/
+    ├── pnl_attribution.py    # P&L by symbol / strategy
+    ├── trade_analysis.py     # Win rate, expectancy, avg win/loss
+    └── risk_reporting.py     # Risk dashboards and compliance reports
+```
+
+### Integration Pattern
+
+```python
+from src.trading.risk.pre_trade import position_sizing, exposure_limits, correlation_check
+from src.trading.risk.real_time import stop_loss_manager, drawdown_control, volatility_scaling
+from src.trading.risk.post_trade import pnl_attribution, trade_analysis, risk_reporting
+
+# 1. Pre-trade: size the position
+size = position_sizing.kelly_criterion(win_rate, avg_win, avg_loss, capital)
+exposure_limits.check(symbol, size, portfolio)
+correlation_check.check(symbol, portfolio)
+
+# 2. Real-time: protect the position
+stop_loss_manager.dynamic_stop_loss(position, atr)
+drawdown_control.check_drawdown(portfolio)          # triggers circuit breaker
+volatility_scaling.volatility_scaled_position(size, realized_vol)
+
+# 3. Post-trade: analyse the result
+pnl_attribution.pnl_attribution(trades, by="symbol")
+trade_analysis.trade_quality_metrics(trades)
+risk_reporting.generate_risk_report(portfolio)
+```
+
+---
+
+## Live Trading Bot — Configuration Reference
+
+The `LiveTradingBot` reads a single JSON manifest. Below is the canonical full-config template.
+
+```json
+{
+    "description": "Strategy description",
+    "version": "1.0",
+
+    "broker": {
+        "type": "binance_paper",   // binance_paper | binance | ibkr | mock
+        "initial_balance": 1000.0,
+        "commission": 0.001
+    },
+
+    "trading": {
+        "symbol": "BTCUSDT",
+        "position_size": 0.1,      // fraction of capital
+        "max_positions": 1,
+        "max_drawdown_pct": 20.0,
+        "max_exposure": 1.0
+    },
+
+    "data": {
+        "data_source": "binance",  // binance | yahoo | ibkr
+        "symbol": "BTCUSDT",
+        "interval": "1h",          // 1m 5m 15m 30m 1h 4h 1d
+        "lookback_bars": 1000,
+        "retry_interval": 60
+    },
+
+    "strategy": {
+        "type": "custom",
+        "entry_logic": {
+            "name": "RSIBBVolumeEntryMixin",
+            "params": { "e_rsi_period": 14, "e_rsi_oversold": 30, "e_bb_period": 20 }
+        },
+        "exit_logic": {
+            "name": "AdvancedATRExitMixin",
+            "params": { "k_init": 2.5, "k_run": 2.0, "use_swing_ratchet": true }
+        },
+        "position_size": 0.1
+    },
+
+    "risk_management": {
+        "stop_loss_pct": 5.0,
+        "take_profit_pct": 10.0,
+        "trailing_stop": { "enabled": false, "activation_pct": 3.0, "trailing_pct": 2.0 },
+        "max_daily_trades": 10,
+        "max_daily_loss": 50.0
+    },
+
+    "notifications": {
+        "enabled": true,
+        "telegram": { "enabled": true, "notify_on": ["trade_entry", "trade_exit", "error", "status"] },
+        "email":    { "enabled": false, "notify_on": ["trade_entry", "trade_exit", "error"] }
+    },
+
+    "logging": {
+        "level": "INFO",
+        "save_trades": true,
+        "save_equity_curve": true,
+        "log_file": "logs/live/trading_bot_0001.log"
+    }
+}
+```
+
+### CLI Usage
+
+```bash
+# Run bot
+python src/trading/trading_bot.py config/trading/0001.json
+
+# Validate config only
+python src/trading/config_validator.py config/trading/0001.json
+
+# Test data feed
+python test_live_data_feeds.py binance BTCUSDT 1m
+```
+
+### Bot Lifecycle
+
+1. Load and validate config → fail fast on errors
+2. Setup notification client
+3. Create broker, data feed, strategy instances
+4. Load open positions from database (resume after restart)
+5. Start Backtrader engine + real-time data loop
+6. On bar close: evaluate signals → execute orders → persist trades
+7. Monitor connection health; auto-reconnect every 60 s on failure
+8. Send trade, error, and status notifications
+
+### Extending the Bot
+
+| Extension Point | Steps |
+|-----------------|-------|
+| New data source | Subclass `BaseLiveDataFeed` → register in `DataFeedFactory` |
+| New strategy | Subclass `bt.Strategy` + entry/exit mixins → update config validation |
+| New broker | Subclass `BaseBroker` → register in `BrokerFactory` |
+
+---
+
+## Bollinger Bands Implementation Reference
+
+Three distinct BB implementations are used across the codebase. Use the correct attribute names for each.
+
+### Quick Reference Table
+
+| Implementation | Upper | Middle | Lower |
+|----------------|-------|--------|-------|
+| `UnifiedBollingerBandsIndicator` | `bb.upper[0]` | `bb.middle[0]` | `bb.lower[0]` |
+| `bt.talib.BBANDS` | `bb.upperband[0]` | `bb.middleband[0]` | `bb.lowerband[0]` |
+| `bt.indicators.BollingerBands` | `bb.lines.top[0]` | `bb.lines.mid[0]` | `bb.lines.bot[0]` |
+
+### Decision Tree
+
+```
+Using UnifiedBollingerBandsIndicator?
+├─ YES → bb.lower / bb.middle / bb.upper
+└─ NO → Using bt.talib.BBANDS directly?
+    ├─ YES → bb.lowerband / bb.middleband / bb.upperband
+    └─ NO (standard BT) → bb.lines.bot / bb.lines.mid / bb.lines.top
+```
+
+### Best Practice — Prefer the Unified Wrapper
+
+```python
+from src.indicators.adapters.backtrader_wrappers import UnifiedBollingerBandsIndicator
+
+bb = UnifiedBollingerBandsIndicator(
+    self.data, period=20, devfactor=2.0,
+    backend="bt-talib" if self.use_talib else "bt"
+)
+# Same attributes regardless of backend:
+bb_lower  = bb.lower[0]
+bb_middle = bb.middle[0]
+bb_upper  = bb.upper[0]
+```
+
+Mixins using the unified wrapper: `RSIBBEntryMixin`, `RSIOrBBEntryMixin`, `RSIBBVolumeEntryMixin`, `RSIBBExitMixin`, `RSIOrBBExitMixin`.
+
+---
+
+**Module Version**: 1.4.0
+**Last Updated**: 2026-04-30
+**Owner**: Trading Team
+**Dependencies**: [Data Management](data-management.md), [Infrastructure](infrastructure.md), [Configuration](configuration.md)
 **Used By**: [ML & Analytics](ml-analytics.md), [Communication](communication.md)
