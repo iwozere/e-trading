@@ -634,10 +634,109 @@ _logger = setup_logger(__name__, use_multiprocessing=True)
 study.optimize(objective, n_trials=100, n_jobs=-1)
 ```
 
+## Context-Aware Logger Inheritance
+
+### Problem Solved
+
+Child modules (e.g. `async_notification_manager.py`) previously wrote to `app.log` instead of the same log file as the parent bot (e.g. `telegram_screener_bot.log`), scattering logs for a single operation across multiple files.
+
+### How It Works
+
+**1. Context Setting (parent module)**
+
+```python
+from src.notification.logger import set_logging_context
+
+# Set context before calling child modules
+set_logging_context("telegram_screener_bot")
+
+# Any child modules instantiated after this call inherit the context
+notification_manager = await initialize_notification_manager(...)
+```
+
+**2. Automatic Inheritance (child module)**
+
+```python
+# In async_notification_manager.py — no special code needed
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)  # Automatically inherits context if set
+# Logs go to telegram_screener_bot.log, not app.log
+```
+
+**3. Direct Inheritance via `setup_context_logger`**
+
+```python
+from src.notification.logger import setup_context_logger
+
+logger = setup_context_logger("my_module", "telegram_background_services")
+logger.info("This goes to telegram_background_services.log")
+```
+
+### Implementation Internals
+
+**Context variable** (async-safe via `contextvars`):
+
+```python
+from contextvars import ContextVar
+_logging_context = ContextVar('logging_context', default=None)
+```
+
+**Handler inheritance** — when context is set, child loggers copy `RotatingFileHandler` instances from the parent logger:
+
+```python
+def _inherit_parent_handlers(self, parent_name: str):
+    parent_logger = logging.getLogger(parent_name)
+    for handler in parent_logger.handlers:
+        if isinstance(handler, RotatingFileHandler):
+            new_handler = RotatingFileHandler(...)  # same file path & config
+            self.logger.addHandler(new_handler)
+```
+
+**Automatic detection** — `setup_logger` checks whether a context is active and the module belongs to the notification namespace:
+
+```python
+context = get_logging_context()
+if context and name.startswith('src.notification.'):
+    return ContextAwareLogger(name, context).logger
+```
+
+### Supported Log File Targets
+
+| Context Name | Log File |
+|---|---|
+| `telegram_screener_bot` | `telegram_screener_bot.log` |
+| `telegram_background_services` | `telegram_background_services.log` |
+| `telegram_alert_monitor` | `telegram_alert_monitor.log` |
+| `telegram_schedule_processor` | `telegram_schedule_processor.log` |
+| *(none)* | `app.log` |
+
+### Migration — Before / After
+
+**Before** (logs scattered):
+```python
+# telegram bot
+notification_manager = await initialize_notification_manager(...)
+# → notification manager logs go to app.log
+```
+
+**After** (logs unified):
+```python
+# telegram bot
+set_logging_context("telegram_screener_bot")
+notification_manager = await initialize_notification_manager(...)
+# → notification manager logs go to telegram_screener_bot.log
+```
+
+### Troubleshooting Context Inheritance
+
+- **Logs still in `app.log`**: Ensure `set_logging_context()` is called *before* instantiating child loggers; verify the context name matches a configured logger.
+- **Context not inherited**: Confirm the child module name starts with `src.notification.`; check that the parent logger has `RotatingFileHandler` instances attached.
+- **Performance**: Context variables are very fast; handler inheritance happens once per logger — no per-message overhead.
+
 ## Related Documentation
 
 - [Infrastructure Module](modules/infrastructure.md#6-logging--observability) - Parent module overview
-- [Multiprocessing Logging Guide](../MULTIPROCESSING_LOGGING.md) - Detailed implementation guide
 - [Coding Conventions](../.claude/CLAUDE.md#3-logging) - Logging standards
 - [Python Logging Cookbook](https://docs.python.org/3/howto/logging-cookbook.html) - Official Python docs
 

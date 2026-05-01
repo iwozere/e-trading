@@ -966,3 +966,110 @@ The Notification Service represents a significant architectural evolution from t
 The service's database-backed architecture ensures reliability and persistence, while the priority-based processing system guarantees that critical notifications are delivered promptly. The plugin architecture enables easy integration of new communication channels, and the comprehensive monitoring system provides visibility into notification system performance.
 
 This design provides a robust foundation for all outbound communications in the Advanced Trading Framework, supporting current needs while enabling future growth and feature expansion.
+
+## Channel Ownership & Service Boundaries
+
+Each service owns specific channels exclusively — channels are never shared between services.
+
+| Service | Owned Channels | Sending Method | Use Case |
+|---------|---------------|----------------|----------|
+| **Telegram Bot** | Telegram | Direct (aiogram) | All Telegram messages — instant commands |
+| **Telegram Bot** | — | Queue → Poll → Send | Heavy processing commands (`/report`, `/screener`) |
+| **Notification Service** | Email, SMS | Poll DB queue → Send | Email/SMS notifications |
+
+**Key Rule**: If it's Telegram, the Telegram Bot handles it. If it's Email/SMS, the Notification Service handles it.
+
+### Telegram Bot
+
+**Responsibilities:**
+- Receives all user commands via Telegram
+- Handles ALL Telegram message sending (instant + queued)
+- Routes email/SMS requests to Notification Service via database queue
+- Main file: `src/telegram/telegram_bot.py`
+- Queue processor: `src/telegram/services/telegram_queue_processor.py` (polls every 5 s)
+
+**Sending patterns:**
+1. **Instant commands** (`/start`, `/help`, `/alerts`) — direct via aiogram, response time < 1 s
+2. **Queued commands** (`/report`, `/screener`) — queued to DB with `channels=["telegram"]`, processed in 5–10 s
+
+### Notification Service
+
+**Responsibilities:**
+- Polls database for pending Email/SMS notifications
+- **NEVER** sends Telegram messages
+- Main file: `src/notification/notification_db_centric_bot.py`
+- Processor: `src/notification/service/processor.py`
+
+```python
+# src/notification/service/processor.py
+enabled_channels = ['email']  # Telegram is owned by the Telegram Bot
+```
+
+### Channel Filtering (Database Queries)
+
+- **Telegram Bot**: `WHERE 'telegram' = ANY(channels)`
+- **Notification Service**: `WHERE 'email' = ANY(channels) OR 'sms' = ANY(channels)`
+
+## Delivery Flow Quick Reference
+
+### Instant Command Flow
+```
+User → /help
+  ↓
+Telegram Bot (receives)
+  ↓
+aiogram.send_message()  [Direct]
+  ↓
+User receives response  (< 1 s)
+```
+
+### Queued Telegram Command Flow
+```
+User → /report vt
+  ↓
+Telegram Bot (receives + heavy processing)
+  ↓
+Queue to database: channels=["telegram"]
+  ↓
+Telegram Queue Processor (polls every 5 s)
+  ↓
+aiogram.send_message()
+  ↓
+Mark as DELIVERED in database
+  ↓
+User receives report  (5–10 s)
+```
+
+### Multi-Channel Flow (Telegram + Email)
+```
+User → /report vt -email
+  ↓
+Telegram Bot (receives + heavy processing)
+  ↓
+├─ Send Telegram directly via aiogram → User receives Telegram message
+└─ Queue to database: channels=["email"]
+     ↓
+     Notification Service (polls)
+     ↓
+     SMTP send → Mark as DELIVERED
+     ↓
+     User receives email
+```
+
+### Adding a New Channel to the Notification Service
+
+1. Create a channel handler in `src/notification/channels/` implementing `BaseChannel`
+2. Add the channel name to `enabled_channels` in `src/notification/service/processor.py`
+3. Configure credentials in `src/notification/service/config.py`
+
+```python
+# src/notification/channels/sms_channel.py
+class SMSChannel(BaseChannel):
+    async def send_message(self, recipient, content, message_id, priority):
+        # SMS sending logic via Twilio/etc.
+        pass
+```
+
+### Legacy AsyncNotificationManager (Deprecated)
+
+The original `AsyncNotificationManager` used an **in-memory** async queue and supported an additional `WebhookHandler` channel for JSON payload delivery to external systems. It is now deprecated in favour of the database-backed architecture described above. All new code should write directly to `msg_messages` via the ORM `Message` model (see §2.2). The `WebhookHandler` is not part of the current DB-centric architecture; external integrations should use the message queue pattern with a custom channel plugin.

@@ -1105,6 +1105,206 @@ error_handling:
 - **Business Alerts**: Trading anomalies, unusual user activity
 - **Maintenance Alerts**: Scheduled maintenance, configuration changes
 
+## Error Handling Component Details
+
+### Custom Exception Hierarchy
+
+All trading-related exceptions extend a common base class, enabling uniform catching and structured context propagation:
+
+```
+TradingException (base)
+├── DataFeedException      — data provider or feed unavailability
+├── BrokerException        — order placement / broker communication
+├── StrategyException      — strategy logic or parameter errors
+├── ConfigurationException — missing/invalid configuration
+├── NetworkException       — connection timeouts, DNS failures
+├── ValidationException    — input validation failures
+└── RecoveryException      — errors during recovery execution
+```
+
+Every exception carries a `.context` dict and a `.to_dict()` serialisation method for structured logging and analytics.
+
+### Recovery Strategies (ErrorRecoveryManager)
+
+The six named recovery strategies registered per component:
+
+| Strategy | Behaviour |
+|---|---|
+| `RETRY` | Retry the operation using the configured `RetryManager` |
+| `FALLBACK` | Call an alternative function or use a secondary data source |
+| `DEGRADE` | Return reduced-functionality result and continue |
+| `RESTART` | Restart the affected component or service |
+| `IGNORE` | Log the error and continue without the failed result |
+| `ALERT` | Send an alert notification and continue |
+
+### Resilience Decorators
+
+`src.error_handling.resilience_decorator` provides composable decorators:
+
+```python
+from src.error_handling.resilience_decorator import retry_on_network_error, circuit_breaker, resilient
+
+@retry_on_network_error(max_attempts=3, base_delay=1.0)
+def api_call(): ...
+
+@circuit_breaker("data_feed", failure_threshold=3)
+@retry_on_network_error(max_attempts=2)
+def get_market_data(symbol): ...
+
+@resilient(
+    retry_config=RetryConfig(max_attempts=3, base_delay=1.0),
+    circuit_breaker_config=CircuitBreakerConfig(failure_threshold=5),
+    fallback_func=lambda: {"status": "degraded"},
+    timeout=30.0
+)
+def critical_function(): ...
+```
+
+The `@resilient` decorator combines retry, circuit breaker, fallback, and timeout in a single annotation.
+
+### Error Monitor — Alert Configuration
+
+```python
+from src.error_handling.error_monitor import ErrorMonitor, ErrorSeverity
+
+monitor = ErrorMonitor()
+monitor.add_alert_function(lambda alert: send_telegram_alert(alert["message"]))
+monitor.configure_alerts(
+    error_rate_threshold=10,         # trigger if > 10 errors/min
+    severity_threshold=ErrorSeverity.ERROR,
+    alert_cooldown=300               # minimum seconds between repeated alerts
+)
+```
+
+## Job Scheduler — Dramatiq / Redis Layer
+
+In addition to the APScheduler-based in-process scheduling, a second scheduling stack uses **Dramatiq + Redis** for scalable async job workers:
+
+### Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   FastAPI       │    │   APScheduler   │    │   Dramatiq      │
+│   (REST API)    │    │   (Scheduler)   │    │   (Workers)     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+                    ┌─────────────────┐    ┌─────────────────┐
+                    │   PostgreSQL    │    │     Redis       │
+                    │   (Schedules,   │    │   (Message      │
+                    │    Run history) │    │    Queue)       │
+                    └─────────────────┘    └─────────────────┘
+```
+
+### REST API Endpoints (FastAPI, port 5003)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/reports/run` | Run a report job immediately |
+| `POST` | `/api/screeners/run` | Run a screener job immediately |
+| `GET` | `/api/runs/{run_id}` | Get execution status |
+| `DELETE` | `/api/runs/{run_id}` | Cancel a pending run |
+| `POST` | `/api/schedules` | Create a recurring schedule |
+| `GET` | `/api/schedules` | List schedules |
+| `PUT` | `/api/schedules/{id}` | Update a schedule |
+| `DELETE` | `/api/schedules/{id}` | Delete a schedule |
+| `POST` | `/api/schedules/{id}/trigger` | Manually trigger a schedule |
+| `GET` | `/api/screener-sets` | List predefined screener sets |
+
+### Dramatiq Workers
+
+- **Report Worker** (`src/backend/workers/report_worker.py`): executes report generation; saves artefacts to `artifacts/{run_id}/`
+- **Screener Worker** (`src/backend/workers/screener_worker.py`): applies filter criteria to market data, returns top-N results
+
+Workers can be scaled horizontally; Redis provides the message queue.
+
+### Screener Sets
+
+Predefined ticker sets are configured in `config/schemas/screener_sets.yml` (e.g. `us_large_caps`, `tech_majors`, `crypto_majors`, `dividend_aristocrats`). The scheduler process expands set names to ticker lists before enqueueing jobs.
+
+### Environment Variables (Dramatiq/Redis stack)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `REDIS_HOST` | `localhost` | Redis server hostname |
+| `REDIS_PORT` | `6379` | Redis server port |
+| `REDIS_DB` | `0` | Redis database index |
+| `REDIS_PASSWORD` | *(none)* | Redis authentication password |
+
+## Trading Strategy KPI Reference
+
+The following KPIs are used to evaluate the quality of backtested and live trading strategies. These targets inform the analytics and monitoring dashboards.
+
+| KPI | Definition | Target |
+|---|---|---|
+| **Win Rate** | Winning trades / total trades × 100 | 40–60% |
+| **Profit Factor** | Gross profit / gross loss | > 1.5–1.75 |
+| **Sharpe Ratio** | (Return − Risk-Free Rate) / Std Dev | > 1.0 |
+| **Maximum Drawdown** | Largest peak-to-trough decline | < 20% (1:1 R/R minimum) |
+| **ROI** | Net profit / initial investment | > 15% annually |
+| **Average Winner / Loser** | Avg profit per win vs avg loss per loss | Winner > Loser |
+| **Number of Trades** | Total executed trades | > 100 for statistical significance |
+| **Calmar Ratio** | Annualised return / max drawdown | > 1.0 (excellent ≥ 2.0) |
+| **SQN** | System Quality Number | > 1.0 |
+| **Risk per Trade** | Loss exposure per trade as % of account | ≤ 1% |
+
+Key insight: a strategy is considered robust when it has positive expectancy, Profit Factor > 1.5, Sharpe Ratio > 1.0, and drawdown below 20%.
+
+## WebGUI — Next.js Management Interface
+
+A modern, enterprise-grade web application for managing the trading system, located at `management/webgui/`.
+
+### Technology Stack
+
+- **Framework**: Next.js (App Router) + TypeScript
+- **UI Library**: Material-UI
+- **Authentication**: NextAuth.js (Google, GitHub, Facebook, credentials)
+- **Real-time data**: WebSocket connections
+
+### Features
+
+- **Dashboard**: Performance charts, position monitor, risk metrics
+- **Strategy Builder**: Visual editor, backtest runner, parameter optimiser
+- **Portfolio**: Allocation chart, rebalancing tool, risk analysis
+- **Real-time updates**: WebSocket streams for strategies and portfolio data
+- **Docker deployment**: `Dockerfile` + `docker-compose.yml` included
+
+### Directory Structure
+
+```
+management/webgui/
+├── src/
+│   ├── app/            # Next.js App Router (routing, layouts, pages)
+│   ├── components/     # UI components (Dashboard, StrategyBuilder, Portfolio, …)
+│   └── hooks/          # Custom React hooks (useWebSocket, useStrategyData, …)
+├── public/             # Static assets
+├── Dockerfile
+├── docker-compose.yml
+└── package.json
+```
+
+### Running Locally
+
+```bash
+cd management/webgui
+npm install
+npm run dev
+# In a second terminal — mock WebSocket server:
+node src/mock-websocket-server.js
+```
+
+App: `http://localhost:5002` | WebSocket: `ws://localhost:5003`
+
+### WebSocket Endpoints
+
+| Endpoint | Data |
+|---|---|
+| `ws://localhost:5003/strategies` | Live strategy state (mock) |
+| `ws://localhost:5003/portfolio` | Live portfolio data (mock) |
+
+Replace the mock server with the real backend WebSocket server for production use.
+
 ---
 
 **Module Version**: 1.3.0  

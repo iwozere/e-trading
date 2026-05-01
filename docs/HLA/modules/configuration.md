@@ -1003,6 +1003,151 @@ security:
 - **Environment Drift**: Notifications for configuration inconsistencies
 - **Security Events**: Alerts for unauthorized configuration changes
 
+## Environment Variable Reference
+
+All sensitive credentials are loaded from environment variables via `config/donotshare/donotshare.py` (or a `config/donotshare/.env` file). These values must never be committed to version control.
+
+### Broker API Keys
+
+| Variable | Description |
+|----------|-------------|
+| `BINANCE_KEY` | Binance live trading API key |
+| `BINANCE_SECRET` | Binance live trading API secret |
+| `BINANCE_PAPER_KEY` | Binance paper trading API key (optional) |
+| `BINANCE_PAPER_SECRET` | Binance paper trading API secret (optional) |
+| `IBKR_HOST` | IBKR TWS/Gateway host (default: `127.0.0.1`) |
+| `IBKR_PORT` | IBKR TWS port (`7497`) or IB Gateway port (`4001`) |
+| `IBKR_PAPER_PORT` | IBKR paper trading port (default: `4002`) |
+| `IBKR_CLIENT_ID` | IBKR client identifier |
+| `IBKR_KEY` / `IBKR_SECRET` | IBKR live trading credentials |
+| `IBKR_PAPER_KEY` / `IBKR_PAPER_SECRET` | IBKR paper trading credentials |
+
+### Notification Credentials
+
+| Variable | Description |
+|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token from @BotFather |
+| `gmail_username` | Gmail address for email notifications |
+| `gmail_password` | Gmail app password |
+| `SENDGRID_API_KEY` | SendGrid API key (alternative email provider) |
+
+### Web Interface & API Credentials
+
+| Variable | Description |
+|----------|-------------|
+| `WEBGUI_LOGIN` | Web GUI username |
+| `WEBGUI_PASSWORD` | Web GUI password |
+| `API_LOGIN` | API user login |
+| `API_PASSWORD` | API user password |
+| `ADMIN_USERNAME` | Admin panel username |
+| `ADMIN_PASSWORD` | Admin panel password |
+
+### System Configuration
+
+| Variable | Description |
+|----------|-------------|
+| `TRADING_ENV` | Active environment (`development`, `staging`, `production`) |
+| `LOG_LEVEL` | Log verbosity (`DEBUG`, `INFO`, `WARNING`) |
+| `DATA_CACHE_DIR` | Directory for cached market data |
+| `DB_URL` | PostgreSQL connection string |
+
+### Setting Environment Variables
+
+**Linux/macOS:**
+```bash
+export BINANCE_KEY="your_api_key"
+# Or permanently via ~/.bashrc / ~/.zshrc
+echo 'export BINANCE_KEY="your_api_key"' >> ~/.bashrc && source ~/.bashrc
+```
+
+**Windows PowerShell:**
+```powershell
+$env:BINANCE_KEY = "your_api_key"
+# Permanently:
+[Environment]::SetEnvironmentVariable("BINANCE_KEY", "your_api_key", "User")
+```
+
+**`.env` file** (loaded automatically from `config/donotshare/.env`):
+```bash
+BINANCE_KEY=your_api_key
+BINANCE_SECRET=your_api_secret
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+```
+
+## ConfigManager API Reference
+
+```python
+class ConfigManager:
+    def __init__(self, config_dir: str = "config", environment: str = None)
+    def get_config(self, config_id: str) -> Optional[Any]
+    def get_config_by_type(self, config_type: str) -> List[Any]
+    def create_config(self, config_type: str, **kwargs) -> Any
+    def save_config(self, config: Any, filename: str = None) -> str
+    def delete_config(self, config_id: str) -> bool
+    def reload_config(self, config_path: str = None)
+    def enable_hot_reload(self, enabled: bool = True)
+    def get_environment_config(self, key: str, default: Any = None) -> Any
+    def list_configs(self) -> Dict[str, List[str]]
+    def validate_config_file(self, config_path: str) -> tuple[bool, List[str]]
+    def get_config_summary(self) -> Dict[str, Any]
+```
+
+### Core Schema Classes
+
+```python
+class TradingConfig(BaseModel):
+    environment: Environment
+    version: str
+    bot_id: str
+    broker: BrokerConfig
+    trading: TradingParams
+    data: DataConfig
+    strategy: StrategyConfig
+    risk_management: RiskManagementConfig
+    logging: LoggingConfig
+    notifications: NotificationConfig
+
+class OptimizerConfig(BaseModel):
+    environment: Environment
+    version: str
+    optimizer_type: str          # e.g. "optuna"
+    initial_capital: float
+    commission: float
+    n_trials: int
+    entry_strategies: List[StrategyConfig]
+    exit_strategies: List[StrategyConfig]
+
+class DataConfig(BaseModel):
+    environment: Environment
+    version: str
+    data_source: DataSourceType
+    symbol: str
+    interval: str
+    lookback_bars: int
+    retry_interval: int
+```
+
+## Configuration Migration Support
+
+To migrate from the old scattered configuration system to the centralized one:
+
+```bash
+python src/config/migrate_configs.py --old-dir config --new-dir config_new --backup
+```
+
+```python
+from src.config.migrate_configs import migrate_configs
+
+migrate_configs(
+    old_dir="config",
+    new_dir="config_new",
+    environment="development",
+    backup=True
+)
+```
+
+The migration tool automatically discovers existing configs, validates them against the new schemas, creates backups, and supports incremental migration.
+
 ---
 
 **Module Version**: 1.3.0  

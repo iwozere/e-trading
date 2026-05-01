@@ -747,6 +747,144 @@ health_service.cleanup_stale_records(stale_threshold_hours=24)
 - Intelligent failover mechanisms
 - Predictive maintenance scheduling
 
+## DB-Centric Health Check Architecture
+
+### Consolidated Health Check Endpoint Design
+
+All health check endpoints are centralized in `src/api/health_routes.py`. Neither the Telegram Bot nor the Notification Service runs its own HTTP server for health reporting — all monitoring is done by querying the database directly. This approach means health status remains queryable even when a monitored service is down.
+
+### Health Endpoint Reference (`/api/health`)
+
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `GET /api/health` | None (public) | Basic API + database connectivity check |
+| `GET /api/health/channels` | Required | Comprehensive status for all services with channel ownership and queue metrics |
+| `GET /api/health/telegram` | Required | Telegram Bot specific health status |
+| `GET /api/health/notification` | Required | Notification Service specific health status |
+| `GET /api/health/database` | Required | Database connectivity and message statistics |
+
+**Deprecated backward-compatible endpoints** (return deprecation notices):
+- `GET /api/health/legacy` (was `/api/health`)
+- `GET /api/notifications/health` → redirect to `/api/health/notification`
+- `GET /api/notifications/channels/health` → redirect to `/api/health/channels`
+
+### Channel Health Response with Ownership
+
+The `/api/health/channels` endpoint exposes which service owns each notification channel, preventing confusion about duplicate message delivery:
+
+```json
+{
+  "status": "healthy",
+  "services": {
+    "telegram_bot": {
+      "channels": { "owned": ["telegram"], "email_owned_by": "notification_service" },
+      "queue": { "pending": 3, "processing": 1, "failed_last_hour": 0, "delivered_last_hour": 45, "stuck_messages": 0 }
+    },
+    "notification_service": {
+      "channels": { "owned": ["email"], "telegram_owned_by": "telegram_bot" },
+      "queue": { "pending": 2, "processing": 0, "failed_last_hour": 0, "delivered_last_hour": 18, "stuck_messages": 0 }
+    }
+  },
+  "summary": {
+    "channel_ownership": { "telegram_bot": ["telegram"], "notification_service": ["email"] }
+  }
+}
+```
+
+### Health Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `healthy` | Service operating normally |
+| `degraded` | Running but experiencing issues |
+| `error` | Health check itself failed |
+
+**Degraded status reasons**:
+- `"X messages stuck in processing"` — messages processing for > 5 minutes
+- `"High queue backlog: X messages"` — pending queue > 100 messages
+- `"High failure rate: X failures in last hour"` — > 10 failures with 0 deliveries
+
+## Health Check 4-Layer Architecture
+
+After refactoring, health monitoring follows the standard service/repository pattern:
+
+```
+HTTP Request → API Route (src/api/health_routes.py)
+                  ↓
+             API Service (src/api/services/telegram_health_service.py
+                          src/api/services/notification_health_service.py)
+                  ↓
+             DB Service (src/data/db/services/health_monitoring_service.py)
+                  ↓
+             Repository (src/data/db/repos/repo_notification.py)
+                  ↓
+             Database
+```
+
+### HealthMonitoringService
+
+Location: `src/data/db/services/health_monitoring_service.py`
+
+```python
+class HealthMonitoringService(BaseDBService):
+    """Service for monitoring notification system health."""
+
+    @with_uow
+    @handle_db_error
+    def get_telegram_health(self) -> Dict[str, Any]: ...
+
+    @with_uow
+    @handle_db_error
+    def get_notification_service_health(self, enabled_channels) -> Dict[str, Any]: ...
+
+    @with_uow
+    @handle_db_error
+    def get_comprehensive_health(self) -> Dict[str, Any]: ...
+
+    @with_uow
+    @handle_db_error
+    def get_database_health(self) -> Dict[str, Any]: ...
+
+    def _assess_health_status(self, queue_metrics: Dict[str, Any]) -> tuple[str, str]: ...
+```
+
+The service can be imported and called from any context (CLI, cron jobs, background workers):
+
+```python
+from src.data.db.services.health_monitoring_service import HealthMonitoringService
+
+health_service = HealthMonitoringService()
+telegram_health = health_service.get_telegram_health()
+```
+
+### Repository Method: `get_queue_health_for_channels`
+
+Location: `src/data/db/repos/repo_notification.py`
+
+```python
+def get_queue_health_for_channels(self, channels: List[str]) -> Dict[str, Any]:
+    """
+    Get queue health metrics for specific channels.
+
+    Returns: pending, processing, failed_last_hour, delivered_last_hour, stuck_messages
+    (stuck = processing for > 5 minutes)
+    """
+```
+
+Uses `func.count()` with `.scalar()` for efficient single-value queries; no N+1 queries.
+
+### Health Assessment Business Rules
+
+```python
+def _assess_health_status(self, queue_metrics):
+    # Priority order:
+    if stuck_messages > 0:        return "degraded", f"{stuck_messages} messages stuck in processing"
+    if pending > 100:             return "degraded", f"High queue backlog: {pending} messages"
+    if failed_last_hour > 10 and delivered_last_hour == 0:
+                                  return "degraded", f"High failure rate: {failed_last_hour} failures in last hour"
+    return "healthy", None
+```
+
 ---
 
 **Document Version**: 1.0.0  

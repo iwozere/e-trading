@@ -1134,6 +1134,140 @@ notifications:
 - **Error Tracking**: Real-time error detection and notification
 - **Capacity Planning**: Resource usage trends and scaling alerts
 
+## Legacy Bot Management API
+
+The legacy `api.py` and `webgui/app.py` bot management API is still available alongside the newer `src/api/` module.
+
+### Endpoint Comparison
+
+| Operation | api.py endpoint | webgui/app.py endpoint |
+|-----------|----------------|------------------------|
+| Start bot | `POST /start_bot` | `POST /api/bots` |
+| Stop bot | `POST /stop_bot` | `DELETE /api/bots/<bot_id>` |
+| Get all bot status | `GET /status` | `GET /api/bots` |
+| Get bot trades | `GET /trades?bot_id=X` | `GET /api/bots/<bot_id>/trades` |
+| Get bot logs | `GET /log?strategy=X` | — |
+| Backtest strategy | `POST /backtest` | — |
+
+### Bot Configuration Endpoints (webgui/app.py)
+
+- `GET /api/config/bots` — List available bot configs
+- `GET /api/config/bots/<bot_id>` — Get config for a specific bot
+- `POST /api/config/bots/<bot_id>` — Save config for a bot
+- `GET /api/config/bots/<bot_id>/parameters` — Get parameter template for a bot type
+- `GET /api/config/bots/<bot_id>/archive` — Get archived configs for a bot
+
+### Authentication Note
+
+The `src/api/` module uses JWT Bearer tokens (see API Security section above). Legacy endpoints require authentication on all bot modification operations; `strategy` parameter must match the bot module name (e.g., `rsi_boll_volume`).
+
+## Smart Alert System
+
+### AlertRule Schema
+
+```python
+@dataclass
+class AlertRule:
+    name: str                    # Unique rule identifier
+    condition: str               # Python expression (e.g., "max_drawdown > 15")
+    severity: AlertSeverity      # Info, Warning, High, Critical
+    channels: List[AlertChannel] # Telegram, Email, SMS, Webhook
+    cooldown: str                # "5m", "1h", "4h", "1d"
+    enabled: bool
+    description: str
+    template: str                # Message template with {metric} placeholders
+```
+
+### Alert Instance Schema
+
+```python
+@dataclass
+class Alert:
+    rule_name: str
+    severity: AlertSeverity
+    message: str
+    data: Dict[str, Any]         # Associated metrics at trigger time
+    timestamp: datetime
+    acknowledged: bool
+    escalated_level: int         # 0 = not escalated
+```
+
+### Default Alert Rules
+
+| Rule Name | Condition | Severity | Cooldown | Channels |
+|-----------|-----------|----------|----------|----------|
+| `drawdown_alert` | `max_drawdown > 15` | High | 1h | Telegram, Email |
+| `profit_target` | `daily_pnl > 5` | Info | 4h | Telegram |
+| `consecutive_losses` | `consecutive_losses >= 3` | Warning | 30m | Telegram, Email |
+| `sharpe_ratio_drop` | `sharpe_ratio < 1.0` | Warning | 2h | Telegram |
+| `api_error` | `api_errors > 5` | Critical | 10m | Telegram, Email |
+
+### Performance Metrics Reference
+
+| Metric | Description | Example |
+|--------|-------------|---------|
+| `max_drawdown_pct` | Maximum drawdown percentage | 15.5 |
+| `daily_pnl` | Daily profit/loss percentage | 2.3 |
+| `max_consecutive_losses` | Maximum consecutive losses | 3 |
+| `sharpe_ratio` | Sharpe ratio | 1.2 |
+| `api_errors` | Number of API errors (last hour) | 2 |
+| `volatility` | Volatility percentage | 25.0 |
+
+### Alert Severity Levels
+
+| Severity | Color | Use Case | Examples |
+|----------|-------|----------|---------|
+| Info | Blue | Positive events, informational | Profit target hit, successful trade |
+| Warning | Yellow | Attention needed | Sharpe drop, consecutive losses |
+| High | Orange | Important issues needing action | High drawdown, significant losses |
+| Critical | Red | Immediate action required | API failures, system errors |
+
+### Alert Aggregation
+
+The `AlertAggregator` reduces noise by grouping similar alerts:
+- **Grouping**: Same rule name + severity
+- **Window**: 5-minute aggregation window
+- **Threshold**: 3 alerts before aggregating into `"Multiple {rule_name} alerts (X occurrences)"`
+
+### Alert Evaluation Integration
+
+```python
+from src.notification.alert_system import SmartAlertSystem, AlertRule, AlertSeverity, AlertChannel
+from src.notification.async_notification_manager import AsyncNotificationManager
+
+notification_manager = AsyncNotificationManager()
+alert_system = SmartAlertSystem(notification_manager)
+
+# Update metrics and evaluate in the trading loop
+metrics = {"max_drawdown_pct": 18.5, "daily_pnl": 2.3, "sharpe_ratio": 0.8, "api_errors": 2}
+alert_system.update_performance_metrics(metrics)
+await alert_system.evaluate_alerts()
+
+# Manage alerts
+active = alert_system.get_active_alerts()
+alert_system.acknowledge_alert("drawdown_alert")
+stats = alert_system.get_alert_statistics()
+
+# Export / import configuration
+config = alert_system.export_configuration()
+alert_system.import_configuration(config)
+```
+
+### Custom Alert Rule Example
+
+```python
+volatility_rule = AlertRule(
+    name="high_volatility",
+    condition="volatility > 50",
+    severity=AlertSeverity.WARNING,
+    channels=[AlertChannel.TELEGRAM],
+    cooldown="15m",
+    description="Alert when volatility exceeds 50%",
+    template="High Volatility: {volatility:.1f}%"
+)
+alert_system.add_alert_rule(volatility_rule)
+```
+
 ---
 
 **Module Version**: 1.3.0  
