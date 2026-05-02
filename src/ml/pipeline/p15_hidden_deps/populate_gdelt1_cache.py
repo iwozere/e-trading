@@ -13,16 +13,16 @@ Already-cached files are skipped unless --force is supplied.
 
 Usage:
     # Full historical backfill (default)
-    python populate_gdelt1_cache.py
+    python src/ml/pipeline/p15_hidden_deps/populate_gdelt1_cache.py
 
     # Custom window
-    python populate_gdelt1_cache.py --start 2013-04-01 --end 2014-12-31
+    python src/ml/pipeline/p15_hidden_deps/populate_gdelt1_cache.py --start 2013-04-01 --end 2014-12-31
 
     # Re-download everything
-    python populate_gdelt1_cache.py --force
+    python src/ml/pipeline/p15_hidden_deps/populate_gdelt1_cache.py --force
 
     # Dry-run: print plan without downloading
-    python populate_gdelt1_cache.py --dry-run
+    python src/ml/pipeline/p15_hidden_deps/populate_gdelt1_cache.py --dry-run
 """
 
 import argparse

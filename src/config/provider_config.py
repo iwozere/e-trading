@@ -46,6 +46,7 @@ _KNOWN_KEYS = [
     "NEWSAPI_API_KEY",
     "FINRA_API_CLIENT",
     "FINRA_API_SECRET",
+    "FRED_API_KEY",
 ]
 
 # ---------------------------------------------------------------------------

@@ -73,6 +73,7 @@ FINRA_API_CLIENT=os.getenv("FINRA_API_CLIENT")
 FINRA_API_SECRET=os.getenv("FINRA_API_SECRET")
 EODHD_API_KEY=os.getenv("EODHD_API_KEY")
 TRADIER_API_KEY=os.getenv("TRADIER_API_KEY")
+FRED_API_KEY=os.getenv("FRED_API_KEY")
 
 ##################################################################
 #

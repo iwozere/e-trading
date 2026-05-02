@@ -28,7 +28,7 @@ import io
 import json
 import time
 import zipfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 import sys
@@ -946,7 +946,9 @@ if __name__ == "__main__":
 
     # -- GDELT 1.0 subcommands --
     p_v1_gkg_day = subparsers.add_parser("v1-gkg-day", help="[v1.0] Download GKG raw zip for one day")
-    p_v1_gkg_day.add_argument("--date", type=str, required=True, help="ISO date, e.g. 2013-04-01")
+    _v1_date_group = p_v1_gkg_day.add_mutually_exclusive_group(required=True)
+    _v1_date_group.add_argument("--date", type=str, help="ISO date, e.g. 2013-04-01")
+    _v1_date_group.add_argument("--yesterday", action="store_true", help="Use yesterday's UTC date")
     p_v1_gkg_day.add_argument("--force", action="store_true", help="Re-download even if cached")
 
     p_v1_gkg_range = subparsers.add_parser("v1-gkg-range", help="[v1.0] Download GKG raw zips for a date range")
@@ -993,7 +995,12 @@ if __name__ == "__main__":
         dl1 = Gdelt1Downloader(cache_dir=args.cache_dir, request_delay=args.request_delay)
 
         if args.command == "v1-gkg-day":
-            date = datetime.strptime(args.date, "%Y-%m-%d")
+            if args.yesterday:
+                date = datetime.now(timezone.utc).replace(
+                    hour=0, minute=0, second=0, microsecond=0, tzinfo=None
+                ) - timedelta(days=1)
+            else:
+                date = datetime.strptime(args.date, "%Y-%m-%d")
             path = dl1.download_gkg_day(date, force=args.force)
             result = {"success": path is not None, "path": str(path) if path else None}
             print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")
