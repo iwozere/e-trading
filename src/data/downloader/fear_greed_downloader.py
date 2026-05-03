@@ -329,7 +329,7 @@ class FearGreedDownloader(BaseDataDownloader):
             _logger.debug("GET %s", _ARCHIVE_URL)
             response = self._session.get(_ARCHIVE_URL, timeout=self._timeout)
             response.raise_for_status()
-            df = pd.read_csv(io.StringIO(response.text), parse_dates=["date"])
+            df = pd.read_csv(io.StringIO(response.text))
         except requests.HTTPError as exc:
             _logger.warning("HTTP error fetching Fear & Greed archive: %s", exc)
             return None
@@ -342,7 +342,9 @@ class FearGreedDownloader(BaseDataDownloader):
             col_map: Dict[str, str] = {}
             for col in df.columns:
                 low = col.lower().strip()
-                if low in ("score", "value", "fear_greed", "fear_greed_score"):
+                if low in ("date", "datetime", "timestamp", "time"):
+                    col_map[col] = "date"
+                elif low in ("score", "value", "fear_greed", "fear_greed_score"):
                     col_map[col] = "fear_greed_score"
                 elif low in ("rating", "label", "category"):
                     col_map[col] = "label"
