@@ -421,6 +421,7 @@ class GdeltDownloader(BaseDataDownloader):
                     on_bad_lines="skip",
                     low_memory=False,
                     dtype=str,
+                    encoding="latin1",
                 )
             return df
         except Exception:
@@ -443,6 +444,7 @@ class GdeltDownloader(BaseDataDownloader):
                     on_bad_lines="skip",
                     low_memory=False,
                     dtype=str,
+                    encoding="latin1",
                 )
             return df
         except Exception:
