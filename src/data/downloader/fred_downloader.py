@@ -2,17 +2,16 @@
 FRED (Federal Reserve Economic Data) Downloader
 
 Downloads macroeconomic time-series from the St. Louis Fed FRED API and
-caches them as individual Parquet files.  Supports incremental updates
+caches them as per-year CSV.gz files.  Supports incremental updates
 (only fetches new observations since the last cached date) and rebuilds
-a single wide combined Parquet suitable for DuckDB queries.
+a single wide combined CSV.gz suitable for analysis.
 
 Cache layout:
     DATA_CACHE_DIR/fred/
-        raw/
-            FEDFUNDS.parquet        ← one file per FRED series ID
-            T10Y2Y.parquet
-            ...
-        fred_combined.parquet       ← wide daily-reindexed forward-filled view
+        FEDFUNDS.csv.gz             ← one flat file per FRED series ID
+        T10Y2Y.csv.gz
+        ...
+        fred_combined.csv.gz        ← wide daily-reindexed forward-filled view
         fred_meta.json              ← last_updated / last_observation per series
 
 Series covered (24 total, matching fred_api_example.py):
@@ -129,8 +128,7 @@ class FredDownloader(BaseDataDownloader):
         super().__init__()
         root = Path(cache_dir) if cache_dir else Path(DATA_CACHE_DIR)
         self._fred_dir = root / "fred"
-        self._raw_dir = self._fred_dir / "raw"
-        self._combined_path = self._fred_dir / "fred_combined.parquet"
+        self._combined_file = self._fred_dir / "fred_combined.csv.gz"
         self._meta_path = self._fred_dir / "fred_meta.json"
         self._start_date = start_date
         self._session = requests.Session()
@@ -233,8 +231,8 @@ class FredDownloader(BaseDataDownloader):
         """
         Incrementally update (or fully download) a single FRED series.
 
-        If a cached Parquet exists and ``force_full`` is False, only
-        observations after the last cached date are fetched and appended.
+        If a cached file exists and ``force_full`` is False, only observations
+        after the last cached date are fetched and appended.
 
         Args:
             series_id: FRED series identifier.
@@ -244,24 +242,36 @@ class FredDownloader(BaseDataDownloader):
         Returns:
             The complete updated DataFrame for this series.
         """
-        cache_path = self._raw_dir / f"{series_id}.parquet"
+        series_path = self._fred_dir / f"{series_id}.csv.gz"
 
-        if cache_path.exists() and not force_full:
-            existing = pd.read_parquet(cache_path)
-            last_date: pd.Timestamp = existing.index.max()  # type: ignore[assignment]
-            fetch_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-            new_data = self.fetch_series(series_id, start_date=fetch_start)
+        if series_path.exists() and not force_full:
+            try:
+                existing = pd.read_csv(
+                    series_path, index_col=0, parse_dates=True, compression="gzip"
+                )
+                last_date = existing.index.max().date() if not existing.empty else None
+            except Exception:
+                _logger.warning("%s: failed to read cache — falling back to full download", series_id)
+                existing = pd.DataFrame()
+                last_date = None
 
-            if new_data.empty:
-                _logger.info("%s: up to date (last observation: %s)", series_id, last_date.date())
-                return existing
-
-            combined = pd.concat([existing, new_data]).sort_index()
-            combined = combined[~combined.index.duplicated(keep="last")]
-            _logger.info(
-                "%s: +%d new rows (total %d, last: %s)",
-                series_id, len(new_data), len(combined), combined.index.max().date(),
-            )
+            if last_date is not None:
+                fetch_start = (pd.Timestamp(last_date) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                new_data = self.fetch_series(series_id, start_date=fetch_start)
+                if new_data.empty:
+                    _logger.info("%s: up to date (last observation: %s)", series_id, last_date)
+                    return existing
+                combined = pd.concat([existing, new_data]).sort_index()
+                combined = combined[~combined.index.duplicated(keep="last")]
+                _logger.info(
+                    "%s: +%d new rows (total %d, last: %s)",
+                    series_id, len(new_data), len(combined), combined.index.max().date(),
+                )
+            else:
+                combined = self.fetch_series(series_id)
+                if combined.empty:
+                    _logger.warning("%s: no data returned", series_id)
+                    return pd.DataFrame()
         else:
             _logger.info("%s: full download from %s", series_id, self._start_date)
             combined = self.fetch_series(series_id)
@@ -269,8 +279,8 @@ class FredDownloader(BaseDataDownloader):
                 _logger.warning("%s: no data returned", series_id)
                 return pd.DataFrame()
 
-        self._raw_dir.mkdir(parents=True, exist_ok=True)
-        combined.to_parquet(cache_path)
+        self._fred_dir.mkdir(parents=True, exist_ok=True)
+        combined.to_csv(series_path, compression="gzip")
         self._update_meta(series_id, combined)
         return combined
 
@@ -290,7 +300,7 @@ class FredDownloader(BaseDataDownloader):
         Args:
             series_ids: List of FRED series IDs to update.
             force_full: If True, force full re-download for all series.
-            rebuild: If True, rebuild fred_combined.parquet after updating.
+            rebuild: If True, rebuild fred combined (combined/YYYY.csv.gz) after updating.
 
         Returns:
             Summary dict: ``total``, ``updated``, ``up_to_date``, ``errors``.
@@ -314,7 +324,7 @@ class FredDownloader(BaseDataDownloader):
             freqs: List of frequency strings, e.g. ``["daily"]`` or
                    ``["monthly", "quarterly"]``.
             force_full: If True, force full re-download for all matched series.
-            rebuild: If True, rebuild fred_combined.parquet after updating.
+            rebuild: If True, rebuild fred combined (combined/YYYY.csv.gz) after updating.
 
         Returns:
             Summary dict: ``total``, ``updated``, ``up_to_date``, ``errors``.
@@ -353,21 +363,30 @@ class FredDownloader(BaseDataDownloader):
         series have a value on every day.
 
         Returns:
-            Wide DataFrame saved to DATA_CACHE_DIR/fred/fred_combined.parquet.
-            Returns an empty DataFrame if no raw files are cached.
+            Wide DataFrame saved to DATA_CACHE_DIR/fred/fred_combined.csv.gz.
+            Returns an empty DataFrame if no series files are cached.
         """
         frames = []
         for series_id, meta in FRED_SERIES.items():
-            path = self._raw_dir / f"{series_id}.parquet"
-            if not path.exists():
+            series_path = self._fred_dir / f"{series_id}.csv.gz"
+            if not series_path.exists():
                 _logger.debug("Skipping %s — not yet cached", series_id)
                 continue
-            df = pd.read_parquet(path)
+            try:
+                df = pd.read_csv(
+                    series_path, index_col=0, parse_dates=True, compression="gzip"
+                )
+            except Exception:
+                _logger.warning("Could not read %s — skipping", series_path)
+                continue
+            if df.empty:
+                _logger.debug("Skipping %s — empty cache", series_id)
+                continue
             df.columns = [meta["name"]]
             frames.append(df)
 
         if not frames:
-            _logger.warning("No cached series found — combined Parquet not built")
+            _logger.warning("No cached series found — combined CSV not built")
             return pd.DataFrame()
 
         combined = pd.concat(frames, axis=1).sort_index()
@@ -380,10 +399,10 @@ class FredDownloader(BaseDataDownloader):
         combined.index.name = "date"
 
         self._fred_dir.mkdir(parents=True, exist_ok=True)
-        combined.to_parquet(self._combined_path)
+        combined.to_csv(self._combined_file, compression="gzip")
         _logger.info(
             "Built combined: %d days × %d columns → %s",
-            len(combined), len(combined.columns), self._combined_path,
+            len(combined), len(combined.columns), self._combined_file,
         )
         return combined
 
@@ -403,8 +422,8 @@ class FredDownloader(BaseDataDownloader):
 
         for series_id in series_ids:
             try:
-                before_path = self._raw_dir / f"{series_id}.parquet"
-                existed = before_path.exists()
+                series_path = self._fred_dir / f"{series_id}.csv.gz"
+                existed = series_path.exists()
                 result = self.update_series(series_id, force_full=force_full)
                 if result.empty:
                     errors += 1
@@ -488,15 +507,15 @@ if __name__ == "__main__":
         choices=["daily", "weekly", "monthly", "quarterly"],
         help="Frequency (or frequencies) to update",
     )
-    p_upd_freq.add_argument("--rebuild", action="store_true", help="Rebuild fred_combined.parquet after update")
+    p_upd_freq.add_argument("--rebuild", action="store_true", help="Rebuild fred_combined.csv.gz after update")
     p_upd_freq.add_argument("--force", action="store_true", help="Force full re-download (ignore cache)")
 
     p_upd_series = subparsers.add_parser("update-series", help="Update specific series by ID")
     p_upd_series.add_argument("--series", nargs="+", required=True, help="FRED series IDs, e.g. ICSA WALCL")
-    p_upd_series.add_argument("--rebuild", action="store_true", help="Rebuild fred_combined.parquet after update")
+    p_upd_series.add_argument("--rebuild", action="store_true", help="Rebuild fred_combined.csv.gz after update")
     p_upd_series.add_argument("--force", action="store_true", help="Force full re-download (ignore cache)")
 
-    subparsers.add_parser("build-combined", help="Rebuild fred_combined.parquet from cached raw files")
+    subparsers.add_parser("build-combined", help="Rebuild fred_combined.csv.gz from cached series files")
 
     p_all = subparsers.add_parser("update-all", help="Update all 24 series and rebuild combined")
     p_all.add_argument("--force", action="store_true", help="Force full re-download for all series")

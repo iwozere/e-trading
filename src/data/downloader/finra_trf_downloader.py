@@ -27,7 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from config.donotshare.donotshare import FINRA_API_CLIENT, FINRA_API_SECRET
+from config.donotshare.donotshare import DATA_CACHE_DIR, FINRA_API_CLIENT, FINRA_API_SECRET
 
 _logger = setup_logger(__name__)
 
@@ -74,13 +74,11 @@ class FinraTRFDownloader:
             self.output_dir = Path(output_dir)
 
         self.output_file = self.output_dir / output_filename
+        self._cache_dir = Path(DATA_CACHE_DIR) / "trf"
 
         # OAuth token management
         self._access_token: Optional[str] = None
         self._token_expires_at: Optional[datetime] = None
-
-        # Ensure output directory exists
-        self.output_dir.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def _is_weekend_or_holiday(date: datetime) -> bool:
@@ -412,9 +410,14 @@ class FinraTRFDownloader:
                 if not self.fetch_yfinance_data:
                     _logger.info("Skipping yfinance data fetch (fetch_yfinance_data=False)")
 
-            # Save results
-            result_df.to_csv(self.output_file, index=False)
-            _logger.info("Saved TRF data to %s", self.output_file)
+            # Save to per-day CSV.gz: DATA_CACHE_DIR/trf/YYYY-MM-DD.csv.gz
+            save_df = result_df.copy()
+            save_df["date"] = pd.to_datetime(save_df["date"])
+            date_str = self.date.strftime("%Y-%m-%d")
+            out_path = self._cache_dir / f"{date_str}.csv.gz"
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
+            save_df.set_index("date").to_csv(out_path, compression="gzip")
+            _logger.info("Saved TRF data to %s", out_path)
 
             return result_df
 

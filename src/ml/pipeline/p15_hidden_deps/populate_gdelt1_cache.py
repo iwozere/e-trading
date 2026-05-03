@@ -1,13 +1,14 @@
 """
 GDELT 1.0 GKG Cache Population Script
 
-Bulk-downloads every available GDELT 1.0 GKG daily zip file
-(2013-04-01 through 2015-02-17) and caches them under
-DATA_CACHE_DIR/gdelt/gkg/YYYYMMDD.gkg.csv.zip.
+Bulk-downloads GDELT 1.0 GKG daily zip files from 2013-04-01 to yesterday
+and caches them under DATA_CACHE_DIR/gdelt/gkg/YYYYMMDD.gkg.csv.zip.
 
-Dates supplied outside the available v1 range are clamped automatically:
+GDELT 1.0 GKG is published daily alongside v2 with no known end date.
+
+Dates supplied outside the available range are clamped automatically:
   - Anything before 2013-04-01 is advanced to 2013-04-01.
-  - Anything after 2015-02-17 is pulled back to 2015-02-17.
+  - Anything after yesterday is pulled back to yesterday.
 
 Already-cached files are skipped unless --force is supplied.
 
@@ -36,7 +37,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.data.downloader.gdelt_downloader import (
     Gdelt1Downloader,
-    _GDELT_1_GKG_END,
     _GDELT_1_GKG_START,
 )
 from src.notification.logger import setup_logger
@@ -62,7 +62,7 @@ def main() -> None:
     delegates to Gdelt1Downloader.download_gkg_range().
     """
     parser = argparse.ArgumentParser(
-        description="Populate the local GDELT 1.0 GKG cache (2013-04-01 to 2015-02-17).",
+        description="Populate the local GDELT 1.0 GKG cache (2013-04-01 to present).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -76,10 +76,7 @@ def main() -> None:
         "--end",
         type=str,
         default=None,
-        help=(
-            "Last day to download inclusive "
-            "(default: yesterday or 2015-02-17, whichever is earlier)"
-        ),
+        help="Last day to download inclusive (default: yesterday)",
     )
     parser.add_argument(
         "--force",
@@ -118,12 +115,9 @@ def main() -> None:
         )
         start = _GDELT_1_GKG_START
 
-    if end > _GDELT_1_GKG_END:
-        _logger.info(
-            "End %s is past GDELT 1.0 GKG cutoff; clamping to %s",
-            end.date(), _GDELT_1_GKG_END.date(),
-        )
-        end = _GDELT_1_GKG_END
+    if end > yest:
+        _logger.info("End %s is in the future; clamping to yesterday %s", end.date(), yest.date())
+        end = yest
 
     if start > end:
         _logger.error("Nothing to download: effective start %s > end %s", start.date(), end.date())

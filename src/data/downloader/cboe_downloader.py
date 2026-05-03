@@ -2,7 +2,7 @@
 CBOE Put/Call Ratio Downloader
 
 Downloads CBOE equity, index, and total put/call ratio data from the CBOE
-CDN and caches the merged result as a single Parquet file.
+CDN and caches the merged result as a single CSV.gz file.
 
 CBOE publishes six CSV files (three current + three archives).  The current
 files are overwritten daily with the full dataset up to today; the archive
@@ -11,7 +11,7 @@ filling any gaps left by the current file.
 
 Cache layout:
     DATA_CACHE_DIR/cboe/
-        cboe_putcall.parquet   ← merged wide series (pc_total, pc_equity, pc_index)
+        cboe_putcall.csv.gz   ← single file, fully replaced on each run
 
 Output columns:
     pc_total   — total options put/call ratio
@@ -87,8 +87,9 @@ class CboeDownloader(BaseDataDownloader):
     CBOE Put/Call Ratio Downloader.
 
     Downloads all six CBOE put/call CSV files (three current + three archives),
-    merges them into a single wide DataFrame, and saves it as a Parquet file
-    under DATA_CACHE_DIR/cboe/cboe_putcall.parquet.
+    merges them into a single wide DataFrame, and saves it as a single CSV.gz
+    file at DATA_CACHE_DIR/cboe/cboe_putcall.csv.gz.  The file is fully
+    replaced on every run.
 
     The result contains three columns (pc_total, pc_equity, pc_index) covering
     the full available history by combining archive and current files.
@@ -104,13 +105,13 @@ class CboeDownloader(BaseDataDownloader):
 
         Args:
             cache_dir: Root cache directory. Defaults to DATA_CACHE_DIR.
-                       Output is stored under <cache_dir>/cboe/.
+                       Output is stored at <cache_dir>/cboe/cboe_putcall.csv.gz.
             request_timeout: HTTP request timeout in seconds. Default: 30.
         """
         super().__init__()
         root = Path(cache_dir) if cache_dir else Path(DATA_CACHE_DIR)
         self._cboe_dir = root / "cboe"
-        self._output_path = self._cboe_dir / "cboe_putcall.parquet"
+        self._cboe_file = self._cboe_dir / "cboe_putcall.csv.gz"
         self._timeout = request_timeout
         self._session = requests.Session()
         self._session.headers.update({
@@ -160,24 +161,19 @@ class CboeDownloader(BaseDataDownloader):
 
     def download(self, force: bool = False) -> Optional[Path]:
         """
-        Download all six CBOE put/call CSV files, merge, and cache as Parquet.
+        Download all six CBOE put/call CSV files, merge, and save as a single CSV.gz.
 
-        Each run replaces the cached file with fresh data because CBOE updates
-        the current files in-place daily.  Pass ``force=True`` to bypass even
-        a same-session cache.
+        The output file is fully replaced on every call because CBOE updates
+        its source files in-place daily.  ``force`` is accepted for API
+        compatibility but has no effect — the download always runs.
 
         Args:
-            force: If True, re-download even if the cache file already exists.
-                   Normally you always want to re-download (daily job), but
-                   ``force=False`` lets tests skip the network call.
+            force: Accepted for API compatibility; has no effect.
 
         Returns:
-            Path to the saved Parquet file, or None if the download failed.
+            Path to ``cboe_putcall.csv.gz``, or None if the download failed.
         """
-        if self._output_path.exists() and not force:
-            _logger.info("CBOE putcall already cached at %s", self._output_path)
-            return self._output_path
-
+        del force  # always re-downloads; CBOE files are replaced in-place daily
         frames: Dict[str, pd.Series] = {}
         errors = 0
 
@@ -200,7 +196,7 @@ class CboeDownloader(BaseDataDownloader):
             current_col = f"pc_{metric}"
             archive_col = f"pc_{metric}_archive"
             if current_col in combined and archive_col in combined:
-                combined[current_col] = combined[current_col].combine_first(combined[archive_col])
+                combined[current_col] = combined[current_col].combine_first(combined[archive_col])  # type: ignore[arg-type]
             elif archive_col in combined and current_col not in combined:
                 # Current file failed — fall back to archive only
                 combined[current_col] = combined[archive_col]
@@ -215,22 +211,23 @@ class CboeDownloader(BaseDataDownloader):
         combined.index.name = "date"
 
         self._cboe_dir.mkdir(parents=True, exist_ok=True)
-        combined.to_parquet(self._output_path)
+        combined.to_csv(self._cboe_file, compression="gzip")
 
         _logger.info(
-            "Saved CBOE putcall: %d rows × %d cols, last date: %s → %s",
+            "Saved CBOE putcall: %d rows × %d cols, %s → %s → %s",
             len(combined), len(combined.columns),
-            combined.index.min().date(), combined.index.max().date(),
-            self._output_path,
+            pd.Timestamp(combined.index.min()).date(),  # type: ignore[arg-type]
+            pd.Timestamp(combined.index.max()).date(),  # type: ignore[arg-type]
+            self._cboe_file,
         )
         if errors:
             _logger.warning("%d source file(s) failed to download", errors)
 
-        return self._output_path
+        return self._cboe_file
 
     def load(self, force_refresh: bool = False) -> pd.DataFrame:
         """
-        Load the cached CBOE put/call Parquet, downloading if absent.
+        Load the cached CBOE put/call data, downloading if absent.
 
         Args:
             force_refresh: If True, re-download before loading.
@@ -239,10 +236,10 @@ class CboeDownloader(BaseDataDownloader):
             DataFrame with DatetimeIndex and columns pc_total, pc_equity,
             pc_index.  Returns an empty DataFrame on failure.
         """
-        path = self.download(force=force_refresh)
-        if path is None or not path.exists():
+        result = self.download(force=force_refresh)
+        if result is None:
             return pd.DataFrame()
-        return pd.read_parquet(path)
+        return pd.read_csv(self._cboe_file, index_col=0, parse_dates=True, compression="gzip")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -316,11 +313,12 @@ class CboeDownloader(BaseDataDownloader):
             df[pc_col] = pd.to_numeric(df[pc_col], errors="coerce")
             df = df[[date_col, pc_col]].dropna()
             df = df.set_index(date_col).sort_index()
-            series = df[pc_col].rename(col_name)
-            series = series[~series.index.duplicated(keep="last")]
+            series: pd.Series = df[pc_col].copy()  # type: ignore[assignment]
+            series.name = col_name
+            series = pd.Series(series[~series.index.duplicated(keep="last")])
 
             _logger.debug("%s: %d rows, %s – %s", source_key, len(series),
-                          series.index.min().date(), series.index.max().date())
+                          str(series.index.min())[:10], str(series.index.max())[:10])
             return series
 
         except Exception:
@@ -338,7 +336,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download CBOE put/call ratio data to local cache.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    p_download = subparsers.add_parser("download", help="Download and cache cboe_putcall.parquet")
+    p_download = subparsers.add_parser("download", help="Download and cache CBOE put/call data")
     p_download.add_argument("--force", action="store_true", help="Re-download even if cache exists")
 
     parser.add_argument(
@@ -354,13 +352,11 @@ if __name__ == "__main__":
     dl = CboeDownloader(cache_dir=args.cache_dir, request_timeout=args.timeout)
 
     if args.command == "download":
-        path = dl.download(force=args.force)
-        rows = 0
-        if path and path.exists():
-            rows = len(pd.read_parquet(path))
+        directory = dl.download(force=args.force)
+        rows = len(dl.load()) if directory is not None else 0
         result = {
-            "success": path is not None,
-            "path": str(path) if path else None,
+            "success": directory is not None,
+            "path": str(directory) if directory else None,
             "rows": rows,
             "downloaded_at": datetime.now(timezone.utc).isoformat(),
         }

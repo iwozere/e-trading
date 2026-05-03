@@ -4,6 +4,71 @@
 
 ### High Priority
 
+#### ALFRED — Archival FRED Vintage Data (P15 Backtesting)
+
+- [ ] **Implement `AlfredDownloader` / vintage mode in `FredDownloader`**
+
+  **Why**: The current `FredDownloader` uses the standard FRED API, which always returns
+  the **latest-revised** value for each observation date.  For heavily-revised macro series
+  (`PAYEMS`, `CPIAUCSL`, `CPILFESL`, `PCEPILFE`, `UNRATE`, `INDPRO`) this introduces
+  look-ahead bias in any backtest: the model sees a revised CPI figure that was not yet
+  available to market participants on the signal date.
+
+  **ALFRED** (Archival FRED) is the same API endpoint (`/fred/series/observations`) with
+  `realtime_start` / `realtime_end` parameters that return the value **as it was known on
+  a specific date**.  All existing FRED API keys work with ALFRED at no extra cost.
+
+  **Data model change required**:
+  ```
+  Current:  (date)                → value        # one row per observation
+  ALFRED:   (date, vintage_date)  → value        # one row per revision
+  ```
+  Cache layout (proposed):
+  ```
+  DATA_CACHE_DIR/fred/
+      raw/           ← unchanged (latest-revised, current behaviour)
+      vintages/
+          PAYEMS.parquet     ← MultiIndex (date, vintage_date), value col
+          CPIAUCSL.parquet
+          ...                ← only the 6 heavily-revised series (see below)
+      fred_combined.parquet  ← unchanged (latest-revised, for live use)
+  ```
+
+  **Point-in-time view builder** (new method):
+  ```python
+  FredDownloader.build_combined_realtime(as_of: date) -> pd.DataFrame
+  # For each vintage series: select the row where vintage_date <= as_of,
+  # pick the most recent vintage.  Fall back to latest-revised for non-vintage series.
+  ```
+
+  **Scope** — vintage tracking needed only for the 6 frequently-revised series:
+  | Series ID   | Name               | Typical revision lag |
+  |-------------|--------------------|--------------------|
+  | PAYEMS      | Nonfarm payrolls   | 1–3 months, ±100k  |
+  | CPIAUCSL    | CPI                | minor but persistent |
+  | CPILFESL    | Core CPI           | same                |
+  | PCEPILFE    | Core PCE           | same                |
+  | UNRATE      | Unemployment rate  | minor               |
+  | INDPRO      | Industrial prod.   | occasional          |
+
+  Market/financial series (`DFF`, `T10Y2Y`, yield spreads, credit spreads) are **never
+  revised** — FRED and ALFRED return identical values; no change needed for those.
+
+  **Implementation steps**:
+  1. Add `fetch_vintages(series_id, start_date)` to `FredDownloader` — calls FRED API
+     with `output_type=4` (all observations for all real-time periods).
+  2. Add `update_vintages(series_ids)` method with incremental update support.
+  3. Add `build_combined_realtime(as_of)` for point-in-time combined view.
+  4. Wire into P15 pipeline: `p15_daily.py` downloads latest-revised (unchanged);
+     a new quarterly job downloads full vintage history for the 6 series.
+  5. Unit tests: verify that a point-in-time view for 2022-03-14 returns the
+     pre-revision CPI, not the post-revision figure.
+
+  **References**:
+  - ALFRED API docs: https://fred.stlouisfed.org/docs/api/fred/series_observations.html
+    (see `realtime_start`, `realtime_end`, `output_type` params)
+  - `output_type=4` returns all vintages efficiently in one request.
+
 #### Database System Enhancements
 - [ ] **Add database migration system**
   - Implement Alembic for schema migrations
