@@ -16,9 +16,16 @@
 - [x] **FINRA TRF** — weekday range fill; silently skipped when credentials absent
 - [x] **AAII investor sentiment** — weekly full download (Thursday publish cycle)
 - [x] **GDELT 1.0 GKG cache** — one-shot backfill via `populate_gdelt1_cache.py` (2013-04-01 to present)
-- [x] **YYYY.csv.gz storage format** — all downloaders (CBOE, Fear & Greed, AAII, FRED, GDELT v2, FINRA,
-      yfinance prices) store tabular cache in per-year `YYYY.csv.gz` files via shared `yearly_csv` utility;
-      human-readable, consistent with OHLCV cache convention
+- [x] **Single-file / daily-file cache format** — all downloaders migrated away from per-year `YYYY.csv.gz`
+      (shared `yearly_csv` utility deleted):
+      CBOE → `cboe/cboe_putcall.csv.gz` (fully replaced each run);
+      Fear & Greed → `fear_greed/cnn_fear_greed.csv.gz` (incremental append+dedup);
+      AAII → `aaii/aaii.csv.gz` (fully replaced each run; columns extended to include
+      `bullish_8wk_avg`, `bull_bear_spread`, `sp500_high/low/close`);
+      FRED → `fred/{SERIES_ID}.csv.gz` per series + `fred/fred_combined.csv.gz`;
+      GDELT v2 → `gdelt/gkg/YYYYMMDD.gkg.csv.gz` and `gdelt/events/YYYYMMDD.events.csv.gz`;
+      FINRA TRF → `trf/YYYY-MM-DD.csv.gz`;
+      yfinance prices → `ohlcv/{TICKER}/1d/YYYY.csv.gz` via `DataManager.get_ohlcv_batch()`
 
 ---
 

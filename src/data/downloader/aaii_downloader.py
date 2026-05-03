@@ -2,29 +2,32 @@
 AAII Investor Sentiment Survey Downloader
 
 Downloads the AAII (American Association of Individual Investors) weekly
-sentiment survey data from the official AAII XLS file and caches it as
-per-year CSV.gz files.
+sentiment survey data from the official AAII XLS file and caches it as a
+single CSV.gz file.
 
 The XLS is published weekly (every Thursday) and contains the full history
 from 1987 onward — there is no incremental API, so each run replaces the
-cache with a fresh full download.
+entire cache with a fresh full download.
 
 Source:
     https://www.aaii.com/files/surveys/sentiment.xls
-    Sheet: "Sentiment Survey", header at row 4 (skiprows=3), columns A:F.
+    Sheet: "Sentiment Survey", header at row 4 (0-indexed row 3, skiprows=3).
+    Life-of-survey constant columns (Average, ±St. Dev.) are excluded.
 
 Cache layout:
     DATA_CACHE_DIR/aaii/
-        2010.csv.gz   ← one file per calendar year
-        2011.csv.gz
-        ...           (DatetimeIndex weekly series)
+        aaii.csv.gz   ← single file, fully replaced each run (DatetimeIndex weekly series)
 
 Output columns:
-    bullish         — % respondents bullish (0–100 scale)
-    neutral         — % respondents neutral (0–100 scale)
-    bearish         — % respondents bearish (0–100 scale)
-    total           — sum (should be ~100; may be NaN in some rows)
-    bull_bear_spread — bullish minus bearish spread
+    bullish           — % respondents bullish (0–100 scale)
+    neutral           — % respondents neutral (0–100 scale)
+    bearish           — % respondents bearish (0–100 scale)
+    total             — sum of bullish+neutral+bearish (~100)
+    bullish_8wk_avg   — 8-week moving average of bullish (0–100 scale)
+    bull_bear_spread  — bullish minus bearish spread (0–100 scale)
+    sp500_high        — S&P 500 weekly high
+    sp500_low         — S&P 500 weekly low
+    sp500_close       — S&P 500 weekly close
 
 Classes:
 - AaiiDownloader: Main downloader class for AAII sentiment survey data
@@ -33,7 +36,7 @@ Classes:
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -43,9 +46,6 @@ import pandas as pd
 import requests
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from src.data.downloader.yearly_csv import load as ycsv_load  # type: ignore[import]
-from src.data.downloader.yearly_csv import save as ycsv_save  # type: ignore[import]
-from src.data.downloader.yearly_csv import watermark as ycsv_watermark  # type: ignore[import]
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -58,9 +58,28 @@ except ImportError:
 _AAII_URL = "https://www.aaii.com/files/surveys/sentiment.xls"
 _SHEET_NAME = "Sentiment Survey"
 _SKIP_ROWS = 3
-_USE_COLS = "A:F"
-_RAW_COLUMNS = ["date", "bullish", "neutral", "bearish", "total", "bull_bear_spread"]
-_PCT_COLUMNS = ["bullish", "neutral", "bearish"]
+# Columns A–G (Date through Bull-Bear Spread) and K–M (S&P 500 High/Low/Close).
+# Excludes H–J: life-of-survey constants (Average, +St. Dev., -St. Dev.).
+# Excludes N: always empty.
+_USE_COLS = "A:G,K:M"
+
+_COLUMN_MAP: Dict[str, str] = {
+    "Date": "date",
+    "Bullish": "bullish",
+    "Neutral": "neutral",
+    "Bearish": "bearish",
+    "Total": "total",
+    "Mov Avg": "bullish_8wk_avg",
+    "Spread": "bull_bear_spread",
+    "High": "sp500_high",
+    "Low": "sp500_low",
+    "Close": "sp500_close",
+}
+
+# Stored as decimals (0.38 → 38.0); scaled × 100 when max abs < 2.0
+_DECIMAL_SCALED_COLS = ["bullish", "neutral", "bearish", "total", "bullish_8wk_avg", "bull_bear_spread"]
+# S&P 500 price columns — numeric only, no scaling
+_PRICE_COLS = ["sp500_high", "sp500_low", "sp500_close"]
 
 
 class AaiiDownloader(BaseDataDownloader):
@@ -68,7 +87,7 @@ class AaiiDownloader(BaseDataDownloader):
     AAII Investor Sentiment Survey Downloader.
 
     Downloads the full AAII weekly sentiment history from the official XLS file,
-    normalises percentage columns, and saves as per-year CSV.gz files under
+    normalises percentage columns, and saves as a single aaii.csv.gz under
     DATA_CACHE_DIR/aaii/.
 
     Because AAII publishes a complete history file (not a delta), each run
@@ -93,6 +112,7 @@ class AaiiDownloader(BaseDataDownloader):
         super().__init__()
         root = Path(cache_dir) if cache_dir else Path(DATA_CACHE_DIR)
         self._aaii_dir = root / "aaii"
+        self._aaii_file = self._aaii_dir / "aaii.csv.gz"
         self._timeout = request_timeout
         self._session = requests.Session()
         self._session.headers.update({
@@ -142,7 +162,7 @@ class AaiiDownloader(BaseDataDownloader):
 
     def download(self, force: bool = False) -> Optional[Path]:
         """
-        Download the AAII sentiment XLS, parse, and cache as YYYY.csv.gz files.
+        Download the AAII sentiment XLS, parse, and cache as aaii.csv.gz.
 
         Args:
             force: If True, re-download even when the cache file already exists.
@@ -151,11 +171,11 @@ class AaiiDownloader(BaseDataDownloader):
                    ensure weekly data is never stale.
 
         Returns:
-            Path to the saved CSV.gz file, or None if the download failed.
+            Path to the saved aaii.csv.gz file, or None if the download failed.
         """
-        if ycsv_watermark(self._aaii_dir) is not None and not force:
-            _logger.info("AAII sentiment already cached at %s", self._aaii_dir)
-            return self._aaii_dir
+        if self._aaii_file.exists() and not force:
+            _logger.info("AAII sentiment already cached at %s", self._aaii_file)
+            return self._aaii_file
 
         raw_bytes = self._fetch_xls()
         if raw_bytes is None:
@@ -165,16 +185,17 @@ class AaiiDownloader(BaseDataDownloader):
         if df is None or df.empty:
             return None
 
-        ycsv_save(df, self._aaii_dir)
+        self._aaii_dir.mkdir(parents=True, exist_ok=True)
+        df.to_csv(self._aaii_file, compression="gzip")
 
         _logger.info(
             "Saved AAII sentiment: %d weeks, %s → %s → %s",
             len(df),
             str(df.index.min())[:10],
             str(df.index.max())[:10],
-            self._aaii_dir,
+            self._aaii_file,
         )
-        return self._aaii_dir
+        return self._aaii_file
 
     def load(self, force_refresh: bool = False) -> pd.DataFrame:
         """
@@ -185,12 +206,13 @@ class AaiiDownloader(BaseDataDownloader):
 
         Returns:
             DataFrame with DatetimeIndex and columns bullish, neutral, bearish,
-            total, bull_bear_spread.  Returns an empty DataFrame on failure.
+            total, bullish_8wk_avg, bull_bear_spread, sp500_high, sp500_low,
+            sp500_close.  Returns an empty DataFrame on failure.
         """
         result = self.download(force=force_refresh)
         if result is None:
             return pd.DataFrame()
-        return ycsv_load(self._aaii_dir)
+        return pd.read_csv(self._aaii_file, index_col=0, parse_dates=True, compression="gzip")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -220,9 +242,12 @@ class AaiiDownloader(BaseDataDownloader):
         Parse the AAII XLS bytes into a clean DataFrame.
 
         Handles:
-        - Multi-row header (skiprows=3)
-        - Trailing summary / blank rows (dropped by date coercion)
-        - Percentage columns stored as decimals (0.38 → 38.0)
+        - Multi-row header: skiprows=3 skips rows 0–2; row 3 (1-indexed row 4)
+          contains the real column names.
+        - Trailing summary / blank rows: dropped by date coercion.
+        - Percentage columns stored as decimals (0.38 → 38.0): scaled × 100
+          when the max absolute value is below 2.0.
+        - Life-of-survey constants (Average, ±St. Dev.): excluded via usecols.
 
         Args:
             raw_bytes: Raw bytes of the downloaded XLS file.
@@ -238,22 +263,25 @@ class AaiiDownloader(BaseDataDownloader):
                 usecols=_USE_COLS,
                 engine="xlrd",
             )
-            df.columns = _RAW_COLUMNS
+            df = df.rename(columns=_COLUMN_MAP)
 
             # Drop rows where date is not a recognisable date (summary rows, blanks)
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
             df = pd.DataFrame(df[df["date"].notna()])
 
-            # Normalise percentage columns: AAII stores them as decimals (0.38)
-            # in older rows and as whole numbers (38.0) in newer ones.
-            for col in _PCT_COLUMNS:
+            # Scale decimal percentages to 0–100 range
+            for col in _DECIMAL_SCALED_COLS:
+                if col not in df.columns:
+                    continue
                 df[col] = pd.to_numeric(df[col], errors="coerce")
                 non_null = df[col].dropna()
                 if not non_null.empty and non_null.abs().max() < 2.0:
                     df[col] = df[col] * 100.0
 
-            df["total"] = pd.to_numeric(df["total"], errors="coerce")
-            df["bull_bear_spread"] = pd.to_numeric(df["bull_bear_spread"], errors="coerce")
+            for col in _PRICE_COLS:
+                if col not in df.columns:
+                    continue
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
             df = df.sort_values("date").set_index("date")
             df = pd.DataFrame(df[~df.index.duplicated(keep="last")])
@@ -295,11 +323,11 @@ if __name__ == "__main__":
     dl = AaiiDownloader(cache_dir=args.cache_dir, request_timeout=args.timeout)
 
     if args.command == "download":
-        directory = dl.download(force=args.force)
-        rows = len(dl.load()) if directory is not None else 0
+        file_path = dl.download(force=args.force)
+        rows = len(dl.load()) if file_path is not None else 0
         result = {
-            "success": directory is not None,
-            "path": str(directory) if directory else None,
+            "success": file_path is not None,
+            "path": str(file_path) if file_path else None,
             "rows": rows,
             "downloaded_at": datetime.now(timezone.utc).isoformat(),
         }

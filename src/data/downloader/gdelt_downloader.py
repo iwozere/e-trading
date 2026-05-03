@@ -15,9 +15,9 @@ Cache layout:
     DATA_CACHE_DIR/gdelt/
         gkg/
             YYYYMMDD.gkg.csv.zip   ← GDELT 1.0 raw daily GKG zip
-            YYYY.csv.gz            ← GDELT 2.0 aggregated GKG by theme (per year)
+            YYYYMMDD.gkg.csv.gz    ← GDELT 2.0 aggregated GKG by theme (one file per day)
         events/
-            YYYY.csv.gz            ← GDELT 2.0 aggregated Events by EventCode (per year)
+            YYYYMMDD.events.csv.gz ← GDELT 2.0 aggregated Events by EventCode (one file per day)
 
 Classes:
 - Gdelt1Downloader: GDELT 1.0 daily GKG downloader (raw zip caching)
@@ -40,9 +40,6 @@ import pandas as pd
 import requests
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
-from src.data.downloader.yearly_csv import cached_dates as ycsv_cached_dates  # type: ignore[import]
-from src.data.downloader.yearly_csv import load as ycsv_load  # type: ignore[import]
-from src.data.downloader.yearly_csv import save as ycsv_save  # type: ignore[import]
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -205,8 +202,8 @@ class GdeltDownloader(BaseDataDownloader):
         Download, aggregate, and cache GKG data for a single calendar day.
 
         Fetches up to ``files_per_day`` 15-minute GKG CSV zip files, parses
-        V2Themes and V2Tone, and produces a per-theme daily summary merged into
-        the yearly YYYY.csv.gz cache.
+        V2Themes and V2Tone, and produces a per-theme daily summary saved to
+        DATA_CACHE_DIR/gdelt/gkg/YYYYMMDD.gkg.csv.gz.
 
         Schema (DatetimeIndex = date):
             theme, article_count, avg_tone, positive_avg, negative_avg, polarity_avg
@@ -216,27 +213,20 @@ class GdeltDownloader(BaseDataDownloader):
             force: If True, re-download even when the cache already contains this date.
 
         Returns:
-            Path to the GKG cache directory, or None if no data could be retrieved.
+            Path to the day's ``YYYYMMDD.gkg.csv.gz`` file, or None if no data
+            could be retrieved.
         """
-        if not force:
-            year_file = self._gkg_dir / f"{date.year}.csv.gz"
-            if year_file.exists():
-                try:
-                    idx = pd.read_csv(  # type: ignore[call-overload, arg-type]
-                        year_file, index_col=0, parse_dates=True,
-                        compression="gzip", usecols=[0],
-                    ).index
-                    if pd.Timestamp(date.date()) in pd.DatetimeIndex(idx):  # type: ignore[attr-defined]
-                        _logger.debug("GKG %s already cached", date.date())
-                        return self._gkg_dir
-                except Exception:
-                    pass
+        date_str = date.strftime("%Y%m%d")
+        day_file = self._gkg_dir / f"{date_str}.gkg.csv.gz"
+
+        if day_file.exists() and not force:
+            _logger.debug("GKG %s already cached at %s", date.date(), day_file)
+            return day_file
 
         if date < _GDELT_2_START:
             _logger.warning("GDELT 2.0 data starts 2015-02-18; skipping %s", date.date())
             return None
 
-        date_str = date.strftime("%Y%m%d")
         frames: List[pd.DataFrame] = []
 
         for slot in self._timeslots:
@@ -256,9 +246,10 @@ class GdeltDownloader(BaseDataDownloader):
             _logger.warning("GKG aggregation produced no rows for %s", date.date())
             return None
 
-        ycsv_save(aggregated.set_index("date"), self._gkg_dir)
-        _logger.info("Saved GKG %s: %d theme-rows → %s", date.date(), len(aggregated), self._gkg_dir)
-        return self._gkg_dir
+        self._gkg_dir.mkdir(parents=True, exist_ok=True)
+        aggregated.set_index("date").to_csv(day_file, compression="gzip")
+        _logger.info("Saved GKG %s: %d theme-rows → %s", date.date(), len(aggregated), day_file)
+        return day_file
 
     def download_gkg_range(
         self,
@@ -280,7 +271,7 @@ class GdeltDownloader(BaseDataDownloader):
         return self._range_download(
             start_date, end_date,
             self.download_gkg_day, self._gkg_dir,
-            force, "GKG",
+            force, "GKG", ".gkg.csv.gz",
         )
 
     def load_gkg_day(self, date: datetime, force_refresh: bool = False) -> pd.DataFrame:
@@ -296,16 +287,11 @@ class GdeltDownloader(BaseDataDownloader):
             avg_tone, positive_avg, negative_avg, polarity_avg.
             Returns an empty DataFrame if the data cannot be retrieved.
         """
-        result = self.download_gkg_day(date, force=force_refresh)
-        if result is None:
-            return pd.DataFrame()
-        year_file = self._gkg_dir / f"{date.year}.csv.gz"
-        if not year_file.exists():
+        path = self.download_gkg_day(date, force=force_refresh)
+        if path is None or not path.exists():
             return pd.DataFrame()
         try:
-            df = pd.read_csv(year_file, index_col=0, parse_dates=True, compression="gzip")
-            target = pd.Timestamp(date.date())
-            return df[pd.DatetimeIndex(df.index).normalize() == target]  # type: ignore[attr-defined]
+            return pd.read_csv(path, index_col=0, parse_dates=True, compression="gzip")
         except Exception:
             _logger.exception("Failed to read GKG data for %s", date.date())
             return pd.DataFrame()
@@ -319,8 +305,8 @@ class GdeltDownloader(BaseDataDownloader):
         Download, aggregate, and cache Events data for a single calendar day.
 
         Fetches up to ``files_per_day`` 15-minute Events CSV zip files and
-        aggregates them to a per-EventCode daily summary merged into the yearly
-        YYYY.csv.gz cache.
+        aggregates them to a per-EventCode daily summary saved to
+        DATA_CACHE_DIR/gdelt/events/YYYYMMDD.events.csv.gz.
 
         Schema (DatetimeIndex = date):
             event_code, event_root_code, quad_class, num_events,
@@ -331,27 +317,20 @@ class GdeltDownloader(BaseDataDownloader):
             force: If True, re-download even when the cache already contains this date.
 
         Returns:
-            Path to the Events cache directory, or None if no data could be retrieved.
+            Path to the day's ``YYYYMMDD.events.csv.gz`` file, or None if no data
+            could be retrieved.
         """
-        if not force:
-            year_file = self._events_dir / f"{date.year}.csv.gz"
-            if year_file.exists():
-                try:
-                    idx = pd.read_csv(  # type: ignore[call-overload, arg-type]
-                        year_file, index_col=0, parse_dates=True,
-                        compression="gzip", usecols=[0],
-                    ).index
-                    if pd.Timestamp(date.date()) in pd.DatetimeIndex(idx):  # type: ignore[attr-defined]
-                        _logger.debug("Events %s already cached", date.date())
-                        return self._events_dir
-                except Exception:
-                    pass
+        date_str = date.strftime("%Y%m%d")
+        day_file = self._events_dir / f"{date_str}.events.csv.gz"
+
+        if day_file.exists() and not force:
+            _logger.debug("Events %s already cached at %s", date.date(), day_file)
+            return day_file
 
         if date < _GDELT_2_START:
             _logger.warning("GDELT 2.0 data starts 2015-02-18; skipping %s", date.date())
             return None
 
-        date_str = date.strftime("%Y%m%d")
         frames: List[pd.DataFrame] = []
 
         for slot in self._timeslots:
@@ -371,9 +350,10 @@ class GdeltDownloader(BaseDataDownloader):
             _logger.warning("Events aggregation produced no rows for %s", date.date())
             return None
 
-        ycsv_save(aggregated.set_index("date"), self._events_dir)
-        _logger.info("Saved Events %s: %d event-code rows → %s", date.date(), len(aggregated), self._events_dir)
-        return self._events_dir
+        self._events_dir.mkdir(parents=True, exist_ok=True)
+        aggregated.set_index("date").to_csv(day_file, compression="gzip")
+        _logger.info("Saved Events %s: %d event-code rows → %s", date.date(), len(aggregated), day_file)
+        return day_file
 
     def download_events_range(
         self,
@@ -395,7 +375,7 @@ class GdeltDownloader(BaseDataDownloader):
         return self._range_download(
             start_date, end_date,
             self.download_events_day, self._events_dir,
-            force, "Events",
+            force, "Events", ".events.csv.gz",
         )
 
     def load_events_day(self, date: datetime, force_refresh: bool = False) -> pd.DataFrame:
@@ -412,16 +392,11 @@ class GdeltDownloader(BaseDataDownloader):
             avg_tone, goldstein_scale_avg.
             Returns an empty DataFrame if the data cannot be retrieved.
         """
-        result = self.download_events_day(date, force=force_refresh)
-        if result is None:
-            return pd.DataFrame()
-        year_file = self._events_dir / f"{date.year}.csv.gz"
-        if not year_file.exists():
+        path = self.download_events_day(date, force=force_refresh)
+        if path is None or not path.exists():
             return pd.DataFrame()
         try:
-            df = pd.read_csv(year_file, index_col=0, parse_dates=True, compression="gzip")
-            target = pd.Timestamp(date.date())
-            return df[pd.DatetimeIndex(df.index).normalize() == target]  # type: ignore[attr-defined]
+            return pd.read_csv(path, index_col=0, parse_dates=True, compression="gzip")
         except Exception:
             _logger.exception("Failed to read Events data for %s", date.date())
             return pd.DataFrame()
@@ -504,14 +479,25 @@ class GdeltDownloader(BaseDataDownloader):
         dest_dir: Path,
         force: bool,
         label: str,
+        file_suffix: str = ".csv.gz",
     ) -> Dict[str, Any]:
         """Generic date-range bulk download loop."""
         total = downloaded = skipped = errors = 0
         current = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end = end_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Build set of already-cached dates once for O(1) per-day skip checks
-        cached = ycsv_cached_dates(dest_dir) if not force else set()
+        # Build set of already-cached dates by scanning YYYYMMDD{file_suffix} filenames
+        if not force and dest_dir.exists():
+            cached = set()
+            for f in dest_dir.glob(f"????????{file_suffix}"):
+                try:
+                    cached.add(
+                        datetime.strptime(f.name[:8], "%Y%m%d").date()
+                    )
+                except ValueError:
+                    pass
+        else:
+            cached = set()
 
         _logger.info(
             "Starting %s range download: %s → %s",

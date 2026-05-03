@@ -56,7 +56,6 @@ from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.data.downloader.fear_greed_downloader import FearGreedDownloader
 from src.data.downloader.fred_downloader import FredDownloader
 from src.data.downloader.gdelt_downloader import GdeltDownloader
-from src.data.downloader.yearly_csv import watermark as ycsv_watermark  # type: ignore[import]
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -179,6 +178,28 @@ def _is_edgar_facts_day(today: datetime) -> bool:
         return today.day == 16
 
 
+def _gdelt_watermark(gdelt_dir: Path, suffix: str) -> Optional[_Date]:
+    """
+    Return the most recent cached date in gdelt_dir by scanning YYYYMMDD{suffix} filenames.
+
+    Args:
+        gdelt_dir: Directory containing per-day YYYYMMDD{suffix} files.
+        suffix:    File suffix, e.g. ``.gkg.csv.gz`` or ``.events.csv.gz``.
+
+    Returns:
+        Most recent date present, or None if the directory is absent or empty.
+    """
+    if not gdelt_dir.exists():
+        return None
+    dates = []
+    for f in gdelt_dir.glob(f"????????{suffix}"):
+        try:
+            dates.append(_Date(int(f.name[:4]), int(f.name[4:6]), int(f.name[6:8])))
+        except ValueError:
+            pass
+    return max(dates) if dates else None
+
+
 def _trf_watermark(trf_dir: Path) -> Optional[_Date]:
     """
     Return the most recent trading date cached in trf_dir.
@@ -255,7 +276,7 @@ def _job_gdelt_gkg(yesterday: _Date) -> Optional[Dict[str, Any]]:
         _cache_root = "c:/data-cache"
 
     gkg_dir = Path(_cache_root) / "gdelt" / "gkg"
-    watermark = ycsv_watermark(gkg_dir)
+    watermark = _gdelt_watermark(gkg_dir, ".gkg.csv.gz")
     start, end = _gap_window(watermark, _GDELT_V2_START, yesterday)
     _logger.info("gdelt_gkg: %s → %s (watermark=%s)", start, end, watermark)
 
@@ -274,7 +295,7 @@ def _job_gdelt_events(yesterday: _Date) -> Optional[Dict[str, Any]]:
         _cache_root = "c:/data-cache"
 
     events_dir = Path(_cache_root) / "gdelt" / "events"
-    watermark = ycsv_watermark(events_dir)
+    watermark = _gdelt_watermark(events_dir, ".events.csv.gz")
     start, end = _gap_window(watermark, _GDELT_V2_START, yesterday)
     _logger.info("gdelt_events: %s → %s (watermark=%s)", start, end, watermark)
 
