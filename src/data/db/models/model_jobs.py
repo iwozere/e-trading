@@ -36,6 +36,7 @@ class JobType(str, Enum):
     DATA_PROCESSING = "data_processing"
     BACKUP = "backup"
     REPORT = "report"
+    SCRIPT = "script"
 
 
 class RunStatus(str, Enum):
@@ -67,7 +68,7 @@ class Schedule(Base):
 
     # Constraints
     __table_args__ = (
-        CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup')", name="check_job_type"),
+        CheckConstraint("job_type IN ('report', 'screener', 'alert', 'notification', 'data_processing', 'backup', 'script', 'schedule')", name="check_job_type"),
         # Use an explicit unique constraint for user_id + name
         UniqueConstraint("user_id", "name", name="unique_user_schedule_name"),
         Index("idx_schedules_enabled", "enabled"),

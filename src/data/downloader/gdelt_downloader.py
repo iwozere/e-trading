@@ -30,6 +30,8 @@ Classes:
   And for 2015-02-18 specifically, force full coverage:
   python src/data/downloader/gdelt_downloader.py gkg-day --date 2015-02-18 --files-per-day 96
 
+  And for the rest of the dates (we will use 4 files per day to reduce download time):
+  python src/data/downloader/gdelt_downloader.py gkg-range --start 2015-02-19 --end 2026-05-03 --files-per-day 4
 """
 
 import io
