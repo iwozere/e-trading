@@ -109,21 +109,6 @@ CREATE SEQUENCE public.msg_rate_limits_id_seq
 ALTER SEQUENCE public.msg_rate_limits_id_seq OWNER TO trading_admin;
 GRANT ALL ON SEQUENCE public.msg_rate_limits_id_seq TO trading_admin;
 
--- DROP SEQUENCE public.sentiment_payloads_id_seq;
-
-CREATE SEQUENCE public.sentiment_payloads_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
-
--- Permissions
-
-ALTER SEQUENCE public.sentiment_payloads_id_seq OWNER TO trading_admin;
-GRANT ALL ON SEQUENCE public.sentiment_payloads_id_seq TO trading_admin;
-
 -- DROP SEQUENCE public.ss_ad_hoc_candidates_id_seq;
 
 CREATE SEQUENCE public.ss_ad_hoc_candidates_id_seq
@@ -196,8 +181,8 @@ CREATE SEQUENCE public.telegram_broadcast_logs_id_seq1
 
 -- Permissions
 
-ALTER SEQUENCE public.telegram_broadcast_logs_id_seq1 OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.telegram_broadcast_logs_id_seq1 TO postgres;
+ALTER SEQUENCE public.telegram_broadcast_logs_id_seq1 OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.telegram_broadcast_logs_id_seq1 TO trading_admin;
 
 -- DROP SEQUENCE public.telegram_command_audits_id_seq1;
 
@@ -211,8 +196,8 @@ CREATE SEQUENCE public.telegram_command_audits_id_seq1
 
 -- Permissions
 
-ALTER SEQUENCE public.telegram_command_audits_id_seq1 OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.telegram_command_audits_id_seq1 TO postgres;
+ALTER SEQUENCE public.telegram_command_audits_id_seq1 OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.telegram_command_audits_id_seq1 TO trading_admin;
 
 -- DROP SEQUENCE public.telegram_feedbacks_id_seq1;
 
@@ -226,8 +211,8 @@ CREATE SEQUENCE public.telegram_feedbacks_id_seq1
 
 -- Permissions
 
-ALTER SEQUENCE public.telegram_feedbacks_id_seq1 OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.telegram_feedbacks_id_seq1 TO postgres;
+ALTER SEQUENCE public.telegram_feedbacks_id_seq1 OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.telegram_feedbacks_id_seq1 TO trading_admin;
 
 -- DROP SEQUENCE public.trading_bots_id_seq;
 
@@ -256,8 +241,8 @@ CREATE SEQUENCE public.trading_performance_metrics_id_seq
 
 -- Permissions
 
-ALTER SEQUENCE public.trading_performance_metrics_id_seq OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.trading_performance_metrics_id_seq TO postgres;
+ALTER SEQUENCE public.trading_performance_metrics_id_seq OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.trading_performance_metrics_id_seq TO trading_admin;
 
 -- DROP SEQUENCE public.trading_positions_id_seq;
 
@@ -271,8 +256,8 @@ CREATE SEQUENCE public.trading_positions_id_seq
 
 -- Permissions
 
-ALTER SEQUENCE public.trading_positions_id_seq OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.trading_positions_id_seq TO postgres;
+ALTER SEQUENCE public.trading_positions_id_seq OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.trading_positions_id_seq TO trading_admin;
 
 -- DROP SEQUENCE public.trading_trades_id_seq;
 
@@ -286,8 +271,8 @@ CREATE SEQUENCE public.trading_trades_id_seq
 
 -- Permissions
 
-ALTER SEQUENCE public.trading_trades_id_seq OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.trading_trades_id_seq TO postgres;
+ALTER SEQUENCE public.trading_trades_id_seq OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.trading_trades_id_seq TO trading_admin;
 
 -- DROP SEQUENCE public.usr_auth_identities_id_seq;
 
@@ -301,8 +286,8 @@ CREATE SEQUENCE public.usr_auth_identities_id_seq
 
 -- Permissions
 
-ALTER SEQUENCE public.usr_auth_identities_id_seq OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.usr_auth_identities_id_seq TO postgres;
+ALTER SEQUENCE public.usr_auth_identities_id_seq OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.usr_auth_identities_id_seq TO trading_admin;
 
 -- DROP SEQUENCE public.usr_users_id_seq;
 
@@ -316,8 +301,8 @@ CREATE SEQUENCE public.usr_users_id_seq
 
 -- Permissions
 
-ALTER SEQUENCE public.usr_users_id_seq OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.usr_users_id_seq TO postgres;
+ALTER SEQUENCE public.usr_users_id_seq OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.usr_users_id_seq TO trading_admin;
 
 -- DROP SEQUENCE public.usr_verification_codes_id_seq;
 
@@ -331,8 +316,8 @@ CREATE SEQUENCE public.usr_verification_codes_id_seq
 
 -- Permissions
 
-ALTER SEQUENCE public.usr_verification_codes_id_seq OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.usr_verification_codes_id_seq TO postgres;
+ALTER SEQUENCE public.usr_verification_codes_id_seq OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.usr_verification_codes_id_seq TO trading_admin;
 
 -- DROP SEQUENCE public.webui_audit_logs_id_seq1;
 
@@ -346,8 +331,8 @@ CREATE SEQUENCE public.webui_audit_logs_id_seq1
 
 -- Permissions
 
-ALTER SEQUENCE public.webui_audit_logs_id_seq1 OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.webui_audit_logs_id_seq1 TO postgres;
+ALTER SEQUENCE public.webui_audit_logs_id_seq1 OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.webui_audit_logs_id_seq1 TO trading_admin;
 
 -- DROP SEQUENCE public.webui_performance_snapshots_id_seq1;
 
@@ -361,8 +346,8 @@ CREATE SEQUENCE public.webui_performance_snapshots_id_seq1
 
 -- Permissions
 
-ALTER SEQUENCE public.webui_performance_snapshots_id_seq1 OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.webui_performance_snapshots_id_seq1 TO postgres;
+ALTER SEQUENCE public.webui_performance_snapshots_id_seq1 OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.webui_performance_snapshots_id_seq1 TO trading_admin;
 
 -- DROP SEQUENCE public.webui_strategy_templates_id_seq1;
 
@@ -376,8 +361,8 @@ CREATE SEQUENCE public.webui_strategy_templates_id_seq1
 
 -- Permissions
 
-ALTER SEQUENCE public.webui_strategy_templates_id_seq1 OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.webui_strategy_templates_id_seq1 TO postgres;
+ALTER SEQUENCE public.webui_strategy_templates_id_seq1 OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.webui_strategy_templates_id_seq1 TO trading_admin;
 
 -- DROP SEQUENCE public.webui_system_config_id_seq1;
 
@@ -391,8 +376,8 @@ CREATE SEQUENCE public.webui_system_config_id_seq1
 
 -- Permissions
 
-ALTER SEQUENCE public.webui_system_config_id_seq1 OWNER TO postgres;
-GRANT ALL ON SEQUENCE public.webui_system_config_id_seq1 TO postgres;
+ALTER SEQUENCE public.webui_system_config_id_seq1 OWNER TO trading_admin;
+GRANT ALL ON SEQUENCE public.webui_system_config_id_seq1 TO trading_admin;
 -- public.alembic_version definition
 
 -- Drop table
@@ -407,13 +392,43 @@ ALTER TABLE public.alembic_version OWNER TO trading_admin;
 GRANT ALL ON TABLE public.alembic_version TO trading_admin;
 
 
+-- public.apscheduler_jobs definition
+
+-- Drop table
+
+-- DROP TABLE public.apscheduler_jobs;
+
+CREATE TABLE public.apscheduler_jobs ( id varchar(191) NOT NULL, next_run_time float8 NULL, job_state bytea NOT NULL, CONSTRAINT apscheduler_jobs_pkey PRIMARY KEY (id));
+CREATE INDEX ix_apscheduler_jobs_next_run_time ON public.apscheduler_jobs USING btree (next_run_time);
+
+-- Permissions
+
+ALTER TABLE public.apscheduler_jobs OWNER TO trading_admin;
+GRANT ALL ON TABLE public.apscheduler_jobs TO trading_admin;
+
+
 -- public.job_schedules definition
 
 -- Drop table
 
 -- DROP TABLE public.job_schedules;
 
-CREATE TABLE public.job_schedules ( id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL, user_id int4 NOT NULL, "name" varchar(255) NOT NULL, job_type varchar(50) NOT NULL, "target" varchar(255) NOT NULL, task_params jsonb DEFAULT '{}'::jsonb NOT NULL, cron varchar(100) NOT NULL, enabled bool DEFAULT true NOT NULL, next_run_at timestamptz NULL, created_at timestamptz DEFAULT now() NOT NULL, updated_at timestamptz DEFAULT now() NOT NULL, CONSTRAINT job_schedules_pkey PRIMARY KEY (id));
+CREATE TABLE public.job_schedules ( id int4 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START 1 CACHE 1 NO CYCLE) NOT NULL, user_id int4 NOT NULL, "name" varchar(255) NOT NULL, job_type varchar(50) NOT NULL, "target" varchar(255) NOT NULL, task_params jsonb DEFAULT '{}'::jsonb NOT NULL, cron varchar(100) NOT NULL, enabled bool DEFAULT true NOT NULL, next_run_at timestamptz NULL, created_at timestamptz DEFAULT now() NOT NULL, updated_at timestamptz DEFAULT now() NOT NULL, state_json text DEFAULT '{}'::text NULL, CONSTRAINT job_schedules_pkey PRIMARY KEY (id));
+
+-- Table Triggers
+
+create trigger trg_scheduler_insert after
+insert
+    on
+    public.job_schedules for each row execute function notify_scheduler_update();
+create trigger trg_scheduler_update after
+update
+    on
+    public.job_schedules for each row execute function notify_scheduler_update();
+create trigger trg_scheduler_delete after
+delete
+    on
+    public.job_schedules for each row execute function notify_scheduler_update();
 
 -- Permissions
 
@@ -451,7 +466,7 @@ GRANT ALL ON TABLE public.msg_channel_configs TO trading_admin;
 
 -- DROP TABLE public.msg_messages;
 
-CREATE TABLE public.msg_messages ( id bigserial NOT NULL, message_type varchar(50) NOT NULL, priority varchar(20) DEFAULT 'NORMAL'::character varying NOT NULL, channels _text NOT NULL, recipient_id varchar(100) NULL, template_name varchar(100) NULL, "content" jsonb NOT NULL, metadata jsonb NULL, created_at timestamptz DEFAULT now() NOT NULL, scheduled_for timestamptz DEFAULT now() NOT NULL, status varchar(20) DEFAULT 'PENDING'::character varying NOT NULL, retry_count int4 DEFAULT 0 NOT NULL, max_retries int4 DEFAULT 3 NOT NULL, last_error text NULL, processed_at timestamptz NULL, locked_by varchar(100) NULL, locked_at timestamptz NULL, CONSTRAINT msg_messages_max_retries_check CHECK ((max_retries >= 0)), CONSTRAINT msg_messages_pkey PRIMARY KEY (id), CONSTRAINT msg_messages_priority_check CHECK (((priority)::text = ANY ((ARRAY['LOW'::character varying, 'NORMAL'::character varying, 'HIGH'::character varying, 'CRITICAL'::character varying])::text[]))), CONSTRAINT msg_messages_retry_count_check CHECK ((retry_count >= 0)), CONSTRAINT msg_messages_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'PROCESSING'::character varying, 'DELIVERED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying])::text[]))));
+CREATE TABLE public.msg_messages ( id bigserial NOT NULL, message_type varchar(50) NOT NULL, priority varchar(20) DEFAULT 'NORMAL'::character varying NOT NULL, channels _text NOT NULL, recipient_id varchar(100) NULL, template_name varchar(100) NULL, "content" jsonb NOT NULL, metadata jsonb NULL, created_at timestamptz DEFAULT now() NOT NULL, scheduled_for timestamptz DEFAULT now() NOT NULL, status varchar(20) DEFAULT 'PENDING'::character varying NOT NULL, retry_count int4 DEFAULT 0 NOT NULL, max_retries int4 DEFAULT 3 NOT NULL, last_error text NULL, processed_at timestamptz NULL, locked_by varchar(100) NULL, locked_at timestamptz NULL, CONSTRAINT msg_messages_max_retries_check CHECK ((max_retries >= 0)), CONSTRAINT msg_messages_pkey PRIMARY KEY (id), CONSTRAINT msg_messages_priority_check CHECK (((priority)::text = ANY (ARRAY[('LOW'::character varying)::text, ('NORMAL'::character varying)::text, ('HIGH'::character varying)::text, ('CRITICAL'::character varying)::text]))), CONSTRAINT msg_messages_retry_count_check CHECK ((retry_count >= 0)), CONSTRAINT msg_messages_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('PROCESSING'::character varying)::text, ('DELIVERED'::character varying)::text, ('FAILED'::character varying)::text, ('CANCELLED'::character varying)::text]))));
 CREATE INDEX idx_msg_messages_created ON public.msg_messages USING btree (created_at);
 CREATE INDEX idx_msg_messages_locked_at ON public.msg_messages USING btree (locked_at);
 CREATE INDEX idx_msg_messages_locked_by ON public.msg_messages USING btree (locked_by);
@@ -495,7 +510,7 @@ GRANT ALL ON TABLE public.msg_rate_limits TO trading_admin;
 
 -- DROP TABLE public.msg_system_health;
 
-CREATE TABLE public.msg_system_health ( id int8 DEFAULT nextval('msg_channel_health_id_seq'::regclass) NOT NULL, component varchar(50) NULL, status varchar(20) NOT NULL, last_success timestamptz NULL, last_failure timestamptz NULL, failure_count int4 DEFAULT 0 NOT NULL, avg_response_time_ms int4 NULL, error_message text NULL, checked_at timestamptz DEFAULT now() NOT NULL, "system" varchar(50) NOT NULL, metadata text NULL, CONSTRAINT check_system_health_status CHECK (((status)::text = ANY ((ARRAY['HEALTHY'::character varying, 'DEGRADED'::character varying, 'DOWN'::character varying, 'UNKNOWN'::character varying])::text[]))), CONSTRAINT msg_channel_health_avg_response_time_ms_check CHECK ((avg_response_time_ms >= 0)), CONSTRAINT msg_channel_health_channel_key UNIQUE (component), CONSTRAINT msg_channel_health_failure_count_check CHECK ((failure_count >= 0)), CONSTRAINT msg_channel_health_pkey PRIMARY KEY (id), CONSTRAINT msg_channel_health_status_check CHECK (((status)::text = ANY ((ARRAY['HEALTHY'::character varying, 'DEGRADED'::character varying, 'DOWN'::character varying])::text[]))));
+CREATE TABLE public.msg_system_health ( id int8 DEFAULT nextval('msg_channel_health_id_seq'::regclass) NOT NULL, component varchar(50) NULL, status varchar(20) NOT NULL, last_success timestamptz NULL, last_failure timestamptz NULL, failure_count int4 DEFAULT 0 NOT NULL, avg_response_time_ms int4 NULL, error_message text NULL, checked_at timestamptz DEFAULT now() NOT NULL, "system" varchar(50) NOT NULL, metadata text NULL, CONSTRAINT check_system_health_status CHECK (((status)::text = ANY (ARRAY[('HEALTHY'::character varying)::text, ('DEGRADED'::character varying)::text, ('DOWN'::character varying)::text, ('UNKNOWN'::character varying)::text]))), CONSTRAINT msg_channel_health_avg_response_time_ms_check CHECK ((avg_response_time_ms >= 0)), CONSTRAINT msg_channel_health_channel_key UNIQUE (component), CONSTRAINT msg_channel_health_failure_count_check CHECK ((failure_count >= 0)), CONSTRAINT msg_channel_health_pkey PRIMARY KEY (id), CONSTRAINT msg_channel_health_status_check CHECK (((status)::text = ANY (ARRAY[('HEALTHY'::character varying)::text, ('DEGRADED'::character varying)::text, ('DOWN'::character varying)::text]))));
 CREATE INDEX idx_channel_health_checked ON public.msg_system_health USING btree (checked_at);
 CREATE INDEX idx_channel_health_status ON public.msg_system_health USING btree (status);
 CREATE INDEX idx_system_health_system ON public.msg_system_health USING btree (system);
@@ -506,20 +521,6 @@ COMMENT ON TABLE public.msg_system_health IS 'Health monitoring for notification
 
 ALTER TABLE public.msg_system_health OWNER TO trading_admin;
 GRANT ALL ON TABLE public.msg_system_health TO trading_admin;
-
-
--- public.sentiment_payloads definition
-
--- Drop table
-
--- DROP TABLE public.sentiment_payloads;
-
-CREATE TABLE public.sentiment_payloads ( id serial4 NOT NULL, ticker text NULL, "date" date NULL, provider text NULL, payload jsonb NULL, created_at timestamp DEFAULT now() NULL, CONSTRAINT sentiment_payloads_pkey PRIMARY KEY (id));
-
--- Permissions
-
-ALTER TABLE public.sentiment_payloads OWNER TO trading_admin;
-GRANT ALL ON TABLE public.sentiment_payloads TO trading_admin;
 
 
 -- public.ss_ad_hoc_candidates definition
@@ -545,7 +546,7 @@ GRANT ALL ON TABLE public.ss_ad_hoc_candidates TO trading_admin;
 
 -- DROP TABLE public.ss_alerts;
 
-CREATE TABLE public.ss_alerts ( id bigserial NOT NULL, ticker varchar(10) NOT NULL, alert_level varchar(10) NOT NULL, reason text NULL, squeeze_score numeric(5, 4) NULL, "timestamp" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL, sent bool DEFAULT false NOT NULL, cooldown_expires timestamptz NULL, notification_id varchar(50) NULL, CONSTRAINT ss_alerts_alert_level_check CHECK (((alert_level)::text = ANY ((ARRAY['LOW'::character varying, 'MEDIUM'::character varying, 'HIGH'::character varying])::text[]))), CONSTRAINT ss_alerts_pkey PRIMARY KEY (id), CONSTRAINT ss_alerts_squeeze_score_check CHECK (((squeeze_score >= (0)::numeric) AND (squeeze_score <= (1)::numeric))));
+CREATE TABLE public.ss_alerts ( id bigserial NOT NULL, ticker varchar(10) NOT NULL, alert_level varchar(10) NOT NULL, reason text NULL, squeeze_score numeric(5, 4) NULL, "timestamp" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL, sent bool DEFAULT false NOT NULL, cooldown_expires timestamptz NULL, notification_id varchar(50) NULL, CONSTRAINT ss_alerts_alert_level_check CHECK (((alert_level)::text = ANY (ARRAY[('LOW'::character varying)::text, ('MEDIUM'::character varying)::text, ('HIGH'::character varying)::text]))), CONSTRAINT ss_alerts_pkey PRIMARY KEY (id), CONSTRAINT ss_alerts_squeeze_score_check CHECK (((squeeze_score >= (0)::numeric) AND (squeeze_score <= (1)::numeric))));
 CREATE INDEX idx_ss_alerts_alert_level_timestamp ON public.ss_alerts USING btree (alert_level, "timestamp" DESC);
 CREATE INDEX idx_ss_alerts_sent_timestamp ON public.ss_alerts USING btree (sent, "timestamp" DESC);
 CREATE INDEX idx_ss_alerts_ticker_cooldown ON public.ss_alerts USING btree (ticker, cooldown_expires);
@@ -563,7 +564,7 @@ GRANT ALL ON TABLE public.ss_alerts TO trading_admin;
 
 -- DROP TABLE public.ss_deep_metrics;
 
-CREATE TABLE public.ss_deep_metrics ( id bigserial NOT NULL, ticker varchar(10) NOT NULL, "date" date NOT NULL, volume_spike numeric(6, 2) NULL, call_put_ratio numeric(6, 2) NULL, sentiment_24h numeric(4, 3) NULL, borrow_fee_pct numeric(5, 4) NULL, squeeze_score numeric(5, 4) NULL, alert_level varchar(10) NULL, raw_payload jsonb NULL, created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL, sentiment_score_24h float4 NULL, mentions_24h int4 NULL, unique_authors_24h int4 NULL, mentions_growth_7d float4 NULL, positive_ratio_24h float4 NULL, virality_index float4 NULL, bot_pct float4 NULL, sentiment_raw_payload jsonb NULL, sentiment_data_quality jsonb NULL, CONSTRAINT ss_deep_metrics_alert_level_check CHECK (((alert_level)::text = ANY ((ARRAY['LOW'::character varying, 'MEDIUM'::character varying, 'HIGH'::character varying])::text[]))), CONSTRAINT ss_deep_metrics_borrow_fee_pct_check CHECK ((borrow_fee_pct >= (0)::numeric)), CONSTRAINT ss_deep_metrics_call_put_ratio_check CHECK ((call_put_ratio >= (0)::numeric)), CONSTRAINT ss_deep_metrics_pkey PRIMARY KEY (id), CONSTRAINT ss_deep_metrics_sentiment_24h_check CHECK (((sentiment_24h >= ('-1'::integer)::numeric) AND (sentiment_24h <= (1)::numeric))), CONSTRAINT ss_deep_metrics_squeeze_score_check CHECK (((squeeze_score >= (0)::numeric) AND (squeeze_score <= (1)::numeric))), CONSTRAINT ss_deep_metrics_ticker_date_key UNIQUE (ticker, date), CONSTRAINT ss_deep_metrics_volume_spike_check CHECK ((volume_spike >= (0)::numeric)));
+CREATE TABLE public.ss_deep_metrics ( id bigserial NOT NULL, ticker varchar(10) NOT NULL, "date" date NOT NULL, volume_spike numeric(6, 2) NULL, call_put_ratio numeric(6, 2) NULL, sentiment_24h numeric(4, 3) NULL, borrow_fee_pct numeric(5, 4) NULL, squeeze_score numeric(5, 4) NULL, alert_level varchar(10) NULL, raw_payload jsonb NULL, created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL, CONSTRAINT ss_deep_metrics_alert_level_check CHECK (((alert_level)::text = ANY (ARRAY[('LOW'::character varying)::text, ('MEDIUM'::character varying)::text, ('HIGH'::character varying)::text]))), CONSTRAINT ss_deep_metrics_borrow_fee_pct_check CHECK ((borrow_fee_pct >= (0)::numeric)), CONSTRAINT ss_deep_metrics_call_put_ratio_check CHECK ((call_put_ratio >= (0)::numeric)), CONSTRAINT ss_deep_metrics_pkey PRIMARY KEY (id), CONSTRAINT ss_deep_metrics_sentiment_24h_check CHECK (((sentiment_24h >= ('-1'::integer)::numeric) AND (sentiment_24h <= (1)::numeric))), CONSTRAINT ss_deep_metrics_squeeze_score_check CHECK (((squeeze_score >= (0)::numeric) AND (squeeze_score <= (1)::numeric))), CONSTRAINT ss_deep_metrics_ticker_date_key UNIQUE (ticker, date), CONSTRAINT ss_deep_metrics_volume_spike_check CHECK ((volume_spike >= (0)::numeric)));
 CREATE INDEX idx_ss_deep_metrics_alert_level ON public.ss_deep_metrics USING btree (alert_level, date DESC);
 CREATE INDEX idx_ss_deep_metrics_created_at ON public.ss_deep_metrics USING btree (created_at);
 CREATE INDEX idx_ss_deep_metrics_date_desc ON public.ss_deep_metrics USING btree (date DESC);
@@ -605,8 +606,8 @@ CREATE TABLE public.telegram_broadcast_logs ( id int4 GENERATED ALWAYS AS IDENTI
 
 -- Permissions
 
-ALTER TABLE public.telegram_broadcast_logs OWNER TO postgres;
-GRANT ALL ON TABLE public.telegram_broadcast_logs TO postgres;
+ALTER TABLE public.telegram_broadcast_logs OWNER TO trading_admin;
+GRANT ALL ON TABLE public.telegram_broadcast_logs TO trading_admin;
 
 
 -- public.telegram_command_audits definition
@@ -623,8 +624,8 @@ CREATE INDEX ix_telegram_command_audits_telegram_user_id ON public.telegram_comm
 
 -- Permissions
 
-ALTER TABLE public.telegram_command_audits OWNER TO postgres;
-GRANT ALL ON TABLE public.telegram_command_audits TO postgres;
+ALTER TABLE public.telegram_command_audits OWNER TO trading_admin;
+GRANT ALL ON TABLE public.telegram_command_audits TO trading_admin;
 
 
 -- public.telegram_settings definition
@@ -637,8 +638,8 @@ CREATE TABLE public.telegram_settings ( "key" varchar(100) NOT NULL, value text 
 
 -- Permissions
 
-ALTER TABLE public.telegram_settings OWNER TO postgres;
-GRANT ALL ON TABLE public.telegram_settings TO postgres;
+ALTER TABLE public.telegram_settings OWNER TO trading_admin;
+GRANT ALL ON TABLE public.telegram_settings TO trading_admin;
 
 
 -- public.usr_users definition
@@ -653,8 +654,8 @@ COMMENT ON TABLE public.usr_users IS 'User accounts and authentication';
 
 -- Permissions
 
-ALTER TABLE public.usr_users OWNER TO postgres;
-GRANT ALL ON TABLE public.usr_users TO postgres;
+ALTER TABLE public.usr_users OWNER TO trading_admin;
+GRANT ALL ON TABLE public.usr_users TO trading_admin;
 
 
 -- public.webui_performance_snapshots definition
@@ -668,8 +669,8 @@ CREATE INDEX ix_webui_performance_snapshots_strategy_id ON public.webui_performa
 
 -- Permissions
 
-ALTER TABLE public.webui_performance_snapshots OWNER TO postgres;
-GRANT ALL ON TABLE public.webui_performance_snapshots TO postgres;
+ALTER TABLE public.webui_performance_snapshots OWNER TO trading_admin;
+GRANT ALL ON TABLE public.webui_performance_snapshots TO trading_admin;
 
 
 -- public.webui_system_config definition
@@ -682,8 +683,8 @@ CREATE TABLE public.webui_system_config ( id int4 GENERATED ALWAYS AS IDENTITY( 
 
 -- Permissions
 
-ALTER TABLE public.webui_system_config OWNER TO postgres;
-GRANT ALL ON TABLE public.webui_system_config TO postgres;
+ALTER TABLE public.webui_system_config OWNER TO trading_admin;
+GRANT ALL ON TABLE public.webui_system_config TO trading_admin;
 
 
 -- public.job_schedule_runs definition
@@ -707,7 +708,7 @@ GRANT ALL ON TABLE public.job_schedule_runs TO trading_admin;
 
 -- DROP TABLE public.msg_delivery_status;
 
-CREATE TABLE public.msg_delivery_status ( id bigserial NOT NULL, message_id int8 NOT NULL, channel varchar(50) NOT NULL, status varchar(20) NOT NULL, delivered_at timestamptz NULL, response_time_ms int4 NULL, error_message text NULL, external_id varchar(255) NULL, created_at timestamptz DEFAULT now() NOT NULL, CONSTRAINT msg_delivery_status_pkey PRIMARY KEY (id), CONSTRAINT msg_delivery_status_response_time_ms_check CHECK ((response_time_ms >= 0)), CONSTRAINT msg_delivery_status_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'SENT'::character varying, 'DELIVERED'::character varying, 'FAILED'::character varying, 'BOUNCED'::character varying])::text[]))), CONSTRAINT msg_delivery_status_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.msg_messages(id) ON DELETE CASCADE);
+CREATE TABLE public.msg_delivery_status ( id bigserial NOT NULL, message_id int8 NOT NULL, channel varchar(50) NOT NULL, status varchar(20) NOT NULL, delivered_at timestamptz NULL, response_time_ms int4 NULL, error_message text NULL, external_id varchar(255) NULL, created_at timestamptz DEFAULT now() NOT NULL, CONSTRAINT msg_delivery_status_pkey PRIMARY KEY (id), CONSTRAINT msg_delivery_status_response_time_ms_check CHECK ((response_time_ms >= 0)), CONSTRAINT msg_delivery_status_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('SENT'::character varying)::text, ('DELIVERED'::character varying)::text, ('FAILED'::character varying)::text, ('BOUNCED'::character varying)::text]))), CONSTRAINT msg_delivery_status_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.msg_messages(id) ON DELETE CASCADE);
 CREATE INDEX idx_delivery_status_channel ON public.msg_delivery_status USING btree (channel);
 CREATE INDEX idx_delivery_status_composite ON public.msg_delivery_status USING btree (message_id, channel, status);
 CREATE INDEX idx_delivery_status_delivered ON public.msg_delivery_status USING btree (delivered_at);
@@ -731,8 +732,8 @@ CREATE TABLE public.telegram_feedbacks ( id int4 GENERATED ALWAYS AS IDENTITY( I
 
 -- Permissions
 
-ALTER TABLE public.telegram_feedbacks OWNER TO postgres;
-GRANT ALL ON TABLE public.telegram_feedbacks TO postgres;
+ALTER TABLE public.telegram_feedbacks OWNER TO trading_admin;
+GRANT ALL ON TABLE public.telegram_feedbacks TO trading_admin;
 
 
 -- public.trading_bots definition
@@ -774,8 +775,8 @@ COMMENT ON TABLE public.trading_performance_metrics IS 'Performance metrics for 
 
 -- Permissions
 
-ALTER TABLE public.trading_performance_metrics OWNER TO postgres;
-GRANT ALL ON TABLE public.trading_performance_metrics TO postgres;
+ALTER TABLE public.trading_performance_metrics OWNER TO trading_admin;
+GRANT ALL ON TABLE public.trading_performance_metrics TO trading_admin;
 
 
 -- public.trading_positions definition
@@ -791,8 +792,8 @@ COMMENT ON TABLE public.trading_positions IS 'Open and closed trading positions'
 
 -- Permissions
 
-ALTER TABLE public.trading_positions OWNER TO postgres;
-GRANT ALL ON TABLE public.trading_positions TO postgres;
+ALTER TABLE public.trading_positions OWNER TO trading_admin;
+GRANT ALL ON TABLE public.trading_positions TO trading_admin;
 
 
 -- public.trading_trades definition
@@ -812,8 +813,8 @@ COMMENT ON TABLE public.trading_trades IS 'Individual trade records';
 
 -- Permissions
 
-ALTER TABLE public.trading_trades OWNER TO postgres;
-GRANT ALL ON TABLE public.trading_trades TO postgres;
+ALTER TABLE public.trading_trades OWNER TO trading_admin;
+GRANT ALL ON TABLE public.trading_trades TO trading_admin;
 
 
 -- public.usr_auth_identities definition
@@ -828,8 +829,8 @@ CREATE INDEX ix_auth_identities_user_id ON public.usr_auth_identities USING btre
 
 -- Permissions
 
-ALTER TABLE public.usr_auth_identities OWNER TO postgres;
-GRANT ALL ON TABLE public.usr_auth_identities TO postgres;
+ALTER TABLE public.usr_auth_identities OWNER TO trading_admin;
+GRANT ALL ON TABLE public.usr_auth_identities TO trading_admin;
 
 
 -- public.usr_verification_codes definition
@@ -843,8 +844,8 @@ CREATE INDEX ix_verification_codes_user_id ON public.usr_verification_codes USIN
 
 -- Permissions
 
-ALTER TABLE public.usr_verification_codes OWNER TO postgres;
-GRANT ALL ON TABLE public.usr_verification_codes TO postgres;
+ALTER TABLE public.usr_verification_codes OWNER TO trading_admin;
+GRANT ALL ON TABLE public.usr_verification_codes TO trading_admin;
 
 
 -- public.webui_audit_logs definition
@@ -859,8 +860,8 @@ CREATE INDEX ix_webui_audit_logs_user_id ON public.webui_audit_logs USING btree 
 
 -- Permissions
 
-ALTER TABLE public.webui_audit_logs OWNER TO postgres;
-GRANT ALL ON TABLE public.webui_audit_logs TO postgres;
+ALTER TABLE public.webui_audit_logs OWNER TO trading_admin;
+GRANT ALL ON TABLE public.webui_audit_logs TO trading_admin;
 
 
 -- public.webui_strategy_templates definition
@@ -874,8 +875,8 @@ CREATE INDEX ix_webui_strategy_templates_created_by ON public.webui_strategy_tem
 
 -- Permissions
 
-ALTER TABLE public.webui_strategy_templates OWNER TO postgres;
-GRANT ALL ON TABLE public.webui_strategy_templates TO postgres;
+ALTER TABLE public.webui_strategy_templates OWNER TO trading_admin;
+GRANT ALL ON TABLE public.webui_strategy_templates TO trading_admin;
 
 
 -- public.v_channel_health_summary source
@@ -1090,6 +1091,24 @@ $function$
 
 ALTER FUNCTION public.get_queue_statistics() OWNER TO trading_admin;
 GRANT ALL ON FUNCTION public.get_queue_statistics() TO trading_admin;
+
+-- DROP FUNCTION public.notify_scheduler_update();
+
+CREATE OR REPLACE FUNCTION public.notify_scheduler_update()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  PERFORM pg_notify('scheduler_updates', 'reload');
+  RETURN NEW;
+END;
+$function$
+;
+
+-- Permissions
+
+ALTER FUNCTION public.notify_scheduler_update() OWNER TO postgres;
+GRANT ALL ON FUNCTION public.notify_scheduler_update() TO postgres;
 
 -- DROP FUNCTION public.record_delivery_status(int8, varchar, varchar, int4, text, varchar);
 
@@ -1377,3 +1396,4 @@ GRANT ALL ON FUNCTION public.uuid_ns_x500() TO postgres;
 
 GRANT ALL ON SCHEMA public TO pg_database_owner;
 GRANT USAGE ON SCHEMA public TO public;
+GRANT ALL ON SCHEMA public TO trading_admin;
