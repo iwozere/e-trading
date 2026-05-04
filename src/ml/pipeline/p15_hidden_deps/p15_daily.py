@@ -53,7 +53,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
 from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
-
+from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
 from src.data.downloader.cboe_downloader import CboeDownloader
 from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.data.downloader.fear_greed_downloader import FearGreedDownloader
@@ -288,11 +288,6 @@ def _job_gdelt_gkg(yesterday: _Date) -> Optional[Dict[str, Any]]:
 
 
 def _job_gdelt_events(yesterday: _Date) -> Optional[Dict[str, Any]]:
-    try:
-        from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
-    except ImportError:
-        _cache_root = "c:/data-cache"
-
     events_dir = Path(_cache_root) / "gdelt" / "events"
     watermark = _gdelt_watermark(events_dir, ".events.csv.gz")
     start, end = _gap_window(watermark, _GDELT_V2_START, yesterday)
@@ -339,49 +334,239 @@ _P15_TICKERS: List[str] = [
 # Submissions are refreshed daily for these ~160 companies only (not the full SEC universe).
 # Organized by the P15 sector ETF each company primarily drives.
 _TIER1_WATCHLIST: Dict[str, List[str]] = {
+
+    # ── XLF: Financials ─────────────────────────────────────────────────────
+    # BRK-B (11.75%), JPM (11.23%), V (7.20%), MA (5.76%), BAC (4.58%),
+    # GS (3.59%), WFC (3.49%), C (2.81%), MS (2.80%), AXP (2.29%)
+    # + key sub-sector representatives: BLK (asset mgmt), SPGI (ratings), CME (exchange)
     "XLF": [
-        "BRK-B", "JPM", "V", "MA", "BAC", "GS", "WFC", "C", "MS", "AXP",
-        "BLK", "SPGI", "CME", "USB", "PGR",
+        "BRK-B",  # Berkshire — systemic bellwether
+        "JPM",    # largest US bank, earnings move entire sector
+        "V",      # payments — rate-insensitive growth within financials
+        "MA",     # payments duopoly
+        "BAC",    # rate-sensitive commercial bank
+        "GS",     # capital markets / investment banking cycle
+        "WFC",    # consumer banking, mortgage exposure
+        "C",      # global wholesale bank, EM exposure
+        "MS",     # wealth management + capital markets
+        "AXP",    # consumer credit, spending indicator
+        "BLK",    # largest asset manager, AUM as market sentiment proxy
+        "SPGI",   # S&P Global — credit ratings, financial data
+        "CME",    # exchange — volatility → volume → revenue
+        "USB",    # US Bancorp — large regional bank proxy
+        "PGR",    # Progressive — insurance cycle indicator
     ],
+
+    # ── XLE: Energy ──────────────────────────────────────────────────────────
+    # XOM (22%), CVX (17%), COP (7%), WMB (4.4%), SLB (4.5%),
+    # EOG (4%), PSX (3.8%), VLO (3.7%), KMI (3.7%), MPC (3.6%)
+    # + oilfield services (HAL), E&P pure-play (OXY), midstream (OKE)
     "XLE": [
-        "XOM", "CVX", "COP", "WMB", "SLB", "EOG", "PSX", "VLO", "KMI", "MPC",
-        "OXY", "HAL", "BKR", "OKE", "FANG",
+        "XOM",    # largest US oil major, global integrated
+        "CVX",    # second major, Permian + international
+        "COP",    # pure E&P, price-sensitive upstream
+        "WMB",    # Williams Cos — natural gas midstream/pipeline
+        "SLB",    # oilfield services leader, capex cycle proxy
+        "EOG",    # Permian pure-play E&P, shale bellwether
+        "PSX",    # Phillips 66 — refining margin indicator
+        "VLO",    # Valero — crack spread proxy
+        "KMI",    # Kinder Morgan — gas pipeline infrastructure
+        "MPC",    # Marathon Petroleum — refining
+        "OXY",    # Occidental — Buffett holding, Permian
+        "HAL",    # Halliburton — oilfield services #2
+        "BKR",    # Baker Hughes — services + LNG equipment
+        "OKE",    # ONEOK — gas gathering/processing
+        "FANG",   # Diamondback Energy — Permian pure-play
     ],
+
+    # ── XLK: Technology ──────────────────────────────────────────────────────
+    # NVDA (14.78%), AAPL (12.14%), MSFT (9.23%), AVGO (6.03%),
+    # MU (4.32%) — weights shift frequently due to AI rally
+    # + enterprise software (CRM, ORCL), semis (AMD, QCOM, TXN), infra (ACN)
     "XLK": [
-        "NVDA", "AAPL", "MSFT", "AVGO", "MU", "AMD", "ORCL", "CRM", "ACN", "QCOM",
-        "TXN", "AMAT", "PLTR", "NOW", "PANW",
+        "NVDA",   # AI/GPU — dominant signal for AI capex cycle
+        "AAPL",   # largest market cap, consumer hardware + services
+        "MSFT",   # cloud (Azure) + enterprise software
+        "AVGO",   # Broadcom — networking chips, AI accelerators
+        "MU",     # Micron — memory cycle, leading indicator for semis
+        "AMD",    # CPU/GPU competitor to Intel/NVDA
+        "ORCL",   # Oracle — enterprise cloud, database
+        "CRM",    # Salesforce — enterprise SaaS spending indicator
+        "ACN",    # Accenture — IT services, consulting capex
+        "QCOM",   # Qualcomm — mobile chips, handset cycle
+        "TXN",    # Texas Instruments — analog semis, industrial demand
+        "AMAT",   # Applied Materials — semiconductor equipment
+        "PLTR",   # Palantir — government AI/defense tech
+        "NOW",    # ServiceNow — enterprise workflow automation
+        "PANW",   # Palo Alto Networks — cybersecurity cycle
     ],
+
+    # ── XLV: Health Care ─────────────────────────────────────────────────────
+    # LLY (14%), JNJ (10%), ABBV (7%), UNH (6%), MRK (5%),
+    # AMGN (3.5%), TMO (3.5%), ISRG (3.2%), ABT (3.1%), GILD (3.1%)
     "XLV": [
-        "LLY", "JNJ", "ABBV", "UNH", "MRK", "AMGN", "TMO", "ISRG", "ABT", "GILD",
-        "BSX", "SYK", "BMY", "CVS", "HCA",
+        "LLY",    # Eli Lilly — GLP-1/obesity drugs, dominant weight
+        "JNJ",    # Johnson & Johnson — diversified, defensive
+        "ABBV",   # AbbVie — Humira/Skyrizi, income proxy
+        "UNH",    # UnitedHealth — managed care, insurance cycle
+        "MRK",    # Merck — Keytruda oncology, vaccines
+        "AMGN",   # Amgen — biotech large-cap
+        "TMO",    # Thermo Fisher — lab equipment, biotech capex proxy
+        "ISRG",   # Intuitive Surgical — robotic surgery, procedure volume
+        "ABT",    # Abbott Labs — devices + diagnostics
+        "GILD",   # Gilead — HIV/oncology, cash flow story
+        "BSX",    # Boston Scientific — cardiac devices
+        "SYK",    # Stryker — orthopedic implants, elective surgery
+        "BMY",    # Bristol-Myers Squibb — oncology pipeline
+        "CVS",    # CVS Health — PBM + retail pharmacy + insurance
+        "HCA",    # HCA Healthcare — hospital utilization indicator
     ],
+
+    # ── XLI: Industrials ─────────────────────────────────────────────────────
+    # CAT (7%), GE (6.6%), RTX (5%), GEV (4.4%), BA (3.3%),
+    # UBER (3%), UNP (2.9%), DE (2.9%), HON (2.9%), ETN (2.6%)
     "XLI": [
-        "CAT", "GE", "RTX", "GEV", "BA", "UNP", "DE", "HON", "ETN", "LMT",
-        "NOC", "UPS", "EMR", "CSX", "PWR",
+        "CAT",    # Caterpillar — global construction/mining capex
+        "GE",     # GE Aerospace — commercial aviation cycle
+        "RTX",    # RTX Corp — defense + aircraft engines
+        "GEV",    # GE Vernova — power generation, energy transition
+        "BA",     # Boeing — commercial/defense aviation
+        "UNP",    # Union Pacific — rail freight, economic activity
+        "DE",     # Deere — agricultural capex, commodity cycle
+        "HON",    # Honeywell — industrial conglomerate
+        "ETN",    # Eaton — electrical components, data center power
+        "LMT",    # Lockheed Martin — defense budget indicator
+        "NOC",    # Northrop Grumman — defense
+        "UPS",    # UPS — parcel volume, consumer + B2B indicator
+        "EMR",    # Emerson Electric — automation/process control
+        "CSX",    # CSX — eastern rail freight
+        "PWR",    # Quanta Services — grid infrastructure buildout
     ],
+
+    # ── XLB: Materials ───────────────────────────────────────────────────────
+    # LIN (17%), NEM (7.3%), SHW (6.2%), FCX (5.3%), CRH (5%),
+    # ECL (4.8%), APD (4.7%), CTVA (4.8%), MLM (4.4%), NUE (3.5%)
     "XLB": [
-        "LIN", "NEM", "SHW", "FCX", "CRH", "APD", "ECL", "CTVA", "MLM", "NUE",
-        "DOW", "PPG", "VMC", "ALB", "CF",
+        "LIN",    # Linde — industrial gases, largest weight
+        "NEM",    # Newmont — gold mining, safe-haven proxy
+        "SHW",    # Sherwin-Williams — housing/construction indicator
+        "FCX",    # Freeport-McMoRan — copper, China demand proxy
+        "CRH",    # CRH — cement/construction materials
+        "APD",    # Air Products — industrial gases, hydrogen
+        "ECL",    # Ecolab — water treatment, specialty chemicals
+        "CTVA",   # Corteva — agricultural chemicals/seeds
+        "MLM",    # Martin Marietta — aggregates, construction
+        "NUE",    # Nucor — steel, manufacturing demand
+        "DOW",    # Dow Inc — commodity chemicals
+        "PPG",    # PPG Industries — coatings, auto/industrial
+        "VMC",    # Vulcan Materials — aggregates, infrastructure
+        "ALB",    # Albemarle — lithium, EV battery supply chain
+        "CF",     # CF Industries — nitrogen fertilizers, nat gas spread
     ],
+
+    # ── XLU: Utilities ───────────────────────────────────────────────────────
+    # NEE (13.8%), SO (7.3%), DUK (6.9%), CEG (6.5%), AEP (5.1%),
+    # SRE (4.2%), VST (3.8%), D (3.7%), XEL (3.4%), EXC (3.4%)
     "XLU": [
-        "NEE", "SO", "DUK", "CEG", "AEP", "SRE", "VST", "D", "XEL", "EXC",
-        "PCG", "ED", "EIX", "ETR", "FE",
+        "NEE",    # NextEra — renewable energy leader, rate-sensitive
+        "SO",     # Southern Company — regulated, nuclear
+        "DUK",    # Duke Energy — large regulated utility
+        "CEG",    # Constellation Energy — nuclear, AI power demand
+        "AEP",    # American Electric Power — transmission grid
+        "SRE",    # Sempra Energy — gas utility + LNG export
+        "VST",    # Vistra — power generation, merchant energy
+        "D",      # Dominion Energy — regulated, rate-sensitive
+        "XEL",    # Xcel Energy — renewables transition
+        "EXC",    # Exelon — nuclear + regulated distribution
+        "PCG",    # PG&E — California utility, wildfire risk proxy
+        "ED",     # Consolidated Edison — NYC utility, stable
+        "EIX",    # Edison International — California utility
+        "ETR",    # Entergy — nuclear + regulated South
+        "FE",     # FirstEnergy — mid-Atlantic regulated
     ],
+
+    # ── XLP: Consumer Staples ────────────────────────────────────────────────
+    # WMT (11.9%), COST (9.4%), PG (7.4%), KO (6.5%), PM (5.5%),
+    # CL (4.75%), PEP (4.7%), MO (4.7%), MDLZ (4.4%), MNST (3.7%)
     "XLP": [
-        "WMT", "COST", "PG", "KO", "PM", "PEP", "MO", "CL", "MDLZ", "MNST",
-        "TGT", "KR", "GIS", "KHC", "STZ",
+        "WMT",    # Walmart — consumer spending bellwether
+        "COST",   # Costco — membership model, affluent consumer
+        "PG",     # Procter & Gamble — household staples pricing power
+        "KO",     # Coca-Cola — global beverage, defensive
+        "PM",     # Philip Morris — international tobacco, EM exposure
+        "PEP",    # PepsiCo — beverages + snacks (Frito-Lay)
+        "MO",     # Altria — domestic tobacco, high yield
+        "CL",     # Colgate-Palmolive — oral/personal care
+        "MDLZ",   # Mondelez — global snack foods
+        "MNST",   # Monster Beverage — energy drinks growth story
+        "TGT",    # Target — discretionary/staples overlap
+        "KR",     # Kroger — grocery chain, food inflation proxy
+        "GIS",    # General Mills — packaged food
+        "KHC",    # Kraft Heinz — packaged food, pricing pressure
+        "STZ",    # Constellation Brands — beer/wine/spirits
     ],
+
+    # ── XLRE: Real Estate ────────────────────────────────────────────────────
+    # WELL (10.3%), PLD (9.1%), EQIX (7.25%), AMT (5.8%), DLR (4.8%),
+    # SPG (4.6%), CBRE (4.5%), VTR (4.4%), O (4.4%), PSA (3.5%)
     "XLRE": [
-        "WELL", "PLD", "EQIX", "AMT", "DLR", "SPG", "CBRE", "VTR", "O", "PSA",
-        "CCI", "EQR", "AVB", "ARE", "VICI",
+        "WELL",   # Welltower — healthcare REIT, aging demographics
+        "PLD",    # Prologis — industrial/warehouse REIT, e-commerce
+        "EQIX",   # Equinix — data center REIT, AI infrastructure
+        "AMT",    # American Tower — cell tower REIT
+        "DLR",    # Digital Realty — data center REIT
+        "SPG",    # Simon Property Group — retail/mall REIT
+        "CBRE",   # CBRE Group — CRE services, transaction volume
+        "VTR",    # Ventas — senior housing + medical office
+        "O",      # Realty Income — net lease, monthly dividend
+        "PSA",    # Public Storage — self-storage
+        "CCI",    # Crown Castle — cell tower infrastructure
+        "EQR",    # Equity Residential — apartment REIT, rents
+        "AVB",    # AvalonBay — apartment REIT, coastal markets
+        "ARE",    # Alexandria RE — life science lab REIT
+        "VICI",   # VICI Properties — gaming/entertainment REIT
     ],
+
+    # ── XLY: Consumer Discretionary ─────────────────────────────────────────
+    # AMZN (21-28% depending on date), TSLA (15-20%), HD (5-7%),
+    # TJX (4%), MCD (4%), BKNG (4%), LOW (3%), SBUX (2.3%), ORLY (2.1%)
     "XLY": [
-        "AMZN", "TSLA", "HD", "MCD", "BKNG", "TJX", "LOW", "SBUX", "ORLY", "NKE",
-        "CMG", "ABNB", "LVS", "GM", "F",
+        "AMZN",   # Amazon — e-commerce + AWS, dominant weight
+        "TSLA",   # Tesla — EV cycle, volatile weight
+        "HD",     # Home Depot — housing/renovation indicator
+        "MCD",    # McDonald's — consumer spending health
+        "BKNG",   # Booking Holdings — travel demand
+        "TJX",    # TJX Companies — value retail, trade-down indicator
+        "LOW",    # Lowe's — housing/DIY, rate sensitivity
+        "SBUX",   # Starbucks — discretionary spending indicator
+        "ORLY",   # O'Reilly Auto — auto aftermarket, aging fleet
+        "NKE",    # Nike — global consumer brand, China exposure
+        "CMG",    # Chipotle — fast casual restaurant cycle
+        "ABNB",   # Airbnb — short-term rental, travel
+        "LVS",    # Las Vegas Sands — Macau/Singapore gaming
+        "GM",     # General Motors — auto cycle, EV transition
+        "F",      # Ford — auto + EV, labor cost indicator
     ],
+
+    # ── XLC: Communication Services ──────────────────────────────────────────
+    # META (14-23%), GOOGL (8.6%), GOOG (6.9%), DIS (4.6%), CMCSA (4.5%),
+    # NFLX (5.9%), T (5%), VZ (4.7%), TMUS (4.6%), WBD (4.7%)
     "XLC": [
-        "META", "GOOGL", "GOOG", "NFLX", "T", "VZ", "TMUS", "DIS", "CMCSA", "WBD",
-        "EA", "TTWO", "LYV", "CHTR", "OMC",
+        "META",   # Meta — digital advertising, AI investment cycle
+        "GOOGL",  # Alphabet A — search + cloud + YouTube
+        "GOOG",   # Alphabet C — same economic exposure
+        "NFLX",   # Netflix — streaming, subscriber growth
+        "T",      # AT&T — telecom, high yield, capex
+        "VZ",     # Verizon — wireless, dividend yield proxy
+        "TMUS",   # T-Mobile — wireless subscriber growth
+        "DIS",    # Disney — streaming + parks + content
+        "CMCSA",  # Comcast — cable + NBC + streaming
+        "WBD",    # Warner Bros Discovery — media/streaming
+        "EA",     # Electronic Arts — gaming cycle
+        "TTWO",   # Take-Two Interactive — GTA cycle
+        "LYV",    # Live Nation — live events, concert demand
+        "CHTR",   # Charter Communications — cable broadband
+        "OMC",    # Omnicom — advertising industry indicator
     ],
 }
 
@@ -452,12 +637,6 @@ def _job_finra_trf(yesterday: _Date) -> Optional[Dict[str, Any]]:
     Returns:
         Dict with rows (total rows across all days) and days_downloaded.
     """
-    from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
-
-    try:
-        from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
-    except ImportError:
-        _cache_root = "c:/data-cache"
 
     trf_cache_dir = Path(_cache_root) / "trf"
     watermark = _trf_watermark(trf_cache_dir)
