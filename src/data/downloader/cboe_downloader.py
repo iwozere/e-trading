@@ -75,9 +75,9 @@ _CBOE_SOURCES: Dict[str, Dict[str, str]] = {
 }
 
 # Possible date column names across different CBOE file versions
-_DATE_COLUMN_CANDIDATES = ["Trade Date", "DATE", "Date", "date"]
+_DATE_COLUMN_CANDIDATES = ["Trade Date", "Trade_date", "DATE", "Date", "date"]
 # Possible P/C ratio column names
-_PC_COLUMN_CANDIDATES = ["P/C Ratio", "P/C RATIO", "Put/Call Ratio", "Total P/C Ratio"]
+_PC_COLUMN_CANDIDATES = ["P/C Ratio", "P/C RATIO", "Put/Call Ratio", "Total P/C Ratio", "Equity P/C Ratio", "Index P/C Ratio"]
 
 _OUTPUT_COLUMNS = ["pc_total", "pc_equity", "pc_index"]
 

@@ -344,9 +344,11 @@ class FearGreedDownloader(BaseDataDownloader):
                 low = col.lower().strip()
                 if low in ("date", "datetime", "timestamp", "time"):
                     col_map[col] = "date"
-                elif low in ("score", "value", "fear_greed", "fear_greed_score"):
+                elif low in ("score", "value", "fear_greed", "fear_greed_score",
+                             "fear_greed_value", "fng_value", "fear greed"):
                     col_map[col] = "fear_greed_score"
-                elif low in ("rating", "label", "category"):
+                elif low in ("rating", "label", "category",
+                             "fear_greed_category", "fng_classification"):
                     col_map[col] = "label"
             if col_map:
                 df = df.rename(columns=col_map)

@@ -22,8 +22,9 @@ Jobs executed (in order, failures are isolated):
     6. fred_daily         — FRED daily series incremental update;
                             per-series → DATA_CACHE_DIR/fred/{SERIES_ID}.csv.gz
     7. fred_combined      — Rebuild DATA_CACHE_DIR/fred/fred_combined.csv.gz
-    8. edgar_submissions  — SEC EDGAR submissions refresh for all tracked CIKs
-                            (lightweight ~KB files; used for 8-K event tracking)
+    8. edgar_submissions  — SEC EDGAR submissions refresh for Tier-1 watchlist CIKs
+                            (~160 sector-bellwether stocks; lightweight ~KB files;
+                            used for 8-K event tracking)
     9. edgar_facts        — SEC EDGAR XBRL company facts full refresh
                             (quarterly: first weekday on or after the 15th of
                             March/May/August/November)
@@ -46,10 +47,12 @@ import sys
 import time
 from datetime import date as _Date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
+
+from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
 
 from src.data.downloader.cboe_downloader import CboeDownloader
 from src.data.downloader.edgar_downloader import EdgarDownloader
@@ -270,10 +273,6 @@ def _job_fear_greed() -> Optional[Dict[str, Any]]:
 
 
 def _job_gdelt_gkg(yesterday: _Date) -> Optional[Dict[str, Any]]:
-    try:
-        from config.donotshare.donotshare import DATA_CACHE_DIR as _cache_root
-    except ImportError:
-        _cache_root = "c:/data-cache"
 
     gkg_dir = Path(_cache_root) / "gdelt" / "gkg"
     watermark = _gdelt_watermark(gkg_dir, ".gkg.csv.gz")
@@ -317,7 +316,7 @@ def _job_fred_combined(dl: FredDownloader) -> Optional[Dict[str, Any]]:
 
 
 # Full P15 price universe from library.md §4
-_P15_TICKERS = [
+_P15_TICKERS: List[str] = [
     # Sector ETFs
     "XLF", "XLE", "XLK", "XLV", "XLI", "XLB", "XLU", "XLP", "XLRE", "XLY", "XLC",
     # Sub-sector ETFs
@@ -335,6 +334,63 @@ _P15_TICKERS = [
     # Volatility & sentiment
     "^VIX", "^VXN", "^SKEW", "VIXY",
 ]
+
+# Tier-1 EDGAR watchlist: sector-bellwether stocks whose 8-K filings move sector ETFs.
+# Submissions are refreshed daily for these ~160 companies only (not the full SEC universe).
+# Organized by the P15 sector ETF each company primarily drives.
+_TIER1_WATCHLIST: Dict[str, List[str]] = {
+    "XLF": [
+        "BRK-B", "JPM", "V", "MA", "BAC", "GS", "WFC", "C", "MS", "AXP",
+        "BLK", "SPGI", "CME", "USB", "PGR",
+    ],
+    "XLE": [
+        "XOM", "CVX", "COP", "WMB", "SLB", "EOG", "PSX", "VLO", "KMI", "MPC",
+        "OXY", "HAL", "BKR", "OKE", "FANG",
+    ],
+    "XLK": [
+        "NVDA", "AAPL", "MSFT", "AVGO", "MU", "AMD", "ORCL", "CRM", "ACN", "QCOM",
+        "TXN", "AMAT", "PLTR", "NOW", "PANW",
+    ],
+    "XLV": [
+        "LLY", "JNJ", "ABBV", "UNH", "MRK", "AMGN", "TMO", "ISRG", "ABT", "GILD",
+        "BSX", "SYK", "BMY", "CVS", "HCA",
+    ],
+    "XLI": [
+        "CAT", "GE", "RTX", "GEV", "BA", "UNP", "DE", "HON", "ETN", "LMT",
+        "NOC", "UPS", "EMR", "CSX", "PWR",
+    ],
+    "XLB": [
+        "LIN", "NEM", "SHW", "FCX", "CRH", "APD", "ECL", "CTVA", "MLM", "NUE",
+        "DOW", "PPG", "VMC", "ALB", "CF",
+    ],
+    "XLU": [
+        "NEE", "SO", "DUK", "CEG", "AEP", "SRE", "VST", "D", "XEL", "EXC",
+        "PCG", "ED", "EIX", "ETR", "FE",
+    ],
+    "XLP": [
+        "WMT", "COST", "PG", "KO", "PM", "PEP", "MO", "CL", "MDLZ", "MNST",
+        "TGT", "KR", "GIS", "KHC", "STZ",
+    ],
+    "XLRE": [
+        "WELL", "PLD", "EQIX", "AMT", "DLR", "SPG", "CBRE", "VTR", "O", "PSA",
+        "CCI", "EQR", "AVB", "ARE", "VICI",
+    ],
+    "XLY": [
+        "AMZN", "TSLA", "HD", "MCD", "BKNG", "TJX", "LOW", "SBUX", "ORLY", "NKE",
+        "CMG", "ABNB", "LVS", "GM", "F",
+    ],
+    "XLC": [
+        "META", "GOOGL", "GOOG", "NFLX", "T", "VZ", "TMUS", "DIS", "CMCSA", "WBD",
+        "EA", "TTWO", "LYV", "CHTR", "OMC",
+    ],
+}
+
+# Flat sorted list of all Tier-1 tickers for CIK resolution
+_EDGAR_WATCHLIST_TICKERS: List[str] = sorted(set(
+    ticker
+    for tickers in _TIER1_WATCHLIST.values()
+    for ticker in tickers
+))
 
 
 def _job_yfinance_prices(yesterday: _Date) -> Optional[Dict[str, Any]]:
@@ -368,7 +424,13 @@ def _job_yfinance_prices(yesterday: _Date) -> Optional[Dict[str, Any]]:
 
 
 def _job_edgar_submissions() -> Optional[Dict[str, Any]]:
-    summary = EdgarDownloader().download_all_submissions(force=True)
+    dl = EdgarDownloader()
+    cik_list = dl.resolve_tickers_to_ciks(_EDGAR_WATCHLIST_TICKERS)
+    _logger.info(
+        "edgar_submissions: %d watchlist tickers → %d CIKs",
+        len(_EDGAR_WATCHLIST_TICKERS), len(cik_list),
+    )
+    summary = dl.download_all_submissions(cik_list=cik_list, force=True)
     return summary  # type: ignore[return-value]
 
 

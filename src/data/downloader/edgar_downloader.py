@@ -413,6 +413,39 @@ class EdgarDownloader(BaseDataDownloader):
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def resolve_tickers_to_ciks(self, tickers: List[str]) -> List[Union[int, str]]:
+        """
+        Resolve a list of ticker symbols to CIK integers using company_tickers.json.
+
+        Tickers not found in the mapping are skipped with a warning.
+
+        Args:
+            tickers: Ticker symbols (e.g. ['JPM', 'AAPL', 'BRK-B']).
+
+        Returns:
+            Sorted list of unique CIK integers for the matched tickers.
+        """
+        tickers_path = self.download_company_tickers(force=False)
+        with tickers_path.open("r", encoding="utf-8") as fh:
+            data: Dict[str, Dict[str, Any]] = json.load(fh)
+
+        ticker_to_cik: Dict[str, int] = {}
+        for entry in data.values():
+            try:
+                ticker_to_cik[str(entry["ticker"]).upper()] = _parse_cik(entry["cik_str"])
+            except (KeyError, ValueError):
+                pass
+
+        ciks: List[Union[int, str]] = []
+        for ticker in tickers:
+            cik = ticker_to_cik.get(ticker.upper())
+            if cik is not None:
+                ciks.append(cik)
+            else:
+                _logger.warning("Ticker %s not found in company_tickers.json — skipped", ticker)
+
+        return sorted(set(ciks))
+
     def _resolve_cik_list(
         self,
         cik_list: Optional[List[Union[int, str]]],

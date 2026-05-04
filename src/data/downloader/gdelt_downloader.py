@@ -22,6 +22,14 @@ Cache layout:
 Classes:
 - Gdelt1Downloader: GDELT 1.0 daily GKG downloader (raw zip caching)
 - GdeltDownloader: GDELT 2.0 15-minute GKG + Events downloader (Parquet)
+
+
+  To get 2013-04-01 → 2015-02-17 you need the v1 downloader:
+  python src/data/downloader/gdelt_downloader.py v1-gkg-range --start 2013-04-01 --end 2015-02-17
+
+  And for 2015-02-18 specifically, force full coverage:
+  python src/data/downloader/gdelt_downloader.py gkg-day --date 2015-02-18 --files-per-day 96
+
 """
 
 import io
