@@ -199,6 +199,11 @@ class FinraTRFDownloader:
             if response.status_code >= 400:
                 _logger.error("Response body: %s", response.text)
 
+            # 204 No Content = no data for this date (holiday / non-trading day)
+            if response.status_code == 204:
+                _logger.info("No TRF data for %s (FINRA returned 204 No Content — likely holiday)", date_str)
+                return pd.DataFrame()
+
             # Handle 404 specifically
             if response.status_code == 404:
                 if self._is_weekend_or_holiday(self.date):
