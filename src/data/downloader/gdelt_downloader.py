@@ -14,7 +14,7 @@ Two downloader classes cover the full GDELT history:
 Cache layout:
     DATA_CACHE_DIR/gdelt/
         gkg/
-            YYYYMMDD.gkg.csv.zip   ← GDELT 1.0 raw daily GKG zip
+            YYYYMMDD.gkg.csv.gz    ← GDELT 1.0 raw daily GKG (re-compressed from zip)
             YYYYMMDD.gkg.csv.gz    ← GDELT 2.0 aggregated GKG by theme (one file per day)
         events/
             YYYYMMDD.events.csv.gz ← GDELT 2.0 aggregated Events by EventCode (one file per day)
@@ -34,6 +34,7 @@ Classes:
   python src/data/downloader/gdelt_downloader.py gkg-range --start 2015-02-19 --end 2026-05-03
 """
 
+import gzip
 import io
 import json
 import time
@@ -734,8 +735,8 @@ class Gdelt1Downloader(BaseDataDownloader):
     """
     GDELT 1.0 GKG Downloader.
 
-    Downloads daily GKG 1.0 zip files from the GDELT project and caches them
-    as-is under DATA_CACHE_DIR/gdelt/gkg/YYYYMMDD.gkg.csv.zip.
+    Downloads daily GKG 1.0 zip files from the GDELT project, extracts the
+    CSV, and re-saves it as gzip under DATA_CACHE_DIR/gdelt/gkg/YYYYMMDD.gkg.csv.gz.
 
     GDELT 1.0 GKG is available from 2013-04-01 to 2015-02-17 (the day before
     GDELT 2.0 went live).  One file per day; no aggregation is performed.
@@ -813,18 +814,18 @@ class Gdelt1Downloader(BaseDataDownloader):
         """
         Download and cache the GDELT 1.0 GKG zip file for a single calendar day.
 
-        The file is saved as-is (no parsing or aggregation) to
-        DATA_CACHE_DIR/gdelt/gkg/YYYYMMDD.gkg.csv.zip.
+        The file is extracted from the source zip and re-saved as gzip to
+        DATA_CACHE_DIR/gdelt/gkg/YYYYMMDD.gkg.csv.gz.
 
         Args:
             date: Calendar day to download. Time component is ignored.
             force: If True, re-download even when the cache file already exists.
 
         Returns:
-            Path to the cached zip file, or None if the download failed.
+            Path to the cached ``.gz`` file, or None if the download failed.
         """
         date_str = date.strftime("%Y%m%d")
-        dest = self._gkg_dir / f"{date_str}.gkg.csv.zip"
+        dest = self._gkg_dir / f"{date_str}.gkg.csv.gz"
 
         if dest.exists() and not force:
             _logger.debug("GKG 1.0 %s already cached at %s", date.date(), dest)
@@ -842,9 +843,13 @@ class Gdelt1Downloader(BaseDataDownloader):
         if content is None:
             return None
 
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            csv_bytes = z.read(z.namelist()[0])
+
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(content)
-        _logger.info("Saved GKG 1.0 %s (%d bytes) → %s", date.date(), len(content), dest)
+        with gzip.open(dest, "wb") as f:
+            f.write(csv_bytes)
+        _logger.info("Saved GKG 1.0 %s (%d bytes) → %s", date.date(), len(csv_bytes), dest)
         return dest
 
     def download_gkg_range(
@@ -874,7 +879,7 @@ class Gdelt1Downloader(BaseDataDownloader):
 
         while current <= end:
             total += 1
-            dest = self._gkg_dir / f"{current.strftime('%Y%m%d')}.gkg.csv.zip"
+            dest = self._gkg_dir / f"{current.strftime('%Y%m%d')}.gkg.csv.gz"
 
             if dest.exists() and not force:
                 skipped += 1
@@ -918,20 +923,19 @@ class Gdelt1Downloader(BaseDataDownloader):
         if path is None or not path.exists():
             return pd.DataFrame()
         try:
-            with zipfile.ZipFile(path) as z:
-                fname = z.namelist()[0]
-                df = pd.read_csv(
-                    z.open(fname),
-                    sep="\t",
-                    header=None,
-                    names=_GKG1_COLS,
-                    on_bad_lines="skip",
-                    low_memory=False,
-                    dtype=str,
-                )
-            return df
+            return pd.read_csv(
+                path,
+                sep="\t",
+                header=None,
+                names=_GKG1_COLS,
+                on_bad_lines="skip",
+                low_memory=False,
+                dtype=str,
+                compression="gzip",
+                encoding="latin1",
+            )
         except Exception:
-            _logger.exception("Failed to read GKG 1.0 zip from %s", path)
+            _logger.exception("Failed to read GKG 1.0 gz from %s", path)
             return pd.DataFrame()
 
     # ------------------------------------------------------------------
