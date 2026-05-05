@@ -648,7 +648,7 @@ def _job_finra_trf(yesterday: _Date) -> Optional[Dict[str, Any]]:
     current = start
     while current <= end:
         if current.weekday() < 5:   # Mon–Fri only
-            dl = FinraTRFDownloader(date=current.strftime("%Y-%m-%d"))
+            dl = FinraTRFDownloader(date=current.strftime("%Y-%m-%d"), fetch_yfinance_data=False)
             df = dl.run()
             if df is not None and not df.empty:
                 total_rows += len(df)
