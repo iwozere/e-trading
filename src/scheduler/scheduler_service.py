@@ -496,6 +496,8 @@ class SchedulerService:
                 result = await self._execute_report_job(schedule, run_record)
             elif schedule.job_type == JobType.DATA_PROCESSING.value:
                 result = await self._execute_data_processing_job(schedule, run_record)
+            elif schedule.job_type == JobType.SCRIPT.value:
+                result = await self._execute_data_processing_job(schedule, run_record)
             else:
                 raise ValueError(f"Unsupported job type: {schedule.job_type}")
 

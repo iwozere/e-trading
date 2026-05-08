@@ -7,11 +7,11 @@
 - [x] **Self-healing gap detection** — each daily job fills up to 60 days of gaps per run;
       cutoff 2010-01-01, gaps healed most-recent-first
 - [x] **Pipeline file log** — `results/p15_hidden_deps/pipeline.log` (RotatingFileHandler)
-- [x] **yfinance prices** — 57-ticker P15 universe, range-fill into parquet
+- [x] **yfinance prices** — 57-ticker P15 universe, range-fill into `ohlcv/{TICKER}/1d/YYYY.csv.gz`
 - [x] **CBOE put/call ratio** — full daily file replacement
 - [x] **CNN Fear & Greed** — incremental append (daily) + full rebuild (weekly)
 - [x] **GDELT v2 GKG & Events** — range fill via `download_gkg_range` / `download_events_range`
-- [x] **FRED daily/weekly/monthly/quarterly** — incremental update, combined parquet rebuilt weekly
+- [x] **FRED daily/weekly/monthly/quarterly** — incremental update, combined `fred/fred_combined.csv.gz` rebuilt weekly
 - [x] **SEC EDGAR submissions + facts** — daily submissions, quarterly facts via date-check
 - [x] **FINRA TRF** — weekday range fill; silently skipped when credentials absent
 - [x] **AAII investor sentiment** — weekly full download (Thursday publish cycle)

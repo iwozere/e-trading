@@ -435,7 +435,7 @@ def run_strategy_6(ctx: RunContext) -> List[PackSignal]:
                 "ema": float(e.iloc[i]),
                 "supertrend": st_val,
                 "direction": int(direction.iloc[i]),
-                "atr_stop_suggest": sl_long if long_cond or held_long else None,
+                "atr_stop_suggest": sl_long if long_cond or prev_long else None,
                 "long_only": long_only,
             },
             notify_recommended=notify,
