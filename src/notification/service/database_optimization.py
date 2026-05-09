@@ -628,6 +628,19 @@ class OptimizedDeliveryStatusRepository:
         """
         self.session = session
 
+    def create_delivery_status(self, status_data: Dict[str, Any]) -> MessageDeliveryStatus:
+        """
+        Create a single delivery status record.
+
+        Args:
+            status_data: Delivery status data dictionary
+
+        Returns:
+            Created MessageDeliveryStatus object
+        """
+        results = self.bulk_create_delivery_statuses([status_data])
+        return results[0]
+
     def bulk_create_delivery_statuses(
         self,
         delivery_data: List[Dict[str, Any]]

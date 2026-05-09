@@ -192,7 +192,7 @@ class JobsRepository:
         return self.session.query(Schedule).filter(
             and_(
                 Schedule.enabled == True,
-                Schedule.next_run_at <= current_time
+                or_(Schedule.next_run_at == None, Schedule.next_run_at <= current_time)
             )
         ).all()
 
