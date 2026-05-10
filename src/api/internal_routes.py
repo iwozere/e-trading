@@ -1,4 +1,5 @@
 """Internal routes for system-to-system communication — no auth, localhost only."""
+import json
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
@@ -20,10 +21,29 @@ class LogAlertRequest(BaseModel):
 
 
 @router.post("/log-alert", include_in_schema=False)
-async def receive_log_alert(request: Request, body: LogAlertRequest) -> dict:
+async def receive_log_alert(request: Request) -> dict:
     """Receive a log error alert from Vector. Restricted to localhost."""
     if not request.client or request.client.host not in _LOCALHOST:
         raise HTTPException(status_code=403, detail="Forbidden")
+
+    raw = await request.body()
+    try:
+        data = json.loads(raw.decode())
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON: {e}") from e
+
+    # Vector HTTP sink sends a JSON array by default; NDJSON framing sends a single object.
+    if isinstance(data, list):
+        if not data:
+            return {"ok": True}
+        payload = data[0]
+    else:
+        payload = data
+
+    try:
+        alert = LogAlertRequest(**payload)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
     db_service = get_database_service()
     with db_service.uow() as uow:
@@ -32,7 +52,7 @@ async def receive_log_alert(request: Request, body: LogAlertRequest) -> dict:
         ]
 
     if not admin_ids:
-        _logger.warning("No admin users found — log alert not delivered: %s", body.source)
+        _logger.warning("No admin users found — log alert not delivered: %s", alert.source)
         return {"ok": True, "warning": "no admin users found"}
 
     svc = NotificationService()
@@ -41,9 +61,9 @@ async def receive_log_alert(request: Request, body: LogAlertRequest) -> dict:
             "message_type": "system_alert",
             "channels": ["telegram"],
             "recipient_id": admin_id,
-            "content": {"message": body.text, "source": body.source},
+            "content": {"message": alert.text, "source": alert.source},
             "priority": "HIGH",
         })
 
-    _logger.info("Log alert queued for %d admin(s): source=%s", len(admin_ids), body.source)
+    _logger.info("Log alert queued for %d admin(s): source=%s", len(admin_ids), alert.source)
     return {"ok": True}
