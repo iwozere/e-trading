@@ -28,9 +28,14 @@ type = "filter"
 inputs = ["normalize"]
 condition = "match(downcase(string!(.message)), r'error|exception|critical|traceback|fatal')"
 
+[transforms.exclude_noise]
+type = "filter"
+inputs = ["errors_only"]
+condition = '!match(string!(.message), r"(?i)(Xlib|XSERVTrans|xkbcomp|XF86|keysym)")'
+
 [transforms.fingerprint]
 type = "remap"
-inputs = ["errors_only"]
+inputs = ["exclude_noise"]   # change this from ["errors_only"]
 source = '''
   fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
   fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
