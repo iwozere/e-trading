@@ -239,21 +239,33 @@ Expected: attempts 1–5 return `401`, attempt 6 returns `429 Too Many Requests`
 
 ### 6. Test password allowlist removal
 
+> **Note:** run this at least 1 minute after step 5 (rate-limit test), otherwise the
+> quota for your IP is already exhausted and every request returns 429 instead of 401/200.
+
 ```bash
-# These should all return 401 (no longer accepted)
-for pw in password 123456 admin trader viewer; do
+# Former allowlist entries — all should return 401
+for pw in password 123456 admin trader; do
   echo -n "password '$pw': "
   curl -s -o /dev/null -w "%{http_code}\n" \
     -X POST http://<host>:5003/auth/login \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"viewer@trading-system.local\",\"password\":\"$pw\"}"
 done
+# Expected: 401 401 401 401
 
-# Only the username prefix should work
-curl -s -o /dev/null -w "username as password: %{http_code}\n" \
+# Username prefix — must succeed (200) for viewer@... with password "viewer"
+curl -s -o /dev/null -w "correct password (viewer): %{http_code}\n" \
+  -X POST http://<host>:5003/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"viewer@trading-system.local","password":"viewer"}'
+# Expected: 200
+
+# Admin user
+curl -s -o /dev/null -w "correct password (admin): %{http_code}\n" \
   -X POST http://<host>:5003/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin@trading-system.local","password":"admin"}'
+# Expected: 200
 ```
 
 ### 7. Test internal route token

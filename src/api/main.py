@@ -739,8 +739,10 @@ async def catch_all(full_path: str):
         return JSONResponse(status_code=404, content={"detail": "API endpoint not found"})
         
     # Check if a static file exists (e.g. for assets/...)
-    dist_path = PROJECT_ROOT / "src/web_ui/frontend/dist"
-    local_path = dist_path / full_path
+    dist_path = (PROJECT_ROOT / "src/web_ui/frontend/dist").resolve()
+    local_path = (dist_path / full_path).resolve()
+    if not str(local_path).startswith(str(dist_path)):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
     if local_path.is_file():
         return FileResponse(local_path)
         

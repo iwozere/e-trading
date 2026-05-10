@@ -1,4 +1,5 @@
 # model_users.py  (patched)
+import bcrypt
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Integer, String, DateTime, ForeignKey, text, UniqueConstraint, Index, CheckConstraint
 from src.data.db.core.json_types import JsonType
@@ -11,6 +12,7 @@ class User(Base):
     __tablename__ = "usr_users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str | None] = mapped_column(String(100), unique=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(20), server_default="trader")
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"))
@@ -30,18 +32,15 @@ class User(Base):
             return self.email.split('@')[0]
         return None
 
+    def set_password(self, password: str) -> None:
+        """Hash and store password using bcrypt."""
+        self.password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
     def verify_password(self, password: str) -> bool:
-        """
-        Verify password for user.
-
-        Temporary implementation until Telegram 2FA replaces password auth.
-        Accepts username (email prefix) as password only.
-        """
-        if not self.email or not password:
+        """Verify password against the stored bcrypt hash."""
+        if not self.password_hash or not password:
             return False
-
-        username = self.email.split('@')[0]
-        return password == username
+        return bcrypt.checkpw(password.encode(), self.password_hash.encode())
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert user to dictionary."""

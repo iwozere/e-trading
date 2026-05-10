@@ -7,7 +7,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path="config/donotshare/.env")
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 
 # Data cache directory
