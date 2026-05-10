@@ -34,29 +34,14 @@ class User(Base):
         """
         Verify password for user.
 
-        For now, this is a simple implementation for default users.
-        In production, this should use proper password hashing.
+        Temporary implementation until Telegram 2FA replaces password auth.
+        Accepts username (email prefix) as password only.
         """
-        if not self.email:
+        if not self.email or not password:
             return False
 
-        # For existing users, use simple password verification
-        # This is temporary - in production use proper password hashing
         username = self.email.split('@')[0]
-
-        # Allow the username as password for simplicity
-        if password == username:
-            return True
-
-        # Also allow some common passwords for testing
-        if password in ["password", "123456", "admin", "trader", "viewer"]:
-            return True
-
-        # For default users, allow role-based passwords
-        if password == self.role:
-            return True
-
-        return False
+        return password == username
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert user to dictionary."""

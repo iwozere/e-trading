@@ -98,6 +98,16 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 #
 ##################################################################
 
+##################################################################
+#
+# SECURITY
+#
+##################################################################
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN")
+API_RELOAD = os.getenv("API_RELOAD", "false").lower() == "true"
+
 WEBGUI_LOGIN = os.getenv("WEBGUI_LOGIN")
 WEBGUI_PASSWORD = os.getenv("WEBGUI_PASSWORD")
 

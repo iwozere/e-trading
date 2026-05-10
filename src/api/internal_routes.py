@@ -1,4 +1,5 @@
 """Internal routes for system-to-system communication — no auth, localhost only."""
+import hmac
 import json
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
@@ -6,6 +7,7 @@ from pydantic import BaseModel
 from src.data.db.models.model_users import User
 from src.data.db.services.database_service import get_database_service
 from src.data.db.services.notification_service import NotificationService
+from src.api.config import settings
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -13,6 +15,17 @@ _logger = setup_logger(__name__)
 router = APIRouter(prefix="/internal", tags=["internal"])
 
 _LOCALHOST = {"127.0.0.1", "::1"}
+_TOKEN_HEADER = "X-Internal-Token"
+
+
+def _check_internal_access(request: Request) -> None:
+    """Verify request is from localhost and carries the correct shared secret."""
+    if not request.client or request.client.host not in _LOCALHOST:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if settings.internal_api_token:
+        incoming = request.headers.get(_TOKEN_HEADER, "")
+        if not hmac.compare_digest(incoming, settings.internal_api_token):
+            raise HTTPException(status_code=403, detail="Forbidden")
 
 
 class LogAlertRequest(BaseModel):
@@ -22,9 +35,8 @@ class LogAlertRequest(BaseModel):
 
 @router.post("/log-alert", include_in_schema=False)
 async def receive_log_alert(request: Request) -> dict:
-    """Receive a log error alert from Vector. Restricted to localhost."""
-    if not request.client or request.client.host not in _LOCALHOST:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    """Receive a log error alert from Vector. Restricted to localhost + shared secret."""
+    _check_internal_access(request)
 
     raw = await request.body()
     try:

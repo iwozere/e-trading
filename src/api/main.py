@@ -22,6 +22,8 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.security import HTTPBearer
 from contextlib import asynccontextmanager
 import asyncio
+import logging
+import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import sys
@@ -55,6 +57,33 @@ if SRC_ROOT in sys.path:
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
+# ---------------------------------------------------------------------------
+# Sensitive-data log filter — redacts JWT bearer tokens from all log records
+# so they never appear in log files even if an exception message carries them.
+# ---------------------------------------------------------------------------
+_JWT_RE = re.compile(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+')
+_PASSWORD_RE = re.compile(r'("password"\s*:\s*")[^"]*"', re.IGNORECASE)
+
+
+class _SensitiveDataFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = _JWT_RE.sub('[JWT]', record.msg)
+            record.msg = _PASSWORD_RE.sub(r'\1[REDACTED]"', record.msg)
+        if record.args:
+            try:
+                sanitized = tuple(
+                    _JWT_RE.sub('[JWT]', str(a)) if isinstance(a, str) else a
+                    for a in (record.args if isinstance(record.args, tuple) else (record.args,))
+                )
+                record.args = sanitized
+            except Exception:
+                pass
+        return True
+
+
+logging.getLogger().addFilter(_SensitiveDataFilter())
+
 # Make trading system import optional for testing
 try:
     from src.trading.strategy_manager import StrategyManager
@@ -63,7 +92,11 @@ except ImportError as e:
     _logger.warning("Trading system not available: %s", e)
     StrategyManager = None
     TRADING_SYSTEM_AVAILABLE = False
-from config.donotshare.donotshare import TRADING_API_PORT, TRADING_WEBGUI_PORT
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from src.api.config import settings
+from src.api.rate_limiter import limiter
+from src.api.exceptions import AppError, app_error_handler
 from src.api.services.webui_app_service import webui_app_service
 from src.api.auth_routes import router as auth_router
 from src.api.telegram_routes import router as telegram_router
@@ -141,8 +174,8 @@ async def lifespan(app: FastAPI):
                             'monitoring_service_initialized': monitoring_service_healthy,
                             'trading_system_available': TRADING_SYSTEM_AVAILABLE,
                             'strategy_manager_initialized': strategy_manager is not None,
-                            'api_port': TRADING_API_PORT,
-                            'webgui_port': TRADING_WEBGUI_PORT
+                            'api_port': settings.trading_api_port,
+                            'webgui_port': settings.trading_webgui_port
                         }
                     }
                 else:
@@ -183,8 +216,8 @@ async def lifespan(app: FastAPI):
     try:
         api_heartbeat_manager.stop_heartbeat()
         _logger.info("Stopped API service heartbeat")
-    except:
-        pass
+    except Exception:
+        _logger.debug("Heartbeat manager was not running at shutdown")
 
     if strategy_manager:
         await strategy_manager.shutdown()
@@ -197,10 +230,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(AppError, app_error_handler)
+
+# Configure CORS - origins loaded from CORS_ORIGINS env var (comma-separated)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all origins for easier Pi access (hostname/IP)
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -288,7 +325,7 @@ async def get_correlation_analysis(
 security = HTTPBearer()
 
 # Pydantic models for API
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 class StrategyConfig(BaseModel):
     """Strategy configuration model."""
@@ -330,6 +367,16 @@ class StrategyAction(BaseModel):
     """Strategy action model."""
     action: str = Field(..., description="Action to perform (start, stop, restart)")
     confirm_live_trading: bool = Field(False, description="Confirmation for live trading")
+
+
+class StrategyParametersBody(BaseModel):
+    """Body for strategy parameter update — arbitrary key/value pairs."""
+    model_config = ConfigDict(extra="allow")
+
+
+class ValidateConfigBody(BaseModel):
+    """Body for strategy config validation — passes through to strategy service."""
+    model_config = ConfigDict(extra="allow")
 
 # Remove old authentication dependency - now using proper JWT auth from auth.py
 
@@ -578,12 +625,12 @@ async def get_system_status(current_user: User = Depends(get_current_user)):
 @app.put("/api/strategies/{strategy_id}/parameters", response_model=Dict[str, Any])
 async def update_strategy_parameters(
     strategy_id: str,
-    parameters: Dict[str, Any],
+    body: StrategyParametersBody,
     current_user: User = Depends(require_trader_or_admin)
 ):
     """Update strategy parameters while running."""
     try:
-        # Update parameters using service
+        parameters = body.model_dump()
         result = await strategy_service.update_strategy_parameters(strategy_id, parameters)
 
         return result
@@ -607,12 +654,12 @@ async def get_strategy_templates(current_user: User = Depends(get_current_user))
 
 @app.post("/api/config/validate")
 async def validate_configuration(
-    config: Dict[str, Any],
+    body: ValidateConfigBody,
     current_user: User = Depends(get_current_user)
 ):
     """Validate a strategy configuration."""
     try:
-        # Use strategy service for validation
+        config = body.model_dump()
         strategy_service.validate_strategy_config(config)
         return {"valid": True, "errors": []}
 
@@ -716,13 +763,13 @@ if __name__ == "__main__":
     import uvicorn
 
     # Get port from config, default to 5003 if not set
-    port = int(TRADING_API_PORT) if TRADING_API_PORT else 5003
+    port = settings.trading_api_port
 
     # Run the server
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=port,
-        reload=True,
+        reload=settings.api_reload,
         log_level="info"
     )

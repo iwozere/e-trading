@@ -7,7 +7,9 @@ access control utilities.
 """
 
 from datetime import datetime, timedelta, timezone
+from threading import Lock
 from typing import Optional, Dict, Any
+import secrets
 import jwt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -19,6 +21,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
+from src.api.config import settings
 from src.api.services.webui_app_service import webui_app_service
 from src.data.db.models.model_users import User
 from src.data.db.services.database_service import get_database_service
@@ -27,14 +30,37 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
-# JWT Configuration
-SECRET_KEY = "your-secret-key-change-in-production"  # TODO: Move to environment variable
+# JWT Configuration — missing JWT_SECRET_KEY causes pydantic-settings to raise at import time
+SECRET_KEY = settings.jwt_secret_key
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # Security scheme
 security = HTTPBearer()
+
+# ---------------------------------------------------------------------------
+# Token deny-list (in-memory, survives the 30-min access-token window)
+# Maps JTI → expiry epoch. Stale entries are purged on each revocation call.
+# ---------------------------------------------------------------------------
+_deny_list: Dict[str, float] = {}
+_deny_lock = Lock()
+
+
+def revoke_token(jti: str, expires_at: float) -> None:
+    """Add a token JTI to the deny-list and prune already-expired entries."""
+    now = datetime.now(timezone.utc).timestamp()
+    with _deny_lock:
+        _deny_list[jti] = expires_at
+        stale = [k for k, v in _deny_list.items() if v < now]
+        for k in stale:
+            del _deny_list[k]
+
+
+def is_token_revoked(jti: str) -> bool:
+    """Return True if the token has been explicitly revoked."""
+    with _deny_lock:
+        return jti in _deny_list
 
 
 class AuthenticationError(Exception):
@@ -65,7 +91,7 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode.update({"exp": expire, "type": "access", "jti": secrets.token_hex(8)})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
     return encoded_jwt
@@ -84,7 +110,7 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({"exp": expire, "type": "refresh", "jti": secrets.token_hex(8)})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
     return encoded_jwt
@@ -105,7 +131,12 @@ def verify_token(token: str) -> Dict[str, Any]:
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        jti = payload.get("jti")
+        if jti and is_token_revoked(jti):
+            raise AuthenticationError("Token has been revoked")
         return payload
+    except AuthenticationError:
+        raise
     except jwt.ExpiredSignatureError:
         raise AuthenticationError("Token has expired")
     except jwt.PyJWTError:

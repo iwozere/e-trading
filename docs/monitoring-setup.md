@@ -298,6 +298,11 @@ encoding.codec = "json"
 retry_attempts = 5
 retry_initial_backoff_secs = 1
 retry_max_duration_secs = 30
+
+# Security: shared secret checked by the /internal/log-alert endpoint.
+# Value must match INTERNAL_API_TOKEN in config/donotshare/.env on the Pi.
+[sinks.notify.request.headers]
+X-Internal-Token = "<INTERNAL_API_TOKEN from .env>"
 ```
 
 ### Step 3 — Enable and restart Vector
@@ -419,7 +424,7 @@ condition = 'match(string!(.message), r"(?i)(error|exception|critical|traceback|
 |---------|--------|
 | Vector not starting | `sudo journalctl -u vector -n 50` |
 | No alerts arriving | `sudo journalctl -u vector -f` — look for HTTP 4xx/5xx or connection errors |
-| `403 Forbidden` from endpoint | Vector is not connecting from 127.0.0.1 — verify `uri` in `vector.toml` |
+| `403 Forbidden` from endpoint | Either Vector is not connecting from 127.0.0.1 (check `uri`) or `X-Internal-Token` header is missing/wrong (check `[sinks.notify.request.headers]` vs `.env`) |
 | `Connection refused` on port 5003 | `trading-api.service` is not running — `sudo systemctl status trading-api` |
 | Endpoint returns 500 | `recipient_id` is invalid — verify user ID in `users` table |
 | Journald access denied | `sudo usermod -a -G systemd-journal vector && sudo systemctl restart vector` |

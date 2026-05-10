@@ -7,6 +7,7 @@ and token management.
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
 from pathlib import Path
@@ -23,9 +24,13 @@ from src.api.auth import (
     create_refresh_token,
     verify_token,
     get_current_user,
+    revoke_token,
+    security,
     AuthenticationError
 )
+from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
+from src.api.rate_limiter import limiter
 
 _logger = setup_logger(__name__)
 
@@ -73,6 +78,7 @@ class UserResponse(BaseModel):
 # Authentication endpoints
 
 @router.post("/login", response_model=LoginResponse)
+@limiter.limit("5/minute")
 async def login(
     request: Request,
     login_data: LoginRequest
@@ -142,6 +148,7 @@ async def login(
 
 
 @router.post("/refresh", response_model=LoginResponse)
+@limiter.limit("10/minute")
 async def refresh_token(
     request: Request,
     refresh_data: RefreshTokenRequest
@@ -173,13 +180,20 @@ async def refresh_token(
         if not user_id:
             raise AuthenticationError("Invalid token payload")
 
-        # For now, we'll use a simple approach since we don't have user lookup by ID
-        # In a real implementation, this would use the users service
+        # Look up the user in the DB to get the current role (not the stale JWT role)
+        db_service = get_database_service()
+        with db_service.uow() as r:
+            db_user = r.s.query(User).filter(User.id == int(user_id)).first()
+
+        if not db_user or not db_user.is_active:
+            raise AuthenticationError("User not found or inactive")
+
         user = {
-            "id": int(user_id),
-            "username": payload.get("username", "unknown"),
-            "role": payload.get("role", "viewer"),
-            "is_active": True
+            "id": db_user.id,
+            "username": db_user.username,
+            "email": db_user.email,
+            "role": db_user.role,
+            "is_active": db_user.is_active,
         }
 
         # Create new tokens
@@ -219,20 +233,31 @@ async def refresh_token(
 @router.post("/logout")
 async def logout(
     request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Logout user (invalidate tokens on client side).
+    Logout user — revokes the current access token server-side.
 
     Args:
         request: FastAPI request object
+        credentials: Raw bearer credentials (used to revoke the token)
         current_user: Current authenticated user
-        db: Database session
 
     Returns:
         dict: Success message
     """
     try:
+        # Revoke the current access token so it cannot be reused
+        try:
+            payload = verify_token(credentials.credentials)
+            jti = payload.get("jti")
+            exp = payload.get("exp")
+            if jti and exp:
+                revoke_token(jti, float(exp))
+        except AuthenticationError:
+            pass  # Already expired — nothing to revoke
+
         # Log logout action
         webui_app_service.log_user_action(
             user_id=current_user.id,

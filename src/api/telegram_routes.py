@@ -108,6 +108,21 @@ class TelegramSchedule(BaseModel):
     schedule_config: Optional[str] = None
     created: Optional[str] = None
 
+class TelegramScheduleUpdate(BaseModel):
+    """Partial update payload for a Telegram schedule."""
+    ticker: Optional[str] = None
+    scheduled_time: Optional[str] = None
+    period: Optional[str] = None
+    active: Optional[bool] = None
+    email: Optional[bool] = None
+    indicators: Optional[str] = None
+    interval: Optional[str] = None
+    provider: Optional[str] = None
+    schedule_type: Optional[str] = None
+    list_type: Optional[str] = None
+    config_json: Optional[str] = None
+
+
 class ScheduleStats(BaseModel):
     """Schedule statistics model."""
     total_schedules: int
@@ -373,28 +388,6 @@ async def delete_telegram_alert(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/alerts/{alert_id}/config")
-async def get_telegram_alert_config(
-    alert_id: int,
-    current_user: User = Depends(get_current_user)
-):
-    """Get detailed configuration for a Telegram alert."""
-    try:
-        _logger.info("Getting Telegram alert config: %d", alert_id)
-
-        # For now, return a simple response since this endpoint needs more complex implementation
-        # TODO: Implement proper alert config retrieval through telegram_app_service
-        raise HTTPException(status_code=501, detail="Alert config endpoint not yet implemented")
-
-        _logger.info("Retrieved Telegram alert config: %d", alert_id)
-        return config
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        _logger.exception("Error getting Telegram alert config %d:", alert_id)
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/stats/alerts", response_model=AlertStats)
 async def get_telegram_alert_stats(
@@ -467,62 +460,6 @@ async def get_telegram_schedules(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/schedules/{schedule_id}/toggle")
-async def toggle_telegram_schedule(
-    schedule_id: int,
-    current_user: User = Depends(require_admin)
-):
-    """Toggle a Telegram schedule's active status."""
-    try:
-        _logger.info("Toggling Telegram schedule: %d", schedule_id)
-
-        # TODO: Implement schedule toggle through telegram_app_service
-        raise HTTPException(status_code=501, detail="Schedule toggle endpoint not yet implemented")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        _logger.exception("Error toggling Telegram schedule %d:", schedule_id)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/schedules/{schedule_id}")
-async def delete_telegram_schedule(
-    schedule_id: int,
-    current_user: User = Depends(require_admin)
-):
-    """Delete a Telegram schedule."""
-    try:
-        _logger.info("Deleting Telegram schedule: %d", schedule_id)
-
-        # TODO: Implement schedule deletion through telegram_app_service
-        raise HTTPException(status_code=501, detail="Schedule deletion endpoint not yet implemented")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        _logger.exception("Error deleting Telegram schedule %d:", schedule_id)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.put("/schedules/{schedule_id}")
-async def update_telegram_schedule(
-    schedule_id: int,
-    schedule_data: Dict[str, Any],
-    current_user: User = Depends(require_admin)
-):
-    """Update a Telegram schedule."""
-    try:
-        _logger.info("Updating Telegram schedule: %d", schedule_id)
-
-        # TODO: Implement schedule update through telegram_app_service
-        raise HTTPException(status_code=501, detail="Schedule update endpoint not yet implemented")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        _logger.exception("Error updating Telegram schedule %d:", schedule_id)
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/stats/schedules", response_model=ScheduleStats)
