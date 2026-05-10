@@ -77,4 +77,4 @@ retry_initial_backoff_secs = 1
 retry_max_duration_secs = 30
 
 [sinks.notify.request.headers]
-X-Internal-Token = "4c341f275b274444ef18c1c26a2f2780"
+X-Internal-Token = "${INTERNAL_API_TOKEN}"
