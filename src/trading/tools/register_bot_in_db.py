@@ -5,6 +5,9 @@ Register Bot in DB
 Utility script to quickly register a new JSON configuration into the PostgreSQL database.
 This is necessary for the enhanced live_trading_bot architecture, which reads configs
 from the DB rather than the file system.
+
+Usage:
+    python scripts/register_bot_in_db.py configs/bots/sentiment_bot.json
 """
 
 import sys
@@ -51,7 +54,7 @@ def register_bot(config_path: str, user_id: int):
         'description': config_dict.get('description', ''),
         'config': config_dict
     }
-    
+
     # Let's ensure 'name' is in the config, the DB uses it.
     if 'name' not in config_dict:
         _logger.error("The JSON config must contain a 'name' field.")
@@ -71,7 +74,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Register a JSON bot configuration to the PostgreSQL database.")
     parser.add_argument("config_file", type=str, help="Path to the bot configuration JSON file")
     parser.add_argument("--user-id", type=int, default=1, help="The User ID to associate this bot with (default: 1)")
-    
+
     args = parser.parse_args()
     success = register_bot(args.config_file, args.user_id)
     sys.exit(0 if success else 1)

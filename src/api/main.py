@@ -70,6 +70,7 @@ from src.api.telegram_routes import router as telegram_router
 from src.api.jobs_routes import router as jobs_router
 from src.api.notification_routes import router as notification_router
 from src.api.health_routes import router as health_router
+from src.api.internal_routes import router as internal_router
 from src.api.auth import get_current_user, require_trader_or_admin
 from src.data.db.models.model_users import User
 from src.api.services import (
@@ -219,6 +220,9 @@ app.include_router(jobs_router)
 
 # Include notification management routes
 app.include_router(notification_router)
+
+# Include internal routes (system-to-system, localhost only, no auth)
+app.include_router(internal_router)
 
 # Include trading bot management routes
 from src.api.trading_bot_routes import router as trading_bot_router
