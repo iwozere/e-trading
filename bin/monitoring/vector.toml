@@ -1,0 +1,72 @@
+[sources.journald]
+type = "journald"
+
+[sources.docker]
+type = "docker_logs"
+
+[transforms.normalize]
+type = "remap"
+inputs = ["journald", "docker"]
+source = '''
+  if exists(.container_name) {
+    .source_type = "docker"
+    .source_name = string(.container_name) ?? "unknown"
+  } else {
+    .source_type = "systemd"
+    .source_name = string(._SYSTEMD_UNIT) ?? string(.SYSLOG_IDENTIFIER) ?? "unknown"
+  }
+  .message = string(.MESSAGE) ?? string!(.message)
+  . = {
+    "source_type": .source_type,
+    "source_name": .source_name,
+    "message": .message,
+  }
+'''
+
+[transforms.errors_only]
+type = "filter"
+inputs = ["normalize"]
+condition = "match(downcase(string!(.message)), r'error|exception|critical|traceback|fatal')"
+
+[transforms.fingerprint]
+type = "remap"
+inputs = ["errors_only"]
+source = '''
+  fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
+  fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
+  fp = replace(fp, r'[0-9]+', "<N>")
+  .dedup_key, err = .source_name + "|" + (slice(fp, 0, 180) ?? fp)
+'''
+
+[transforms.cooldown]
+type = "throttle"
+inputs = ["fingerprint"]
+threshold = 1
+window_secs = 1800
+key_field = "dedup_key"
+
+[transforms.final_shape]
+type = "remap"
+inputs = ["cooldown"]
+source = '''
+  . = {
+    "text": "[" + string!(.source_type) + "/" + string!(.source_name) + "] " + string!(.message),
+    "source": string!(.source_name),
+  }
+'''
+
+[sinks.notify]
+type = "http"
+inputs = ["final_shape"]
+uri = "http://127.0.0.1:5003/internal/log-alert"
+method = "post"
+encoding.codec = "json"
+framing.method = "newline_delimited"
+
+[sinks.notify.batch]
+max_events = 1
+
+[sinks.notify.request]
+retry_attempts = 5
+retry_initial_backoff_secs = 1
+retry_max_duration_secs = 30

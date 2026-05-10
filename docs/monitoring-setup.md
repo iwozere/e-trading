@@ -124,10 +124,10 @@ git push
 
 ---
 
-## Part 2: Deploy `trading-api.service` on the Pi
+## Part 2: Ensure `trading-webui.service` is running on the Pi
 
-`trading-api.service` is the FastAPI application that exposes the notification endpoints.
-It has been developed but never installed as a systemd service on the Pi.
+The `/internal/log-alert` endpoint is part of the main FastAPI app (`src.api.main`),
+which is served by `trading-webui.service` on port 5003. No separate service is needed.
 
 ### Step 1 — Pull the latest code
 
@@ -136,49 +136,31 @@ cd /opt/apps/e-trading
 git pull
 ```
 
-### Step 2 — Install the service file
+### Step 2 — Restart the web UI service to load the new internal router
 
 ```bash
-sudo cp /opt/apps/e-trading/bin/api/trading-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
+sudo systemctl restart trading-webui.service
+sudo systemctl status trading-webui.service
 ```
 
-### Step 3 — Verify the environment file
-
-The service loads secrets from `/opt/apps/e-trading/config/donotshare/.env`.
-Confirm it contains at minimum:
-
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/your_db
-TRADING_API_PORT=5003
-```
-
-### Step 4 — Find the admin user ID
-
-The internal endpoint sends alerts as a notification to a specific user. Find the admin
-user ID in your database:
+### Step 3 — Verify
 
 ```bash
-psql -U your_db_user -d your_db_name \
-  -c "SELECT id, username, email FROM users ORDER BY id LIMIT 10;"
-```
-
-Replace `"REPLACE_WITH_ADMIN_USER_ID"` in `src/api/internal_routes.py` with the
-integer ID (as a string, e.g. `"1"`), then commit and pull again.
-
-### Step 5 — Enable and start the service
-
-```bash
-sudo systemctl enable trading-api.service
-sudo systemctl start trading-api.service
-```
-
-### Step 6 — Verify
-
-```bash
-sudo systemctl status trading-api.service
 curl -s http://localhost:5003/api/health | python3 -m json.tool
 ```
+
+The health endpoint should return `{"status": "healthy", ...}`.
+
+### Step 4 — Test the internal endpoint
+
+```bash
+curl -s -X POST http://localhost:5003/internal/log-alert \
+  -H "Content-Type: application/json" \
+  -d '{"text": "[systemd/manual] Test alert", "source": "manual-test"}' \
+  | python3 -m json.tool
+```
+
+Expected: `{"ok": true}`
 
 The health endpoint should return `{"status": "healthy", ...}`.
 
@@ -192,8 +174,7 @@ Raspberry Pi OS (arm64 and armhf).
 ### Step 1 — Add the Vector apt repository
 
 ```bash
-curl -1sLf 'https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh' \
-  | sudo -E bash
+curl -1sLf 'https://repositories.timber.io/public/vector/cfg/setup/bash.deb.sh' | sudo -E bash
 ```
 
 ### Step 2 — Install Vector

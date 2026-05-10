@@ -48,6 +48,7 @@ sudo journalctl -u notification_bot.service --since "10 minutes ago"
 sudo journalctl -u trading-api.service --since "10 minutes ago"
 sudo journalctl -u trading-webui.service --since "10 minutes ago"
 sudo journalctl -u trading.service --since "10 minutes ago"
+sudo journalctl -u vector -n 30 --no-pager
 
 sudo systemctl status NAME
 
