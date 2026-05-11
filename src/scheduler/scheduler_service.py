@@ -791,7 +791,7 @@ class SchedulerService:
             return False
 
         # Build notification message
-        message_title = f"Job Alert: {schedule.name}"
+        message_title = f"[Scheduler] {schedule.name}"
         message_body_parts = [
             f"**Scheduled Job:** {schedule.name}",
             f"**Job Type:** {schedule.job_type}",

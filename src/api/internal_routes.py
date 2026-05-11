@@ -67,13 +67,18 @@ async def receive_log_alert(request: Request) -> dict:
         _logger.warning("No admin users found — log alert not delivered: %s", alert.source)
         return {"ok": True, "warning": "no admin users found"}
 
+    # Build a subject that shows the source and the first meaningful part of the error line.
+    # alert.text format from Vector: "[systemd/service] ERROR: ..."
+    first_line = alert.text.splitlines()[0] if alert.text else alert.source
+    subject = f"[Monitoring/{alert.source}] {first_line[:120]}"
+
     svc = NotificationService()
     for admin_id in admin_ids:
         svc.create_message({
             "message_type": "system_alert",
             "channels": ["telegram"],
             "recipient_id": admin_id,
-            "content": {"message": alert.text, "source": alert.source},
+            "content": {"title": subject, "message": alert.text, "source": alert.source},
             "priority": "HIGH",
         })
 
