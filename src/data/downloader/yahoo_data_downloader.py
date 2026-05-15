@@ -17,6 +17,7 @@ Valid values:
 Classes:
 - YahooDataDownloader: Main class for interacting with Yahoo Finance and managing data downloads
 """
+import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 
@@ -948,3 +949,110 @@ class YahooDataDownloader(BaseDataDownloader):
         except Exception as e:
             _logger.error("Error fetching profile for %s: %s", symbol, e)
             return None
+
+    # ------------------------------------------------------------------
+    # Options chain
+    # ------------------------------------------------------------------
+
+    def get_options_chain_full(self, symbol: str) -> pd.DataFrame:
+        """
+        Fetch the complete options chain across all available expirations.
+
+        Intended to be called before market open (pipeline runs at 13:00 UTC).
+        At that time, volume reflects the previous trading session and
+        openInterest reflects the previous EOD settlement — i.e. yesterday's data.
+
+        Args:
+            symbol: Ticker symbol, e.g. 'SPY'.
+
+        Returns:
+            DataFrame with columns: type, expiration, strike, volume, openInterest,
+            impliedVolatility, bid, ask, lastPrice, inTheMoney, contractSymbol,
+            lastTradeDate.  Empty DataFrame when options are unavailable.
+        """
+        _KEEP_COLS = [
+            "type", "expiration", "strike", "volume", "openInterest",
+            "impliedVolatility", "bid", "ask", "lastPrice", "inTheMoney",
+            "contractSymbol", "lastTradeDate",
+        ]
+        try:
+            ticker = yf.Ticker(symbol)
+            expirations = ticker.options
+            if not expirations:
+                _logger.debug("%s: no options expirations available", symbol)
+                return pd.DataFrame()
+
+            frames: List[pd.DataFrame] = []
+            for exp in expirations:
+                try:
+                    chain = ticker.option_chain(exp)
+                    for side, df in (("call", chain.calls), ("put", chain.puts)):
+                        if df.empty:
+                            continue
+                        df = df.copy()
+                        df["type"] = side
+                        df["expiration"] = exp
+                        frames.append(df)
+                    time.sleep(0.05)
+                except Exception:
+                    _logger.warning("%s: could not fetch chain for expiration %s", symbol, exp)
+
+            if not frames:
+                return pd.DataFrame()
+
+            combined = pd.concat(frames, ignore_index=True)
+            available = [c for c in _KEEP_COLS if c in combined.columns]
+            _logger.debug(
+                "%s: %d contracts across %d expirations",
+                symbol, len(combined), len(expirations),
+            )
+            return combined[available]
+
+        except Exception:
+            _logger.exception("%s: failed to fetch full options chain", symbol)
+            return pd.DataFrame()
+
+    def compute_options_summary(self, chain_df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Aggregate a full options chain into daily put/call metrics.
+
+        Args:
+            chain_df: DataFrame returned by get_options_chain_full().
+
+        Returns:
+            Dict with put_volume, call_volume, pc_volume_ratio, put_oi, call_oi,
+            pc_oi_ratio, put_iv_wavg, call_iv_wavg, n_expirations.
+            Ratio fields are None when the denominator is zero.
+            Empty dict when chain_df is empty.
+        """
+        if chain_df.empty:
+            return {}
+
+        puts  = chain_df[chain_df["type"] == "put"]
+        calls = chain_df[chain_df["type"] == "call"]
+
+        put_vol  = float(puts["volume"].fillna(0).sum())
+        call_vol = float(calls["volume"].fillna(0).sum())
+        put_oi   = float(puts["openInterest"].fillna(0).sum())
+        call_oi  = float(calls["openInterest"].fillna(0).sum())
+
+        def _wavg_iv(df: pd.DataFrame) -> Optional[float]:
+            oi = df["openInterest"].fillna(0)
+            iv = df["impliedVolatility"].fillna(0)
+            total = float(oi.sum())
+            if total > 0:
+                return float((iv * oi).sum() / total)
+            positive = iv[iv > 0]
+            return float(positive.mean()) if not positive.empty else None
+
+        return {
+            "put_volume":      put_vol,
+            "call_volume":     call_vol,
+            "pc_volume_ratio": put_vol / call_vol if call_vol > 0 else None,
+            "put_oi":          put_oi,
+            "call_oi":         call_oi,
+            "pc_oi_ratio":     put_oi / call_oi if call_oi > 0 else None,
+            "put_iv_wavg":     _wavg_iv(puts),
+            "call_iv_wavg":    _wavg_iv(calls),
+            "n_expirations":   int(chain_df["expiration"].nunique()),
+        }

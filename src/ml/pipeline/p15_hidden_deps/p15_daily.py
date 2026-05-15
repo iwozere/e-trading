@@ -14,7 +14,13 @@ Jobs executed (in order, failures are isolated):
                             cached per-ticker at DATA_CACHE_DIR/ohlcv/{TICKER}/1d/YYYY.csv.gz
     2. cboe               — CBOE put/call ratio; single file fully replaced each run
                             → DATA_CACHE_DIR/cboe/cboe_putcall.csv.gz
-    3. fear_greed         — CNN Fear & Greed incremental append+dedup in-place
+                            NOTE: CBOE CDN frozen at 2019-10-04; kept for historical ML features
+    3. options_putcall    — Per-ticker daily options chain snapshot via yfinance (pre-market);
+                            volume = previous session, openInterest = previous EOD.
+                            Raw chains → DATA_CACHE_DIR/options/chains/{TICKER}/{YYYY-MM-DD}.csv.gz
+                            Daily P/C  → DATA_CACHE_DIR/options/putcall/{TICKER}_putcall.csv.gz
+                            Skips: continuous futures, forex pairs, VIX index series.
+    4. fear_greed         — CNN Fear & Greed incremental append+dedup in-place
                             → DATA_CACHE_DIR/fear_greed/cnn_fear_greed.csv.gz
     4. gdelt_gkg          — GDELT v2 GKG aggregated parquet; range fill via
                             download_gkg_range() which skips already-cached days
@@ -49,6 +55,8 @@ from datetime import date as _Date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import pandas as pd
+
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 sys.path.append(str(PROJECT_ROOT))
 
@@ -59,6 +67,7 @@ from src.data.downloader.edgar_downloader import EdgarDownloader
 from src.data.downloader.fear_greed_downloader import FearGreedDownloader
 from src.data.downloader.fred_downloader import FredDownloader
 from src.data.downloader.gdelt_downloader import GdeltDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -330,6 +339,14 @@ _P15_TICKERS: List[str] = [
     "^VIX", "^VXN", "^SKEW", "VIXY",
 ]
 
+# Options-eligible subset of _P15_TICKERS: excludes continuous futures (CL=F …),
+# forex pairs (EURUSD=X …), and VIX index series (^VIX, ^VXN, ^SKEW) because
+# yfinance does not provide standard exchange-listed options chains for those.
+_OPTIONS_TICKERS: List[str] = [
+    t for t in _P15_TICKERS
+    if not (t.endswith("=F") or t.endswith("=X") or t.startswith("^"))
+]
+
 # Tier-1 EDGAR watchlist: sector-bellwether stocks whose 8-K filings move sector ETFs.
 # Submissions are refreshed daily for these ~160 companies only (not the full SEC universe).
 # Organized by the P15 sector ETF each company primarily drives.
@@ -578,6 +595,111 @@ _EDGAR_WATCHLIST_TICKERS: List[str] = sorted(set(
 ))
 
 
+# ---------------------------------------------------------------------------
+# Options put/call helpers
+# ---------------------------------------------------------------------------
+
+def _options_append_summary(putcall_dir: Path, ticker: str, row: Dict[str, Any]) -> None:
+    """
+    Append one daily summary row to the per-ticker putcall CSV.gz, deduplicating on date.
+
+    Creates the file if it does not exist.
+
+    Args:
+        putcall_dir: Directory for putcall CSV files (DATA_CACHE_DIR/options/putcall).
+        ticker:      Ticker symbol.
+        row:         Dict containing 'date' plus metric keys from compute_options_summary().
+    """
+    path = putcall_dir / f"{ticker}_putcall.csv.gz"
+    new_row = pd.DataFrame([row]).set_index("date")
+    new_row.index = pd.to_datetime(new_row.index)
+
+    if path.exists():
+        try:
+            existing = pd.read_csv(path, index_col=0, parse_dates=True, compression="gzip")
+            combined = pd.concat([existing, new_row])
+            combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+        except Exception:
+            _logger.warning("%s: corrupt putcall cache — overwriting with new row", ticker)
+            combined = new_row
+    else:
+        combined = new_row
+
+    combined.to_csv(path, compression="gzip")
+
+
+def _job_options_putcall(yesterday: _Date) -> Optional[Dict[str, Any]]:
+    """
+    Snapshot yesterday's options chain for all options-eligible P15 tickers.
+
+    Called at 13:00 UTC (9 AM ET, before market open) so that yfinance reports:
+      - volume        = previous session's traded contracts
+      - openInterest  = previous EOD settlement
+
+    Per-ticker cache layout:
+      DATA_CACHE_DIR/options/chains/{TICKER}/{YYYY-MM-DD}.csv.gz   ← raw full chain
+      DATA_CACHE_DIR/options/putcall/{TICKER}_putcall.csv.gz       ← growing daily summary
+
+    Args:
+        yesterday: UTC date representing the trading session to capture.
+
+    Returns:
+        Dict with symbols_ok, symbols_skipped, symbols_empty, date.
+    """
+    options_dir  = Path(_cache_root) / "options"
+    chains_dir   = options_dir / "chains"
+    putcall_dir  = options_dir / "putcall"
+    putcall_dir.mkdir(parents=True, exist_ok=True)
+
+    dl = YahooDataDownloader()
+    date_str = yesterday.strftime("%Y-%m-%d")
+    symbols_ok = symbols_skipped = symbols_empty = 0
+
+    for ticker in _OPTIONS_TICKERS:
+        chain_path = chains_dir / ticker / f"{date_str}.csv.gz"
+
+        if chain_path.exists():
+            symbols_skipped += 1
+            _logger.debug("options: %s %s already cached — skipping", ticker, date_str)
+            continue
+
+        chain_df = dl.get_options_chain_full(ticker)
+
+        if chain_df.empty:
+            symbols_empty += 1
+            _logger.warning("options: %s returned empty chain — skipping", ticker)
+            time.sleep(0.3)
+            continue
+
+        chain_path.parent.mkdir(parents=True, exist_ok=True)
+        chain_df.to_csv(chain_path, index=False, compression="gzip")
+
+        summary = dl.compute_options_summary(chain_df)
+        summary["date"] = pd.Timestamp(yesterday)
+        _options_append_summary(putcall_dir, ticker, summary)
+
+        symbols_ok += 1
+        _logger.debug(
+            "options: %s %s  pc_vol=%.3f  pc_oi=%.3f  n_exp=%d",
+            ticker, date_str,
+            summary.get("pc_volume_ratio") or 0,
+            summary.get("pc_oi_ratio") or 0,
+            summary.get("n_expirations", 0),
+        )
+        time.sleep(0.3)
+
+    _logger.info(
+        "options_putcall %s: ok=%d  skipped=%d  empty=%d / %d tickers",
+        date_str, symbols_ok, symbols_skipped, symbols_empty, len(_OPTIONS_TICKERS),
+    )
+    return {
+        "symbols_ok":      symbols_ok,
+        "symbols_skipped": symbols_skipped,
+        "symbols_empty":   symbols_empty,
+        "date":            date_str,
+    }
+
+
 def _job_yfinance_prices(yesterday: _Date) -> Optional[Dict[str, Any]]:
     """
     Download P15 OHLCV data for all tickers via DataManager.
@@ -675,6 +797,7 @@ def main() -> None:
 
     results["yfinance_prices"]   = _run_job("yfinance_prices",   lambda: _job_yfinance_prices(yesterday))
     results["cboe"]              = _run_job("cboe",              _job_cboe)
+    results["options_putcall"]   = _run_job("options_putcall",   lambda: _job_options_putcall(yesterday))
     results["fear_greed"]        = _run_job("fear_greed",        _job_fear_greed)
     results["gdelt_gkg"]         = _run_job("gdelt_gkg",         lambda: _job_gdelt_gkg(yesterday))
     results["gdelt_events"]      = _run_job("gdelt_events",      lambda: _job_gdelt_events(yesterday))
