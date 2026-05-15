@@ -1,7 +1,7 @@
 ````md
 # Explosive Penny Stock Screener — Agent Pipeline Specification
 
-Version: 1.0  
+Version: 1.1  
 Target Market: NASDAQ penny stocks  
 Execution Frequency: Daily (pre-market + post-market optional)  
 Goal: Detect early-stage explosive growth candidates before broad retail attention
@@ -66,9 +66,13 @@ PROJECT_ROOT/
 │
 ├── agents/
 │   ├── universe_agent.py
+│   ├── data_quality_agent.py
 │   ├── market_agent.py
 │   ├── fundamentals_agent.py
 │   ├── catalyst_agent.py
+│   ├── dilution_agent.py
+│   ├── short_squeeze_agent.py
+│   ├── technical_agent.py
 │   ├── scoring_agent.py
 │   ├── reporting_agent.py
 │   └── notification_agent.py
@@ -85,27 +89,33 @@ PROJECT_ROOT/
 # 4. Pipeline Architecture
 
 ```text
-NASDAQ LIST
+NASDAQ / NYSE-AMERICAN LIST
     ↓
 Universe Filter
     ↓
-Market Data Enrichment
+Data Quality Check  ← data freshness, corporate actions, missing fields
+    ↓
+Market Data Enrichment  ← OHLCV, float, SI, pre-market, VWAP
     ↓
 Fundamental Enrichment
     ↓
 Catalyst / News Analysis
     ↓
-Dilution Risk Detection
+Dilution Risk Detection  ← hard penalty deduction
     ↓
-Technical Pattern Detection
+Short Squeeze Detection  ← SI%, days-to-cover, borrow rate
     ↓
-Composite Scoring Engine
+Technical Pattern Detection  ← breakout, compression, accumulation
     ↓
-Ranking
+Composite Scoring Engine  ← normalized sub-scores, weighted sum
+    ↓
+Ranking + Tier Assignment  ← A / B / C / W (Watchlist)
     ↓
 Report Generation
     ↓
 Notification Delivery
+    ↓
+Historical Snapshot Storage  ← for backtesting and ML
 ```
 
 ---
@@ -195,6 +205,65 @@ Recommended:
 
 ---
 
+## Market Data — Additional Required Fields
+
+The following fields are essential and must be added to the data model:
+
+```text
+52_week_high
+52_week_low
+vwap_intraday         # critical for intraday run detection
+premarket_volume      # leading indicator for gap-up setups
+premarket_price_chg   # % change vs prior close
+short_interest_shares
+short_interest_pct_float
+days_to_cover
+```
+
+---
+
+## Data Quality and Freshness
+
+All ingested data must carry a `data_as_of` timestamp.
+
+### Staleness Policy
+
+```yaml
+MARKET_DATA_MAX_AGE_HOURS: 2
+FUNDAMENTAL_DATA_MAX_AGE_DAYS: 95   # roughly one quarter; flag if older
+NEWS_DATA_MAX_AGE_HOURS: 24
+```
+
+### Handling Missing Data
+
+```text
+If market data missing      → skip ticker, log warning
+If fundamentals missing     → score fundamentals_score = 0, flag as "fundamentals unknown"
+If float missing            → skip ticker (float is required for liquidity assessment)
+If short_interest missing   → score short_squeeze_score = 0, flag as "SI unknown"
+```
+
+Do NOT impute or estimate missing fundamental values.
+A ticker with unknown fundamentals can still qualify via momentum + catalyst path.
+
+### Corporate Actions Handling
+
+Price history must be adjusted for:
+
+* forward/reverse stock splits
+* ticker symbol changes (carry historical data to new ticker)
+* delistings (remove from universe immediately)
+
+Sources for corporate action data:
+
+* Polygon corporate actions API
+* SEC filings (8-K for reverse splits)
+
+Flag any ticker that executed a **reverse split in the past 12 months** for enhanced
+dilution scrutiny — this is a strong negative signal independent of current price.
+
+---
+
 # 7. Hard Filters
 
 Reject immediately if:
@@ -204,6 +273,13 @@ Reject immediately if:
 ```yaml
 ALLOWED_EXCHANGES:
   - NASDAQ
+  - NYSE_AMERICAN     # AMEX — hosts many legitimate explosive small-caps
+
+EXCLUDED_EXCHANGES:
+  - OTC
+  - PINK
+  - GREY              # OTC/Pink/Grey Sheet stocks: insufficient regulatory oversight,
+                      # no minimum listing standards, highest pump-and-dump exposure
 ```
 
 ---
@@ -254,7 +330,7 @@ Reject if:
 
 # 8. Feature Engineering
 
-# 8.1 Momentum Features
+## 8.1 Momentum Features
 
 ## Relative Volume
 
@@ -309,7 +385,7 @@ Explosive moves often start after compression.
 
 ---
 
-# 8.2 Technical Breakout Features
+## 8.2 Technical Breakout Features
 
 Detect:
 
@@ -327,7 +403,7 @@ Patterns:
 
 ---
 
-# 8.3 Accumulation Features
+## 8.3 Accumulation Features
 
 Bullish:
 
@@ -338,7 +414,7 @@ Bullish:
 
 ---
 
-# 8.4 Fundamental Acceleration
+## 8.4 Fundamental Acceleration
 
 ## Revenue Growth Score
 
@@ -380,7 +456,7 @@ Huge signal:
 
 ---
 
-# 8.5 Dilution Risk Detection
+## 8.5 Dilution Risk Detection
 
 CRITICAL MODULE.
 
@@ -402,7 +478,7 @@ RECENT_REVERSE_SPLIT_PENALTY: -40
 
 ---
 
-# 8.6 Catalyst Detection
+## 8.6 Catalyst Detection
 
 Extract from:
 
@@ -424,7 +500,7 @@ Bullish catalyst categories:
 
 ---
 
-# 8.7 Social / Sentiment
+## 8.7 Social / Sentiment
 
 Optional.
 
@@ -441,6 +517,60 @@ Only additive.
 
 ---
 
+## 8.8 Short Squeeze Detection
+
+HIGH PRIORITY MODULE.
+
+Short squeezes are among the most explosive and reliable penny stock move catalysts.
+The `short_interest` field from market data must feed a dedicated feature set.
+
+### Required Fields
+
+```text
+short_interest_shares
+short_interest_pct_float
+days_to_cover            = short_interest_shares / avg_volume_30d
+borrow_rate              (if available via data provider)
+```
+
+### Scoring Signals
+
+Strong squeeze setup:
+
+```yaml
+SHORT_INTEREST_THRESHOLD: 20%    # of float
+DAYS_TO_COVER_THRESHOLD: 3       # high squeeze potential above this
+```
+
+Score escalation:
+
+```text
+SI < 10% float   → base score
+SI 10–20% float  → moderate squeeze potential
+SI > 20% float   → high squeeze potential
+SI > 30% float   → extreme squeeze (adds to score but flags halt risk)
+```
+
+### Squeeze Trigger Confirmation
+
+A short squeeze setup alone is NOT sufficient.
+It must coincide with:
+
+* relative_volume > 2.5
+* price moving against the short (upward momentum)
+* catalyst or volume breakout
+
+### Risk Note
+
+High short interest + low liquidity = halt risk.
+Apply additional liquidity check when `short_interest_pct_float > 25%`:
+
+```yaml
+MIN_DAILY_VOLUME_SQUEEZE: 1000000
+```
+
+---
+
 # 9. Composite Scoring System
 
 ## Final Score
@@ -449,12 +579,50 @@ Only additive.
 FINAL_SCORE =
 0.25 * momentum_score +
 0.20 * volume_score +
-0.20 * technical_score +
+0.15 * technical_score +
 0.15 * fundamentals_score +
 0.10 * catalyst_score +
-0.05 * accumulation_score -
-0.05 * dilution_risk
+0.10 * short_squeeze_score +
+0.05 * accumulation_score
 ```
+
+Weights sum to 1.00. Configurable via `config/weights.yaml`.
+
+### Dilution Penalty
+
+Applied as a hard point deduction AFTER the weighted sum:
+
+```text
+FINAL_SCORE -= dilution_penalty
+```
+
+Where `dilution_penalty` is the sum of applicable penalties from section 8.5.
+Dilution risk is treated as a hard deduction — not a weighted component — because
+a confirmed serial diluter must be demoted regardless of other strong signals.
+
+---
+
+## Sub-Score Normalization
+
+Each sub-score MUST be normalized to [0, 100] before the weighted sum.
+
+Use min-max normalization across all candidates on each run day:
+
+```text
+score_normalized = 100 * (raw - min_raw) / (max_raw - min_raw)
+```
+
+Or use fixed thresholds (preferred for interpretability):
+
+| Sub-score          | 0 (min)         | 50 (mid)      | 100 (max)          |
+|--------------------|-----------------|---------------|--------------------|
+| momentum_score     | ≤ -20% 20d ret  | flat          | ≥ +50% 20d ret     |
+| volume_score       | rvol < 1.0      | rvol = 2.0    | rvol ≥ 5.0         |
+| technical_score    | no signals      | 1 pattern     | breakout + pattern |
+| fundamentals_score | declining rev   | stable        | rev accel > 50%    |
+| catalyst_score     | no catalyst     | minor news    | tier-1 catalyst    |
+| short_squeeze_score| SI < 5% float   | SI ~15% float | SI > 25% float     |
+| accumulation_score | distribution    | neutral       | strong accumulation|
 
 Configurable.
 
@@ -525,6 +693,26 @@ Potential:
 
 Catalyst-driven only.
 High risk.
+
+---
+
+## Tier W — Watchlist (Pre-Alert)
+
+Tickers that are ONE condition away from qualifying as Tier A or B.
+
+Examples:
+
+* strong fundamentals + breakout setup but relative_volume currently 2.1 (threshold 3.0)
+* excellent catalyst but no technical breakout yet
+* high short interest but no volume trigger yet
+
+Purpose:
+
+* surface setups to watch before they trigger
+* allow intraday monitoring for condition completion
+* reduce false-negative rate from rigid thresholding
+
+Tier-W tickers appear in the daily report's "Watching" section but do NOT trigger alerts.
 
 ---
 
@@ -610,15 +798,46 @@ Needed for:
 
 # 15. Backtesting Engine
 
-Measure:
+## Entry Rules
+
+Entry price must be defined before computing any metric:
+
+```yaml
+ENTRY_METHOD: next_open          # default: open price of the trading day after alert
+ENTRY_ALTERNATIVES:
+  - breakout_print               # price at which volume breakout confirmed intraday
+  - vwap_cross                   # entry at first VWAP cross after alert
+```
+
+Use `next_open` as the primary method — it is the most conservative and realistic.
+
+---
+
+## Exit Rules
+
+```yaml
+EXIT_METHODS:
+  trailing_stop:
+    initial_stop_pct: 8          # 8% trailing stop from entry
+  time_based:
+    days: [1, 5, 10, 20]        # forced exit at end of Nth trading day
+  target_based:
+    targets: [20, 50, 100]      # % gain targets — measure how often hit before stop
+```
+
+All backtests should run under ALL exit methods and report separately.
+
+---
 
 ## Metrics
 
-* win rate
-* average return
-* max drawdown
-* Sharpe ratio
-* false breakout rate
+* win rate (per exit method)
+* average return (per exit method)
+* median return
+* max drawdown (per candidate, portfolio-level)
+* Sharpe ratio (annualized, using daily returns)
+* false breakout rate (breakout detected but -10% within 5 days)
+* tier accuracy: % of Tier-A alerts that beat Tier-B and Tier-C
 
 ---
 
@@ -630,6 +849,13 @@ Test:
 * 5d
 * 10d
 * 20d
+
+---
+
+## Concentration Risk in Backtests
+
+Flag days where >3 Tier-A candidates come from the same sector.
+Sector concentration is a common source of correlated drawdowns.
 
 ---
 
@@ -695,6 +921,21 @@ MAX_OFFERINGS_LAST_12M: 3
 08:00 ET
 ```
 
+Scan pre-market movers using `premarket_volume` and `premarket_price_chg`.
+Surface gap-up + high pre-market volume as early Tier-W candidates.
+
+### Market Open Watch (09:30–10:30 ET)
+
+```text
+09:30 ET  — first 5-min bar
+09:45 ET  — volume trend confirmation
+10:00 ET  — breakout confirmation scan
+```
+
+This window is optional but high-value: the first hour produces the majority
+of intraday explosive moves. Run a lightweight scan at each interval checking
+Tier-W tickers from the pre-market run for condition completion.
+
 ### Midday update
 
 ```text
@@ -706,6 +947,20 @@ MAX_OFFERINGS_LAST_12M: 3
 ```text
 17:00 ET
 ```
+
+---
+
+## Intraday Volume Spike Trigger
+
+For Tier-W tickers already in the watchlist, implement a real-time volume
+spike monitor:
+
+```yaml
+INTRADAY_RVOL_TRIGGER: 4.0      # if intraday rvol crosses this, re-score immediately
+INTRADAY_CHECK_INTERVAL: 5min   # polling interval during market hours
+```
+
+When triggered: re-run scoring for that ticker and send alert if it now qualifies.
 
 ---
 
@@ -848,6 +1103,3 @@ Momentum + Volume + Catalyst + Survivability
 ```
 
 is where explosive asymmetric opportunities usually emerge.
-
-```
-```
