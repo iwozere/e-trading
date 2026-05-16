@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 
@@ -22,6 +22,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.notification.logger import setup_logger
 from src.ml.pipeline.p17_penny_stocks.config import P17ScoringConfig
 from src.ml.pipeline.p17_penny_stocks.models.candidate import Candidate
+
+_FearGreedDownloader = None
+try:
+    from src.data.downloader.fear_greed_downloader import FearGreedDownloader as _FearGreedDownloader  # type: ignore[assignment]
+except Exception:
+    pass
 
 _logger = setup_logger(__name__)
 
@@ -60,9 +66,11 @@ class ReportingAgent:
             _logger.warning("No candidates to report")
             return {"candidates": 0}
 
+        fg_context = self._load_fear_greed()
+
         csv_path = self._write_csv(candidates)
-        json_path = self._write_json(candidates)
-        md_path = self._write_markdown(candidates)
+        json_path = self._write_json(candidates, fg_context)
+        md_path = self._write_markdown(candidates, fg_context)
 
         tier_counts = self._tier_counts(candidates)
         _logger.info(
@@ -79,6 +87,8 @@ class ReportingAgent:
             "tier_c": tier_counts.get("C", 0),
             "tier_w": tier_counts.get("W", 0),
             "explosive": sum(1 for c in candidates if c.explosive_candidate),
+            "fear_greed_score": fg_context.get("score") if fg_context else None,
+            "fear_greed_label": fg_context.get("label") if fg_context else None,
             "csv_path": str(csv_path),
             "json_path": str(json_path),
             "md_path": str(md_path),
@@ -96,12 +106,13 @@ class ReportingAgent:
 
     # ── JSON ───────────────────────────────────────────────────────────────
 
-    def _write_json(self, candidates: List[Candidate]) -> Path:
+    def _write_json(self, candidates: List[Candidate], fg_context: Optional[dict]) -> Path:
         top = candidates[: self.top_n]
 
         report = {
             "run_date": self.run_date,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "market_sentiment": fg_context,
             "summary": {
                 "total_candidates": len(candidates),
                 **self._tier_counts(candidates),
@@ -143,27 +154,44 @@ class ReportingAgent:
 
     # ── Markdown ───────────────────────────────────────────────────────────
 
-    def _write_markdown(self, candidates: List[Candidate]) -> Path:
+    def _write_markdown(self, candidates: List[Candidate], fg_context: Optional[dict]) -> Path:
         tiers = self._tier_counts(candidates)
         explosive = [c for c in candidates if c.explosive_candidate]
         tier_a = [c for c in candidates if c.tier == "A"]
         tier_b = [c for c in candidates if c.tier == "B"][:5]
         tier_c = [c for c in candidates if c.tier == "C"][:5]
 
+        fg_row = ""
+        if fg_context:
+            score = fg_context.get("score", "?")
+            label = fg_context.get("label", "").replace("_", " ").title()
+            fg_row = f"| Market sentiment (F&G) | {score:.0f} — {label} |"
+
         lines = [
             f"# P17 Penny Stock Screener — {self.run_date}",
             "",
             "## Summary",
             "",
-            f"| Metric | Count |",
-            f"|--------|-------|",
+            "| Metric | Count |",
+            "|--------|-------|",
             f"| Total candidates | {len(candidates)} |",
             f"| Tier A (elite) | {tiers.get('A', 0)} |",
             f"| Tier B (momentum) | {tiers.get('B', 0)} |",
             f"| Tier C (speculative) | {tiers.get('C', 0)} |",
             f"| Explosive candidates | {len(explosive)} |",
-            "",
         ]
+        if fg_row:
+            lines.append(fg_row)
+        lines.append("")
+
+        if fg_context and fg_context.get("label") == "extreme_fear":
+            lines += [
+                "> **⚠ Market Sentiment: Extreme Fear "
+                f"({fg_context.get('score', '?'):.0f})** — "
+                "broad risk-off environment. Validate all setups carefully "
+                "and consider reducing position size.",
+                "",
+            ]
 
         if explosive:
             lines += ["## Explosive Candidates", ""]
@@ -207,6 +235,44 @@ class ReportingAgent:
             f.write("\n".join(lines))
         _logger.info("Markdown report written: %s", path)
         return path
+
+    # ── Fear & Greed ───────────────────────────────────────────────────────
+
+    def _load_fear_greed(self) -> Optional[dict]:
+        """
+        Load the CNN Fear & Greed index value for run_date from the local cache.
+
+        Falls back to the most recent available date if the exact date is absent
+        (weekends, holidays).  Returns None on any failure so the rest of the
+        report is unaffected.
+        """
+        if _FearGreedDownloader is None:
+            _logger.debug("FearGreedDownloader not available — skipping sentiment overlay")
+            return None
+        try:
+            dl = _FearGreedDownloader()
+            df = dl.load()
+            if df.empty:
+                _logger.warning("Fear & Greed cache is empty — skipping sentiment overlay")
+                return None
+
+            ts = pd.Timestamp(self.run_date)
+            if ts in df.index:
+                row = df.loc[ts]
+            else:
+                prior = df[df.index <= ts]
+                if prior.empty:
+                    return None
+                row = prior.iloc[-1]
+
+            score = float(row["fear_greed_score"])
+            label = str(row["label"])
+            date_str = str(pd.Timestamp(row.name).date())  # type: ignore[arg-type]
+            _logger.info("Fear & Greed (%s): %.0f — %s", date_str, score, label)
+            return {"score": score, "label": label, "date": date_str}
+        except Exception:
+            _logger.warning("Fear & Greed data unavailable — skipping sentiment overlay")
+            return None
 
     @staticmethod
     def _candidate_table(candidates: List[Candidate]) -> List[str]:

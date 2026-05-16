@@ -309,6 +309,17 @@ class Fundamentals:
     # Data source information
     data_source: Optional[str] = None
     last_updated: Optional[str] = None
+    # Extended trading metrics (used by p17 penny-stock pipeline)
+    quote_type: Optional[str] = None
+    volume: Optional[float] = None
+    short_pct_float: Optional[float] = None
+    fifty_two_week_high: Optional[float] = None
+    fifty_two_week_low: Optional[float] = None
+    institutional_pct: Optional[float] = None
+    gross_margin: Optional[float] = None
+    total_cash: Optional[float] = None
+    total_debt: Optional[float] = None
+    operating_cashflow: Optional[float] = None
     # Track which provider supplied each value
     sources: Optional[Dict[str, str]] = field(default_factory=dict)
 
@@ -330,13 +341,11 @@ class Fundamentals:
 
     def get_52_week_high(self) -> Optional[float]:
         """Get 52-week high price."""
-        # This field doesn't exist in the original, but we can add it
-        return getattr(self, 'fifty_two_week_high', None)
+        return self.fifty_two_week_high
 
     def get_52_week_low(self) -> Optional[float]:
         """Get 52-week low price."""
-        # This field doesn't exist in the original, but we can add it
-        return getattr(self, 'fifty_two_week_low', None)
+        return self.fifty_two_week_low
 
 
 @dataclass

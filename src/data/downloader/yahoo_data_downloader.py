@@ -391,7 +391,6 @@ class YahooDataDownloader(BaseDataDownloader):
                 dividend_yield=info.get("dividendYield", 0.0),
                 earnings_per_share=info.get("trailingEps", 0.0),
                 avg_volume=avg_volume,
-                # Additional fields
                 price_to_book=info.get("priceToBook", None),
                 return_on_equity=info.get("returnOnEquity", None),
                 return_on_assets=info.get("returnOnAssets", None),
@@ -420,13 +419,23 @@ class YahooDataDownloader(BaseDataDownloader):
                 enterprise_value=info.get("enterpriseValue", None),
                 enterprise_value_to_ebitda=info.get("enterpriseToEbitda", None),
                 data_source="Yahoo Finance",
-                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                quote_type=info.get("quoteType"),
+                volume=info.get("volume") or info.get("regularMarketVolume"),
+                short_pct_float=info.get("shortPercentOfFloat"),
+                fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
+                fifty_two_week_low=info.get("fiftyTwoWeekLow"),
+                institutional_pct=info.get("heldPercentInstitutions"),
+                gross_margin=info.get("grossMargins"),
+                total_cash=info.get("totalCash"),
+                total_debt=info.get("totalDebt"),
+                operating_cashflow=info.get("operatingCashflow"),
             )
 
             return fundamentals
 
-        except Exception:
-            _logger.exception("Error getting fundamentals for %s:", symbol)
+        except Exception as e:
+            _logger.debug("Error getting fundamentals for %s: %s", symbol, e)
             raise
 
     def get_fundamentals_batch(self, symbols: List[str]) -> Dict[str, Fundamentals]:
@@ -469,8 +478,6 @@ class YahooDataDownloader(BaseDataDownloader):
                             results[symbol] = self._create_default_fundamentals(symbol)
                             continue
 
-                        # Create Fundamentals object with only the data available from batch call
-                        # Avoid individual API calls for financial statements unless absolutely necessary
                         avg_volume = self._avg_volume_from_yf_info(info)
                         results[symbol] = Fundamentals(
                             ticker=symbol.upper(),
@@ -482,7 +489,6 @@ class YahooDataDownloader(BaseDataDownloader):
                             dividend_yield=info.get("dividendYield", 0.0),
                             earnings_per_share=info.get("trailingEps", 0.0),
                             avg_volume=avg_volume,
-                            # Additional fields from batch call
                             price_to_book=info.get("priceToBook", None),
                             return_on_equity=info.get("returnOnEquity", None),
                             return_on_assets=info.get("returnOnAssets", None),
@@ -511,7 +517,17 @@ class YahooDataDownloader(BaseDataDownloader):
                             enterprise_value=info.get("enterpriseValue", None),
                             enterprise_value_to_ebitda=info.get("enterpriseToEbitda", None),
                             data_source="Yahoo Finance",
-                            last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            quote_type=info.get("quoteType"),
+                            volume=info.get("volume") or info.get("regularMarketVolume"),
+                            short_pct_float=info.get("shortPercentOfFloat"),
+                            fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
+                            fifty_two_week_low=info.get("fiftyTwoWeekLow"),
+                            institutional_pct=info.get("heldPercentInstitutions"),
+                            gross_margin=info.get("grossMargins"),
+                            total_cash=info.get("totalCash"),
+                            total_debt=info.get("totalDebt"),
+                            operating_cashflow=info.get("operatingCashflow"),
                         )
                     else:
                         _logger.warning("Symbol %s not found in batch response", symbol)
@@ -527,7 +543,6 @@ class YahooDataDownloader(BaseDataDownloader):
 
         except Exception:
             _logger.exception("Error in batch fundamentals download:")
-            # Fallback to individual downloads
             _logger.info("Falling back to individual fundamental downloads")
             return self._fallback_individual_fundamentals(symbols)
 
@@ -593,7 +608,6 @@ class YahooDataDownloader(BaseDataDownloader):
                             except Exception:
                                 pass  # Use price from info if basic data extraction fails
 
-                        # Create Fundamentals object with all available data
                         avg_volume = self._avg_volume_from_yf_info(info)
                         results[symbol] = Fundamentals(
                             ticker=symbol.upper(),
@@ -605,7 +619,6 @@ class YahooDataDownloader(BaseDataDownloader):
                             dividend_yield=info.get("dividendYield", 0.0),
                             earnings_per_share=info.get("trailingEps", 0.0),
                             avg_volume=avg_volume,
-                            # Additional fields from batch call
                             price_to_book=info.get("priceToBook", None),
                             return_on_equity=info.get("returnOnEquity", None),
                             return_on_assets=info.get("returnOnAssets", None),
@@ -634,7 +647,17 @@ class YahooDataDownloader(BaseDataDownloader):
                             enterprise_value=info.get("enterpriseValue", None),
                             enterprise_value_to_ebitda=info.get("enterpriseToEbitda", None),
                             data_source="Yahoo Finance",
-                            last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            quote_type=info.get("quoteType"),
+                            volume=info.get("volume") or info.get("regularMarketVolume"),
+                            short_pct_float=info.get("shortPercentOfFloat"),
+                            fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
+                            fifty_two_week_low=info.get("fiftyTwoWeekLow"),
+                            institutional_pct=info.get("heldPercentInstitutions"),
+                            gross_margin=info.get("grossMargins"),
+                            total_cash=info.get("totalCash"),
+                            total_debt=info.get("totalDebt"),
+                            operating_cashflow=info.get("operatingCashflow"),
                         )
                     else:
                         _logger.warning("Symbol %s not found in batch response", symbol)

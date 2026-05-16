@@ -6,6 +6,7 @@ filtered universe using yfinance. Results are cached as parquet files
 to avoid redundant downloads on reruns.
 """
 
+import dataclasses
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.notification.logger import setup_logger
 from src.ml.pipeline.p17_penny_stocks.config import P17FilterConfig
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.cache.fundamentals_cache import FundamentalsCache
 
 _logger = setup_logger(__name__)
 
@@ -52,6 +55,8 @@ class MarketAgent:
         self.target_date = target_date
         self._ohlcv_cache_dir = results_dir / "ohlcv_cache"
         self._ohlcv_cache_dir.mkdir(parents=True, exist_ok=True)
+        self._downloader = YahooDataDownloader()
+        self._fundamentals_cache = FundamentalsCache()
 
     def run(
         self,
@@ -195,47 +200,64 @@ class MarketAgent:
         return results
 
     def _fetch_ticker_fundamentals(self, ticker: str) -> Optional[dict]:
+        cache_meta = self._fundamentals_cache.find_latest_json(
+            ticker, provider="yahoo", max_age_days=1
+        )
+        if cache_meta:
+            cached = self._fundamentals_cache.read_json(cache_meta.file_path)
+            if cached:
+                return self._fundamentals_to_market_record(ticker, cached)
+
         try:
-            t = yf.Ticker(ticker)
-            info = t.info or {}
-
-            revenue_growth_yoy = self._compute_revenue_growth(t)
-            operating_cf = _safe_float(info.get("operatingCashflow"))
-            total_cash = _safe_float(info.get("totalCash"))
-            total_debt = _safe_float(info.get("totalDebt"))
-
-            cash_runway = None
-            if total_cash is not None and operating_cf is not None and operating_cf < 0:
-                monthly_burn = abs(operating_cf) / 12
-                if monthly_burn > 0:
-                    cash_runway = total_cash / monthly_burn
-
-            return {
-                "ticker": ticker,
-                "revenue_growth_yoy": revenue_growth_yoy,
-                "gross_margin": _safe_float(info.get("grossMargins")),
-                "total_cash": total_cash,
-                "total_debt": total_debt,
-                "operating_cashflow": operating_cf,
-                "cash_runway_months": cash_runway,
-                "short_ratio": _safe_float(info.get("shortRatio")),
-                "short_pct_float": _safe_float(info.get("shortPercentOfFloat")),
-                "institutional_pct": _safe_float(info.get("heldPercentInstitutions")),
-                "high_52w": _safe_float(info.get("fiftyTwoWeekHigh")),
-                "low_52w": _safe_float(info.get("fiftyTwoWeekLow")),
-                "data_as_of": datetime.now(timezone.utc).isoformat(),
-            }
+            f = self._downloader.get_fundamentals(ticker)
+            if f is None:
+                return None
+            f_dict = dataclasses.asdict(f)
+            f_dict["revenue_growth_yoy"] = self._compute_revenue_growth(
+                ticker, revenue_growth_fallback=f.revenue_growth
+            )
+            self._fundamentals_cache.write_json(ticker, "yahoo", f_dict)
+            return self._fundamentals_to_market_record(ticker, f_dict)
         except Exception:
             _logger.debug("Failed to fetch fundamentals for %s", ticker)
             return None
 
-    def _compute_revenue_growth(self, ticker_obj: yf.Ticker) -> Optional[float]:
+    def _fundamentals_to_market_record(self, ticker: str, f: dict) -> Optional[dict]:
+        """Map a cached Fundamentals dict to the market agent record format."""
+        operating_cf = _safe_float(f.get("operating_cashflow"))
+        total_cash = _safe_float(f.get("total_cash"))
+
+        cash_runway = None
+        if total_cash is not None and operating_cf is not None and operating_cf < 0:
+            monthly_burn = abs(operating_cf) / 12
+            if monthly_burn > 0:
+                cash_runway = total_cash / monthly_burn
+
+        return {
+            "ticker": ticker,
+            "revenue_growth_yoy": f.get("revenue_growth_yoy"),
+            "gross_margin": _safe_float(f.get("gross_margin")),
+            "total_cash": total_cash,
+            "total_debt": _safe_float(f.get("total_debt")),
+            "operating_cashflow": operating_cf,
+            "cash_runway_months": cash_runway,
+            "short_ratio": _safe_float(f.get("short_ratio")),
+            "short_pct_float": _safe_float(f.get("short_pct_float")),
+            "institutional_pct": _safe_float(f.get("institutional_pct")),
+            "high_52w": _safe_float(f.get("fifty_two_week_high")),
+            "low_52w": _safe_float(f.get("fifty_two_week_low")),
+            "data_as_of": f.get("last_updated") or datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _compute_revenue_growth(
+        self, ticker: str, revenue_growth_fallback: Optional[float] = None
+    ) -> Optional[float]:
         """
         Compute YoY revenue growth from quarterly income statements.
-        Falls back to the trailing-12-month revenueGrowth field from info.
+        Falls back to the TTM revenueGrowth value already in the Fundamentals object.
         """
         try:
-            qf = ticker_obj.quarterly_income_stmt
+            qf = yf.Ticker(ticker).quarterly_income_stmt
             if qf is None or qf.empty:
                 raise ValueError("no quarterly income stmt")
 
@@ -250,7 +272,6 @@ class MarketAgent:
             if len(rev) < 5:
                 raise ValueError("insufficient quarters")
 
-            # Compare TTM (latest 4 quarters) vs prior year TTM
             ttm_current = rev.iloc[:4].sum()
             ttm_prior = rev.iloc[4:8].sum() if len(rev) >= 8 else rev.iloc[4:].sum()
 
@@ -259,12 +280,7 @@ class MarketAgent:
         except Exception:
             pass
 
-        # Fallback: use yfinance info.revenueGrowth (trailing 12M vs prior 12M)
-        try:
-            v = ticker_obj.info.get("revenueGrowth")
-            return _safe_float(v)
-        except Exception:
-            return None
+        return revenue_growth_fallback
 
     def apply_survival_filter(
         self,

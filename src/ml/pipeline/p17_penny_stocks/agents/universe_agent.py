@@ -8,13 +8,14 @@ Uses yfinance.Ticker.info for per-ticker market snapshot data with
 checkpoint/resume support to survive interruptions on large universes.
 """
 
+import dataclasses
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import sys
+import time
 from typing import Dict, List, Optional
 
 import pandas as pd
-import yfinance as yf
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
@@ -24,8 +25,12 @@ from src.notification.logger import setup_logger
 from src.ml.pipeline.p17_penny_stocks.config import P17FilterConfig
 from src.ml.pipeline.shared.config import UniverseConfig
 from src.ml.pipeline.shared.universe_downloader import NasdaqUniverseDownloader
+from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
+from src.data.cache.fundamentals_cache import FundamentalsCache
 
 _logger = setup_logger(__name__)
+
+_FUNDAMENTALS_CACHE_TTL_DAYS = 1
 
 # yfinance exchange code → normalised exchange name
 _EXCHANGE_MAP: Dict[str, str] = {
@@ -44,9 +49,10 @@ _ALLOWED_EXCHANGES = {"NASDAQ", "NYSE_AMERICAN"}
 
 
 def _safe_float(value, default: Optional[float] = None) -> Optional[float]:
+    """Coerce value to float, returning default on failure or NaN."""
     try:
         v = float(value)
-        return v if v == v else default   # NaN check
+        return v if v == v else default
     except (TypeError, ValueError):
         return default
 
@@ -77,6 +83,8 @@ class UniverseAgent:
             results_dir=results_dir,
             target_date=target_date,
         )
+        self._downloader = YahooDataDownloader()
+        self._fundamentals_cache = FundamentalsCache()
 
     def run(
         self,
@@ -164,7 +172,7 @@ class UniverseAgent:
 
     def _fetch_chunk(self, tickers: List[str]) -> List[dict]:
         results: List[dict] = []
-        with ThreadPoolExecutor(max_workers=6) as pool:
+        with ThreadPoolExecutor(max_workers=1) as pool:
             futures = {pool.submit(self._fetch_ticker_info, t): t for t in tickers}
             for future in as_completed(futures):
                 result = future.result()
@@ -172,38 +180,61 @@ class UniverseAgent:
                     results.append(result)
         return results
 
-    def _fetch_ticker_info(self, ticker: str) -> Optional[dict]:
-        try:
-            info = yf.Ticker(ticker).info or {}
+    def _fetch_ticker_info(self, ticker: str, max_retries: int = 3) -> Optional[dict]:
+        cache_meta = self._fundamentals_cache.find_latest_json(
+            ticker, provider="yahoo", max_age_days=_FUNDAMENTALS_CACHE_TTL_DAYS
+        )
+        if cache_meta:
+            cached = self._fundamentals_cache.read_json(cache_meta.file_path)
+            if cached:
+                return self._fundamentals_to_universe_record(ticker, cached)
 
-            if info.get("quoteType") not in ("EQUITY", None):
-                return None
+        for attempt in range(max_retries):
+            try:
+                f = self._downloader.get_fundamentals(ticker)
+                if f is None:
+                    return None
+                f_dict = dataclasses.asdict(f)
+                self._fundamentals_cache.write_json(ticker, "yahoo", f_dict)
+                return self._fundamentals_to_universe_record(ticker, f_dict)
+            except Exception as e:
+                err = str(e)
+                if "Too Many Requests" in err or "Rate limited" in err:
+                    delay = 2 ** attempt
+                    _logger.debug("Rate limited on %s (attempt %d/%d), retrying in %ds", ticker, attempt + 1, max_retries, delay)
+                    time.sleep(delay)
+                else:
+                    _logger.debug("Failed to fetch info for %s: %s", ticker, e)
+                    return None
 
-            price = _safe_float(info.get("regularMarketPrice") or info.get("currentPrice"))
-            if price is None or price <= 0:
-                return None
+        _logger.debug("Giving up on %s after %d attempts (rate limited)", ticker, max_retries)
+        return None
 
-            return {
-                "ticker": ticker,
-                "company_name": info.get("longName", ""),
-                "exchange": info.get("exchange", ""),
-                "sector": info.get("sector", ""),
-                "industry": info.get("industry", ""),
-                "price": price,
-                "market_cap": _safe_float(info.get("marketCap"), 0.0),
-                "float_shares": _safe_float(info.get("floatShares"), 0.0),
-                "shares_outstanding": _safe_float(info.get("sharesOutstanding"), 0.0),
-                "avg_volume": _safe_float(info.get("averageVolume"), 0.0),
-                "volume": _safe_float(info.get("volume") or info.get("regularMarketVolume"), 0.0),
-                "short_ratio": _safe_float(info.get("shortRatio")),
-                "short_pct_float": _safe_float(info.get("shortPercentOfFloat")),
-                "high_52w": _safe_float(info.get("fiftyTwoWeekHigh"), 0.0),
-                "low_52w": _safe_float(info.get("fiftyTwoWeekLow"), 0.0),
-                "institutional_pct": _safe_float(info.get("heldPercentInstitutions")),
-            }
-        except Exception:
-            _logger.debug("Failed to fetch info for %s", ticker)
+    def _fundamentals_to_universe_record(self, ticker: str, f: dict) -> Optional[dict]:
+        """Map a cached Fundamentals dict to the universe record format, applying equity/price filters."""
+        if f.get("quote_type") not in ("EQUITY", None):
             return None
+        price = _safe_float(f.get("current_price"))
+        if price is None or price <= 0:
+            return None
+        return {
+            "ticker": ticker,
+            "company_name": f.get("company_name") or "",
+            "exchange": f.get("exchange") or "",
+            "sector": f.get("sector") or "",
+            "industry": f.get("industry") or "",
+            "price": price,
+            "market_cap": _safe_float(f.get("market_cap"), 0.0),
+            "float_shares": _safe_float(f.get("float_shares"), 0.0),
+            "shares_outstanding": _safe_float(f.get("shares_outstanding"), 0.0),
+            "avg_volume": _safe_float(f.get("avg_volume"), 0.0),
+            "volume": _safe_float(f.get("volume"), 0.0),
+            "short_ratio": _safe_float(f.get("short_ratio")),
+            "short_pct_float": _safe_float(f.get("short_pct_float")),
+            "high_52w": _safe_float(f.get("fifty_two_week_high"), 0.0),
+            "low_52w": _safe_float(f.get("fifty_two_week_low"), 0.0),
+            "institutional_pct": _safe_float(f.get("institutional_pct")),
+        }
 
     # ── Internal: hard filters ─────────────────────────────────────────────
 
