@@ -12,6 +12,12 @@
 - [x] **CNN Fear & Greed** — incremental append (daily) + full rebuild (weekly)
 - [x] **GDELT v2 GKG & Events** — range fill via `download_gkg_range` / `download_events_range`
 - [x] **FRED daily/weekly/monthly/quarterly** — incremental update, combined `fred/fred_combined.csv.gz` rebuilt weekly
+- [x] **FRED series expansion (2026-05-17)** — added 19 new series to `FRED_SERIES` in `fred_downloader.py`:
+      *Daily*: `DTB3` (3M T-bill discount), `DGS3MO` (3M CMT yield — used by P16 for BS pricing),
+      `DGS1`, `DGS5`, `DGS30` (yield curve), `SOFR`, `DAAA`, `DBAA` (credit spreads), `DTWEXBGS` (USD index);
+      *Weekly*: `CCSA` (continued jobless claims), `NFCI` (Chicago Fed financial conditions);
+      *Monthly*: `HOUST`, `PERMIT`, `RSAFS`, `PCE`, `PSAVERT`, `DGORDER`, `SAHMCURRENT`, `TOTALSL`.
+      Total FRED series tracked: ~50.
 - [x] **SEC EDGAR submissions + facts** — daily submissions, quarterly facts via date-check
 - [x] **FINRA TRF** — weekday range fill; silently skipped when credentials absent
 - [x] **AAII investor sentiment** — weekly full download (Thursday publish cycle)

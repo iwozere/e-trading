@@ -14,12 +14,18 @@ Cache layout:
         fred_combined.csv.gz        ← wide daily-reindexed forward-filled view
         fred_meta.json              ← last_updated / last_observation per series
 
-Series covered (24 total, matching fred_api_example.py):
-    Daily   : DFF, T10Y2Y, T10Y3M, DGS2, DGS10, T5YIE, T10YIE,
-              BAMLH0A0HYM2, BAMLC0A0CM
-    Weekly  : ICSA, WALCL, MORTGAGE30US
+Series covered (50 total):
+    Daily   : DFF, DTB3, DGS3MO, DGS1, DGS2, DGS5, DGS10, DGS30,
+              T10Y2Y, T10Y3M, T5YIE, T10YIE,
+              SOFR, DBAA, DAAA,
+              BAMLH0A0HYM2, BAMLC0A0CM,
+              USEPUINDXD, DTWEXBGS
+    Weekly  : ICSA, CCSA, WALCL, MORTGAGE30US, NFCI
     Monthly : FEDFUNDS, CPIAUCSL, CPILFESL, PCEPILFE, PPIACO, UNRATE,
-              PAYEMS, M2SL, UMCSENT, INDPRO, USREC
+              PAYEMS, M2SL, UMCSENT, INDPRO, USREC,
+              HOUST, PERMIT, RSAFS, PCE, PSAVERT, DGORDER,
+              SAHMCURRENT, TOTALSL,
+              USEPUINDXM, EPUTRADE, EPUHEALTHCARE, GEPUCURRENT
     Quarterly: DRTSCILM
 
 CLI usage:
@@ -60,41 +66,77 @@ _FRED_OBS_URL = "https://api.stlouisfed.org/fred/series/observations"
 _DEFAULT_START_DATE = "2010-01-01"
 _REQUEST_DELAY = 0.15  # seconds — well within FRED's 120 req/min limit
 
-# All 24 series from fred_api_example.py, with friendly names and frequencies
 FRED_SERIES: Dict[str, Dict[str, str]] = {
-    # Daily
-    "DFF":          {"name": "fed_funds_daily",    "freq": "daily"},
-    "T10Y2Y":       {"name": "yield_spread_10_2",  "freq": "daily"},
-    "T10Y3M":       {"name": "yield_spread_10_3m", "freq": "daily"},
-    "DGS2":         {"name": "yield_2y",           "freq": "daily"},
-    "DGS10":        {"name": "yield_10y",          "freq": "daily"},
-    "T5YIE":        {"name": "breakeven_5y",       "freq": "daily"},
-    "T10YIE":       {"name": "breakeven_10y",      "freq": "daily"},
-    "BAMLH0A0HYM2": {"name": "hy_spread",          "freq": "daily"},
-    "BAMLC0A0CM":   {"name": "ig_spread",          "freq": "daily"},
-    "USEPUINDXD":   {"name": "epu_daily",          "freq": "daily"},    # from 1985
-    # Weekly (released Thursdays)
-    "ICSA":         {"name": "jobless_claims",     "freq": "weekly"},
-    "WALCL":        {"name": "fed_balance_sheet",  "freq": "weekly"},
-    "MORTGAGE30US": {"name": "mortgage_rate_30y",  "freq": "weekly"},
-    # Monthly
-    "FEDFUNDS":     {"name": "fed_funds_rate",     "freq": "monthly"},
-    "CPIAUCSL":     {"name": "cpi",                "freq": "monthly"},
-    "CPILFESL":     {"name": "core_cpi",           "freq": "monthly"},
-    "PCEPILFE":     {"name": "core_pce",           "freq": "monthly"},
-    "PPIACO":       {"name": "ppi",                "freq": "monthly"},
-    "UNRATE":       {"name": "unemployment",       "freq": "monthly"},
-    "PAYEMS":       {"name": "nonfarm_payrolls",   "freq": "monthly"},
-    "M2SL":         {"name": "m2",                 "freq": "monthly"},
-    "UMCSENT":      {"name": "consumer_sentiment", "freq": "monthly"},
-    "INDPRO":       {"name": "industrial_prod",    "freq": "monthly"},
-    "USREC":        {"name": "recession_flag",     "freq": "monthly"},
-    "USEPUINDXM":   {"name": "epu_monthly",        "freq": "monthly"},  # from 1985
-    "EPUTRADE":     {"name": "epu_trade",          "freq": "monthly"},  # trade policy
-    "EPUHEALTHCARE":{"name": "epu_healthcare",     "freq": "monthly"},
-    "GEPUCURRENT":  {"name": "epu_global",         "freq": "monthly"},  # global EPU
+    # -----------------------------------------------------------------------
+    # Daily — short-term rates & yield curve
+    # -----------------------------------------------------------------------
+    "DFF":          {"name": "fed_funds_daily",      "freq": "daily"},
+    # 3-month rates: DTB3 = discount basis (secondary market);
+    # DGS3MO = bond-equivalent constant maturity. Use DGS3MO for BS pricing.
+    "DTB3":         {"name": "tbill_3m_discount",    "freq": "daily"},   # from 1954; needed for P16
+    "DGS3MO":       {"name": "yield_3m",             "freq": "daily"},   # from 1982; preferred for BS
+    "DGS1":         {"name": "yield_1y",             "freq": "daily"},
+    "DGS2":         {"name": "yield_2y",             "freq": "daily"},
+    "DGS5":         {"name": "yield_5y",             "freq": "daily"},
+    "DGS10":        {"name": "yield_10y",            "freq": "daily"},
+    "DGS30":        {"name": "yield_30y",            "freq": "daily"},
+    # Spreads & breakevens
+    "T10Y2Y":       {"name": "yield_spread_10_2",    "freq": "daily"},
+    "T10Y3M":       {"name": "yield_spread_10_3m",   "freq": "daily"},
+    "T5YIE":        {"name": "breakeven_5y",         "freq": "daily"},
+    "T10YIE":       {"name": "breakeven_10y",        "freq": "daily"},
+    # Modern risk-free benchmark (SOFR replaced LIBOR; available from 2018-04-02)
+    "SOFR":         {"name": "sofr",                 "freq": "daily"},
+    # Credit quality spreads (Moody's AAA and BAA corporate bond yields)
+    "DAAA":         {"name": "corp_yield_aaa",       "freq": "daily"},
+    "DBAA":         {"name": "corp_yield_baa",       "freq": "daily"},
+    # Option-adjusted credit spreads
+    "BAMLH0A0HYM2": {"name": "hy_spread",            "freq": "daily"},
+    "BAMLC0A0CM":   {"name": "ig_spread",            "freq": "daily"},
+    # Policy uncertainty & dollar
+    "USEPUINDXD":   {"name": "epu_daily",            "freq": "daily"},   # from 1985
+    "DTWEXBGS":     {"name": "usd_index_broad",      "freq": "daily"},   # from 2006
+
+    # -----------------------------------------------------------------------
+    # Weekly
+    # -----------------------------------------------------------------------
+    "ICSA":         {"name": "jobless_claims_initial",    "freq": "weekly"},  # Thursday release
+    "CCSA":         {"name": "jobless_claims_continued",  "freq": "weekly"},  # Thursday release
+    "WALCL":        {"name": "fed_balance_sheet",         "freq": "weekly"},
+    "MORTGAGE30US": {"name": "mortgage_rate_30y",         "freq": "weekly"},
+    "NFCI":         {"name": "financial_conditions_nfci", "freq": "weekly"},  # Chicago Fed; from 1973
+
+    # -----------------------------------------------------------------------
+    # Monthly — activity, inflation, credit, housing
+    # -----------------------------------------------------------------------
+    "FEDFUNDS":     {"name": "fed_funds_rate",       "freq": "monthly"},
+    "CPIAUCSL":     {"name": "cpi",                  "freq": "monthly"},
+    "CPILFESL":     {"name": "core_cpi",             "freq": "monthly"},
+    "PCEPILFE":     {"name": "core_pce",             "freq": "monthly"},
+    "PCE":          {"name": "pce",                  "freq": "monthly"},   # total personal consumption
+    "PPIACO":       {"name": "ppi",                  "freq": "monthly"},
+    "UNRATE":       {"name": "unemployment",         "freq": "monthly"},
+    "PAYEMS":       {"name": "nonfarm_payrolls",     "freq": "monthly"},
+    "SAHMCURRENT":  {"name": "sahm_rule",            "freq": "monthly"},   # real-time recession indicator
+    "M2SL":         {"name": "m2",                   "freq": "monthly"},
+    "TOTALSL":      {"name": "consumer_credit",      "freq": "monthly"},   # total outstanding credit
+    "UMCSENT":      {"name": "consumer_sentiment",   "freq": "monthly"},
+    "INDPRO":       {"name": "industrial_prod",      "freq": "monthly"},
+    "DGORDER":      {"name": "durable_goods_orders", "freq": "monthly"},
+    "RSAFS":        {"name": "retail_sales",         "freq": "monthly"},   # advance retail sales
+    "PSAVERT":      {"name": "personal_saving_rate", "freq": "monthly"},
+    "HOUST":        {"name": "housing_starts",       "freq": "monthly"},
+    "PERMIT":       {"name": "building_permits",     "freq": "monthly"},
+    "USREC":        {"name": "recession_flag",       "freq": "monthly"},
+    "USEPUINDXM":   {"name": "epu_monthly",          "freq": "monthly"},   # from 1985
+    "EPUTRADE":     {"name": "epu_trade",            "freq": "monthly"},
+    "EPUHEALTHCARE":{"name": "epu_healthcare",       "freq": "monthly"},
+    "GEPUCURRENT":  {"name": "epu_global",           "freq": "monthly"},
+
+    # -----------------------------------------------------------------------
     # Quarterly
-    "DRTSCILM":     {"name": "loan_standards",     "freq": "quarterly"},
+    # -----------------------------------------------------------------------
+    "DRTSCILM":     {"name": "loan_standards",       "freq": "quarterly"},
 }
 
 
