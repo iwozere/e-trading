@@ -86,9 +86,14 @@ class RollingMemoryConfig:
     phase1_max_sentiment: float = 0.5  # Low/neutral sentiment
 
     # Phase 2 detection (Early Public Signal)
-    phase2_min_vol_zscore: float = 3.0  # Volume acceleration
-    phase2_min_sentiment: float = 0.5  # Sentiment starts rising
-    phase2_min_virality: float = 1.5  # Going viral
+    phase2_min_vol_zscore: float = 3.0       # Today's volume Z-score must exceed this
+    phase2_min_vol_acceleration: float = 1.3  # today_zscore / avg_zscore: volume must be accelerating
+    phase2_min_sentiment: float = 0.5        # Sentiment starts rising
+    phase2_min_virality: float = 1.5         # Going viral
+
+    # Phase 2 quality gates (data-driven, see docs/TIMING_ANALYSIS.md 2026-05-20)
+    max_phase2_lag_days: int = 7              # Suppress if >7 days since first_seen (stale signal)
+    max_pre_alert_drift_pct: float = 5.0     # Suppress if price already up >5% since first detection
 
     # Alert settings
     send_alerts: bool = True

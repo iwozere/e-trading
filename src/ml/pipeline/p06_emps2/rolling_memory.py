@@ -233,35 +233,35 @@ class RollingMemoryScanner:
         """
         Detect Phase 2: Early Public Signal.
 
-        Criteria:
-        - Already in Phase 1 watchlist
-        - Volume Z-Score accelerating (>3.0)
-        - Sentiment rising (if available)
-        - Virality increasing
+        Criteria (in order applied):
+        1. Already in Phase 1 watchlist AND appears in today's scan
+        2. [Gate] lag_days <= max_phase2_lag_days  — drop stale signals
+        3. Today's vol Z-Score >= phase2_min_vol_zscore  — strong absolute volume
+        4. [Gate] vol_acceleration >= phase2_min_vol_acceleration  — volume rising vs avg
+        5. Sentiment or virality rising (if data available)
+        6. [Gate] pre_alert_drift_pct <= max_pre_alert_drift_pct  — price not already run up
+
+        Priority labels on output:
+        - PREMIUM: pre_alert_drift_pct < 0 (price pulled back during accumulation — best signal)
+        - HIGH:    all other passing tickers
 
         Args:
-            phase1_df: Phase 1 watchlist
-            current_scan_df: Today's scan results (with sentiment if available)
+            phase1_df: Phase 1 watchlist (from detect_phase1_candidates)
+            current_scan_df: Today's volatility filter output
 
         Returns:
-            Phase 2 alerts DataFrame
+            Phase 2 alerts DataFrame with lag_days, vol_acceleration, pre_alert_drift_pct columns.
         """
         if phase1_df.empty or current_scan_df.empty:
             _logger.info("No Phase 1 candidates or current scan data for Phase 2 detection")
             return pd.DataFrame()
 
-        # Prepare current scan columns
+        # Merge Phase 1 tickers with today's scan results
         merge_cols = ['ticker']
-        if 'vol_zscore' in current_scan_df.columns:
-            merge_cols.append('vol_zscore')
-        if 'sentiment_score' in current_scan_df.columns:
-            merge_cols.append('sentiment_score')
-        if 'mentions_24h' in current_scan_df.columns:
-            merge_cols.append('mentions_24h')
-        if 'virality_index' in current_scan_df.columns:
-            merge_cols.append('virality_index')
+        for col in ('vol_zscore', 'last_price', 'sentiment_score', 'mentions_24h', 'virality_index'):
+            if col in current_scan_df.columns:
+                merge_cols.append(col)
 
-        # Merge Phase 1 tickers with today's scan
         phase2_df = phase1_df.merge(
             current_scan_df[merge_cols],
             on='ticker',
@@ -273,14 +273,56 @@ class RollingMemoryScanner:
             _logger.info("No Phase 1 tickers found in current scan")
             return pd.DataFrame()
 
-        # Build filter conditions
+        # ── Gate 1: Lag filter ────────────────────────────────────────────────
+        # Stale signals (ticker has been accumulating too long without triggering)
+        # perform worse. See docs/TIMING_ANALYSIS.md 2026-05-20.
+        from datetime import datetime as _dt
+        alert_date = _dt.strptime(self.target_date, '%Y-%m-%d').date()
+        phase2_df['lag_days'] = phase2_df['first_seen'].apply(
+            lambda fs: (alert_date - fs).days if not pd.isna(fs) else 999
+        )
+        before_lag = len(phase2_df)
+        if self.config.max_phase2_lag_days > 0:
+            phase2_df = phase2_df[
+                phase2_df['lag_days'] <= self.config.max_phase2_lag_days
+            ].copy()
+        _logger.info(
+            "Lag gate (<= %d days): %d -> %d tickers",
+            self.config.max_phase2_lag_days, before_lag, len(phase2_df)
+        )
+        if phase2_df.empty:
+            _logger.info("All Phase 2 candidates filtered out by lag gate")
+            return pd.DataFrame()
+
+        # ── Derived metrics ───────────────────────────────────────────────────
+        # Vol acceleration: today's zscore relative to the historical average.
+        # latest_last_price holds the price on first_seen date (oldest entry in the
+        # reversed-iteration rolling window — see rolling_memory.scan_historical_results).
+        if 'vol_zscore' in phase2_df.columns and 'avg_vol_zscore' in phase2_df.columns:
+            safe_avg = phase2_df['avg_vol_zscore'].replace(0.0, float('nan'))
+            phase2_df['vol_acceleration'] = phase2_df['vol_zscore'] / safe_avg
+
+        if 'last_price' in phase2_df.columns and 'latest_last_price' in phase2_df.columns:
+            safe_first = phase2_df['latest_last_price'].replace(0.0, float('nan'))
+            phase2_df['pre_alert_drift_pct'] = (
+                (phase2_df['last_price'] / safe_first - 1.0) * 100.0
+            )
+
+        # ── Signal conditions ─────────────────────────────────────────────────
         conditions = []
 
-        # Volume acceleration (required)
+        # Absolute vol level: today's zscore must be strong
         if 'vol_zscore' in phase2_df.columns:
             conditions.append(phase2_df['vol_zscore'] >= self.config.phase2_min_vol_zscore)
 
-        # Sentiment OR virality (at least one must be true)
+        # Gate 2: Vol acceleration — volume must be rising vs its own history
+        # Filters out tickers that had one spike days ago but are now cooling.
+        if 'vol_acceleration' in phase2_df.columns:
+            conditions.append(
+                phase2_df['vol_acceleration'].fillna(0.0) >= self.config.phase2_min_vol_acceleration
+            )
+
+        # Sentiment OR virality (optional enrichment if data is available)
         sentiment_conditions = []
         if 'sentiment_score' in phase2_df.columns:
             sentiment_conditions.append(
@@ -291,30 +333,63 @@ class RollingMemoryScanner:
                 phase2_df['virality_index'] >= self.config.phase2_min_virality
             )
 
-        # Combine conditions
-        if conditions and sentiment_conditions:
-            # Volume acceleration AND (sentiment OR virality)
-            final_condition = conditions[0]
-            if len(sentiment_conditions) > 1:
-                final_condition = final_condition & (sentiment_conditions[0] | sentiment_conditions[1])
-            elif len(sentiment_conditions) == 1:
-                final_condition = final_condition & sentiment_conditions[0]
-
-            phase2_df = phase2_df[final_condition].copy()
-        elif conditions:
-            # Only volume condition
-            phase2_df = phase2_df[conditions[0]].copy()
+        # Combine: all hard conditions AND (sentiment OR virality if available)
+        if conditions:
+            combined = conditions[0]
+            for cond in conditions[1:]:
+                combined = combined & cond
+            if sentiment_conditions:
+                sentiment_combined = sentiment_conditions[0]
+                for sc in sentiment_conditions[1:]:
+                    sentiment_combined = sentiment_combined | sc
+                combined = combined & sentiment_combined
+            phase2_df = phase2_df[combined].copy()
+        elif sentiment_conditions:
+            sentiment_combined = sentiment_conditions[0]
+            for sc in sentiment_conditions[1:]:
+                sentiment_combined = sentiment_combined | sc
+            phase2_df = phase2_df[sentiment_combined].copy()
         else:
-            # No valid conditions, return empty
             _logger.warning("No valid Phase 2 detection conditions available")
             return pd.DataFrame()
 
-        phase2_df['phase'] = 'Phase 2: Early Public Signal'
-        phase2_df['alert_priority'] = 'HIGH'
+        if phase2_df.empty:
+            _logger.info("No tickers passed vol/sentiment conditions")
+            return pd.DataFrame()
 
+        # ── Gate 3: Price drift filter ────────────────────────────────────────
+        # Tickers that have already run up >5% before the alert fire with much lower
+        # win rates. See docs/TIMING_ANALYSIS.md 2026-05-20.
+        if 'pre_alert_drift_pct' in phase2_df.columns and self.config.max_pre_alert_drift_pct > 0:
+            before_drift = len(phase2_df)
+            drift_ok = (
+                (phase2_df['pre_alert_drift_pct'] <= self.config.max_pre_alert_drift_pct)
+                | phase2_df['pre_alert_drift_pct'].isna()
+            )
+            phase2_df = phase2_df[drift_ok].copy()
+            _logger.info(
+                "Price drift gate (<= +%.0f%%): %d -> %d tickers",
+                self.config.max_pre_alert_drift_pct, before_drift, len(phase2_df)
+            )
+
+        if phase2_df.empty:
+            _logger.info("All Phase 2 candidates filtered out by price drift gate")
+            return pd.DataFrame()
+
+        phase2_df['phase'] = 'Phase 2: Early Public Signal'
+
+        # PREMIUM priority: price pulled back during accumulation (strongest signal)
+        if 'pre_alert_drift_pct' in phase2_df.columns:
+            phase2_df['alert_priority'] = phase2_df['pre_alert_drift_pct'].apply(
+                lambda x: 'PREMIUM' if (not pd.isna(x) and float(x) < 0.0) else 'HIGH'
+            )
+        else:
+            phase2_df['alert_priority'] = 'HIGH'
+
+        premium_count = (phase2_df['alert_priority'] == 'PREMIUM').sum()
         _logger.info(
-            "Detected %d Phase 2 transitions (HOT candidates) 🔥",
-            len(phase2_df)
+            "Phase 2 detection complete: %d candidates (%d PREMIUM, %d HIGH)",
+            len(phase2_df), premium_count, len(phase2_df) - premium_count
         )
 
         return phase2_df
