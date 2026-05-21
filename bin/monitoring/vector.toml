@@ -40,7 +40,7 @@ source = '''
   fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
   fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
   fp = replace(fp, r'[0-9]+', "<N>")
-  .dedup_key = .source_name + "|" + (slice(fp, 0, 180) ?? fp)
+  .dedup_key = string!(.source_name) + "|" + (slice(fp, 0, 180) ?? fp)
 '''
 
 [transforms.cooldown]
