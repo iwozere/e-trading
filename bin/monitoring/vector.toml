@@ -31,7 +31,7 @@ condition = "match(downcase(string!(.message)), r'error|exception|critical|trace
 [transforms.exclude_noise]
 type = "filter"
 inputs = ["errors_only"]
-condition = "!match(string!(.message), r'(?i)(Xlib|XSERVTrans|xkbcomp|XF86|keysym)')"
+condition = "!match(string!(.message), r'(?i)(Xlib|XSERVTrans|xkbcomp|XF86|keysym|apport|unmet condition|ConditionPath)')"
 
 [transforms.fingerprint]
 type = "remap"
