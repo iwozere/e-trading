@@ -181,6 +181,8 @@ class EMPS3Pipeline:
             return pd.DataFrame()
         finally:
             self._cleanup_pipeline_logging()
+            if self.alert_sender:
+                self.alert_sender.close()
 
     def _stage2b_download_trf_data(self) -> None:
         """

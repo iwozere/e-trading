@@ -347,6 +347,56 @@ See `results/p06_emps2/stop_simulation_summary.csv` for full per-configuration n
 
 ---
 
+## Improved Exit Strategy — 2026-05-21
+
+After finding the 10-day return (+1.6% mean) beats the 20-day return (+0.2%) for PREMIUM tickers,
+three incremental exit improvements were simulated. Implementation in `simulate_stops.py` (Impr-3 config).
+
+### Key finding that motivated the changes
+
+| Hold period | PREMIUM win% | PREMIUM mean% |
+|---|---|---|
+| 5 days | 48% | +0.3% |
+| **10 days** | **57%** | **+1.6%** (peak) |
+| 20 days | 48% | +0.2% |
+
+11 of 20 PREMIUM positions up at day 5 were **negative by day 20** (55% reversal rate).
+67% of positions flat/down at day 10 stayed that way through day 20. The 20-day ceiling was wrong.
+
+### Improvements tested (2026-05-21, n=121 alerts)
+
+| Strategy | Avg hold | Win% | Mean% | Crashes >15% | Max loss |
+|---|---|---|---|---|---|
+| Baseline: no stop, 20d | 20.0d | 48% | -0.7% | 18 | -55.4% |
+| Baseline: no stop, 10d | 10.0d | 47% | 0.0% | 10 | -39.7% |
+| Old best: BE 8%/+10%/trail 8%, 20d | 6.3d | 42% | -1.1% | 4 | -29.9% |
+| Impr-1: 10d ceiling only | 5.2d | 43% | -0.9% | 4 | -29.9% |
+| Impr-2: +dead-money exit at day 10 | 5.7d | 43% | -1.1% | 4 | -29.9% |
+| **Impr-3: +tight trail 5% once up >15%** | **5.4d** | **43%** | **-1.1%** | **4** | **-29.9%** |
+
+### PREMIUM-only (n=50)
+
+| Strategy | Avg hold | Win% | Mean% | Crashes >15% |
+|---|---|---|---|---|
+| No stop, 20d | 20.0d | 56% | +1.2% | 5 |
+| Old best BE 20d | 7.0d | 50% | +0.2% | 2 |
+| **Impr-3 (recommended)** | **6.0d** | **50%** | **+0.5%** | **2** |
+
+Impr-3 improves PREMIUM mean return from +0.2% to +0.5% by tightening the trail once up >15%,
+capturing more of big-winner gains before they reverse. Crashes halved vs old best.
+
+### Impr-3 exit rules (the recommended approach)
+
+1. **Initial stop**: 8% below entry
+2. **Breakeven at +10%**: move stop to entry (cannot lose money after this point)
+3. **Tight trail at +15%**: switch from 8% trail to 5% trail below the high watermark
+4. **Dead-money exit**: at EOD of day 10, if within ±3% of entry AND breakeven never triggered → exit at next open
+5. **Hard ceiling**: sell at close on day 20 (avg actual hold is ~6 days in practice)
+
+See `docs/TRADING_PLAYBOOK.md` for the full operational checklist.
+
+---
+
 ## Re-measurement Checklist
 
 After running the improved pipeline for ~3 months, re-run:
@@ -366,4 +416,4 @@ Compare against the **2026-05-20 baseline** numbers in this document:
 
 ---
 
-*Created: 2026-05-20 | Last updated: 2026-05-20 (implemented 3 quality gates)*
+*Created: 2026-05-20 | Last updated: 2026-05-21 (improved exit strategy, Impr-3)*

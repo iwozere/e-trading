@@ -254,7 +254,7 @@ class AccumulationAnalyzer:
         else:
             rv = 0.0
             
-        ar = vol_zscore / rv if rv > 0 else 0.0
+        ar = vol_zscore / rv if (rv > 0 and vol_zscore > 0) else 0.0
         
         # Squeeze Logic
         daily_prev = df_daily.iloc[-2]
@@ -297,7 +297,9 @@ class AccumulationAnalyzer:
         high_20 = np.max(df_daily['high'].values[-20:])
         if (high_20 - daily_curr['close']) / high_20 < 0.02: score += 30
         # Virality mocked or fetched: missing sentiment here so +0 for now.
-        
+
+        dist_local_high = (high_20 - daily_curr['close']) / high_20 if high_20 > 0 else 0.0
+
         metrics = {
             'ticker': ticker,
             'last_price': float(last_price),
@@ -313,33 +315,39 @@ class AccumulationAnalyzer:
             'price_change_1d': float(price_change_1d),
             'dist_sma_20': float(dist_sma_20),
             'dist_52w_high': float(dist_52w_high),
+            'dist_local_high': float(dist_local_high),
             'prebreakout_score': score,
             # for rolling memory Trend tracking
             'volume': float(daily_curr['volume'])
         }
 
+        # NaN guard — reject before any comparison (NaN <= X evaluates to False in Python,
+        # causing tickers with missing data to silently pass all filters).
+        if any(np.isnan(v) for v in [vol_zscore, rv, ar, price_range_1d, atr_ratio]):
+            return False, metrics, 'nan_metrics'
+
         # Validate conditions
         # 1. Volume Presence
         if vol_zscore <= self.config.min_vol_zscore:
             return False, metrics, 'low_volume_zscore'
-        
+
         # 2. Price Compression
-        if price_range_1d >= self.config.max_price_impact or atr_ratio >= 0.02:
+        if price_range_1d >= self.config.max_price_impact or atr_ratio >= self.config.max_atr_ratio:
             return False, metrics, 'poor_price_compression'
-            
+
         # 3. Absorption
         if ar <= self.config.min_vol_rv_ratio:
             return False, metrics, 'low_absorption_ratio'
-            
+
         # Exclusions
         if price_change_1d > 0.035:
             return False, metrics, 'price_change_too_high'
         if dist_sma_20 > self.config.max_distance_from_sma20:
             return False, metrics, 'too_far_from_sma20'
-        
-        # Inclusions: must be close to resistance (we use 3% of 52-week high here)
-        if dist_52w_high > self.config.max_distance_from_resistance:
-            return False, metrics, 'too_far_from_52w_high'
+
+        # Inclusions: must be pressing local resistance (20-day high)
+        if dist_local_high > self.config.max_distance_from_resistance:
+            return False, metrics, 'too_far_from_local_high'
             
         if score > 70:
             metrics['prebreakout_watchlist'] = True

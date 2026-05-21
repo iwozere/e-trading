@@ -60,19 +60,23 @@ See attached CSV."""
         except Exception:
             _logger.exception("Failed to send Phase 1.5 alerts")
 
+    def close(self) -> None:
+        """Release the notification client. Call once at the end of the pipeline run."""
+        if self.client:
+            try:
+                asyncio.run(self.client.close())
+            except Exception:
+                _logger.exception("Failed to close notification client")
+            self.client = None
+
     async def _send_notifications(self, title: str, message: str, attachments: dict):
-        try:
-            # Map channels and send
-            for channel in ['telegram', 'email']:
-                await self.client.send_notification(
-                    notification_type="alert",
-                    title=title,
-                    message=message,
-                    priority="high",
-                    channels=[channel],
-                    recipient_id=self.user_id,
-                    attachments=attachments or None,
-                    source="emps3_pipeline"
-                )
-        finally:
-            await self.client.close()
+        await self.client.send_notification(
+            notification_type="alert",
+            title=title,
+            message=message,
+            priority="high",
+            channels=['telegram', 'email'],
+            recipient_id=self.user_id,
+            attachments=attachments or None,
+            source="emps3_pipeline"
+        )

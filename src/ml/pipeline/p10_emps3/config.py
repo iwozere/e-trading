@@ -28,11 +28,12 @@ class EMPS3FilterConfig(FundamentalFilterConfig):
 
     # Accumulation Analyzer Config (Stage C)
     min_vol_zscore: float = 1.5
-    max_price_impact: float = 0.03 # was - 0.025
-    min_vol_rv_ratio: float = 1.5 # was - 2.0
+    max_price_impact: float = 0.05             # daily range gate; was 0.03
+    min_vol_rv_ratio: float = 1.5              # was 2.0
+    max_atr_ratio: float = 0.04               # ATR(14)/price gate; was hardcoded 0.02 in analyzer
     lookback_days: int = 10
     require_dark_pool_surge: bool = True
-    max_distance_from_resistance: float = 0.05 # was - 3% from 52w High
+    max_distance_from_resistance: float = 0.15 # applies to 20-day high; was 0.05 (52w high)
     max_distance_from_sma20: float = 0.10      # 10% from SMA20
 
     # Data parameters
