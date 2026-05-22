@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import Iterable, Optional
+from typing import Any, Generator, Optional
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
@@ -20,7 +20,7 @@ from config.donotshare.donotshare import SQL_ECHO, DB_URL as CONFIG_DB_URL
 DB_URL = os.getenv("DB_URL", CONFIG_DB_URL)
 
 # Flip this on to see SQL in logs (or set SQL_ECHO=1 in env)
-SQL_ECHO = bool(int(os.getenv("SQL_ECHO", SQL_ECHO)))
+SQL_ECHO = bool(int(os.getenv("SQL_ECHO", "1" if SQL_ECHO else "0")))
 
 
 def get_database_url() -> str:
@@ -146,7 +146,7 @@ SessionLocal = _LazySessionLocal()
 
 
 @contextmanager
-def session_scope() -> Session:
+def session_scope() -> Generator[Session, None, None]:
     """
     Short-lived session pattern:
         with session_scope() as s:
@@ -167,7 +167,7 @@ def session_scope() -> Session:
 
 # --- Utilities ---------------------------------------------------------------
 
-def create_all_tables(*bases: Iterable) -> None:
+def create_all_tables(*bases: Any) -> None:
     """
     If you keep multiple Declarative 'Base' objects (users/telegram/trading),
     call this once at startup to ensure all tables exist:
@@ -186,7 +186,7 @@ def create_all_tables(*bases: Iterable) -> None:
             base.metadata.create_all(get_engine())
 
 
-def drop_all_tables(*bases: Iterable) -> None:
+def drop_all_tables(*bases: Any) -> None:
     """
     Drop all database tables. Handy in tests.
 

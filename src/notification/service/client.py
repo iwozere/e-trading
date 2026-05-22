@@ -150,7 +150,7 @@ class NotificationServiceClient:
 
     def __init__(self,
                  service_url: Optional[str] = None,
-                 base_url: str = None,  # For backward compatibility
+                 base_url: Optional[str] = None,  # For backward compatibility
                  timeout: int = 30,
                  max_retries: int = 3):
         """
@@ -207,7 +207,7 @@ class NotificationServiceClient:
         if self._session and not self._session.closed:
             await self._session.close()
 
-    async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+    async def _make_request(self, method: str, endpoint: str, **kwargs) -> Any:
         """
         Make HTTP request with retry logic.
 
@@ -245,6 +245,8 @@ class NotificationServiceClient:
                 _logger.warning("Request failed (attempt %d/%d), retrying in %ds: %s",
                               attempt + 1, self.max_retries + 1, wait_time, e)
                 await asyncio.sleep(wait_time)
+
+        raise Exception(f"No successful response from {self.service_url}{endpoint} after {self.max_retries + 1} attempts")
 
     async def send_notification(self,
                               notification_type: Union[str, MessageType],
@@ -707,7 +709,7 @@ class NotificationServiceClient:
                         priority=priority,
                         data=notification_data,
                         channels=notification_channels,
-                        telegram_chat_id=admin_id,
+                        telegram_chat_id=int(admin_id),
                         recipient_id=str(admin_id),
                         email_receiver=email_receiver,
                     )
@@ -748,7 +750,7 @@ class NotificationServiceClient:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, *_):
         """Async context manager exit."""
         await self.close()
 
