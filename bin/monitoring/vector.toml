@@ -1,8 +1,13 @@
+# ─── Sources ──────────────────────────────────────────────────────────────────
+
 [sources.journald]
 type = "journald"
 
 [sources.docker]
 type = "docker_logs"
+
+# ─── Normalize ────────────────────────────────────────────────────────────────
+# Unify field names from journald and docker into source_type, source_name, message.
 
 [transforms.normalize]
 type = "remap"
@@ -23,19 +28,91 @@ source = '''
   }
 '''
 
+# ─── Parse log level ──────────────────────────────────────────────────────────
+# Extracts semantic log level from the message text into .parsed_level.
+# Recognises three formats used in this stack:
+#   - Python app:   "YYYY-MM-DD HH:MM:SS,ms - [PID n] - LEVEL - message"
+#   - Docker logfmt: level=error  /  level="error"
+#   - ISO-Z prefix:  "...nZ  ERROR ..."  (Vector, Rust services, Cloudflare ERR)
+# Anything unrecognised gets UNKNOWN — treated conservatively (not silently dropped).
+
+[transforms.parse_level]
+type = "remap"
+inputs = ["normalize"]
+source = '''
+  msg = string!(.message)
+  .parsed_level = "UNKNOWN"
+
+  # Python app format — our scheduler, notification_bot, trading services
+  if      match(msg, r'\] - DEBUG -')         { .parsed_level = "DEBUG"    }
+  else if match(msg, r'\] - INFO -')          { .parsed_level = "INFO"     }
+  else if match(msg, r'\] - WARNING -')       { .parsed_level = "WARNING"  }
+  else if match(msg, r'\] - ERROR -')         { .parsed_level = "ERROR"    }
+  else if match(msg, r'\] - CRITICAL -')      { .parsed_level = "CRITICAL" }
+
+  # Docker daemon / logfmt:  level=error  or  level="error"
+  else if match(msg, r'level="?debug')        { .parsed_level = "DEBUG"    }
+  else if match(msg, r'level="?info')         { .parsed_level = "INFO"     }
+  else if match(msg, r'level="?warn')         { .parsed_level = "WARNING"  }
+  else if match(msg, r'level="?error')        { .parsed_level = "ERROR"    }
+  else if match(msg, r'level="?critical')     { .parsed_level = "CRITICAL" }
+
+  # ISO-8601 Z-suffix prefix — Vector, Rust services: "...Z  ERROR vector::"
+  # Also covers Cloudflare's three-letter "Z ERR " variant
+  else if match(msg, r'\dZ\s+DEBUG\b')        { .parsed_level = "DEBUG"    }
+  else if match(msg, r'\dZ\s+INFO\b')         { .parsed_level = "INFO"     }
+  else if match(msg, r'\dZ\s+WARN\b')         { .parsed_level = "WARNING"  }
+  else if match(msg, r'\dZ\s+ERROR\b')        { .parsed_level = "ERROR"    }
+  else if match(msg, r'\dZ\s+CRITICAL\b')     { .parsed_level = "CRITICAL" }
+  else if match(msg, r'\dZ ERR ')             { .parsed_level = "ERROR"    }
+'''
+
+# ─── Level gate ───────────────────────────────────────────────────────────────
+# Drop DEBUG and INFO unconditionally — regardless of message content.
+# WARNING, ERROR, CRITICAL, and UNKNOWN all pass through.
+
+[transforms.level_gate]
+type = "filter"
+inputs = ["parse_level"]
+condition = "string!(.parsed_level) != 'DEBUG' && string!(.parsed_level) != 'INFO'"
+
+# ─── Content gate ─────────────────────────────────────────────────────────────
+# Secondary keyword guard applied only to UNKNOWN-level lines.
+# Ensures unrecognised log formats still need an error keyword to alert.
+
 [transforms.errors_only]
 type = "filter"
-inputs = ["normalize"]
-condition = "match(downcase(string!(.message)), r'error|exception|critical|traceback|fatal')"
+inputs = ["level_gate"]
+condition = "string!(.parsed_level) != 'UNKNOWN' || match(string!(.message), r'(?i)(error|exception|critical|traceback|fatal)')"
 
-[transforms.exclude_noise]
+# ─── Per-source noise exclusions ──────────────────────────────────────────────
+# Each transform targets a specific known-noisy pattern.
+# Add new ones here — keep each focused so the reason is obvious.
+
+# Cloudflare tunnel QUIC reconnects — normal transient network events, auto-recover
+[transforms.exclude_cloudflare]
 type = "filter"
 inputs = ["errors_only"]
-condition = "!match(string!(.message), r'(?i)(Xlib|XSERVTrans|xkbcomp|XF86|keysym|apport|unmet condition|ConditionPath)')"
+condition = "!(match(string!(.source_name), r'cloudflared') && match(string!(.message), r'no recent network activity|failed to accept QUIC stream'))"
+
+# IB Gateway log4j shutdown race — always fires when the container stops cleanly
+[transforms.exclude_ib_shutdown]
+type = "filter"
+inputs = ["exclude_cloudflare"]
+condition = "!match(string!(.message), r'non-started appender')"
+
+# General OS / X11 / infra patterns that can't be suppressed by level alone
+[transforms.exclude_infra_noise]
+type = "filter"
+inputs = ["exclude_ib_shutdown"]
+condition = "!match(string!(.message), r'(?i)(apport|ConditionPath|unmet condition|TzCache|py-yfinance|Xlib|XSERVTrans|xkbcomp|XF86|keysym)')"
+
+# ─── Fingerprint ──────────────────────────────────────────────────────────────
+# Build a stable dedup key by stripping timestamps, UUIDs, and numbers.
 
 [transforms.fingerprint]
 type = "remap"
-inputs = ["exclude_noise"]   # change this from ["errors_only"]
+inputs = ["exclude_infra_noise"]
 source = '''
   fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
   fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
@@ -43,12 +120,17 @@ source = '''
   .dedup_key = string!(.source_name) + "|" + (slice(fp, 0, 180) ?? fp)
 '''
 
+# ─── Cooldown ─────────────────────────────────────────────────────────────────
+# At most one alert per unique error fingerprint per 30 minutes.
+
 [transforms.cooldown]
 type = "throttle"
 inputs = ["fingerprint"]
 threshold = 1
 window_secs = 1800
 key_field = "dedup_key"
+
+# ─── Final shape ──────────────────────────────────────────────────────────────
 
 [transforms.final_shape]
 type = "remap"
@@ -59,6 +141,8 @@ source = '''
     "source": string!(.source_name),
   }
 '''
+
+# ─── Sink ─────────────────────────────────────────────────────────────────────
 
 [sinks.notify]
 type = "http"
