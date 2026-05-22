@@ -179,11 +179,10 @@ class NotificationServiceClient:
             _logger.info("NotificationServiceClient configured for database-only mode (no HTTP API)")
             self.service_url = service_url  # Keep the database:// URL for identification
         else:
-            # P2.4 Fix: Stop silent URL rewriting. Just warn if ports look incorrect.
-            if ":8080" in service_url or ":5003" in service_url:
+            if ":8080" in service_url:
                 _logger.warning(
-                    "Service URL %s uses a legacy port. Database-centric architecture "
-                    "typically uses the Main API at http://localhost:5003.", service_url
+                    "Service URL %s uses the legacy port 8080. The Main API runs at http://localhost:5003.",
+                    service_url
                 )
 
             self.service_url = service_url.rstrip('/')
