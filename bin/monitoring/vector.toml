@@ -103,7 +103,7 @@ condition = "!match(string!(.message), r'non-started appender')"
 [transforms.exclude_infra_noise]
 type = "filter"
 inputs = ["exclude_ib_shutdown"]
-condition = "!match(string!(.message), r'(?i)(apport|ConditionPath|unmet condition|TzCache|py-yfinance|Xlib|XSERVTrans|xkbcomp|XF86|keysym)')"
+condition = "!match(string!(.message), r'(?i)(apport|ConditionPath|unmet condition|TzCache|py-yfinance|Xlib|XSERVTrans|xkbcomp|XF86|keysym|separator are deprecated)')"
 
 # ─── Fingerprint ──────────────────────────────────────────────────────────────
 # Build a stable dedup key by stripping timestamps, UUIDs, and numbers.
