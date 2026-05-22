@@ -29,12 +29,14 @@ source = '''
 '''
 
 # ─── Parse log level ──────────────────────────────────────────────────────────
-# Extracts semantic log level from the message text into .parsed_level.
-# Recognises three formats used in this stack:
-#   - Python app:   "YYYY-MM-DD HH:MM:SS,ms - [PID n] - LEVEL - message"
-#   - Docker logfmt: level=error  /  level="error"
-#   - ISO-Z prefix:  "...nZ  ERROR ..."  (Vector, Rust services, Cloudflare ERR)
-# Anything unrecognised gets UNKNOWN — treated conservatively (not silently dropped).
+# Extracts semantic log level into .parsed_level.
+# Supports three formats used in this stack:
+#   Python app:   "YYYY-MM-DD HH:MM:SS,ms - [PID n] - LEVEL - message"
+#   Docker logfmt: level=error  /  level="error"
+#   ISO-Z prefix:  "...nZ  ERROR ..."  (Vector/Rust/Cloudflare ERR)
+# Unrecognised lines get UNKNOWN — treated conservatively, never silently dropped.
+#
+# NOTE: VRL requires "} else if" on the same line — no newline between } and else.
 
 [transforms.parse_level]
 type = "remap"
@@ -43,51 +45,47 @@ source = '''
   msg = string!(.message)
   .parsed_level = "UNKNOWN"
 
-  # Python app format — our scheduler, notification_bot, trading services
-  if      match(msg, r'\] - DEBUG -')         { .parsed_level = "DEBUG"    }
-  else if match(msg, r'\] - INFO -')          { .parsed_level = "INFO"     }
-  else if match(msg, r'\] - WARNING -')       { .parsed_level = "WARNING"  }
-  else if match(msg, r'\] - ERROR -')         { .parsed_level = "ERROR"    }
-  else if match(msg, r'\] - CRITICAL -')      { .parsed_level = "CRITICAL" }
-
-  # Docker daemon / logfmt:  level=error  or  level="error"
-  else if match(msg, r'level="?debug')        { .parsed_level = "DEBUG"    }
-  else if match(msg, r'level="?info')         { .parsed_level = "INFO"     }
-  else if match(msg, r'level="?warn')         { .parsed_level = "WARNING"  }
-  else if match(msg, r'level="?error')        { .parsed_level = "ERROR"    }
-  else if match(msg, r'level="?critical')     { .parsed_level = "CRITICAL" }
-
-  # ISO-8601 Z-suffix prefix — Vector, Rust services: "...Z  ERROR vector::"
-  # Also covers Cloudflare's three-letter "Z ERR " variant
-  else if match(msg, r'\dZ\s+DEBUG\b')        { .parsed_level = "DEBUG"    }
-  else if match(msg, r'\dZ\s+INFO\b')         { .parsed_level = "INFO"     }
-  else if match(msg, r'\dZ\s+WARN\b')         { .parsed_level = "WARNING"  }
-  else if match(msg, r'\dZ\s+ERROR\b')        { .parsed_level = "ERROR"    }
-  else if match(msg, r'\dZ\s+CRITICAL\b')     { .parsed_level = "CRITICAL" }
-  else if match(msg, r'\dZ ERR ')             { .parsed_level = "ERROR"    }
+  if match(msg, r'\] - DEBUG -') { .parsed_level = "DEBUG"
+  } else if match(msg, r'\] - INFO -') { .parsed_level = "INFO"
+  } else if match(msg, r'\] - WARNING -') { .parsed_level = "WARNING"
+  } else if match(msg, r'\] - ERROR -') { .parsed_level = "ERROR"
+  } else if match(msg, r'\] - CRITICAL -') { .parsed_level = "CRITICAL"
+  } else if match(msg, r'level="?debug') { .parsed_level = "DEBUG"
+  } else if match(msg, r'level="?info') { .parsed_level = "INFO"
+  } else if match(msg, r'level="?warn') { .parsed_level = "WARNING"
+  } else if match(msg, r'level="?error') { .parsed_level = "ERROR"
+  } else if match(msg, r'level="?critical') { .parsed_level = "CRITICAL"
+  } else if match(msg, r'\dZ\s+DEBUG\b') { .parsed_level = "DEBUG"
+  } else if match(msg, r'\dZ\s+INFO\b') { .parsed_level = "INFO"
+  } else if match(msg, r'\dZ\s+WARN\b') { .parsed_level = "WARNING"
+  } else if match(msg, r'\dZ\s+ERROR\b') { .parsed_level = "ERROR"
+  } else if match(msg, r'\dZ\s+CRITICAL\b') { .parsed_level = "CRITICAL"
+  } else if match(msg, r'\dZ ERR ') { .parsed_level = "ERROR"
+  }
 '''
 
 # ─── Level gate ───────────────────────────────────────────────────────────────
-# Drop DEBUG and INFO unconditionally — regardless of message content.
-# WARNING, ERROR, CRITICAL, and UNKNOWN all pass through.
+# Drop DEBUG and INFO unconditionally regardless of message content.
+# WARNING, ERROR, CRITICAL, UNKNOWN all pass through.
+# NOTE: VRL string literals use double quotes; single-quoted 'x' is only for r'regex'.
 
 [transforms.level_gate]
 type = "filter"
 inputs = ["parse_level"]
-condition = "string!(.parsed_level) != 'DEBUG' && string!(.parsed_level) != 'INFO'"
+condition = '.parsed_level != "DEBUG" && .parsed_level != "INFO"'
 
 # ─── Content gate ─────────────────────────────────────────────────────────────
-# Secondary keyword guard applied only to UNKNOWN-level lines.
-# Ensures unrecognised log formats still need an error keyword to alert.
+# For UNKNOWN-level lines, require an error keyword so unrecognised formats
+# don't generate noise from non-error messages.
 
 [transforms.errors_only]
 type = "filter"
 inputs = ["level_gate"]
-condition = "string!(.parsed_level) != 'UNKNOWN' || match(string!(.message), r'(?i)(error|exception|critical|traceback|fatal)')"
+condition = ".parsed_level != \"UNKNOWN\" || match(string!(.message), r'(?i)(error|exception|critical|traceback|fatal)')"
 
 # ─── Per-source noise exclusions ──────────────────────────────────────────────
-# Each transform targets a specific known-noisy pattern.
-# Add new ones here — keep each focused so the reason is obvious.
+# Each transform targets one specific known-noisy pattern.
+# Add new ones here; keep each focused so the reason is self-evident.
 
 # Cloudflare tunnel QUIC reconnects — normal transient network events, auto-recover
 [transforms.exclude_cloudflare]
@@ -101,7 +99,7 @@ type = "filter"
 inputs = ["exclude_cloudflare"]
 condition = "!match(string!(.message), r'non-started appender')"
 
-# General OS / X11 / infra patterns that can't be suppressed by level alone
+# General OS / X11 / infra patterns that level parsing cannot suppress
 [transforms.exclude_infra_noise]
 type = "filter"
 inputs = ["exclude_ib_shutdown"]
