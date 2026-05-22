@@ -31,7 +31,7 @@ DB_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_H
 TEST_DB_URL="postgresql+psycopg2://test_user:test_password@localhost:5432/e_trading_test"
 
 # 0 - off, 1 - log SQL queries into the log files
-SQL_ECHO = "0"
+SQL_ECHO = False
 
 TRADING_WEBGUI_PORT=5002
 TRADING_API_PORT=5003
