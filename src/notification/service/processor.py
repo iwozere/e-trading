@@ -673,7 +673,7 @@ class MessageProcessor:
             from src.notification.channels.base import MessageContent
             # Map database content structure to MessageContent structure
             content = MessageContent(
-                text=db_message.content.get('message', db_message.content.get('text', '')),
+                text=db_message.content.get('message') or db_message.content.get('text') or db_message.content.get('body') or '',
                 subject=db_message.content.get('title', db_message.content.get('subject')),
                 html=db_message.content.get('html'),
                 attachments=db_message.content.get('attachments'),
@@ -757,8 +757,6 @@ class MessageProcessor:
                             db_message.id, db_message.max_retries, error_message
                         )
 
-                uow.commit()
-
             # Update stats
             self._stats['messages_processed'] += 1
             if success:
@@ -803,7 +801,6 @@ class MessageProcessor:
                         'locked_by': None,
                         'locked_at': None
                     })
-                    uow.commit()
             except Exception as db_error:
                 self._logger.error("Failed to update message status in database: %s", db_error)
 

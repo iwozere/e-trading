@@ -837,7 +837,7 @@ class SchedulerService:
                 "recipient_id": str(schedule.user_id),
                 "content": {
                     "title": message_title,
-                    "body": message_body,
+                    "message": message_body,
                     "metadata": notification_data
                 },
                 "priority": "NORMAL",
@@ -1247,7 +1247,7 @@ class SchedulerService:
                     "recipient_id": str(recipient_id),
                     "content": {
                         "title": title,
-                        "body": message,
+                        "message": message,
                         "metadata": notification_data
                     },
                     "priority": db_priority,
