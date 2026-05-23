@@ -91,26 +91,40 @@ condition = ".parsed_level != \"UNKNOWN\" || match(string!(.message), r'(?i)(err
 [transforms.exclude_cloudflare]
 type = "filter"
 inputs = ["errors_only"]
-condition = "!(match(string!(.source_name), r'cloudflared') && match(string!(.message), r'no recent network activity|failed to accept QUIC stream'))"
+condition = "!(match(string!(.source_name), r'cloudflared') && match(string!(.message), r'no recent network activity|failed to accept QUIC stream|failed to serve tunnel connection|accept stream listener'))"
 
 # IB Gateway log4j shutdown race — always fires when the container stops cleanly
+# "it may be disabled" is a partial log4j informational fragment that leaks through UNKNOWN filter
 [transforms.exclude_ib_shutdown]
 type = "filter"
 inputs = ["exclude_cloudflare"]
-condition = "!match(string!(.message), r'non-started appender')"
+condition = "!match(string!(.message), r'non-started appender|it may be disabled')"
 
 # General OS / X11 / infra patterns that level parsing cannot suppress
+# Cache fallback warning: system recovers automatically, mount absence is tracked separately
 [transforms.exclude_infra_noise]
 type = "filter"
 inputs = ["exclude_ib_shutdown"]
-condition = "!match(string!(.message), r'(?i)(apport|ConditionPath|unmet condition|TzCache|py-yfinance|Xlib|XSERVTrans|xkbcomp|XF86|keysym|separator are deprecated)')"
+condition = "!match(string!(.message), r'(?i)(apport|ConditionPath|unmet condition|TzCache|py-yfinance|Xlib|XSERVTrans|xkbcomp|XF86|keysym|separator are deprecated|Primary cache dir.*unavailable.*Falling back)')"
+
+# IB Gateway API port 7497 connection refused — expected during nightly IB restart window
+[transforms.exclude_ib_reconnect]
+type = "filter"
+inputs = ["exclude_infra_noise"]
+condition = "!match(string!(.message), r'ConnectionRefusedError.*127\.0\.0\.1.*7497')"
+
+# Docker internal DNS resolver transient timeouts — single retries auto-recover
+[transforms.exclude_docker_dns]
+type = "filter"
+inputs = ["exclude_ib_reconnect"]
+condition = "!(match(string!(.source_name), r'^docker\.service$') && match(string!(.message), r'failed to query external DNS server.*i/o timeout'))"
 
 # ─── Fingerprint ──────────────────────────────────────────────────────────────
 # Build a stable dedup key by stripping timestamps, UUIDs, and numbers.
 
 [transforms.fingerprint]
 type = "remap"
-inputs = ["exclude_infra_noise"]
+inputs = ["exclude_docker_dns"]
 source = '''
   fp = replace(string!(.message), r'[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}[^ ]*', "<TS>")
   fp = replace(fp, r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', "<UUID>")
