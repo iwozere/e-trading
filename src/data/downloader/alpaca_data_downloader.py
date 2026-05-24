@@ -369,7 +369,10 @@ class AlpacaDataDownloader(BaseDataDownloader):
         # Ensure timestamp is timezone-naive and set as index
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         if df['timestamp'].dt.tz is not None:
-            df['timestamp'] = df['timestamp'].dt.tz_localize(None)
+            # tz_convert(None) converts to UTC first, then removes tz info —
+            # the correct approach for tz-aware → tz-naive UTC conversion.
+            # tz_localize(None) would just drop the label without converting.
+            df['timestamp'] = df['timestamp'].dt.tz_convert(None)
 
         # Filter data to ensure it starts from the requested start_date (UTC)
         df = df[df['timestamp'] >= start_date]
@@ -426,7 +429,10 @@ class AlpacaDataDownloader(BaseDataDownloader):
         # Ensure timestamp is timezone-naive and set as index
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         if df['timestamp'].dt.tz is not None:
-            df['timestamp'] = df['timestamp'].dt.tz_localize(None)
+            # tz_convert(None) converts to UTC first, then removes tz info —
+            # the correct approach for tz-aware → tz-naive UTC conversion.
+            # tz_localize(None) would just drop the label without converting.
+            df['timestamp'] = df['timestamp'].dt.tz_convert(None)
 
         # Filter data to ensure it starts from the requested start_date (UTC)
         df = df[df['timestamp'] >= start_date]

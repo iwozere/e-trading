@@ -49,7 +49,7 @@ class BotsRepo:
         self.s.add(obj); self.s.flush()
         return obj
 
-    def heartbeat(self, bot_id: str) -> None:
+    def heartbeat(self, bot_id: int) -> None:
         self.s.execute(
             update(BotInstance)
             .where(BotInstance.id == bot_id)

@@ -16,7 +16,7 @@ Core functionality:
 
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.data.db.services.base_service import BaseDBService, with_uow, handle_db_error
 from src.trading.services.bot_config_validator import validate_database_bot_record
@@ -175,7 +175,7 @@ class TradingService(BaseDBService):
         from sqlalchemy import update
         from src.data.db.models.model_trading import BotInstance
 
-        update_data = {"status": status, "updated_at": datetime.now()}
+        update_data = {"status": status, "updated_at": datetime.now(timezone.utc)}
 
         # Set started_at timestamp when bot starts running
         if status == "running" and started_at:
@@ -188,7 +188,7 @@ class TradingService(BaseDBService):
                 error_count = (bot.error_count or 0) + 1
                 metadata = bot.extra_metadata or {}
                 metadata["last_error"] = error_message
-                metadata["last_error_time"] = datetime.now().isoformat()
+                metadata["last_error_time"] = datetime.now(timezone.utc).isoformat()
 
                 update_data.update({
                     "error_count": error_count,
@@ -210,7 +210,7 @@ class TradingService(BaseDBService):
         from sqlalchemy import update
         from src.data.db.models.model_trading import BotInstance
 
-        update_data = {"updated_at": datetime.now()}
+        update_data = {"updated_at": datetime.now(timezone.utc)}
 
         if current_balance is not None:
             update_data["current_balance"] = current_balance

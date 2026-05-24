@@ -48,7 +48,7 @@ def handle_db_error(func: Callable[..., T]) -> Callable[..., T]:
         try:
             return func(self, *args, **kwargs)
         except Exception:
-            self._logger.exception(f"Database error in {func.__name__}")
+            self._logger.exception("Database error in %s", func.__name__)
             raise
     return wrapper
 

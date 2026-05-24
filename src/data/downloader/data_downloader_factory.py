@@ -64,12 +64,11 @@ class ProviderSpec:
 # ---------------------------------------------------------------------------
 def _build_registry() -> List[ProviderSpec]:
     # IBKR and NewsAPI are imported lazily to avoid hard dependency at module load.
+    # NOTE: We intentionally do NOT manipulate the global asyncio event loop here.
+    # IBKR's own __init__ is responsible for any event-loop setup it needs; doing
+    # asyncio.set_event_loop() at module-import time conflicts with async
+    # frameworks (FastAPI, aiogram) that manage their own loop.
     try:
-        import asyncio
-        try:
-            asyncio.get_event_loop()
-        except RuntimeError:
-            asyncio.set_event_loop(asyncio.new_event_loop())
         from src.data.downloader.ibkr_downloader import IBKRDownloader as _IBKR
     except Exception:
         _IBKR = None  # type: ignore
@@ -199,12 +198,12 @@ class DataDownloaderFactory:
 
     @staticmethod
     def list_providers() -> None:
-        """Print a formatted list of all registered providers."""
-        print("Supported Data Providers:")
-        print("=" * 40)
+        """Log a formatted list of all registered providers."""
+        _logger.info("Supported Data Providers:")
+        _logger.info("=" * 40)
         for spec in _REGISTRY:
             codes = ", ".join([spec.canonical] + list(spec.aliases))
-            print(f"{spec.display_name} ({spec.canonical}) - Codes: {codes}")
+            _logger.info("%s (%s) - Codes: %s", spec.display_name, spec.canonical, codes)
 
     # ------------------------------------------------------------------ #
     #  Legacy private helpers kept for backward compatibility              #

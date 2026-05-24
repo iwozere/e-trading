@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 from src.data.db.core import database as core_db
 SessionLocal = core_db.SessionLocal
 
-# Model Bases — used by init_databases()
+# Shared metadata — all model Bases inherit from the same DeclarativeBase
+# so a single create_all() call covers every table.
+from src.data.db.core.base import Base as _SharedBase
+
+# Model Bases — kept for backward-compat imports by callers; all point to the
+# same underlying metadata as _SharedBase.
 from src.data.db.models.model_users import Base as UsersBase
 from src.data.db.models.model_telegram import Base as TelegramBase
 from src.data.db.models.model_trading import Base as TradingBase
@@ -103,10 +108,14 @@ class DatabaseService:
         pass
 
     def init_databases(self) -> None:
-        """Create all tables for every model base (idempotent)."""
+        """Create all tables (idempotent).
+
+        All model Bases share a single ``MetaData`` instance (via the common
+        ``DeclarativeBase`` in ``core.base``), so one ``create_all`` call is
+        sufficient to create every table across every model module.
+        """
         eng = getattr(self, "engine", None) or core_db.get_engine()
-        for base in (UsersBase, TelegramBase, TradingBase, WebUIBase, JobsBase, NotificationBase, SystemHealthBase, ShortSqueezeBase):
-            base.metadata.create_all(bind=eng)
+        _SharedBase.metadata.create_all(bind=eng)
 
     # for tests that call ds.get_database_service()
     def get_database_service(self):
@@ -168,9 +177,9 @@ class DatabaseService:
 
 
 # ------------------------- Singleton-style accessors -------------------------
-# Make a module-level singleton that tests import as `ds`
-# ------------------------- Singleton-style accessors -------------------------
+
 _db_service_singleton: DatabaseService | None = None
+
 
 def get_database_service() -> DatabaseService:
     """Global accessor used by services (webui_service, trading_service, telegram_service)."""
@@ -179,12 +188,22 @@ def get_database_service() -> DatabaseService:
         _db_service_singleton = DatabaseService()
     return _db_service_singleton
 
-# Make a module-level singleton that tests import as `ds`
-database_service = get_database_service()
-
 
 def init_databases() -> None:
     """Convenience to match existing service init_db() calls."""
     get_database_service().init_databases()
+
+
+# ---------------------------------------------------------------------------
+# Lazy module-level ``database_service`` attribute
+# ---------------------------------------------------------------------------
+# ``database_service = get_database_service()`` at module scope would create
+# the singleton on every *import*, even in code paths that never use the DB.
+# Using module ``__getattr__`` defers construction until the name is first
+# accessed, while remaining fully transparent to ``from ... import`` callers.
+def __getattr__(name: str) -> DatabaseService:
+    if name == "database_service":
+        return get_database_service()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

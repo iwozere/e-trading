@@ -5,7 +5,7 @@ Repository layer for short squeeze detection pipeline database operations.
 Provides CRUD operations for all short squeeze related tables.
 """
 
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Optional, Dict, Any, Sequence
 
 from sqlalchemy import and_, desc, func, select, update, delete
@@ -218,7 +218,7 @@ class SqueezeAlertRepo:
 
     def check_cooldown(self, ticker: str, alert_level: AlertLevel) -> bool:
         """Check if ticker is in cooldown period for alert level."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         active_cooldown = self.session.execute(
             select(SqueezeAlert)
             .where(
@@ -235,7 +235,7 @@ class SqueezeAlertRepo:
 
     def get_recent_alerts(self, days: int = 7) -> Sequence[SqueezeAlert]:
         """Get recent alerts within specified days."""
-        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
         return list(self.session.execute(
             select(SqueezeAlert)
             .where(SqueezeAlert.timestamp >= cutoff_date)
@@ -244,7 +244,7 @@ class SqueezeAlertRepo:
 
     def get_ticker_alert_history(self, ticker: str, days: int = 30) -> Sequence[SqueezeAlert]:
         """Get alert history for a ticker."""
-        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
         return list(self.session.execute(
             select(SqueezeAlert)
             .where(
@@ -258,7 +258,7 @@ class SqueezeAlertRepo:
 
     def cleanup_expired_cooldowns(self) -> int:
         """Remove expired cooldown records."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         result = self.session.execute(
             delete(SqueezeAlert)
             .where(
@@ -332,7 +332,7 @@ class AdHocCandidateRepo:
 
     def expire_candidates(self) -> List[str]:
         """Expire candidates past their expiration date."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         expired_candidates = list(self.session.execute(
             select(AdHocCandidateModel.ticker)
             .where(
@@ -402,7 +402,7 @@ class ShortSqueezeRepo:
     def cleanup_old_data(self, days_to_keep: int = 90) -> Dict[str, int]:
         """Clean up old data beyond retention period."""
         cutoff_date = date.today() - timedelta(days=days_to_keep)
-        cutoff_datetime = datetime.now() - timedelta(days=days_to_keep)
+        cutoff_datetime = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
 
         # Clean up old snapshots
         snapshot_result = self.session.execute(

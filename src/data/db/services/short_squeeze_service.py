@@ -5,7 +5,7 @@ Service layer for short squeeze detection pipeline business logic.
 Provides high-level operations and coordinates between repositories.
 """
 
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 
@@ -249,7 +249,7 @@ class ShortSqueezeService(BaseDBService):
             self._logger.error("Cannot add ad-hoc candidate: ticker cannot be empty")
             return False
 
-        expires_at = datetime.now() + timedelta(days=ttl_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=ttl_days)
         candidate = self.repos.short_squeeze.adhoc_candidates.add_candidate(ticker, reason, expires_at)
         self._logger.info("Added ad-hoc candidate: %s (reason: %s, expires: %s)",
                     ticker, reason, expires_at)
@@ -286,7 +286,7 @@ class ShortSqueezeService(BaseDBService):
             self._logger.debug("Ticker %s is in cooldown for %s alerts", ticker, alert_level.value)
             return None
 
-        cooldown_expires = datetime.now() + timedelta(days=cooldown_days)
+        cooldown_expires = datetime.now(timezone.utc) + timedelta(days=cooldown_days)
 
         alert_data = {
             'ticker': ticker,

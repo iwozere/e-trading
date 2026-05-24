@@ -9,7 +9,7 @@ from __future__ import annotations
 import datetime
 from datetime import datetime as dt
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from sqlalchemy import (
     Integer, String, Boolean, DateTime, Text,
@@ -17,7 +17,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from src.data.db.core.json_types import JsonType
-from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from src.data.db.core.base import Base
 
@@ -108,133 +107,37 @@ class ScheduleRun(Base):
 
 
 
-# Pydantic models for API validation
-class ScheduleCreate(BaseModel):
-    """Pydantic model for creating a schedule."""
-    name: str = Field(..., min_length=1, max_length=255)
-    job_type: JobType
-    target: str = Field(..., min_length=1, max_length=255)
-    task_params: Dict[str, Any] = Field(default_factory=dict)
-    cron: str = Field(..., min_length=1, max_length=100)
-    enabled: bool = Field(default=True)
+# ---------------------------------------------------------------------------
+# Pydantic schemas — defined in src.data.db.schemas.schema_jobs
+# Re-exported here for backward compatibility with existing imports.
+# ---------------------------------------------------------------------------
+from src.data.db.schemas.schema_jobs import (  # noqa: E402
+    ScheduleCreate,
+    ScheduleUpdate,
+    ScheduleResponse,
+    ScheduleRunCreate,
+    ScheduleRunUpdate,
+    ScheduleRunResponse,
+    ReportRequest,
+    ScreenerRequest,
+    ScreenerSetInfo,
+)
 
-    @field_validator('cron')
-    def validate_cron(cls, v):
-        """Basic cron validation - should be 5 fields separated by spaces."""
-        parts = v.strip().split()
-        if len(parts) != 5:
-            raise ValueError('Cron expression must have exactly 5 fields')
-        return v
-
-
-class ScheduleUpdate(BaseModel):
-    """Pydantic model for updating a schedule."""
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    target: Optional[str] = Field(None, min_length=1, max_length=255)
-    task_params: Optional[Dict[str, Any]] = None
-    cron: Optional[str] = Field(None, min_length=1, max_length=100)
-    enabled: Optional[bool] = None
-
-
-class ScheduleResponse(BaseModel):
-    """Pydantic model for schedule API responses."""
-    id: int
-    user_id: int
-    name: str
-    job_type: JobType
-    target: str
-    task_params: Dict[str, Any]
-    cron: str
-    enabled: bool
-    next_run_at: Optional[dt]
-    created_at: dt
-    updated_at: dt
-    state_json: Dict[str, Any] = {}
-    model_config = ConfigDict(from_attributes=True)
-
-    @field_validator('task_params', 'state_json', mode='before')
-    @classmethod
-    def parse_json_strings(cls, v):
-        if isinstance(v, str):
-            import json
-            try:
-                return json.loads(v)
-            except Exception:
-                pass
-        return v
-
-
-class ScheduleRunCreate(BaseModel):
-    """Pydantic model for creating a run."""
-    job_type: JobType
-    job_id: Optional[str] = None
-    scheduled_for: dt
-    job_snapshot: Dict[str, Any] = Field(default_factory=dict)
-
-
-class ScheduleRunUpdate(BaseModel):
-    """Pydantic model for updating a run."""
-    status: Optional[RunStatus] = None
-    started_at: Optional[dt] = None
-    finished_at: Optional[dt] = None
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-
-
-class ScheduleRunResponse(BaseModel):
-    """Pydantic model for run API responses."""
-    id: int
-    job_type: JobType
-    job_id: Optional[str]
-    user_id: Optional[int]
-    status: Optional[RunStatus]
-    scheduled_for: Optional[dt]
-    enqueued_at: Optional[dt]
-    started_at: Optional[dt]
-    finished_at: Optional[dt]
-    job_snapshot: Optional[Dict[str, Any]]
-    result: Optional[Dict[str, Any]]
-    error: Optional[str]
-    model_config = ConfigDict(from_attributes=True)
-
-    @field_validator('job_snapshot', 'result', mode='before')
-    @classmethod
-    def parse_json_strings(cls, v):
-        if isinstance(v, str):
-            import json
-            try:
-                return json.loads(v)
-            except Exception:
-                pass
-        return v
-
-class ReportRequest(BaseModel):
-    """Pydantic model for report execution requests."""
-    report_type: str = Field(..., min_length=1, max_length=100)
-    parameters: Dict[str, Any] = Field(default_factory=dict)
-    scheduled_for: Optional[dt] = None
-
-
-class ScreenerRequest(BaseModel):
-    """Pydantic model for screener execution requests."""
-    screener_set: Optional[str] = Field(None, min_length=1, max_length=100)
-    tickers: Optional[list[str]] = Field(None, min_length=1)
-    filter_criteria: Dict[str, Any] = Field(default_factory=dict)
-    top_n: Optional[int] = Field(None, ge=1, le=1000)
-    scheduled_for: Optional[dt] = None
-
-    @field_validator('tickers')
-    def validate_tickers_or_set(cls, v, values):
-        """Ensure either screener_set or tickers is provided."""
-        if not v and not values.get('screener_set'):
-            raise ValueError('Either screener_set or tickers must be provided')
-        return v
-
-
-class ScreenerSetInfo(BaseModel):
-    """Pydantic model for screener set information."""
-    name: str
-    description: str
-    ticker_count: int
-    tickers: list[str]
-    categories: list[str]
+__all__ = [
+    # ORM models
+    "Schedule",
+    "ScheduleRun",
+    # Enums
+    "JobType",
+    "RunStatus",
+    # Pydantic schemas (re-exported from schemas.schema_jobs)
+    "ScheduleCreate",
+    "ScheduleUpdate",
+    "ScheduleResponse",
+    "ScheduleRunCreate",
+    "ScheduleRunUpdate",
+    "ScheduleRunResponse",
+    "ReportRequest",
+    "ScreenerRequest",
+    "ScreenerSetInfo",
+]

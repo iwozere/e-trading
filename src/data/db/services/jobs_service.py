@@ -98,7 +98,7 @@ class JobsService(BaseDBService):
         """Update a schedule."""
         # Prepare update dictionary (only include non-None values)
         update_dict = {}
-        for field, value in update_data.dict(exclude_unset=True).items():
+        for field, value in update_data.model_dump(exclude_unset=True).items():
             if value is not None:
                 update_dict[field] = value
 
@@ -231,7 +231,7 @@ class JobsService(BaseDBService):
         """Update a run."""
         # Prepare update dictionary (only include non-None values)
         update_dict = {}
-        for field, value in update_data.dict(exclude_unset=True).items():
+        for field, value in update_data.model_dump(exclude_unset=True).items():
             if value is not None:
                 if field == "status" and isinstance(value, RunStatus):
                     update_dict[field] = value.value
