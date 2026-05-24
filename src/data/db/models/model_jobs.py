@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Optional, Dict, Any
 
 from sqlalchemy import (
-    Integer, String, Boolean, DateTime, Text, BigInteger,
+    Integer, String, Boolean, DateTime, Text,
     CheckConstraint, UniqueConstraint, Index, func
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -86,8 +86,8 @@ class ScheduleRun(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     job_type: Mapped[str] = mapped_column(Text)
-    job_id: Mapped[int | None] = mapped_column(BigInteger)
-    user_id: Mapped[int | None] = mapped_column(BigInteger)
+    job_id: Mapped[str | None] = mapped_column(String(255))
+    user_id: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str | None] = mapped_column(Text)
     scheduled_for: Mapped[dt | None] = mapped_column(DateTime(timezone=True))
     enqueued_at: Mapped[dt | None] = mapped_column(DateTime(timezone=True), default=func.now())
@@ -167,7 +167,7 @@ class ScheduleResponse(BaseModel):
 class ScheduleRunCreate(BaseModel):
     """Pydantic model for creating a run."""
     job_type: JobType
-    job_id: Optional[int] = None
+    job_id: Optional[str] = None
     scheduled_for: dt
     job_snapshot: Dict[str, Any] = Field(default_factory=dict)
 
@@ -185,7 +185,7 @@ class ScheduleRunResponse(BaseModel):
     """Pydantic model for run API responses."""
     id: int
     job_type: JobType
-    job_id: Optional[int]
+    job_id: Optional[str]
     user_id: Optional[int]
     status: Optional[RunStatus]
     scheduled_for: Optional[dt]

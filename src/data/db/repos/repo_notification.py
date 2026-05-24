@@ -65,7 +65,6 @@ class MessageRepository:
             _logger.info("Created message %s with type %s", message.id, message.message_type)
             return message
         except IntegrityError:
-            self.session.rollback()
             _logger.exception("Failed to create message:")
             raise
 
@@ -155,7 +154,6 @@ class MessageRepository:
             _logger.info("Updated message %s", message.id)
             return message
         except Exception as e:
-            self.session.rollback()
             _logger.error("Failed to update message %s: %s", message_id, e)
             raise
 
@@ -422,7 +420,6 @@ class MessageRepository:
 
         except Exception:
             _logger.exception("Error claiming messages with lock:")
-            self.session.rollback()
             return []
 
     def release_message_lock(self, message_id: int, lock_instance_id: str) -> bool:
@@ -520,7 +517,6 @@ class DeliveryStatusRepository:
             _logger.info("Created delivery status %s for message %s", delivery_status.id, delivery_status.message_id)
             return delivery_status
         except IntegrityError:
-            self.session.rollback()
             _logger.exception("Failed to create delivery status:")
             raise
 
@@ -574,7 +570,6 @@ class DeliveryStatusRepository:
             _logger.info("Updated delivery status %s", delivery_status.id)
             return delivery_status
         except Exception as e:
-            self.session.rollback()
             _logger.error("Failed to update delivery status %s: %s", status_id, e)
             raise
 
@@ -883,7 +878,6 @@ class RateLimitRepository:
             _logger.info("Updated rate limit for user %s, channel %s", user_id, channel)
             return rate_limit
         except Exception as e:
-            self.session.rollback()
             _logger.error("Failed to update rate limit for user %s, channel %s: %s", user_id, channel, e)
             raise
 
@@ -968,7 +962,6 @@ class ChannelConfigRepository:
             _logger.info("Created channel config for %s", config.channel)
             return config
         except IntegrityError:
-            self.session.rollback()
             _logger.exception("Failed to create channel config:")
             raise
 
@@ -1025,7 +1018,6 @@ class ChannelConfigRepository:
             _logger.info("Updated channel config for %s", channel)
             return config
         except Exception as e:
-            self.session.rollback()
             _logger.error("Failed to update channel config for %s: %s", channel, e)
             raise
 
@@ -1048,7 +1040,6 @@ class ChannelConfigRepository:
             _logger.info("Deleted channel config for %s", channel)
             return True
         except Exception as e:
-            self.session.rollback()
             _logger.error("Failed to delete channel config for %s: %s", channel, e)
             raise
 

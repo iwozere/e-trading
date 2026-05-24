@@ -51,7 +51,6 @@ class JobsRepository:
             _logger.info("Created schedule: %s (ID: %s)", schedule.name, schedule.id)
             return schedule
         except IntegrityError:
-            self.session.rollback()
             _logger.exception("Failed to create schedule:")
             raise
 
@@ -152,7 +151,6 @@ class JobsRepository:
             _logger.info("Updated schedule: %s (ID: %s)", schedule.name, schedule.id)
             return schedule
         except Exception:
-            self.session.rollback()
             _logger.exception("Failed to update schedule %s:", schedule_id)
             raise
 
@@ -175,7 +173,6 @@ class JobsRepository:
             _logger.info("Deleted schedule: %s (ID: %s)", schedule.name, schedule.id)
             return True
         except Exception:
-            self.session.rollback()
             _logger.exception("Failed to delete schedule %s:", schedule_id)
             raise
 
@@ -237,7 +234,6 @@ class JobsRepository:
             _logger.info("Created run: %s (%s:%s)", run.id, run.job_type, run.job_id)
             return run
         except IntegrityError:
-            self.session.rollback()
             _logger.exception("Failed to create run:")
             raise
 
@@ -303,7 +299,7 @@ class JobsRepository:
         Update a run.
 
         Args:
-            run_id: Run ID (integer)
+            run_id: Run ID
             update_data: Dictionary with fields to update
 
         Returns:
@@ -322,7 +318,6 @@ class JobsRepository:
             _logger.info("Updated run: %s (status: %s)", run.id, run.status)
             return run
         except Exception:
-            self.session.rollback()
             _logger.exception("Failed to update run %s:", run_id)
             raise
 
@@ -361,7 +356,6 @@ class JobsRepository:
             return run
 
         except Exception:
-            self.session.rollback()
             _logger.exception("Failed to claim run %s:", run_id)
             raise
 
@@ -387,13 +381,13 @@ class JobsRepository:
 
         return query.order_by(asc(ScheduleRun.scheduled_for)).limit(limit).all()
 
-    def get_runs_by_job(self, job_type: JobType, job_id: int) -> List[ScheduleRun]:
+    def get_runs_by_job(self, job_type: JobType, job_id: str) -> List[ScheduleRun]:
         """
         Get all runs for a specific job.
 
         Args:
             job_type: Job type
-            job_id: Job identifier (integer)
+            job_id: Job identifier string
 
         Returns:
             List of ScheduleRun objects

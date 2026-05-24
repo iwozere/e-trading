@@ -99,11 +99,9 @@ class SystemHealthRepository:
 
         except IntegrityError:
             _logger.exception("Integrity error creating/updating system health:")
-            self.session.rollback()
             raise
         except Exception:
             _logger.exception("Error creating/updating system health:")
-            self.session.rollback()
             raise
 
     def get_system_health(self, system: str, component: Optional[str] = None) -> Optional[SystemHealth]:

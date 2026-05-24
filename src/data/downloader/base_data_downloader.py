@@ -20,8 +20,7 @@ Classes:
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List, Optional
-import os
+from typing import Callable, Dict, List, Optional
 
 import pandas as pd
 
@@ -126,3 +125,42 @@ class BaseDataDownloader(ABC):
     def is_valid_period_interval(self, period: str, interval: str) -> bool:
         """Check if the given period and interval combination is valid."""
         return interval in self.get_supported_intervals() and period in self.get_periods()
+
+    def download_multiple_symbols(
+        self,
+        symbols: List[str],
+        download_func: Callable,
+        interval: str,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> Dict[str, "pd.DataFrame"]:
+        """
+        Download data for multiple symbols using a caller-supplied fetch function.
+
+        This default implementation iterates sequentially and logs failures
+        without aborting the batch.  Subclasses may override for parallelism.
+
+        Args:
+            symbols: List of trading symbols to download.
+            download_func: Callable with signature
+                ``(symbol, interval, start_date, end_date) -> pd.DataFrame``.
+                Typically a bound method of the subclass (e.g. ``self.get_ohlcv``).
+            interval: Data interval string (e.g. ``'1d'``, ``'1h'``).
+            start_date: Start of the requested range.
+            end_date: End of the requested range.
+
+        Returns:
+            Mapping of symbol → DataFrame.  Symbols that raised an exception
+            are omitted from the result rather than propagating the error.
+        """
+        results: Dict[str, "pd.DataFrame"] = {}
+        for symbol in symbols:
+            try:
+                results[symbol] = download_func(symbol, interval, start_date, end_date)
+            except Exception:
+                _logger.exception(
+                    "download_multiple_symbols: failed to fetch %s from %s",
+                    symbol,
+                    self.get_provider_name(),
+                )
+        return results

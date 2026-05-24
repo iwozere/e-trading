@@ -44,7 +44,7 @@ class BotInstance(Base):
     performance_metrics = relationship("PerformanceMetric", back_populates="bot", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<BotInstance(id={self.id}, type='{self.type}', status='{self.status}')>"
+        return f"<BotInstance(id={self.id}, status='{self.status}')>"
 
 
 class Trade(Base):
