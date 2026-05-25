@@ -113,9 +113,20 @@ class StrategyInstance:
             except Exception as e:
                 _logger.warning("Failed to update bot status in DB: %s", e)
 
-            # Start processing loops
+            # Start processing loops.
+            # When cerebro is active, Backtrader drives all signal generation.
+            # Signals are forwarded to execute_trade() synchronously inside the
+            # Backtrader thread via _bt_signal_execute (set as on_signal_callback
+            # in _setup_backtrader). Starting _start_trading_bot_loop() alongside
+            # cerebro would:
+            #   1. Process an always-empty signal queue with a 1 s sleep, wasting CPU.
+            #   2. Race on active_positions if strategy_class.get_signals() exists.
+            #   3. Duplicate DB heartbeat writes from both loop and _heartbeat_loop.
+            # When cerebro is None (pure live-data bot, no Backtrader), the
+            # BaseTradingBot loop is the sole execution path and must run.
             asyncio.create_task(self._run_backtrader_async())
-            asyncio.create_task(self._start_trading_bot_loop())
+            if self.cerebro is None:
+                asyncio.create_task(self._start_trading_bot_loop())
 
             _logger.info("✅ Strategy instance %s started successfully", self.name)
             return True
@@ -329,10 +340,37 @@ class StrategyInstance:
             self.cerebro.adddata(self.data_feed)
 
             strategy_params = self.config['strategy'].get('parameters', {})
+            def _bt_signal_execute(signal: dict) -> None:
+                """Execute a signal synchronously in the Backtrader thread.
+
+                When Backtrader is active, signals must be acted upon immediately
+                inside the same thread that drives cerebro — queuing them for a
+                separate BaseTradingBot loop causes a time-mismatch (bars processed
+                in milliseconds vs. 1 s sleep between queue drains) and would
+                leave signals unprocessed after the cerebro run completes.
+                """
+                if not self.trading_bot:
+                    return
+                side = (signal.get("type") or signal.get("side") or "").strip().lower()
+                if not side:
+                    return
+                try:
+                    price = float(signal.get("price") or 0.0)
+                    size = float(
+                        signal.get("size") if signal.get("size") is not None
+                        else signal.get("quantity") or 0.0
+                    )
+                except (TypeError, ValueError):
+                    _logger.warning(
+                        "Ignoring Backtrader signal with non-numeric price/size: %s", signal
+                    )
+                    return
+                self.trading_bot.execute_trade(side, price, size)
+
             self.cerebro.addstrategy(
                 strategy_class,
                 strategy_config=strategy_params,
-                on_signal_callback=self.trading_bot.add_signal if self.trading_bot else None,
+                on_signal_callback=_bt_signal_execute,
                 on_order_executed_callback=self._on_bt_order_filled,
             )
 

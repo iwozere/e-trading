@@ -36,7 +36,11 @@ class LiveTradingBot:
         
         # Register instance with manager
         self.instance_id = self.manager.add_instance(hydrated_config)
-        _logger.info("Registered bot %s with StrategyManager. Instance ID: %s", 
+        # Event loop captured in _start_and_capture_loop() so stop() can safely
+        # schedule the shutdown coroutine from a signal handler via
+        # asyncio.run_coroutine_threadsafe().
+        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
+        _logger.info("Registered bot %s with StrategyManager. Instance ID: %s",
                      config_file, self.instance_id)
 
     def _load_and_hydrate_config(self) -> Dict[str, Any]:
@@ -60,29 +64,47 @@ class LiveTradingBot:
         """Start the bot instance via the manager."""
         _logger.info("Starting bot instance %s...", self.instance_id)
         try:
-            # We use a new event loop for CLI compatibility if one isn't running
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're already in a loop (e.g. called from another async func)
-                asyncio.ensure_future(self.manager.start_instance(self.instance_id))
-            else:
-                loop.run_until_complete(self.manager.start_instance(self.instance_id))
-                # Loop must stay running for the async tasks to proceed if this is the main entry
-                if not loop.is_running() and str(sys.argv[0]).endswith("live_trading_bot.py"):
-                     loop.run_forever()
+            # get_running_loop() raises RuntimeError when there is no running event
+            # loop, which lets us distinguish a CLI entry-point (create a fresh loop)
+            # from an async caller such as the Web UI (schedule on the existing loop).
+            # This replaces the deprecated asyncio.get_event_loop() pattern which
+            # raises DeprecationWarning in Python 3.10 and RuntimeError in 3.12+.
+            asyncio.get_running_loop()
+            # Already inside an async context — schedule without blocking.
+            asyncio.ensure_future(self.manager.start_instance(self.instance_id))
+        except RuntimeError:
+            # No running event loop — CLI entry point.
+            # asyncio.run() creates a fresh loop and keeps it alive while
+            # background tasks (Backtrader / bot loops) are pending.
+            asyncio.run(self._start_and_capture_loop())
         except Exception:
             _logger.exception("Failed to start bot via manager:")
             raise
+
+    async def _start_and_capture_loop(self) -> None:
+        """Coroutine for asyncio.run() CLI startup; stores the event loop reference."""
+        self._event_loop = asyncio.get_running_loop()
+        await self.manager.start_instance(self.instance_id)
 
     def stop(self):
         """Stop the bot instance via the manager."""
         _logger.info("Stopping bot instance %s...", self.instance_id)
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.ensure_future(self.manager.stop_instance(self.instance_id))
+            asyncio.get_running_loop()
+            # Inside an async context — schedule without blocking.
+            asyncio.ensure_future(self.manager.stop_instance(self.instance_id))
+        except RuntimeError:
+            # Not in an async context (e.g. called from a SIGINT/SIGTERM signal
+            # handler that interrupted asyncio.run() in the main thread).
+            # run_coroutine_threadsafe() is the correct way to schedule a
+            # coroutine from a non-async context onto a running event loop.
+            if self._event_loop is not None and self._event_loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    self.manager.stop_instance(self.instance_id),
+                    self._event_loop,
+                )
             else:
-                loop.run_until_complete(self.manager.stop_instance(self.instance_id))
+                asyncio.run(self.manager.stop_instance(self.instance_id))
         except Exception:
             _logger.exception("Failed to stop bot via manager:")
 
@@ -93,11 +115,17 @@ class LiveTradingBot:
     def restart(self):
         """Restart via the manager."""
         _logger.info("Restarting bot instance %s...", self.instance_id)
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
+        try:
+            asyncio.get_running_loop()
             asyncio.ensure_future(self.manager.restart_instance(self.instance_id))
-        else:
-            loop.run_until_complete(self.manager.restart_instance(self.instance_id))
+        except RuntimeError:
+            if self._event_loop is not None and self._event_loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    self.manager.restart_instance(self.instance_id),
+                    self._event_loop,
+                )
+            else:
+                asyncio.run(self.manager.restart_instance(self.instance_id))
 
 
 def main():

@@ -715,6 +715,12 @@ class BaseBroker(ABC):
         self.backtrader_auto_process = backtrader_config.get('auto_process_orders', True)
         self.backtrader_notification_buffer = backtrader_config.get('notification_buffer_size', 100)
 
+        # Current bar prices: populated by update_market_price() on every bar
+        # (typically called by BacktraderBrokerBridge.next() or buy()/sell())
+        # so that paper-trading order simulation uses real instrument prices
+        # instead of the hardcoded $100 placeholder.
+        self._current_bar_prices: Dict[str, float] = {}
+
         # Execution metrics tracking
         self.execution_metrics: List[ExecutionMetrics] = []
         self.total_executions = 0
@@ -1134,6 +1140,14 @@ class BaseBroker(ABC):
         # Get symbol from data feed
         symbol = getattr(data, '_name', 'UNKNOWN') if data else 'UNKNOWN'
 
+        # Capture the current bar close price so that _get_simulated_market_price()
+        # returns a real price instead of the hardcoded $100 placeholder.
+        if data is not None and hasattr(data, 'close'):
+            try:
+                self.update_market_price(symbol, float(data.close[0]))
+            except (IndexError, TypeError, AttributeError):
+                pass
+
         # Create our internal Order object
         order = Order(
             symbol=symbol,
@@ -1279,6 +1293,14 @@ class BaseBroker(ABC):
 
         # Get symbol from data feed
         symbol = getattr(data, '_name', 'UNKNOWN') if data else 'UNKNOWN'
+
+        # Capture the current bar close price so that _get_simulated_market_price()
+        # returns a real price instead of the hardcoded $100 placeholder.
+        if data is not None and hasattr(data, 'close'):
+            try:
+                self.update_market_price(symbol, float(data.close[0]))
+            except (IndexError, TypeError, AttributeError):
+                pass
 
         # Create our internal Order object
         order = Order(
@@ -1535,16 +1557,53 @@ class BaseBroker(ABC):
             order.status = OrderStatus.REJECTED
             return False
 
+    def update_market_price(self, symbol: str, price: float) -> None:
+        """Store the current bar close price for a symbol.
+
+        Call this on every Backtrader bar (e.g. from ``BacktraderBrokerBridge.next()``
+        or from the ``buy()`` / ``sell()`` adapters) so that paper-trading order
+        simulation uses the real instrument price instead of the hardcoded $100
+        placeholder.
+
+        Args:
+            symbol: Instrument symbol (e.g. 'BTCUSDT').
+            price:  Current bar close price (must be > 0).
+        """
+        if price > 0:
+            self._current_bar_prices[symbol] = float(price)
+
     def _get_simulated_market_price(self, symbol: str) -> float:
+        """Return the current market price for *symbol*.
+
+        Priority:
+        1. Price stored via :meth:`update_market_price` (real bar close from
+           Backtrader or a live data feed).
+        2. Noisy random walk around the last known price — only used as a last
+           resort and triggers a warning so misconfiguration is visible.
+
+        Returns:
+            float: Current market price with a tiny spread noise (±0.02 %).
         """
-        Get simulated market price for a symbol.
-        In a real implementation, this would get the current price from backtrader data feeds.
-        """
-        # Simple price simulation - in reality, this would use backtrader's data
+        last_price = self._current_bar_prices.get(symbol)
+        if last_price and last_price > 0:
+            # Add tiny Gaussian noise (±0.02 %) to simulate bid/ask spread
+            # without drifting away from the real bar close price.
+            noise = random.gauss(0, 0.0002)
+            return last_price * (1.0 + noise)
+
+        # No real price available — warn loudly so the mis-configuration is
+        # caught early; results using this path will be inaccurate.
+        self._logger.warning(
+            "No real market price stored for '%s'. "
+            "Call update_market_price() on each bar (e.g. from "
+            "BacktraderBrokerBridge.next()) to avoid using the $100 placeholder. "
+            "Paper-trading results will be inaccurate.",
+            symbol,
+        )
         base_price = 100.0
-        volatility = 0.02  # 2% volatility
+        volatility = 0.02
         price_change = random.gauss(0, volatility)
-        return base_price * (1 + price_change)
+        return base_price * (1.0 + price_change)
 
     def _update_paper_portfolio_from_order(self, order: Order):
         """Update paper trading portfolio based on executed order."""
@@ -1578,12 +1637,14 @@ class BaseBroker(ABC):
                     position.average_price = total_cost / total_qty if total_qty > 0 else 0
                     position.quantity = total_qty
                 else:
-                    # Reduce position
-                    position.quantity -= executed_qty
+                    # Reduce position — capture closed qty BEFORE subtracting to compute PnL correctly.
+                    # Using position.quantity after subtraction would give 0 when the position is fully
+                    # closed, causing realized_pnl to always be $0.
+                    qty_closed = min(executed_qty, position.quantity)
+                    realized_pnl = (executed_price - position.average_price) * qty_closed
+                    self.paper_portfolio.realized_pnl += realized_pnl
+                    position.quantity -= qty_closed
                     if position.quantity <= 0:
-                        # Position closed
-                        realized_pnl = (executed_price - position.average_price) * abs(position.quantity)
-                        self.paper_portfolio.realized_pnl += realized_pnl
                         del self.paper_portfolio.positions[symbol]
 
             else:
