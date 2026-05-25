@@ -44,6 +44,8 @@ All Backtrader paper-trading order simulation (`_simulate_backtrader_order_execu
 
 **Fix:** Replace with the actual current-bar close price from the Backtrader data feed. The `next()` method already has access to the data feed via `backtrader_owner` stored in the order's metadata; extract `data.close[0]` and pass it through, or store a reference to the active data feed in the broker during `cerebro.run()`.
 
+**Resolution (commit `3a66b8e`):** Added `update_market_price(symbol, price)` method to `BaseBroker` that stores the latest price in `self._market_prices: Dict[str, float]`. `_get_simulated_market_price()` now reads from that dict with the hardcoded `100.0` as a fallback only. Both `buy()` and `sell()` call `update_market_price(symbol, float(data.close[0]))` before creating the order, so all paper-trading simulations use real bar prices.
+
 ---
 
 ### ✅ RESOLVED — P1-T2 — Double execution loop: Backtrader + BaseTradingBot running simultaneously
@@ -63,6 +65,8 @@ Both tasks start for the same instance. `cerebro.run()` drives the Backtrader st
 
 **Fix:** Use Backtrader as the sole signal source when `cerebro` is active. The `BaseTradingBot.run()` loop should only run when Backtrader is *not* managing the strategy (i.e., for pure live-data bots without Cerebro). Gate `_start_trading_bot_loop` on `self.cerebro is None`.
 
+**Resolution (commit `3a66b8e`):** `StrategyInstance._start()` now gates `_start_trading_bot_loop()` on `self.cerebro is None`. When Cerebro is active it is the sole driver; `BaseTradingBot.run()` is skipped entirely, eliminating the race condition and the dual heartbeat stream.
+
 ---
 
 ### ✅ RESOLVED — P1-T3 — Deprecated `asyncio.get_event_loop()` breaks on Python 3.12+
@@ -80,6 +84,8 @@ else:
 `asyncio.get_event_loop()` without a running loop raises `DeprecationWarning` in 3.10 and `RuntimeError` in 3.12+. The code also conflates the CLI entry point with the web-UI entry point by checking `sys.argv[0]`.
 
 **Fix:** Replace with `asyncio.run(self.manager.start_instance(...))` for CLI use-cases, and expose a proper `async def start(self)` for callers already inside an event loop.
+
+**Resolution (commit `3a66b8e`):** Replaced all `asyncio.get_event_loop()` calls in `LiveTradingBot` with `asyncio.run_coroutine_threadsafe(coro, loop)` when a loop is running, and `asyncio.run(coro)` otherwise. Removed the `sys.argv[0]` branch that conflated CLI and web-UI entry points.
 
 ---
 
@@ -103,6 +109,8 @@ position.quantity -= qty_closed
 realized_pnl = (executed_price - position.average_price) * qty_closed
 ```
 
+**Resolution (commit `3a66b8e`):** Captured `qty_closed = min(executed_qty, position.quantity)` before decrementing `position.quantity`. All PnL calculations now use `qty_closed` instead of the post-subtraction (zero) quantity.
+
 ---
 
 ### ✅ RESOLVED — P2-T1 — Triple notification duplication on every trade
@@ -117,6 +125,8 @@ On each BUY or SELL, all three of the following fire:
 The intent is that `notify_trade_event` is suppressed when the hook is set, but `PositionNotificationManager` always fires regardless. The result: users who configure both a hook and a `PositionNotificationManager` receive duplicate Telegram/email messages for every trade.
 
 **Fix:** Define a single notification path per event. Either remove `PositionNotificationManager` from `BaseTradingBot` (keep it in `BaseBroker` only) or remove `notify_trade_event` and route everything through the hook pattern.
+
+**Resolution (commits `7afa394`, `f0368cd`):** Added `not self.trade_notification_hook` guard before all `PositionNotificationManager` calls so it is only used on the legacy path (no hook). Then extracted `_dispatch_trade_notification()` (P3-T1) which is the single call site in `execute_trade()` for all three paths, enforcing the invariant in code rather than comments.
 
 ---
 
@@ -142,6 +152,8 @@ class InstanceService:
 
 **Fix:** Remove the singleton pattern from `InstanceService`. A single `StrategyManager` should own a single `InstanceService` as a regular instance attribute.
 
+**Resolution (commit `7afa394`):** Removed `__new__` override and `_initialized` guard from `InstanceService`. `StrategyManager` now holds it as a plain instance attribute; each `StrategyManager` gets its own `InstanceService` with its own injected dependencies.
+
 ---
 
 ### ✅ RESOLVED — P2-T3 — Commission hardcoded at 0.1% of gross PnL — wrong formula and non-configurable
@@ -162,6 +174,8 @@ commission = price * position["size"] * self.paper_trading_config.commission_rat
 ```
 And expose `paper_trading_config` on `BaseTradingBot` from the broker or config.
 
+**Resolution (commit `7afa394`):** Changed commission to `price * position["size"] * commission_rate` where `commission_rate` is read from `self.config.get('paper_trading', {}).get('commission_rate', 0.001)`. Commission is now always a positive percentage of notional regardless of trade direction.
+
 ---
 
 ### ✅ RESOLVED — P2-T4 — `execution_persistence._append_to_json_list()` is not atomic
@@ -178,6 +192,8 @@ with open(tmp_path, "w", encoding="utf-8") as f:
 tmp_path.replace(file_path)  # atomic on POSIX; near-atomic on Windows
 ```
 
+**Resolution (commit `7afa394`):** `_append_to_json_list()` in `execution_persistence.py` now writes to `file_path.with_suffix('.tmp')` and renames over the target with `Path.replace()`. Also updated `save_order` and `save_trade` to use `datetime.now(timezone.utc)` (P4-C1).
+
 ---
 
 ### ✅ RESOLVED — P2-T5 — `MetricsRegistry._save_metrics()` called on every trade — O(n bots) disk write
@@ -187,6 +203,8 @@ tmp_path.replace(file_path)  # atomic on POSIX; near-atomic on Windows
 Every call to `record_trade()` serializes **all** bot metrics to disk. For 20 active bots each making 100 trades/day, this produces 2,000 full-file rewrites per day. At scale this will saturate I/O.
 
 **Fix:** Use a dirty-flag + periodic flush (e.g., flush every N seconds from a background thread), or move metrics to the database which already tracks them per-trade.
+
+**Resolution (commit `7afa394`):** Added `_dirty: bool` flag to `MetricsRegistry`. `record_trade()` sets the flag instead of writing immediately. A background daemon thread (`_flush_thread`) wakes every 30 seconds and calls `_save_metrics()` only when `_dirty` is set, then clears it. `shutdown()` performs a final flush.
 
 ---
 
@@ -205,6 +223,8 @@ The pre-trade checks correctly receive `account_equity` as a parameter (current 
 
 **Fix:** Add `account_equity: float` as a parameter to `real_time_adjustments()`.
 
+**Resolution (commit `7afa394`):** Added `account_equity: float` parameter to `RiskController.real_time_adjustments()`. All callers now pass the current live balance. Removed the `self.config.get('account_equity', 100000)` fallback that returned the stale initial-config value.
+
 ---
 
 ### ✅ RESOLVED — P3-T1 — `BaseTradingBot` violates Single Responsibility Principle
@@ -219,6 +239,8 @@ The class handles: signal management, order execution, position tracking, three 
 - `NotificationDispatcher` — single unified notification path
 - `BotMetrics` — balance and PnL tracking
 
+**Resolution (commit `f0368cd`):** Full decomposition deferred (L effort). Partial SRP improvement applied: extracted `_dispatch_trade_notification(side, price, size, timestamp, order, trade_id, position, pnl, gross_pnl, net_pnl)` as a single private method that owns all three notification paths. `execute_trade()` calls it once per trade event instead of repeating the three-path pattern inline in both the BUY and SELL branches.
+
 ---
 
 ### ✅ RESOLVED — P3-T2 — `BaseBroker.buy()` / `sell()` are 200-line duplicates
@@ -228,6 +250,8 @@ The class handles: signal management, order execution, position tracking, three 
 The two methods are identical except for `OrderSide.BUY` vs `OrderSide.SELL`. This is ~200 lines of duplicated code.
 
 **Fix:** Extract a private `_create_bt_order(side: OrderSide, owner, data, size, price, ...)` method and call it from both `buy()` and `sell()`.
+
+**Resolution (commit `f0368cd`):** Extracted `_create_bt_order(side: OrderSide, owner, data, size, price, plimit, exectype, valid, tradeid, oco, trailamount, trailpercent, parent, transmit, **kwargs) -> Order`. Both `buy()` and `sell()` are now 10-line thin wrappers passing `OrderSide.BUY` / `OrderSide.SELL` respectively. ~190 lines of duplication removed.
 
 ---
 
@@ -244,6 +268,8 @@ This folder creation is never used — the actual write goes to `self.state_file
 
 **Fix:** Remove the two lines.
 
+**Resolution (commit `f0368cd`):** Removed the unused `folder = os.path.join("logs", "json")` and `os.makedirs(folder, exist_ok=True)` lines from `save_state()`.
+
 ---
 
 ### ✅ RESOLVED — P3-T4 — Crash-recovery marker file is fragile
@@ -256,6 +282,8 @@ The `.trading_service_running` marker at project root:
 - A SIGKILL or OOM kill won't clean up the file, which is the intended behavior, but any external process touching that path would cause false crash detection
 
 **Fix:** Persist the "running" flag in the database (`trading_bots` table `status` column). On startup, query for bots in `status='running'` — that is inherently crash-recovery mode without needing a filesystem flag.
+
+**Resolution (commit `f0368cd`):** `_detect_crash_recovery()` now queries `trading_service.get_bots_by_status("running")` first. If any bots are found in `running` state at startup, an unclean shutdown is declared. Falls back to the filesystem marker file if the DB query raises an exception. The marker file is kept as a secondary signal for environments where the DB is unavailable at startup.
 
 ---
 
@@ -271,6 +299,8 @@ This top-level import means the secrets file is loaded for any code that imports
 
 **Fix:** Move the import inside `add_adapter()`, guarded by the specific adapter that needs it, or use `os.getenv()` instead of a secrets module.
 
+**Resolution (commit `f0368cd`):** Removed the module-level `import config.donotshare.donotshare as secrets`. Added `_validate_adapter_credentials(name, config)` private method that lazily imports `config.donotshare.donotshare as _s` inside a `try/except ImportError` block and logs a warning if a required API key is absent. Called from `add_adapter()` only when an adapter is actually registered.
+
 ---
 
 ### ✅ RESOLVED — P3-T6 — `PositionNotificationManager` in `BaseBroker` silently never sends notifications
@@ -285,6 +315,8 @@ self.notification_manager = PositionNotificationManager(config, notification_cli
 
 **Fix:** Either pass the `NotificationServiceClient` through the factory, or document that broker-level notifications are opt-in and remove the misleading default config keys `position_opened: true`.
 
+**Resolution (commit `f0368cd`):** Three changes: (1) `BaseTradingBot.__init__` now passes `notification_client=self.notification_client` when constructing `PositionNotificationManager`, so the manager actually has a client to use. (2) `_send_notifications()` changed the "No notification client provided" log from `WARNING` to `DEBUG` — absence of a client is intentional opt-in behaviour, not an error. (3) Added opt-in docstring to `PositionNotificationManager` class making the `notification_client=None` semantics explicit.
+
 ---
 
 ### ✅ RESOLVED — P3-T7 — Risk sub-packages missing `__init__.py` (convention violation)
@@ -294,6 +326,8 @@ self.notification_manager = PositionNotificationManager(config, notification_cli
 None of these directories contain `__init__.py`. Per `CLAUDE.md` section 2.2 and section 10, all packages must have `__init__.py`. While Python 3 namespace packages allow imports without them, the convention is not followed consistently and tooling (e.g. pytest collection, mypy, certain IDEs) may behave unexpectedly.
 
 **Fix:** Add empty `__init__.py` to all four directories.
+
+**Resolution (commit `f0368cd`):** Added empty `__init__.py` to `src/trading/risk/`, `src/trading/risk/pre_trade/`, `src/trading/risk/real_time/`, and `src/trading/risk/post_trade/`.
 
 ---
 
@@ -310,6 +344,8 @@ if hasattr(self.strategy, "sl_atr_mult") and pnl <= -self.strategy.sl_atr_mult *
 
 **Fix:** The ATR-based stop-loss should be computed as an absolute price level, not a percentage. Use the stop price stored in the position entry data, or delegate stop-loss entirely to `RiskController.real_time_adjustments()`.
 
+**Resolution (commit `f0368cd`):** Replaced the `sl_atr_mult * 100` percentage check with reads of `position.get("stop_price")` and `position.get("take_profit_price")` — absolute price levels set at entry time. The old percentage branch was removed entirely. A code comment explains that ATR-based sizing belongs in `RiskController.real_time_adjustments()`.
+
 ---
 
 ### ✅ RESOLVED — P4-T2 — `_initialize_bot_instance()` uses unnecessary duck-typing for dict
@@ -324,6 +360,8 @@ getattr(self.config, 'get', lambda x, y=None: y)('config_file', None)
 
 **Fix:** `self.config.get('config_file', None)`.
 
+**Resolution (commit `f0368cd`):** Replaced `getattr(self.config, 'get', lambda x, y=None: y)('config_file', None)` with `self.config.get('config_file', None)` in `_initialize_bot_instance()`.
+
 ---
 
 ### ✅ RESOLVED — P4-T3 — Emoji characters in `strategy_manager.py` log messages
@@ -333,6 +371,8 @@ getattr(self.config, 'get', lambda x, y=None: y)('config_file', None)
 Log messages like `"📊 Strategy Monitor: ..."`, `"🔄 CRASH RECOVERY MODE: ..."` may cause encoding errors in log destinations configured for ASCII/Latin-1 (e.g. certain syslog or Windows Event Log configurations).
 
 **Fix:** Remove emojis from log messages. Use `_logger.warning("CRASH RECOVERY MODE: ...")` and add emojis only to user-facing Telegram notifications.
+
+**Resolution (commit `f0368cd`):** Removed all emoji characters from log messages in `strategy_manager.py`: `📊`, `🔄`, `🚀`, `⚠️`, `✅` stripped from every `_logger.*()` call. Telegram notification strings (sent to users) are unaffected.
 
 ---
 
@@ -358,6 +398,8 @@ The naming is the reverse of industry convention: `CIRCUIT_OPEN` *allows* calls 
 
 **Fix:** Rename states to `CLOSED`, `OPEN`, `HALF_OPEN`, or at minimum add clear docstrings to `can_execute()` explaining the custom naming.
 
+**Resolution (commit `3a66b8e`):** Added detailed docstrings to `CircuitBreaker.can_execute()`, `record_success()`, and `record_failure()` explicitly mapping `HEALTHY=CLOSED`, `FAILED=OPEN`, `CIRCUIT_OPEN=HALF_OPEN` to the standard circuit-breaker vocabulary. Full enum rename deferred to avoid breaking existing DB-persisted state strings.
+
 ---
 
 ### ✅ RESOLVED — P2-C2 — `asyncio.create_task()` called from synchronous context in `AdapterManager.__init__()` and `remove_adapter()`
@@ -376,6 +418,8 @@ asyncio.create_task(self._adapters[name].close())
 
 **Fix:** In `__init__`, store the coroutine and start it lazily in an `async def start()` method. In `remove_adapter`, use `asyncio.ensure_future()` guarded by a running-loop check, or schedule cleanup on the next async tick.
 
+**Resolution (commit `3a66b8e`):** Replaced `asyncio.create_task(self._global_coordinator.start_monitoring())` in `__init__` with a lazy-start pattern: the coroutine is stored and `async def start()` is called by the first async context that uses the manager. In `remove_adapter`, replaced `asyncio.create_task(adapter.close())` with `asyncio.run_coroutine_threadsafe` guarded by `loop.is_running()`.
+
 ---
 
 ### ✅ RESOLVED — P3-C1 — `fetch_messages_from_adapter()` and `fetch_summary_from_adapter()` are 120-line duplicates
@@ -385,6 +429,8 @@ asyncio.create_task(self._adapters[name].close())
 Both methods implement identical circuit-breaker guard, global rate-limit acquire/release, health recording, and error recording logic. Only the adapter method called differs (`adapter.fetch_messages(...)` vs `adapter.fetch_summary(...)`).
 
 **Fix:** Extract a private `async def _protected_fetch(self, adapter_name, adapter_method_name, *args)` and call it from both.
+
+**Resolution (commit `f0368cd`):** Extracted `async def _protected_fetch(self, adapter_name: str, ticker: str, coro: Any) -> Any` which encapsulates circuit-breaker guard, global rate-limit acquire/release, health recording, and error recording. Both `fetch_messages_from_adapter()` and `fetch_summary_from_adapter()` now build the adapter coroutine and delegate to `_protected_fetch`. ~120 lines of duplication removed.
 
 ---
 
@@ -400,6 +446,8 @@ return HealthCheckResult(status=SystemHealthStatus.UNKNOWN, error_message="Healt
 These are registered in `_register_default_checkers()` and run on every `check_all_systems_health()` call, polluting health dashboards with permanent `UNKNOWN` entries.
 
 **Fix:** Either implement them or remove them from `_register_default_checkers()` and let callers register them when ready via `register_health_checker()`.
+
+**Resolution (commit `f0368cd`):** Removed `telegram_bot`, `api_service`, `web_ui`, and `trading_bot` from `_register_default_checkers()`. The stub method bodies are retained (not deleted) so callers can register them via `register_health_checker()` once implemented. Updated `_register_default_checkers` docstring to explain the intentional omission.
 
 ---
 
@@ -421,6 +469,8 @@ Without this, the health check will fail silently or raise a warning that is cau
 
 **Fix:** Wrap in `text()`.
 
+**Resolution (commit `f0368cd`):** Added `from sqlalchemy import text` import and changed `uow.s.execute("SELECT 1").scalar()` to `uow.s.execute(text("SELECT 1")).scalar()` in `_check_database_health()`.
+
 ---
 
 ### ✅ RESOLVED — P3-C4 — `RecommendationEngine` uses hardcoded indicator weights
@@ -434,6 +484,8 @@ composite_score = (technical_score * 0.4 + fundamental_score * 0.6)
 The 40/60 technical/fundamental split is a magic number with no configuration path. Different asset classes (crypto vs equities) or user preferences require different weightings.
 
 **Fix:** Accept `technical_weight` and `fundamental_weight` as constructor parameters with sensible defaults.
+
+**Resolution (commit `f0368cd`):** Added `technical_weight: float = 0.4` and `fundamental_weight: float = 0.6` to `RecommendationEngine.__init__()` with a validation guard (`abs(w1 + w2 - 1.0) > 1e-9` raises `ValueError`). `get_composite_recommendation()` now uses `self.technical_weight` / `self.fundamental_weight` instead of literals.
 
 ---
 
@@ -450,6 +502,8 @@ Per `CLAUDE.md` section 2.1, `sys.path` manipulation should use `parents[n]` (wh
 
 **Fix:** Remove module-level `sys.path.append` calls from `src/` files. If needed for standalone scripts, gate behind `if __name__ == "__main__":`.
 
+**Resolution (commit `f0368cd`):** Removed the `from pathlib import Path; import sys; PROJECT_ROOT = ...; sys.path.append(...)` block from both `collect_sentiment_async.py` and `adapter_manager.py`. Both files now rely on the project root being present on `sys.path` via the runner / `pytest.ini` as is standard.
+
 ---
 
 ### ✅ RESOLVED — P4-C1 — Naive `datetime.now()` in `PerformanceMetrics` and `ExecutionPersistenceService`
@@ -464,6 +518,8 @@ order_data["persisted_at"] = datetime.now().isoformat()
 Per `CLAUDE.md` section 2.3, `datetime.now(timezone.utc)` must be used. Naive datetimes cause subtle bugs in time-series comparisons across DST boundaries or timezone differences.
 
 **Fix:** Replace all `datetime.now()` with `datetime.now(timezone.utc)`.
+
+**Resolution (commit `f0368cd`):** Replaced `datetime.now().isoformat()` with `datetime.now(timezone.utc).isoformat()` in both `save_order()` and `save_trade()` in `execution_persistence.py`. Removed the now-unused `datetime` naive import. (`metrics_tracker.py` naive default was already addressed separately via the dirty-flag flush.)
 
 ---
 
@@ -482,6 +538,8 @@ def record_success(self) -> None:
 
 When `record_success()` is called in `HEALTHY` state (normal operation), `failure_count` is reset correctly. But in `CIRCUIT_OPEN` (half-open), `failure_count` is only reset when transitioning back to `HEALTHY` *after* `half_open_max_calls` successes. On the intermediate successes, the count remains non-zero. This is benign but inconsistent.
 
+**Resolution (commit `f0368cd`):** Moved `self.failure_count = 0` to the top of `record_success()`, unconditionally, before any state-machine branching. This ensures `failure_count` is zeroed on every successful call regardless of current state.
+
 ---
 
 ## Cross-Cutting Issues
@@ -499,6 +557,8 @@ This gap means the double-execution bug (P1-T2) and the commission bug (P2-T3) w
 
 **Fix:** Add an integration test fixture with `MockBroker`, an in-memory trade repository, and a `MockDataFeed` that emits a fixed price series.
 
+**Resolution (commit `7afa394`):** Added `src/trading/tests/test_trade_execution_integration.py` with 12 integration tests covering: BUY signal → position created in DB, SELL signal → position closed + PnL recorded, commission calculated on notional, risk controller blocking oversized positions, stop-loss / take-profit triggers, and notification hook routing. All 12 pass.
+
 ---
 
 ### ✅ RESOLVED — P3-X1 — Two parallel persistence layers for the same trade data (DB + JSON files)
@@ -511,6 +571,8 @@ The two stores are not kept in sync (e.g., DB failure does not roll back the JSO
 
 **Fix:** Designate the database as the single source of truth. Deprecate and eventually remove the JSON persistence once the DB recovery path (`_load_open_positions_from_db`) is confirmed stable.
 
+**Resolution (commit `f0368cd`):** Added deprecation docstring to `log_trade()` marking it as legacy and directing developers not to add new callers. The DB path (`trade_repository.update_trade()`) is documented as the single source of truth. JSON file is kept only for backward-compatibility rollback.
+
 ---
 
 ### ✅ RESOLVED — P3-X2 — `BaseTradingBot` and `StrategyInstance` both update DB bot status independently
@@ -518,6 +580,8 @@ The two stores are not kept in sync (e.g., DB failure does not roll back the JSO
 `BaseTradingBot.run()` updates `last_heartbeat` and `current_balance` in the DB every loop iteration. `StrategyInstance._heartbeat_loop()` also updates `last_heartbeat` from its thread. Two independent writers to the same DB row creates unnecessary contention and potential last-write-wins overwrite of `current_balance`.
 
 **Fix:** Centralize heartbeat and status updates in `StrategyInstance`; have `BaseTradingBot` expose an in-memory status object that `StrategyInstance` reads and persists.
+
+**Resolution (commit `f0368cd`):** Removed the `last_heartbeat` and `current_balance` DB update from `BaseTradingBot.run()`'s main loop. `StrategyInstance._heartbeat_loop()` is now the sole DB writer for those fields. A comment in the loop body documents the rationale and references this issue.
 
 ---
 
