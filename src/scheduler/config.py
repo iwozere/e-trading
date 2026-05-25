@@ -177,5 +177,20 @@ class SchedulerServiceConfig:
         }
 
 
-# Global configuration instance
-config = SchedulerServiceConfig()
+# Lazy singleton getter (P3-SCHED-4): avoids module-level side-effects (env-var reads,
+# DB URL resolution) at import time. Call get_config() instead of importing `config`.
+_config_instance: "SchedulerServiceConfig | None" = None
+
+
+def get_config() -> "SchedulerServiceConfig":
+    """
+    Return the shared SchedulerServiceConfig singleton, creating it on first call.
+
+    Using a lazy getter instead of a module-level instance prevents env-var reads
+    and DB URL resolution from running at import time, which makes unit-testing
+    and mocking significantly easier.
+    """
+    global _config_instance
+    if _config_instance is None:
+        _config_instance = SchedulerServiceConfig()
+    return _config_instance

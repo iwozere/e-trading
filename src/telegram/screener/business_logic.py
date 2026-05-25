@@ -64,7 +64,7 @@ class TelegramBusinessLogic:
             
             return {"status": "error", "message": f"Unknown command: {cmd}"}
         except Exception as e:
-            _logger.exception(f"Error handling command {parsed.command}")
+            _logger.exception("Error handling command %s", parsed.command)
             return {"status": "error", "message": f"Internal error: {str(e)}"}
 
     def handle_help(self, parsed: ParsedCommand) -> Dict[str, Any]:
@@ -96,24 +96,27 @@ class TelegramBusinessLogic:
 
     def handle_feedback(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Delegates feedback collection."""
-        # Simple implementation using telegram_service
+        tid = parsed.args.get("telegram_user_id")
         try:
-            tid = parsed.args.get("telegram_user_id")
             msg = parsed.args.get("feedback") or " ".join(parsed.positionals)
             if self.telegram_service:
                 self.telegram_service.add_feedback(tid, "feedback", msg)
             return {"status": "ok", "message": "Feedback received. Thank you!"}
-        except: return {"status": "error", "message": "Failed to save feedback."}
+        except Exception:
+            _logger.exception("Error saving feedback for user %s", tid)
+            return {"status": "error", "message": "Failed to save feedback."}
 
     def handle_feature(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Delegates feature request collection."""
+        tid = parsed.args.get("telegram_user_id")
         try:
-            tid = parsed.args.get("telegram_user_id")
             msg = parsed.args.get("feature") or " ".join(parsed.positionals)
             if self.telegram_service:
                 self.telegram_service.add_feedback(tid, "feature_request", msg)
             return {"status": "ok", "message": "Feature request received. Thank you!"}
-        except: return {"status": "error", "message": "Failed to save feature request."}
+        except Exception:
+            _logger.exception("Error saving feature request for user %s", tid)
+            return {"status": "error", "message": "Failed to save feature request."}
 
     def handle_admin(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Delegates admin commands to user_service."""

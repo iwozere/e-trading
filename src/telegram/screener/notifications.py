@@ -1,18 +1,33 @@
 import sys
 from pathlib import Path
+from typing import Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
+# Use insert(0, ...) so the project root takes precedence over any same-named
+# packages elsewhere on sys.path (P3-TG-3).
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.telegram.screener.business_logic import handle_command, get_service_instances
 from src.telegram.command_parser import ParsedCommand, parse_command
 from src.notification.logger import setup_logger
 from src.notification.service.client import MessageType, MessagePriority
 from src.common.recommendation.engine import RecommendationEngine
+
 _logger = setup_logger(__name__)
 
-# Initialize unified recommendation engine
-recommendation_engine = RecommendationEngine()
+# Lazy singleton for RecommendationEngine (P3-TG-4): module-level instantiation
+# triggers heavy imports and potential I/O at import time.  Use get_recommendation_engine()
+# instead, which defers construction until first use.
+_recommendation_engine: Optional[RecommendationEngine] = None
+
+
+def get_recommendation_engine() -> RecommendationEngine:
+    """Return the shared RecommendationEngine, creating it on first call."""
+    global _recommendation_engine
+    if _recommendation_engine is None:
+        _recommendation_engine = RecommendationEngine()
+    return _recommendation_engine
 
 
 async def process_report_notifications(result, notification_client, message, user_email):
@@ -457,8 +472,8 @@ def _get_unified_recommendation(indicator: str, value: float, context: dict = No
         if value is None:
             return "HOLD"
 
-        # Get recommendation from unified engine
-        recommendation = recommendation_engine.get_legacy_recommendation(indicator, value, context)
+        # Get recommendation from unified engine (lazy-initialised singleton)
+        recommendation = get_recommendation_engine().get_legacy_recommendation(indicator, value, context)
         return recommendation[0]  # Return just the recommendation string
     except Exception as e:
         _logger.warning("Error getting recommendation for %s: %s", indicator, e)

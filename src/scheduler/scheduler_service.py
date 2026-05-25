@@ -35,16 +35,7 @@ from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobT
 from src.common.alerts.cron_parser import CronParser
 from src.common.alerts.alert_evaluator import AlertEvaluator
 from src.notification.logger import setup_logger
-
-# Import MessagePriority enum for compatibility
-from enum import Enum
-
-class MessagePriority(str, Enum):
-    """Message priority levels."""
-    CRITICAL = "critical"
-    HIGH = "high"
-    NORMAL = "normal"
-    LOW = "low"
+from src.notification.service.client import MessagePriority
 
 _logger = setup_logger(__name__)
 UTC = timezone.utc
@@ -398,6 +389,11 @@ class SchedulerService:
                 # If downtime could produce many missed runs that aren't useful to replay,
                 # set coalesce=True in the environment config.
                 'coalesce': False,
+                # misfire_grace_time caps missed-run replay (P3-SCHED-3): APScheduler will
+                # only replay a missed execution if it is within this window of its scheduled
+                # time. Runs older than misfire_grace_time are silently discarded, preventing
+                # an avalanche of catch-up executions after a long outage.
+                'misfire_grace_time': 300,  # 5 minutes — tune per env if needed
                 'max_instances': self.max_workers
             }
 
@@ -518,13 +514,16 @@ class SchedulerService:
             job_id = f"schedule_{schedule.id}"
 
             # Register job with APScheduler
-            # Use module-level wrapper instead of instance method to avoid pickling errors
+            # Use module-level wrapper instead of instance method to avoid pickling errors.
+            # max_instances=1 ensures a single schedule never runs concurrently with itself,
+            # which also naturally caps catch-up replay to one execution at a time (P3-SCHED-3).
             self.scheduler.add_job(
                 func=execute_job_wrapper,
                 trigger=trigger,
                 id=job_id,
                 args=[schedule.id],
-                replace_existing=True
+                replace_existing=True,
+                max_instances=1,
             )
 
             _logger.debug("Registered schedule %s (ID: %d) with job ID: %s",
@@ -1180,163 +1179,160 @@ class SchedulerService:
         except Exception:
             _logger.exception("Error updating schedule state for %d:", schedule_id)
 
-    async def _send_notification(self, notification_data: Dict[str, Any]) -> bool:
+    @staticmethod
+    def _format_alert_message(notification_data: Dict[str, Any]) -> tuple[str, str]:
         """
-        Send notification for triggered alert with enhanced formatting and error handling.
+        Format the Markdown notification title and message body for a triggered alert.
+
+        Extracted from _send_notification to satisfy SRP (P3-SCHED-2).
+        Pure function — no I/O, no side effects.
 
         Args:
-            notification_data: Notification data from alert evaluation
+            notification_data: Notification data from alert evaluation.
 
         Returns:
-            True if notification was sent successfully, False otherwise
+            A ``(title, message)`` tuple ready to be inserted into the DB.
+        """
+        ticker = notification_data.get("ticker", "Unknown")
+        timeframe = notification_data.get("timeframe", "Unknown")
+        price = notification_data.get("price", 0.0)
+        alert_name = notification_data.get("alert_name", "Alert")
+
+        # Safely convert price to float
+        try:
+            price_float = float(price) if price is not None else 0.0
+        except (ValueError, TypeError):
+            price_float = 0.0
+            _logger.warning("Invalid price value: %s, using 0.0", price)
+
+        title = f"🚨 {alert_name}: {ticker} ({timeframe})"
+
+        message_parts = [
+            f"**Alert Triggered: {alert_name}**",
+            f"📈 Symbol: {ticker}",
+            f"⏱️ Timeframe: {timeframe}",
+            f"💰 Current Price: ${price_float:.4f}",
+            f"🕐 Triggered At: {notification_data.get('timestamp', datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC'))}"
+        ]
+
+        # Market context
+        market_data = notification_data.get("market_data", {})
+        if market_data:
+            message_parts.append("\n**📊 Market Context:**")
+            if "open" in market_data:
+                try:
+                    open_price = float(market_data["open"])
+                    high_price = float(market_data.get("high", price_float))
+                    low_price = float(market_data.get("low", price_float))
+                    volume = float(market_data.get("volume", 0))
+                    price_change = ((price_float - open_price) / open_price * 100) if open_price > 0 else 0
+                    change_emoji = "📈" if price_change >= 0 else "📉"
+                    message_parts.extend([
+                        f"  • Open: ${open_price:.4f}",
+                        f"  • High: ${high_price:.4f}",
+                        f"  • Low: ${low_price:.4f}",
+                        f"  • Change: {change_emoji} {price_change:+.2f}%"
+                    ])
+                    if volume > 0:
+                        message_parts.append(f"  • Volume: {volume:,.0f}")
+                except (ValueError, TypeError):
+                    _logger.warning("Invalid market data values, skipping market context")
+
+        # Technical indicators grouped by type
+        indicators = notification_data.get("indicators", {})
+        if indicators:
+            message_parts.append("\n**📊 Technical Indicators:**")
+            trend_ind: Dict[str, Any] = {}
+            momentum_ind: Dict[str, Any] = {}
+            volatility_ind: Dict[str, Any] = {}
+            other_ind: Dict[str, Any] = {}
+            for name, value in indicators.items():
+                name_lower = name.lower()
+                if any(k in name_lower for k in ["sma", "ema", "ma", "trend", "supertrend"]):
+                    trend_ind[name] = value
+                elif any(k in name_lower for k in ["rsi", "macd", "stoch", "momentum"]):
+                    momentum_ind[name] = value
+                elif any(k in name_lower for k in ["bb", "bollinger", "atr", "volatility"]):
+                    volatility_ind[name] = value
+                else:
+                    other_ind[name] = value
+            for _category, ind_dict in [
+                ("Trend", trend_ind),
+                ("Momentum", momentum_ind),
+                ("Volatility", volatility_ind),
+                ("Other", other_ind),
+            ]:
+                for ind_name, ind_val in ind_dict.items():
+                    if isinstance(ind_val, bool):
+                        message_parts.append(f"  • {ind_name}: {ind_val}")
+                    elif isinstance(ind_val, (int, float)):
+                        message_parts.append(f"  • {ind_name}: {ind_val:.4f}")
+                    else:
+                        message_parts.append(f"  • {ind_name}: {ind_val}")
+
+        # Rule evaluation details
+        rule_snapshot = notification_data.get("rule_snapshot", {})
+        rule_description = notification_data.get("rule_description", "")
+        if rule_snapshot or rule_description:
+            message_parts.append("\n**📋 Alert Rule Details:**")
+            if rule_description:
+                message_parts.append(f"  • Rule: {rule_description}")
+            if rule_snapshot:
+                message_parts.append("  • Values:")
+                for r_name, r_val in rule_snapshot.items():
+                    if isinstance(r_val, bool):
+                        message_parts.append(f"    - {r_name}: {r_val}")
+                    elif isinstance(r_val, (int, float)):
+                        message_parts.append(f"    - {r_name}: {r_val:.4f}")
+                    else:
+                        message_parts.append(f"    - {r_name}: {r_val}")
+
+        # Rearm status
+        rearm_info = notification_data.get("rearm_info", {})
+        if rearm_info:
+            message_parts.append("\n**🔄 Rearm Status:**")
+            message_parts.append(f"  • Type: {rearm_info.get('type', 'unknown')}")
+            message_parts.append(f"  • Value: {rearm_info.get('value', 'N/A')}")
+
+        # Alert config summary
+        alert_config = notification_data.get("alert_config", {})
+        if alert_config:
+            message_parts.append("\n**⚙️ Alert Configuration:**")
+            if "description" in alert_config:
+                message_parts.append(f"  • Description: {alert_config['description']}")
+            if "priority" in alert_config:
+                message_parts.append(f"  • Priority: {alert_config['priority']}")
+
+        # Footer
+        message_parts.extend([
+            "\n" + "─" * 30,
+            "💡 **Next Steps:**",
+            "• Review your trading strategy",
+            "• Check market conditions",
+            "• Consider position sizing",
+            "",
+            f"🤖 Generated by Scheduler Service at {datetime.now(UTC).strftime('%H:%M:%S UTC')}"
+        ])
+
+        return title, "\n".join(message_parts)
+
+    async def _send_notification(self, notification_data: Dict[str, Any]) -> bool:
+        """
+        Persist a formatted alert notification to the DB for downstream delivery.
+
+        Message formatting is delegated to _format_alert_message (P3-SCHED-2).
+
+        Args:
+            notification_data: Notification data from alert evaluation.
+
+        Returns:
+            True if the notification record was created successfully, False otherwise.
         """
         try:
-            # Extract notification configuration
             notify_config = notification_data.get("notify_config", {})
-
-            # Build enhanced notification title and message
             ticker = notification_data.get("ticker", "Unknown")
-            timeframe = notification_data.get("timeframe", "Unknown")
-            price = notification_data.get("price", 0.0)
-            alert_name = notification_data.get("alert_name", "Alert")
 
-            # Safely convert price to float
-            try:
-                price_float = float(price) if price is not None else 0.0
-            except (ValueError, TypeError):
-                price_float = 0.0
-                _logger.warning("Invalid price value: %s, using 0.0", price)
-
-            # Create contextual title
-            title = f"🚨 {alert_name}: {ticker} ({timeframe})"
-
-            # Build comprehensive message with enhanced formatting
-            message_parts = [
-                f"**Alert Triggered: {alert_name}**",
-                f"📈 Symbol: {ticker}",
-                f"⏱️ Timeframe: {timeframe}",
-                f"💰 Current Price: ${price_float:.4f}",
-                f"🕐 Triggered At: {notification_data.get('timestamp', datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC'))}"
-            ]
-
-            # Add market context if available
-            market_data = notification_data.get("market_data", {})
-            if market_data:
-                message_parts.append("\n**📊 Market Context:**")
-
-                # Add OHLCV data if available
-                if "open" in market_data:
-                    try:
-                        open_price = float(market_data["open"])
-                        high_price = float(market_data.get("high", price_float))
-                        low_price = float(market_data.get("low", price_float))
-                        volume = float(market_data.get("volume", 0))
-
-                        # Calculate price change
-                        price_change = ((price_float - open_price) / open_price * 100) if open_price > 0 else 0
-                        change_emoji = "📈" if price_change >= 0 else "📉"
-
-                        message_parts.extend([
-                            f"  • Open: ${open_price:.4f}",
-                            f"  • High: ${high_price:.4f}",
-                            f"  • Low: ${low_price:.4f}",
-                            f"  • Change: {change_emoji} {price_change:+.2f}%"
-                        ])
-
-                        if volume > 0:
-                            message_parts.append(f"  • Volume: {volume:,.0f}")
-
-                    except (ValueError, TypeError):
-                        _logger.warning("Invalid market data values, skipping market context")
-
-            # Add technical indicators with enhanced formatting
-            indicators = notification_data.get("indicators", {})
-            if indicators:
-                message_parts.append("\n**📊 Technical Indicators:**")
-
-                # Group indicators by type for better readability
-                trend_indicators = {}
-                momentum_indicators = {}
-                volatility_indicators = {}
-                other_indicators = {}
-
-                for name, value in indicators.items():
-                    name_lower = name.lower()
-                    if any(trend in name_lower for trend in ["sma", "ema", "ma", "trend", "supertrend"]):
-                        trend_indicators[name] = value
-                    elif any(momentum in name_lower for momentum in ["rsi", "macd", "stoch", "momentum"]):
-                        momentum_indicators[name] = value
-                    elif any(vol in name_lower for vol in ["bb", "bollinger", "atr", "volatility"]):
-                        volatility_indicators[name] = value
-                    else:
-                        other_indicators[name] = value
-
-                # Format indicators by category
-                for category, indicators_dict in [
-                    ("Trend", trend_indicators),
-                    ("Momentum", momentum_indicators),
-                    ("Volatility", volatility_indicators),
-                    ("Other", other_indicators)
-                ]:
-                    if indicators_dict:
-                        for name, value in indicators_dict.items():
-                            if isinstance(value, bool):
-                                message_parts.append(f"  • {name}: {value}")
-                            elif isinstance(value, (int, float)):
-                                message_parts.append(f"  • {name}: {value:.4f}")
-                            else:
-                                message_parts.append(f"  • {name}: {value}")
-
-            # Add rule evaluation details
-            rule_snapshot = notification_data.get("rule_snapshot", {})
-            rule_description = notification_data.get("rule_description", "")
-
-            if rule_snapshot or rule_description:
-                message_parts.append("\n**📋 Alert Rule Details:**")
-
-                if rule_description:
-                    message_parts.append(f"  • Rule: {rule_description}")
-
-                if rule_snapshot:
-                    message_parts.append("  • Values:")
-                    for name, value in rule_snapshot.items():
-                        if isinstance(value, bool):
-                            message_parts.append(f"    - {name}: {value}")
-                        elif isinstance(value, (int, float)):
-                            message_parts.append(f"    - {name}: {value:.4f}")
-                        else:
-                            message_parts.append(f"    - {name}: {value}")
-
-            # Add rearm status if available
-            rearm_info = notification_data.get("rearm_info", {})
-            if rearm_info:
-                message_parts.append("\n**🔄 Rearm Status:**")
-                rearm_type = rearm_info.get("type", "unknown")
-                rearm_value = rearm_info.get("value", "N/A")
-                message_parts.append(f"  • Type: {rearm_type}")
-                message_parts.append(f"  • Value: {rearm_value}")
-
-            # Add alert configuration summary
-            alert_config = notification_data.get("alert_config", {})
-            if alert_config:
-                message_parts.append("\n**⚙️ Alert Configuration:**")
-                if "description" in alert_config:
-                    message_parts.append(f"  • Description: {alert_config['description']}")
-                if "priority" in alert_config:
-                    message_parts.append(f"  • Priority: {alert_config['priority']}")
-
-            # Add footer with action suggestions
-            message_parts.extend([
-                "\n" + "─" * 30,
-                "💡 **Next Steps:**",
-                "• Review your trading strategy",
-                "• Check market conditions",
-                "• Consider position sizing",
-                "",
-                f"🤖 Generated by Scheduler Service at {datetime.now(UTC).strftime('%H:%M:%S UTC')}"
-            ])
-
-            message = "\n".join(message_parts)
+            title, message = self._format_alert_message(notification_data)
 
             # Determine channels from notify config with smart defaults
             channels = notify_config.get("channels", ["telegram"])
@@ -1351,7 +1347,7 @@ class SchedulerService:
             # Determine recipient
             recipient_id = notify_config.get("recipient_id") or notify_config.get("user_id") or "default"
 
-            # Adjust message priority based on alert configuration
+            # Map priority string to MessagePriority enum
             message_priority = MessagePriority.NORMAL
             if priority == "critical":
                 message_priority = MessagePriority.CRITICAL
@@ -1360,18 +1356,16 @@ class SchedulerService:
             elif priority == "low":
                 message_priority = MessagePriority.LOW
 
-            # Create notification message in database
-            # The notification processor will handle delivery to channels
-            try:
-                # Map priority to database format
-                priority_map = {
-                    MessagePriority.CRITICAL: "CRITICAL",
-                    MessagePriority.HIGH: "HIGH",
-                    MessagePriority.NORMAL: "NORMAL",
-                    MessagePriority.LOW: "LOW"
-                }
-                db_priority = priority_map.get(message_priority, "NORMAL")
+            # Map priority to database format
+            priority_map = {
+                MessagePriority.CRITICAL: "CRITICAL",
+                MessagePriority.HIGH: "HIGH",
+                MessagePriority.NORMAL: "NORMAL",
+                MessagePriority.LOW: "LOW",
+            }
+            db_priority = priority_map.get(message_priority, "NORMAL")
 
+            try:
                 message_data = {
                     "message_type": "ALERT",
                     "channels": channels,
@@ -1379,18 +1373,15 @@ class SchedulerService:
                     "content": {
                         "title": title,
                         "message": message,
-                        "metadata": notification_data
+                        "metadata": notification_data,
                     },
                     "priority": db_priority,
-                    "source": "scheduler_service"
+                    "source": "scheduler_service",
                 }
-
                 message_record = self.notification_db_service.create_message(message_data)
-
                 _logger.info("Created alert notification message %d for %s to channels: %s",
-                           message_record.id, ticker, channels)
+                             message_record.id, ticker, channels)
                 return True
-
             except Exception as e:
                 _logger.error("Error creating alert notification for %s: %s", ticker, str(e))
                 return False
@@ -1398,7 +1389,7 @@ class SchedulerService:
         except Exception:
             _logger.exception("Unexpected error sending enhanced notification:")
             _logger.debug("Notification error traceback: %s", traceback.format_exc())
-            # Don't raise - notification failures shouldn't stop job execution
+            # Don't raise — notification failures shouldn't stop job execution
             return False
 
     async def _clear_all_jobs(self) -> None:
