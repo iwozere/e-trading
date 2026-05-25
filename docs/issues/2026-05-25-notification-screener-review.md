@@ -3,7 +3,7 @@
 **Date:** 2026-05-25  
 **Reviewer:** AI Architecture Review (Claude Sonnet 4.6)  
 **Scope:** `src/notification/` · `src/screeners/`  
-**Status:** 🔄 In progress
+**Status:** ✅ P1 + P2 resolved — 1 commit on `main`
 
 ---
 
@@ -11,7 +11,7 @@
 
 | SHA | Message |
 |-----|---------|
-| _(pending)_ | Fix critical and high issues in notification and screeners modules |
+| `66611c0` | Fix critical and high issues in notification and screeners modules |
 
 ---
 
