@@ -17,6 +17,28 @@
 | P1-TG-2 | ✅ Fixed | `random.randint` → `secrets.randbelow` in `account.py`, `user_service.py`, `create_admin.py` |
 | P1-TG-3 | ✅ Fixed | `/api/status` removed from `_OPEN_PATHS`; new unauthenticated `/api/health` probe added |
 | P1-TG-4 | ✅ Fixed | Magic `"admin"` recipient replaced with `telegram_svc.get_admin_user_ids()` loop |
+| P2-SCHED-1 | ✅ Fixed | `get_event_loop()` → `get_running_loop()`; `ensure_future()` → `create_task()` |
+| P2-SCHED-2 | ✅ Fixed | Cancel-and-reschedule debounce (`_schedule_debounced_reload` / `_debounced_reload`) |
+| P2-SCHED-3 | ✅ Fixed | `asyncio.wait_for(timeout=job_timeout_seconds)` wraps every job execution |
+| P2-SCHED-4 | ✅ Fixed | Atomic reload: add/replace first, remove stale jobs last |
+| P2-TG-1 | ✅ Fixed | `handlers/alerts.py` fully delegates to `AlertManager.handle_alerts()` |
+| P2-TG-2 | ✅ Fixed | Lazy cached `get_business_logic()` facade in `business_logic.py` |
+| P2-TG-3 | ✅ Fixed | Exponential backoff (ceiling 300 s) in queue processor poll loop |
+| P2-TG-4 | ✅ Fixed | DB-first chat ID resolution; `< 1_000_000` heuristic removed |
+| P2-TG-5 | ✅ Fixed | Alert quota enforcement inherited from `AlertManager` (side-effect of P2-TG-1) |
+| P2-TG-6 | ✅ Fixed | `handlers_map` removed; `Command(ignore_case=True)` used throughout |
+| P3-SCHED-1 | ✅ Fixed | Local `MessagePriority` enum removed; import from `src.notification.service.client` |
+| P3-SCHED-2 | ✅ Fixed | `_format_alert_message()` static method extracted from `_send_notification()` |
+| P3-SCHED-3 | ✅ Fixed | `misfire_grace_time=300` in job defaults; `max_instances=1` per registered job |
+| P3-SCHED-4 | ✅ Fixed | Module-level `config = SchedulerServiceConfig()` replaced with lazy `get_config()` |
+| P3-TG-1 | ✅ Fixed | Bare `except:` replaced with `except Exception:` + `_logger.exception()` |
+| P3-TG-2 | ✅ Fixed | f-string in `_logger.exception()` replaced with lazy `%s` format |
+| P3-TG-3 | ✅ Fixed | `sys.path.append` → `sys.path.insert(0, ...)` with duplicate guard |
+| P3-TG-4 | ✅ Fixed | `recommendation_engine` module-level instance → lazy `get_recommendation_engine()` |
+| P4-SCHED-1 | ✅ Fixed | All `print()` calls in `cli.py` replaced with `_logger` calls |
+| P4-SCHED-2 | ✅ Fixed | `src/scheduler/README.md` created |
+| P4-TG-1 | ✅ Fixed | `src/telegram/README.md` created |
+| P4-TG-2 | ✅ Fixed | `src/telegram/docs/` created with `Requirements.md`, `Design.md`, `Tasks.md` |
 
 ---
 
