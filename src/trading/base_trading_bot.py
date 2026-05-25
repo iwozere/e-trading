@@ -471,11 +471,13 @@ class BaseTradingBot:
                         "trade_id": new_trade_id
                     }
 
-                # Send both legacy and enhanced notifications
+                # Route through a single notification path to avoid duplicate alerts.
+                # - notify_trade_event() is suppressed when trade_notification_hook is set.
+                # - position_notification_manager is only used on the legacy path (no hook).
+                # - trade_notification_hook is the modern path used by StrategyInstance.
                 self.notify_trade_event("BUY", price, size, timestamp)
 
-                # Enhanced position notification (P1-3: _run_async)
-                if self.position_notification_manager:
+                if self.position_notification_manager and not self.trade_notification_hook:
                     position_data = {
                         'symbol': self.trading_pair,
                         'side': 'BUY',
@@ -484,7 +486,7 @@ class BaseTradingBot:
                         'timestamp': timestamp,
                         'bot_id': self.bot_id,
                         'trading_mode': 'paper' if self.paper_trading else 'live',
-                        'order_id': str(order) if order else new_trade_id,  # P1-2: fixed
+                        'order_id': str(order) if order else new_trade_id,
                         'strategy': self.strategy_class.__name__ if hasattr(self.strategy_class, '__name__') else 'Unknown'
                     }
                     _run_async(self.position_notification_manager.notify_position_opened(position_data))
@@ -499,10 +501,15 @@ class BaseTradingBot:
                 position = sell_position
                 trade_id = position.get("trade_id")
 
-                # Calculate PnL
+                # Calculate PnL.
+                # Commission is a percentage of trade *notional* (price × size), not of
+                # P&L.  Using gross_pnl would produce a negative commission on losing
+                # trades (i.e. a rebate), which is wrong.  The rate comes from the
+                # paper_trading config block so it is configurable per-deployment.
                 pnl = ((price - position["entry_price"]) / position["entry_price"]) * 100
                 gross_pnl = (price - position["entry_price"]) * position["size"]
-                commission = gross_pnl * 0.001  # 0.1% commission
+                commission_rate = self.config.get('paper_trading', {}).get('commission_rate', 0.001)
+                commission = price * position["size"] * commission_rate
                 net_pnl = gross_pnl - commission
 
                 # Update trade in database
@@ -559,7 +566,8 @@ class BaseTradingBot:
                 with self._positions_lock:
                     self.active_positions.pop(self.trading_pair, None)
 
-                # Send both legacy and enhanced notifications
+                # Route through a single notification path to avoid duplicate alerts.
+                # See the BUY block above for the full rationale.
                 self.notify_trade_event(
                     "SELL",
                     price,
@@ -569,8 +577,7 @@ class BaseTradingBot:
                     pnl=pnl,
                 )
 
-                # Enhanced position notification (P1-3: _run_async)
-                if self.position_notification_manager:
+                if self.position_notification_manager and not self.trade_notification_hook:
                     hold_duration = "Unknown"
                     if position.get("entry_time"):
                         duration = timestamp - position["entry_time"]

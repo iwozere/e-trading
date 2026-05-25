@@ -76,12 +76,16 @@ class ExecutionPersistenceService:
                         all_items = []
 
                 all_items.append(data)
-                
-                # Atomic-like write using temporary file is preferred but here we do direct write
-                # since RotatingFileHandler (if used) would handle rollovers.
-                # However, this service handles raw JSON files.
-                with open(file_path, "w", encoding="utf-8") as f:
+
+                # Write to a sibling .tmp file first, then atomically rename over the
+                # target.  This prevents a crash mid-write from leaving a partially
+                # written (and therefore corrupt) JSON file.  On POSIX the rename is
+                # guaranteed atomic; on Windows it is near-atomic (same volume, single
+                # FS operation).
+                tmp_path = file_path.with_suffix('.tmp')
+                with open(tmp_path, "w", encoding="utf-8") as f:
                     json.dump(all_items, f, default=str, indent=2)
+                tmp_path.replace(file_path)
                     
             except Exception as e:
                 _logger.exception("Error appending to JSON list %s: %s", file_path, e)

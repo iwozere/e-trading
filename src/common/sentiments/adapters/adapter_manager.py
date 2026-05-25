@@ -39,6 +39,22 @@ class CircuitBreaker:
 
     Prevents cascading failures by temporarily disabling failed adapters
     and allowing gradual recovery.
+
+    **State naming note** — this implementation reuses ``AdapterStatus`` values
+    instead of defining its own enum, which leads to names that are the *inverse*
+    of the industry-standard Martin Fowler / Netflix Hystrix convention:
+
+    +---------------------------+----------------------------------+-------------------------------------+
+    | ``AdapterStatus`` value   | Industry-standard equivalent     | Calls allowed?                      |
+    +===========================+==================================+=====================================+
+    | ``HEALTHY``               | ``CLOSED`` (circuit is closed)   | Yes — all calls pass through        |
+    | ``FAILED``                | ``OPEN`` (circuit is open/tripped)| No — calls are blocked              |
+    | ``CIRCUIT_OPEN``          | ``HALF_OPEN`` (recovery probe)   | Yes — limited to half_open_max_calls|
+    +---------------------------+----------------------------------+-------------------------------------+
+
+    The critical counter-intuitive point: ``CIRCUIT_OPEN`` **allows** calls (it
+    is the recovery / half-open state), while ``FAILED`` **blocks** them.  Do
+    not confuse these names with the conventional meanings.
     """
 
     def __init__(self, config: CircuitBreakerConfig):
@@ -49,12 +65,20 @@ class CircuitBreaker:
         self.half_open_calls = 0
 
     def can_execute(self) -> bool:
-        """Check if operation can be executed based on circuit breaker state."""
+        """
+        Return True if a call may proceed given the current circuit-breaker state.
+
+        State semantics (see class docstring for the full naming table):
+        - ``HEALTHY``      → always allowed.
+        - ``FAILED``       → blocked; transitions to ``CIRCUIT_OPEN`` (half-open
+                             recovery probe) after ``recovery_timeout_seconds``.
+        - ``CIRCUIT_OPEN`` → allowed up to ``half_open_max_calls`` probes.
+        """
         if self.state == AdapterStatus.HEALTHY:
             return True
 
         if self.state == AdapterStatus.FAILED:
-            # Check if we should transition to half-open
+            # Check if we should transition to half-open (CIRCUIT_OPEN)
             if (self.last_failure_time and
                 datetime.now(timezone.utc) - self.last_failure_time > timedelta(seconds=self.config.recovery_timeout_seconds)):
                 self.state = AdapterStatus.CIRCUIT_OPEN
@@ -63,7 +87,7 @@ class CircuitBreaker:
             return False
 
         if self.state == AdapterStatus.CIRCUIT_OPEN:
-            # Allow limited calls in half-open state
+            # Allow limited probe calls in the half-open recovery state
             return self.half_open_calls < self.config.half_open_max_calls
 
         return False
@@ -167,7 +191,11 @@ class AdapterManager:
         self._health_check_interval = 300  # 5 minutes
         self._last_health_check: Optional[datetime] = None
 
-        # Initialize global rate limiting if enabled
+        # Initialize global rate limiting if enabled.
+        # The monitoring coroutine is NOT started here because __init__ may be
+        # called from synchronous code where there is no running event loop.
+        # Call ``await manager.start()`` once inside an async context to launch
+        # the background monitor.
         self._global_coordinator: Optional[GlobalRateLimitCoordinator] = None
         if enable_global_rate_limiting:
             try:
@@ -178,10 +206,7 @@ class AdapterManager:
                     enable_adaptive_global_limit=True
                 )
                 self._global_coordinator = initialize_global_coordinator(global_config)
-                # Note: Monitoring task will be started when needed or manually
-                if hasattr(self._global_coordinator, 'start_monitoring'):
-                    asyncio.create_task(self._global_coordinator.start_monitoring())
-                _logger.info("Global rate limiting enabled")
+                _logger.info("Global rate limiting enabled (monitoring not yet started — call start())")
             except Exception as e:
                 _logger.warning("Failed to initialize global rate limiting: %s", e)
 
@@ -235,12 +260,35 @@ class AdapterManager:
 
         _logger.info("Added adapter: %s", name)
 
+    async def start(self) -> None:
+        """
+        Start background monitoring tasks.
+
+        Must be called once from an async context after the manager is created.
+        ``__init__`` deliberately does not start these tasks so that the manager
+        can be safely instantiated from synchronous code (e.g. at module level or
+        in tests) without requiring a running event loop.
+        """
+        if self._global_coordinator and hasattr(self._global_coordinator, 'start_monitoring'):
+            asyncio.create_task(self._global_coordinator.start_monitoring())
+            _logger.info("Global rate-limit monitoring task started")
+
     def remove_adapter(self, name: str) -> None:
         """Remove an adapter from the manager."""
         if name in self._adapters:
-            asyncio.create_task(self._adapters[name].close())
-            del self._adapters[name]
+            adapter = self._adapters.pop(name)
             del self._circuit_breakers[name]
+            # Schedule the async close() on the running loop if available,
+            # otherwise defer to close_all() / GC.  Do NOT use
+            # asyncio.create_task() here because remove_adapter() is a sync
+            # method that may be called outside an async context.
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(adapter.close())
+            except RuntimeError:
+                # No running loop — the adapter will be closed when close_all()
+                # is eventually called, or the process exits.
+                _logger.debug("No running event loop; adapter '%s' close deferred", name)
             _logger.info("Removed adapter: %s", name)
 
     async def fetch_messages_from_adapter(self, adapter_name: str, ticker: str,

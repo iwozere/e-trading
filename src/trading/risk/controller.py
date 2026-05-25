@@ -1,6 +1,6 @@
 # src/risk/controller.py
 
-from typing import List, Dict
+from typing import Dict, List, Optional
 from src.trading.risk.pre_trade import position_sizing, exposure_limits, correlation_check
 from src.trading.risk.real_time import stop_loss_manager, drawdown_control, volatility_scaling
 from src.trading.risk.post_trade import pnl_attribution, trade_analysis, risk_reporting
@@ -84,10 +84,22 @@ class RiskController:
         entry_price: float,
         current_price: float,
         initial_stop: float,
-        returns: List[float]
+        returns: List[float],
+        account_equity: Optional[float] = None,
     ) -> Dict[str, float]:
         """
         Adjust stop-loss and calculate volatility-adjusted position size.
+
+        Args:
+            entry_price: Original trade entry price.
+            current_price: Latest market price.
+            initial_stop: Initial stop-loss price level.
+            returns: Recent return series used for volatility estimation.
+            account_equity: Current account balance.  When provided this
+                value is used for volatility-scaled sizing so the position
+                shrinks after losses.  Falls back to the (stale) value in
+                ``self.config`` only when ``None`` is passed — callers
+                should always supply the live balance.
         """
         trailing_pct = self.config.get('trailing_pct', 0.02)
         new_stop = stop_loss_manager.dynamic_stop_loss(
@@ -97,8 +109,14 @@ class RiskController:
             trailing_pct=trailing_pct
         )
 
+        # Prefer the caller-supplied live equity over the stale config value.
+        effective_equity = (
+            account_equity
+            if account_equity is not None
+            else self.config.get('account_equity', 100000)
+        )
         volatility_size = volatility_scaling.volatility_scaled_position(
-            account_equity=self.config.get('account_equity', 100000),
+            account_equity=effective_equity,
             target_vol=self.config.get('target_volatility', 0.15),
             returns=returns
         )

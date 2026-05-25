@@ -105,7 +105,7 @@ realized_pnl = (executed_price - position.average_price) * qty_closed
 
 ---
 
-### 🟠 P2-T1 — Triple notification duplication on every trade
+### ✅ RESOLVED — P2-T1 — Triple notification duplication on every trade
 
 **File:** `src/trading/base_trading_bot.py:474–496, 560–608`
 
@@ -120,7 +120,7 @@ The intent is that `notify_trade_event` is suppressed when the hook is set, but 
 
 ---
 
-### 🟠 P2-T2 — `InstanceService` singleton silently ignores dependency injection
+### ✅ RESOLVED — P2-T2 — `InstanceService` singleton silently ignores dependency injection
 
 **File:** `src/trading/instance_service.py:27–43`
 
@@ -144,7 +144,7 @@ class InstanceService:
 
 ---
 
-### 🟠 P2-T3 — Commission hardcoded at 0.1% of gross PnL — wrong formula and non-configurable
+### ✅ RESOLVED — P2-T3 — Commission hardcoded at 0.1% of gross PnL — wrong formula and non-configurable
 
 **File:** `src/trading/base_trading_bot.py:505–506`
 
@@ -164,7 +164,7 @@ And expose `paper_trading_config` on `BaseTradingBot` from the broker or config.
 
 ---
 
-### 🟠 P2-T4 — `execution_persistence._append_to_json_list()` is not atomic
+### ✅ RESOLVED — P2-T4 — `execution_persistence._append_to_json_list()` is not atomic
 
 **File:** `src/trading/execution_persistence.py:59–88`
 
@@ -180,7 +180,7 @@ tmp_path.replace(file_path)  # atomic on POSIX; near-atomic on Windows
 
 ---
 
-### 🟠 P2-T5 — `MetricsRegistry._save_metrics()` called on every trade — O(n bots) disk write
+### ✅ RESOLVED — P2-T5 — `MetricsRegistry._save_metrics()` called on every trade — O(n bots) disk write
 
 **File:** `src/trading/metrics_tracker.py:133–140`
 
@@ -190,7 +190,7 @@ Every call to `record_trade()` serializes **all** bot metrics to disk. For 20 ac
 
 ---
 
-### 🟠 P2-T6 — `RiskController.real_time_adjustments()` uses config equity, not actual balance
+### ✅ RESOLVED — P2-T6 — `RiskController.real_time_adjustments()` uses config equity, not actual balance
 
 **File:** `src/trading/risk/controller.py:100–108`
 
@@ -340,7 +340,7 @@ Log messages like `"📊 Strategy Monitor: ..."`, `"🔄 CRASH RECOVERY MODE: ..
 
 ---
 
-### 🟠 P2-C1 — `CircuitBreaker` state machine uses inverted/non-standard naming
+### ✅ RESOLVED — P2-C1 — `CircuitBreaker` state machine uses inverted/non-standard naming
 
 **File:** `src/common/sentiments/adapters/adapter_manager.py:36–93`
 
@@ -360,7 +360,7 @@ The naming is the reverse of industry convention: `CIRCUIT_OPEN` *allows* calls 
 
 ---
 
-### 🟠 P2-C2 — `asyncio.create_task()` called from synchronous context in `AdapterManager.__init__()` and `remove_adapter()`
+### ✅ RESOLVED — P2-C2 — `asyncio.create_task()` called from synchronous context in `AdapterManager.__init__()` and `remove_adapter()`
 
 **File:** `src/common/sentiments/adapters/adapter_manager.py:183, 241`
 
@@ -488,7 +488,7 @@ When `record_success()` is called in `HEALTHY` state (normal operation), `failur
 
 ---
 
-### 🟠 P2-X1 — No integration tests covering the full trade execution path
+### ✅ RESOLVED — P2-X1 — No integration tests covering the full trade execution path
 
 The unit tests in `src/trading/broker/tests/` test broker connectivity and individual methods. There are no integration tests that:
 1. Start a `StrategyInstance` with a mock broker and mock data feed
