@@ -3,7 +3,7 @@
 **Date:** 2026-05-25  
 **Reviewer:** AI Architecture Review (Claude Sonnet 4.6)  
 **Scope:** `src/notification/` · `src/screeners/`  
-**Status:** ✅ P1 + P2 resolved — 1 commit on `main`
+**Status:** ✅ All issues resolved — P1+P2 in commit `66611c0`, P3+P4 in commit `87c36be`
 
 ---
 
@@ -12,6 +12,7 @@
 | SHA | Message |
 |-----|---------|
 | `66611c0` | Fix critical and high issues in notification and screeners modules |
+| `87c36be` | Fix medium and low issues in notification and screeners modules |
 
 ---
 
@@ -137,25 +138,25 @@ self.results_dir = os.path.join('results', 'screeners', 'ibkr')
 
 ---
 
-## 🟡 P3 — Medium (tracked, not in this PR)
+## 🟡 P3 — Medium
 
-| # | Description | File |
-|---|---|---|
-| 8 | `process_database_message` duplicates `_process_single_message` (~140 lines DRY violation) | `service/processor.py` |
-| 9 | Hardcoded `enabled_channels = ['email']` — architecture in a comment | `service/processor.py:145` |
-| 10 | `donotshare.py` imported at module level in `service/config.py` — blocks testing | `service/config.py:13` |
-| 11 | No signal de-duplication — identical alerts fire every scan interval | `ibkr_screener_service.py` |
-| 12 | `IBKRDownloader()` created without configuration — hidden coupling to donotshare | `ibkr_screener_service.py:41` |
+| # | Description | File | Status |
+|---|---|---|---|
+| 8 | `process_database_message` duplicates `_process_single_message` (~140 lines DRY violation) | `service/processor.py` | ✅ Fixed — extracted `_build_delivery_result_dict` + `_make_processing_result` helpers |
+| 9 | Hardcoded `enabled_channels = ['email']` — architecture in a comment | `service/processor.py:145` | ✅ Fixed — reads from `config.enabled_channels` |
+| 10 | `donotshare.py` imported at module level in `service/config.py` — blocks testing | `service/config.py:13` | ✅ Fixed — wrapped in `try/except ImportError` with empty-string fallbacks |
+| 11 | No signal de-duplication — identical alerts fire every scan interval | `ibkr_screener_service.py` | ✅ Fixed — `_signal_fingerprint()` + `_seen_signals` dict; volatile keys excluded |
+| 12 | `IBKRDownloader()` created without configuration — hidden coupling to donotshare | `ibkr_screener_service.py:41` | ✅ Fixed — injectable `downloader` parameter added to `__init__` |
 
 ---
 
-## 🔵 P4 — Low / Convention (tracked, not in this PR)
+## 🔵 P4 — Low / Convention
 
-| # | Description | File |
-|---|---|---|
-| 13 | Dead code (unreachable lines) after `return` in `get_multiprocessing_logger()` | `logger.py:507` |
-| 14 | `print_log()` function uses `print()` directly — violates no-print convention | `logger.py:99` |
-| 15 | `os.path` should be `pathlib` throughout screeners | `ibkr_screener_service.py`, `discovery/static.py` |
-| 16 | Missing `__init__.py` files in `src/screeners/` packages | `screeners/`, `screeners/logic/`, `screeners/discovery/` |
-| 17 | No `tests/` directory in `src/screeners/` | `screeners/` |
-| 18 | `ContextAwareLogger` clones `RotatingFileHandler` instances to same file — race on rotation | `logger.py:527` |
+| # | Description | File | Status |
+|---|---|---|---|
+| 13 | Dead code (unreachable lines) after `return` in `get_multiprocessing_logger()` | `logger.py:507` | ✅ Fixed — dead lines removed |
+| 14 | `print_log()` function uses `print()` directly — violates no-print convention | `logger.py:99` | ✅ Fixed — uses `logging.getLogger(__name__).info()` |
+| 15 | `os.path` should be `pathlib` throughout screeners | `ibkr_screener_service.py`, `discovery/static.py` | ✅ Fixed — `discovery/static.py` now uses `Path`; `ibkr_screener_service.py` was already pathed |
+| 16 | Missing `__init__.py` files in `src/screeners/` packages | `screeners/`, `screeners/logic/`, `screeners/discovery/` | ✅ Fixed — three empty `__init__.py` files created |
+| 17 | No `tests/` directory in `src/screeners/` | `screeners/` | ✅ Fixed — `tests/` created with `test_ibkr_screener_service.py` and `test_static_discovery.py` |
+| 18 | `ContextAwareLogger` clones `RotatingFileHandler` instances to same file — race on rotation | `logger.py:527` | ✅ Fixed — handler instances are shared (not cloned) in both `_inherit_parent_handlers` and `_apply_context_to_existing_logger` |
