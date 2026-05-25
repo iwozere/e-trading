@@ -10,7 +10,7 @@ import backtrader as bt
 import pandas as pd
 from typing import Dict, Any, Type, Optional
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.strategy.base_strategy import BaseStrategy
 from src.notification.logger import setup_logger
@@ -80,7 +80,7 @@ class ScreenerStrategyBridge:
 
         except Exception as e:
             _logger.exception("Error in StrategyBridge for %s: %s", symbol, e)
-            return {"symbol": symbol, "error": str(e), "timestamp": datetime.now().isoformat()}
+            return {"symbol": symbol, "error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
     def _harvest_results(self, strategy: BaseStrategy, symbol: str) -> Dict[str, Any]:
         """Extracts the state of the strategy at the current (last) bar."""

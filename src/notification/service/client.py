@@ -19,6 +19,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger # noqa: E402
+# Import canonical enum definitions from model.py.  The local re-exports below keep
+# backward-compatible names for callers that do:
+#   from src.notification.service.client import MessageType, MessagePriority
+from src.notification.model import NotificationType, NotificationPriority  # noqa: E402
+
+MessageType = NotificationType        # backward-compat re-export
+MessagePriority = NotificationPriority  # backward-compat re-export
 
 _logger = setup_logger(__name__)
 
@@ -119,25 +126,6 @@ class CircuitBreaker:
         self.last_failure_time = datetime.now(timezone.utc)
         if self.failure_count >= self.failure_threshold:
             self.state = CircuitBreakerState.OPEN
-
-
-class MessagePriority(str, Enum):
-    """Message priority levels."""
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
-    CRITICAL = "critical"
-
-
-class MessageType(str, Enum):
-    """Message types for categorization."""
-    TRADE_ENTRY = "trade_entry"
-    TRADE_EXIT = "trade_exit"
-    ERROR = "error"
-    ALERT = "alert"
-    REPORT = "report"
-    SYSTEM = "system"
-    INFO = "info"
 
 
 class NotificationServiceClient:

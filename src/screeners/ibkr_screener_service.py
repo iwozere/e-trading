@@ -1,7 +1,8 @@
 import asyncio
 import json
-import os
-from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import List, Dict, Any, Type, Optional
 
 from src.data.downloader.ibkr_downloader import IBKRDownloader
@@ -40,10 +41,15 @@ class IBKRScreenerService:
         self.downloader = IBKRDownloader()
         self.bridge = ScreenerStrategyBridge(strategy_class, strategy_config)
 
-        # Settings
-        self.results_dir = os.path.join('results', 'screeners', 'ibkr')
-        if not os.path.exists(self.results_dir):
-            os.makedirs(self.results_dir)
+        # Thread pool for CPU-bound strategy work — keeps the event loop free.
+        # NOTE: ProcessPoolExecutor would give true parallelism but requires all
+        # strategy classes to be picklable.  ThreadPoolExecutor is the safe default.
+        self._executor = ThreadPoolExecutor(max_workers=min(32, concurrency))
+
+        # Settings — derive from __file__ so the path is always relative to the project root,
+        # not the process working directory.
+        self.results_dir = Path(__file__).resolve().parents[2] / "results" / "screeners" / "ibkr"
+        self.results_dir.mkdir(parents=True, exist_ok=True)
 
     async def run_once(self):
         """Executes one full scan of all discovered symbols."""
@@ -81,22 +87,29 @@ class IBKRScreenerService:
                 # A. Download Data
                 # We need enough data for the strategy warmup
                 warmup = self.strategy_config.get('warmup_period', 100)
-                start_date = datetime.now() - timedelta(days=warmup * 2) # Heuristic for intraday
+                start_date = datetime.now(timezone.utc) - timedelta(days=warmup * 2)
 
-                # Downloader handles caching internally
-                df = self.downloader.get_ohlcv(
-                    symbol=symbol,
-                    interval=self.interval,
-                    start_date=start_date,
-                    end_date=datetime.now()
+                # Downloader handles caching internally.
+                # get_ohlcv is synchronous/I-O-bound — run it in the thread pool so we
+                # do not block the event loop while waiting for disk or network I/O.
+                loop = asyncio.get_running_loop()
+                df = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self.downloader.get_ohlcv(
+                        symbol=symbol,
+                        interval=self.interval,
+                        start_date=start_date,
+                        end_date=datetime.now(timezone.utc)
+                    )
                 )
 
                 if df.empty or len(df) < 10:
                     _logger.warning("Insufficient data for %s", symbol)
                     return {"symbol": symbol, "error": "Insufficient data"}
 
-                # B. Run Strategy Bridge
-                result = self.bridge.run(symbol, df)
+                # B. Run Strategy Bridge — CPU-bound Backtrader work in thread pool so
+                # the event loop stays responsive for notifications, health checks, etc.
+                result = await loop.run_in_executor(self._executor, self.bridge.run, symbol, df)
                 return result
 
             except Exception as e:
@@ -104,17 +117,18 @@ class IBKRScreenerService:
                 return {"symbol": symbol, "error": str(e)}
 
     def _persist_results(self, results: List[Dict[str, Any]]):
-        """Saves signals to results/screeners/ibkr/signals_{timestamp}.json"""
+        """Saves signals to <project_root>/results/screeners/ibkr/signals_{timestamp}.json"""
         if not results:
             return
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_path = os.path.join(self.results_dir, f"signals_{timestamp}.json")
+        now_utc = datetime.now(timezone.utc)
+        timestamp = now_utc.strftime("%Y%m%d_%H%M%S")
+        file_path = self.results_dir / f"signals_{timestamp}.json"
 
         try:
             with open(file_path, 'w') as f:
                 json.dump({
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": now_utc.isoformat(),
                     "total_symbols": len(results),
                     "signals": results
                 }, f, indent=2)

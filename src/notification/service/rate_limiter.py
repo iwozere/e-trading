@@ -7,11 +7,11 @@ Supports configurable limits, priority bypass, and violation tracking.
 
 import asyncio
 import time
+from collections import deque
 from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from enum import Enum
-import threading
 
 from src.data.db.services.database_service import get_database_service
 from src.data.db.models.model_notification import MessagePriority
@@ -155,8 +155,12 @@ class RateLimiter:
     def __init__(self):
         """Initialize rate limiter."""
         self._buckets: Dict[str, TokenBucket] = {}
-        self._violations: List[RateLimitViolation] = []
-        self._lock = threading.RLock()
+        # Hard-capped deque prevents unbounded memory growth when many HIGH/CRITICAL
+        # messages bypass rate limiting and are still logged as violation records.
+        self._violations: deque = deque(maxlen=10_000)
+        # asyncio.Lock is the correct primitive for async code.  threading.RLock was
+        # previously used here but it cannot be awaited and breaks under run_in_executor.
+        self._lock = asyncio.Lock()
         self._logger = setup_logger(f"{__name__}.RateLimiter")
 
         # Default configurations per channel
@@ -234,16 +238,22 @@ class RateLimiter:
         """Get or create token bucket for user-channel combination."""
         bucket_key = self._get_bucket_key(user_id, channel)
 
-        with self._lock:
-            # Check in-memory cache first
+        # Fast path: asyncio is single-threaded, so a plain dict lookup between
+        # await points cannot race with another coroutine.
+        if bucket_key in self._buckets:
+            return self._buckets[bucket_key]
+
+        # Perform I/O BEFORE acquiring the lock so we never await while holding it.
+        loaded_bucket = await self._load_bucket_from_db(user_id, channel)
+
+        # Brief critical section — write to the in-memory cache (no await inside).
+        async with self._lock:
+            # Another coroutine may have populated the cache while we were loading.
             if bucket_key in self._buckets:
                 return self._buckets[bucket_key]
 
-            # Try to load from database
-            bucket = await self._load_bucket_from_db(user_id, channel)
-
+            bucket = loaded_bucket
             if bucket is None:
-                # Create new bucket
                 config = self._get_config(channel)
                 bucket = TokenBucket(
                     tokens=float(config.max_tokens),
@@ -252,10 +262,8 @@ class RateLimiter:
                     last_refill=time.time(),
                     config=config
                 )
-
                 self._logger.info("Created new rate limit bucket for %s:%s", user_id, channel)
 
-            # Cache in memory
             self._buckets[bucket_key] = bucket
             return bucket
 
@@ -295,48 +303,45 @@ class RateLimiter:
                 bypassed=True
             )
 
-            with self._lock:
-                self._violations.append(violation)
+            # deque.append is atomic in CPython and there is no await here, so no
+            # lock is needed.
+            self._violations.append(violation)
 
             return RateLimitResult.BYPASSED, None
 
-        # Get or create bucket
+        # Await is safe here — we are not holding any lock.
         bucket = await self._get_or_create_bucket(user_id, channel)
 
-        with self._lock:
-            # Refill tokens
-            bucket.refill(current_time)
+        # From here to the return there are no await points, so asyncio guarantees
+        # no other coroutine can interleave.  No lock is needed.
+        bucket.refill(current_time)
 
-            # Try to consume tokens
-            if bucket.consume(tokens):
-                # Save updated state to database (async)
-                asyncio.create_task(self._save_bucket_to_db(user_id, channel, bucket))
+        if bucket.consume(tokens):
+            # Fire-and-forget DB persistence — runs after we return, so `bucket`
+            # will hold the correct post-consume token count when the task executes.
+            asyncio.create_task(self._save_bucket_to_db(user_id, channel, bucket))
+            self._logger.debug("Rate limit check passed for %s:%s (tokens: %.2f)", user_id, channel, bucket.tokens)
+            return RateLimitResult.ALLOWED, None
 
-                self._logger.debug("Rate limit check passed for %s:%s (tokens: %.2f)", user_id, channel, bucket.tokens)
-                return RateLimitResult.ALLOWED, None
+        # Rate limited — calculate wait time and record violation.
+        wait_time = bucket.get_wait_time(tokens)
 
-            # Rate limited - calculate wait time
-            wait_time = bucket.get_wait_time(tokens)
+        violation = RateLimitViolation(
+            user_id=user_id,
+            channel=channel,
+            timestamp=datetime.now(timezone.utc),
+            requested_tokens=tokens,
+            available_tokens=bucket.tokens,
+            priority=priority.value,
+            bypassed=False
+        )
+        self._violations.append(violation)
 
-            # Record violation
-            violation = RateLimitViolation(
-                user_id=user_id,
-                channel=channel,
-                timestamp=datetime.now(timezone.utc),
-                requested_tokens=tokens,
-                available_tokens=bucket.tokens,
-                priority=priority.value,
-                bypassed=False
-            )
-
-            self._violations.append(violation)
-
-            self._logger.warning(
-                "Rate limit exceeded for %s:%s (available: %.2f, requested: %d, wait: %.2fs)",
-                user_id, channel, bucket.tokens, tokens, wait_time
-            )
-
-            return RateLimitResult.RATE_LIMITED, wait_time
+        self._logger.warning(
+            "Rate limit exceeded for %s:%s (available: %.2f, requested: %d, wait: %.2fs)",
+            user_id, channel, bucket.tokens, tokens, wait_time
+        )
+        return RateLimitResult.RATE_LIMITED, wait_time
 
     async def consume_tokens(
         self,
@@ -373,23 +378,23 @@ class RateLimiter:
         """
         bucket = await self._get_or_create_bucket(user_id, channel)
 
-        with self._lock:
-            bucket.refill(time.time())
+        # No await after get_or_create — direct read/write is safe without a lock.
+        bucket.refill(time.time())
 
-            return {
-                "user_id": user_id,
-                "channel": channel,
-                "tokens": bucket.tokens,
-                "max_tokens": bucket.max_tokens,
-                "refill_rate_per_minute": bucket.refill_rate * 60,
-                "last_refill": datetime.fromtimestamp(bucket.last_refill).isoformat(),
-                "config": {
-                    "max_tokens": bucket.config.max_tokens,
-                    "refill_rate": bucket.config.refill_rate * 60,
-                    "window_minutes": bucket.config.window_minutes,
-                    "burst_allowance": bucket.config.burst_allowance
-                }
+        return {
+            "user_id": user_id,
+            "channel": channel,
+            "tokens": bucket.tokens,
+            "max_tokens": bucket.max_tokens,
+            "refill_rate_per_minute": bucket.refill_rate * 60,
+            "last_refill": datetime.fromtimestamp(bucket.last_refill).isoformat(),
+            "config": {
+                "max_tokens": bucket.config.max_tokens,
+                "refill_rate": bucket.config.refill_rate * 60,
+                "window_minutes": bucket.config.window_minutes,
+                "burst_allowance": bucket.config.burst_allowance
             }
+        }
 
     def set_channel_config(self, channel: str, config: RateLimitConfig) -> None:
         """
@@ -441,8 +446,9 @@ class RateLimiter:
         Returns:
             List of rate limit violations
         """
-        with self._lock:
-            violations = self._violations.copy()
+        # Snapshot the deque into a list — no lock needed (asyncio single-threaded,
+        # sync method called between await points).
+        violations = list(self._violations)
 
         # Apply filters
         if user_id:
@@ -535,10 +541,13 @@ class RateLimiter:
         """
         cutoff_time = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
 
-        with self._lock:
-            original_count = len(self._violations)
-            self._violations = [v for v in self._violations if v.timestamp >= cutoff_time]
-            removed_count = original_count - len(self._violations)
+        # No await — safe without a lock in asyncio single-threaded context.
+        original_count = len(self._violations)
+        self._violations = deque(
+            (v for v in self._violations if v.timestamp >= cutoff_time),
+            maxlen=10_000
+        )
+        removed_count = original_count - len(self._violations)
 
         if removed_count > 0:
             self._logger.info("Cleaned up %d old rate limit violations", removed_count)
@@ -558,7 +567,8 @@ class RateLimiter:
         """
         reset_count = 0
 
-        with self._lock:
+        # async with: no await inside the block, so this is safe and non-blocking.
+        async with self._lock:
             keys_to_remove = []
 
             for bucket_key, bucket in self._buckets.items():

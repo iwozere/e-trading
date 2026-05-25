@@ -8,7 +8,7 @@ Data models and enums for the notification system.
 from enum import Enum
 
 
-class NotificationType(Enum):
+class NotificationType(str, Enum):
     """Notification types for categorization."""
     TRADE_ENTRY = "trade_entry"
     TRADE_EXIT = "trade_exit"
@@ -20,7 +20,7 @@ class NotificationType(Enum):
     INFO = "info"
 
 
-class NotificationPriority(Enum):
+class NotificationPriority(str, Enum):
     """Notification priority levels."""
     LOW = "low"
     NORMAL = "normal"

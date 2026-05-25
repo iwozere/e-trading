@@ -11,7 +11,6 @@ from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum
-import threading
 
 from src.data.db.models.model_notification import MessagePriority
 from src.notification.service.message_queue import QueuedMessage
@@ -219,7 +218,9 @@ class BatchProcessor:
         self._batch_configs: Dict[str, BatchConfig] = {}
         self._batch_timers: Dict[str, asyncio.Task] = {}
 
-        self._lock = threading.RLock()
+        # asyncio.Lock — replaces threading.RLock.  Never await inside a block
+        # that holds this lock; use it only to protect synchronous state mutations.
+        self._lock = asyncio.Lock()
         self._stats = BatchStats()
         self._logger = setup_logger(f"{__name__}.BatchProcessor")
 
@@ -319,16 +320,16 @@ class BatchProcessor:
             return False
 
         try:
-            with self._lock:
-                # Initialize channel data if needed
+            # Hold the lock only for the synchronous dict mutations — release it
+            # before awaiting _process_pending_messages so we never await while
+            # holding the lock.
+            async with self._lock:
                 if channel not in self._pending_messages:
                     self._pending_messages[channel] = []
-
-                # Add to pending messages
                 self._pending_messages[channel].append(message)
 
-                # Try to add to current batch or create new one
-                await self._process_pending_messages(channel)
+            # Await outside the lock.
+            await self._process_pending_messages(channel)
 
             self._logger.debug("Added message %s to batch queue for channel %s", message.id, channel)
             return True
@@ -411,7 +412,9 @@ class BatchProcessor:
 
     async def _complete_batch(self, channel: str, trigger: BatchTrigger):
         """Complete and process a batch."""
-        with self._lock:
+        # Hold the lock only for the synchronous state mutation; all async
+        # calls happen after the lock is released.
+        async with self._lock:
             batch = self._batches.get(channel)
 
             if batch is None or batch.size == 0:
@@ -456,12 +459,16 @@ class BatchProcessor:
         Returns:
             Flushed batch or None if no batch exists
         """
-        with self._lock:
+        # Capture the batch reference inside the lock (no await inside).
+        async with self._lock:
             batch = self._batches.get(channel)
+            has_content = batch is not None and batch.size > 0
 
-            if batch and batch.size > 0:
-                await self._complete_batch(channel, BatchTrigger.MANUAL)
-                return batch
+        # Await outside the lock — _complete_batch will re-acquire it briefly
+        # for its own state mutation.
+        if has_content:
+            await self._complete_batch(channel, BatchTrigger.MANUAL)
+            return batch
 
         return None
 
@@ -474,7 +481,8 @@ class BatchProcessor:
         """
         flushed_batches = []
 
-        with self._lock:
+        # Snapshot channels — no await inside the lock.
+        async with self._lock:
             channels = list(self._batches.keys())
 
         for channel in channels:
@@ -492,16 +500,34 @@ class BatchProcessor:
         Returns:
             Dictionary with batch status information
         """
-        with self._lock:
-            channel_status = {}
+        # Synchronous read — asyncio is single-threaded so a plain dict iteration
+        # between await points cannot race; no lock is needed here.
+        channel_status = {}
 
-            for channel, batch in self._batches.items():
+        for channel, batch in self._batches.items():
+            config = self._get_config(channel)
+            pending_count = len(self._pending_messages.get(channel, []))
+
+            channel_status[channel] = {
+                "current_batch": batch.to_dict() if batch else None,
+                "pending_messages": pending_count,
+                "config": {
+                    "max_batch_size": config.max_batch_size,
+                    "max_wait_time_seconds": config.max_wait_time_seconds,
+                    "min_batch_size": config.min_batch_size,
+                    "enabled": config.enabled,
+                    "prefer_same_recipient": config.prefer_same_recipient,
+                    "prefer_same_type": config.prefer_same_type
+                }
+            }
+
+        # Add channels with pending messages but no active batch
+        for channel, pending in self._pending_messages.items():
+            if channel not in channel_status and pending:
                 config = self._get_config(channel)
-                pending_count = len(self._pending_messages.get(channel, []))
-
                 channel_status[channel] = {
-                    "current_batch": batch.to_dict() if batch else None,
-                    "pending_messages": pending_count,
+                    "current_batch": None,
+                    "pending_messages": len(pending),
                     "config": {
                         "max_batch_size": config.max_batch_size,
                         "max_wait_time_seconds": config.max_wait_time_seconds,
@@ -511,23 +537,6 @@ class BatchProcessor:
                         "prefer_same_type": config.prefer_same_type
                     }
                 }
-
-            # Add channels with pending messages but no active batch
-            for channel, pending in self._pending_messages.items():
-                if channel not in channel_status and pending:
-                    config = self._get_config(channel)
-                    channel_status[channel] = {
-                        "current_batch": None,
-                        "pending_messages": len(pending),
-                        "config": {
-                            "max_batch_size": config.max_batch_size,
-                            "max_wait_time_seconds": config.max_wait_time_seconds,
-                            "min_batch_size": config.min_batch_size,
-                            "enabled": config.enabled,
-                            "prefer_same_recipient": config.prefer_same_recipient,
-                            "prefer_same_type": config.prefer_same_type
-                        }
-                    }
 
         return {
             "channels": channel_status,
@@ -561,8 +570,8 @@ class BatchProcessor:
         for timer in self._batch_timers.values():
             timer.cancel()
 
-        # Flush all remaining batches
-        with self._lock:
+        # Flush all remaining batches — snapshot channels, no await inside.
+        async with self._lock:
             channels = list(self._batches.keys())
 
         for channel in channels:
