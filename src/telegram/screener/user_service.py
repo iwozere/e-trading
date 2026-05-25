@@ -1,6 +1,6 @@
 import time
 import re
-import random
+import secrets
 from typing import Any, Dict, Optional
 from src.telegram.command_parser import ParsedCommand
 from src.notification.logger import setup_logger
@@ -66,8 +66,8 @@ class UserService:
             if codes_sent >= 5:
                 return {"status": "error", "message": "Too many verification codes sent. Please wait an hour before requesting another."}
 
-            # Generate verification code
-            code = f"{random.randint(100000, 999999):06d}"
+            # Generate verification code using CSPRNG (secrets module — not random)
+            code = f"{secrets.randbelow(900000) + 100000:06d}"
             sent_time = int(time.time())
 
             # Store user and code

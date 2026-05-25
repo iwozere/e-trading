@@ -136,8 +136,13 @@ async def api_notify(request: web.Request) -> web.Response:
         return web.json_response({"success": False, "error": str(exc)}, status=500)
 
 
+async def api_health(request: web.Request) -> web.Response:
+    """Minimal liveness probe — no authentication required, no internal data exposed."""
+    return web.json_response({"status": "ok"})
+
+
 async def api_status(request: web.Request) -> web.Response:
-    """Health check and service status probe (unauthenticated)."""
+    """Detailed service status — requires X-API-Key (P1-TG-3)."""
     try:
         from src.telegram.lifecycle import get_notification_client as _get_client
         client = await _get_client()
@@ -177,6 +182,7 @@ def create_api_app() -> web.Application:
     app.router.add_post("/api/send_message", api_send_message)
     app.router.add_post("/api/broadcast", api_broadcast)
     app.router.add_post("/api/notify", api_notify)
-    app.router.add_get("/api/status", api_status)
+    app.router.add_get("/api/status", api_status)          # authenticated — returns service internals
+    app.router.add_get("/api/health", api_health)          # unauthenticated — minimal liveness probe
     app.router.add_get("/api/test", lambda r: web.json_response({"status": "ok", "message": "Bot API is working!"}))
     return app

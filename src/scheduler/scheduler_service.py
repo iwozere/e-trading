@@ -113,9 +113,29 @@ class SchedulerService:
 
         _logger.info("SchedulerService initialized with max_workers=%d", max_workers)
 
-        # Set global instance
+        # Register as the process-wide singleton (P1-SCHED-2).
+        # Raise immediately if another instance is already registered so double
+        # instantiation (e.g. from tests or a mis-wired CLI reload) is caught
+        # at construction time rather than silently corrupting job dispatch.
         global _service_instance
+        if _service_instance is not None and _service_instance is not self:
+            raise RuntimeError(
+                "A SchedulerService instance is already registered. "
+                "Only one instance per process is supported. "
+                "Call SchedulerService._deregister_instance() before creating a new one."
+            )
         _service_instance = self
+
+    @classmethod
+    def _deregister_instance(cls) -> None:
+        """
+        Clear the process-wide singleton reference.
+
+        Call this in tests (teardown) or before constructing a replacement instance
+        after a graceful shutdown so the guard in __init__ does not raise.
+        """
+        global _service_instance
+        _service_instance = None
 
     async def start(self) -> None:
         """
@@ -199,6 +219,9 @@ class SchedulerService:
             await self._cleanup_scheduler()
 
             self.is_running = False
+            # Release the singleton reference so a replacement instance can be
+            # created (e.g. after restart in the same process) without raising.
+            SchedulerService._deregister_instance()
             _logger.info("Scheduler service stopped successfully")
 
         except Exception:
@@ -638,12 +661,44 @@ class SchedulerService:
         if not script_path:
             raise ValueError("script_path is required in task_params")
 
+        # ── P1-SCHED-1: validate script path and args before subprocess exec ──
+        # script_path comes from the database (task_params written by users/admins).
+        # Without validation an attacker or a compromised DB row could execute
+        # arbitrary code with the scheduler process's privileges.
+
+        # 1. Path traversal protection — script must resolve inside PROJECT_ROOT.
+        resolved_root = Path(PROJECT_ROOT).resolve()
+        script_full_path = (Path(PROJECT_ROOT) / script_path).resolve()
+        try:
+            script_full_path.relative_to(resolved_root)
+        except ValueError:
+            raise ValueError(
+                f"script_path '{script_path}' resolves outside the project root "
+                f"({resolved_root}). Path traversal is not permitted."
+            )
+
+        # 2. script_args validation — must be a list of plain strings with no
+        #    null bytes (null bytes terminate C-string argv entries unexpectedly).
+        if not isinstance(script_args, list):
+            raise ValueError(
+                f"script_args must be a list, got {type(script_args).__name__}"
+            )
+        for idx, arg in enumerate(script_args):
+            if not isinstance(arg, str):
+                raise ValueError(
+                    f"script_args[{idx}] must be a string, got {type(arg).__name__}"
+                )
+            if "\x00" in arg:
+                raise ValueError(
+                    f"script_args[{idx}] contains a null byte, which is not permitted"
+                )
+        # ── end validation ────────────────────────────────────────────────────
+
         _logger.info("Executing data processing job: %s with args: %s", script_path, script_args)
 
         try:
             # Build command
             python_executable = sys.executable
-            script_full_path = Path(PROJECT_ROOT) / script_path
 
             if not script_full_path.exists():
                 raise FileNotFoundError(f"Script not found: {script_full_path}")

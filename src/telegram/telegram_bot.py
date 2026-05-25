@@ -56,7 +56,7 @@ async def main() -> None:
     if not TELEGRAM_BOT_TOKEN:
         _logger.error("TELEGRAM_BOT_TOKEN is not set!")
         return
-    _logger.info("Bot token: %s…", TELEGRAM_BOT_TOKEN[:10])
+    _logger.info("Bot token present, starting initialisation")
 
     # P2.1: Bot created here, not at import time.
     bot = Bot(token=TELEGRAM_BOT_TOKEN)

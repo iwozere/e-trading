@@ -1,14 +1,21 @@
 """
 api/middleware.py — aiohttp middleware for the Telegram bot's HTTP API.
 
-Write-path endpoints require an X-API-Key header matching TELEGRAM_API_KEY.
-Read-only probes (/api/status, /api/test) are left unauthenticated.
+Write-path endpoints and the full /api/status endpoint require an X-API-Key header
+matching TELEGRAM_API_KEY.  The lightweight /api/health probe (used by load-balancers
+and container health-checks) is intentionally unauthenticated — it returns only
+{"status": "ok"} or {"status": "error"} with no internal information.
 """
 import os
 from aiohttp import web
 
-# Paths that do not require authentication
-_OPEN_PATHS = {"/api/status", "/api/test"}
+# Paths that do NOT require authentication.
+# /api/health   — minimal liveness probe; exposes no internal data.
+# /api/test     — legacy alias kept for backward compatibility.
+# NOTE: /api/status was intentionally removed from this list (P1-TG-3).
+#       It now requires X-API-Key because it discloses adapter names,
+#       user counts, and service internals.
+_OPEN_PATHS = {"/api/health", "/api/test"}
 
 
 @web.middleware

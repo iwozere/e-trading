@@ -27,10 +27,10 @@ from src.notification.logger import setup_logger
 
 logger = setup_logger("create_admin")
 
-def generate_code():
-    """Generate a 6-digit verification code"""
-    import random
-    return f"{random.randint(100000, 999999):06d}"
+def generate_code() -> str:
+    """Generate a cryptographically secure 6-digit verification code."""
+    import secrets
+    return f"{secrets.randbelow(900000) + 100000:06d}"
 
 def create_admin(telegram_user_id: str, email: str):
     """

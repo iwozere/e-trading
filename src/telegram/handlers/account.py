@@ -5,7 +5,7 @@ Command handlers register routes onto the supplied Dispatcher and delegate
 business logic to the process_* functions defined here.
 """
 import re
-import random
+import secrets
 import time
 from typing import Optional
 
@@ -91,7 +91,7 @@ async def process_register_command_immediate(user_id: str, parsed: ParsedCommand
         except Exception as exc:
             _logger.warning("Rate limit check failed: %s", exc)
 
-        verification_code = f"{random.randint(100000, 999999):06d}"
+        verification_code = f"{secrets.randbelow(900000) + 100000:06d}"
         sent_time = int(time.time())
 
         existing_user = telegram_svc.get_user_status(user_id)
@@ -239,17 +239,46 @@ async def process_request_approval_command_immediate(user_id: str, parsed: Parse
 
         await message.reply("✅ **Approval Request Submitted**\n\nYour request has been submitted to the administrators. You will be notified when your request is reviewed.", parse_mode="Markdown")
 
+        # Resolve admin Telegram IDs from the DB and notify each one (P1-TG-4 fix).
+        # Previously this used the magic string "admin" which was never deliverable.
         try:
             client = await get_notification_client()
-            if client:
-                await client.send_notification(
-                    notification_type="INFO",
-                    title="New Approval Request",
-                    message=f"User {user_id} ({status.get('email')}) has requested approval for restricted features.",
-                    priority="HIGH",
-                    channels=["telegram"],
-                    recipient_id="admin",
+            if not client:
+                _logger.warning("Notification client unavailable — admin approval request not forwarded for user %s", user_id)
+            else:
+                try:
+                    admin_ids = telegram_svc.get_admin_user_ids()
+                except Exception as exc:
+                    _logger.error("Failed to fetch admin IDs for approval notification: %s", exc)
+                    admin_ids = []
+
+                if not admin_ids:
+                    _logger.warning(
+                        "No admin Telegram IDs found — approval request from user %s will not be forwarded. "
+                        "Ensure at least one user has is_admin=True in the database.",
+                        user_id,
+                    )
+
+                notification_message = (
+                    f"👤 **New Approval Request**\n\n"
+                    f"User `{user_id}` ({status.get('email', 'no email')}) "
+                    f"has requested approval for restricted features.\n\n"
+                    f"Use `/admin approve {user_id}` to grant access or "
+                    f"`/admin reject {user_id}` to deny."
                 )
+                for admin_id in admin_ids:
+                    try:
+                        await client.send_notification(
+                            notification_type="INFO",
+                            title="New Approval Request",
+                            message=notification_message,
+                            priority="HIGH",
+                            channels=["telegram"],
+                            recipient_id=str(admin_id),
+                        )
+                        _logger.info("Notified admin %s about approval request from user %s", admin_id, user_id)
+                    except Exception as exc:
+                        _logger.warning("Failed to notify admin %s about approval request: %s", admin_id, exc)
         except Exception as exc:
             _logger.warning("Failed to notify admins about approval request: %s", exc)
     except Exception:
