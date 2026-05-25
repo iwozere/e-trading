@@ -28,18 +28,21 @@ async def start_service(config: SchedulerServiceConfig) -> None:
 
     try:
         await app.start()
-        print("Scheduler service started successfully")
-        print(f"Environment: {config.service.environment}")
-        print(f"Max workers: {config.scheduler.max_workers}")
-        print(f"Database: {config.database.url.split('@')[1] if '@' in config.database.url else 'local'}")
-        print("Press Ctrl+C to stop...")
+        _logger.info("Scheduler service started successfully")
+        _logger.info("Environment: %s", config.service.environment)
+        _logger.info("Max workers: %d", config.scheduler.max_workers)
+        _logger.info(
+            "Database: %s",
+            config.database.url.split('@')[1] if '@' in config.database.url else 'local',
+        )
+        _logger.info("Press Ctrl+C to stop...")
 
         await app.wait_for_shutdown()
 
     except KeyboardInterrupt:
-        print("\nReceived interrupt signal, shutting down...")
+        _logger.info("Received interrupt signal, shutting down...")
     except Exception as e:
-        print(f"Error: {e}")
+        _logger.error("Fatal error starting scheduler service: %s", e)
         sys.exit(1)
     finally:
         await app.stop()
@@ -53,23 +56,23 @@ async def show_status(config: SchedulerServiceConfig) -> None:
         await app.initialize_services()
         status = app.get_status()
 
-        print("Scheduler Service Status:")
-        print("=" * 40)
-        print(f"Service: {status['service']}")
-        print(f"Version: {status['version']}")
-        print(f"Environment: {status['environment']}")
-        print(f"Database: {status['database_url']}")
-        print(f"Max Workers: {status['max_workers']}")
-        print(f"Notification Method: {status.get('notification_method', 'N/A')}")
+        _logger.info("Scheduler Service Status:")
+        _logger.info("=" * 40)
+        _logger.info("Service:              %s", status['service'])
+        _logger.info("Version:              %s", status['version'])
+        _logger.info("Environment:          %s", status['environment'])
+        _logger.info("Database:             %s", status['database_url'])
+        _logger.info("Max Workers:          %s", status['max_workers'])
+        _logger.info("Notification Method:  %s", status.get('notification_method', 'N/A'))
 
         if status['scheduler']:
             scheduler_status = status['scheduler']
-            print(f"Scheduler Running: {scheduler_status['is_running']}")
-            print(f"Scheduler State: {scheduler_status.get('scheduler_state', 'N/A')}")
-            print(f"Job Count: {scheduler_status.get('job_count', 0)}")
+            _logger.info("Scheduler Running:    %s", scheduler_status['is_running'])
+            _logger.info("Scheduler State:      %s", scheduler_status.get('scheduler_state', 'N/A'))
+            _logger.info("Job Count:            %s", scheduler_status.get('job_count', 0))
 
     except Exception as e:
-        print(f"Error getting status: {e}")
+        _logger.error("Error getting status: %s", e)
         sys.exit(1)
     finally:
         await app.stop()
@@ -82,10 +85,10 @@ async def reload_schedules(config: SchedulerServiceConfig) -> None:
     try:
         await app.start()
         count = await app.reload_schedules()
-        print(f"Successfully reloaded {count} schedules")
+        _logger.info("Successfully reloaded %d schedules", count)
 
     except Exception as e:
-        print(f"Error reloading schedules: {e}")
+        _logger.error("Error reloading schedules: %s", e)
         sys.exit(1)
     finally:
         await app.stop()
@@ -94,28 +97,28 @@ async def reload_schedules(config: SchedulerServiceConfig) -> None:
 async def validate_config(config: SchedulerServiceConfig) -> None:
     """Validate configuration."""
     try:
-        print("Configuration Validation:")
-        print("=" * 40)
+        _logger.info("Configuration Validation:")
+        _logger.info("=" * 40)
 
         config_dict = config.to_dict()
 
-        print("✓ Configuration loaded successfully")
-        print(f"✓ Environment: {config_dict['service']['environment']}")
-        print(f"✓ Database URL: {config_dict['database']['url']}")
-        print(f"✓ Max Workers: {config_dict['scheduler']['max_workers']}")
-        print(f"✓ Alert Schema Dir: {config_dict['alert']['schema_dir']}")
+        _logger.info("✓ Configuration loaded successfully")
+        _logger.info("✓ Environment:     %s", config_dict['service']['environment'])
+        _logger.info("✓ Database URL:    %s", config_dict['database']['url'])
+        _logger.info("✓ Max Workers:     %s", config_dict['scheduler']['max_workers'])
+        _logger.info("✓ Alert Schema Dir: %s", config_dict['alert']['schema_dir'])
 
         # Check schema directory
         schema_path = Path(config.alert.schema_dir)
         if schema_path.exists():
-            print(f"✓ Schema directory exists: {schema_path}")
+            _logger.info("✓ Schema directory exists: %s", schema_path)
         else:
-            print(f"⚠ Schema directory not found: {schema_path}")
+            _logger.warning("⚠ Schema directory not found: %s", schema_path)
 
-        print("\nConfiguration is valid!")
+        _logger.info("Configuration is valid!")
 
     except Exception as e:
-        print(f"Configuration validation failed: {e}")
+        _logger.error("Configuration validation failed: %s", e)
         sys.exit(1)
 
 
@@ -184,10 +187,10 @@ Examples:
             asyncio.run(validate_config(config))
 
     except KeyboardInterrupt:
-        print("\nOperation cancelled by user")
+        _logger.info("Operation cancelled by user")
         sys.exit(0)
     except Exception as e:
-        print(f"Error: {e}")
+        _logger.error("Unexpected error: %s", e)
         sys.exit(1)
 
 
