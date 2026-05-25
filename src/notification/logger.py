@@ -97,12 +97,8 @@ class SensitiveDataFilter(logging.Filter):
 # Simple logger, which logs to console
 ####################################################################
 def print_log(msg: str):
-    # Get current timestamp
-    current_time = dt.now()
-    time = current_time.strftime("%Y-%m-%d %H:%M:%S")
-
-    # Print the timestamp in a human-readable format
-    print(f"{time} {msg}")
+    """Log a plain message at INFO level using the module logger."""
+    logging.getLogger(__name__).info(msg)
 
 
 ####################################################################
@@ -505,8 +501,6 @@ def get_multiprocessing_logger(name: str, level: int = logging.DEBUG, external_q
                 root.addHandler(h)
 
     return logger
-    """Log an exception with full stack trace"""
-    logger.error("Full traceback:\n" + "".join(traceback.format_exception(*exc_info)))
 
 
 class ContextAwareLogger:
@@ -525,24 +519,23 @@ class ContextAwareLogger:
             self._inherit_parent_handlers(parent_logger_name)
 
     def _inherit_parent_handlers(self, parent_name: str):
-        """Inherit file handlers from parent logger"""
-        parent_logger = logging.getLogger(parent_name)
+        """Share (not clone) RotatingFileHandler instances from parent logger.
 
-        # Find file handlers in parent logger
+        Cloning a RotatingFileHandler to the same file path creates two independent
+        rotation states that race on rotation — this method avoids that by adding
+        the existing handler object directly so both loggers share one instance.
+        """
+        parent_logger = logging.getLogger(parent_name)
+        existing_filenames = {
+            h.baseFilename
+            for h in self.logger.handlers
+            if isinstance(h, RotatingFileHandler)
+        }
         for handler in parent_logger.handlers:
             if isinstance(handler, RotatingFileHandler):
-                # Create a new handler with the same configuration
-                new_handler = RotatingFileHandler(
-                    handler.baseFilename,
-                    maxBytes=handler.maxBytes,
-                    backupCount=handler.backupCount,
-                    encoding=handler.encoding
-                )
-                new_handler.setLevel(handler.level)
-                new_handler.setFormatter(handler.formatter)
-
-                # Add to this logger
-                self.logger.addHandler(new_handler)
+                if handler.baseFilename not in existing_filenames:
+                    self.logger.addHandler(handler)
+                    existing_filenames.add(handler.baseFilename)
 
     def debug(self, msg, *args, **kwargs):
         self.logger.debug(msg, *args, **kwargs)
@@ -567,34 +560,23 @@ def _apply_context_to_existing_logger(logger_name: str, context_name: str):
     """
     Apply context to an existing logger that was already created.
     This is useful for loggers created at import time.
+
+    Handler instances are shared rather than cloned to avoid independent rotation
+    state on the same file (which causes a race on log rotation).
     """
     logger = logging.getLogger(logger_name)
     context_logger = logging.getLogger(context_name)
 
-    # Find file handlers in context logger
+    existing_filenames = {
+        h.baseFilename
+        for h in logger.handlers
+        if isinstance(h, RotatingFileHandler)
+    }
     for handler in context_logger.handlers:
         if isinstance(handler, RotatingFileHandler):
-            # Check if this handler is already added
-            handler_exists = False
-            for existing_handler in logger.handlers:
-                if (isinstance(existing_handler, RotatingFileHandler) and
-                    existing_handler.baseFilename == handler.baseFilename):
-                    handler_exists = True
-                    break
-
-            if not handler_exists:
-                # Create a new handler with the same configuration
-                new_handler = RotatingFileHandler(
-                    handler.baseFilename,
-                    maxBytes=handler.maxBytes,
-                    backupCount=handler.backupCount,
-                    encoding=handler.encoding
-                )
-                new_handler.setLevel(handler.level)
-                new_handler.setFormatter(handler.formatter)
-
-                # Add to this logger
-                logger.addHandler(new_handler)
+            if handler.baseFilename not in existing_filenames:
+                logger.addHandler(handler)
+                existing_filenames.add(handler.baseFilename)
 
 
 def set_logging_context(context_name: str):

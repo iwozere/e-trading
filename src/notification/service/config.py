@@ -10,7 +10,16 @@ from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator, ConfigDict
 import os
 
-from config.donotshare.donotshare import SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USER, TELEGRAM_BOT_TOKEN
+try:
+    from config.donotshare.donotshare import SMTP_PASSWORD, SMTP_PORT, SMTP_SERVER, SMTP_USER, TELEGRAM_BOT_TOKEN
+except ImportError:
+    # Allow importing this module without donotshare (e.g. in unit tests).
+    # Secrets must then be supplied via environment variables.
+    SMTP_PASSWORD = ""
+    SMTP_PORT = "587"
+    SMTP_SERVER = ""
+    SMTP_USER = ""
+    TELEGRAM_BOT_TOKEN = ""
 from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 

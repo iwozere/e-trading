@@ -139,10 +139,10 @@ class MessageProcessor:
             from src.notification.channels.loader import load_all_channels
             load_all_channels()
 
-            # PHASE 1 FIX: Only enable email channel
-            # Telegram channel is handled by telegram bot to avoid duplicates
-            # See MIGRATION_PLAN.md Phase 1 for details
-            enabled_channels = ['email']  # Telegram owned by telegram bot
+            # Enabled channels come from config so the list is never hard-coded
+            # in application logic.  Default is ["email"] because Telegram is
+            # owned by the telegram bot (see MIGRATION_PLAN.md Phase 1).
+            enabled_channels = config.enabled_channels
 
             self._logger.info(
                 "Notification Service - Enabled channels: %s (Telegram handled by telegram bot)",
@@ -567,24 +567,9 @@ class MessageProcessor:
                     if failed_message.message_id in self.fallback_manager._dead_letter_queue:
                         self._stats["dead_letter_messages"] += 1
 
-            # Convert delivery results for response
-            result_dict = {}
-            for result in delivery_results:
-                if hasattr(result, 'metadata') and result.metadata:
-                    channel_name = result.metadata.get('channel', 'unknown')
-                    result_dict[channel_name] = {
-                        "status": result.status.value,
-                        "external_id": result.external_id,
-                        "response_time_ms": result.response_time_ms,
-                        "success": result.success
-                    }
-
-            return ProcessingResult(
-                message_id=message.id,
-                success=success,
-                error_message=failed_message.failure_details if failed_message else None,
-                delivery_results=result_dict,
-                processing_time_ms=processing_time_ms
+            result_dict = self._build_delivery_result_dict(delivery_results)
+            return self._make_processing_result(
+                message.id, success, failed_message, result_dict, processing_time_ms
             )
 
         except Exception as e:
@@ -592,17 +577,69 @@ class MessageProcessor:
             error_message = f"Processing exception: {str(e)}"
 
             self.queue.mark_failed(message.id, error_message)
-            self._logger.error(
-                "Message %s processing failed: %s",
-                message.id, error_message
-            )
+            self._logger.error("Message %s processing failed: %s", message.id, error_message)
 
             return ProcessingResult(
                 message_id=message.id,
                 success=False,
                 error_message=error_message,
-                processing_time_ms=processing_time_ms
+                processing_time_ms=processing_time_ms,
             )
+
+    # ------------------------------------------------------------------
+    # Private shared helpers
+    # ------------------------------------------------------------------
+
+    def _build_delivery_result_dict(self, delivery_results) -> Dict[str, Any]:
+        """
+        Build a channel-keyed result dict from the delivery results list.
+
+        Args:
+            delivery_results: Iterable of delivery result objects.
+
+        Returns:
+            Dict mapping channel name to status, external_id, response_time and success.
+        """
+        result_dict: Dict[str, Any] = {}
+        for result in delivery_results:
+            if hasattr(result, 'metadata') and result.metadata:
+                channel_name = result.metadata.get('channel', 'unknown')
+                result_dict[channel_name] = {
+                    "status": result.status.value,
+                    "external_id": result.external_id,
+                    "response_time_ms": result.response_time_ms,
+                    "success": result.success,
+                }
+        return result_dict
+
+    def _make_processing_result(
+        self,
+        message_id: int,
+        success: bool,
+        failed_message,
+        result_dict: Dict[str, Any],
+        processing_time_ms: int,
+    ) -> ProcessingResult:
+        """
+        Construct a ProcessingResult from common delivery outcome fields.
+
+        Args:
+            message_id: ID of the processed message.
+            success: Whether delivery succeeded.
+            failed_message: Failed-message object (may be None).
+            result_dict: Channel-keyed delivery result dict.
+            processing_time_ms: Wall-clock processing time in milliseconds.
+
+        Returns:
+            Populated ProcessingResult instance.
+        """
+        return ProcessingResult(
+            message_id=message_id,
+            success=success,
+            error_message=failed_message.failure_details if failed_message else None,
+            delivery_results=result_dict,
+            processing_time_ms=processing_time_ms,
+        )
 
     def get_stats(self) -> Dict[str, Any]:
         """
@@ -764,24 +801,9 @@ class MessageProcessor:
             else:
                 self._stats['messages_failed'] += 1
 
-            # Convert delivery results for response
-            result_dict = {}
-            for result in delivery_results:
-                if hasattr(result, 'metadata') and result.metadata:
-                    channel_name = result.metadata.get('channel', 'unknown')
-                    result_dict[channel_name] = {
-                        "status": result.status.value,
-                        "external_id": result.external_id,
-                        "response_time_ms": result.response_time_ms,
-                        "success": result.success
-                    }
-
-            return ProcessingResult(
-                message_id=db_message.id,
-                success=success,
-                error_message=failed_message.failure_details if failed_message else None,
-                delivery_results=result_dict,
-                processing_time_ms=processing_time_ms
+            result_dict = self._build_delivery_result_dict(delivery_results)
+            return self._make_processing_result(
+                db_message.id, success, failed_message, result_dict, processing_time_ms
             )
 
         except Exception as e:

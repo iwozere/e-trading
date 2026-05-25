@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -26,9 +27,21 @@ class IBKRScreenerService:
                  discovery_providers: List[IDiscoveryProvider],
                  notifier: Optional[SignalNotifier] = None,
                  interval: str = '1h',
-                 concurrency: int = 50):
+                 concurrency: int = 50,
+                 downloader: Optional[IBKRDownloader] = None):
         """
         Initialize the service.
+
+        Args:
+            strategy_class: Backtrader strategy class to run on each symbol.
+            strategy_config: Configuration dict passed to the strategy.
+            discovery_providers: List of symbol-discovery providers.
+            notifier: Optional notifier to broadcast signals.
+            interval: OHLCV bar interval (e.g. '1h').
+            concurrency: Maximum number of symbols processed in parallel.
+            downloader: IBKRDownloader instance.  Defaults to ``IBKRDownloader()``
+                when *None*.  Pass an explicit instance to inject test doubles or
+                pre-configured downloaders.
         """
         self.strategy_class = strategy_class
         self.strategy_config = strategy_config
@@ -38,8 +51,13 @@ class IBKRScreenerService:
         self.notifier = notifier
 
         # Components
-        self.downloader = IBKRDownloader()
+        self.downloader = downloader if downloader is not None else IBKRDownloader()
         self.bridge = ScreenerStrategyBridge(strategy_class, strategy_config)
+
+        # In-memory signal de-duplication — maps symbol → fingerprint of last
+        # broadcast signal.  Identical signals are suppressed until the
+        # fingerprint changes (i.e. price, regime, or indicators change).
+        self._seen_signals: Dict[str, str] = {}
 
         # Thread pool for CPU-bound strategy work — keeps the event loop free.
         # NOTE: ProcessPoolExecutor would give true parallelism but requires all
@@ -71,12 +89,45 @@ class IBKRScreenerService:
         valid_results = [r for r in results if r and "error" not in r]
         self._persist_results(valid_results)
 
-        # 4. Broadcast Signals
-        if self.notifier and valid_results:
-            await self.notifier.notify_signals(valid_results)
+        # 4. De-duplicate signals — only broadcast signals whose content changed
+        #    since the last scan.  This prevents identical alerts from flooding
+        #    notification channels on every scan interval.
+        new_signals = []
+        for result in valid_results:
+            symbol = result.get('symbol', '')
+            fp = self._signal_fingerprint(result)
+            if self._seen_signals.get(symbol) != fp:
+                self._seen_signals[symbol] = fp
+                new_signals.append(result)
+            else:
+                _logger.debug("Skipping duplicate signal for %s (unchanged)", symbol)
 
-        _logger.info("Scan loop complete. %d signals generated.", len(valid_results))
+        if self.notifier and new_signals:
+            await self.notifier.notify_signals(new_signals)
+
+        _logger.info(
+            "Scan loop complete. %d signals generated, %d new (de-duplicated).",
+            len(valid_results), len(new_signals)
+        )
         return valid_results
+
+    def _signal_fingerprint(self, result: Dict[str, Any]) -> str:
+        """
+        Compute a stable fingerprint for a signal result dict.
+
+        Volatile, time-varying keys (``timestamp``, ``scan_time``) are excluded
+        so that only meaningful data changes trigger a new notification.
+
+        Args:
+            result: Signal result dict from :meth:`_harvest_results`.
+
+        Returns:
+            Hex MD5 digest of the sorted, serialised result content.
+        """
+        _VOLATILE_KEYS = frozenset(('timestamp', 'scan_time', 'date'))
+        filtered = {k: v for k, v in result.items() if k not in _VOLATILE_KEYS}
+        payload = json.dumps(filtered, sort_keys=True, default=str).encode()
+        return hashlib.md5(payload).hexdigest()
 
     async def _process_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Handles the flow for a single symbol with concurrency limiting."""
