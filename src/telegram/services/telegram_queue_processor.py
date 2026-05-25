@@ -16,6 +16,7 @@ Architecture:
 """
 
 import asyncio
+from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 import base64
@@ -53,6 +54,7 @@ class TelegramQueueProcessor:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._message_queue_client = get_message_queue_client()
+        self._consecutive_errors: int = 0  # tracks backoff state (P2-TG-3)
         self._logger = setup_logger(f"{__name__}.TelegramQueueProcessor")
 
         self._logger.info(
@@ -87,8 +89,11 @@ class TelegramQueueProcessor:
 
         self._logger.info("Telegram queue processor stopped")
 
+    # P2-TG-3: maximum sleep between retries after repeated errors (5 minutes)
+    _MAX_BACKOFF_SECONDS: int = 300
+
     async def _poll_loop(self):
-        """Main polling loop."""
+        """Main polling loop with exponential backoff on consecutive errors (P2-TG-3)."""
         self._logger.info("Telegram queue processor polling loop started")
 
         while self._running:
@@ -111,15 +116,25 @@ class TelegramQueueProcessor:
                                 message.id
                             )
 
-                # Sleep before next poll
+                # Successful poll — reset error counter and use normal interval
+                self._consecutive_errors = 0
                 await asyncio.sleep(self.poll_interval)
 
             except asyncio.CancelledError:
                 break
             except Exception:
-                self._logger.exception("Error in telegram queue processor poll loop:")
-                # Back off on error
-                await asyncio.sleep(self.poll_interval * 2)
+                self._consecutive_errors += 1
+                # Exponential backoff capped at _MAX_BACKOFF_SECONDS so a DB outage
+                # does not hammer the connection indefinitely (P2-TG-3).
+                backoff = min(
+                    self.poll_interval * (2 ** self._consecutive_errors),
+                    self._MAX_BACKOFF_SECONDS,
+                )
+                self._logger.exception(
+                    "Error in telegram queue processor poll loop (error #%d, sleeping %ds):",
+                    self._consecutive_errors, backoff,
+                )
+                await asyncio.sleep(backoff)
 
         self._logger.info("Telegram queue processor polling loop stopped")
 
@@ -203,50 +218,68 @@ class TelegramQueueProcessor:
 
     def _extract_telegram_chat_id(self, message: Dict[str, Any]) -> Optional[int]:
         """
-        Extract telegram_chat_id from message metadata or resolve from recipient_id.
+        Extract a Telegram chat ID from the message, trying three sources in order.
+
+        Resolution strategy (P2-TG-4 fix — replaces the fragile ``< 1_000_000`` heuristic):
+
+        1. ``message_metadata.telegram_chat_id`` — explicit override, highest priority.
+        2. DB lookup via ``users_service.get_user_notification_channels(recipient_id)`` —
+           always attempted first when recipient_id is a valid integer; returns the
+           registered Telegram chat ID for that internal user row.
+        3. Treat ``recipient_id`` as a direct Telegram chat ID — fallback for messages
+           that were already created with the Telegram ID as the recipient (e.g. from
+           the notification layer that stores telegram_chat_id there directly).
 
         Args:
-            message: Message dictionary
+            message: Message dictionary from the queue
 
         Returns:
-            Telegram chat ID or None if not found/could not be resolved
+            Telegram chat ID, or None if resolution fails
         """
-        # 1. Check metadata first (direct chat_id override)
+        # 1. Explicit telegram_chat_id in metadata (highest priority)
         message_metadata = message.get('message_metadata') or {}
-        telegram_chat_id = message_metadata.get("telegram_chat_id")
-        if telegram_chat_id:
+        explicit_chat_id = message_metadata.get("telegram_chat_id")
+        if explicit_chat_id:
             try:
-                return int(telegram_chat_id)
+                return int(explicit_chat_id)
             except (ValueError, TypeError):
-                self._logger.warning("Invalid telegram_chat_id in metadata: %s", telegram_chat_id)
+                self._logger.warning(
+                    "Invalid telegram_chat_id in message_metadata: %s", explicit_chat_id
+                )
 
-        # 2. Check recipient_id
+        # 2 + 3. Resolve from recipient_id
         recipient_id = message.get('recipient_id')
-        if recipient_id:
-            # If it's a numeric string that looks like a Telegram ID (usually > 100k)
-            # but we'll try to resolve it as a User ID first if it's small,
-            # or if it's explicitly a User ID.
+        if not recipient_id:
+            return None
 
-            try:
-                recipient_id_int = int(recipient_id)
+        try:
+            recipient_id_int = int(recipient_id)
+        except (ValueError, TypeError):
+            self._logger.warning("Non-integer recipient_id, cannot resolve: %s", recipient_id)
+            return None
 
-                # If recipient_id is small (e.g. < 1,000,000), it's likely our internal User ID
-                # Telegram IDs are typically much larger integers.
-                if recipient_id_int < 1000000:
-                    self._logger.debug("Attempting to resolve User ID %s to Telegram Chat ID", recipient_id_int)
-                    channels = users_service.get_user_notification_channels(recipient_id_int)
-                    if channels and channels.get('telegram_chat_id'):
-                        resolved_id = channels['telegram_chat_id']
-                        self._logger.debug("Resolved User ID %s to Telegram Chat ID %s", recipient_id_int, resolved_id)
-                        return int(resolved_id)
+        # 2. Try DB lookup first — works for internal user IDs of any magnitude
+        try:
+            channels = users_service.get_user_notification_channels(recipient_id_int)
+            if channels and channels.get('telegram_chat_id'):
+                resolved = int(channels['telegram_chat_id'])
+                self._logger.debug(
+                    "Resolved recipient_id %s to Telegram chat ID %s via DB",
+                    recipient_id_int, resolved,
+                )
+                return resolved
+        except Exception as exc:
+            self._logger.debug(
+                "DB lookup failed for recipient_id %s: %s — falling back to direct ID",
+                recipient_id_int, exc,
+            )
 
-                # Otherwise, treat it as a direct Chat ID
-                return recipient_id_int
-            except (ValueError, TypeError):
-                # Probably not a numeric ID
-                pass
-
-        return None
+        # 3. Treat recipient_id itself as a direct Telegram chat ID
+        self._logger.debug(
+            "Treating recipient_id %s as direct Telegram chat ID (no DB match found)",
+            recipient_id_int,
+        )
+        return recipient_id_int
 
     def _build_message_text(self, message: Dict[str, Any]) -> str:
         """

@@ -81,7 +81,8 @@ class SchedulerService:
                  alert_evaluator: AlertEvaluator,
                  notification_db_service: NotificationService,
                  database_url: str,
-                 max_workers: int = 10):
+                 max_workers: int = 10,
+                 job_timeout_seconds: int = 300):
         """
         Initialize the scheduler service.
 
@@ -91,6 +92,7 @@ class SchedulerService:
             notification_db_service: Database service for notifications (both alerts and data processing)
             database_url: Database connection URL for APScheduler job store only
             max_workers: Maximum number of worker threads
+            job_timeout_seconds: Execution timeout applied to all job types via asyncio.wait_for
         """
         self.jobs_service = jobs_service
         self.alert_evaluator = alert_evaluator
@@ -105,6 +107,12 @@ class SchedulerService:
 
         # DB Listener
         self._db_listener_task: Optional[asyncio.Task] = None
+
+        # Debounce task: collapses burst NOTIFY events into a single reload (P2-SCHED-2)
+        self._reload_debounce_task: Optional[asyncio.Task] = None
+
+        # Job execution timeout in seconds applied via asyncio.wait_for (P2-SCHED-3)
+        self.job_timeout_seconds = job_timeout_seconds
 
         # Service state
         self.is_running = False
@@ -136,6 +144,32 @@ class SchedulerService:
         """
         global _service_instance
         _service_instance = None
+
+    # ── Debounced reload helpers (P2-SCHED-1 + P2-SCHED-2) ──────────────────
+
+    async def _schedule_debounced_reload(self) -> None:
+        """
+        Cancel any in-flight debounce task and schedule a fresh one.
+
+        Called from the asyncpg NOTIFY callback so that a burst of DB
+        notifications (e.g. a batch DB operation) collapses into a single
+        reload fired DEBOUNCE_DELAY seconds after the *last* notification.
+        """
+        if self._reload_debounce_task and not self._reload_debounce_task.done():
+            self._reload_debounce_task.cancel()
+        self._reload_debounce_task = asyncio.create_task(self._debounced_reload())
+
+    async def _debounced_reload(self, delay: float = 3.0) -> None:
+        """Wait for the debounce delay, then reload schedules once."""
+        try:
+            await asyncio.sleep(delay)
+            if self.is_running:
+                _logger.info("Debounced DB NOTIFY: reloading schedules")
+                await self.reload_schedules()
+        except asyncio.CancelledError:
+            pass  # superseded by a newer notification — expected behaviour
+        except Exception:
+            _logger.exception("Error in debounced schedule reload:")
 
     async def start(self) -> None:
         """
@@ -216,6 +250,15 @@ class SchedulerService:
                     pass
                 self._db_listener_task = None
 
+            # Cancel any pending debounced reload (P2-SCHED-2)
+            if self._reload_debounce_task and not self._reload_debounce_task.done():
+                self._reload_debounce_task.cancel()
+                try:
+                    await self._reload_debounce_task
+                except asyncio.CancelledError:
+                    pass
+            self._reload_debounce_task = None
+
             await self._cleanup_scheduler()
 
             self.is_running = False
@@ -230,15 +273,16 @@ class SchedulerService:
 
     async def reload_schedules(self) -> int:
         """
-        Reload schedules from database and update APScheduler.
+        Atomically reconcile APScheduler jobs with the enabled schedules in the database.
 
-        This method:
-        - Removes all existing jobs from APScheduler
-        - Loads current enabled schedules from database
-        - Registers updated jobs with APScheduler
+        P2-SCHED-4 fix: previously this cleared all jobs then re-inserted them, leaving
+        a window where zero jobs were registered if the DB call failed mid-reload.
+        Now we: (1) load the new desired state first, (2) add/replace each schedule
+        using replace_existing=True, (3) only then remove jobs that are no longer needed.
+        Existing jobs keep firing throughout steps 1 and 2.
 
         Returns:
-            Number of schedules loaded and registered
+            Number of enabled schedules successfully registered
 
         Raises:
             RuntimeError: If service is not running
@@ -246,17 +290,35 @@ class SchedulerService:
         if not self.is_running:
             raise RuntimeError("Cannot reload schedules - service is not running")
 
-        _logger.info("Reloading schedules...")
+        _logger.info("Reloading schedules (atomic reconciliation)...")
 
         try:
-            # Remove all existing jobs
-            await self._clear_all_jobs()
+            # Step 1 — fetch desired state from DB *before* touching APScheduler
+            schedules = self.jobs_service.list_schedules(enabled=True, limit=1000)
+            desired_job_ids = {f"schedule_{s.id}" for s in schedules}
 
-            # Load and register current schedules
-            count = await self._load_and_register_schedules()
+            # Step 2 — add/replace each schedule (jobs keep firing during this phase)
+            registered_count = 0
+            for schedule in schedules:
+                try:
+                    await self._register_schedule(schedule)  # uses replace_existing=True
+                    registered_count += 1
+                except Exception:
+                    _logger.error("Failed to register schedule %s (ID: %d) during reload",
+                                  schedule.name, schedule.id, exc_info=True)
 
-            _logger.info("Successfully reloaded %d schedules", count)
-            return count
+            # Step 3 — remove jobs that are no longer in the enabled set
+            if self.scheduler:
+                for job in self.scheduler.get_jobs():
+                    if job.id not in desired_job_ids:
+                        try:
+                            self.scheduler.remove_job(job.id)
+                            _logger.debug("Removed stale schedule job: %s", job.id)
+                        except Exception:
+                            _logger.warning("Failed to remove stale job %s", job.id, exc_info=True)
+
+            _logger.info("Reloaded schedules: %d active", registered_count)
+            return registered_count
 
         except Exception:
             _logger.exception("Error reloading schedules:")
@@ -505,24 +567,36 @@ class SchedulerService:
             _logger.info("Executing job for schedule %s (ID: %d, Run: %d)",
                         schedule.name, schedule.id, run_record.id)
 
-            # Execute based on job type
-            result = None
+            # Build the job coroutine for this job type
             if schedule.job_type == JobType.ALERT.value:
                 target = (schedule.target or "").strip()
                 if target.startswith("portfolio."):
-                    result = await self._execute_portfolio_job(schedule, run_record)
+                    job_coro = self._execute_portfolio_job(schedule, run_record)
                 else:
-                    result = await self._execute_alert_job(schedule, run_record)
+                    job_coro = self._execute_alert_job(schedule, run_record)
             elif schedule.job_type == JobType.SCREENER.value:
-                result = await self._execute_screener_job(schedule, run_record)
+                job_coro = self._execute_screener_job(schedule, run_record)
             elif schedule.job_type == JobType.REPORT.value:
-                result = await self._execute_report_job(schedule, run_record)
-            elif schedule.job_type == JobType.DATA_PROCESSING.value:
-                result = await self._execute_data_processing_job(schedule, run_record)
-            elif schedule.job_type == JobType.SCRIPT.value:
-                result = await self._execute_data_processing_job(schedule, run_record)
+                job_coro = self._execute_report_job(schedule, run_record)
+            elif schedule.job_type in (JobType.DATA_PROCESSING.value, JobType.SCRIPT.value):
+                job_coro = self._execute_data_processing_job(schedule, run_record)
             else:
                 raise ValueError(f"Unsupported job type: {schedule.job_type}")
+
+            # P2-SCHED-3: apply execution timeout so a hung job cannot block the
+            # event loop indefinitely.  DATA_PROCESSING jobs have their own inner
+            # timeout via asyncio.wait_for; this outer limit is the absolute backstop.
+            try:
+                result = await asyncio.wait_for(job_coro, timeout=self.job_timeout_seconds)
+            except asyncio.TimeoutError:
+                timeout_msg = (
+                    f"Job timed out after {self.job_timeout_seconds}s "
+                    f"(schedule: {schedule.name!r}, type: {schedule.job_type})"
+                )
+                _logger.error(timeout_msg)
+                if run_record:
+                    await self._complete_run_record(run_record, RunStatus.FAILED, None, timeout_msg)
+                return
 
             # Update run record with success
             await self._complete_run_record(run_record, RunStatus.COMPLETED, result)
@@ -932,13 +1006,15 @@ class SchedulerService:
                 # SSL is not required for local network connection, bypassing permission issues with keys
                 conn = await asyncpg.connect(current_db_url, ssl='disable')
 
-                # P1.2 Fix: Use call_soon_threadsafe so we schedule the coroutine
-                # from within the event loop thread, not from the asyncpg sync callback.
-                loop = asyncio.get_event_loop()
+                # P2-SCHED-1: use get_running_loop() (get_event_loop() is deprecated in 3.10+)
+                # and create_task() (ensure_future() is deprecated in 3.10+).
+                # P2-SCHED-2: route through _schedule_debounced_reload() so a burst
+                # of NOTIFY events collapses into a single reload (cancel-and-reschedule).
+                loop = asyncio.get_running_loop()
                 await conn.add_listener(
                     'scheduler_updates',
                     lambda *args: loop.call_soon_threadsafe(
-                        asyncio.ensure_future, self.reload_schedules()
+                        loop.create_task, self._schedule_debounced_reload()
                     )
                 )
 

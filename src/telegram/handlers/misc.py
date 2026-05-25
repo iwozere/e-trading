@@ -122,31 +122,20 @@ async def cmd_feature(msg: Message):
 
 
 async def unknown_command(msg: Message):
-    """Handle unknown slash commands."""
+    """
+    Handle unknown slash commands.
+
+    P2-TG-6: The manual case-insensitive dispatch table has been removed.
+    All Command() filters now use ignore_case=True (see register() below),
+    so aiogram handles case-insensitivity natively without a secondary
+    lookup table that could diverge from the registered handlers.
+    """
     from src.telegram.handlers.common import HELP_TEXT, audit_command_wrapper
     _logger.info("Unknown command: %s from user %s", msg.text, msg.from_user.id)
-    command_name = msg.text.strip().split()[0].lstrip("/").lower()
-
-    # Case-insensitive dispatch table
-    from src.telegram.handlers import account, alerts, admin, content
-    handlers_map = {
-        "info": lambda m: account.process_info_command_immediate(str(m.from_user.id), m),
-        "start": lambda m: cmd_start(m),
-        "help": lambda m: cmd_help(m),
-        "schedules": lambda m: cmd_schedules(m),
-        "feedback": lambda m: cmd_feedback(m),
-        "feature": lambda m: cmd_feature(m),
-    }
-    if command_name in handlers_map:
-        try:
-            await handlers_map[command_name](msg)
-            return
-        except Exception:
-            _logger.exception("Error in case-insensitive %s for user %s", command_name, msg.from_user.id)
-            await msg.answer("Sorry, there was an error. Please try again.")
-            return
     try:
-        await audit_command_wrapper(msg, process_unknown_command_immediate, str(msg.from_user.id), msg, HELP_TEXT)
+        await audit_command_wrapper(
+            msg, process_unknown_command_immediate, str(msg.from_user.id), msg, HELP_TEXT
+        )
     except Exception:
         _logger.exception("Error processing unknown command for user %s", msg.from_user.id)
         await msg.answer("Sorry, there was an error. Please try again.")
@@ -169,15 +158,19 @@ async def all_messages(msg: Message):
 
 
 def register(dp: Dispatcher) -> None:
-    """Register all misc handlers onto the Dispatcher."""
-    dp.message(Command("start"))(cmd_start)
-    dp.message(Command("help"))(cmd_help)
-    dp.message(Command("schedules"))(cmd_schedules)
-    dp.message(Command("feedback"))(cmd_feedback)
-    dp.message(Command("feature"))(cmd_feature)
-    
-    # Unknown slash command
+    """Register all misc handlers onto the Dispatcher.
+
+    All Command() filters use ignore_case=True (P2-TG-6) so aiogram handles
+    case normalisation natively, removing the need for a secondary dispatch table.
+    """
+    dp.message(Command("start", ignore_case=True))(cmd_start)
+    dp.message(Command("help", ignore_case=True))(cmd_help)
+    dp.message(Command("schedules", ignore_case=True))(cmd_schedules)
+    dp.message(Command("feedback", ignore_case=True))(cmd_feedback)
+    dp.message(Command("feature", ignore_case=True))(cmd_feature)
+
+    # Unknown slash command (anything that didn't match a registered Command filter)
     dp.message(lambda m: m.text and m.text.startswith("/"))(unknown_command)
-    
+
     # Non-command messages
     dp.message()(all_messages)

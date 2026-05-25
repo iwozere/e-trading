@@ -93,7 +93,8 @@ class SchedulerApplication:
                 alert_evaluator=self.alert_evaluator,
                 notification_db_service=self.notification_db_service,
                 database_url=self.config.database.url,
-                max_workers=self.config.scheduler.max_workers
+                max_workers=self.config.scheduler.max_workers,
+                job_timeout_seconds=self.config.scheduler.job_timeout,
             )
             _logger.debug("Scheduler service initialized")
 

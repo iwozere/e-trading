@@ -136,11 +136,35 @@ class TelegramBusinessLogic:
 
 # Service instances are now managed in src.telegram.lifecycle
 
+# ── Cached facade (P2-TG-2) ──────────────────────────────────────────────────
+# Re-creating TelegramBusinessLogic (and all its sub-services) on every command
+# call is wasteful.  This cached getter rebuilds only when the underlying service
+# instances change (e.g. after a lifecycle restart).
+
+_cached_logic: Optional["TelegramBusinessLogic"] = None
+_cached_ts = None   # telegram_service identity used to detect staleness
+_cached_ids = None  # indicator_service identity used to detect staleness
+
+
+def get_business_logic() -> Optional["TelegramBusinessLogic"]:
+    """Return a cached TelegramBusinessLogic, rebuilding if services have changed."""
+    global _cached_logic, _cached_ts, _cached_ids
+    ts, ids = get_service_instances()
+    if ts is None:
+        return None
+    if _cached_logic is None or _cached_ts is not ts or _cached_ids is not ids:
+        _cached_logic = TelegramBusinessLogic(ts, ids)
+        _cached_ts = ts
+        _cached_ids = ids
+    return _cached_logic
+
+
 async def handle_command(parsed: ParsedCommand) -> Dict[str, Any]:
     """Standalone entry point used by notifications.py."""
-    ts, ids = get_service_instances()
-    facade = TelegramBusinessLogic(ts, ids)
-    return await facade.handle_command(parsed)
+    logic = get_business_logic()
+    if logic is None:
+        return {"status": "error", "message": "Service temporarily unavailable"}
+    return await logic.handle_command(parsed)
 
 # Legacy / Exported functions for backward compatibility if needed
 def is_admin_user(user_id: str) -> bool:
