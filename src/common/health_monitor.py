@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 
 import psutil
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.data.db.services.database_service import DatabaseService
@@ -55,14 +56,18 @@ class HealthMonitor:
         self._register_default_checkers()
 
     def _register_default_checkers(self):
-        """Register default health check functions for core systems."""
+        """
+        Register default health check functions for core systems.
+
+        Only production-ready checkers are registered here.  Stub checkers
+        (telegram_bot, api_service, web_ui, trading_bot) are intentionally
+        omitted — they always returned UNKNOWN and polluted health dashboards.
+        Register them via :meth:`register_health_checker` once they are
+        implemented.
+        """
         self._health_checkers.update({
             "database": self._check_database_health,
             "notification": self._check_notification_health,
-            "telegram_bot": self._check_telegram_bot_health,
-            "api_service": self._check_api_service_health,
-            "web_ui": self._check_web_ui_health,
-            "trading_bot": self._check_trading_bot_health,
             "system_resources": self._check_system_resources,
         })
 
@@ -263,7 +268,7 @@ class HealthMonitor:
             with self.db_service.uow() as uow:
                 # Test basic connectivity
                 start_time = time.time()
-                result = uow.s.execute("SELECT 1").scalar()
+                result = uow.s.execute(text("SELECT 1")).scalar()
                 query_time = int((time.time() - start_time) * 1000)
 
                 if result == 1:

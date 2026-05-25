@@ -25,12 +25,7 @@ from datetime import datetime, timedelta, timezone
 import math
 import json
 from pathlib import Path
-import sys
 import os
-
-# Add project root to path for imports
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.append(str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
 

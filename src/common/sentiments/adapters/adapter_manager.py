@@ -9,19 +9,10 @@ from typing import Dict, List, Optional, Type, Any
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import time
-from pathlib import Path
-import sys
-
-# Add project root to path for imports
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
-sys.path.append(str(PROJECT_ROOT))
-
 from src.notification.logger import setup_logger
 from src.common.sentiments.adapters.base_adapter import BaseSentimentAdapter, AdapterStatus, AdapterHealthInfo
 from src.common.sentiments.rate_limiting.global_coordinator import GlobalRateLimitCoordinator, GlobalLimitConfig
 from src.common.sentiments.rate_limiting.adaptive_limiter import AdaptiveConfig
-import config.donotshare.donotshare as secrets
-
 _logger = setup_logger(__name__)
 
 
@@ -93,16 +84,17 @@ class CircuitBreaker:
         return False
 
     def record_success(self) -> None:
-        """Record successful operation."""
+        """Record a successful operation and update the circuit-breaker state."""
+        # Always reset failure_count on any success so that the next failure
+        # threshold calculation starts from zero — regardless of state.
+        self.failure_count = 0
         if self.state == AdapterStatus.CIRCUIT_OPEN:
             self.half_open_calls += 1
             if self.half_open_calls >= self.config.half_open_max_calls:
-                # Transition back to healthy
+                # All probe calls succeeded → transition back to HEALTHY (CLOSED).
                 self.state = AdapterStatus.HEALTHY
-                self.failure_count = 0
                 self.half_open_calls = 0
         else:
-            self.failure_count = 0
             self.state = AdapterStatus.HEALTHY
 
     def record_failure(self) -> None:
@@ -243,22 +235,44 @@ class AdapterManager:
             except Exception as e:
                 _logger.warning("Failed to register adapter %s with global coordinator: %s", name, e)
 
-        if name == "reddit" and not (config.get("client_id") or secrets.REDDIT_API_KEY):
-            _logger.warning("Reddit adapter added but REDDIT_API_KEY is missing in secrets!")
-
-        if name == "twitter" and not (config.get("bearer_token") or secrets.TWITTER_BEARER_TOKEN):
-            _logger.warning("Twitter adapter added but TWITTER_BEARER_TOKEN is missing in secrets!")
-
-        if name == "news":
-            if not (config.get("finnhub_token") or secrets.FINNHUB_API_KEY):
-                _logger.warning("News adapter: FINNHUB_API_KEY is missing!")
-            if not (config.get("alpha_vantage_token") or secrets.ALPHA_VANTAGE_API_KEY):
-                _logger.warning("News adapter: ALPHA_VANTAGE_API_KEY is missing!")
-
-        if name == "discord" and not (config.get("bot_token") or secrets.DISCORD_BOT_TOKEN):
-            _logger.warning("Discord adapter added but DISCORD_BOT_TOKEN is missing!")
+        # Validate that required API credentials exist for known adapter types.
+        # The secrets module is imported lazily (not at module level) so that
+        # importing AdapterManager does not eagerly load sensitive credentials
+        # into the process for code that never calls add_adapter().
+        self._validate_adapter_credentials(name, config)
 
         _logger.info("Added adapter: %s", name)
+
+    def _validate_adapter_credentials(
+        self, name: str, config: Optional[Dict[str, Any]]
+    ) -> None:
+        """
+        Warn if a known adapter type is missing its API credentials.
+
+        The ``config.donotshare`` module is imported lazily here so that
+        importing :class:`AdapterManager` elsewhere does not load sensitive
+        secrets into memory unless an adapter is actually being added.
+        """
+        cfg = config or {}
+        try:
+            import config.donotshare.donotshare as _s  # type: ignore[import]
+
+            checks: Dict[str, bool] = {
+                "reddit": bool(cfg.get("client_id") or getattr(_s, "REDDIT_API_KEY", None)),
+                "twitter": bool(cfg.get("bearer_token") or getattr(_s, "TWITTER_BEARER_TOKEN", None)),
+                "discord": bool(cfg.get("bot_token") or getattr(_s, "DISCORD_BOT_TOKEN", None)),
+            }
+            if name in checks and not checks[name]:
+                _logger.warning("Adapter '%s' added but its API key is missing in secrets!", name)
+
+            if name == "news":
+                if not (cfg.get("finnhub_token") or getattr(_s, "FINNHUB_API_KEY", None)):
+                    _logger.warning("News adapter: FINNHUB_API_KEY is missing!")
+                if not (cfg.get("alpha_vantage_token") or getattr(_s, "ALPHA_VANTAGE_API_KEY", None)):
+                    _logger.warning("News adapter: ALPHA_VANTAGE_API_KEY is missing!")
+
+        except ImportError:
+            _logger.debug("config.donotshare not found; skipping credential validation for '%s'", name)
 
     async def start(self) -> None:
         """
@@ -291,157 +305,128 @@ class AdapterManager:
                 _logger.debug("No running event loop; adapter '%s' close deferred", name)
             _logger.info("Removed adapter: %s", name)
 
-    async def fetch_messages_from_adapter(self, adapter_name: str, ticker: str,
-                                        since_ts: Optional[int] = None,
-                                        limit: int = 200) -> Optional[List[Dict[str, Any]]]:
+    async def _protected_fetch(
+        self,
+        adapter_name: str,
+        ticker: str,
+        coro: Any,
+    ) -> Any:
+        """
+        Execute ``coro`` with circuit-breaker and global rate-limit protection.
+
+        This private helper eliminates the ~120-line duplication between
+        :meth:`fetch_messages_from_adapter` and
+        :meth:`fetch_summary_from_adapter`.  Both public methods delegate here
+        after constructing the appropriate adapter coroutine.
+
+        Args:
+            adapter_name: Adapter name for circuit-breaker and coordinator lookup.
+            ticker: Ticker symbol — used only for warning messages.
+            coro: Awaitable produced by the adapter (e.g.
+                ``adapter.fetch_messages(...)`` or ``adapter.fetch_summary(...)``).
+
+        Returns:
+            The awaited result, or ``None`` if the circuit breaker is open /
+            the rate limit is exceeded / the adapter raises.
+        """
+        circuit_breaker = self._circuit_breakers[adapter_name]
+        if not circuit_breaker.can_execute():
+            _logger.debug("Circuit breaker open for adapter %s", adapter_name)
+            return None
+
+        adapter = self._adapters[adapter_name]
+        start_time = time.time()
+
+        # Acquire global rate-limit permission when a coordinator is active.
+        global_permission_acquired = False
+        if self._global_coordinator:
+            try:
+                global_permission_acquired = await self._global_coordinator.acquire_global_permission(
+                    adapter_name, timeout=30.0
+                )
+                if not global_permission_acquired:
+                    _logger.debug("Global rate limit exceeded for adapter %s", adapter_name)
+                    return None
+            except Exception as exc:
+                _logger.debug("Global rate limiting failed for %s: %s", adapter_name, exc)
+
+        try:
+            result = await coro
+
+            response_time_ms = (time.time() - start_time) * 1000
+            adapter._update_health_success(response_time_ms)
+            circuit_breaker.record_success()
+            if self._global_coordinator:
+                self._global_coordinator.record_adapter_response(adapter_name, response_time_ms, True)
+
+            return result
+
+        except Exception as exc:
+            _logger.warning("Adapter %s failed for ticker %s: %s", adapter_name, ticker, exc)
+            response_time_ms = (time.time() - start_time) * 1000
+            adapter._update_health_failure(exc)
+            circuit_breaker.record_failure()
+            if self._global_coordinator:
+                self._global_coordinator.record_adapter_response(
+                    adapter_name, response_time_ms, False, error_type=type(exc).__name__
+                )
+            return None
+
+        finally:
+            if global_permission_acquired and self._global_coordinator:
+                self._global_coordinator.release_global_permission(adapter_name)
+
+    async def fetch_messages_from_adapter(
+        self,
+        adapter_name: str,
+        ticker: str,
+        since_ts: Optional[int] = None,
+        limit: int = 200,
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Fetch messages from a specific adapter with circuit breaker protection.
 
         Args:
-            adapter_name: Name of the adapter to use
-            ticker: Stock ticker symbol
-            since_ts: Unix timestamp to fetch messages since
-            limit: Maximum number of messages to fetch
+            adapter_name: Name of the adapter to use.
+            ticker: Stock ticker symbol.
+            since_ts: Unix timestamp to fetch messages since.
+            limit: Maximum number of messages to fetch.
 
         Returns:
-            List of messages or None if adapter is unavailable
+            List of message dicts, or ``None`` if the adapter is unavailable.
         """
         if adapter_name not in self._adapters:
             _logger.warning("Adapter %s not found", adapter_name)
             return None
-
-        circuit_breaker = self._circuit_breakers[adapter_name]
-        if not circuit_breaker.can_execute():
-            _logger.debug("Circuit breaker open for adapter %s", adapter_name)
-            return None
-
         adapter = self._adapters[adapter_name]
-        start_time = time.time()
+        return await self._protected_fetch(
+            adapter_name, ticker, adapter.fetch_messages(ticker, since_ts, limit)
+        )
 
-        # Acquire global rate limiting permission if available
-        global_permission_acquired = False
-        if self._global_coordinator:
-            try:
-                global_permission_acquired = await self._global_coordinator.acquire_global_permission(
-                    adapter_name, timeout=30.0
-                )
-                if not global_permission_acquired:
-                    _logger.debug("Global rate limit exceeded for adapter %s", adapter_name)
-                    return None
-            except Exception as e:
-                _logger.debug("Global rate limiting failed for %s: %s", adapter_name, e)
-
-        try:
-            messages = await adapter.fetch_messages(ticker, since_ts, limit)
-
-            # Record success
-            response_time_ms = (time.time() - start_time) * 1000
-            adapter._update_health_success(response_time_ms)
-            circuit_breaker.record_success()
-
-            # Record with global coordinator
-            if self._global_coordinator:
-                self._global_coordinator.record_adapter_response(
-                    adapter_name, response_time_ms, True
-                )
-
-            return messages
-
-        except Exception as e:
-            _logger.warning("Adapter %s failed for ticker %s: %s", adapter_name, ticker, e)
-
-            # Record failure
-            adapter._update_health_failure(e)
-            circuit_breaker.record_failure()
-
-            # Record with global coordinator
-            if self._global_coordinator:
-                response_time_ms = (time.time() - start_time) * 1000
-                self._global_coordinator.record_adapter_response(
-                    adapter_name, response_time_ms, False, error_type=str(type(e).__name__)
-                )
-
-            return None
-
-        finally:
-            # Release global permission
-            if global_permission_acquired and self._global_coordinator:
-                self._global_coordinator.release_global_permission(adapter_name)
-
-    async def fetch_summary_from_adapter(self, adapter_name: str, ticker: str,
-                                       since_ts: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    async def fetch_summary_from_adapter(
+        self,
+        adapter_name: str,
+        ticker: str,
+        since_ts: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
         Fetch summary from a specific adapter with circuit breaker protection.
 
         Args:
-            adapter_name: Name of the adapter to use
-            ticker: Stock ticker symbol
-            since_ts: Unix timestamp to fetch data since
+            adapter_name: Name of the adapter to use.
+            ticker: Stock ticker symbol.
+            since_ts: Unix timestamp to fetch data since.
 
         Returns:
-            Summary dictionary or None if adapter is unavailable
+            Summary dict, or ``None`` if the adapter is unavailable.
         """
         if adapter_name not in self._adapters:
             _logger.warning("Adapter %s not found", adapter_name)
             return None
-
-        circuit_breaker = self._circuit_breakers[adapter_name]
-        if not circuit_breaker.can_execute():
-            _logger.debug("Circuit breaker open for adapter %s", adapter_name)
-            return None
-
         adapter = self._adapters[adapter_name]
-        start_time = time.time()
-
-        # Acquire global rate limiting permission if available
-        global_permission_acquired = False
-        if self._global_coordinator:
-            try:
-                global_permission_acquired = await self._global_coordinator.acquire_global_permission(
-                    adapter_name, timeout=30.0
-                )
-                if not global_permission_acquired:
-                    _logger.debug("Global rate limit exceeded for adapter %s", adapter_name)
-                    return None
-            except Exception as e:
-                _logger.debug("Global rate limiting failed for %s: %s", adapter_name, e)
-
-        try:
-            summary = await adapter.fetch_summary(ticker, since_ts)
-
-            # Record success
-            response_time_ms = (time.time() - start_time) * 1000
-            adapter._update_health_success(response_time_ms)
-            circuit_breaker.record_success()
-
-            # Record with global coordinator
-            if self._global_coordinator:
-                self._global_coordinator.record_adapter_response(
-                    adapter_name, response_time_ms, True
-                )
-
-            return summary
-
-        except Exception as e:
-            _logger.warning("Adapter %s failed for ticker %s: %s", adapter_name, ticker, e)
-
-            # Record failure
-            adapter._update_health_failure(e)
-            circuit_breaker.record_failure()
-
-            # Record with global coordinator
-            if self._global_coordinator:
-                response_time_ms = (time.time() - start_time) * 1000
-                self._global_coordinator.record_adapter_response(
-                    adapter_name, response_time_ms, False, error_type=str(type(e).__name__)
-                )
-
-            return None
-
-        finally:
-            # Release global permission
-            if global_permission_acquired and self._global_coordinator:
-                self._global_coordinator.release_global_permission(adapter_name)
+        return await self._protected_fetch(
+            adapter_name, ticker, adapter.fetch_summary(ticker, since_ts)
+        )
 
     async def get_health_status(self) -> Dict[str, AdapterHealthInfo]:
         """Get health status for all adapters."""

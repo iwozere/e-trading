@@ -523,7 +523,14 @@ class BacktraderPortfolioAdapter:
 class PositionNotificationManager:
     """
     Manages notifications for position events (opened/closed).
+
     Supports email and Telegram notifications with configurable settings.
+
+    **Opt-in**: A ``notification_client`` must be supplied to actually send
+    notifications.  When ``notification_client=None`` (the default), all
+    notify calls are silently skipped at DEBUG level.  This is intentional
+    for environments where notifications are handled via a separate hook
+    (e.g. ``BaseTradingBot.trade_notification_hook`` / StrategyInstance).
     """
 
     def __init__(self, config: Dict[str, Any], notification_client=None):
@@ -649,8 +656,13 @@ class PositionNotificationManager:
                 else:
                     _logger.debug("No notification channels enabled")
             else:
-                # No notification client provided - log warning
-                _logger.warning("No notification client provided for trading notifications")
+                # notification_client=None means this manager is opt-in disabled.
+                # Log at DEBUG so callers that intentionally omit it don't see noisy warnings.
+                _logger.debug(
+                    "PositionNotificationManager: notification_client not set — "
+                    "skipping notification '%s' (pass notification_client= to enable)",
+                    title,
+                )
 
         except Exception:
             _logger.exception("Error sending notifications:")
@@ -1088,8 +1100,8 @@ class BaseBroker(ABC):
         """
         Backtrader buy method adapter.
 
-        Converts backtrader buy parameters to our internal Order format
-        and calls the existing place_order method.
+        Converts backtrader buy parameters to our internal Order format.
+        Delegates to :meth:`_create_bt_order`.
 
         Args:
             owner: Strategy instance (backtrader specific)
@@ -1110,29 +1122,71 @@ class BaseBroker(ABC):
         Returns:
             Order object compatible with backtrader
         """
+        return self._create_bt_order(
+            OrderSide.BUY,
+            owner=owner, data=data, size=size, price=price, plimit=plimit,
+            exectype=exectype, valid=valid, tradeid=tradeid, oco=oco,
+            trailamount=trailamount, trailpercent=trailpercent,
+            parent=parent, transmit=transmit, **kwargs
+        )
+
+    def _create_bt_order(
+        self,
+        side: OrderSide,
+        owner=None, data=None, size=None, price=None, plimit=None,
+        exectype=None, valid=None, tradeid=0, oco=None, trailamount=None,
+        trailpercent=None, parent=None, transmit=True, **kwargs
+    ) -> Order:
+        """
+        Shared implementation for backtrader ``buy()`` / ``sell()`` adapters.
+
+        Validates parameters, converts backtrader types to internal types, creates
+        an :class:`Order` object, and either queues it (paper) or marks it
+        ``QUEUED`` for async processing (live).
+
+        Args:
+            side: ``OrderSide.BUY`` or ``OrderSide.SELL``.
+            owner: Strategy instance (backtrader specific).
+            data: Data feed (backtrader specific).
+            size: Order size (quantity).
+            price: Limit price (for limit orders).
+            plimit: Price limit (for stop-limit orders).
+            exectype: Execution type (Market, Limit, Stop, etc.).
+            valid: Order validity.
+            tradeid: Trade ID.
+            oco: One-Cancels-Other order.
+            trailamount: Trailing stop amount.
+            trailpercent: Trailing stop percentage.
+            parent: Parent order.
+            transmit: Whether to transmit immediately.
+            **kwargs: Additional parameters forwarded to order metadata.
+
+        Returns:
+            :class:`Order` object compatible with backtrader.
+        """
+        side_str = "buy" if side == OrderSide.BUY else "sell"
+
         if not self._backtrader_mode:
             raise RuntimeError(
-                "buy() method only available in backtrader mode. "
+                f"{side_str}() method only available in backtrader mode. "
                 "Ensure backtrader is installed and the broker is initialized in backtrader context."
             )
 
         # Log the operation
-        self._log_backtrader_operation("buy", size=size, price=price, exectype=exectype)
+        self._log_backtrader_operation(side_str, size=size, price=price, exectype=exectype)
 
         # Validate parameters
         is_valid, error_msg = self._validate_backtrader_order_params(size, price, exectype)
         if not is_valid:
-            self._logger.error("Invalid buy order parameters: %s", error_msg)
-            # Return a rejected order
-            order = Order(
+            self._logger.error("Invalid %s order parameters: %s", side_str, error_msg)
+            return Order(
                 symbol="INVALID",
-                side=OrderSide.BUY,
+                side=side,
                 order_type=OrderType.MARKET,
                 quantity=0.0,
                 status=OrderStatus.REJECTED,
                 metadata={'error': error_msg}
             )
-            return order
 
         # Convert backtrader exectype to our OrderType
         order_type = self._convert_bt_exectype_to_order_type(exectype)
@@ -1151,7 +1205,7 @@ class BaseBroker(ABC):
         # Create our internal Order object
         order = Order(
             symbol=symbol,
-            side=OrderSide.BUY,
+            side=side,
             order_type=order_type,
             quantity=float(size) if size else 0.0,
             price=float(price) if price else None,
@@ -1170,31 +1224,27 @@ class BaseBroker(ABC):
             }
         )
 
-        # Place the order using our existing method
         try:
-            # Since place_order is async, we need to handle this appropriately
-            # For backtrader compatibility, we'll store the order and process it later
             if self.paper_trading_enabled:
-                # In paper trading mode, we can process immediately
-                order_id = order.order_id
-                self.paper_orders[order_id] = order
-
-                # Set initial status
+                # In paper trading mode, process immediately
+                self.paper_orders[order.order_id] = order
                 order.status = OrderStatus.PENDING
-
-                self._logger.info("Backtrader buy order created: %s %s @ %s",
-                                size, symbol, price or "MARKET")
-
+                self._logger.info(
+                    "Backtrader %s order created: %s %s @ %s",
+                    side_str, size, symbol, price or "MARKET",
+                )
                 return order
             else:
-                # For live trading, we need to queue the order for async processing
+                # For live trading, queue for async processing
                 order.status = OrderStatus.QUEUED
-                self._logger.info("Backtrader buy order queued: %s %s @ %s",
-                                size, symbol, price or "MARKET")
+                self._logger.info(
+                    "Backtrader %s order queued: %s %s @ %s",
+                    side_str, size, symbol, price or "MARKET",
+                )
                 return order
 
         except Exception as e:
-            self._logger.exception("Error creating backtrader buy order: %s", e)
+            self._logger.exception("Error creating backtrader %s order: %s", side_str, e)
             order.status = OrderStatus.REJECTED
             return order
 
@@ -1242,8 +1292,8 @@ class BaseBroker(ABC):
         """
         Backtrader sell method adapter.
 
-        Converts backtrader sell parameters to our internal Order format
-        and calls the existing place_order method.
+        Converts backtrader sell parameters to our internal Order format.
+        Delegates to :meth:`_create_bt_order`.
 
         Args:
             owner: Strategy instance (backtrader specific)
@@ -1264,93 +1314,13 @@ class BaseBroker(ABC):
         Returns:
             Order object compatible with backtrader
         """
-        if not self._backtrader_mode:
-            raise RuntimeError(
-                "sell() method only available in backtrader mode. "
-                "Ensure backtrader is installed and the broker is initialized in backtrader context."
-            )
-
-        # Log the operation
-        self._log_backtrader_operation("sell", size=size, price=price, exectype=exectype)
-
-        # Validate parameters
-        is_valid, error_msg = self._validate_backtrader_order_params(size, price, exectype)
-        if not is_valid:
-            self._logger.error("Invalid sell order parameters: %s", error_msg)
-            # Return a rejected order
-            order = Order(
-                symbol="INVALID",
-                side=OrderSide.SELL,
-                order_type=OrderType.MARKET,
-                quantity=0.0,
-                status=OrderStatus.REJECTED,
-                metadata={'error': error_msg}
-            )
-            return order
-
-        # Convert backtrader exectype to our OrderType
-        order_type = self._convert_bt_exectype_to_order_type(exectype)
-
-        # Get symbol from data feed
-        symbol = getattr(data, '_name', 'UNKNOWN') if data else 'UNKNOWN'
-
-        # Capture the current bar close price so that _get_simulated_market_price()
-        # returns a real price instead of the hardcoded $100 placeholder.
-        if data is not None and hasattr(data, 'close'):
-            try:
-                self.update_market_price(symbol, float(data.close[0]))
-            except (IndexError, TypeError, AttributeError):
-                pass
-
-        # Create our internal Order object
-        order = Order(
-            symbol=symbol,
-            side=OrderSide.SELL,
-            order_type=order_type,
-            quantity=float(size) if size else 0.0,
-            price=float(price) if price else None,
-            stop_price=float(plimit) if plimit else None,
-            time_in_force=self._convert_bt_valid_to_tif(valid),
-            metadata={
-                'backtrader_owner': owner,
-                'backtrader_data': data,
-                'tradeid': tradeid,
-                'oco': oco,
-                'trailamount': trailamount,
-                'trailpercent': trailpercent,
-                'parent': parent,
-                'transmit': transmit,
-                **kwargs
-            }
+        return self._create_bt_order(
+            OrderSide.SELL,
+            owner=owner, data=data, size=size, price=price, plimit=plimit,
+            exectype=exectype, valid=valid, tradeid=tradeid, oco=oco,
+            trailamount=trailamount, trailpercent=trailpercent,
+            parent=parent, transmit=transmit, **kwargs
         )
-
-        # Place the order using our existing method
-        try:
-            # Since place_order is async, we need to handle this appropriately
-            # For backtrader compatibility, we'll store the order and process it later
-            if self.paper_trading_enabled:
-                # In paper trading mode, we can process immediately
-                order_id = order.order_id
-                self.paper_orders[order_id] = order
-
-                # Set initial status
-                order.status = OrderStatus.PENDING
-
-                self._logger.info("Backtrader sell order created: %s %s @ %s",
-                                size, symbol, price or "MARKET")
-
-                return order
-            else:
-                # For live trading, we need to queue the order for async processing
-                order.status = OrderStatus.QUEUED
-                self._logger.info("Backtrader sell order queued: %s %s @ %s",
-                                size, symbol, price or "MARKET")
-                return order
-
-        except Exception as e:
-            self._logger.exception("Error creating backtrader sell order: %s", e)
-            order.status = OrderStatus.REJECTED
-            return order
 
     def cancel(self, order):
         """

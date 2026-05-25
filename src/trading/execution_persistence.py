@@ -6,11 +6,10 @@ Provides a centralized way to log trading activity across all bot instances.
 """
 
 import json
-import logging
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from datetime import datetime
+from typing import Any, Dict
+from datetime import datetime, timezone
 
 from src.trading.constants import TRADING_LOGS_DIR
 from src.notification.logger import setup_logger
@@ -105,7 +104,7 @@ class ExecutionPersistenceService:
             
         # Add persistence timestamp if not present
         if "persisted_at" not in order_data:
-            order_data["persisted_at"] = datetime.now().isoformat()
+            order_data["persisted_at"] = datetime.now(timezone.utc).isoformat()
             
         path = self.logs_dir / "orders.json"
         self._append_to_json_list(path, order_data)
@@ -125,7 +124,7 @@ class ExecutionPersistenceService:
             
         # Add persistence timestamp if not present
         if "persisted_at" not in trade_data:
-            trade_data["persisted_at"] = datetime.now().isoformat()
+            trade_data["persisted_at"] = datetime.now(timezone.utc).isoformat()
             
         path = self.logs_dir / "trades.json"
         self._append_to_json_list(path, trade_data)

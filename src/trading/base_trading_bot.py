@@ -162,9 +162,10 @@ class BaseTradingBot:
                     'telegram_enabled': True,
                     'error_notifications': True
                 })
-                self.position_notification_manager = PositionNotificationManager({
-                    'notifications': notification_config
-                })
+                self.position_notification_manager = PositionNotificationManager(
+                    {'notifications': notification_config},
+                    notification_client=self.notification_client,
+                )
 
             except Exception as e:
                 _logger.exception("Notification client not initialized: %s", e)
@@ -229,13 +230,126 @@ class BaseTradingBot:
 
         _run_async(_send())
 
+    def _dispatch_trade_notification(
+        self,
+        *,
+        side: str,
+        price: float,
+        size: float,
+        timestamp: datetime,
+        order: Any,
+        trade_id: Optional[str],
+        position: Optional[Dict[str, Any]] = None,
+        pnl: Optional[float] = None,
+        gross_pnl: Optional[float] = None,
+        net_pnl: Optional[float] = None,
+    ) -> None:
+        """
+        Dispatch trade notifications through all registered channels.
+
+        Consolidates the three notification paths so each is called exactly once
+        per trade event:
+
+        1. ``notify_trade_event`` — legacy owner notification (skipped internally
+           when ``trade_notification_hook`` is set).
+        2. ``position_notification_manager`` — broker-level position events
+           (used only on the legacy path, i.e. when no hook is set).
+        3. ``trade_notification_hook`` — modern StrategyInstance hook (primary
+           path when running under the strategy manager).
+
+        Args:
+            side: "buy" or "sell".
+            price: Execution price.
+            size: Trade size.
+            timestamp: Execution timestamp (UTC-aware).
+            order: Raw broker order object or ``None`` for paper trades.
+            trade_id: Database trade ID (used as fallback order reference).
+            position: Position dict from ``active_positions`` (SELL only).
+            pnl: Percentage P&L (SELL only).
+            gross_pnl: Gross P&L in base currency (SELL only).
+            net_pnl: Net P&L after commission (SELL only).
+        """
+        upper_side = side.upper()
+
+        # Path 1: legacy owner notification (no-op when hook is set)
+        if upper_side == "BUY":
+            self.notify_trade_event(upper_side, price, size, timestamp)
+        else:
+            self.notify_trade_event(
+                upper_side, price, size, timestamp,
+                entry_price=position["entry_price"] if position else None,
+                pnl=pnl,
+            )
+
+        # Path 2: position notification manager (legacy path only)
+        if self.position_notification_manager and not self.trade_notification_hook:
+            strategy_name = (
+                self.strategy_class.__name__
+                if hasattr(self.strategy_class, "__name__")
+                else "Unknown"
+            )
+            order_ref = str(order) if order else trade_id
+            trading_mode = "paper" if self.paper_trading else "live"
+
+            if upper_side == "BUY":
+                position_data: Dict[str, Any] = {
+                    "symbol": self.trading_pair,
+                    "side": "BUY",
+                    "price": price,
+                    "size": size,
+                    "timestamp": timestamp,
+                    "bot_id": self.bot_id,
+                    "trading_mode": trading_mode,
+                    "order_id": order_ref,
+                    "strategy": strategy_name,
+                }
+                _run_async(self.position_notification_manager.notify_position_opened(position_data))
+            else:
+                hold_duration = "Unknown"
+                if position and position.get("entry_time"):
+                    duration = timestamp - position["entry_time"]
+                    days = duration.days
+                    hours, remainder = divmod(duration.seconds, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    if days > 0:
+                        hold_duration = f"{days}d {hours}h {minutes}m"
+                    elif hours > 0:
+                        hold_duration = f"{hours}h {minutes}m {seconds}s"
+                    else:
+                        hold_duration = f"{minutes}m {seconds}s"
+
+                position_data = {
+                    "symbol": self.trading_pair,
+                    "side": "SELL",
+                    "entry_price": position["entry_price"] if position else None,
+                    "exit_price": price,
+                    "size": size,
+                    "pnl": gross_pnl,
+                    "pnl_percentage": pnl,
+                    "timestamp": timestamp,
+                    "bot_id": self.bot_id,
+                    "trading_mode": trading_mode,
+                    "order_id": order_ref,
+                    "strategy": strategy_name,
+                    "hold_duration": hold_duration,
+                }
+                _run_async(self.position_notification_manager.notify_position_closed(position_data))
+
+        # Path 3: modern StrategyInstance hook
+        if self.trade_notification_hook:
+            try:
+                hook_pnl = net_pnl if upper_side == "SELL" else None
+                self.trade_notification_hook(side, price, size, hook_pnl)
+            except Exception:
+                _logger.exception("trade_notification_hook failed (%s)", side)
+
     def _initialize_bot_instance(self):
         """Initialize bot instance in database."""
         try:
             bot_data = {
                 'id': self.bot_id,
                 'type': self.trade_type,
-                'config_file': getattr(self.config, 'get', lambda x, y=None: y)('config_file', None),
+                'config_file': self.config.get('config_file', None),
                 'status': 'stopped',
                 'current_balance': self.current_balance,
                 'total_pnl': self.total_pnl,
@@ -289,17 +403,11 @@ class BaseTradingBot:
                 self.process_signals(signals)
                 self.update_positions()
                 self.save_state()
-
-                # Update heartbeat
-                try:
-                    self.trade_repository.update_bot_instance(self.bot_id, {
-                        'last_heartbeat': datetime.now(timezone.utc),
-                        'current_balance': self.current_balance,
-                        'total_pnl': self.total_pnl
-                    })
-                except Exception:
-                    _logger.exception("Error updating heartbeat: %s")
-
+                # Note (P3-X2): heartbeat / current_balance DB updates are
+                # intentionally omitted here.  When BaseTradingBot is managed
+                # by StrategyInstance, its _heartbeat_loop() is the single DB
+                # writer for last_heartbeat and current_balance, which prevents
+                # last-write-wins contention on the same row from two threads.
                 time.sleep(1)
             except Exception as e:
                 _logger.exception("Error in bot loop: %s")
@@ -471,34 +579,18 @@ class BaseTradingBot:
                         "trade_id": new_trade_id
                     }
 
-                # Route through a single notification path to avoid duplicate alerts.
-                # - notify_trade_event() is suppressed when trade_notification_hook is set.
-                # - position_notification_manager is only used on the legacy path (no hook).
-                # - trade_notification_hook is the modern path used by StrategyInstance.
-                self.notify_trade_event("BUY", price, size, timestamp)
-
-                if self.position_notification_manager and not self.trade_notification_hook:
-                    position_data = {
-                        'symbol': self.trading_pair,
-                        'side': 'BUY',
-                        'price': price,
-                        'size': size,
-                        'timestamp': timestamp,
-                        'bot_id': self.bot_id,
-                        'trading_mode': 'paper' if self.paper_trading else 'live',
-                        'order_id': str(order) if order else new_trade_id,
-                        'strategy': self.strategy_class.__name__ if hasattr(self.strategy_class, '__name__') else 'Unknown'
-                    }
-                    _run_async(self.position_notification_manager.notify_position_opened(position_data))
-
-                if self.trade_notification_hook:
-                    try:
-                        self.trade_notification_hook("buy", price, size, None)
-                    except Exception:
-                        _logger.exception("trade_notification_hook failed (buy)")
+                self._dispatch_trade_notification(
+                    side="buy",
+                    price=price,
+                    size=size,
+                    timestamp=timestamp,
+                    order=order,
+                    trade_id=new_trade_id,
+                )
 
             else:  # sell
                 position = sell_position
+                assert position is not None  # narrowed by sell_position guard above
                 trade_id = position.get("trade_id")
 
                 # Calculate PnL.
@@ -566,53 +658,18 @@ class BaseTradingBot:
                 with self._positions_lock:
                     self.active_positions.pop(self.trading_pair, None)
 
-                # Route through a single notification path to avoid duplicate alerts.
-                # See the BUY block above for the full rationale.
-                self.notify_trade_event(
-                    "SELL",
-                    price,
-                    size,
-                    timestamp,
-                    entry_price=position["entry_price"],
+                self._dispatch_trade_notification(
+                    side="sell",
+                    price=price,
+                    size=size,
+                    timestamp=timestamp,
+                    order=order,
+                    trade_id=trade_id,
+                    position=position,
                     pnl=pnl,
+                    gross_pnl=gross_pnl,
+                    net_pnl=net_pnl,
                 )
-
-                if self.position_notification_manager and not self.trade_notification_hook:
-                    hold_duration = "Unknown"
-                    if position.get("entry_time"):
-                        duration = timestamp - position["entry_time"]
-                        days = duration.days
-                        hours, remainder = divmod(duration.seconds, 3600)
-                        minutes, seconds = divmod(remainder, 60)
-                        if days > 0:
-                            hold_duration = f"{days}d {hours}h {minutes}m"
-                        elif hours > 0:
-                            hold_duration = f"{hours}h {minutes}m {seconds}s"
-                        else:
-                            hold_duration = f"{minutes}m {seconds}s"
-
-                    position_data = {
-                        'symbol': self.trading_pair,
-                        'side': 'SELL',
-                        'entry_price': position["entry_price"],
-                        'exit_price': price,
-                        'size': size,
-                        'pnl': gross_pnl,
-                        'pnl_percentage': pnl,
-                        'timestamp': timestamp,
-                        'bot_id': self.bot_id,
-                        'trading_mode': 'paper' if self.paper_trading else 'live',
-                        'order_id': str(order) if order else trade_id,
-                        'strategy': self.strategy_class.__name__ if hasattr(self.strategy_class, '__name__') else 'Unknown',
-                        'hold_duration': hold_duration
-                    }
-                    _run_async(self.position_notification_manager.notify_position_closed(position_data))
-
-                if self.trade_notification_hook:
-                    try:
-                        self.trade_notification_hook("sell", price, size, net_pnl)
-                    except Exception:
-                        _logger.exception("trade_notification_hook failed (sell)")
 
         except Exception as e:
             _logger.exception("Error executing trade: %s", e)
@@ -633,9 +690,14 @@ class BaseTradingBot:
 
     def log_trade(self, trade: Dict[str, Any]) -> None:
         """
-        Persist trade details to trades.json using the persistence service.
-        Args:
-            trade: Trade dictionary
+        Persist trade details to the legacy ``trades.json`` file.
+
+        .. deprecated::
+            The database (via ``trade_repository``) is the single source of truth
+            for completed trades (P3-X1).  JSON file persistence is kept for
+            backward compatibility only and will be removed once the DB recovery
+            path (``_load_open_positions_from_db``) is confirmed stable in all
+            deployments.  Do **not** add new callers of this method.
         """
         try:
             execution_persistence.save_trade(self.bot_id, trade)
@@ -646,8 +708,6 @@ class BaseTradingBot:
         """
         Save open positions and bot state to disk for recovery.
         """
-        folder = os.path.join("logs", "json")
-        os.makedirs(folder, exist_ok=True)
         try:
             state = {
                 "active_positions": self.active_positions,
@@ -851,18 +911,26 @@ class BaseTradingBot:
             if current_price is None:
                 continue
             entry_price = position["entry_price"]
-            pnl = ((current_price - entry_price) / entry_price) * 100
-            # Check stop loss
-            if (
-                hasattr(self.strategy, "sl_atr_mult")
-                and pnl <= -self.strategy.sl_atr_mult * 100
-            ):
+            # Prefer a stop_price recorded at entry time (absolute price level).
+            # The sl_atr_mult check below is deliberately disabled because
+            # multiplying an ATR multiplier by 100 gives a threshold like -150 %,
+            # which is impossible for a long position and never fires (P4-T1).
+            # Stop-loss is properly handled by RiskController.real_time_adjustments()
+            # when a risk_controller is configured; the logic here only covers
+            # explicit stop/take-profit prices stored in the position dict.
+            stop_price = position.get("stop_price")
+            take_profit_price = position.get("take_profit_price")
+            if stop_price and current_price <= stop_price:
+                _logger.info(
+                    "Stop-loss triggered for %s: price %.4f <= stop %.4f",
+                    pair, current_price, stop_price,
+                )
                 self.execute_trade("sell", current_price, position["size"])
-            # Check take profit
-            elif (
-                hasattr(self.strategy, "tp_atr_mult")
-                and pnl >= self.strategy.tp_atr_mult * 100
-            ):
+            elif take_profit_price and current_price >= take_profit_price:
+                _logger.info(
+                    "Take-profit triggered for %s: price %.4f >= tp %.4f",
+                    pair, current_price, take_profit_price,
+                )
                 self.execute_trade("sell", current_price, position["size"])
 
     def stop(self):

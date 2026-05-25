@@ -207,7 +207,7 @@ The pre-trade checks correctly receive `account_equity` as a parameter (current 
 
 ---
 
-### 🟡 P3-T1 — `BaseTradingBot` violates Single Responsibility Principle
+### ✅ RESOLVED — P3-T1 — `BaseTradingBot` violates Single Responsibility Principle
 
 **File:** `src/trading/base_trading_bot.py` (~1000 lines)
 
@@ -221,7 +221,7 @@ The class handles: signal management, order execution, position tracking, three 
 
 ---
 
-### 🟡 P3-T2 — `BaseBroker.buy()` / `sell()` are 200-line duplicates
+### ✅ RESOLVED — P3-T2 — `BaseBroker.buy()` / `sell()` are 200-line duplicates
 
 **File:** `src/trading/broker/base_broker.py:1079–1331`
 
@@ -231,7 +231,7 @@ The two methods are identical except for `OrderSide.BUY` vs `OrderSide.SELL`. Th
 
 ---
 
-### 🟡 P3-T3 — Dead code in `save_state()`
+### ✅ RESOLVED — P3-T3 — Dead code in `save_state()`
 
 **File:** `src/trading/base_trading_bot.py:642–643`
 
@@ -246,7 +246,7 @@ This folder creation is never used — the actual write goes to `self.state_file
 
 ---
 
-### 🟡 P3-T4 — Crash-recovery marker file is fragile
+### ✅ RESOLVED — P3-T4 — Crash-recovery marker file is fragile
 
 **File:** `src/trading/strategy_manager.py:344–365`
 
@@ -259,7 +259,7 @@ The `.trading_service_running` marker at project root:
 
 ---
 
-### 🟡 P3-T5 — `adapter_manager.py` imports `donotshare` secrets at module-level
+### ✅ RESOLVED — P3-T5 — `adapter_manager.py` imports `donotshare` secrets at module-level
 
 **File:** `src/common/sentiments/adapters/adapter_manager.py:23`
 
@@ -273,7 +273,7 @@ This top-level import means the secrets file is loaded for any code that imports
 
 ---
 
-### 🟡 P3-T6 — `PositionNotificationManager` in `BaseBroker` silently never sends notifications
+### ✅ RESOLVED — P3-T6 — `PositionNotificationManager` in `BaseBroker` silently never sends notifications
 
 **File:** `src/trading/broker/base_broker.py:711`
 
@@ -287,7 +287,7 @@ self.notification_manager = PositionNotificationManager(config, notification_cli
 
 ---
 
-### 🟡 P3-T7 — Risk sub-packages missing `__init__.py` (convention violation)
+### ✅ RESOLVED — P3-T7 — Risk sub-packages missing `__init__.py` (convention violation)
 
 **Files:** `src/trading/risk/pre_trade/`, `real_time/`, `post_trade/`, `src/trading/risk/`
 
@@ -297,7 +297,7 @@ None of these directories contain `__init__.py`. Per `CLAUDE.md` section 2.2 and
 
 ---
 
-### 🟢 P4-T1 — `update_positions()` stop-loss trigger at -150% PnL is effectively disabled
+### ✅ RESOLVED — P4-T1 — `update_positions()` stop-loss trigger at -150% PnL is effectively disabled
 
 **File:** `src/trading/base_trading_bot.py:848–853`
 
@@ -312,7 +312,7 @@ if hasattr(self.strategy, "sl_atr_mult") and pnl <= -self.strategy.sl_atr_mult *
 
 ---
 
-### 🟢 P4-T2 — `_initialize_bot_instance()` uses unnecessary duck-typing for dict
+### ✅ RESOLVED — P4-T2 — `_initialize_bot_instance()` uses unnecessary duck-typing for dict
 
 **File:** `src/trading/base_trading_bot.py:237`
 
@@ -326,7 +326,7 @@ getattr(self.config, 'get', lambda x, y=None: y)('config_file', None)
 
 ---
 
-### 🟢 P4-T3 — Emoji characters in `strategy_manager.py` log messages
+### ✅ RESOLVED — P4-T3 — Emoji characters in `strategy_manager.py` log messages
 
 **File:** `src/trading/strategy_manager.py` (multiple locations)
 
@@ -378,7 +378,7 @@ asyncio.create_task(self._adapters[name].close())
 
 ---
 
-### 🟡 P3-C1 — `fetch_messages_from_adapter()` and `fetch_summary_from_adapter()` are 120-line duplicates
+### ✅ RESOLVED — P3-C1 — `fetch_messages_from_adapter()` and `fetch_summary_from_adapter()` are 120-line duplicates
 
 **File:** `src/common/sentiments/adapters/adapter_manager.py:246–396`
 
@@ -388,7 +388,7 @@ Both methods implement identical circuit-breaker guard, global rate-limit acquir
 
 ---
 
-### 🟡 P3-C2 — Four stub health checkers always return `UNKNOWN` status
+### ✅ RESOLVED — P3-C2 — Four stub health checkers always return `UNKNOWN` status
 
 **File:** `src/common/health_monitor.py:348–391`
 
@@ -403,7 +403,7 @@ These are registered in `_register_default_checkers()` and run on every `check_a
 
 ---
 
-### 🟡 P3-C3 — `_check_database_health()` uses raw SQL string incompatible with SQLAlchemy 2.x
+### ✅ RESOLVED — P3-C3 — `_check_database_health()` uses raw SQL string incompatible with SQLAlchemy 2.x
 
 **File:** `src/common/health_monitor.py:266`
 
@@ -423,7 +423,7 @@ Without this, the health check will fail silently or raise a warning that is cau
 
 ---
 
-### 🟡 P3-C4 — `RecommendationEngine` uses hardcoded indicator weights
+### ✅ RESOLVED — P3-C4 — `RecommendationEngine` uses hardcoded indicator weights
 
 **File:** `src/common/recommendation/engine.py:175`
 
@@ -437,7 +437,7 @@ The 40/60 technical/fundamental split is a magic number with no configuration pa
 
 ---
 
-### 🟡 P3-C5 — Multiple sentiment files use `sys.path.append` at module level
+### ✅ RESOLVED — P3-C5 — Multiple sentiment files use `sys.path.append` at module level
 
 **Files:** `src/common/sentiments/collect_sentiment_async.py:32–33`, `src/common/sentiments/adapters/adapter_manager.py:16–17`
 
@@ -452,7 +452,7 @@ Per `CLAUDE.md` section 2.1, `sys.path` manipulation should use `parents[n]` (wh
 
 ---
 
-### 🟢 P4-C1 — Naive `datetime.now()` in `PerformanceMetrics` and `ExecutionPersistenceService`
+### ✅ RESOLVED — P4-C1 — Naive `datetime.now()` in `PerformanceMetrics` and `ExecutionPersistenceService`
 
 **Files:** `src/trading/metrics_tracker.py:39`, `src/trading/execution_persistence.py:104, 122`
 
@@ -467,7 +467,7 @@ Per `CLAUDE.md` section 2.3, `datetime.now(timezone.utc)` must be used. Naive da
 
 ---
 
-### 🟢 P4-C2 — `CircuitBreaker` does not reset `failure_count` on half-open success
+### ✅ RESOLVED — P4-C2 — `CircuitBreaker` does not reset `failure_count` on half-open success
 
 **File:** `src/common/sentiments/adapters/adapter_manager.py:72–79`
 
@@ -501,7 +501,7 @@ This gap means the double-execution bug (P1-T2) and the commission bug (P2-T3) w
 
 ---
 
-### 🟡 P3-X1 — Two parallel persistence layers for the same trade data (DB + JSON files)
+### ✅ RESOLVED — P3-X1 — Two parallel persistence layers for the same trade data (DB + JSON files)
 
 `BaseTradingBot` writes completed trades to:
 1. The database via `trade_repository.update_trade()` (primary)
@@ -513,7 +513,7 @@ The two stores are not kept in sync (e.g., DB failure does not roll back the JSO
 
 ---
 
-### 🟡 P3-X2 — `BaseTradingBot` and `StrategyInstance` both update DB bot status independently
+### ✅ RESOLVED — P3-X2 — `BaseTradingBot` and `StrategyInstance` both update DB bot status independently
 
 `BaseTradingBot.run()` updates `last_heartbeat` and `current_balance` in the DB every loop iteration. `StrategyInstance._heartbeat_loop()` also updates `last_heartbeat` from its thread. Two independent writers to the same DB row creates unnecessary contention and potential last-write-wins overwrite of `current_balance`.
 

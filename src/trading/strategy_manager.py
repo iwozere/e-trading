@@ -314,7 +314,7 @@ class StrategyManager:
 
                 # Log periodic status with detailed metrics
                 _logger.info(
-                    "📊 Strategy Monitor: %d/%d running, %d unhealthy, %d total",
+                    "Strategy Monitor: %d/%d running, %d unhealthy, %d total",
                     running_count, len(self.strategy_instances), unhealthy_count, len(self.strategy_instances)
                 )
 
@@ -329,39 +329,57 @@ class StrategyManager:
         """
         Detect if this is a crash recovery (unclean shutdown).
 
-        Uses a marker file that's created on startup and deleted on clean shutdown.
-        If marker exists on startup, previous shutdown was unclean.
+        Primary signal: any bots in ``status='running'`` in the database when
+        we start up indicates they were not stopped cleanly.  This is reliable
+        across containerised deployments where filesystem markers are ephemeral.
+
+        Secondary signal (fallback): the ``_marker_path`` file, kept for
+        environments where the DB is unavailable during early startup or where
+        single-process restart patterns rely on the file.
 
         Returns:
-            True if previous shutdown was unclean (crash detected), False otherwise
+            True if previous shutdown was unclean (crash detected).
         """
+        # DB-first: query for bots that were left in 'running' state.
+        try:
+            running_bots = trading_service.get_bots_by_status("running")
+            if running_bots:
+                _logger.warning(
+                    "UNCLEAN SHUTDOWN detected: %d bot(s) left in 'running' state in DB",
+                    len(running_bots),
+                )
+                return True
+        except Exception as exc:
+            _logger.debug("DB crash-detection query failed, falling back to marker file: %s", exc)
+
+        # File fallback: legacy marker for non-containerised deployments.
         if self._marker_path.exists():
-            _logger.warning("⚠️ Found running marker from previous session - UNCLEAN SHUTDOWN detected")
+            _logger.warning("UNCLEAN SHUTDOWN detected: stale session marker found at %s", self._marker_path)
             _logger.warning("This indicates the service crashed or was forcefully terminated")
-            self._marker_path.unlink()  # Remove stale marker
+            self._marker_path.unlink()
             return True
 
-        _logger.info("Clean startup detected - no previous running marker found")
+        _logger.info("Clean startup detected — no crash signals found")
         return False
 
-    def _mark_service_running(self):
-        """Mark that service is now running by creating marker file."""
+    def _mark_service_running(self) -> None:
+        """Record that the service is running (creates marker file as fallback)."""
         try:
             self._marker_path.touch()
-            _logger.info("Created session marker file: %s", self._marker_path)
-        except Exception as e:
-            _logger.warning("Failed to create session marker: %s", e)
+            _logger.debug("Created session marker file: %s", self._marker_path)
+        except Exception as exc:
+            _logger.warning("Failed to create session marker: %s", exc)
 
-    def _mark_clean_shutdown(self):
-        """Mark that service is shutting down cleanly by removing marker file."""
+    def _mark_clean_shutdown(self) -> None:
+        """Record a clean shutdown by removing the marker file."""
         try:
             if self._marker_path.exists():
                 self._marker_path.unlink()
-                _logger.info("Removed session marker - CLEAN SHUTDOWN")
+                _logger.info("Removed session marker — clean shutdown")
             else:
                 _logger.debug("Session marker already removed")
-        except Exception as e:
-            _logger.warning("Failed to remove session marker: %s", e)
+        except Exception as exc:
+            _logger.warning("Failed to remove session marker: %s", exc)
 
     def _recover_bot_state(self, bot_id: int, config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -383,7 +401,7 @@ class StrategyManager:
 
             if open_positions:
                 _logger.info(
-                    "🔄 Recovered %d open position(s) for bot %d",
+                    "Recovered %d open position(s) for bot %d",
                     len(open_positions), bot_id
                 )
                 # Store positions in config for strategy to access
@@ -406,7 +424,7 @@ class StrategyManager:
 
             if bot_trades:
                 _logger.info(
-                    "🔄 Recovered %d open trade(s) for bot %d",
+                    "Recovered %d open trade(s) for bot %d",
                     len(bot_trades), bot_id
                 )
                 config['_recovered_trades'] = bot_trades
@@ -460,16 +478,16 @@ class StrategyManager:
                 was_crashed = self._detect_crash_recovery()
 
                 if was_crashed:
-                    _logger.warning("🔄 CRASH RECOVERY MODE: Resuming previously running bots")
+                    _logger.warning("CRASH RECOVERY MODE: Resuming previously running bots")
                     # Load only bots that were running before crash
                     bots = trading_service.get_bots_by_status("running", user_id)
                     _logger.info("Found %d bot(s) that were running before crash", len(bots))
                 else:
-                    _logger.info("🚀 NORMAL STARTUP: Loading all enabled bots")
+                    _logger.info("NORMAL STARTUP: Loading all enabled bots")
                     bots = trading_service.get_enabled_bots(user_id)
                     _logger.info("Found %d enabled bot(s) in database", len(bots))
             else:
-                _logger.info("🚀 NORMAL STARTUP (resume_mode=False): Loading all enabled bots")
+                _logger.info("NORMAL STARTUP (resume_mode=False): Loading all enabled bots")
                 bots = trading_service.get_enabled_bots(user_id)
                 _logger.info("Found %d enabled bot(s) in database", len(bots))
 
@@ -700,9 +718,9 @@ class StrategyManager:
             # Mark clean shutdown (remove crash marker)
             self._mark_clean_shutdown()
 
-            _logger.info("✅ Enhanced Strategy Manager shutdown complete")
+            _logger.info("Enhanced Strategy Manager shutdown complete")
 
         except Exception:
             _logger.exception("Error during shutdown:")
             # Don't mark clean shutdown if errors occurred
-            _logger.warning("⚠️ Shutdown completed with errors - crash marker not removed")
+            _logger.warning("Shutdown completed with errors — crash marker not removed")

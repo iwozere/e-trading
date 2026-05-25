@@ -21,8 +21,31 @@ _logger = setup_logger(__name__)
 class RecommendationEngine:
     """Unified recommendation engine for all indicators."""
 
-    def __init__(self):
-        """Initialize the recommendation engine."""
+    def __init__(
+        self,
+        technical_weight: float = 0.4,
+        fundamental_weight: float = 0.6,
+    ):
+        """
+        Initialize the recommendation engine.
+
+        Args:
+            technical_weight: Weight applied to the average technical-indicator
+                score when computing the composite recommendation.  The two
+                weights must sum to 1.0.  Default: 0.4 (technical) / 0.6
+                (fundamental), which suits equity analysis.  For crypto or
+                short-term traders a higher technical_weight (e.g. 0.7/0.3)
+                is typically more appropriate.
+            fundamental_weight: Weight applied to the average fundamental-
+                indicator score.  Complement of ``technical_weight``.
+        """
+        if abs(technical_weight + fundamental_weight - 1.0) > 1e-9:
+            raise ValueError(
+                f"technical_weight ({technical_weight}) + fundamental_weight "
+                f"({fundamental_weight}) must equal 1.0"
+            )
+        self.technical_weight = technical_weight
+        self.fundamental_weight = fundamental_weight
         self.technical_rules = TechnicalRecommendationRules()
         self.fundamental_rules = FundamentalRecommendationRules()
 
@@ -172,7 +195,10 @@ class RecommendationEngine:
 
             technical_score = sum(technical_scores) / len(technical_scores) if technical_scores else 0
             fundamental_score = sum(fundamental_scores) / len(fundamental_scores) if fundamental_scores else 0
-            composite_score = (technical_score * 0.4 + fundamental_score * 0.6)
+            composite_score = (
+                technical_score * self.technical_weight
+                + fundamental_score * self.fundamental_weight
+            )
 
             if composite_score >= 0.3:
                 recommendation = RecommendationType.STRONG_BUY
