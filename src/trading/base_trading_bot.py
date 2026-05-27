@@ -641,8 +641,12 @@ class BaseTradingBot:
                 # Legacy JSON logging (for backward compatibility)
                 self.log_trade(trade_record)
 
-                # Update balance
-                self.current_balance *= 1 + pnl / 100
+                # Update balance using the actual dollar P&L (net_pnl), not
+                # the entry-price % return.  Applying pnl/100 as a multiplier
+                # would only be correct if the entire balance was invested in
+                # this single position (100 % position sizing).  Using net_pnl
+                # correctly handles partial-position sizing.
+                self.current_balance += net_pnl
                 self.total_pnl += pnl
 
                 # Update metrics registry

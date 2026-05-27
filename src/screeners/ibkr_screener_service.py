@@ -187,6 +187,17 @@ class IBKRScreenerService:
         except Exception as e:
             _logger.error("Failed to save results: %s", e)
 
+    def shutdown(self) -> None:
+        """
+        Shutdown the service and release all resources.
+
+        Waits for any in-flight thread-pool tasks to complete before returning.
+        Always call this in the ``finally`` block of the entry-point to avoid
+        thread leaks on ``KeyboardInterrupt`` or unhandled exceptions.
+        """
+        self._executor.shutdown(wait=True)
+        _logger.info("IBKRScreenerService executor shut down")
+
     async def start_scheduled_loop(self, run_every_minutes: int = 15):
         """Runs the screener indefinitely on a fixed interval with exponential backoff on retry."""
         _logger.info("Starting scheduled screener loop every %d minutes", run_every_minutes)

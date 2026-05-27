@@ -410,11 +410,33 @@ class StrategyInstance:
                 time.sleep(60)
 
     def _heartbeat_loop(self):
-        """Main heartbeat loop for the instance."""
+        """
+        Main heartbeat loop for the instance.
+
+        This is the *sole* DB writer for ``last_heartbeat`` and
+        ``current_balance`` when BaseTradingBot is managed by a
+        StrategyInstance.  Running a single writer here prevents
+        last-write-wins contention with the BaseTradingBot loop.
+        """
         while self.is_running and not self.should_stop:
             try:
                 self.last_heartbeat = datetime.now(timezone.utc)
-                # Heartbeat logic (e.g. reporting to DB)
+
+                # Persist heartbeat timestamp to DB so health monitors see
+                # a live signal.  Also sync current_balance if the trading
+                # bot has updated it since the last heartbeat tick.
+                try:
+                    trading_service.heartbeat(self.instance_id)
+                    if self.trading_bot is not None:
+                        trading_service.update_bot_performance(
+                            self.instance_id,
+                            current_balance=self.trading_bot.current_balance,
+                        )
+                except Exception:
+                    _logger.debug(
+                        "Failed to persist heartbeat for instance %s", self.name
+                    )
+
                 time.sleep(self.heartbeat_interval)
             except Exception:
                 time.sleep(5)

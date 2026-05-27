@@ -1494,9 +1494,13 @@ class BaseBroker(ABC):
                     should_execute = True
                     executed_price = market_price
 
-            # Simulate partial fills if enabled
+            # Simulate partial fills if enabled.
+            # NOTE: should_execute is checked first so that a limit/stop order
+            # whose price condition is NOT met is never mis-tagged as
+            # PARTIALLY_FILLED just because the random roll happened to pass.
             executed_quantity = order.quantity
-            if (self.paper_trading_config.realistic_fills and
+            if (should_execute and
+                self.paper_trading_config.realistic_fills and
                 random.random() < self.paper_trading_config.partial_fill_probability):
                 executed_quantity = order.quantity * random.uniform(0.5, 0.9)
                 order.status = OrderStatus.PARTIALLY_FILLED

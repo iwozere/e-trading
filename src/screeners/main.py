@@ -76,6 +76,9 @@ async def main():
     except Exception as e:
         _logger.exception("Screener failed with critical error: %s", e)
     finally:
+        # Shut down the thread pool first to let any in-flight strategy
+        # evaluations finish before the process exits.
+        service.shutdown()
         await broker.disconnect()
         await notif_client.close()
 

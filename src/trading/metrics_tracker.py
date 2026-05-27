@@ -43,8 +43,10 @@ class PerformanceMetrics:
         self.total_trades += 1
         if trade_pnl > 0:
             self.winning_trades += 1
-        else:
+        elif trade_pnl < 0:
             self.losing_trades += 1
+        # trade_pnl == 0 (break-even) is counted in total_trades but not
+        # in winning_trades or losing_trades — it is a neutral outcome.
 
         self.win_rate = (self.winning_trades / self.total_trades) * 100
         self.total_pnl += trade_pnl

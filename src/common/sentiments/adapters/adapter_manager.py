@@ -436,9 +436,16 @@ class AdapterManager:
             health_info = await adapter.health_check()
             circuit_breaker = self._circuit_breakers[name]
 
-            # Override status if circuit breaker is open
-            if circuit_breaker.state == AdapterStatus.FAILED:
-                health_info.status = AdapterStatus.CIRCUIT_OPEN
+            # Override status to reflect circuit breaker state.
+            # IMPORTANT — AdapterStatus naming is the inverse of the industry
+            # standard (see CircuitBreaker docstring):
+            #   FAILED      = circuit open   → calls are BLOCKED
+            #   CIRCUIT_OPEN = half-open     → limited probe calls allowed
+            # Propagate the circuit breaker's actual state so callers can
+            # distinguish a fully-blocked adapter (FAILED) from a recovering
+            # one (CIRCUIT_OPEN).
+            if circuit_breaker.state != AdapterStatus.HEALTHY:
+                health_info.status = circuit_breaker.state
 
             health_status[name] = health_info
 

@@ -226,7 +226,7 @@ class RateLimiter:
                     "tokens": int(bucket.tokens),
                     "max_tokens": bucket.max_tokens,
                     "refill_rate": int(bucket.refill_rate * 60),  # Convert to per-minute
-                    "last_refill": datetime.fromtimestamp(bucket.last_refill)
+                    "last_refill": datetime.fromtimestamp(bucket.last_refill, tz=timezone.utc)
                 }
 
                 r.notifications.rate_limits.create_or_update_rate_limit(rate_limit_data)

@@ -59,17 +59,52 @@ class HealthMonitor:
         """
         Register default health check functions for core systems.
 
-        Only production-ready checkers are registered here.  Stub checkers
-        (telegram_bot, api_service, web_ui, trading_bot) are intentionally
-        omitted — they always returned UNKNOWN and polluted health dashboards.
-        Register them via :meth:`register_health_checker` once they are
-        implemented.
+        Production-ready checkers are registered directly.  Components that
+        are not yet fully implemented (telegram_bot, api_service, web_ui,
+        trading_bot) are registered as stubs that return UNKNOWN so that:
+
+        * ``check_all_systems_health()`` always surfaces all expected
+          components — dashboards and alert rules won't see a missing key.
+        * The stub message makes it obvious the checker needs wiring up,
+          rather than silently missing from health reports.
+
+        Replace a stub with a real implementation via
+        :meth:`register_health_checker` once it is production-ready.
         """
         self._health_checkers.update({
             "database": self._check_database_health,
             "notification": self._check_notification_health,
             "system_resources": self._check_system_resources,
+            # Stub checkers — return UNKNOWN until fully implemented.
+            "telegram_bot": self._make_stub_checker("telegram_bot"),
+            "api_service": self._make_stub_checker("api_service"),
+            "web_ui": self._make_stub_checker("web_ui"),
+            "trading_bot": self._make_stub_checker("trading_bot"),
         })
+
+    @staticmethod
+    def _make_stub_checker(system_name: str) -> Callable:
+        """
+        Return a health-check coroutine that always reports UNKNOWN.
+
+        Used as a placeholder for components that are not yet instrumented.
+        Replace via :meth:`register_health_checker` once the real check is ready.
+
+        Args:
+            system_name: The component name embedded in the returned result.
+
+        Returns:
+            An async callable compatible with the health-checker signature.
+        """
+        async def _stub(component: Optional[str] = None) -> "HealthCheckResult":
+            return HealthCheckResult(
+                system=system_name,
+                component=component,
+                status=SystemHealthStatus.UNKNOWN,
+                response_time_ms=None,
+                error_message="Health checker not yet implemented — register via register_health_checker()",
+            )
+        return _stub
 
     def register_health_checker(self, system: str, checker_func: Callable):
         """

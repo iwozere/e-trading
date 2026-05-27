@@ -420,7 +420,10 @@ class MessageRepository:
 
         except Exception:
             _logger.exception("Error claiming messages with lock:")
-            return []
+            # Re-raise so the enclosing UoW can roll back the session.
+            # Returning [] here would leave the session in a needs-rollback state
+            # and cause PendingRollbackError on the subsequent commit.
+            raise
 
     def release_message_lock(self, message_id: int, lock_instance_id: str) -> bool:
         """

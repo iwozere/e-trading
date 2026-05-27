@@ -456,6 +456,11 @@ async def collect_sentiment_batch(
     try:
         _initialize_adapters(manager, config)
 
+        # Start background monitoring tasks (global rate-limit coordination).
+        # Must be awaited here — start() is intentionally not called in __init__
+        # so the manager can be safely instantiated from synchronous code.
+        await manager.start()
+
         # Check if any adapters are available
         available_adapters = manager.get_available_adapters()
         if not available_adapters:
