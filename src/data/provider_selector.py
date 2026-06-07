@@ -7,6 +7,7 @@ backward compatibility.
 """
 
 import os
+import re
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -690,7 +691,7 @@ class ProviderSelector:
 
         return info
 
-    def get_data_provider_config(self, symbol: str, interval: str = None) -> Dict[str, Any]:
+    def get_data_provider_config(self, symbol: str, interval: Optional[str] = None) -> Dict[str, Any]:
         """
         Get configuration for data retrieval based on ticker and interval.
 

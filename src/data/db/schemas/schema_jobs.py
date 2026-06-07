@@ -125,6 +125,14 @@ class ScheduleRunResponse(BaseModel):
     error: Optional[str]
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator("job_id", mode="before")
+    @classmethod
+    def coerce_job_id_to_str(cls, v: Any) -> Optional[str]:
+        """DB column is BigInteger; coerce to str until a migration converts it to VARCHAR."""
+        if v is None:
+            return None
+        return str(v)
+
     @field_validator("job_snapshot", "result", mode="before")
     @classmethod
     def parse_json_strings(cls, v: Any) -> Any:
