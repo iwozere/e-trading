@@ -382,14 +382,15 @@ async def shutdown():
     _logger.info("Notification Service shutdown complete")
 
 
-def setup_signal_handlers(loop: asyncio.AbstractEventLoop):
+def setup_signal_handlers(stop_event: asyncio.Event):
     """Set up signal handlers for graceful shutdown.
-    
-    Uses loop.call_soon_threadsafe(loop.stop) to safely trigger shutdown.
+
+    Sets an asyncio.Event instead of stopping the loop directly so the
+    main() coroutine can reach its finally block and run shutdown().
     """
     def signal_handler(signum, frame):
         _logger.info("Received signal %s, initiating shutdown...", signum)
-        loop.call_soon_threadsafe(loop.stop)
+        stop_event.set()
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -397,16 +398,12 @@ def setup_signal_handlers(loop: asyncio.AbstractEventLoop):
 
 async def main():
     """Main application entry point."""
-    loop = asyncio.get_running_loop()
-    setup_signal_handlers(loop)
+    stop_event = asyncio.Event()
+    setup_signal_handlers(stop_event)
 
     try:
-        # Start the service
         await startup()
-
-        # Keep running until loop is stopped by signal handler
-        while True:
-            await asyncio.sleep(1)
+        await stop_event.wait()
 
     except KeyboardInterrupt:
         _logger.info("Received keyboard interrupt")

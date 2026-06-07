@@ -738,6 +738,7 @@ class SchedulerService:
             "src/ml/pipeline/",
             "src/scheduler/scripts/",
             "src/screeners/",
+            "src/strategy_pack/",
         ]
 
         # 1. Path traversal protection — script must resolve inside PROJECT_ROOT.
