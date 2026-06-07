@@ -235,9 +235,18 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_exception_handler(AppError, app_error_handler)
 
 # Configure CORS - origins loaded from CORS_ORIGINS env var (comma-separated)
+_cors_origins = settings.cors_origins_list
+if "*" in _cors_origins:
+    # SECURITY: allow_credentials=True with allow_origins=["*"] lets any origin
+    # send credentialed cross-site requests — a browser security violation and a
+    # real attack surface.  Fail hard so misconfiguration is caught at startup.
+    raise RuntimeError(
+        "CORS_ORIGINS must not contain '*' when allow_credentials=True. "
+        "Set CORS_ORIGINS to a comma-separated list of explicit allowed origins."
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -409,14 +418,14 @@ async def test_auth(current_user: User = Depends(get_current_user)):
 # Strategy Management Endpoints
 
 @app.get("/api/strategies", response_model=List[StrategyStatus])
-async def list_strategies(current_user: User = Depends(get_current_user)):
+def list_strategies(current_user: User = Depends(get_current_user)):
     """List all configured strategies."""
     try:
         strategies = strategy_service.get_all_strategies_status()
         return [StrategyStatus(**strategy) for strategy in strategies]
     except Exception as e:
         _logger.exception("Error listing strategies:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/strategies", response_model=Dict[str, str])
 async def create_strategy(
@@ -442,10 +451,10 @@ async def create_strategy(
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         _logger.exception("Error creating strategy:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/strategies/{strategy_id}", response_model=StrategyStatus)
-async def get_strategy(strategy_id: str, current_user: User = Depends(get_current_user)):
+def get_strategy(strategy_id: str, current_user: User = Depends(get_current_user)):
     """Get details of a specific strategy."""
     try:
         status = strategy_service.get_strategy_status(strategy_id)
@@ -458,7 +467,7 @@ async def get_strategy(strategy_id: str, current_user: User = Depends(get_curren
         raise
     except Exception as e:
         _logger.exception("Error getting strategy %s:", strategy_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.put("/api/strategies/{strategy_id}", response_model=Dict[str, str])
 async def update_strategy(
@@ -485,7 +494,7 @@ async def update_strategy(
         raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
     except Exception as e:
         _logger.exception("Error updating strategy %s:", strategy_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.delete("/api/strategies/{strategy_id}", response_model=Dict[str, str])
 async def delete_strategy(strategy_id: str, current_user: User = Depends(require_trader_or_admin)):
@@ -503,7 +512,7 @@ async def delete_strategy(strategy_id: str, current_user: User = Depends(require
         raise HTTPException(status_code=404 if "not found" in str(e).lower() else 400, detail=str(e))
     except Exception as e:
         _logger.exception("Error deleting strategy %s:", strategy_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # Strategy Lifecycle Endpoints
 
@@ -535,7 +544,7 @@ async def start_strategy(
             raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         _logger.exception("Error starting strategy %s:", strategy_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/strategies/{strategy_id}/stop", response_model=Dict[str, str])
 async def stop_strategy(strategy_id: str, current_user: User = Depends(require_trader_or_admin)):
@@ -553,7 +562,7 @@ async def stop_strategy(strategy_id: str, current_user: User = Depends(require_t
         raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
     except Exception as e:
         _logger.exception("Error stopping strategy %s:", strategy_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/strategies/{strategy_id}/restart", response_model=Dict[str, str])
 async def restart_strategy(
@@ -583,12 +592,12 @@ async def restart_strategy(
             raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         _logger.exception("Error restarting strategy %s:", strategy_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # System Monitoring Endpoints
 
 @app.get("/api/system/status", response_model=SystemStatus)
-async def get_system_status(current_user: User = Depends(get_current_user)):
+def get_system_status(current_user: User = Depends(get_current_user)):
     """Get overall system status."""
     try:
         # Get service status
@@ -617,7 +626,7 @@ async def get_system_status(current_user: User = Depends(get_current_user)):
 
     except Exception as e:
         _logger.exception("Error getting system status:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # Configuration Management Endpoints
 
@@ -639,10 +648,10 @@ async def update_strategy_parameters(
         raise HTTPException(status_code=404 if "not found" in str(e).lower() else 503, detail=str(e))
     except Exception as e:
         _logger.exception("Error updating strategy parameters %s:", strategy_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/config/templates")
-async def get_strategy_templates(current_user: User = Depends(get_current_user)):
+def get_strategy_templates(current_user: User = Depends(get_current_user)):
     """Get available strategy templates."""
     try:
         templates = strategy_service.get_strategy_templates()
@@ -650,10 +659,10 @@ async def get_strategy_templates(current_user: User = Depends(get_current_user))
 
     except Exception as e:
         _logger.exception("Error loading templates:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/config/validate")
-async def validate_configuration(
+def validate_configuration(
     body: ValidateConfigBody,
     current_user: User = Depends(get_current_user)
 ):
@@ -667,21 +676,21 @@ async def validate_configuration(
         return {"valid": False, "errors": [str(e)]}
     except Exception as e:
         _logger.exception("Error validating configuration:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # System monitoring endpoints
 @app.get("/api/monitoring/metrics")
-async def get_system_metrics(current_user: User = Depends(get_current_user)):
+def get_system_metrics(current_user: User = Depends(get_current_user)):
     """Get comprehensive system metrics."""
     try:
         metrics = monitoring_service.get_comprehensive_metrics()
         return metrics
     except Exception as e:
         _logger.exception("Error getting system metrics:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/monitoring/alerts")
-async def get_system_alerts(
+def get_system_alerts(
     unacknowledged_only: bool = False,
     current_user: User = Depends(get_current_user)
 ):
@@ -691,10 +700,10 @@ async def get_system_alerts(
         return {"alerts": alerts}
     except Exception as e:
         _logger.exception("Error getting system alerts:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/monitoring/alerts/{alert_index}/acknowledge")
-async def acknowledge_alert(
+def acknowledge_alert(
     alert_index: int,
     current_user: User = Depends(require_trader_or_admin)
 ):
@@ -709,10 +718,10 @@ async def acknowledge_alert(
         raise
     except Exception as e:
         _logger.exception("Error acknowledging alert:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/monitoring/history")
-async def get_performance_history(
+def get_performance_history(
     hours: int = 1,
     current_user: User = Depends(get_current_user)
 ):
@@ -727,7 +736,7 @@ async def get_performance_history(
         raise
     except Exception as e:
         _logger.exception("Error getting performance history:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # SPA Catch-all: Route all non-API paths to index.html

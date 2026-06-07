@@ -145,8 +145,8 @@ class BBVolumeSupertrendEntryMixin(BaseEntryMixin):
             current_volume = self.strategy.data.volume[0]
 
             # Standardized parameter retrieval
-            use_bb_touch = self.get_param("use_bb_touch") or self.get_param("e_use_bb_touch", True)
-            min_volume_ratio = self.get_param("min_volume_ratio") or self.get_param("e_min_volume_ratio", 1.1)
+            use_bb_touch = self._resolve_param("use_bb_touch", "e_use_bb_touch", True)
+            min_volume_ratio = self._resolve_param("min_volume_ratio", "e_min_volume_ratio", 1.1)
 
             # Unified Indicator Access
             bb_lower = self.get_indicator('entry_bb_lower')

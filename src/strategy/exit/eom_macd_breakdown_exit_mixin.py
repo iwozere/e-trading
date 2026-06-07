@@ -173,7 +173,7 @@ class EOMMAcdBreakdownExitMixin(BaseExitMixin):
             volume_sma = self.get_indicator('exit_volume_sma')
 
             # Get parameters
-            support_threshold = self.get_param("support_threshold") or self.get_param("x_support_threshold", 0.002)
+            support_threshold = self._resolve_param('support_threshold', 'x_support_threshold', 0.002)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):

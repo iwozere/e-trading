@@ -74,16 +74,21 @@ class ModelTrainer:
                 self.config.n_features
             )
 
-            # Feature scaling
-            X_scaled = self.feature_pipeline.scale_features(
-                X_selected, self.config.scaler_type
+            # Split BEFORE scaling to prevent scaler leakage (fit on train only).
+            # shuffle=False preserves temporal order for time-series data.
+            X_train_raw, X_val_raw, y_train, y_val = train_test_split(
+                X_selected, y,
+                test_size=self.config.validation_split,
+                shuffle=False,
             )
 
-            # Split data
-            X_train, X_val, y_train, y_val = train_test_split(
-                X_scaled, y,
-                test_size=self.config.validation_split,
-                random_state=42
+            # Feature scaling — fit on train only (fit=True), then transform val
+            # using the already-fitted scaler (fit=False) to prevent leakage.
+            X_train = self.feature_pipeline.scale_features(
+                X_train_raw, self.config.scaler_type, fit=True
+            )
+            X_val = self.feature_pipeline.scale_features(
+                X_val_raw, self.config.scaler_type, fit=False
             )
 
             # Optimize hyperparameters if requested

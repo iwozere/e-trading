@@ -155,7 +155,10 @@ async def run_once(
         return summary
 
     symbols = [h.symbol for h in holdings]
-    prices = fetch_latest_closes(symbols, data_manager=data_manager)
+    # fetch_latest_closes is synchronous (blocking network I/O); offload to
+    # a thread pool so the scheduler's event loop is not blocked.
+    import asyncio as _asyncio
+    prices = await _asyncio.to_thread(fetch_latest_closes, symbols, data_manager)
     summary.priced_count = len(prices)
 
     if not prices:

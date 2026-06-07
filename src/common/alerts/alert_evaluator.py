@@ -117,7 +117,9 @@ class AlertEvaluator:
                     error="Invalid schedule_id in job_run"
                 )
 
-            schedule = self.jobs_service.get_schedule(schedule_id)
+            schedule = await asyncio.to_thread(
+                lambda: self.jobs_service.get_schedule(schedule_id)
+            )
             if not schedule:
                 return AlertEvaluationResult(
                     triggered=False,
@@ -933,6 +935,17 @@ class AlertEvaluator:
 
         # Crossing operators
         if op in ("crosses_above", "crosses_below"):
+            # CADENCE CONTRACT: crossing state is tracked between evaluation runs
+            # (persisted in sides_state), NOT between consecutive bars.  The
+            # evaluate_once_per_bar guard ensures at most one crossing signal per bar
+            # window when evaluation cadence ≠ bar cadence.
+            #
+            # Example: 5-min cron + 1-h bars → up to 12 evaluations per bar; only
+            # the first evaluation in each bar window fires via once_per_bar.
+            # A cross that completes entirely within an unobserved bar window can be
+            # missed; this is a known limitation of cron-driven crossing detection.
+            # Use a bar-aligned cadence (e.g. cron every 1h for 1h bars) to minimise
+            # missed crosses.
             lhs, lhs_snap = resolve_operand(node.get("lhs"))
             rhs, rhs_snap = resolve_operand(node.get("rhs"))
             snapshot.update(lhs_snap)
@@ -1619,10 +1632,12 @@ class AlertEvaluator:
         """
         try:
             # Get active alert jobs from the jobs service
-            active_jobs = self.jobs_service.get_active_jobs(
-                job_type="alert",
-                user_id=user_id,
-                limit=limit
+            active_jobs = await asyncio.to_thread(
+                lambda: self.jobs_service.get_active_jobs(
+                    job_type="alert",
+                    user_id=user_id,
+                    limit=limit,
+                )
             )
 
             _logger.info("Evaluating %d active alert(s) for user %s", len(active_jobs), user_id or "all")
@@ -1666,7 +1681,9 @@ class AlertEvaluator:
 
                     # Update job state if needed
                     if result.state_updates:
-                        self.jobs_service.update_job_state(job.id, result.state_updates)
+                        await asyncio.to_thread(
+                            lambda: self.jobs_service.update_job_state(job.id, result.state_updates)
+                        )
 
                 except Exception as e:
                     _logger.exception("Failed to evaluate alert job %s", job.id)

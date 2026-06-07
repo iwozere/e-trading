@@ -81,14 +81,14 @@ class TrailingStopExitMixin(BaseExitMixin):
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        use_atr = self.get_param("use_atr") or self.get_param("x_use_atr", False)
+        use_atr = self._resolve_param('use_atr', 'x_use_atr', False)
         if not use_atr:
             return 0
-        return self.get_param("atr_period") or self.get_param("x_atr_period", 14)
+        return self._resolve_param('atr_period', 'x_atr_period', 14)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
-        use_atr = self.get_param("use_atr") or self.get_param("x_use_atr", False)
+        use_atr = self._resolve_param('use_atr', 'x_use_atr', False)
         if not use_atr:
             return True
         return 'exit_atr' in getattr(self.strategy, 'indicators', {})
@@ -109,10 +109,10 @@ class TrailingStopExitMixin(BaseExitMixin):
             self.highest_price = max(self.highest_price, price)
 
             # Get parameters
-            use_atr = self.get_param("use_atr") or self.get_param("x_use_atr", False)
-            atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
-            trail_pct = self.get_param("trail_pct") or self.get_param("x_trail_pct", 0.02)
-            activation_pct = self.get_param("activation_pct") or self.get_param("x_activation_pct", 0.0)
+            use_atr = self._resolve_param('use_atr', 'x_use_atr', False)
+            atr_multiplier = self._resolve_param('atr_multiplier', 'x_atr_multiplier', 2.0)
+            trail_pct = self._resolve_param('trail_pct', 'x_trail_pct', 0.02)
+            activation_pct = self._resolve_param('activation_pct', 'x_activation_pct', 0.0)
 
             # Calculate stop level
             if use_atr:

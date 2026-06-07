@@ -110,7 +110,7 @@ class RSIOrBBExitMixin(BaseExitMixin):
 
         try:
             # Standardized parameter retrieval
-            rsi_overbought = self.get_param("rsi_overbought") or self.get_param("x_rsi_overbought", 70)
+            rsi_overbought = self._resolve_param('rsi_overbought', 'x_rsi_overbought', 70)
 
             # Unified Indicator Access
             current_rsi = self.get_indicator('exit_rsi')

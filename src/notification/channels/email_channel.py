@@ -477,12 +477,20 @@ class EmailChannel(NotificationChannel):
             smtp_kwargs["use_tls"] = True
             smtp_kwargs["tls_context"] = ssl.create_default_context()
             if not self.config.get("validate_certs", True):
+                _logger.warning(
+                    "SMTP TLS certificate validation is DISABLED (validate_certs=False). "
+                    "This exposes SMTP connections to MITM attacks. Never use in production."
+                )
                 smtp_kwargs["tls_context"].check_hostname = False
                 smtp_kwargs["tls_context"].verify_mode = ssl.CERT_NONE
         elif self.config.get("use_tls"):
             smtp_kwargs["start_tls"] = True
             smtp_kwargs["tls_context"] = ssl.create_default_context()
             if not self.config.get("validate_certs", True):
+                _logger.warning(
+                    "SMTP STARTTLS certificate validation is DISABLED (validate_certs=False). "
+                    "This exposes SMTP connections to MITM attacks. Never use in production."
+                )
                 smtp_kwargs["tls_context"].check_hostname = False
                 smtp_kwargs["tls_context"].verify_mode = ssl.CERT_NONE
 

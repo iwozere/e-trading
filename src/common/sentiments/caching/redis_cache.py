@@ -158,6 +158,10 @@ class RedisCache:
         if self.serialization == "json":
             return json.dumps(value, default=str).encode('utf-8')
         elif self.serialization == "pickle":
+            # SECURITY: pickle.dumps/loads is an RCE sink if the Redis instance is
+            # shared or reachable by untrusted parties.  Only use pickle mode with
+            # a fully isolated, single-tenant Redis that is not network-accessible
+            # outside the application process.  Default (json) is safe.
             return pickle.dumps(value)
         else:
             raise ValueError(f"Unknown serialization method: {self.serialization}")
@@ -167,7 +171,9 @@ class RedisCache:
         if self.serialization == "json":
             return json.loads(data.decode('utf-8'))
         elif self.serialization == "pickle":
-            return pickle.loads(data)
+            # SECURITY: see _serialize_value.  Never deserialize pickle data from
+            # a shared or multi-tenant Redis instance.
+            return pickle.loads(data)  # noqa: S301
         else:
             raise ValueError(f"Unknown serialization method: {self.serialization}")
 

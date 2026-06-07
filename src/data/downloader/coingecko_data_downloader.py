@@ -106,7 +106,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
             "from": start_timestamp,
             "to": end_timestamp,
         }
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=30)
         if response.status_code != 200:
             _logger.error("CoinGecko API error: %s %s", response.status_code, response.text)
             raise RuntimeError(f"CoinGecko API error: {response.status_code} {response.text}")
@@ -174,7 +174,7 @@ class CoinGeckoDataDownloader(BaseDataDownloader):
         }
 
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, timeout=30)
             if response.status_code != 200:
                 _logger.error("CoinGecko API error: %s %s", response.status_code, response.text)
                 return pd.DataFrame()

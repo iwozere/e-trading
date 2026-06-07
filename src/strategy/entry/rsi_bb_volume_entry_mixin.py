@@ -139,7 +139,7 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
             current_volume = self.strategy.data.volume[0]
 
             # Standardized parameter retrieval
-            oversold = self.get_param("oversold") or self.get_param("rsi_oversold") or self.get_param("e_rsi_oversold", 30)
+            oversold = self.get_param("oversold") or self._resolve_param("rsi_oversold", "e_rsi_oversold", 30)
             use_bb_touch = self.get_param("use_bb_touch", self.get_param("e_use_bb_touch", True))
             min_volume_ratio = self.get_param("min_volume_ratio", self.get_param("e_min_volume_ratio", 1.1))
 
@@ -169,5 +169,5 @@ class RSIBBVolumeEntryMixin(BaseEntryMixin):
                 )
             return entry_signal
         except Exception:
-            logger.exception("Error in should_enter: ")
+            logger.exception("Unexpected error in should_enter [%s]; strategy will not enter:", self.__class__.__name__)
             return False

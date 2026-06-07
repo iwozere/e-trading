@@ -122,8 +122,8 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
         return max(
-            self.get_param("rsi_period") or self.get_param("e_rsi_period", 14),
-            self.get_param("bb_period") or self.get_param("e_bb_period", 20)
+            self._resolve_param("rsi_period", "e_rsi_period", 14),
+            self._resolve_param("bb_period", "e_bb_period", 20)
         )
 
     def are_indicators_ready(self) -> bool:
@@ -138,7 +138,7 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
 
         try:
             # Check cooldown period
-            cooldown_bars = self.get_param("cooldown_bars") or self.get_param("e_cooldown_bars", 0)
+            cooldown_bars = self._resolve_param("cooldown_bars", "e_cooldown_bars", 0)
             if cooldown_bars > 0:
                 current_bar = len(self.strategy.data)
                 if (self.last_entry_bar is not None and
@@ -148,10 +148,10 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
             current_price = self.strategy.data.close[0]
 
             # Standardized parameter retrieval
-            oversold = self.get_param("rsi_oversold") or self.get_param("e_rsi_oversold", 30)
-            use_bb_touch = self.get_param("use_bb_touch") or self.get_param("e_use_bb_touch", True)
-            rsi_cross = self.get_param("rsi_cross") or self.get_param("e_rsi_cross", False)
-            bb_reentry = self.get_param("bb_reentry") or self.get_param("e_bb_reentry", False)
+            oversold = self._resolve_param("rsi_oversold", "e_rsi_oversold", 30)
+            use_bb_touch = self._resolve_param("use_bb_touch", "e_use_bb_touch", True)
+            rsi_cross = self._resolve_param("rsi_cross", "e_rsi_cross", False)
+            bb_reentry = self._resolve_param("bb_reentry", "e_bb_reentry", False)
 
             # Unified Indicator Access
             rsi_value = self.get_indicator('entry_rsi')
@@ -186,5 +186,5 @@ class RSIOrBBEntryMixin(BaseEntryMixin):
             return entry_signal
 
         except Exception:
-            logger.exception("Error in should_enter: ")
+            logger.exception("Unexpected error in should_enter [%s]; strategy will not enter:", self.__class__.__name__)
             return False

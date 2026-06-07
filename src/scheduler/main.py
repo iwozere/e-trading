@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.scheduler.scheduler_service import SchedulerService
-from src.scheduler.config import SchedulerServiceConfig
+from src.scheduler.config import SchedulerServiceConfig, get_config
 from src.common.alerts.alert_evaluator import AlertEvaluator
 from src.common.alerts.schema_validator import AlertSchemaValidator
 from src.data.data_manager import DataManager
@@ -202,8 +202,8 @@ async def main() -> None:
     global app
 
     try:
-        # Load configuration
-        config = SchedulerServiceConfig()
+        # Load configuration via the lazy singleton so all callers share the same instance
+        config = get_config()
 
         # Create application
         app = SchedulerApplication(config)

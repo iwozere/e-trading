@@ -146,8 +146,8 @@ class EOMRejectionExitMixin(BaseExitMixin):
             rsi_prev = self.get_indicator_prev('exit_rsi', 1)
 
             # Get parameters
-            resistance_threshold = self.get_param("resistance_threshold") or self.get_param("x_resistance_threshold", 0.995)
-            rsi_overbought = self.get_param("rsi_overbought") or self.get_param("x_rsi_overbought", 60)
+            resistance_threshold = self._resolve_param('resistance_threshold', 'x_resistance_threshold', 0.995)
+            rsi_overbought = self._resolve_param('rsi_overbought', 'x_rsi_overbought', 60)
 
             # Check if resistance is valid (not NaN)
             if math.isnan(resistance):

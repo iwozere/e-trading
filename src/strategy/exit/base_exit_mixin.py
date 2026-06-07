@@ -112,6 +112,19 @@ class BaseExitMixin(ABC):
     def get_param(self, key: str, default=None):
         return self.params.get(key, default)
 
+    def _resolve_param(self, key: str, e_key: str, default=None):
+        """
+        Resolve a param with e_-prefixed fallback, correctly handling falsy values.
+
+        Unlike ``get_param(key) or get_param(e_key, default)``, this method treats
+        ``False``, ``0``, and ``0.0`` as valid configured values rather than
+        falling through to the e_-prefixed fallback or the hard-coded default.
+        """
+        val = self.get_param(key)
+        if val is not None:
+            return val
+        return self.get_param(e_key, default)
+
     def get_indicator(self, alias: str) -> Any:
         """
         Get indicator value by alias (for new TALib-based architecture).

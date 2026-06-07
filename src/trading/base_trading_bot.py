@@ -490,6 +490,7 @@ class BaseTradingBot:
                 account_equity=self.current_balance,
                 stop_loss_pct=stop_loss_pct,
                 current_exposures=current_exposures,
+                entry_price=price,
             )
             if approved_size == 0.0:
                 _logger.warning(

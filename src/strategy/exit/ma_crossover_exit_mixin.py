@@ -122,7 +122,7 @@ class MACrossoverExitMixin(BaseExitMixin):
                     f"EXIT Crossover - Fast: {fast_ma_current:.2f}, Slow: {slow_ma_current:.2f}, "
                     f"Prev Fast: {fast_ma_prev:.2f}, Prev Slow: {slow_ma_prev:.2f}"
                 )
-                ma_type = self.get_param("ma_type") or self.get_param("x_ma_type", "SMA")
+                ma_type = self._resolve_param('ma_type', 'x_ma_type', "SMA")
                 self.strategy.current_exit_reason = f"{ma_type.lower()}_crossover"
             return return_value
 

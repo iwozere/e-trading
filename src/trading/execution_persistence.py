@@ -55,79 +55,98 @@ class ExecutionPersistenceService:
                 self._file_locks[filename] = threading.RLock()
             return self._file_locks[filename]
 
-    def _append_to_json_list(self, file_path: Path, data: Any) -> None:
+    def _append_record(self, file_path: Path, data: Any) -> None:
         """
-        Append an item to a JSON list file in a thread-safe manner.
-        Creates the file if it doesn't exist.
+        Append one record to a JSONL (newline-delimited JSON) file.
+
+        Each call is O(1) — the file is opened in append mode and a single line
+        is written.  On a corrupt file the bad file is quarantined (renamed) so
+        history is never silently discarded; a fresh file is then started.
         """
         lock = self._get_file_lock(file_path.name)
         with lock:
+            if file_path.exists() and file_path.stat().st_size > 0:
+                self._quarantine_if_corrupt(file_path)
             try:
-                all_items = []
-                if file_path.exists():
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            content = f.read().strip()
-                            if content:
-                                all_items = json.loads(content)
-                    except (json.JSONDecodeError, Exception) as e:
-                        _logger.warning("Failed to load existing log file %s: %s. Starting fresh.", file_path, e)
-                        all_items = []
-
-                all_items.append(data)
-
-                # Write to a sibling .tmp file first, then atomically rename over the
-                # target.  This prevents a crash mid-write from leaving a partially
-                # written (and therefore corrupt) JSON file.  On POSIX the rename is
-                # guaranteed atomic; on Windows it is near-atomic (same volume, single
-                # FS operation).
-                tmp_path = file_path.with_suffix('.tmp')
-                with open(tmp_path, "w", encoding="utf-8") as f:
-                    json.dump(all_items, f, default=str, indent=2)
-                tmp_path.replace(file_path)
-                    
+                with open(file_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(data, default=str))
+                    f.write("\n")
             except Exception as e:
-                _logger.exception("Error appending to JSON list %s: %s", file_path, e)
+                _logger.exception("Error appending record to %s:", file_path)
                 raise ExecutionPersistenceError(f"Failed to persist data to {file_path.name}") from e
+
+    def _quarantine_if_corrupt(self, file_path: Path) -> None:
+        """Rename a JSONL file that contains an invalid last line to isolate it."""
+        try:
+            with open(file_path, "rb") as f:
+                # Seek to the last non-empty line without reading the whole file.
+                f.seek(0, 2)
+                end = f.tell()
+                if end == 0:
+                    return
+                # Walk backwards past trailing newlines.
+                pos = end - 1
+                while pos > 0:
+                    f.seek(pos)
+                    ch = f.read(1)
+                    if ch not in (b"\n", b"\r"):
+                        break
+                    pos -= 1
+                # Find start of that last line.
+                while pos > 0:
+                    f.seek(pos - 1)
+                    if f.read(1) == b"\n":
+                        break
+                    pos -= 1
+                f.seek(pos)
+                last_line = f.read().rstrip()
+            json.loads(last_line)
+        except (json.JSONDecodeError, ValueError):
+            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            quarantine = file_path.with_name(f"{file_path.stem}.corrupt.{ts}{file_path.suffix}")
+            try:
+                file_path.rename(quarantine)
+                _logger.error(
+                    "Corrupt JSONL file quarantined: %s -> %s. A fresh log will be started.",
+                    file_path.name, quarantine.name,
+                )
+            except OSError:
+                _logger.exception("Could not quarantine corrupt log file %s:", file_path)
+        except OSError:
+            _logger.exception("Could not verify integrity of log file %s:", file_path)
 
     def save_order(self, bot_id: str, order_data: Dict[str, Any]) -> None:
         """
-        Persist order details to the orders log.
-        
+        Persist order details to the orders log (JSONL).
+
         Args:
             bot_id: Unique bot identifier
             order_data: Dictionary containing order details
         """
-        # Ensure bot_id is in the data
         if "bot_id" not in order_data:
             order_data["bot_id"] = bot_id
-            
-        # Add persistence timestamp if not present
         if "persisted_at" not in order_data:
             order_data["persisted_at"] = datetime.now(timezone.utc).isoformat()
-            
-        path = self.logs_dir / "orders.json"
-        self._append_to_json_list(path, order_data)
+
+        path = self.logs_dir / "orders.jsonl"
+        self._append_record(path, order_data)
         _logger.debug("Order saved for bot %s", bot_id)
 
     def save_trade(self, bot_id: str, trade_data: Dict[str, Any]) -> None:
         """
-        Persist completed trade details to the trades log.
-        
+        Persist completed trade details to the trades log (JSONL).
+
         Args:
             bot_id: Unique bot identifier
             trade_data: Dictionary containing trade details
         """
-        # Ensure bot_id is in the data
         if "bot_id" not in trade_data:
             trade_data["bot_id"] = bot_id
-            
-        # Add persistence timestamp if not present
         if "persisted_at" not in trade_data:
             trade_data["persisted_at"] = datetime.now(timezone.utc).isoformat()
-            
-        path = self.logs_dir / "trades.json"
-        self._append_to_json_list(path, trade_data)
+
+        path = self.logs_dir / "trades.jsonl"
+        self._append_record(path, trade_data)
         _logger.debug("Trade saved for bot %s", bot_id)
 
 # Singleton instance for easy access

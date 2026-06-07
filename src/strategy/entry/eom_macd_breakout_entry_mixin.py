@@ -138,9 +138,9 @@ class EOMMAcdBreakoutEntryMixin(BaseEntryMixin):
             volume_sma = self.get_indicator('entry_volume_sma')
 
             # Get parameters
-            resistance_range_low = self.get_param("resistance_range_low") or self.get_param("e_resistance_range_low", 0.995)
-            resistance_range_high = self.get_param("resistance_range_high") or self.get_param("e_resistance_range_high", 1.002)
-            volume_threshold = self.get_param("volume_threshold") or self.get_param("e_volume_threshold", 0.8)
+            resistance_range_low = self._resolve_param("resistance_range_low", "e_resistance_range_low", 0.995)
+            resistance_range_high = self._resolve_param("resistance_range_high", "e_resistance_range_high", 1.002)
+            volume_threshold = self._resolve_param("volume_threshold", "e_volume_threshold", 0.8)
 
             # Check if resistance is valid (not NaN)
             if math.isnan(resistance):

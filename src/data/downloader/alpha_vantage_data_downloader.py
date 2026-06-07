@@ -129,7 +129,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                     'outputsize': 'full',
                     'datatype': 'json',
                 }
-            response = requests.get(self.base_url, params=params)
+            response = requests.get(self.base_url, params=params, timeout=30)
             data = response.json()
 
             # Find the key for the time series data
@@ -201,7 +201,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 'apikey': self.api_key
             }
 
-            overview_response = requests.get(overview_url, params=overview_params)
+            overview_response = requests.get(overview_url, params=overview_params, timeout=30)
             if overview_response.status_code != 200:
                 raise RuntimeError(f"Alpha Vantage API error: {overview_response.status_code}")
 
@@ -230,7 +230,7 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
                 'apikey': self.api_key
             }
 
-            quote_response = requests.get(quote_url, params=quote_params)
+            quote_response = requests.get(quote_url, params=quote_params, timeout=30)
             quote_data = quote_response.json() if quote_response.status_code == 200 else {}
             current_price = safe_float(quote_data.get('Global Quote', {}).get('05. price', 0)) if quote_data else 0.0
 

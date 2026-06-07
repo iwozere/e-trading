@@ -34,38 +34,30 @@ class TelegramBusinessLogic:
         """Dispatches commands to the appropriate service handler."""
         try:
             cmd = parsed.command.lstrip('/')
-            
-            # User management commands
-            if cmd == "register": return self.user_service.handle_register(parsed)
-            elif cmd == "verify": return self.user_service.handle_verify(parsed)
-            elif cmd == "info": return self.user_service.handle_info(parsed)
-            elif cmd == "language": return self.user_service.handle_language(parsed)
-            elif cmd == "request_approval": return self.user_service.handle_request_approval(parsed)
-            
-            # Alert commands
-            elif cmd == "alerts": return self.alert_manager.handle_alerts(parsed)
-            
-            # Schedule commands
-            elif cmd == "schedules": return self.schedule_manager.handle_schedules(parsed)
-            
-            # Report and Screener commands
-            elif cmd == "report": return await self.report_engine.handle_report(parsed)
-            elif cmd == "screener": return await self.screener_engine.handle_screener(parsed)
-            
-            # Admin commands
-            elif cmd == "admin": return self.handle_admin(parsed)
-            
-            # Help
-            elif cmd == "help": return self.handle_help(parsed)
-            
-            # Feedback / Feature (delegated to user_service or helper)
-            elif cmd == "feedback": return self.handle_feedback(parsed)
-            elif cmd == "feature": return self.handle_feature(parsed)
-            
-            return {"status": "error", "message": f"Unknown command: {cmd}"}
-        except Exception as e:
+            if cmd == "report":
+                return await self.report_engine.handle_report(parsed)
+            if cmd == "screener":
+                return await self.screener_engine.handle_screener(parsed)
+            return await asyncio.to_thread(self._dispatch_sync, parsed)
+        except Exception:
             _logger.exception("Error handling command %s", parsed.command)
-            return {"status": "error", "message": f"Internal error: {str(e)}"}
+            return {"status": "error", "message": "An error occurred. Please try again later."}
+
+    def _dispatch_sync(self, parsed: ParsedCommand) -> Dict[str, Any]:
+        """Synchronous dispatch for non-async command handlers (runs in thread pool)."""
+        cmd = parsed.command.lstrip('/')
+        if cmd == "register": return self.user_service.handle_register(parsed)
+        elif cmd == "verify": return self.user_service.handle_verify(parsed)
+        elif cmd == "info": return self.user_service.handle_info(parsed)
+        elif cmd == "language": return self.user_service.handle_language(parsed)
+        elif cmd == "request_approval": return self.user_service.handle_request_approval(parsed)
+        elif cmd == "alerts": return self.alert_manager.handle_alerts(parsed)
+        elif cmd == "schedules": return self.schedule_manager.handle_schedules(parsed)
+        elif cmd == "admin": return self.handle_admin(parsed)
+        elif cmd == "help": return self.handle_help(parsed)
+        elif cmd == "feedback": return self.handle_feedback(parsed)
+        elif cmd == "feature": return self.handle_feature(parsed)
+        return {"status": "error", "message": f"Unknown command: {cmd}"}
 
     def handle_help(self, parsed: ParsedCommand) -> Dict[str, Any]:
         """Business logic for /help command."""

@@ -105,7 +105,7 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
         """
         Returns the minimum number of bars required (Kijun period for Ichimoku cloud).
         """
-        return self.get_param("kijun_period") or self.get_param("e_kijun", 26)
+        return self._resolve_param('kijun_period', 'e_kijun', 26)
 
     def are_indicators_ready(self) -> bool:
         """
@@ -161,5 +161,5 @@ class RSIIchimokuEntryMixin(BaseEntryMixin):
             return entry_signal
 
         except Exception:
-            logger.exception("Error in should_enter: ")
+            logger.exception("Unexpected error in should_enter [%s]; strategy will not enter:", self.__class__.__name__)
             return False

@@ -76,7 +76,7 @@ class SimpleATRExitMixin(BaseExitMixin):
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        return self.get_param("atr_period") or self.get_param("x_atr_period", 14)
+        return self._resolve_param('atr_period', 'x_atr_period', 14)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
@@ -88,7 +88,7 @@ class SimpleATRExitMixin(BaseExitMixin):
 
         if self.are_indicators_ready():
             atr_value = self.get_indicator('exit_atr')
-            atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
+            atr_multiplier = self._resolve_param('atr_multiplier', 'x_atr_multiplier', 2.0)
 
             if atr_value is not None and atr_value > 0:
                 if direction.lower() == "long":
@@ -110,9 +110,9 @@ class SimpleATRExitMixin(BaseExitMixin):
             current_price = self.strategy.data.close[0]
 
             atr_value = self.get_indicator('exit_atr')
-            use_breakeven = self.get_param("use_breakeven") or self.get_param("x_use_breakeven", True)
-            breakeven_atr = self.get_param("breakeven_atr") or self.get_param("x_breakeven_atr", 1.0)
-            atr_multiplier = self.get_param("atr_multiplier") or self.get_param("x_atr_multiplier", 2.0)
+            use_breakeven = self._resolve_param('use_breakeven', 'x_use_breakeven', True)
+            breakeven_atr = self._resolve_param('breakeven_atr', 'x_breakeven_atr', 1.0)
+            atr_multiplier = self._resolve_param('atr_multiplier', 'x_atr_multiplier', 2.0)
 
             if atr_value is None or atr_value <= 0:
                 return False

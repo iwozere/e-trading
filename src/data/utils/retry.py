@@ -7,11 +7,23 @@ handling transient failures in data requests.
 
 import time
 import random
+import requests
 from typing import Callable, Optional, TypeVar
 from functools import wraps
-import logging
 
-_logger = logging.getLogger(__name__)
+from src.notification.logger import setup_logger
+
+_logger = setup_logger(__name__)
+
+# Default transient exceptions to retry (excludes programming errors like ValueError/TypeError)
+TRANSIENT_EXCEPTIONS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.HTTPError,
+    ConnectionError,
+    TimeoutError,
+    OSError,
+)
 
 T = TypeVar('T')
 
@@ -50,7 +62,7 @@ def request_with_backoff(
     max_delay: float = 60.0,
     backoff_factor: float = 2.0,
     jitter: bool = True,
-    exceptions: tuple = (Exception,),
+    exceptions: tuple = TRANSIENT_EXCEPTIONS,
     on_retry: Optional[Callable[[int, Exception, float], None]] = None
 ) -> T:
     """
@@ -63,7 +75,8 @@ def request_with_backoff(
         max_delay: Maximum delay in seconds
         backoff_factor: Multiplicative factor for each retry
         jitter: Whether to add random jitter to delays
-        exceptions: Tuple of exceptions to catch and retry on
+        exceptions: Tuple of exceptions to catch and retry on; defaults to TRANSIENT_EXCEPTIONS
+            (network/IO errors only — programming errors like ValueError are not retried)
         on_retry: Optional callback function called before each retry
 
     Returns:
@@ -95,8 +108,7 @@ def request_with_backoff(
 
             time.sleep(delay)
 
-    # This should never be reached, but just in case
-    raise last_exception
+    raise last_exception or RuntimeError("All retry attempts exhausted")
 
 
 def retry_on_exception(
@@ -105,7 +117,7 @@ def retry_on_exception(
     max_delay: float = 60.0,
     backoff_factor: float = 2.0,
     jitter: bool = True,
-    exceptions: tuple = (Exception,),
+    exceptions: tuple = TRANSIENT_EXCEPTIONS,
     on_retry: Optional[Callable[[int, Exception, float], None]] = None
 ):
     """
@@ -176,6 +188,6 @@ def retry_on_rate_limit(
         max_delay=max_delay,
         backoff_factor=backoff_factor,
         jitter=jitter,
-        exceptions=(Exception,),  # Catch all exceptions for rate limits
+        exceptions=TRANSIENT_EXCEPTIONS,
         on_retry=on_rate_limit_retry
     )

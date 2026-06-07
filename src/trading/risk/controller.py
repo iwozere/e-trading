@@ -16,16 +16,25 @@ class RiskController:
         account_equity: float,
         stop_loss_pct: float,
         current_exposures: Dict[str, float],
-        correlation_matrix=None
+        entry_price: float = 0.0,
+        correlation_matrix=None,
     ) -> float:
         """
         Run position sizing and limit checks before placing a trade.
-        Returns position size if all checks pass; otherwise 0.0
+        Returns position size in asset units if all checks pass; otherwise 0.0.
+
+        Args:
+            account_equity: Current account balance.
+            stop_loss_pct: Stop loss as a fraction of entry price (e.g., 0.02 for 2%).
+            current_exposures: Map of symbol → current notional exposure.
+            entry_price: Current asset price used to convert risk dollars to units.
+            correlation_matrix: Optional correlation matrix for correlation checks.
         """
         size = position_sizing.fixed_fractional(
             account_equity=account_equity,
             risk_per_trade=self.config.get('risk_per_trade', 0.01),
-            stop_loss_pct=stop_loss_pct
+            stop_loss_pct=stop_loss_pct,
+            entry_price=entry_price,
         )
 
         within_position_limits = exposure_limits.check_position_limit(

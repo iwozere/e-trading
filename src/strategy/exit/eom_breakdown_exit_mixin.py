@@ -160,7 +160,7 @@ class EOMBreakdownExitMixin(BaseExitMixin):
             atr_prev = self.get_indicator_prev('exit_atr', 1)
 
             # Get parameters
-            breakdown_threshold = self.get_param("breakdown_threshold") or self.get_param("x_breakdown_threshold", 0.002)
+            breakdown_threshold = self._resolve_param('breakdown_threshold', 'x_breakdown_threshold', 0.002)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):

@@ -73,8 +73,8 @@ def analyze_period_interval(period: str = "2y", interval: str = "1d"):
         ``d``  – days
         ``m``  – months           (alias for ``mo``)
     """
-    from datetime import datetime, timedelta
-    end_date = datetime.now()
+    from datetime import datetime, timedelta, timezone
+    end_date = datetime.now(timezone.utc)
 
     period = period.strip().lower()
 
@@ -101,16 +101,25 @@ def analyze_period_interval(period: str = "2y", interval: str = "1d"):
 _data_manager = None
 
 
+import threading as _threading
+_data_manager_lock = _threading.Lock()
+
+
 def _get_data_manager():
-    """Lazy singleton for DataManager. Expensive to construct; create once."""
+    """Lazy, thread-safe singleton for DataManager. Expensive to construct; create once."""
     global _data_manager
     if _data_manager is None:
-        from src.data.data_manager import DataManager
-        try:
-            from config.donotshare.donotshare import DATA_CACHE_DIR
-        except ImportError:
-            DATA_CACHE_DIR = "c:/data-cache"
-        _data_manager = DataManager(cache_dir=DATA_CACHE_DIR)
+        with _data_manager_lock:
+            if _data_manager is None:
+                from src.data.data_manager import DataManager
+                import tempfile
+                try:
+                    from config.donotshare.donotshare import DATA_CACHE_DIR
+                except ImportError:
+                    DATA_CACHE_DIR = str(
+                        ((__import__("pathlib").Path(tempfile.gettempdir())) / "e-trading-cache")
+                    )
+                _data_manager = DataManager(cache_dir=DATA_CACHE_DIR)
     return _data_manager
 
 

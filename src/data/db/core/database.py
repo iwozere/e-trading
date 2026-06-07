@@ -19,8 +19,9 @@ from config.donotshare.donotshare import SQL_ECHO, DB_URL as CONFIG_DB_URL
 # Environment variable DB_URL can override this
 DB_URL = os.getenv("DB_URL", CONFIG_DB_URL)
 
-# Flip this on to see SQL in logs (or set SQL_ECHO=1 in env)
-SQL_ECHO = bool(int(os.getenv("SQL_ECHO", "1" if SQL_ECHO else "0")))
+# SQL query logging — disabled by default; enable only in development via SQL_ECHO=1 env var.
+# Never enable in production: exposes bound values (PII) in logs.
+SQL_ECHO = bool(int(os.getenv("SQL_ECHO", "0")))
 
 
 def get_database_url() -> str:

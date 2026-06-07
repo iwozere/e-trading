@@ -95,8 +95,8 @@ def create_admin(telegram_user_id: str, email: str):
 def main():
     """Main function to handle command line arguments"""
     if len(sys.argv) != 3:
-        print("Usage: python src/util/create_admin.py <telegram_user_id> <email>")
-        print("Example: python src/util/create_admin.py 123456789 admin@example.com")
+        logger.error("Usage: python src/util/create_admin.py <telegram_user_id> <email>")
+        logger.error("Example: python src/util/create_admin.py 123456789 admin@example.com")
         sys.exit(1)
 
     telegram_user_id = sys.argv[1]
@@ -104,32 +104,23 @@ def main():
 
     # Validate inputs
     if not telegram_user_id.isdigit():
-        print("Error: telegram_user_id must be a number")
+        logger.error("telegram_user_id must be a number, got: %s", telegram_user_id)
         sys.exit(1)
 
     if "@" not in email or "." not in email:
-        print("Error: email must be a valid email address")
+        logger.error("email must be a valid email address, got: %s", email)
         sys.exit(1)
 
-    print("Setting up admin user:")
-    print(f"  Telegram User ID: {telegram_user_id}")
-    print(f"  Email: {email}")
-    print()
+    logger.info("Setting up admin user: telegram_user_id=%s email=%s", telegram_user_id, email)
 
     # Create admin user
     success = create_admin(telegram_user_id, email)
 
     if success:
-        print("✅ Admin user created successfully!")
-        print(f"User {telegram_user_id} can now use admin commands in the Telegram bot.")
-        print("Admin commands include:")
-        print("  /admin users - List all users")
-        print("  /admin approve USER_ID - Approve a user")
-        print("  /admin reject USER_ID - Reject a user")
-        print("  /admin pending - List pending approvals")
-        print("  /admin broadcast MESSAGE - Send broadcast message")
+        logger.info("Admin user created successfully for %s", telegram_user_id)
+        logger.info("User can now use admin commands: /admin users|approve|reject|pending")
     else:
-        print("❌ Failed to create admin user. Check the logs for details.")
+        logger.error("Failed to create admin user for %s. Check logs above for details.", telegram_user_id)
         sys.exit(1)
 
 if __name__ == "__main__":

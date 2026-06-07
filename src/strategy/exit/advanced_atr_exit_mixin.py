@@ -66,41 +66,41 @@ class AdvancedATRExitMixin(BaseExitMixin):
         super().__init__(params)
 
         # Core parameters (standardized names or legacy)
-        self.anchor = self.get_param("anchor") or self.get_param("x_anchor", "high")
-        self.update_on = self.get_param("update_on") or self.get_param("x_update_on", "bar_close")
-        self.k_init = self.get_param("k_init") or self.get_param("x_k_init", 2.5)
-        self.k_run = self.get_param("k_run") or self.get_param("x_k_run", 2.0)
-        self.k_phase2 = self.get_param("k_phase2") or self.get_param("x_k_phase2", 1.5)
+        self.anchor = self._resolve_param('anchor', 'x_anchor', "high")
+        self.update_on = self._resolve_param('update_on', 'x_update_on', "bar_close")
+        self.k_init = self._resolve_param('k_init', 'x_k_init', 2.5)
+        self.k_run = self._resolve_param('k_run', 'x_k_run', 2.0)
+        self.k_phase2 = self._resolve_param('k_phase2', 'x_k_phase2', 1.5)
 
         # ATR parameters
-        self.p_fast = self.get_param("p_fast") or self.get_param("x_p_fast", 7)
-        self.p_slow = self.get_param("p_slow") or self.get_param("x_p_slow", 21)
-        self.use_htf_atr = self.get_param("use_htf_atr") or self.get_param("x_use_htf_atr", True)
-        self.htf = self.get_param("htf") or self.get_param("x_htf", "4h")
-        self.alpha_fast = self.get_param("alpha_fast") or self.get_param("x_alpha_fast", 1.0)
-        self.alpha_slow = self.get_param("alpha_slow") or self.get_param("x_alpha_slow", 1.0)
-        self.alpha_htf = self.get_param("alpha_htf") or self.get_param("x_alpha_htf", 1.0)
-        self.atr_floor = self.get_param("atr_floor") or self.get_param("x_atr_floor", 0.0)
+        self.p_fast = self._resolve_param('p_fast', 'x_p_fast', 7)
+        self.p_slow = self._resolve_param('p_slow', 'x_p_slow', 21)
+        self.use_htf_atr = self._resolve_param('use_htf_atr', 'x_use_htf_atr', True)
+        self.htf = self._resolve_param('htf', 'x_htf', "4h")
+        self.alpha_fast = self._resolve_param('alpha_fast', 'x_alpha_fast', 1.0)
+        self.alpha_slow = self._resolve_param('alpha_slow', 'x_alpha_slow', 1.0)
+        self.alpha_htf = self._resolve_param('alpha_htf', 'x_alpha_htf', 1.0)
+        self.atr_floor = self._resolve_param('atr_floor', 'x_atr_floor', 0.0)
 
         # Break-even and phases
-        self.arm_at_R = self.get_param("arm_at_R") or self.get_param("x_arm_at_R", 1.0)
-        self.breakeven_offset_atr = self.get_param("breakeven_offset_atr") or self.get_param("x_breakeven_offset_atr", 0.0)
-        self.phase2_at_R = self.get_param("phase2_at_R") or self.get_param("x_phase2_at_R", 2.0)
+        self.arm_at_R = self._resolve_param('arm_at_R', 'x_arm_at_R', 1.0)
+        self.breakeven_offset_atr = self._resolve_param('breakeven_offset_atr', 'x_breakeven_offset_atr', 0.0)
+        self.phase2_at_R = self._resolve_param('phase2_at_R', 'x_phase2_at_R', 2.0)
 
         # Structural ratchet
-        self.use_swing_ratchet = self.get_param("use_swing_ratchet") or self.get_param("x_use_swing_ratchet", True)
-        self.swing_lookback = self.get_param("swing_lookback") or self.get_param("x_swing_lookback", 10)
-        self.struct_buffer_atr = self.get_param("struct_buffer_atr") or self.get_param("x_struct_buffer_atr", 0.25)
+        self.use_swing_ratchet = self._resolve_param('use_swing_ratchet', 'x_use_swing_ratchet', True)
+        self.swing_lookback = self._resolve_param('swing_lookback', 'x_swing_lookback', 10)
+        self.struct_buffer_atr = self._resolve_param('struct_buffer_atr', 'x_struct_buffer_atr', 0.25)
 
         # Time-based tightening
-        self.tighten_if_stagnant_bars = self.get_param("tighten_if_stagnant_bars") or self.get_param("x_tighten_if_stagnant_bars", 20)
-        self.tighten_k_factor = self.get_param("tighten_k_factor") or self.get_param("x_tighten_k_factor", 0.8)
-        self.min_bars_between_tighten = self.get_param("min_bars_between_tighten") or self.get_param("x_min_bars_between_tighten", 5)
+        self.tighten_if_stagnant_bars = self._resolve_param('tighten_if_stagnant_bars', 'x_tighten_if_stagnant_bars', 20)
+        self.tighten_k_factor = self._resolve_param('tighten_k_factor', 'x_tighten_k_factor', 0.8)
+        self.min_bars_between_tighten = self._resolve_param('min_bars_between_tighten', 'x_min_bars_between_tighten', 5)
 
         # Noise and step filters
-        self.min_stop_step = self.get_param("min_stop_step") or self.get_param("x_min_stop_step", 0.0)
-        self.noise_filter_atr = self.get_param("noise_filter_atr") or self.get_param("x_noise_filter_atr", 0.0)
-        self.max_trail_freq = self.get_param("max_trail_freq") or self.get_param("x_max_trail_freq", 1)
+        self.min_stop_step = self._resolve_param('min_stop_step', 'x_min_stop_step', 0.0)
+        self.noise_filter_atr = self._resolve_param('noise_filter_atr', 'x_noise_filter_atr', 0.0)
+        self.max_trail_freq = self._resolve_param('max_trail_freq', 'x_max_trail_freq', 1)
 
         # State variables
         self.state = ExitState.INIT

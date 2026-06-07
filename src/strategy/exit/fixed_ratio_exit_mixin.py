@@ -59,8 +59,8 @@ class FixedRatioExitMixin(BaseExitMixin):
         profit_ratio = (current_price - entry_price) / entry_price
 
         # Standardized parameter retrieval
-        tp_ratio = self.get_param("take_profit") or self.get_param("x_take_profit", 0.1)
-        sl_ratio = self.get_param("stop_loss") or self.get_param("x_stop_loss", 0.05)
+        tp_ratio = self._resolve_param('take_profit', 'x_take_profit', 0.1)
+        sl_ratio = self._resolve_param('stop_loss', 'x_stop_loss', 0.05)
 
         return_value = False
         if profit_ratio >= tp_ratio:

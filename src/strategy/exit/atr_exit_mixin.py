@@ -81,7 +81,7 @@ class ATRExitMixin(BaseExitMixin):
 
     def get_minimum_lookback(self) -> int:
         """Returns the minimum number of bars required."""
-        return self.get_param("atr_period") or self.get_param("x_atr_period", 14)
+        return self._resolve_param('atr_period', 'x_atr_period', 14)
 
     def are_indicators_ready(self) -> bool:
         """Check if required indicators exist in the strategy registry."""
@@ -120,7 +120,7 @@ class ATRExitMixin(BaseExitMixin):
             else:
                 atr_val = self.get_indicator('exit_atr')
 
-            sl_multiplier = self.get_param("sl_multiplier") or self.get_param("x_sl_multiplier", 2.0)
+            sl_multiplier = self._resolve_param('sl_multiplier', 'x_sl_multiplier', 2.0)
 
             if atr_val is None or atr_val <= 0:
                 return False

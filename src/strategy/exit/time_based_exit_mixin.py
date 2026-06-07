@@ -57,9 +57,9 @@ class TimeBasedExitMixin(BaseExitMixin):
 
         try:
             # Standardized parameter retrieval
-            use_time = self.get_param("use_time") or self.get_param("x_use_time", False)
-            max_minutes = self.get_param("max_minutes") or self.get_param("x_max_minutes", 60)
-            max_bars = self.get_param("max_bars") or self.get_param("x_max_bars", 20)
+            use_time = self._resolve_param('use_time', 'x_use_time', False)
+            max_minutes = self._resolve_param('max_minutes', 'x_max_minutes', 60)
+            max_bars = self._resolve_param('max_bars', 'x_max_bars', 20)
 
             if use_time:
                 # Use calendar time

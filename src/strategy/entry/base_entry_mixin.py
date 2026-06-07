@@ -6,7 +6,7 @@ This module provides the base class for all entry mixins.
 
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, get_type_hints, List
+from typing import Any, Dict, Optional, List
 
 from src.notification.logger import setup_logger
 
@@ -107,23 +107,22 @@ class BaseEntryMixin(ABC):
         self._validate_method_signatures()
 
     def _validate_method_signatures(self):
-        """Validate the signatures and return types of implemented methods"""
-        # Validate get_default_params
+        """
+        Validate method signatures (structural checks only).
+
+        Return-type annotation checks were removed because they rejected valid
+        annotations like ``-> dict`` or ``-> List[str]`` that are semantically
+        equivalent to the expected types.  Type-level contract enforcement now
+        lives in the test suite (see tests/test_mixin_contracts.py).
+        """
+        # Validate get_default_params is a class method
         if not inspect.ismethod(self.__class__.get_default_params):
             raise TypeError(
                 f"{self.__class__.__name__}.get_default_params must be a class method. "
                 "Use @classmethod decorator and 'cls' parameter."
             )
 
-        # Validate return type of get_default_params
-        return_type = get_type_hints(self.__class__.get_default_params).get("return")
-        if return_type != Dict[str, Any]:
-            raise TypeError(
-                f"{self.__class__.__name__}.get_default_params must return Dict[str, Any]. "
-                f"Current return type: {return_type}"
-            )
-
-        # Validate get_required_params
+        # Validate get_required_params is an instance method
         required_params_sig = inspect.signature(self.__class__.get_required_params)
         if "self" not in required_params_sig.parameters:
             raise TypeError(
@@ -131,15 +130,7 @@ class BaseEntryMixin(ABC):
                 "Example: def get_required_params(self) -> list:"
             )
 
-        # Validate return type of get_required_params
-        return_type = get_type_hints(self.__class__.get_required_params).get("return")
-        if return_type != list:
-            raise TypeError(
-                f"{self.__class__.__name__}.get_required_params must return list. "
-                f"Current return type: {return_type}"
-            )
-
-        # Validate _init_indicators
+        # Validate _init_indicators is an instance method
         init_indicators_sig = inspect.signature(self.__class__._init_indicators)
         if "self" not in init_indicators_sig.parameters:
             raise TypeError(
@@ -147,28 +138,12 @@ class BaseEntryMixin(ABC):
                 "Example: def _init_indicators(self):"
             )
 
-        # Validate return type of _init_indicators
-        return_type = get_type_hints(self.__class__._init_indicators).get("return")
-        if return_type is not None and return_type != type(None):
-            raise TypeError(
-                f"{self.__class__.__name__}._init_indicators should not return anything. "
-                f"Current return type: {return_type}"
-            )
-
-        # Validate should_enter
+        # Validate should_enter is an instance method
         should_enter_sig = inspect.signature(self.__class__.should_enter)
         if "self" not in should_enter_sig.parameters:
             raise TypeError(
                 f"{self.__class__.__name__}.should_enter must have 'self' parameter. "
                 "Example: def should_enter(self) -> bool:"
-            )
-
-        # Validate return type of should_enter
-        return_type = get_type_hints(self.__class__.should_enter).get("return")
-        if return_type != bool:
-            raise TypeError(
-                f"{self.__class__.__name__}.should_enter must return bool. "
-                f"Current return type: {return_type}"
             )
 
     def _validate_params(self):
@@ -283,6 +258,19 @@ class BaseEntryMixin(ABC):
     def get_param(self, key: str, default=None):
         """Safe parameter retrieval"""
         return self.params.get(key, default)
+
+    def _resolve_param(self, key: str, e_key: str, default=None):
+        """
+        Resolve a param with e_-prefixed fallback, correctly handling falsy values.
+
+        Unlike ``get_param(key) or get_param(e_key, default)``, this method treats
+        ``False``, ``0``, and ``0.0`` as valid configured values rather than
+        falling through to the e_-prefixed fallback or the hard-coded default.
+        """
+        val = self.get_param(key)
+        if val is not None:
+            return val
+        return self.get_param(e_key, default)
 
     def get_indicator(self, alias: str) -> Any:
         """

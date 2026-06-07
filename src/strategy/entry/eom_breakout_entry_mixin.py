@@ -125,7 +125,7 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
         required = [
             'entry_resistance', 'entry_eom', 'entry_volume_sma', 'entry_rsi'
         ]
-        if self.get_param("use_atr_filter") or self.get_param("e_use_atr_filter", True):
+        if self._resolve_param("use_atr_filter", "e_use_atr_filter", True):
             required.extend(['entry_atr', 'entry_atr_sma'])
 
         return all(alias in getattr(self.strategy, 'indicators', {}) for alias in required)
@@ -148,9 +148,9 @@ class EOMBreakoutEntryMixin(BaseEntryMixin):
             rsi = self.get_indicator('entry_rsi')
 
             # Get parameters
-            breakout_threshold = self.get_param("breakout_threshold") or self.get_param("e_breakout_threshold", 0.002)
-            use_atr_filter = self.get_param("use_atr_filter") or self.get_param("e_use_atr_filter", True)
-            rsi_overbought = self.get_param("rsi_overbought") or self.get_param("e_rsi_overbought", 70)
+            breakout_threshold = self._resolve_param("breakout_threshold", "e_breakout_threshold", 0.002)
+            use_atr_filter = self._resolve_param("use_atr_filter", "e_use_atr_filter", True)
+            rsi_overbought = self._resolve_param("rsi_overbought", "e_rsi_overbought", 70)
 
             # Check if resistance is valid (not NaN)
             if math.isnan(resistance):

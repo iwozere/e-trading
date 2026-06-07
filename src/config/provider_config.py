@@ -4,16 +4,25 @@ Provider Configuration Service
 
 Central, module-level store for all external data-provider API keys.
 
-Keys are loaded **once** at import time using a two-step priority:
+Keys are loaded **once at import time** using a two-step priority:
   1. Environment variable (upper-cased key name)
   2. ``config.donotshare.donotshare`` module attribute
+
+**Import-time contract:** ``_load()`` executes as soon as this module is first
+imported.  Any env var set *after* import (e.g. by a late ``dotenv`` load or a
+test fixture) will not be picked up for the pre-seeded keys.  Call
+``reload()`` explicitly after changing env vars in tests or at runtime.
+
+Unknown keys (not in ``_KNOWN_KEYS``) are resolved live on first access and
+then cached.  A ``None`` result is also cached — call ``reload()`` if the key
+is added later.
 
 All downloader constructors should call ``get_api_key(key_name)`` through
 ``BaseDataDownloader._get_config_value``, which delegates here.
 
 Usage::
 
-    from src.config.provider_config import get_api_key
+    from src.config.provider_config import get_api_key, reload
     key = get_api_key("FMP_API_KEY")
 """
 
@@ -75,6 +84,16 @@ def _load() -> None:
 
 
 _load()
+
+
+def reload() -> None:
+    """
+    Re-read all known keys from env and donotshare and reset the live-lookup
+    cache.  Call this in tests after patching env vars, or after a runtime
+    key rotation when env is updated externally.
+    """
+    _cache.clear()
+    _load()
 
 
 def get_api_key(key_name: str) -> Optional[str]:

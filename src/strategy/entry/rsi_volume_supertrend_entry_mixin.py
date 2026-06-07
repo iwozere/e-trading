@@ -134,8 +134,8 @@ class RSIVolumeSupertrendEntryMixin(BaseEntryMixin):
             current_volume = self.strategy.data.volume[0]
 
             # Standardized parameter retrieval
-            rsi_oversold = self.get_param("rsi_oversold") or self.get_param("e_rsi_oversold", 30)
-            min_volume_ratio = self.get_param("min_volume_ratio") or self.get_param("e_min_volume_ratio", 1.5)
+            rsi_oversold = self._resolve_param("rsi_oversold", "e_rsi_oversold", 30)
+            min_volume_ratio = self._resolve_param("min_volume_ratio", "e_min_volume_ratio", 1.5)
 
             # Unified Indicator Access
             current_rsi = self.get_indicator('entry_rsi')

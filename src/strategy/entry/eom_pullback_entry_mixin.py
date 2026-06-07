@@ -132,9 +132,9 @@ class EOMPullbackEntryMixin(BaseEntryMixin):
             atr_sma = self.get_indicator('entry_atr_sma')
 
             # Get parameters
-            support_threshold = self.get_param("support_threshold") or self.get_param("e_support_threshold", 0.005)
-            rsi_oversold = self.get_param("rsi_oversold") or self.get_param("e_rsi_oversold", 40)
-            atr_floor_multiplier = self.get_param("atr_floor_multiplier") or self.get_param("e_atr_floor_multiplier", 0.9)
+            support_threshold = self._resolve_param("support_threshold", "e_support_threshold", 0.005)
+            rsi_oversold = self._resolve_param("rsi_oversold", "e_rsi_oversold", 40)
+            atr_floor_multiplier = self._resolve_param("atr_floor_multiplier", "e_atr_floor_multiplier", 0.9)
 
             # Check if support is valid (not NaN)
             if math.isnan(support):

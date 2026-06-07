@@ -56,8 +56,8 @@ class CalculationError(IndicatorServiceError):
     pass
 
 
-class TimeoutError(IndicatorServiceError):
-    """Error due to operation timeout."""
+class IndicatorTimeoutError(IndicatorServiceError):
+    """Error due to operation timeout. Named to avoid shadowing the built-in TimeoutError."""
     pass
 
 

@@ -42,6 +42,13 @@ security = HTTPBearer()
 # ---------------------------------------------------------------------------
 # Token deny-list (in-memory, survives the 30-min access-token window)
 # Maps JTI → expiry epoch. Stale entries are purged on each revocation call.
+#
+# ⚠  Multi-worker limitation: this dict is process-local.  With multiple
+# uvicorn workers (--workers N > 1) or after a process restart, a token
+# revoked in one worker is still accepted by others.
+# For multi-worker deployments, replace with a shared store (Redis / DB query):
+#   _deny_list[jti] = expires_at  → Redis SETEX jti ttl "1"
+#   is_token_revoked(jti)         → Redis EXISTS jti
 # ---------------------------------------------------------------------------
 _deny_list: Dict[str, float] = {}
 _deny_lock = Lock()
@@ -158,7 +165,7 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
     Args:
         db: Database session
         username: Email or telegram_user_id
-        password: Plain text password (temporary: empty or "temp")
+        password: Plain text password (bcrypt-verified)
 
     Returns:
         User: Authenticated user or None
