@@ -72,17 +72,24 @@ def download_trf(target_date: Optional[datetime] = None, force_download: bool = 
     _logger.info(f"Downloading TRF data for {date_str}")
     downloader = FinraDataDownloader(
         date=date_str,
-        output_dir=str(trf_dir),  # Use the TRF date directory
+        output_dir=trf_dir,
         output_filename="trf.csv",
         fetch_yfinance_data=False,
     )
 
     try:
         downloader.run()
-        _logger.info(f"Successfully downloaded TRF data to {output_file}")
+        if output_file.exists():
+            _logger.info("Successfully downloaded TRF data to %s", output_file)
+        else:
+            # FINRA returned no data (market closed / holiday) — write an empty sentinel
+            # so the cache check on subsequent calls doesn't trigger re-downloads.
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame({"ticker": [], "short_volume": [], "total_volume": []}).to_csv(output_file, index=False)
+            _logger.info("No TRF data for %s (market closed?) — wrote empty sentinel: %s", date_str, output_file)
         return output_file
     except Exception as e:
-        _logger.error(f"Failed to download TRF data: {str(e)}")
+        _logger.error("Failed to download TRF data: %s", str(e))
         raise
 
 def get_trf_correction_factor(ticker: str, date: datetime) -> float:

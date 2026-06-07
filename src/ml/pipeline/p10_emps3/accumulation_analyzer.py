@@ -22,7 +22,7 @@ from src.notification.logger import setup_logger
 from src.data.data_manager import DataManager
 from src.ml.pipeline.p10_emps3.config import EMPS3FilterConfig
 from src.ml.pipeline.shared.ohlcv_timestamp import coerce_ohlcv_timestamp_column
-from src.ml.pipeline.shared.trf_downloader import download_trf, get_trf_correction_factor
+from src.ml.pipeline.shared.trf_downloader import download_trf
 
 _logger = setup_logger(__name__)
 
@@ -87,6 +87,9 @@ class AccumulationAnalyzer:
             )
         remaining = [t for t in tickers if t not in processed_tickers]
 
+        # Load TRF data once for all tickers — avoids per-ticker re-reads and re-downloads.
+        trf_factors = self._load_trf_factors(trf_date)
+
         total = len(tickers)
         chunks = [remaining[i:i + self.chunk_size] for i in range(0, len(remaining), self.chunk_size)]
 
@@ -135,7 +138,7 @@ class AccumulationAnalyzer:
                             diagnostic_data.append({'ticker': ticker, 'status': 'FAILED', 'reason': 'insufficient_bars'})
                             continue
 
-                        trf_factor = get_trf_correction_factor(ticker, trf_date)
+                        trf_factor = trf_factors.get(ticker.upper(), 1.0)
                         if trf_factor != 1.0:
                             df_intra = self._apply_trf_volume_correction(df_intra, trf_factor)
                             df_daily = self._apply_trf_volume_correction(df_daily, trf_factor)
@@ -365,15 +368,31 @@ class AccumulationAnalyzer:
         """Normalize OHLCV DataFrame to include a canonical timestamp column."""
         return coerce_ohlcv_timestamp_column(df)
 
-    def _load_trf_volume_corrections(self) -> Dict[str, float]:
+    def _load_trf_factors(self, trf_date: datetime) -> Dict[str, float]:
+        """Load TRF correction factors for all tickers into memory once."""
         try:
-            target_date = datetime.now() - timedelta(days=self.config.lookback_days)
-            correction_factor = get_trf_correction_factor("", target_date)
-            if correction_factor != 1.0:
-                return {"*": correction_factor}
-            return {}
+            trf_path = download_trf(target_date=trf_date)
+            if not trf_path.exists():
+                return {}
+            df = pd.read_csv(trf_path)
+            if df.empty or "ticker" not in df.columns:
+                return {}
+            factors: Dict[str, float] = {}
+            for row in df.itertuples(index=False):
+                ticker = str(getattr(row, "ticker", "")).upper()
+                total = getattr(row, "total_volume", 0)
+                short = getattr(row, "short_volume", 0)
+                if total and total > 0 and short < total:
+                    factors[ticker] = total / (total - short)
+            _logger.info("Loaded TRF correction factors for %d tickers", len(factors))
+            return factors
         except Exception:
+            _logger.exception("Failed to load TRF data — proceeding without volume corrections")
             return {}
+
+    def _load_trf_volume_corrections(self) -> Dict[str, float]:
+        trf_date = datetime.now() - timedelta(days=self.config.lookback_days)
+        return self._load_trf_factors(trf_date)
 
     def _apply_trf_volume_correction(self, df: pd.DataFrame, correction_factor: float) -> pd.DataFrame:
         df = coerce_ohlcv_timestamp_column(df.copy())
