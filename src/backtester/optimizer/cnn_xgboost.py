@@ -193,6 +193,10 @@ class CNNXGBoostOptimizer(BaseOptimizer):
                 cnn_data['model_path'] = str(cnn_model_path)
 
                 # Load scaler
+                # SECURITY: pickle.load is an RCE sink if model directories are shared,
+                # writable by others, or fetched from an untrusted source.  These files
+                # must be produced locally by this pipeline and stored in a path that is
+                # not network-accessible.  Never load pickles from external/shared dirs.
                 scaler_path = cnn_model_path.parent / f"{cnn_model_path.stem}_scaler.pkl"
                 if scaler_path.exists():
                     with open(scaler_path, 'rb') as f:
@@ -206,7 +210,7 @@ class CNNXGBoostOptimizer(BaseOptimizer):
                 for target, model_path in combination['xgb_models'].items():
                     model_path = Path(model_path)
 
-                    # Load model
+                    # SECURITY: same trust-boundary constraint as the CNN scaler above.
                     with open(model_path, 'rb') as f:
                         xgb_data[f'{target}_model'] = pickle.load(f)
 

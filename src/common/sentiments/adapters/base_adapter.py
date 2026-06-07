@@ -111,12 +111,15 @@ class BaseSentimentAdapter(ABC):
         self._health_info.failure_count += 1
         self._health_info.error_message = str(error)
 
-        # Update status based on failure count
+        # Update status based on failure count.
+        # CIRCUIT_OPEN means the circuit breaker has tripped: callers should stop
+        # forwarding requests until a manual reset or timed half-open recovery is
+        # implemented (see _update_health_success which resets to HEALTHY).
         if self._health_info.failure_count >= 5:
-            self._health_info.status = AdapterStatus.FAILED
+            self._health_info.status = AdapterStatus.CIRCUIT_OPEN
         elif self._health_info.failure_count >= 3:
             self._health_info.status = AdapterStatus.DEGRADED
 
     def is_healthy(self) -> bool:
-        """Check if adapter is in a healthy state."""
-        return self._health_info.status in [AdapterStatus.HEALTHY, AdapterStatus.DEGRADED]
+        """Check if adapter is in a healthy state (not CIRCUIT_OPEN or FAILED)."""
+        return self._health_info.status in (AdapterStatus.HEALTHY, AdapterStatus.DEGRADED)

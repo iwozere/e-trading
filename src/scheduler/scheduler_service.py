@@ -94,7 +94,7 @@ class SchedulerService:
         # APScheduler components
         self.scheduler: Optional[AsyncIOScheduler] = None
         self.jobstore: Optional[SQLAlchemyJobStore] = None
-        self.notification_client = None  # Placeholder for legacy/future notification client
+        # notification_client intentionally removed — notifications go via notification_db_service
 
         # DB Listener
         self._db_listener_task: Optional[asyncio.Task] = None
@@ -285,7 +285,9 @@ class SchedulerService:
 
         try:
             # Step 1 — fetch desired state from DB *before* touching APScheduler
-            schedules = self.jobs_service.list_schedules(enabled=True, limit=1000)
+            schedules = await asyncio.to_thread(
+                lambda: self.jobs_service.list_schedules(enabled=True, limit=1000)
+            )
             desired_job_ids = {f"schedule_{s.id}" for s in schedules}
 
             # Step 2 — add/replace each schedule (jobs keep firing during this phase)
@@ -329,33 +331,18 @@ class SchedulerService:
             "scheduler_state": None,
             "job_count": 0,
             "datastore_url": self.database_url,
-            "notification_client": self.notification_client.get_stats() if self.notification_client else None
+            "notification_client": None  # removed; use notification_db_service directly
         }
 
         if self.scheduler:
             status["scheduler_state"] = str(self.scheduler.state)
-            # Note: APScheduler 4.x doesn't have a direct way to get job count
-            # This would need to be implemented by querying the datastore directly
+            # APScheduler 3.x: scheduler.get_jobs() returns the live job list.
 
         return status
 
     async def check_notification_health(self) -> Dict[str, Any]:
-        """
-        Check notification service health.
-
-        Returns:
-            Dictionary with notification service health status
-        """
-        try:
-            if not self.notification_client:
-                return {"status": "unavailable", "error": "No notification client configured"}
-
-            health_status = await self.notification_client.get_health_status()
-            return health_status
-
-        except Exception as e:
-            _logger.exception("Error checking notification service health:")
-            return {"status": "unhealthy", "error": str(e)}
+        """Check notification DB service health (stub — no HTTP client configured)."""
+        return {"status": "unavailable", "error": "Notifications are delivered via DB queue; no HTTP client"}
 
     async def _initialize_scheduler(self) -> None:
         """
@@ -444,7 +431,9 @@ class SchedulerService:
         """
         try:
             # Get all enabled schedules
-            schedules = self.jobs_service.list_schedules(enabled=True, limit=1000)
+            schedules = await asyncio.to_thread(
+                lambda: self.jobs_service.list_schedules(enabled=True, limit=1000)
+            )
 
             registered_count = 0
 
@@ -484,7 +473,6 @@ class SchedulerService:
                 raise ValueError(f"Invalid cron expression: {schedule.cron}")
 
             # Create cron trigger
-            # APScheduler 4.x uses different syntax for cron triggers
             cron_fields = schedule.cron.split()
             if len(cron_fields) == 5:
                 # 5-field cron: minute hour day month weekday
@@ -551,7 +539,9 @@ class SchedulerService:
 
         try:
             # Get schedule details
-            schedule = self.jobs_service.get_schedule(schedule_id)
+            schedule = await asyncio.to_thread(
+                lambda: self.jobs_service.get_schedule(schedule_id)
+            )
             if not schedule:
                 _logger.error("Schedule %d not found for execution", schedule_id)
                 return
@@ -601,7 +591,9 @@ class SchedulerService:
             await self._complete_run_record(run_record, RunStatus.COMPLETED, result)
 
             # Update schedule's next run time
-            self.jobs_service.update_schedule_next_run(schedule_id)
+            await asyncio.to_thread(
+                lambda: self.jobs_service.update_schedule_next_run(schedule_id)
+            )
 
             _logger.info("Successfully completed job for schedule %s (ID: %d)",
                         schedule.name, schedule.id)
@@ -739,6 +731,14 @@ class SchedulerService:
         # Without validation an attacker or a compromised DB row could execute
         # arbitrary code with the scheduler process's privileges.
 
+        # Allowlisted directories — only scripts in these paths may be executed.
+        # Add entries here (relative to PROJECT_ROOT) when onboarding new pipeline dirs.
+        _ALLOWED_SCRIPT_DIRS = [
+            "src/data/",
+            "src/ml/pipeline/",
+            "src/scheduler/scripts/",
+        ]
+
         # 1. Path traversal protection — script must resolve inside PROJECT_ROOT.
         resolved_root = Path(PROJECT_ROOT).resolve()
         script_full_path = (Path(PROJECT_ROOT) / script_path).resolve()
@@ -748,6 +748,14 @@ class SchedulerService:
             raise ValueError(
                 f"script_path '{script_path}' resolves outside the project root "
                 f"({resolved_root}). Path traversal is not permitted."
+            )
+
+        # 1b. Whitelist check — must be inside one of the allowed subdirectories.
+        script_rel = str(script_full_path.relative_to(resolved_root)).replace("\\", "/")
+        if not any(script_rel.startswith(d) for d in _ALLOWED_SCRIPT_DIRS):
+            raise ValueError(
+                f"script_path '{script_path}' is not in an allowed directory. "
+                f"Allowed prefixes: {_ALLOWED_SCRIPT_DIRS}"
             )
 
         # 2. script_args validation — must be a list of plain strings with no
@@ -974,7 +982,9 @@ class SchedulerService:
                 }
             }
 
-            message = self.notification_db_service.create_message(message_data)
+            message = await asyncio.to_thread(
+                lambda: self.notification_db_service.create_message(message_data)
+            )
 
             _logger.info("Created notification message %d for schedule %d to channels: %s",
                        message.id, schedule.id, matching_channels)
@@ -1010,12 +1020,14 @@ class SchedulerService:
                 # P2-SCHED-2: route through _schedule_debounced_reload() so a burst
                 # of NOTIFY events collapses into a single reload (cancel-and-reschedule).
                 loop = asyncio.get_running_loop()
-                await conn.add_listener(
-                    'scheduler_updates',
-                    lambda *args: loop.call_soon_threadsafe(
+
+                def _on_scheduler_notify(*_args):
+                    """Named NOTIFY callback: schedule a debounced reload on the event loop."""
+                    loop.call_soon_threadsafe(
                         loop.create_task, self._schedule_debounced_reload()
                     )
-                )
+
+                await conn.add_listener('scheduler_updates', _on_scheduler_notify)
 
                 _logger.info("Listening for 'scheduler_updates' notifications")
                 retry_count = 0
@@ -1127,7 +1139,9 @@ class SchedulerService:
         )
 
         # Create run record
-        run_record = self.jobs_service.create_run(schedule.user_id, run_data)
+        run_record = await asyncio.to_thread(
+            lambda: self.jobs_service.create_run(schedule.user_id, run_data)
+        )
 
         # Update status to RUNNING
         from src.data.db.models.model_jobs import ScheduleRunUpdate
@@ -1136,7 +1150,9 @@ class SchedulerService:
             started_at=datetime.now(UTC)
         )
 
-        updated_run = self.jobs_service.update_run(run_record.id, update_data)
+        updated_run = await asyncio.to_thread(
+            lambda: self.jobs_service.update_run(run_record.id, update_data)
+        )
         return updated_run or run_record
 
     async def _complete_run_record(self, run_record: ScheduleRun, status: RunStatus,
@@ -1160,7 +1176,7 @@ class SchedulerService:
             error=error
         )
 
-        self.jobs_service.update_run(run_record.id, update_data)
+        await asyncio.to_thread(lambda: self.jobs_service.update_run(run_record.id, update_data))
 
     async def _update_schedule_state(self, schedule_id: int, state_updates: Dict[str, Any]) -> None:
         """
@@ -1174,7 +1190,9 @@ class SchedulerService:
             _logger.debug("Updating schedule %d state: %s", schedule_id, state_updates)
             
             # Use jobs_service to update the state_json field
-            self.jobs_service.update_schedule_state(schedule_id, state_updates)
+            await asyncio.to_thread(
+                lambda: self.jobs_service.update_schedule_state(schedule_id, state_updates)
+            )
 
         except Exception:
             _logger.exception("Error updating schedule state for %d:", schedule_id)
@@ -1378,7 +1396,9 @@ class SchedulerService:
                     "priority": db_priority,
                     "source": "scheduler_service",
                 }
-                message_record = self.notification_db_service.create_message(message_data)
+                message_record = await asyncio.to_thread(
+                    lambda: self.notification_db_service.create_message(message_data)
+                )
                 _logger.info("Created alert notification message %d for %s to channels: %s",
                              message_record.id, ticker, channels)
                 return True
@@ -1395,7 +1415,6 @@ class SchedulerService:
     async def _clear_all_jobs(self) -> None:
         """Remove all jobs from APScheduler."""
         if self.scheduler:
-            # APScheduler 3.x way to remove all jobs
             jobs = self.scheduler.get_jobs()
             for job in jobs:
                 self.scheduler.remove_job(job.id)

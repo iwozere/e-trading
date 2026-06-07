@@ -4,6 +4,18 @@ XGBoost Training Stage for CNN + XGBoost Pipeline.
 This module trains the final XGBoost models using the optimized hyperparameters
 for each target variable. It implements a multi-target classification approach
 with time series cross-validation for robust model training.
+
+SECURITY — pickle trust boundary
+---------------------------------
+This module reads and writes model artifacts with ``pickle`` (``*.pkl`` files).
+``pickle.load`` executes arbitrary code embedded in the file and is therefore an
+RCE sink if the artifact is produced by an untrusted source.  The contract is:
+
+* Model directories must be **local, self-produced** outputs of this pipeline.
+* Model directories must **not** be shared with untrusted users or writable by
+  other services.
+* Never load a ``.pkl`` file downloaded from the internet or received from a
+  third party without first converting it through a trusted re-serialization step.
 """
 
 import sys

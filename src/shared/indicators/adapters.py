@@ -4,6 +4,23 @@ Shared TA-Lib Adapters
 
 Thin wrappers around TA-Lib functions to ensure consistent behavior
 between research (vectorbt) and production (backtrader) environments.
+
+ARCHITECTURE NOTE — two TA-Lib adapter layers (SHARED-1)
+---------------------------------------------------------
+There are currently **two** TA-Lib adapter implementations in the repo:
+
+* ``src/shared/indicators/adapters.py`` (this file) — research-focused wrappers
+  that accept Series, DataFrame, and numpy arrays; used by the VectorBT pipeline.
+
+* ``src/indicators/adapters/ta_lib_adapter.py`` — production-grade adapter with
+  strict registry-based input validation; used by the live-trading indicator
+  service and the Backtrader backtesting engine.
+
+The long-term goal is to **consolidate to a single adapter** so that research
+and production compute indicators identically and divergence is structurally
+impossible.  Until that refactor is done, keep the two sets of wrappers
+functionally consistent — any parameter change in one must be mirrored in the
+other to avoid silent divergence in strategy signals.
 """
 
 import talib

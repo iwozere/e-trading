@@ -126,11 +126,12 @@ class HMMLSTMOptimizer(BaseOptimizer):
         Returns:
             Tuple of (hmm_model_data, lstm_model_data)
         """
-        # Load HMM model
+        # SECURITY: pickle.load is an RCE sink if model files are shared or
+        # writable by others.  These artifacts must be produced locally by this
+        # pipeline and stored in a path inaccessible to other users/services.
         with open(hmm_path, 'rb') as f:
             hmm_data = pickle.load(f)
 
-        # Load LSTM model
         with open(lstm_path, 'rb') as f:
             lstm_data = pickle.load(f)
 

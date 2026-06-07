@@ -365,12 +365,14 @@ def main():
                     continue
 
                 if len(test_files) > 1:
-                    _logger.warning(
-                        "Multiple test files found for %s/%s: %s. Using first file only.",
-                        symbol, timeframe, test_files
+                    # Ambiguous match corrupts validation results — fail loudly so
+                    # the caller can remove duplicates or add explicit metadata.
+                    raise ValueError(
+                        f"Ambiguous test data: {len(test_files)} files match "
+                        f"{symbol}/{timeframe} in window '{window['name']}': {test_files}. "
+                        "Remove duplicate files or use explicit metadata to disambiguate."
                     )
 
-                # Use the first matching file
                 test_data_file = test_files[0]
                 _logger.info("  Using test data: %s", test_data_file)
 

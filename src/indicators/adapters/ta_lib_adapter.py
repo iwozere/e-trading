@@ -2,6 +2,13 @@
 # src/indicators/adapters/ta_lib_adapter.py
 # TA-Lib adapter with canonical → TA-Lib param translation
 # + strict required-input validation (raise KeyError if missing)
+#
+# ARCHITECTURE NOTE — two TA-Lib adapter layers (SHARED-1 / IND-2)
+# There is a second, research-oriented adapter at src/shared/indicators/adapters.py
+# used by the VectorBT pipeline.  Until they are consolidated into one, keep
+# parameter semantics in sync to prevent silent divergence between research
+# and production signal calculation.  See src/shared/indicators/adapters.py
+# for the consolidation plan.
 # ---------------------------------------------------------------------------
 from __future__ import annotations
 

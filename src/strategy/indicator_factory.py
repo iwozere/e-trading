@@ -4,6 +4,21 @@ IndicatorFactory - Creates TALib indicators from configuration
 This module provides a factory for creating Backtrader TALib indicators
 from JSON configuration. It handles indicator creation, parameter validation,
 and field mapping.
+
+ARCHITECTURE NOTE — duplicate module name (IND-2)
+--------------------------------------------------
+There is a second module with the same name at ``src/indicators/indicator_factory.py``.
+The two serve different purposes:
+
+* This module (``src/strategy/``) — creates Backtrader ``bt.*`` indicator objects
+  directly from a JSON config dict; consumed by strategy mixins at runtime.
+
+* ``src/indicators/indicator_factory.py`` — creates indicator objects for pandas
+  DataFrames; consumed by the indicator service, screeners, and analytics.
+
+Until they are consolidated (or clearly renamed), avoid importing the wrong one
+by using the full absolute path (``from src.strategy.indicator_factory import ...``
+vs ``from src.indicators.indicator_factory import ...``).
 """
 
 import backtrader as bt

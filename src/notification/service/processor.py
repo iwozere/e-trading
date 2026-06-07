@@ -4,6 +4,14 @@ Notification Service Message Processor
 Asynchronous message processing engine with priority handling, worker pools,
 and graceful shutdown. Processes messages from the queue and delivers them
 through appropriate channels.
+
+Dependency injection
+--------------------
+``MessageProcessor.__init__`` accepts optional ``queue``, ``notification_config``,
+and ``health_mon`` parameters so callers (and unit tests) can inject their own
+instances instead of relying on the module-level singletons.  The module-level
+``message_processor`` instance at the bottom of this file uses the singletons as
+defaults, so existing callers are unaffected.
 """
 
 import asyncio
@@ -47,27 +55,36 @@ class MessageProcessor:
         max_workers: int = None,
         batch_size: int = None,
         batch_timeout_seconds: int = None,
-        retry_delay_minutes: int = None
+        retry_delay_minutes: int = None,
+        *,
+        queue=None,
+        notification_config=None,
+        health_mon=None,
     ):
         """
         Initialize the message processor.
 
         Args:
-            max_workers: Maximum number of concurrent workers
-            batch_size: Maximum messages per batch
-            batch_timeout_seconds: Maximum time to wait for batch completion
-            retry_delay_minutes: Minutes to wait before retrying failed messages
+            max_workers: Maximum number of concurrent workers.
+            batch_size: Maximum messages per batch.
+            batch_timeout_seconds: Maximum time to wait for batch completion.
+            retry_delay_minutes: Minutes to wait before retrying failed messages.
+            queue: Message queue instance (defaults to the module-level singleton).
+            notification_config: Config instance (defaults to the module-level singleton).
+            health_mon: HealthMonitor instance (defaults to the module-level singleton).
         """
-        self.max_workers = max_workers or config.processing.max_workers
-        self.batch_size = batch_size or config.processing.batch_size
-        self.batch_timeout_seconds = batch_timeout_seconds or config.processing.batch_timeout_seconds
-        self.retry_delay_minutes = retry_delay_minutes or config.processing.retry_delay_minutes
+        _cfg = notification_config or config
+        self.max_workers = max_workers or _cfg.processing.max_workers
+        self.batch_size = batch_size or _cfg.processing.batch_size
+        self.batch_timeout_seconds = batch_timeout_seconds or _cfg.processing.batch_timeout_seconds
+        self.retry_delay_minutes = retry_delay_minutes or _cfg.processing.retry_delay_minutes
 
-        self.queue = message_queue
+        self.queue = queue or message_queue
+        self._health_monitor = health_mon or health_monitor
         self._logger = setup_logger(f"{__name__}.MessageProcessor")
 
         # Initialize fallback manager
-        self.fallback_manager = FallbackManager(health_monitor)
+        self.fallback_manager = FallbackManager(self._health_monitor)
 
         # Channel instances cache
         self._channel_instances = {}
@@ -173,7 +190,7 @@ class MessageProcessor:
                             auto_enable_threshold=2,   # Re-enable after 2 consecutive successes
                             enabled_checks={HealthCheckType.CONNECTIVITY, HealthCheckType.RESPONSE_TIME}
                         )
-                        health_monitor.configure_channel(health_config)
+                        self._health_monitor.configure_channel(health_config)
 
                         self._logger.info("Initialized channel: %s", channel_name)
                     except Exception as e:

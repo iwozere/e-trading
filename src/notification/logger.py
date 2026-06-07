@@ -4,6 +4,23 @@ Provides logging utilities for the trading system, including console and file lo
 This module sets up application-wide logging configuration and exposes a logger for use throughout the project.
 
 Supports multiprocessing-safe logging through QueueHandler and QueueListener.
+
+IMPORT-TIME SIDE EFFECTS
+------------------------
+Importing this module (or any module that calls ``setup_logger``) has the following
+side effects that run **once at first import**, before any user code executes:
+
+1. ``logs/log/`` directory is created (``log_dir.mkdir(parents=True, exist_ok=True)``).
+2. ``logging.config.dictConfig(LOG_CONFIG)`` is called, which reconfigures the
+   Python root logger and all named loggers globally for the current process.
+3. In child/spawned processes the log filenames are suffixed with the child PID
+   to avoid cross-process file-handle contention.
+
+Re-entrancy guard: ``logging.config.dictConfig`` is idempotent for the same config
+dict, but importing this module in a spawned process will re-run the config block
+with the child's PID suffix.  This is intentional.  Do NOT import this module from
+``__init__.py`` files of packages that are also imported by spawned workers unless
+the PID-suffix behaviour is acceptable.
 """
 
 import logging
@@ -40,14 +57,26 @@ import re
 class SensitiveDataFilter(logging.Filter):
     """
     Filter to mask sensitive data like API keys and tokens in log messages.
+
+    This is a defense-in-depth backstop only — it cannot catch all forms of
+    secret leakage (nested JSON, custom encoding, structured payloads).  The
+    primary defence is keeping secrets/PII out of log arguments at the call site.
     """
-    SENSITIVE_KEYS = ['apikey', 'api_key', 'token', 'secret', 'api-key', 'app_key', 'app_secret']
+    SENSITIVE_KEYS = ['apikey', 'api_key', 'token', 'secret', 'api-key', 'app_key', 'app_secret',
+                      'password', 'passwd', 'authorization', 'access_token', 'refresh_token']
 
     # Regex to match key=value patterns in URLs or strings
     # Matches: key=value, key:value, "key":"value", 'key':'value'
     # Supports various delimiters: &, ?, ", ', or space
     MASK_PATTERN = re.compile(
-        rf'({"|".join(SENSITIVE_KEYS)})[=:]\s*(["\']?)([a-zA-Z0-9.\-_]{{4,}})\2',
+        rf'({"|".join(SENSITIVE_KEYS)})[=:]\s*(["\']?)([a-zA-Z0-9.\-_/+]{{4,}})\2',
+        re.IGNORECASE
+    )
+
+    # Match HTTP Authorization header values: "Bearer <token>" or "Basic <credentials>"
+    # Handles base64 characters (+, /, =) that the key=value pattern misses.
+    BEARER_PATTERN = re.compile(
+        r'\b(Bearer|Basic|Token)\s+([A-Za-z0-9+/=._\-]{8,})',
         re.IGNORECASE
     )
 
@@ -79,18 +108,21 @@ class SensitiveDataFilter(logging.Filter):
 
     def _mask_sensitive_data(self, text: str) -> str:
         """Replace sensitive values with [MASKED]."""
-        # We keep the first 2 characters for debugging if they are long enough, otherwise just mask all
         def mask_match(match):
             key = match.group(1)
             quote = match.group(2)
             value = match.group(3)
-
             if len(value) <= 6:
                 return f"{key}={quote}[MASKED]{quote}"
-            else:
-                return f"{key}={quote}{value[:2]}...[MASKED]{quote}"
+            return f"{key}={quote}{value[:2]}...[MASKED]{quote}"
 
-        return self.MASK_PATTERN.sub(mask_match, text)
+        def mask_bearer(match):
+            scheme = match.group(1)
+            return f"{scheme} [MASKED]"
+
+        text = self.MASK_PATTERN.sub(mask_match, text)
+        text = self.BEARER_PATTERN.sub(mask_bearer, text)
+        return text
 
 
 ####################################################################
@@ -254,10 +286,17 @@ LOG_CONFIG = {
     "root": {"handlers": ["console", "file"], "level": "DEBUG"},
 }
 
-# --- PATCH LOG_CONFIG for UTF-8 encoding and conditional file handlers ---
+# --- PATCH LOG_CONFIG for UTF-8 encoding, env-driven log levels, and child-process filenames ---
 # Determine if we are in a main process or a fork/spawn child
 import multiprocessing
 import os
+
+# Respect LOG_LEVEL env var; default to INFO so production is not DEBUG by default.
+# Individual handlers that are intentionally stricter (e.g. error_file at ERROR) are
+# left unchanged — only handlers/loggers currently set to DEBUG are adjusted.
+_LOG_LEVEL_NAME: str = os.environ.get("LOG_LEVEL", "INFO").upper()
+if not hasattr(logging, _LOG_LEVEL_NAME):
+    _LOG_LEVEL_NAME = "INFO"
 
 # Robust check for main process
 # On Windows/spawn, parent_process() is None only for the true root process
@@ -299,6 +338,19 @@ for handler_name in LOG_CONFIG["handlers"]:
 
 
 
+# Promote DEBUG → _LOG_LEVEL_NAME for every handler and logger that was DEBUG.
+# Error-only handlers (level "ERROR") and named loggers already at INFO+ are untouched.
+for _hcfg in LOG_CONFIG["handlers"].values():
+    if _hcfg.get("level") == "DEBUG":
+        _hcfg["level"] = _LOG_LEVEL_NAME
+
+for _lcfg in LOG_CONFIG.get("loggers", {}).values():
+    if _lcfg.get("level") == "DEBUG":
+        _lcfg["level"] = _LOG_LEVEL_NAME
+
+if LOG_CONFIG.get("root", {}).get("level") == "DEBUG":
+    LOG_CONFIG["root"]["level"] = _LOG_LEVEL_NAME
+
 logging.config.dictConfig(LOG_CONFIG)
 _logger = logging.getLogger(__name__)
 
@@ -327,6 +379,8 @@ def _create_file_handlers(pid_suffix: str = ""):
             return f"{base_path}.{pid_suffix}"
         return base_path
 
+    _level = getattr(logging, _LOG_LEVEL_NAME, logging.INFO)
+
     # Create file handler for main app log
     file_handler = RotatingFileHandler(
         get_log_path("app.log"),
@@ -334,7 +388,7 @@ def _create_file_handlers(pid_suffix: str = ""):
         backupCount=BACKUP_COUNT,
         encoding="utf-8"
     )
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(_level)
     file_handler.setFormatter(logging.Formatter(
         "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
     ))
@@ -347,7 +401,7 @@ def _create_file_handlers(pid_suffix: str = ""):
         backupCount=BACKUP_COUNT,
         encoding="utf-8"
     )
-    trade_handler.setLevel(logging.DEBUG)
+    trade_handler.setLevel(_level)
     trade_handler.setFormatter(logging.Formatter(
         "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
     ))
@@ -360,7 +414,7 @@ def _create_file_handlers(pid_suffix: str = ""):
         backupCount=BACKUP_COUNT,
         encoding="utf-8"
     )
-    order_handler.setLevel(logging.DEBUG)
+    order_handler.setLevel(_level)
     order_handler.setFormatter(logging.Formatter(
         "%(asctime)s - [PID %(process)d] - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
     ))
@@ -409,7 +463,7 @@ def setup_multiprocessing_logging():
 
         # Create console handler
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.DEBUG)
+        console_handler.setLevel(getattr(logging, _LOG_LEVEL_NAME, logging.INFO))
         console_handler.setFormatter(logging.Formatter(
             "%(asctime)s - [PID %(process)d] - %(levelname)s - %(message)s"
         ))

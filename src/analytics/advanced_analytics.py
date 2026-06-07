@@ -9,6 +9,27 @@ Provides comprehensive analytics including:
 - Strategy comparison and ranking
 - Automated reporting with PDF/Excel export
 - Portfolio analytics and correlation analysis
+
+ARCHITECTURE NOTE — analytics in three locations (ANALYTICS-1)
+--------------------------------------------------------------
+Analytics logic currently lives in three places:
+
+1. ``src/analytics/advanced_analytics.py`` (this file) — deep offline analytics:
+   Monte Carlo, VaR/CVaR, portfolio correlation, PDF/Excel export.  Intended as
+   the **primary analytics library** for research and reporting.
+
+2. ``src/api/services/unified_analytics_service.py`` — thin API adapter that
+   surfaces aggregate stats (notification counts, trade summaries) for the Web UI.
+   Should call into this module rather than re-implementing metrics.
+
+3. ``src/backtester/analyzer/bt_analyzers.py`` — Backtrader-specific runtime
+   analyzers (Calmar, CAGR, Sortino, Profit Factor, Win Rate) computed bar-by-bar
+   during simulation.  These feed results into this module for offline reporting.
+
+**Ownership rule:** metric *definitions* belong here (single source of truth).
+The backtester feeds raw trade/equity data; the API service aggregates and routes.
+If you add a new metric (e.g. Omega ratio), add it here first and call it from the
+other two locations.  Never define the same metric formula in more than one place.
 """
 
 import pandas as pd
