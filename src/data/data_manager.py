@@ -719,9 +719,7 @@ class DataManager:
         try:
             # Use UnifiedCache put method with the full data and date range
             success = self.cache.put(data, symbol, timeframe, start_date, end_date, provider)
-            if success:
-                _logger.info("Cached %d rows for %s %s from %s", len(data), symbol, timeframe, provider)
-            else:
+            if not success:
                 _logger.warning("Failed to cache data for %s %s", symbol, timeframe)
 
         except Exception:
