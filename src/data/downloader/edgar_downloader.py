@@ -25,8 +25,10 @@ Classes:
 """
 
 import json
+import re
 import time
-from datetime import datetime
+import xml.etree.ElementTree as ET
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import sys
@@ -51,9 +53,27 @@ except ImportError:
 _COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 _COMPANY_FACTS_URL_TEMPLATE = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"
 _SUBMISSIONS_URL_TEMPLATE = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
+_EDGAR_ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
+_EDGAR_EFTS_SEARCH = "https://efts.sec.gov/LATEST/search-index"
 
 # SEC Fair Access Policy: no more than 10 requests per second
 _MIN_REQUEST_INTERVAL = 0.11
+
+# 13F filing window: institutions have up to 45 days after quarter-end to file
+_QUARTER_END_MONTH_DAY = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
+_13F_FILING_WINDOW_DAYS = 50  # search for filings up to 50 days after quarter-end
+
+# Candidate infotable filenames in 13F-HR filings (tried in order)
+_INFOTABLE_FILENAMES = [
+    "infotable.xml",
+    "InfoTable.xml",
+    "form13fInfoTable.xml",
+    "xslForm13F_X02.xml",
+    "xslForm13F_X01.xml",
+]
+
+# EFTS pagination page size (max 100)
+_EFTS_PAGE_SIZE = 100
 
 
 class EdgarDownloader(BaseDataDownloader):
@@ -86,6 +106,11 @@ class EdgarDownloader(BaseDataDownloader):
         self._edgar_dir = root / "edgar"
         self._companyfacts_dir = self._edgar_dir / "companyfacts"
         self._submissions_dir = self._edgar_dir / "submissions"
+        self._13f_dir = self._edgar_dir / "13f"
+        self._13f_index_dir = self._13f_dir / "index"
+        self._13f_holdings_dir = self._13f_dir / "holdings"
+        self._form4_dir = self._13f_dir / "form4"
+        self._13dg_dir = self._13f_dir / "13dg"
         self._session = requests.Session()
         self._session.headers.update({"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"})
         self._last_request_time: float = 0.0
@@ -410,6 +435,351 @@ class EdgarDownloader(BaseDataDownloader):
         return filings
 
     # ------------------------------------------------------------------
+    # 13F-HR institutional holdings
+    # ------------------------------------------------------------------
+
+    def download_13f_index(self, year: int, quarter: int, force: bool = False) -> pd.DataFrame:
+        """
+        Download the index of all 13F-HR filings for a calendar quarter.
+
+        Queries EDGAR EFTS for 13F-HR filings filed within 50 days of the
+        quarter-end date and caches the result as
+        DATA_CACHE_DIR/edgar/13f/index/{year}_Q{quarter}.csv.gz.
+
+        Args:
+            year: Calendar year (e.g., 2024).
+            quarter: Quarter number 1–4.
+            force: Re-download even if the cache file exists.
+
+        Returns:
+            DataFrame with columns: cik, institution_name, accession_number, filed_date.
+            Empty DataFrame on failure.
+        """
+        dest = self._13f_index_dir / f"{year}_Q{quarter}.csv.gz"
+        if dest.exists() and not force:
+            _logger.info("13F index for %d Q%d already cached at %s", year, quarter, dest)
+            return pd.read_csv(dest, compression="gzip", dtype=str)
+
+        start_dt, end_dt = _13f_filing_window(year, quarter)
+        _logger.info("Downloading 13F index for %d Q%d (filing window %s → %s)", year, quarter, start_dt, end_dt)
+
+        hits = self._efts_search(forms="13F-HR", start_dt=str(start_dt), end_dt=str(end_dt))
+        if not hits:
+            _logger.warning("No 13F-HR filings found for %d Q%d", year, quarter)
+            return pd.DataFrame()
+
+        records = []
+        for hit in hits:
+            src = hit.get("_source", {})
+            records.append({
+                "cik": str(src.get("entity_id", "")).lstrip("0") or None,
+                "institution_name": src.get("entity_name", ""),
+                "accession_number": src.get("accession_no", ""),
+                "filed_date": src.get("file_date", ""),
+                "period_of_report": src.get("period_of_report", ""),
+            })
+
+        df = pd.DataFrame(records).dropna(subset=["cik"])
+        df["cik"] = df["cik"].astype(str)
+
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dest, index=False, compression="gzip")
+        _logger.info("Cached 13F index: %d filers for %d Q%d → %s", len(df), year, quarter, dest)
+        return df
+
+    def download_13f_infotable(
+        self,
+        cik: Union[int, str],
+        accession_number: str,
+        year: int,
+        quarter: int,
+        institution_name: str = "",
+        force: bool = False,
+    ) -> Optional[Path]:
+        """
+        Download, parse, and cache the holdings infotable for one 13F-HR filing.
+
+        Tries candidate infotable filenames in order, falls back to parsing the
+        EDGAR filing index HTML if all candidates return 404.
+        Result is saved as DATA_CACHE_DIR/edgar/13f/holdings/{year}_Q{quarter}/{cik:010d}.csv.gz.
+
+        Args:
+            cik: Institution CIK.
+            accession_number: Accession number, e.g. ``"0001234567-24-000123"``.
+            year: Calendar year of the reporting quarter.
+            quarter: Quarter number 1–4.
+            institution_name: Human-readable institution name (stored in output).
+            force: Re-download even if cached.
+
+        Returns:
+            Path to the saved CSV.gz, or None on failure.
+        """
+        cik_int = _parse_cik(cik)
+        quarter_dir = self._13f_holdings_dir / f"{year}_Q{quarter}"
+        dest = quarter_dir / f"{cik_int:010d}.csv.gz"
+
+        if dest.exists() and not force:
+            _logger.debug("13F holdings for CIK %010d Q%d/%d already cached", cik_int, year, quarter)
+            return dest
+
+        acc_norm = accession_number.replace("-", "")
+        xml_content = self._fetch_filing_xml(cik_int, acc_norm)
+        if xml_content is None:
+            _logger.warning("Could not fetch infotable XML for CIK %010d acc %s", cik_int, accession_number)
+            return None
+
+        quarter_str = f"{year}Q{quarter}"
+        df = self.parse_13f_infotable(xml_content, cik_int, institution_name, quarter_str)
+        if df.empty:
+            _logger.warning("Empty infotable for CIK %010d acc %s", cik_int, accession_number)
+            return None
+
+        # Compute portfolio percentage weights
+        total_value = df["value_usd"].sum()
+        df["pct_of_portfolio"] = df["value_usd"] / total_value if total_value > 0 else 0.0
+
+        quarter_dir.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dest, index=False, compression="gzip")
+        _logger.debug(
+            "Cached 13F holdings for CIK %010d: %d positions, $%.0fM total → %s",
+            cik_int, len(df), total_value / 1_000_000, dest,
+        )
+        return dest
+
+    def parse_13f_infotable(
+        self,
+        xml_content: str,
+        cik: int,
+        institution_name: str,
+        quarter: str,
+    ) -> pd.DataFrame:
+        """
+        Parse a 13F infotable XML string into a holdings DataFrame.
+
+        Handles both namespaced and bare XML variants used across different filers.
+
+        Args:
+            xml_content: Raw XML text of the infotable document.
+            cik: Institution CIK (added to every row).
+            institution_name: Institution name (added to every row).
+            quarter: Quarter string, e.g. ``"2024Q1"`` (added to every row).
+
+        Returns:
+            DataFrame with columns: cik, institution_name, quarter, name_of_issuer,
+            cusip, value_usd, shares, investment_discretion, put_call.
+            Empty DataFrame on parse failure or no positions found.
+        """
+        try:
+            root = ET.fromstring(xml_content)
+        except ET.ParseError:
+            _logger.warning("XML parse error for CIK %d, quarter %s", cik, quarter)
+            return pd.DataFrame()
+
+        # Strip namespaces so tag matching works regardless of ns variant
+        for elem in root.iter():
+            if "}" in elem.tag:
+                elem.tag = elem.tag.split("}")[-1]
+
+        records = []
+        for info in root.findall(".//infoTable"):
+            records.append({
+                "cik": cik,
+                "institution_name": institution_name,
+                "quarter": quarter,
+                "name_of_issuer": _xml_text(info, "nameOfIssuer"),
+                "cusip": _xml_text(info, "cusip"),
+                "value_usd": _safe_int(_xml_text(info, "value")) * 1000,
+                "shares": _safe_int(_xml_text(info, ".//sshPrnamt")),
+                "investment_discretion": _xml_text(info, "investmentDiscretion"),
+                "put_call": _xml_text(info, "putCall"),
+            })
+
+        if not records:
+            return pd.DataFrame()
+
+        return pd.DataFrame(records)
+
+    def load_13f_holdings(
+        self,
+        cik: Union[int, str],
+        year: int,
+        quarter: int,
+        force_refresh: bool = False,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Load cached 13F holdings for a CIK and quarter from CSV.gz.
+
+        Args:
+            cik: Institution CIK.
+            year: Calendar year.
+            quarter: Quarter number 1–4.
+            force_refresh: If True, re-download before loading.
+
+        Returns:
+            DataFrame of holdings, or None if the file is absent and cannot be fetched.
+        """
+        cik_int = _parse_cik(cik)
+        dest = self._13f_holdings_dir / f"{year}_Q{quarter}" / f"{cik_int:010d}.csv.gz"
+        if dest.exists() and not force_refresh:
+            return pd.read_csv(dest, compression="gzip")
+
+        # Try to obtain from the index
+        index_df = self.download_13f_index(year, quarter, force=False)
+        row = index_df[index_df["cik"] == str(cik_int)]
+        if row.empty:
+            _logger.warning("CIK %d not found in 13F index for %d Q%d", cik_int, year, quarter)
+            return None
+
+        acc = row.iloc[0]["accession_number"]
+        name = row.iloc[0].get("institution_name", "")
+        path = self.download_13f_infotable(cik_int, acc, year, quarter, name, force=force_refresh)
+        if path is None or not path.exists():
+            return None
+
+        return pd.read_csv(path, compression="gzip")
+
+    def get_new_13f_filings_today(self, as_of_date: Optional[date] = None) -> pd.DataFrame:
+        """
+        Return 13F-HR filings submitted on a given date (default: today).
+
+        Used by the daily scheduler job to detect new filings incrementally.
+        Does NOT cache — always queries EDGAR live.
+
+        Args:
+            as_of_date: Date to check. Defaults to today (UTC).
+
+        Returns:
+            DataFrame with columns: cik, institution_name, accession_number, filed_date.
+        """
+        check_date = as_of_date or datetime.now().date()
+        date_str = str(check_date)
+        _logger.info("Checking EDGAR for new 13F-HR filings on %s", date_str)
+
+        hits = self._efts_search(forms="13F-HR", start_dt=date_str, end_dt=date_str)
+        if not hits:
+            return pd.DataFrame(columns=["cik", "institution_name", "accession_number", "filed_date"])
+
+        records = [
+            {
+                "cik": str(h.get("_source", {}).get("entity_id", "")).lstrip("0"),
+                "institution_name": h.get("_source", {}).get("entity_name", ""),
+                "accession_number": h.get("_source", {}).get("accession_no", ""),
+                "filed_date": h.get("_source", {}).get("file_date", ""),
+                "period_of_report": h.get("_source", {}).get("period_of_report", ""),
+            }
+            for h in hits
+        ]
+        _logger.info("Found %d new 13F-HR filings on %s", len(records), date_str)
+        return pd.DataFrame(records)
+
+    # ------------------------------------------------------------------
+    # Form 4 and Schedule 13D/G daily monitoring
+    # ------------------------------------------------------------------
+
+    def download_form4_filings(
+        self,
+        as_of_date: Optional[date] = None,
+        force: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Download and parse Form 4 insider transaction filings for a given date.
+
+        Only sale transactions (codes S, S-) are retained. Results are cached as
+        DATA_CACHE_DIR/edgar/13f/form4/{date}.csv.gz.
+
+        Args:
+            as_of_date: Filing date to fetch. Defaults to yesterday (markets are
+                        closed when the pipeline runs at 07:00 UTC).
+            force: Re-download even if cached.
+
+        Returns:
+            DataFrame with columns: ticker, issuer_cik, insider_name, transaction_code,
+            shares, price_per_share, total_value_usd, filed_date.
+        """
+        target_date = as_of_date or (datetime.now().date() - timedelta(days=1))
+        date_str = str(target_date)
+        dest = self._form4_dir / f"{date_str}.csv.gz"
+
+        if dest.exists() and not force:
+            _logger.info("Form 4 filings for %s already cached at %s", date_str, dest)
+            return pd.read_csv(dest, compression="gzip")
+
+        _logger.info("Downloading Form 4 filings for %s ...", date_str)
+        hits = self._efts_search(forms="4", start_dt=date_str, end_dt=date_str)
+
+        records = []
+        for hit in hits:
+            src = hit.get("_source", {})
+            acc = src.get("accession_no", "").replace("-", "")
+            cik_str = str(src.get("entity_id", "")).lstrip("0")
+            if not acc or not cik_str:
+                continue
+
+            xml_content = self._fetch_filing_xml(
+                int(cik_str) if cik_str else 0,
+                acc,
+                candidate_names=["primary-doc.xml", "form4.xml", "doc4.xml"],
+            )
+            if xml_content is None:
+                continue
+
+            for row in _parse_form4_xml(xml_content, filed_date=date_str):
+                records.append(row)
+
+        df = pd.DataFrame(records) if records else pd.DataFrame()
+
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dest, index=False, compression="gzip")
+        _logger.info("Cached %d Form 4 sale transactions for %s → %s", len(df), date_str, dest)
+        return df
+
+    def download_13dg_filings(
+        self,
+        as_of_date: Optional[date] = None,
+        force: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Download Schedule 13D and 13G amendments filed on a given date.
+
+        Results are cached as DATA_CACHE_DIR/edgar/13f/13dg/{date}.csv.gz.
+
+        Args:
+            as_of_date: Filing date to fetch. Defaults to yesterday.
+            force: Re-download even if cached.
+
+        Returns:
+            DataFrame with columns: cik, entity_name, accession_number, filed_date,
+            form_type (13D or 13G).
+        """
+        target_date = as_of_date or (datetime.now().date() - timedelta(days=1))
+        date_str = str(target_date)
+        dest = self._13dg_dir / f"{date_str}.csv.gz"
+
+        if dest.exists() and not force:
+            _logger.info("13D/G filings for %s already cached at %s", date_str, dest)
+            return pd.read_csv(dest, compression="gzip")
+
+        _logger.info("Downloading 13D/G filings for %s ...", date_str)
+        hits = self._efts_search(forms="SC 13D,SC 13G,SC 13D/A,SC 13G/A", start_dt=date_str, end_dt=date_str)
+
+        records = [
+            {
+                "cik": str(h.get("_source", {}).get("entity_id", "")).lstrip("0"),
+                "entity_name": h.get("_source", {}).get("entity_name", ""),
+                "accession_number": h.get("_source", {}).get("accession_no", ""),
+                "filed_date": date_str,
+                "form_type": h.get("_source", {}).get("form_type", ""),
+            }
+            for h in hits
+        ]
+
+        df = pd.DataFrame(records) if records else pd.DataFrame()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(dest, index=False, compression="gzip")
+        _logger.info("Cached %d 13D/G filings for %s → %s", len(df), date_str, dest)
+        return df
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
@@ -445,6 +815,115 @@ class EdgarDownloader(BaseDataDownloader):
                 _logger.warning("Ticker %s not found in company_tickers.json — skipped", ticker)
 
         return sorted(set(ciks))
+
+    def _efts_search(self, forms: str, start_dt: str, end_dt: str) -> List[Dict]:
+        """
+        Paginate through EDGAR EFTS full-text search results for given form types.
+
+        Args:
+            forms: Comma-separated form type filter, e.g. ``"13F-HR"`` or ``"4"``.
+            start_dt: Start date string ``"YYYY-MM-DD"``.
+            end_dt: End date string ``"YYYY-MM-DD"``.
+
+        Returns:
+            List of ``hits`` dicts from the EFTS response.
+        """
+        all_hits: List[Dict] = []
+        offset = 0
+
+        while True:
+            params = {
+                "forms": forms,
+                "dateRange": "custom",
+                "startdt": start_dt,
+                "enddt": end_dt,
+                "from": offset,
+            }
+            try:
+                elapsed = time.monotonic() - self._last_request_time
+                if elapsed < _MIN_REQUEST_INTERVAL:
+                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+
+                resp = self._session.get(_EDGAR_EFTS_SEARCH, params=params, timeout=30)
+                self._last_request_time = time.monotonic()
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception:
+                _logger.exception("EFTS search failed (forms=%s start=%s end=%s offset=%d)", forms, start_dt, end_dt, offset)
+                break
+
+            hits = data.get("hits", {}).get("hits", [])
+            all_hits.extend(hits)
+
+            total = data.get("hits", {}).get("total", {}).get("value", 0)
+            offset += len(hits)
+            if not hits or offset >= total:
+                break
+
+        return all_hits
+
+    def _fetch_filing_xml(
+        self,
+        cik_int: int,
+        acc_norm: str,
+        candidate_names: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """
+        Try candidate filenames inside an EDGAR filing folder and return XML text.
+
+        Args:
+            cik_int: CIK as integer.
+            acc_norm: Accession number with dashes removed, e.g. ``"000123456724001234"``.
+            candidate_names: Ordered list of filenames to try. Defaults to
+                             ``_INFOTABLE_FILENAMES``.
+
+        Returns:
+            Raw XML text, or None if no candidate succeeds.
+        """
+        names = candidate_names or _INFOTABLE_FILENAMES
+        base = f"{_EDGAR_ARCHIVES_BASE}/{cik_int}/{acc_norm}"
+
+        for filename in names:
+            url = f"{base}/{filename}"
+            try:
+                elapsed = time.monotonic() - self._last_request_time
+                if elapsed < _MIN_REQUEST_INTERVAL:
+                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+
+                resp = self._session.get(url, timeout=30)
+                self._last_request_time = time.monotonic()
+
+                if resp.status_code == 200:
+                    _logger.debug("Found filing document at %s", url)
+                    return resp.text
+                if resp.status_code != 404:
+                    _logger.warning("Unexpected status %d for %s", resp.status_code, url)
+            except Exception:
+                _logger.exception("Error fetching %s", url)
+
+        # Fallback: fetch the filing index HTML and look for any .xml link
+        index_url = f"{_EDGAR_ARCHIVES_BASE}/{cik_int}/{acc_norm}/{acc_norm}-index.htm"
+        try:
+            elapsed = time.monotonic() - self._last_request_time
+            if elapsed < _MIN_REQUEST_INTERVAL:
+                time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+            resp = self._session.get(index_url, timeout=30)
+            self._last_request_time = time.monotonic()
+
+            if resp.status_code == 200:
+                import re as _re
+                xml_files = re.findall(r'href="([^"]+\.xml)"', resp.text, _re.IGNORECASE)
+                infotable_candidates = [f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table"))]
+                for xml_file in (infotable_candidates or xml_files):
+                    xml_url = f"{_EDGAR_ARCHIVES_BASE}/{cik_int}/{acc_norm}/{xml_file}"
+                    r2 = self._session.get(xml_url, timeout=30)
+                    self._last_request_time = time.monotonic()
+                    if r2.status_code == 200:
+                        return r2.text
+        except Exception:
+            _logger.exception("Fallback index fetch failed for CIK %d acc %s", cik_int, acc_norm)
+
+        return None
 
     def _resolve_cik_list(
         self,
@@ -556,6 +1035,87 @@ class EdgarDownloader(BaseDataDownloader):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+def _13f_filing_window(year: int, quarter: int) -> tuple:
+    """Return (start_date, end_date) of the 13F filing window for a quarter."""
+    qe_month, qe_day = _QUARTER_END_MONTH_DAY[quarter]
+    quarter_end = date(year, qe_month, qe_day)
+    start = quarter_end + timedelta(days=1)
+    end = quarter_end + timedelta(days=_13F_FILING_WINDOW_DAYS)
+    return start, end
+
+
+def _xml_text(element: ET.Element, path: str) -> str:
+    """Return stripped text of the first matching sub-element, or empty string."""
+    found = element.find(path)
+    if found is not None and found.text:
+        return found.text.strip()
+    return ""
+
+
+def _safe_int(value: str) -> int:
+    """Convert a string to int, returning 0 on failure."""
+    try:
+        return int(value.replace(",", "").strip()) if value else 0
+    except (ValueError, AttributeError):
+        return 0
+
+
+def _parse_form4_xml(xml_content: str, filed_date: str) -> List[Dict[str, Any]]:
+    """
+    Parse a Form 4 XML document and return sale transaction rows.
+
+    Only returns rows for open-market sale codes: S (sale) and S- (sale short).
+
+    Args:
+        xml_content: Raw XML text of the Form 4 filing.
+        filed_date: Date string ``"YYYY-MM-DD"`` added to every row.
+
+    Returns:
+        List of row dicts (may be empty if no qualifying transactions found).
+    """
+    _SALE_CODES = {"S", "S-"}
+    rows: List[Dict[str, Any]] = []
+
+    try:
+        root = ET.fromstring(xml_content)
+    except ET.ParseError:
+        return rows
+
+    for elem in root.iter():
+        if "}" in elem.tag:
+            elem.tag = elem.tag.split("}")[-1]
+
+    ticker = _xml_text(root, ".//issuerTradingSymbol")
+    issuer_cik = _xml_text(root, ".//issuerCik")
+    insider_name = _xml_text(root, ".//rptOwnerName")
+
+    for txn in root.findall(".//nonDerivativeTransaction"):
+        code = _xml_text(txn, ".//transactionCode")
+        if code not in _SALE_CODES:
+            continue
+
+        shares_str = _xml_text(txn, ".//transactionShares/value")
+        price_str = _xml_text(txn, ".//transactionPricePerShare/value")
+        shares = _safe_int(shares_str)
+        try:
+            price = float(price_str) if price_str else 0.0
+        except ValueError:
+            price = 0.0
+
+        rows.append({
+            "ticker": ticker,
+            "issuer_cik": issuer_cik,
+            "insider_name": insider_name,
+            "transaction_code": code,
+            "shares": shares,
+            "price_per_share": price,
+            "total_value_usd": shares * price,
+            "filed_date": filed_date,
+        })
+
+    return rows
+
 
 def _parse_cik(cik: Union[int, str]) -> int:
     """Normalise a CIK value (int or zero-padded string) to a plain int."""
