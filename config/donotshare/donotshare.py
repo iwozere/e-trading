@@ -26,7 +26,7 @@ POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE", "trading") # Add database nam
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Database URL - PostgreSQL connection string
-DB_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}"
+DB_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}?sslmode=disable"
 
 TEST_DB_URL="postgresql+psycopg2://test_user:test_password@localhost:5432/e_trading_test"
 
