@@ -262,8 +262,9 @@ class MessageProcessor:
         except asyncio.TimeoutError:
             self._logger.warning("Shutdown timeout reached, forcing termination")
 
-        # Shutdown executor
-        self._executor.shutdown(wait=True, timeout=timeout)
+        # Shutdown executor — ThreadPoolExecutor.shutdown() has no timeout param;
+        # cancel_futures=True drops any queued (not yet started) work immediately.
+        self._executor.shutdown(wait=True, cancel_futures=True)
 
         self._worker_tasks.clear()
         self._logger.info("Message processor shutdown complete")
