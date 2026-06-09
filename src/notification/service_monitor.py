@@ -19,9 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.notification.logger import setup_logger
-from src.notification.service.message_queue_client import MessageQueueClient
-from src.data.db.services.database_service import DatabaseService
-from src.data.db.models.model_notification import MessagePriority
+from src.data.db.services.notification_service import NotificationService
 
 _logger = setup_logger(__name__)
 
@@ -40,7 +38,7 @@ STATE_FILE = PROJECT_ROOT / "logs" / "monitor_state.json"
 class ServiceMonitor:
     def __init__(self, admin_user_id=1):
         self.admin_user_id = admin_user_id
-        self.mq_client = MessageQueueClient()
+        self.notification_service = NotificationService()
         self.state = self._load_state()
 
     def _load_state(self):
@@ -83,15 +81,15 @@ class ServiceMonitor:
             )
             logs = result.stdout
 
-            # Look for common error patterns
+            # Look for genuine failure patterns; exclude graceful shutdown messages
+            # ("Stopped", "stopped", "Deactivated successfully") which appear in
+            # logs whenever a service restarts and are not real errors.
             error_patterns = [
-                r"Traceback",
-                r"Exception",
+                r"Traceback \(most recent call last\)",
                 r"SyntaxError",
-                r"ERROR",
                 r"CRITICAL",
-                r"failed",
-                r"Stopped"
+                r"SystemExit",
+                r"OOM|out of memory",
             ]
 
             found_errors = []
@@ -152,27 +150,27 @@ class ServiceMonitor:
         self._save_state()
         _logger.info(f"Monitoring check complete. Alerts sent for: {alerts_triggered}")
 
-    def send_notification(self, service, reason):
-        """Queue a notification message."""
+    def send_notification(self, service: str, reason: str) -> None:
+        """Write a SYSTEM_ALERT notification to the DB queue for delivery."""
         try:
-            message_content = {
-                "subject": f"🚨 Service Alert: {service}",
-                "body": f"The monitoring script detected an issue with {service} on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\nReason:\n{reason}",
-                "service": service,
-                "timestamp": datetime.now().isoformat()
+            message_data = {
+                "message_type": "SYSTEM_ALERT",
+                "channels": ["telegram", "email"],
+                "recipient_id": str(self.admin_user_id),
+                "content": {
+                    "title": f"Service Alert: {service}",
+                    "message": (
+                        f"Monitoring detected an issue with {service} "
+                        f"on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                        f"\n\nReason:\n{reason}"
+                    ),
+                },
+                "priority": "CRITICAL",
             }
-
-            # Send to both Email and Telegram if configured
-            self.mq_client.enqueue_message(
-                message_type="SYSTEM_ALERT",
-                content=message_content,
-                channels=["TELEGRAM", "EMAIL"],
-                recipient_id=str(self.admin_user_id),
-                priority=MessagePriority.CRITICAL
-            )
-            _logger.info(f"Notification queued for {service}")
-        except Exception as e:
-            _logger.error(f"Failed to queue notification for {service}: {e}")
+            self.notification_service.create_message(message_data)
+            _logger.info("Notification queued for %s", service)
+        except Exception:
+            _logger.exception("Failed to queue notification for %s:", service)
 
 if __name__ == "__main__":
     monitor = ServiceMonitor(admin_user_id=1) # Default admin ID
