@@ -6,6 +6,7 @@ Scans historical daily results to identify:
 - Phase 2: Early Public Signal (Phase 1 + volume/sentiment acceleration)
 """
 
+import json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -393,6 +394,71 @@ class RollingMemoryScanner:
         )
 
         return phase2_df
+
+    # ── Bootstrap health check ────────────────────────────────────────────────
+
+    @property
+    def _state_path(self) -> Path:
+        return self.results_base_path / ".rolling_memory_state.json"
+
+    def _load_state(self) -> dict:
+        if self._state_path.exists():
+            try:
+                return json.loads(self._state_path.read_text(encoding="utf-8"))
+            except Exception:
+                _logger.warning("Could not read rolling memory state from %s", self._state_path)
+        return {}
+
+    def _save_state(self, state: dict) -> None:
+        try:
+            self._state_path.write_text(json.dumps(state, default=str), encoding="utf-8")
+        except Exception:
+            _logger.warning("Could not persist rolling memory state to %s", self._state_path)
+
+    def check_bootstrap_health(
+        self,
+        phase1_count: int,
+        lookback_days: Optional[int] = None,
+    ) -> None:
+        """
+        Persist run state and emit error if Phase 1 has never fired after lookback_days.
+
+        Call this once per pipeline run, passing the number of Phase 1 candidates
+        detected in this run.  The method accumulates a lifetime detection count and
+        raises an error log when the scanner has been active longer than the lookback
+        window without ever producing a Phase 1 signal — which strongly indicates a
+        data quality or configuration problem.
+
+        Args:
+            phase1_count: Number of Phase 1 candidates detected this run.
+            lookback_days: Override config lookback period.
+        """
+        lookback = lookback_days or self.config.lookback_days
+
+        state = self._load_state()
+        if "first_run_date" not in state:
+            state["first_run_date"] = self.target_date
+        state["last_run_date"] = self.target_date
+        state["cumulative_phase1_count"] = state.get("cumulative_phase1_count", 0) + phase1_count
+        self._save_state(state)
+
+        first_run = datetime.strptime(state["first_run_date"], "%Y-%m-%d").date()
+        today = datetime.strptime(self.target_date, "%Y-%m-%d").date()
+        active_days = (today - first_run).days
+
+        _logger.debug(
+            "Rolling memory health: active_days=%d, lookback=%d, "
+            "cumulative_phase1=%d (this_run=%d)",
+            active_days, lookback, state["cumulative_phase1_count"], phase1_count,
+        )
+
+        if active_days > lookback and state["cumulative_phase1_count"] == 0:
+            _logger.error(
+                "Rolling memory health check FAILED: scanner has been active %d days "
+                "(> lookback %d days) but cumulative Phase 1 detections = 0. "
+                "Check data quality, filter thresholds, and results path: %s",
+                active_days, lookback, self.results_base_path,
+            )
 
     def generate_outputs(
         self,

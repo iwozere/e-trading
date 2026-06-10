@@ -42,16 +42,19 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 class PipelineRunner:
-    def __init__(self, config_path: str = "config/pipeline/p01.yaml"):
+    def __init__(self, config_path: str = "config/pipeline/p01.yaml", interactive: bool = False):
         """
         Initialize pipeline runner.
 
         Args:
             config_path: Path to configuration file
+            interactive: If True, prompt the user before continuing after stage failures.
+                         Defaults to False so the pipeline is safe to run from schedulers.
         """
         self.config_path = Path(config_path)
         self.config = self._load_config()
         self.pipeline_dir = Path(__file__).parent
+        self.interactive = interactive
 
         # Pipeline stages with their respective modules
         self.stages = {
@@ -185,7 +188,8 @@ class PipelineRunner:
                     symbols: Optional[List[str]] = None,
                     timeframes: Optional[List[str]] = None,
                     fail_fast: bool = True,
-                    continue_on_optional_failures: bool = False) -> Dict:
+                    continue_on_optional_failures: bool = False,
+                    interactive: Optional[bool] = None) -> Dict:
         """
         Run the complete pipeline.
 
@@ -195,10 +199,12 @@ class PipelineRunner:
             timeframes: Override timeframes from config (legacy support)
             fail_fast: If True, stop immediately on critical stage failures
             continue_on_optional_failures: If True, continue even if optional stages fail
+            interactive: Override the instance-level interactive flag for this run.
 
         Returns:
             Dict with complete pipeline results
         """
+        is_interactive = self.interactive if interactive is None else interactive
         _logger.info("Starting HMM-LSTM Trading Pipeline")
         _logger.info("Configuration: %s", self.config_path)
         _logger.info("Fail-fast mode: %s", "ENABLED" if fail_fast else "DISABLED")
@@ -260,13 +266,14 @@ class PipelineRunner:
                         _logger.error("Pipeline stopped due to critical stage failure (fail-fast mode enabled)")
                         _logger.error("Fix the issue and restart the pipeline from stage %d", stage_num)
                         break
-                    else:
+                    elif is_interactive:
                         _logger.warning("Critical stage failed but continuing (fail-fast mode disabled)")
-                        # Ask user if they want to continue
                         response = input(f"\nCritical stage {stage_num} failed. Continue with remaining stages? (y/n): ")
                         if response.lower() != 'y':
                             _logger.info("Pipeline execution stopped by user")
                             break
+                    else:
+                        _logger.warning("Critical stage %d failed; continuing automatically (non-interactive mode)", stage_num)
                 else:
                     # Optional stage failed
                     results['failed_optional_stages'].append(stage_result)
@@ -274,13 +281,15 @@ class PipelineRunner:
                     _logger.warning("OPTIONAL STAGE FAILED: Stage %d (%s)", stage_num, stage['name'])
                     _logger.warning("Error: %s", stage_result['error'])
 
-                    if not continue_on_optional_failures:
+                    if not continue_on_optional_failures and is_interactive:
                         _logger.warning("Optional stage failed and continue_on_optional_failures=False")
-                        # Ask user if they want to continue
                         response = input(f"\nOptional stage {stage_num} failed. Continue with remaining stages? (y/n): ")
                         if response.lower() != 'y':
                             _logger.info("Pipeline execution stopped by user")
                             break
+                    elif not continue_on_optional_failures:
+                        _logger.warning("Optional stage %d failed; stopping (continue_on_optional_failures=False)", stage_num)
+                        break
                     else:
                         _logger.info("Optional stage failed but continuing (continue_on_optional_failures=True)")
 
@@ -448,12 +457,14 @@ Examples:
                        help='Disable fail-fast mode (continue on critical failures)')
     parser.add_argument('--continue-on-optional-failures', action='store_true',
                        help='Continue pipeline even if optional stages fail')
+    parser.add_argument('--interactive', action='store_true',
+                       help='Prompt before continuing after stage failures (default: non-interactive)')
 
     args = parser.parse_args()
 
     try:
         # Initialize pipeline runner
-        runner = PipelineRunner(args.config)
+        runner = PipelineRunner(args.config, interactive=args.interactive)
 
         # Handle list stages
         if args.list_stages:
@@ -473,8 +484,12 @@ Examples:
         skip_stages = []
         if args.skip_stages:
             skip_stages = [int(s.strip()) for s in args.skip_stages.split(',')]
-        else:
-            skip_stages = [1,2]
+            skipping_data_or_hmm = any(s in skip_stages for s in (1, 2))
+            if skipping_data_or_hmm:
+                _logger.warning(
+                    "Skipping stages 1 or 2 requires cached data/HMM artefacts to already exist. "
+                    "If they are missing the pipeline will fail at stage 3."
+                )
 
         symbols = None
         if args.symbols:

@@ -2,7 +2,7 @@ import re
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
 import sys
 
 # Ensure project root is in sys.path for internal imports
@@ -117,16 +117,92 @@ class P07DataLoader:
         vix = self.load_vix()
         btc_mc = self.load_btc_marketcap()
 
-        # Merge VIX
         if not vix.empty:
             ohlcv = ohlcv.join(vix, how="left")
             ohlcv["vix"] = ohlcv["vix"].ffill()
 
-        # Merge BTC Market Cap
         if not btc_mc.empty:
             ohlcv = ohlcv.join(btc_mc, how="left")
             ohlcv["btc_mc"] = ohlcv["btc_mc"].ffill()
 
-        # Drop rows where we don't have macro data if essential,
-        # but usually we just want the macro features for the model.
         return ohlcv
+
+    # ------------------------------------------------------------------
+    # Multi-Timeframe (MTF) support — merged from P08DataLoader
+    # ------------------------------------------------------------------
+
+    # Maps execution timeframe → anchor timeframe for MTF context
+    TF_MAPPING: Dict[str, str] = {
+        "5m":  "1h",
+        "15m": "4h",
+        "30m": "4h",
+        "1h":  "1d",
+        "4h":  "1d",
+    }
+
+    def get_anchor_tf(self, execution_tf: str) -> Optional[str]:
+        """Returns the mapped anchor timeframe for a given execution timeframe."""
+        return self.TF_MAPPING.get(execution_tf)
+
+    def find_anchor_file(self, ticker: str, anchor_tf: str, start_date: str, end_date: str) -> Optional[Path]:
+        """Finds a matching anchor data file in the data root."""
+        path = self.data_root / f"{ticker}_{anchor_tf}_{start_date}_{end_date}.csv"
+        if path.exists():
+            return path
+        for f in self.data_root.glob(f"{ticker}_{anchor_tf}_*.csv"):
+            return f
+        return None
+
+    def merge_mtf(self, df_exec: pd.DataFrame, df_anchor: pd.DataFrame) -> pd.DataFrame:
+        """
+        Look-ahead safe join between execution and anchor timeframes.
+
+        Shifts anchor data by 1 bar then uses merge_asof(direction='backward')
+        so each execution bar only sees anchor bars that were fully closed before it.
+        """
+        df_exec = df_exec.sort_index()
+        df_anchor = df_anchor.sort_index()
+
+        anchor_cols = {col: f"anchor_{col}" for col in df_anchor.columns}
+        df_anchor_renamed = df_anchor.rename(columns=anchor_cols)
+
+        # 1-bar shift ensures point-in-time validity (no look-ahead on anchor close)
+        df_anchor_safe = df_anchor_renamed.shift(1)
+
+        merged = pd.merge_asof(
+            df_exec,
+            df_anchor_safe,
+            left_index=True,
+            right_index=True,
+            direction='backward'
+        )
+        return merged
+
+    def get_mtf_dataset(self, exec_path: Path) -> pd.DataFrame:
+        """
+        Loads execution file, finds matching anchor timeframe file, merges them,
+        and adds macro features (VIX, BTC market cap).
+        """
+        ticker, timeframe, start, end = self.parse_filename(exec_path)
+        if not ticker:
+            raise ValueError(f"Could not parse filename: {exec_path.name}")
+
+        _logger.info("Loading MTF dataset for %s %s [%s_%s]", ticker, timeframe, start, end)
+
+        df_exec = self.get_merged_dataset(exec_path)
+
+        anchor_tf = self.get_anchor_tf(timeframe)
+        if anchor_tf:
+            anchor_file = self.find_anchor_file(ticker, anchor_tf, start, end)
+            if anchor_file:
+                _logger.info("Merging with anchor TF: %s (%s)", anchor_tf, anchor_file.name)
+                df_anchor = self.load_ohlcv(anchor_file)
+                df_exec = self.merge_mtf(df_exec, df_anchor)
+            else:
+                _logger.warning(
+                    "No anchor file found for %s %s. Proceeding without MTF features.", ticker, anchor_tf
+                )
+        else:
+            _logger.info("No anchor TF mapped for %s. Skipping MTF join.", timeframe)
+
+        return df_exec

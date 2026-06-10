@@ -45,14 +45,13 @@ def objective(trial, ohlcv_clean: Any, timeframe: str = "15m"):
     if "error" in res:
         return -1.0
 
-    # 3. Objective Metric (Adjusted Sharpe)
-    sharpe = res["pf"].sharpe_ratio()
-    total_trades = res["pf"].trades.count().sum()
+    # 3. Objective Metric — score on val set ONLY; test set is never touched by Optuna
+    sharpe = res["pf_val"].sharpe_ratio()
+    total_trades = res["pf_val"].trades.count().sum()
 
     if pd.isna(sharpe) or total_trades < 10:
         return -1.0
 
-    # Reward more trades (up to a point) using log multiplier
-    adjusted_score = sharpe * np.log10(total_trades)
+    adjusted_score = sharpe * np.log10(max(total_trades, 2))
 
     return float(adjusted_score)

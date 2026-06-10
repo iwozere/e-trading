@@ -131,28 +131,59 @@ class LSTMValidator:
         _logger.info("Loaded configuration from %s", self.config_path)
         return config
 
-    def find_latest_model(self, symbol: str, timeframe: str) -> Optional[Path]:
+    def find_latest_model(self, symbol: str, timeframe: str,
+                           regime_id: Optional[int] = None) -> Optional[Path]:
         """
         Find the latest trained LSTM model.
 
         Args:
             symbol: Trading symbol
             timeframe: Timeframe
+            regime_id: If provided, finds the per-regime model with suffix _regime{id}
 
         Returns:
             Path to latest model file or None if not found
         """
-        pattern = f"lstm_{symbol}_{timeframe}_*.pkl"
+        if regime_id is not None:
+            pattern = f"lstm_{symbol}_{timeframe}_regime{regime_id}_*.pkl"
+        else:
+            # Exclude per-regime models from the default search
+            pattern = f"lstm_{symbol}_{timeframe}_*.pkl"
+
         model_files = list(self.models_dir.glob(pattern))
 
+        # When not looking for a specific regime, exclude per-regime files
+        if regime_id is None:
+            model_files = [f for f in model_files if "_regime" not in f.name]
+
         if not model_files:
-            _logger.warning("No LSTM model found for %s %s", symbol, timeframe)
+            _logger.warning("No LSTM model found for %s %s (regime_id=%s)",
+                            symbol, timeframe, regime_id)
             return None
 
-        # Return the most recent model
         latest_model = sorted(model_files)[-1]
         _logger.info("Found latest model: %s", latest_model)
         return latest_model
+
+    def find_regime_models(self, symbol: str, timeframe: str) -> Dict[int, Path]:
+        """
+        Find all per-regime LSTM models for a symbol/timeframe.
+
+        Returns:
+            Dict mapping regime_id → Path of the latest model for that regime
+        """
+        pattern = f"lstm_{symbol}_{timeframe}_regime*_*.pkl"
+        all_files = sorted(self.models_dir.glob(pattern))
+
+        regime_to_path: Dict[int, Path] = {}
+        for f in all_files:
+            import re as _re
+            m = _re.search(r"_regime(\d+)_", f.name)
+            if m:
+                rid = int(m.group(1))
+                regime_to_path[rid] = f  # sorted → last wins = latest
+
+        return regime_to_path
 
     def load_model(self, model_path: Path) -> Dict:
         """
@@ -814,9 +845,90 @@ class LSTMValidator:
 
         return png_files
 
+    def _validate_multi_regime(self, symbol: str, timeframe: str) -> Dict:
+        """
+        Validate all per-regime LSTM models for a symbol/timeframe.
+        Evaluates each regime model only on its own regime's test samples.
+        """
+        regime_models = self.find_regime_models(symbol, timeframe)
+        if not regime_models:
+            return {'symbol': symbol, 'timeframe': timeframe, 'success': False,
+                    'error': 'No per-regime models found'}
+
+        # Load labeled data
+        patterns = [
+            f"labeled_{symbol}_{timeframe}_*.csv",
+            f"*_{symbol}_{timeframe}_*_labeled.csv"
+        ]
+        csv_files = []
+        for p in patterns:
+            csv_files.extend(list(self.labeled_data_dir.glob(p)))
+        if not csv_files:
+            return {'symbol': symbol, 'timeframe': timeframe, 'success': False,
+                    'error': 'No labeled data found'}
+
+        df = pd.read_csv(sorted(csv_files)[-1])
+
+        regime_results = {}
+        for regime_id, model_path in regime_models.items():
+            try:
+                _logger.info("Validating regime %d model: %s", regime_id, model_path.name)
+                model_package = self.load_model(model_path)
+                model_package['symbol'] = symbol
+                model_package['timeframe'] = timeframe
+
+                optimization_params = self.load_optimization_parameters(symbol, timeframe)
+                df_work = df.copy()
+                if optimization_params and optimization_params['indicator_params']:
+                    df_work = self.apply_optimized_indicators(df_work, optimization_params['indicator_params'])
+
+                # Filter to this regime's rows for evaluation
+                if 'regime' in df_work.columns:
+                    df_regime = df_work[df_work['regime'] == regime_id].copy().reset_index(drop=True)
+                else:
+                    df_regime = df_work
+
+                test_data = self.prepare_test_data(df_regime, model_package)
+                predictions = self.make_predictions(model_package['model'], test_data)
+                baseline = self.calculate_baseline_predictions(df_regime, test_data['test_start_idx'])
+
+                min_len = min(len(predictions), len(test_data['y_test_original']), len(baseline))
+                metrics = self.calculate_performance_metrics(
+                    predictions[:min_len],
+                    test_data['y_test_original'][:min_len],
+                    baseline[:min_len]
+                )
+
+                regime_results[regime_id] = {
+                    'success': True,
+                    'model_path': str(model_path),
+                    'directional_accuracy': metrics['lstm_metrics']['directional_accuracy'],
+                    'mse_improvement_pct': metrics['improvements']['mse_improvement_pct'],
+                    'sample_size': metrics['sample_size'],
+                }
+                _logger.info("Regime %d — dir_acc=%.2f%%, mse_imp=%.2f%%, n=%d",
+                             regime_id,
+                             metrics['lstm_metrics']['directional_accuracy'],
+                             metrics['improvements']['mse_improvement_pct'],
+                             metrics['sample_size'])
+            except Exception as e:
+                _logger.error("Validation failed for regime %d: %s", regime_id, str(e))
+                regime_results[regime_id] = {'success': False, 'error': str(e)}
+
+        n_ok = sum(1 for r in regime_results.values() if r.get('success'))
+        return {
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'success': n_ok > 0,
+            'multi_regime': True,
+            'regime_results': regime_results,
+            'regimes_validated': n_ok,
+        }
+
     def validate_lstm(self, symbol: str, timeframe: str) -> Dict:
         """
         Validate LSTM model for a specific symbol-timeframe combination.
+        When config.lstm.multi_regime is True, validates each per-regime model.
 
         Args:
             symbol: Trading symbol
@@ -826,6 +938,9 @@ class LSTMValidator:
             Dict with validation results
         """
         _logger.info("Validating LSTM for %s %s", symbol, timeframe)
+
+        if self.config['lstm'].get('multi_regime', False):
+            return self._validate_multi_regime(symbol, timeframe)
 
         try:
             # Find and load model

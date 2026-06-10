@@ -1,15 +1,11 @@
 """
-P03 CNN-XGBoost — deprecated.
+P00 HMM-3LSTM — deprecated.
 
-The simple CNN1D model and walk-forward validation from P03 have been merged
-into P02 (p02_cnn_lstm_xgboost) as configurable options.  Use P02 with
-cnn_variant: simple in config/pipeline/p02.yaml instead:
+Per-regime LSTM training has been merged into P01 (p01_hmm_lstm) as a
+configurable option.  Set lstm.multi_regime: true in config/pipeline/p01.yaml
+and run P01 instead:
 
-    # config/pipeline/p02.yaml
-    cnn_variant: simple
-    target_strategy: multi
-
-    python src/ml/pipeline/p02_cnn_lstm_xgboost/run_pipeline.py --config config/pipeline/p02.yaml
+    python src/ml/pipeline/p01_hmm_lstm/run_pipeline.py
 
 This shim is kept for backward-compatibility during the deprecation window.
 Remove once no scheduler or caller references this entrypoint directly.
@@ -28,19 +24,19 @@ from src.notification.logger import setup_logger
 _logger = setup_logger(__name__)
 
 _DEPRECATION_MSG = (
-    "P03 (p03_cnn_xgboost) is deprecated. "
-    "Use P02 (p02_cnn_lstm_xgboost) with cnn_variant: simple in config/pipeline/p02.yaml instead."
+    "P00 (p00_hmm_3lstm) is deprecated. "
+    "Use P01 (p01_hmm_lstm) with lstm.multi_regime: true in config/pipeline/p01.yaml instead."
 )
 
 warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=1)
 _logger.warning(_DEPRECATION_MSG)
 
 if __name__ == "__main__":
-    _logger.info("Redirecting to P02 pipeline runner...")
+    _logger.info("Redirecting to P01 pipeline runner with multi_regime flag...")
     import subprocess
     result = subprocess.run(
         [sys.executable,
-         str(PROJECT_ROOT / "src" / "ml" / "pipeline" / "p02_cnn_lstm_xgboost" / "run_pipeline.py")] +
+         str(PROJECT_ROOT / "src" / "ml" / "pipeline" / "p01_hmm_lstm" / "run_pipeline.py")] +
         sys.argv[1:],
         check=False
     )

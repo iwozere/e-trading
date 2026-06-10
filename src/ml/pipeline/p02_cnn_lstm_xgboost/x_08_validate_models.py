@@ -12,7 +12,9 @@ import numpy as np
 import json
 import pandas as pd
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.model_selection import TimeSeriesSplit
 from pathlib import Path
+from typing import Dict, Any, List
 
 # Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
@@ -132,6 +134,65 @@ class ModelValidator:
                 report['recommendations'].append("Both models show similar MSE performance")
 
         return report
+
+    def walk_forward_validate(self, y_true: np.ndarray, y_pred: np.ndarray,
+                               n_splits: int = 5) -> Dict[str, Any]:
+        """
+        Walk-forward (time-series cross-validation) evaluation of predictions.
+        Merged from P03's ModelValidator to avoid in-sample evaluation bias.
+
+        Args:
+            y_true: Ground-truth values aligned with y_pred.
+            y_pred: Model predictions (pre-computed; split only for OOS scoring).
+            n_splits: Number of TimeSeriesSplit folds.
+
+        Returns:
+            Dict with per-fold and aggregate OOS metrics.
+        """
+        tscv = TimeSeriesSplit(n_splits=n_splits)
+        fold_metrics: List[Dict[str, float]] = []
+
+        for fold_idx, (_, test_idx) in enumerate(tscv.split(y_true)):
+            yt = y_true[test_idx]
+            yp = y_pred[test_idx]
+
+            if len(yt) < 2:
+                continue
+
+            mse = mean_squared_error(yt, yp)
+            mae = mean_absolute_error(yt, yp)
+            yt_diff = np.diff(yt)
+            yp_diff = np.diff(yp)
+            dir_acc = float(np.mean((yt_diff > 0) == (yp_diff > 0))) if len(yt_diff) > 0 else float('nan')
+
+            fold_metrics.append({
+                'fold': fold_idx,
+                'mse': float(mse),
+                'mae': float(mae),
+                'directional_accuracy': dir_acc,
+                'n_samples': len(yt),
+            })
+            _logger.debug("WFA fold %d: mse=%.6f, dir_acc=%.4f", fold_idx, mse, dir_acc)
+
+        if not fold_metrics:
+            return {'fold_metrics': [], 'avg_mse': float('nan'),
+                    'avg_mae': float('nan'), 'avg_sharpe': float('nan')}
+
+        avg_mse = float(np.mean([f['mse'] for f in fold_metrics]))
+        avg_mae = float(np.mean([f['mae'] for f in fold_metrics]))
+        avg_dir = float(np.mean([f['directional_accuracy'] for f in fold_metrics
+                                  if not np.isnan(f['directional_accuracy'])]))
+
+        result = {
+            'fold_metrics': fold_metrics,
+            'avg_mse': avg_mse,
+            'avg_mae': avg_mae,
+            'avg_directional_accuracy': avg_dir,
+            'n_folds': len(fold_metrics),
+        }
+        _logger.info("Walk-forward: avg_mse=%.6f, avg_dir_acc=%.4f over %d folds",
+                     avg_mse, avg_dir, len(fold_metrics))
+        return result
 
     def validate(self) -> dict:
         """Perform model validation."""

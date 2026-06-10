@@ -25,15 +25,21 @@ class P07Evaluator:
             'bb_period': params.get('bb_period', 20),
             'bb_std': params.get('bb_std', 2.0),
             'atr_period': params.get('atr_period', 14),
-            'vol_lookback': params.get('vol_lookback', 20)
+            'vol_lookback': params.get('vol_lookback', 20),
+            'anchor_ema_period': params.get('anchor_ema_period', 20),
+            'anchor_rsi_period': params.get('anchor_rsi_period', 14),
+            'anchor_bb_period': params.get('anchor_bb_period', 20),
+            'anchor_atr_period': params.get('anchor_atr_period', 14),
+            'regime_threshold': params.get('regime_threshold', 0.0001),
         }
+        enable_mtf = params.get('enable_mtf', False)
 
         # If ohlcv is a single DF, make it a list for uniform processing
         segments = [ohlcv] if isinstance(ohlcv, pd.DataFrame) else ohlcv
 
         Xs, ys = [], []
         for seg in segments:
-            X_seg = build_features(seg, feature_config)
+            X_seg = build_features(seg, feature_config, enable_mtf=enable_mtf)
             y_seg = get_triple_barrier_labels(
                 seg,
                 pt_mult=params.get('pt_mult', 2.0),
@@ -71,27 +77,46 @@ class P07Evaluator:
     def run_evaluation(cls, ohlcv: pd.DataFrame, params: Dict[str, Any], timeframe: str = "15m") -> Dict[str, Any]:
         """
         Full pipeline: Features -> Train -> Predict -> Backtest.
-        Adaptive Window: Uses tpl_hours converted to bars.
+
+        Splits raw OHLCV FIRST into 60/20/20 train/val/test segments with a
+        tpl_bars-wide buffer between each boundary to eliminate triple-barrier
+        label leakage.  Optuna callers must use pf_val; save_artifacts must
+        use pf_test for all reported metrics.
         """
         # 1. Adaptive Window Calculation
-        tpl_hours = params.get('tpl_hours', params.get('tpl_bars', 12) * 15 / 60) # Fallback for old trials
+        tpl_hours = params.get('tpl_hours', params.get('tpl_bars', 12) * 15 / 60)
         tpl_bars = cls.hours_to_bars(tpl_hours, timeframe)
 
-        # Inject tpl_bars for prepare_data
         params_with_bars = params.copy()
         params_with_bars['tpl_bars'] = tpl_bars
 
-        X_f, y_f = cls.prepare_data(ohlcv, params_with_bars)
+        # 2. Resolve raw OHLCV to a single sorted DataFrame
+        if isinstance(ohlcv, list):
+            ohlcv_full = pd.concat(ohlcv).sort_index()
+            ohlcv_full = ohlcv_full.loc[~ohlcv_full.index.duplicated(keep='last')]
+        else:
+            ohlcv_full = ohlcv
 
-        if len(X_f) < 100:
-            return {"error": "Insufficient data samples"}
+        n = len(ohlcv_full)
+        train_end = int(n * 0.60) - tpl_bars
+        val_end   = int(n * 0.80) - tpl_bars
 
-        # 70/30 Split
-        split_idx = int(len(X_f) * 0.7)
-        X_train, y_train = X_f[:split_idx], y_f[:split_idx]
-        X_test, y_test = X_f[split_idx:], y_f[split_idx:]
+        if train_end < 50 or val_end <= train_end or val_end >= n:
+            return {"error": "Insufficient data for 3-way split"}
 
-        # Train Model
+        ohlcv_train = ohlcv_full.iloc[:train_end]
+        ohlcv_val   = ohlcv_full.iloc[train_end + tpl_bars:val_end]
+        ohlcv_test  = ohlcv_full.iloc[val_end + tpl_bars:]
+
+        # 3. Compute features + labels independently per segment (no leakage)
+        X_train, y_train = cls.prepare_data(ohlcv_train, params_with_bars)
+        X_val,   y_val   = cls.prepare_data(ohlcv_val,   params_with_bars)
+        X_test,  y_test  = cls.prepare_data(ohlcv_test,  params_with_bars)
+
+        if len(X_train) < 50 or len(X_val) < 10:
+            return {"error": "Insufficient data samples after split"}
+
+        # 4. Train Model on train segment only
         xgb_params = {
             'max_depth': params.get('max_depth', 6),
             'learning_rate': params.get('learning_rate', 0.1),
@@ -100,48 +125,49 @@ class P07Evaluator:
         model = P07XGBModel(params=xgb_params)
         model.fit(X_train, y_train)
 
-        # Generate Signals
         thresholds = {
             'buy_prob_min': params.get('buy_prob_min', 0.5),
             'sell_prob_min': params.get('sell_prob_min', 0.5)
         }
-        signals = model.predict_signal(X_test, thresholds=thresholds)
 
-        # Backtest - Dynamic Frequency
-        # Map p07 timeframe to VectorBT frequency
         vbt_freq = timeframe if timeframe != "d" else "1D"
 
-        # Handle list of segments for indexing
-        if isinstance(ohlcv, list):
-            ohlcv_full = pd.concat(ohlcv).sort_index()
-            # Drop duplicates if any across files
-            ohlcv_full = ohlcv_full.loc[~ohlcv_full.index.duplicated(keep='last')]
-        else:
-            ohlcv_full = ohlcv
+        def _backtest(X: pd.DataFrame, ohlcv_seg: pd.DataFrame) -> vbt.Portfolio:
+            sigs = model.predict_signal(X, thresholds=thresholds)
+            prices = ohlcv_seg.loc[X.index, 'close']
+            return vbt.Portfolio.from_signals(
+                prices,
+                sigs == 1,
+                sigs == -1,
+                fees=0.001,
+                slippage=0.0005,
+                freq=vbt_freq,
+                direction='both'
+            ), sigs
 
-        ohlcv_test = ohlcv_full.loc[X_test.index]
-        pf = vbt.Portfolio.from_signals(
-            ohlcv_test['close'],
-            signals == 1,
-            signals == -1,
-            fees=0.001,
-            slippage=0.0005,
-            freq=vbt_freq,
-            direction='both'
-        )
+        pf_val,  signals_val  = _backtest(X_val,  ohlcv_val)
+        pf_test, signals_test = _backtest(X_test, ohlcv_test)
 
         return {
             "model": model,
-            "pf": pf,
-            "signals": signals,
+            # val portfolio — for Optuna objective scoring
+            "pf_val": pf_val,
+            "signals_val": signals_val,
+            "X_val": X_val,
+            "y_val": y_val,
+            # test portfolio — true OOS, for save_artifacts only
+            "pf_test": pf_test,
+            "signals": signals_test,
             "X_test": X_test,
             "y_test": y_test,
+            # train segment kept for diagnostics
             "X_train": X_train,
             "y_train": y_train,
-            "y_f": y_f,
             "ohlcv_test": ohlcv_test,
-            "metrics": pf.stats(),
-            "trades": pf.trades.records_readable
+            # legacy alias so callers that used "pf" still get the test portfolio
+            "pf": pf_test,
+            "metrics": pf_test.stats(),
+            "trades": pf_test.trades.records_readable
         }
 
     @classmethod

@@ -20,6 +20,14 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+
+def _is_cache_fresh(path: Path, max_age_days: int = 1) -> bool:
+    """Return True if the cached file exists and is younger than max_age_days."""
+    if not path.exists():
+        return False
+    age_days = (datetime.now().timestamp() - path.stat().st_mtime) / 86400.0
+    return age_days <= max_age_days
+
 def get_previous_trading_day(date: Optional[datetime] = None) -> datetime:
     """Get the previous trading day (Monday-Friday)"""
     if date is None:
@@ -55,10 +63,12 @@ def download_trf(target_date: Optional[datetime] = None, force_download: bool = 
     trf_dir = Path("results") / "trf_data" / date_str
     output_file = trf_dir / "trf.csv"
 
-    # Check if file already exists
+    # Check if cached file is still fresh enough to reuse
     if output_file.exists() and not force_download:
-        _logger.info(f"TRF file already exists: {output_file}")
-        return output_file
+        if _is_cache_fresh(output_file):
+            _logger.info("TRF cache is fresh for data_date=%s: %s", date_str, output_file)
+            return output_file
+        _logger.info("TRF cache is stale for data_date=%s — forcing refresh: %s", date_str, output_file)
 
     # Create output directory
     trf_dir.mkdir(parents=True, exist_ok=True)
@@ -69,7 +79,7 @@ def download_trf(target_date: Optional[datetime] = None, force_download: bool = 
     # only reads FINRA's own total_volume / short_volume columns. The default
     # yfinance merge would download ~9k tickers of daily bars (serial, batched)
     # which takes ~10 minutes on a Raspberry Pi and is entirely unused.
-    _logger.info(f"Downloading TRF data for {date_str}")
+    _logger.info("Downloading TRF data for data_date=%s", date_str)
     downloader = FinraDataDownloader(
         date=date_str,
         output_dir=trf_dir,
@@ -123,7 +133,7 @@ def get_trf_correction_factor(ticker: str, date: datetime) -> float:
         try:
             download_trf(date)
         except Exception as e:
-            _logger.warning(f"Failed to download TRF data for {date_str}: {str(e)}")
+            _logger.warning("Failed to download TRF data for %s: %s", date_str, str(e))
 
     # If file still doesn't exist, try previous days (up to 5 days back)
     max_days_back = 5
@@ -145,13 +155,19 @@ def get_trf_correction_factor(ticker: str, date: datetime) -> float:
             df = pd.read_csv(trf_file)
             ticker_data = df[df['ticker'] == ticker.upper()]
             if not ticker_data.empty:
-                # Calculate correction factor (example: total_volume / (total_volume - short_volume))
                 total_volume = ticker_data['total_volume'].iloc[0]
                 short_volume = ticker_data['short_volume'].iloc[0]
                 if total_volume > 0 and short_volume < total_volume:
-                    return total_volume / (total_volume - short_volume)
+                    factor = total_volume / (total_volume - short_volume)
+                    _logger.debug(
+                        "TRF correction factor for %s: %.4f "
+                        "(data_date=%s, total_vol=%s, short_vol=%s)",
+                        ticker, factor, trf_file.parent.name,
+                        total_volume, short_volume
+                    )
+                    return factor
         except Exception as e:
-            _logger.error(f"Error reading TRF file {trf_file}: {str(e)}")
+            _logger.error("Error reading TRF file %s: %s", trf_file, str(e))
 
     # Return 1.0 (no correction) if we couldn't find or read the file
     return 1.0
@@ -170,7 +186,7 @@ def main():
         target_date = datetime.strptime(args.date, '%Y-%m-%d') if args.date else None
         download_trf(target_date, args.force)
     except Exception as e:
-        _logger.error(f"Error: {str(e)}")
+        _logger.error("Error: %s", str(e))
         sys.exit(1)
 
 if __name__ == "__main__":

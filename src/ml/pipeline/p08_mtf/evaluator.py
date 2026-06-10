@@ -16,6 +16,7 @@ class P08Evaluator(P07Evaluator):
     """
     MTF-Aware Evaluator for P08.
     Uses P08FeatureEngine for trend-aware signals.
+    Inherits the 3-way split logic from P07Evaluator.run_evaluation().
     """
 
     @staticmethod
@@ -24,12 +25,12 @@ class P08Evaluator(P07Evaluator):
         Calculates MTF features and labels.
         Supports both single DF and list of DFs (for gap-aware processing).
         """
-        # If ohlcv is a list, process each segment independently to prevent gap leakage
         if isinstance(ohlcv, list):
             all_X = []
             all_y = []
             for segment in ohlcv:
-                if segment.empty: continue
+                if segment.empty:
+                    continue
                 X_seg = P08FeatureEngine.build_features(segment, params)
                 y_seg = get_triple_barrier_labels(
                     segment,
@@ -38,22 +39,19 @@ class P08Evaluator(P07Evaluator):
                     tpl_bars=params.get('tpl_bars', 12),
                     atr_period=params.get('atr_period', 14)
                 )
-
-                # Align X and y
                 common_idx = X_seg.index.intersection(y_seg.index)
                 all_X.append(X_seg.loc[common_idx])
                 all_y.append(y_seg.loc[common_idx])
 
-            if not all_X: return pd.DataFrame(), pd.Series()
+            if not all_X:
+                return pd.DataFrame(), pd.Series()
 
             X_f = pd.concat(all_X).sort_index()
             y_f = pd.concat(all_y).sort_index()
-            # Drop duplicates if any overlap
             X_f = X_f.loc[~X_f.index.duplicated(keep='last')]
             y_f = y_f.loc[~y_f.index.duplicated(keep='last')]
             return X_f, y_f
         else:
-            # Single segment processing
             X_f = P08FeatureEngine.build_features(ohlcv, params)
             y_seg = get_triple_barrier_labels(
                 ohlcv,

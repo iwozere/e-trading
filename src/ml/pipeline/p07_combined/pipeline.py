@@ -28,14 +28,18 @@ _logger = setup_logger(__name__)
 class P07Pipeline:
     """
     Core Orchestrator for p07_combined.
+    Supports optional Multi-Timeframe (MTF) mode via enable_mtf flag.
     """
 
     def __init__(self,
                  result_root: Path = Path("results/p07_combined"),
-                 db_url: Optional[str] = None):
+                 db_url: Optional[str] = None,
+                 enable_mtf: bool = False):
         self.result_root = Path(result_root)
+        self.enable_mtf = enable_mtf
         self.data_loader = P07DataLoader()
         self.regime_model = P07RegimeModel()
+        self._regime_trained: bool = False
 
         if db_url is None:
             db_path = (PROJECT_ROOT / "src" / "ml" / "pipeline" / "p07_combined" / "optuna_study.db").as_posix()
@@ -45,8 +49,17 @@ class P07Pipeline:
 
         self.result_root.mkdir(parents=True, exist_ok=True)
 
-    def train_macro_regimes(self, anchor_date: Optional[pd.Timestamp] = None):
-        """Train or load the global HMM regime model with an anchor date constraint."""
+    def train_macro_regimes(self, anchor_date: Optional[pd.Timestamp] = None, force: bool = False) -> bool:
+        """
+        Train or load the global HMM regime model.
+
+        After the first successful training, subsequent calls are no-ops unless
+        force=True.  Call this once before a batch loop (Phase 7.4) rather than
+        per-ticker to avoid repeated HMM fitting.
+        """
+        if self._regime_trained and not force:
+            return True
+
         vix = self.data_loader.load_vix()
         btc_mc = self.data_loader.load_btc_marketcap()
 
@@ -54,22 +67,31 @@ class P07Pipeline:
 
         if not macro_df.empty:
             _logger.info("Retraining macro regime model with anchor_date: %s", anchor_date)
-            return self.regime_model.train(macro_df, anchor_date=anchor_date)
+            success = self.regime_model.train(macro_df, anchor_date=anchor_date)
+            if success:
+                self._regime_trained = True
+            return success
         return False
 
     def enrich_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Inject global regime context into the ticker DataFrame, ensuring no look-ahead bias."""
-        anchor_date = df.index.min()
-        success = self.train_macro_regimes(anchor_date=anchor_date)
-
-        if not success:
-            _logger.warning("Failed to train regime model for anchor %s. Using default states.", anchor_date)
-            df["global_regime"] = 0
-            return df
+        if not self._regime_trained:
+            anchor_date = df.index.min()
+            success = self.train_macro_regimes(anchor_date=anchor_date)
+            if not success:
+                _logger.warning("Failed to train regime model for anchor %s. Using default states.", anchor_date)
+                df["global_regime"] = 0
+                return df
 
         regimes = self.regime_model.predict(df)
         df["global_regime"] = regimes
         return df
+
+    def _load_dataset(self, filepath: Path) -> pd.DataFrame:
+        """Load and merge a single data file, applying MTF join when enabled."""
+        if self.enable_mtf:
+            return self.data_loader.get_mtf_dataset(filepath)
+        return self.data_loader.get_merged_dataset(filepath)
 
     def get_result_dir(self, ticker: str, timeframe: str, start_date: str = "", end_date: str = "") -> Path:
         """Standardized path for results, nested by date range if provided."""
@@ -101,10 +123,13 @@ class P07Pipeline:
             direction="maximize"
         )
 
+        enable_mtf = self.enable_mtf
         if len(study.trials) < n_trials:
             _logger.info("Starting optimization for %s_%s %s (%d trials)...", ticker, timeframe, f"[{start_date}_{end_date}]" if start_date else "", n_trials)
-            # Pass timeframe to the objective
-            study.optimize(lambda trial: objective(trial, df_enriched, timeframe=timeframe), n_trials=n_trials)
+            study.optimize(
+                lambda trial: objective(trial, df_enriched, timeframe=timeframe, enable_mtf=enable_mtf),
+                n_trials=n_trials
+            )
         else:
             _logger.info("Optimization already sufficient for %s_%s %s (%d trials).", ticker, timeframe, f"[{start_date}_{end_date}]" if start_date else "", len(study.trials))
 
@@ -121,8 +146,11 @@ class P07Pipeline:
 
         _logger.info("Saving artifacts to %s", res_dir)
 
-        # 1. Run Shared Evaluation - PASS TIMEFRAME
-        res = P07Evaluator.run_evaluation(ohlcv_clean, params, timeframe=timeframe)
+        # Inject enable_mtf into params so evaluator passes it to build_features
+        params_with_mtf = {**params, 'enable_mtf': self.enable_mtf}
+
+        # 1. Run Shared Evaluation
+        res = P07Evaluator.run_evaluation(ohlcv_clean, params_with_mtf, timeframe=timeframe)
         if "error" in res:
             _logger.error("Failed to run evaluation for artifacts: %s", res["error"])
             return False
@@ -150,9 +178,29 @@ class P07Pipeline:
         plot_sigs[diff > 0] = 1
         plot_sigs[diff < 0] = -1
 
-        # 4. Save Plots
+        # 4. Walk-Forward Efficiency gate
+        is_sharpe = pf.sharpe_ratio()
+        try:
+            rob_dir = res_dir / "robustness"
+            checker = P07RobustnessChecker(ticker, timeframe, rob_dir)
+            rob_results = checker.run_all_checks(ohlcv_clean, params_with_mtf, res)
+            avg_oos_sharpe = rob_results.get('wfa', {}).get('avg_oos_sharpe', float('nan'))
+            if is_sharpe and is_sharpe > 0 and not pd.isna(avg_oos_sharpe):
+                wfe = avg_oos_sharpe / is_sharpe
+            else:
+                wfe = float('nan')
+            _logger.info("Walk-Forward Efficiency for %s %s: %.3f (threshold 0.50)", ticker, timeframe, wfe)
+            if not pd.isna(wfe) and wfe < 0.5:
+                _logger.warning(
+                    "Strategy REJECTED for %s %s: WFE=%.3f < 0.50. "
+                    "completed.flag will NOT be written.", ticker, timeframe, wfe)
+                return False
+        except Exception as e:
+            _logger.warning("WFE check skipped for %s %s due to error: %s", ticker, timeframe, str(e))
+
+        # 5. Save Plots
         viz = P07Visualizer(res_dir)
-        viz.plot_tbm_hits(res["y_f"])
+        viz.plot_tbm_hits(res["y_test"])
         viz.plot_prediction_diagnostics(
             model._map_labels(res["y_test"]).values,
             model.predict_proba(res["X_test"])
@@ -174,18 +222,15 @@ class P07Pipeline:
             _logger.error("No data files found for %s %s", ticker, timeframe)
             return
 
-        # For robustness, we collect all available data to have a long enough backtest
         dfs = []
         for f in ticker_files:
-            dfs.append(self.data_loader.get_merged_dataset(f))
+            dfs.append(self._load_dataset(f))
 
         ohlcv = pd.concat(dfs).sort_index()
         ohlcv = ohlcv.loc[~ohlcv.index.duplicated(keep='last')]
         ohlcv = self.enrich_data(ohlcv)
 
         # 2. Get Best Params from Study
-        # We need to know the agg_start/agg_end to find the study
-        # For simplicity, we search for the study name pattern
         all_studies = optuna.get_all_study_summaries(storage=self.db_url)
         study_name = None
         for s in all_studies:
@@ -239,7 +284,6 @@ class P07Pipeline:
             ticker, timeframe, start, end = self.data_loader.parse_filename(filepath)
             if not ticker: continue
 
-            # (Optional) Filter by year if train_years is specified
             if train_years:
                 if not any(yr in start or yr in end for yr in train_years):
                     _logger.debug("Skipping file %s as it doesn't match training years %s", filepath.name, train_years)
@@ -249,13 +293,14 @@ class P07Pipeline:
             if key not in groups: groups[key] = []
             groups[key].append({'path': filepath, 'start': start, 'end': end, 'year': start[:4]})
 
-        # 2. Process each group
+        # 2. Pre-train macro regime model ONCE before the batch loop (Phase 7.4)
+        self.train_macro_regimes()
+
+        # 3. Process each group
         for (ticker, timeframe), files in groups.items():
             # Sort by start date to find latest for validation
             files.sort(key=lambda x: x['start'])
 
-            # If we have multiple files, use all but the last for optimization
-            # and the last one for out-of-sample validation.
             if len(files) > 1:
                 opt_files = files[:-1]
                 val_file = files[-1]
@@ -268,33 +313,27 @@ class P07Pipeline:
                              ticker, timeframe, opt_files[0]['path'].name)
 
             # --- A. Optimization Phase ---
-            # Combined optimization across all opt_files (simplified here by taking first or merging)
-            # For simplicity in this iteration, we combine the opt data
             try:
                 dfs = []
                 for f in opt_files:
-                    df_merged = self.data_loader.get_merged_dataset(f['path'])
+                    df_merged = self._load_dataset(f['path'])
                     dfs.append(self.enrich_data(df_merged))
 
-                # Use AGGREGATE range for naming/completion check
                 agg_start = min(f['start'] for f in opt_files)
                 agg_end = max(f['end'] for f in opt_files)
 
                 if self.is_completed(ticker, timeframe, agg_start, agg_end):
                     _logger.info("Optimization already completed for aggregated %s %s (%s_%s)", ticker, timeframe, agg_start, agg_end)
                 else:
-                    # Pass the LIST of dataframes (dfs) instead of concatenated df_opt
-                    # This allows P07Evaluator and labeling to process segments safely.
                     self.run_optimization(ticker, timeframe, dfs, start_date=agg_start, end_date=agg_end)
 
                 # --- B. Validation Phase (Optional) ---
                 if val_file:
                     _logger.info("Running Out-of-Sample Validation for %s %s on %s", ticker, timeframe, val_file['path'].name)
-                    # Load best params from the study
                     study_name = f"p07_{ticker}_{timeframe}_{agg_start}_{agg_end}"
                     study = optuna.load_study(study_name=study_name, storage=self.db_url)
 
-                    df_val = self.data_loader.get_merged_dataset(val_file['path'])
+                    df_val = self._load_dataset(val_file['path'])
                     df_val = self.enrich_data(df_val)
 
                     self.save_artifacts(ticker, timeframe, df_val, study.best_params,
@@ -310,10 +349,12 @@ if __name__ == "__main__":
     parser.add_argument("--ticker", type=str, help="Specific ticker to run")
     parser.add_argument("--tf", type=str, help="Specific timeframe to run")
     parser.add_argument("--years", type=str, help="Comma-separated years to train on (e.g., 2022,2023,2024)")
+    parser.add_argument("--enable-mtf", action="store_true", default=False,
+                        help="Enable Multi-Timeframe (anchor TF) features")
     args = parser.parse_args()
 
-    p = P07Pipeline()
-    _logger.info("Starting P07 Pipeline Batch...")
+    p = P07Pipeline(enable_mtf=args.enable_mtf)
+    _logger.info("Starting P07 Pipeline Batch... (MTF=%s)", args.enable_mtf)
     data_dir = Path("data")
 
     # Standard segment files (ticker_tf_start_end.csv)

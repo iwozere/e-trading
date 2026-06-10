@@ -27,6 +27,8 @@ lstm:
   validation_split: 0.2
   dropout: 0.2
   num_layers: 2
+  multi_regime: false          # true → train one LSTM per HMM regime (P00 approach)
+  min_regime_samples: 200      # skip regimes with fewer samples than this
 
 optuna:
   n_trials: 50

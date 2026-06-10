@@ -627,7 +627,8 @@ class LSTMTrainer:
         }
 
     def save_model(self, model: nn.Module, scalers: Dict, features: List[str],
-                  training_results: Dict, lstm_params: Dict, symbol: str, timeframe: str) -> Path:
+                  training_results: Dict, lstm_params: Dict, symbol: str, timeframe: str,
+                  regime_suffix: str = "") -> Path:
         """
         Save trained LSTM model and metadata.
 
@@ -639,12 +640,13 @@ class LSTMTrainer:
             lstm_params: LSTM hyperparameters
             symbol: Trading symbol
             timeframe: Timeframe
+            regime_suffix: Optional suffix like "_regime0" for multi-regime models
 
         Returns:
             Path to saved model file
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"lstm_{symbol}_{timeframe}_{timestamp}.pkl"
+        filename = f"lstm_{symbol}_{timeframe}{regime_suffix}_{timestamp}.pkl"
         filepath = self.models_dir / filename
 
         # Prepare model package
@@ -676,9 +678,98 @@ class LSTMTrainer:
         _logger.info("Saved LSTM model to %s", filepath)
         return filepath
 
+    def _train_single(self, df: pd.DataFrame, symbol: str, timeframe: str,
+                       lstm_params: Dict, regime_suffix: str = "") -> Dict:
+        """
+        Train one LSTM on a (possibly regime-filtered) DataFrame.
+        regime_suffix is appended to the saved filename, e.g. "_regime0".
+        """
+        features = self.prepare_lstm_features(df, exclude_regime=True)
+
+        data_dict = self.prepare_data(
+            df, features,
+            lstm_params['sequence_length'],
+            test_size=self.config['evaluation']['test_split']
+        )
+
+        scaled_data, scalers = self.scale_data(data_dict)
+        loaders = self.create_data_loaders(scaled_data, lstm_params['batch_size'])
+
+        model = LSTMModel(
+            input_size=scaled_data['n_features'],
+            hidden_size=lstm_params['hidden_size'],
+            num_layers=lstm_params['num_layers'],
+            dropout=lstm_params['dropout'],
+            n_regimes=self.config['hmm']['n_components']
+        ).to(DEVICE)
+
+        _logger.info("LSTM model (%s%s): %d parameters",
+                     f"{symbol} {timeframe}", regime_suffix,
+                     sum(p.numel() for p in model.parameters()))
+
+        training_results = self.train_model(
+            model,
+            loaders['train_loader'],
+            loaders['val_loader'],
+            lstm_params['learning_rate'],
+            lstm_params['epochs'],
+            symbol=symbol,
+            timeframe=f"{timeframe}{regime_suffix}"
+        )
+
+        model_path = self.save_model(
+            model, scalers, features, training_results, lstm_params,
+            symbol, timeframe, regime_suffix=regime_suffix
+        )
+        return {
+            'model_path': str(model_path),
+            'best_val_loss': training_results['best_val_loss'],
+            'training_epochs': training_results['final_epoch'],
+            'n_parameters': sum(p.numel() for p in model.parameters()),
+            'features_used': len(features),
+        }
+
+    def _train_multi_regime(self, df: pd.DataFrame, symbol: str, timeframe: str,
+                             lstm_params: Dict) -> Dict:
+        """
+        Train one LSTM per distinct HMM regime.
+        Skips regimes with fewer than min_regime_samples rows.
+        Returns a dict keyed by regime_id with per-regime results.
+        """
+        min_samples = self.config['lstm'].get('min_regime_samples', 200)
+        regime_results = {}
+
+        if 'regime' not in df.columns:
+            _logger.error("'regime' column not found; cannot train in multi-regime mode.")
+            return regime_results
+
+        for regime_id in sorted(df['regime'].dropna().unique()):
+            regime_df = df[df['regime'] == regime_id].copy().reset_index(drop=True)
+            if len(regime_df) < min_samples:
+                _logger.warning("Regime %s has only %d samples (min=%d); skipping.",
+                                 regime_id, len(regime_df), min_samples)
+                continue
+
+            suffix = f"_regime{int(regime_id)}"
+            _logger.info("Training LSTM for %s %s%s (%d samples)",
+                         symbol, timeframe, suffix, len(regime_df))
+            try:
+                result = self._train_single(regime_df, symbol, timeframe, lstm_params,
+                                            regime_suffix=suffix)
+                regime_results[int(regime_id)] = {**result, 'success': True}
+                _logger.info("[OK] regime %s — best_val_loss=%.6f, epochs=%d",
+                             regime_id, result['best_val_loss'], result['training_epochs'])
+            except Exception as e:
+                _logger.error("Failed training regime %s for %s %s: %s",
+                              regime_id, symbol, timeframe, str(e))
+                regime_results[int(regime_id)] = {'success': False, 'error': str(e)}
+
+        return regime_results
+
     def train_lstm(self, symbol: str, timeframe: str) -> Dict:
         """
         Train LSTM model for a specific symbol-timeframe combination.
+        When config.lstm.multi_regime is True, trains one model per HMM regime.
 
         Args:
             symbol: Trading symbol
@@ -726,60 +817,36 @@ class LSTMTrainer:
             if indicator_params:
                 df = self.apply_optimized_indicators(df, indicator_params)
 
-            # Prepare features (exclude regime as it's handled separately)
-            features = self.prepare_lstm_features(df, exclude_regime=True)
+            multi_regime = self.config['lstm'].get('multi_regime', False)
 
-            # Prepare data
-            data_dict = self.prepare_data(
-                df, features,
-                lstm_params['sequence_length'],
-                test_size=self.config['evaluation']['test_split']
-            )
+            if multi_regime:
+                _logger.info("Multi-regime mode: training one LSTM per HMM regime.")
+                regime_results = self._train_multi_regime(df, symbol, timeframe, lstm_params)
+                n_trained = sum(1 for r in regime_results.values() if r.get('success'))
+                _logger.info("[OK] Multi-regime training done for %s %s: %d/%d regimes trained.",
+                             symbol, timeframe, n_trained, len(regime_results))
+                return {
+                    'symbol': symbol,
+                    'timeframe': timeframe,
+                    'success': n_trained > 0,
+                    'multi_regime': True,
+                    'regime_results': regime_results,
+                    'regimes_trained': n_trained,
+                }
 
-            # Scale data
-            scaled_data, scalers = self.scale_data(data_dict)
-
-            # Create data loaders
-            loaders = self.create_data_loaders(scaled_data, lstm_params['batch_size'])
-
-            # Create model
-            model = LSTMModel(
-                input_size=scaled_data['n_features'],
-                hidden_size=lstm_params['hidden_size'],
-                num_layers=lstm_params['num_layers'],
-                dropout=lstm_params['dropout'],
-                n_regimes=3  # From HMM configuration
-            ).to(DEVICE)
-
-            _logger.info("Created LSTM model with %d parameters", sum(p.numel() for p in model.parameters()))
-
-            # Train model
-            training_results = self.train_model(
-                model,
-                loaders['train_loader'],
-                loaders['val_loader'],
-                lstm_params['learning_rate'],
-                lstm_params['epochs']
-            )
-
-            # Save model
-            model_path = self.save_model(
-                model, scalers, features, training_results, lstm_params, symbol, timeframe
-            )
+            # --- Single-model path ---
+            result = self._train_single(df, symbol, timeframe, lstm_params)
 
             _logger.info("[OK] LSTM training completed for %s %s", symbol, timeframe)
-            _logger.info("  Best validation loss: %.6f", training_results['best_val_loss'])
-            _logger.info("  Training epochs: %d", training_results['final_epoch'])
+            _logger.info("  Best validation loss: %.6f", result['best_val_loss'])
+            _logger.info("  Training epochs: %d", result['training_epochs'])
 
             return {
                 'symbol': symbol,
                 'timeframe': timeframe,
                 'success': True,
-                'model_path': str(model_path),
-                'best_val_loss': training_results['best_val_loss'],
-                'training_epochs': training_results['final_epoch'],
-                'n_parameters': sum(p.numel() for p in model.parameters()),
-                'features_used': len(features)
+                'multi_regime': False,
+                **result,
             }
 
         except Exception as e:

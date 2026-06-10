@@ -9,6 +9,10 @@ data_sources:
     symbols: [AAPL, MSFT]
     timeframes: [1d]
 
+# Model variant selection (merged from P03)
+cnn_variant: cnn_lstm     # cnn_lstm | simple  (simple → CNN1D from P03, less overfitting risk)
+target_strategy: single   # single | multi     (multi adds direction/volatility/trend/magnitude targets)
+
 # CNN-LSTM model configuration
 cnn_lstm:
   time_steps: 20

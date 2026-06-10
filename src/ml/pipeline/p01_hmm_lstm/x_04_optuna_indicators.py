@@ -341,12 +341,14 @@ class IndicatorOptimizer:
             # Load data
             df = pd.read_csv(csv_file)
 
-            # Use a subset of data for optimization (to speed up the process)
-            # Keep last 80% for optimization, reserve 20% for validation
-            split_idx = int(len(df) * 0.2)
-            df_optimization = df.iloc[split_idx:].copy().reset_index(drop=True)
+            # Only allow Stage 4 to see the first 60% of data.
+            # The next 20% is reserved for LSTM validation (Stage 6) and
+            # the final 20% is the true OOS test set (Stage 7).
+            train_end = int(len(df) * 0.60)
+            df_optimization = df.iloc[:train_end].copy().reset_index(drop=True)
 
-            _logger.info("Using %d samples for optimization", len(df_optimization))
+            _logger.info("Using %d samples for indicator optimization (first 60%% of %d total)",
+                         len(df_optimization), len(df))
 
             # Create Optuna study
             study = optuna.create_study(
@@ -371,10 +373,12 @@ class IndicatorOptimizer:
             _logger.info("Best objective value: %.4f", best_value)
             _logger.info("Best parameters: %s", best_params)
 
-            # Validate on the full dataset
-            df_with_indicators = self.calculate_indicators_with_params(df, best_params)
-            df_with_signals = self.generate_trading_signals(df_with_indicators)
-            validation_metrics = self.calculate_performance_metrics(df_with_signals)
+            # Report in-sample metrics on the optimization segment only.
+            # Do NOT compute metrics on the full dataset — that would contaminate
+            # the LSTM validation and OOS test sets reserved for Stages 6–7.
+            df_opt_with_indicators = self.calculate_indicators_with_params(df_optimization, best_params)
+            df_opt_with_signals = self.generate_trading_signals(df_opt_with_indicators)
+            validation_metrics = self.calculate_performance_metrics(df_opt_with_signals)
 
             # Save results
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -403,7 +407,8 @@ class IndicatorOptimizer:
                 'validation_metrics': convert_numpy_types(validation_metrics),
                 'n_trials': len(study.trials),
                 'optimization_samples': len(df_optimization),
-                'validation_samples': len(df)
+                'total_samples': len(df),
+                'validation_samples': len(df_optimization)
             }
 
             # Save to JSON file

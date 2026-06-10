@@ -205,6 +205,18 @@ Examples:
         help='User ID to associate with alerts and jobs'
     )
 
+    # Stage 3 analyzer selection
+    parser.add_argument(
+        '--analyzer-type',
+        type=str,
+        choices=['volatility', 'accumulation'],
+        default='volatility',
+        help=(
+            "Stage 3 analyzer: 'volatility' (default — VolatilityFilter, original P06) "
+            "or 'accumulation' (AccumulationAnalyzer, Coiled Spring / former P10 approach)"
+        )
+    )
+
     # Sentiment filtering parameters
     sentiment_group = parser.add_argument_group('Sentiment Filtering')
     sentiment_group.add_argument(
@@ -326,6 +338,11 @@ def main() -> int:
         config.sentiment_config.enabled = False
     if args.user_id:
         config.user_id = args.user_id
+
+    # Apply analyzer type
+    config.analyzer_type = args.analyzer_type
+    if args.analyzer_type == 'accumulation':
+        _logger.info("Stage 3: AccumulationAnalyzer (accumulation mode — former P10 approach)")
 
     # Determine force_refresh (default is False, use cache unless --force-refresh is specified)
     force_refresh = args.force_refresh

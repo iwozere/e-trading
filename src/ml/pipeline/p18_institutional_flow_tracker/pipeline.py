@@ -324,8 +324,4 @@ def _collect_watchlist_tickers(
         tickers += consensus_df["ticker"].dropna().unique().tolist()
     if not form4_df.empty and "ticker" in form4_df.columns:
         tickers += form4_df["ticker"].dropna().unique().tolist()
-    seen: List[str] = []
-    for t in tickers:
-        if t and t not in seen:
-            seen.append(t)
-    return seen[:max_tickers]
+    return list(dict.fromkeys(t for t in tickers if t))[:max_tickers]

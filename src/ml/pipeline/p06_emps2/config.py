@@ -5,7 +5,7 @@ Configuration dataclasses for the EMPS2 (Enhanced Explosive Move Pre-Screener) p
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from src.ml.pipeline.shared.config import (
     FundamentalFilterConfig, 
@@ -44,6 +44,14 @@ class EMPS2FilterConfig(FundamentalFilterConfig):
     lookback_days: int = 15
     interval: str = "1h"
     atr_period: int = 14
+
+    # Accumulation mode fields (used when analyzer_type='accumulation')
+    # These mirror EMPS3FilterConfig defaults so the merged pipeline is drop-in compatible.
+    max_price_impact: float = 0.05             # daily range gate (price_range_1d < this)
+    max_atr_ratio: float = 0.04               # ATR(14)/price gate
+    max_distance_from_resistance: float = 0.15 # distance from 20-day high
+    max_distance_from_sma20: float = 0.10      # distance from SMA-20
+    ohlcv_chunk_size: int = 50                 # tickers per download chunk
 
 
 @dataclass
@@ -100,6 +108,11 @@ class RollingMemoryConfig:
     alert_on_phase1: bool = False  # Only alert on Phase 2 by default
     alert_on_phase2: bool = True
 
+    # EMPS3-style slope thresholds (used by accumulation rolling memory)
+    min_vol_slope: float = 0.05       # minimum volume acceleration slope
+    max_atr_slope: float = -0.0001    # maximum ATR contraction slope (must be negative)
+    phase1_5_min_appearances: int = 3  # for Phase 1.5 early-warning detection
+
     # Output settings
     save_rolling_candidates: bool = True
     save_phase1_watchlist: bool = True
@@ -136,6 +149,9 @@ class EMPS2PipelineConfig:
     universe_config: EMPS2UniverseConfig
     rolling_memory_config: RollingMemoryConfig
     sentiment_config: SentimentFilterConfig
+
+    # Stage 3 analyzer selection
+    analyzer_type: Literal["volatility", "accumulation"] = "volatility"
 
     # Output settings
     save_intermediate_results: bool = True

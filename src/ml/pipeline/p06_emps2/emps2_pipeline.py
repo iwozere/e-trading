@@ -21,12 +21,14 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.data_manager import DataManager
 from .config import EMPS2PipelineConfig
+from src.ml.pipeline.shared.analyzer_protocol import ScreenerAnalyzer
 from src.ml.pipeline.shared.universe_downloader import NasdaqUniverseDownloader
 from src.ml.pipeline.shared.fundamental_filter import FundamentalFilter
 from src.ml.pipeline.shared.volatility_filter import VolatilityFilter
 from src.ml.pipeline.shared.sentiment_filter import SentimentFilter
 from src.ml.pipeline.shared.trf_downloader import download_trf
 from src.ml.pipeline.p06_emps2.rolling_memory import RollingMemoryScanner
+from src.ml.pipeline.p06_emps2.accumulation_analyzer import AccumulationAnalyzer
 from src.ml.pipeline.p06_emps2.alerts import EMPS2AlertSender
 from src.ml.pipeline.p06_emps2.uoa_analyzer import UOAAnalyzer
 
@@ -94,12 +96,7 @@ class EMPS2Pipeline:
             checkpoint_interval=self.config.checkpoint_interval
         )
 
-        self.volatility_filter = VolatilityFilter(
-            self.data_manager,
-            self.config.filter_config,
-            results_dir=self._results_dir,
-            target_date=target_date,
-        )
+        self._stage3_analyzer: ScreenerAnalyzer = self._build_analyzer(target_date)
 
         # Rolling memory scanner
         self.rolling_memory = RollingMemoryScanner(
@@ -170,6 +167,31 @@ class EMPS2Pipeline:
             self._pipeline_logger.removeHandler(self._pipeline_log_handler)
             self._pipeline_log_handler.close()
             _logger.debug("Per-scan logging handler cleaned up")
+
+    def _build_analyzer(self, target_date: str) -> ScreenerAnalyzer:
+        """
+        Factory that selects the Stage 3 analyzer based on config.analyzer_type.
+
+        "volatility"    → VolatilityFilter  (default, original P06 behaviour)
+        "accumulation"  → AccumulationAnalyzer (Coiled Spring / P10 approach)
+        """
+        if self.config.analyzer_type == "accumulation":
+            _logger.info("Stage 3 analyzer: AccumulationAnalyzer (accumulation mode)")
+            return AccumulationAnalyzer(
+                data_manager=self.data_manager,
+                config=self.config.filter_config,
+                results_dir=self._results_dir,
+                target_date=target_date,
+                chunk_size=self.config.filter_config.ohlcv_chunk_size,
+                checkpoint_enabled=self.config.checkpoint_enabled,
+            )
+        _logger.info("Stage 3 analyzer: VolatilityFilter (volatility mode)")
+        return VolatilityFilter(
+            self.data_manager,
+            self.config.filter_config,
+            results_dir=self._results_dir,
+            target_date=target_date,
+        )
 
     def run(self, force_refresh: bool = False) -> pd.DataFrame:
         """
@@ -323,20 +345,20 @@ class EMPS2Pipeline:
 
     def _stage3_volatility_filter(self, tickers: list) -> pd.DataFrame:
         """
-        Stage 3: Apply volatility filters.
+        Stage 3: Apply the configured Stage 3 analyzer (volatility or accumulation).
 
         Args:
             tickers: List of ticker symbols
 
         Returns:
-            DataFrame with volatility-filtered tickers and metrics
+            DataFrame with filtered tickers and diagnostic metrics
         """
         _logger.info("-"*70)
-        _logger.info("Stage 3: Applying Volatility Filters")
+        analyzer_label = "AccumulationAnalyzer" if self.config.analyzer_type == "accumulation" else "VolatilityFilter"
+        _logger.info("Stage 3: %s", analyzer_label)
         _logger.info("-"*70)
 
-        # Apply volatility filter (now returns DataFrame directly)
-        filtered_df = self.volatility_filter.apply_filters(tickers)
+        filtered_df = self._stage3_analyzer.apply_filters(tickers)
 
         _logger.info("Stage 3 complete: %d tickers", len(filtered_df))
         return filtered_df
