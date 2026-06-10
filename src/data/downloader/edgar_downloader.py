@@ -72,6 +72,15 @@ _INFOTABLE_FILENAMES = [
     "xslForm13F_X01.xml",
 ]
 
+# XBRL fact candidates for shares outstanding (preference order)
+_SHARES_FACT_CANDIDATES = [
+    ("us-gaap", "CommonStockSharesOutstanding"),
+    ("us-gaap", "CommonStockSharesOutstandingPeriod"),
+    ("us-gaap", "WeightedAverageNumberOfShareOutstandingBasic"),
+    ("us-gaap", "SharesOutstanding"),
+    ("dei", "EntityCommonStockSharesOutstanding"),
+]
+
 # EFTS pagination page size (max 100)
 _EFTS_PAGE_SIZE = 100
 
@@ -816,6 +825,32 @@ class EdgarDownloader(BaseDataDownloader):
 
         return sorted(set(ciks))
 
+    def get_shares_outstanding_at_date(
+        self,
+        cik: Union[int, str],
+        settlement_date: date,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Return the best shares-outstanding fact for a CIK on or before a given date.
+
+        Loads company facts from cache (fetching from SEC EDGAR if absent) and
+        searches XBRL facts in preference order for the most recent filing whose
+        end date is <= settlement_date.
+
+        Args:
+            cik: CIK number as int or string.
+            settlement_date: Upper bound for the effective date (e.g. a settlement date).
+
+        Returns:
+            Dict with keys value (int), effective_date (date), fact (str), unit (str);
+            or None if no matching fact is found.
+        """
+        cf_json = self.load_company_facts(cik)
+        if cf_json is None:
+            _logger.warning("No company facts available for CIK %s", cik)
+            return None
+        return _pick_best_shares_fact(cf_json, settlement_date)
+
     def _efts_search(self, forms: str, start_dt: str, end_dt: str) -> List[Dict]:
         """
         Paginate through EDGAR EFTS full-text search results for given form types.
@@ -1035,6 +1070,57 @@ class EdgarDownloader(BaseDataDownloader):
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
+def _pick_best_shares_fact(
+    cf_json: Dict[str, Any],
+    settlement_date: date,
+) -> Optional[Dict[str, Any]]:
+    """
+    Select the most recent shares-outstanding fact from EDGAR company facts JSON
+    whose end date is on or before settlement_date.
+
+    Iterates _SHARES_FACT_CANDIDATES in preference order.
+
+    Args:
+        cf_json: Parsed company facts JSON from SEC EDGAR.
+        settlement_date: Upper bound for the effective date of the fact.
+
+    Returns:
+        Dict with keys value (int), effective_date (date), fact (str), unit (str);
+        or None if no match found.
+    """
+    facts = cf_json.get("facts", {})
+    best: Optional[tuple] = None  # (end_date, value, fact_name, unit_name)
+    for space, fname in _SHARES_FACT_CANDIDATES:
+        fact_obj = facts.get(space, {}).get(fname)
+        if not fact_obj:
+            continue
+        for unit_name, entries in fact_obj.get("units", {}).items():
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                end = entry.get("end") or entry.get("instant")
+                if not end:
+                    continue
+                try:
+                    end_date = datetime.strptime(end[:10], "%Y-%m-%d").date()
+                except ValueError:
+                    continue
+                if end_date > settlement_date:
+                    continue
+                val = entry.get("val")
+                if val is None:
+                    continue
+                try:
+                    val_int = int(float(val))
+                except (ValueError, TypeError):
+                    continue
+                if best is None or end_date > best[0]:
+                    best = (end_date, val_int, f"{space}:{fname}", unit_name)
+    if best is None:
+        return None
+    return {"value": best[1], "effective_date": best[0], "fact": best[2], "unit": best[3]}
+
 
 def _13f_filing_window(year: int, quarter: int) -> tuple:
     """Return (start_date, end_date) of the 13F filing window for a quarter."""
