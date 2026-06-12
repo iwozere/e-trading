@@ -44,9 +44,6 @@ entries:
   - symbol: ESTC
     avg_price: 79
     notes: "short-term hold"
-  - symbol: DCTH
-    avg_price: 10.52
-    notes: "short-term hold"
   - symbol: CRSP
     avg_price: 55.79
     notes: "short-term hold"
