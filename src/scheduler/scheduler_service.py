@@ -573,13 +573,21 @@ class SchedulerService:
                 raise ValueError(f"Unsupported job type: {schedule.job_type}")
 
             # P2-SCHED-3: apply execution timeout so a hung job cannot block the
-            # event loop indefinitely.  DATA_PROCESSING jobs have their own inner
-            # timeout via asyncio.wait_for; this outer limit is the absolute backstop.
+            # event loop indefinitely.  For DATA_PROCESSING / SCRIPT jobs the
+            # per-job inner timeout lives in task_params["timeout_seconds"]; the
+            # outer limit must be at least that value plus a grace period so the
+            # inner timeout can fire cleanly before the outer one cuts in.
+            effective_timeout = self.job_timeout_seconds
+            if schedule.job_type in (JobType.DATA_PROCESSING.value, JobType.SCRIPT.value):
+                inner = (schedule.task_params or {}).get("timeout_seconds")
+                if isinstance(inner, (int, float)) and inner > 0:
+                    effective_timeout = max(effective_timeout, int(inner) + 60)
+
             try:
-                result = await asyncio.wait_for(job_coro, timeout=self.job_timeout_seconds)
+                result = await asyncio.wait_for(job_coro, timeout=effective_timeout)
             except asyncio.TimeoutError:
                 timeout_msg = (
-                    f"Job timed out after {self.job_timeout_seconds}s "
+                    f"Job timed out after {effective_timeout}s "
                     f"(schedule: {schedule.name!r}, type: {schedule.job_type})"
                 )
                 _logger.error(timeout_msg)

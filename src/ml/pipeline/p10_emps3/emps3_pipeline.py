@@ -41,5 +41,15 @@ class EMPS3Pipeline:
 
         self._delegate = EMPS2Pipeline(emps2_config, target_date=target_date)
 
-    def run(self, force_refresh: bool = False) -> pd.DataFrame:
+    @property
+    def target_date(self) -> str:
+        return self._delegate.target_date
+
+    def run(self, force_refresh: bool = False, tickers: Optional[list] = None) -> pd.DataFrame:
+        if tickers is not None:
+            _logger.warning(
+                "EMPS3Pipeline shim: 'tickers' filter is not supported by the EMPS2 delegate "
+                "and will be ignored (%d tickers passed).",
+                len(tickers),
+            )
         return self._delegate.run(force_refresh=force_refresh)
