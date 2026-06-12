@@ -86,7 +86,7 @@ class ServiceMonitor:
             error_patterns = [
                 r"Traceback \(most recent call last\)",
                 r"SyntaxError",
-                r"CRITICAL",
+                r"- CRITICAL -",  # log level only, not the word in a message body
                 r"SystemExit",
                 r"OOM|out of memory",
             ]
