@@ -9,7 +9,6 @@ git pull origin main
 telegram_bot.service
 notification_bot.service
 scheduler.service
-trading-api.service
 trading-webui.service
 trading.service
 
@@ -27,7 +26,6 @@ scheduler.service
 telegram_bot.service
 trading.service
 trading-webui.service
-trading-api.service
 
 
 ############################################
@@ -37,7 +35,6 @@ sudo systemctl status telegram_bot.service
 sudo systemctl status scheduler.service
 sudo systemctl status notification_bot.service
 sudo systemctl status ibgateway-docker.service
-sudo systemctl status trading-api.service
 sudo systemctl status trading-webui.service
 sudo systemctl status trading.service
 
@@ -45,7 +42,6 @@ sudo systemctl status trading.service
 sudo journalctl -u telegram_bot.service --since "10 minutes ago"
 sudo journalctl -u scheduler.service --since "10 minutes ago"
 sudo journalctl -u notification_bot.service --since "10 minutes ago"
-sudo journalctl -u trading-api.service --since "10 minutes ago"
 sudo journalctl -u trading-webui.service --since "10 minutes ago"
 sudo journalctl -u trading.service --since "10 minutes ago"
 sudo journalctl -u vector -n 30 --no-pager

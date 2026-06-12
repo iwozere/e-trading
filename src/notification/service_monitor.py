@@ -30,7 +30,6 @@ SERVICES_TO_MONITOR = [
     "telegram_bot.service",
     "trading.service",
     "trading-webui.service",
-    "trading-api.service"
 ]
 
 STATE_FILE = PROJECT_ROOT / "logs" / "monitor_state.json"
