@@ -17,6 +17,12 @@ from src.portfolio.pnl_alert.position_aggregator import RawIbkrPosition
 
 _logger = setup_logger(__name__)
 
+# IBKR reports non-US ETFs without the exchange suffix that data providers
+# (Tiingo, FMP, Yahoo) require. Map IBKR ticker → provider ticker here.
+_IBKR_SYMBOL_MAP: dict[str, str] = {
+    "VUSD": "VUSD.L",  # Vanguard FTSE All-World UCITS ETF (LSE, USD share class)
+}
+
 
 def resolve_xml_path(path_or_glob: str) -> Path:
     """
@@ -95,6 +101,7 @@ def load_ibkr_xml(path: str) -> List[RawIbkrPosition]:
         symbol_raw = pos_el.get("symbol", "").strip().upper()
         if not symbol_raw:
             continue
+        symbol_raw = _IBKR_SYMBOL_MAP.get(symbol_raw, symbol_raw)
 
         try:
             quantity = float(pos_el.get("position", "0"))
