@@ -504,19 +504,19 @@ class OptimizedMessageRepository:
 
         failed_last_hour = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.FAILED.value,
-            Message.updated_at >= one_hour_ago,
+            Message.processed_at >= one_hour_ago,
             Message.channels.overlap(channel_array)
         ).scalar() or 0
 
         delivered_last_hour = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.DELIVERED.value,
-            Message.delivered_at >= one_hour_ago,
+            Message.processed_at >= one_hour_ago,
             Message.channels.overlap(channel_array)
         ).scalar() or 0
 
         stuck_messages = self.session.query(func.count(Message.id)).filter(
             Message.status == MessageStatus.PROCESSING.value,
-            Message.updated_at < five_min_ago,
+            Message.locked_at < five_min_ago,
             Message.channels.overlap(channel_array)
         ).scalar() or 0
 
