@@ -1,0 +1,31 @@
+<FlexQueryResponse queryName="Open Positions" type="AF">
+<FlexStatements count="2">
+<FlexStatement accountId="U4594031" fromDate="2026-06-09" toDate="2026-06-09" period="LastBusinessDay" whenGenerated="2026-06-10 16:36:53">
+<OpenPositions>
+<OpenPosition symbol="AI" reportDate="2026-06-09" position="250" markPrice="10.79" positionValue="2697.5" openPrice="12.7550088" costBasisPrice="12.7550088" costBasisMoney="3188.7522" fifoPnlUnrealized="-491.2522" />
+<OpenPosition symbol="ALT" reportDate="2026-06-09" position="300" markPrice="2.66" positionValue="798" openPrice="2.806669667" costBasisPrice="2.806669667" costBasisMoney="842.0009" fifoPnlUnrealized="-44.0009" />
+<OpenPosition symbol="BINI" reportDate="2026-06-09" position="0.0002" markPrice="0.088" positionValue="0" openPrice="1414175" costBasisPrice="1414175" costBasisMoney="282.835" fifoPnlUnrealized="-282.835" />
+<OpenPosition symbol="CRSP" reportDate="2026-06-09" position="85" markPrice="51.48" positionValue="4375.8" openPrice="55.794135765" costBasisPrice="55.794135765" costBasisMoney="4742.50154" fifoPnlUnrealized="-366.70154" />
+<OpenPosition symbol="DKNG" reportDate="2026-06-09" position="150" markPrice="27.59" positionValue="4138.5" openPrice="29.860014667" costBasisPrice="29.860014667" costBasisMoney="4479.0022" fifoPnlUnrealized="-340.5022" />
+<OpenPosition symbol="ESTC" reportDate="2026-06-09" position="110" markPrice="61.26" positionValue="6738.6" openPrice="79.004565455" costBasisPrice="79.004565455" costBasisMoney="8690.5022" fifoPnlUnrealized="-1951.9022" />
+<OpenPosition symbol="IOVA" reportDate="2026-06-09" position="250" markPrice="3.88" positionValue="970" openPrice="2.205022" costBasisPrice="2.205022" costBasisMoney="551.2555" fifoPnlUnrealized="418.7445" />
+<OpenPosition symbol="MELI" reportDate="2026-06-09" position="5" markPrice="1641.16" positionValue="8205.8" openPrice="1735.1480056" costBasisPrice="1735.1480056" costBasisMoney="8675.740028" fifoPnlUnrealized="-469.940028" />
+<OpenPosition symbol="NUVL" reportDate="2026-06-09" position="10" markPrice="123.25" positionValue="1232.5" openPrice="88.900003" costBasisPrice="88.900003" costBasisMoney="889.00003" fifoPnlUnrealized="343.49997" />
+<OpenPosition symbol="NVDA" reportDate="2026-06-09" position="20" markPrice="208.19" positionValue="4163.8" openPrice="179.19" costBasisPrice="179.19" costBasisMoney="3583.8" fifoPnlUnrealized="580" />
+<OpenPosition symbol="ORCL" reportDate="2026-06-09" position="113" markPrice="205.81" positionValue="23256.53" openPrice="198.052043186" costBasisPrice="198.052043186" costBasisMoney="22379.88088" fifoPnlUnrealized="876.64912" />
+<OpenPosition symbol="PINS" reportDate="2026-06-09" position="150" markPrice="21.92" positionValue="3288" openPrice="27.020014667" costBasisPrice="27.020014667" costBasisMoney="4053.0022" fifoPnlUnrealized="-765.0022" />
+<OpenPosition symbol="RGNX" reportDate="2026-06-09" position="260" markPrice="6.34" positionValue="1648.4" openPrice="7.671539615" costBasisPrice="7.671539615" costBasisMoney="1994.6003" fifoPnlUnrealized="-346.2003" />
+<OpenPosition symbol="RPD" reportDate="2026-06-09" position="400" markPrice="7.1" positionValue="2840" openPrice="13.46876375" costBasisPrice="13.46876375" costBasisMoney="5387.5055" fifoPnlUnrealized="-2547.5055" />
+<OpenPosition symbol="SANA" reportDate="2026-06-09" position="150" markPrice="2.82" positionValue="423" openPrice="3.106669667" costBasisPrice="3.106669667" costBasisMoney="466.00045" fifoPnlUnrealized="-43.00045" />
+<OpenPosition symbol="VT" reportDate="2026-06-09" position="1216" markPrice="154.3" positionValue="187628.8" openPrice="113.718751658" costBasisPrice="113.718751658" costBasisMoney="138282.002016" fifoPnlUnrealized="49346.797984" />
+<OpenPosition symbol="VUSD" reportDate="2026-06-09" position="48" markPrice="139.005" positionValue="6672.24" openPrice="124.925" costBasisPrice="124.925" costBasisMoney="5996.4" fifoPnlUnrealized="675.84" />
+<OpenPosition symbol="YQ" reportDate="2026-06-09" position="50" markPrice="2.25" positionValue="112.5" openPrice="22.1" costBasisPrice="22.1" costBasisMoney="1105" fifoPnlUnrealized="-992.5" />
+</OpenPositions>
+</FlexStatement>
+<FlexStatement accountId="U13144347" fromDate="2026-06-09" toDate="2026-06-09" period="LastBusinessDay" whenGenerated="2026-06-10 16:36:53">
+<OpenPositions>
+<OpenPosition symbol="VT" reportDate="2026-06-09" position="74" markPrice="154.3" positionValue="11418.2" openPrice="93.975441649" costBasisPrice="93.975441649" costBasisMoney="6954.182682" fifoPnlUnrealized="4464.017318" />
+</OpenPositions>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>

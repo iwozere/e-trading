@@ -11,11 +11,16 @@ from typing import Any, Dict, List, Optional
 
 from src.notification.logger import setup_logger
 from src.portfolio.pnl_alert.config import PnLAlertConfig
+from src.portfolio.pnl_alert.ibkr_xml_loader import load_ibkr_xml
 from src.portfolio.pnl_alert.notifier import send_alert
 from src.portfolio.pnl_alert.pnl_evaluator import AlertRow, evaluate
-from src.portfolio.pnl_alert.position_aggregator import aggregate_holdings
+from src.portfolio.pnl_alert.position_aggregator import (
+    RawIbkrPosition,
+    fetch_raw_ibkr_positions,
+    merge_holdings,
+)
 from src.portfolio.pnl_alert.price_fetcher import fetch_latest_closes
-from src.portfolio.pnl_alert.watchlist_loader import load_watchlist
+from src.portfolio.pnl_alert.watchlist_loader import WatchlistEntry, load_watchlist
 
 _logger = setup_logger(__name__)
 
@@ -115,36 +120,56 @@ async def run_once(
 
     summary = RunSummary(ran_at=ran_at.isoformat(), dry_run=dry_run)
 
-    try:
-        watchlist = load_watchlist(cfg.watchlist_path)
-    except FileNotFoundError:
-        _logger.exception("Watchlist not found: %s", cfg.watchlist_path)
-        summary.errors.append(f"watchlist_not_found:{cfg.watchlist_path}")
-        return summary
-    except Exception as exc:
-        _logger.exception("Watchlist failed to load")
-        summary.errors.append(f"watchlist_invalid:{exc}")
-        return summary
+    # --- watchlist (optional) ---
+    watchlist: List[WatchlistEntry] = []
+    if cfg.watchlist_path:
+        try:
+            watchlist = load_watchlist(cfg.watchlist_path)
+        except FileNotFoundError:
+            _logger.exception("Watchlist not found: %s", cfg.watchlist_path)
+            summary.errors.append(f"watchlist_not_found:{cfg.watchlist_path}")
+            return summary
+        except Exception as exc:
+            _logger.exception("Watchlist failed to load")
+            summary.errors.append(f"watchlist_invalid:{exc}")
+            return summary
 
     summary.watchlist_count = len(watchlist)
 
+    # --- IBKR XML positions (optional) ---
+    xml_positions: List[RawIbkrPosition] = []
+    if cfg.ibkr_xml_path:
+        try:
+            xml_positions = load_ibkr_xml(cfg.ibkr_xml_path)
+        except Exception as exc:
+            _logger.exception("IBKR XML load failed: %s", cfg.ibkr_xml_path)
+            summary.errors.append(f"ibkr_xml_failed:{exc}")
+
+    # --- live IBKR broker (optional) ---
     owned_broker = False
     if cfg.include_ibkr and broker is None:
         broker = await _build_ibkr_broker()
         owned_broker = broker is not None
 
     try:
-        holdings, conflicts = await aggregate_holdings(
-            broker if cfg.include_ibkr else None,
-            watchlist,
-            stk_only=cfg.ibkr_stk_only,
-        )
+        live_ibkr: List[RawIbkrPosition] = []
+        if cfg.include_ibkr and broker is not None:
+            live_ibkr = fetch_raw_ibkr_positions(broker)
     finally:
         if owned_broker and broker is not None:
             try:
                 await broker.disconnect()
             except Exception:
                 _logger.exception("IBKR disconnect() raised")
+
+    # Merge: live IBKR overrides XML on the same symbol; both win over watchlist.
+    combined: dict[str, RawIbkrPosition] = {p.symbol: p for p in xml_positions}
+    for p in live_ibkr:
+        combined[p.symbol] = p
+
+    holdings, conflicts = merge_holdings(
+        list(combined.values()), watchlist, stk_only=cfg.ibkr_stk_only
+    )
 
     summary.ibkr_count = sum(1 for h in holdings if h.source == "ibkr")
     summary.holdings_count = len(holdings)

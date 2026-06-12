@@ -14,7 +14,18 @@ channels:
 cron: "30 21 * * 1-5"
 
 # Path (relative to project root) to the user-editable watchlist YAML.
+# Set to an empty string ("") to skip watchlist loading when ibkr_xml_path is used instead.
 watchlist_path: src/portfolio/pnl_alert/config/watchlist.yaml
+
+# Path to an IBKR Flex Query "Open Positions" XML export.
+# Supports glob patterns — the lexicographically-last match is used,
+# so ISO-date filenames (Open_Positions-YYYY-MM-DD.xml) resolve to the newest file.
+# Use the fixed-name export for simplicity, or a glob to auto-pick the latest dated file.
+# Examples:
+#   ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions.xml
+#   ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions-*.xml
+# Leave empty to disable.
+ibkr_xml_path: src/portfolio/pnl_alert/config/Open_Positions.xml
 
 # User ID whose email address and Telegram chat ID will receive the alert.
 recipient_id: 2

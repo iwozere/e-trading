@@ -41,17 +41,8 @@ entries:
   - symbol: IOVA
     avg_price: 2.21
     notes: "short-term hold"
-  - symbol: IONQ
-    avg_price: 48.79
-    notes: "short-term hold"
-  - symbol: FIVN
-    avg_price: 20.44
-    notes: "short-term hold"
   - symbol: ESTC
     avg_price: 79
-    notes: "short-term hold"
-  - symbol: DKNG
-    avg_price: 29.86
     notes: "short-term hold"
   - symbol: DCTH
     avg_price: 10.52

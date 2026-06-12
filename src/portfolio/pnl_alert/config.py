@@ -29,6 +29,12 @@ class PnLAlertConfig:
         channels: Notification channels (subset of "telegram", "email").
         cron: Cron expression (UTC) for the daily scheduled run.
         watchlist_path: Path, relative to project root, of the user watchlist.
+            Set to an empty string to skip watchlist loading entirely.
+        ibkr_xml_path: Path (or glob pattern) to an IBKR Flex Query Open
+            Positions XML export.  When a glob such as
+            ``config/Open_Positions-*.xml`` is given, the
+            lexicographically-last match is used (ISO-date filenames sort
+            correctly).  Empty string disables XML loading.
         include_ibkr: Whether to pull live IBKR positions.
         ibkr_stk_only: Restrict IBKR positions to STK sec-types.
         recipient_id: User ID whose email and Telegram are used for delivery.
@@ -38,6 +44,7 @@ class PnLAlertConfig:
     channels: List[str] = field(default_factory=lambda: ["telegram", "email"])
     cron: str = "30 21 * * 1-5"
     watchlist_path: str = "src/portfolio/pnl_alert/config/watchlist.yaml"
+    ibkr_xml_path: str = ""
     include_ibkr: bool = True
     ibkr_stk_only: bool = True
     recipient_id: Optional[int] = None
@@ -102,6 +109,7 @@ def load_config(path: Optional[str] = None) -> PnLAlertConfig:
         channels=list(raw.get("channels", ["telegram", "email"])),
         cron=str(raw.get("cron", "30 21 * * 1-5")),
         watchlist_path=str(raw.get("watchlist_path", "src/portfolio/pnl_alert/config/watchlist.yaml")),
+        ibkr_xml_path=str(raw.get("ibkr_xml_path", "")),
         include_ibkr=bool(raw.get("include_ibkr", True)),
         ibkr_stk_only=bool(raw.get("ibkr_stk_only", True)),
         recipient_id=int(raw_recipient) if raw_recipient is not None else None,
