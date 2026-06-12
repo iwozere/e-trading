@@ -1,22 +1,129 @@
-import React from 'react';
-import { 
-  Box, 
-  Typography, 
-  Card, 
-  CardContent,
-  Grid,
-  CircularProgress,
+import React, { useState } from 'react';
+import {
   Alert,
+  Box,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Collapse,
   Divider,
-  Paper
+  Grid,
+  IconButton,
+  Paper,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tabs,
+  Tooltip,
+  Typography,
 } from '@mui/material';
-import { 
+import {
+  CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon,
+  ExpandLess,
+  ExpandMore,
+  HelpOutline as UnknownIcon,
   Memory as MemoryIcon,
+  Speed as SpeedIcon,
   Timeline as TimelineIcon,
   Timer as TimerIcon,
-  Speed as SpeedIcon
+  Warning as WarningIcon,
 } from '@mui/icons-material';
-import { useSystemStatus, useSystemMetrics } from '../../hooks/system/useSystemHealth';
+import { useSystemMetrics, useSystemStatus, useServicesStatus, usePipelinesStatus } from '../../hooks/system/useSystemHealth';
+
+// ── shared types ─────────────────────────────────────────────────────────────
+
+interface RecentRun {
+  id: number;
+  status: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_s: number | null;
+  error: string | null;
+}
+
+interface Pipeline {
+  id: number;
+  name: string;
+  job_type: string;
+  target: string;
+  enabled: boolean;
+  cron: string;
+  next_run_at: string | null;
+  last_status: string;
+  last_run_at: string | null;
+  last_duration_s: number | null;
+  success_rate_10: number | null;
+  recent_runs: RecentRun[];
+}
+
+interface ServiceEntry {
+  name: string;
+  display_name: string;
+  status: 'active' | 'inactive' | 'unknown';
+  has_errors: boolean;
+}
+
+interface ChannelEntry {
+  status: string;
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function statusColor(status: string): 'success' | 'error' | 'warning' | 'default' {
+  if (['active', 'healthy', 'completed'].includes(status)) return 'success';
+  if (['failed', 'inactive'].includes(status)) return 'error';
+  if (['running', 'degraded'].includes(status)) return 'warning';
+  return 'default';
+}
+
+function statusIcon(status: string) {
+  if (['active', 'healthy', 'completed'].includes(status))
+    return <CheckCircleIcon fontSize="small" color="success" />;
+  if (['failed', 'inactive'].includes(status))
+    return <ErrorIcon fontSize="small" color="error" />;
+  if (['running', 'degraded'].includes(status))
+    return <WarningIcon fontSize="small" color="warning" />;
+  return <UnknownIcon fontSize="small" color="disabled" />;
+}
+
+function fmtDuration(seconds: number | null): string {
+  if (seconds === null) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString();
+}
+
+function fmtDateShort(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+// ── TabPanel ──────────────────────────────────────────────────────────────────
+
+interface TabPanelProps {
+  children: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => (
+  <div role="tabpanel" hidden={value !== index}>
+    {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+  </div>
+);
+
+// ── MetricBox (unchanged from original) ───────────────────────────────────────
 
 interface MetricBoxProps {
   title: string;
@@ -44,17 +151,11 @@ const MetricBox: React.FC<MetricBoxProps> = ({ title, value, icon, subtitle }) =
   </Paper>
 );
 
-const Monitoring: React.FC = () => {
-  const { data: statusData, isLoading: statusLoading, error: statusError } = useSystemStatus();
-  const { data: metricsData, isLoading: metricsLoading, error: metricsError } = useSystemMetrics();
+// ── SystemTab (original content) ──────────────────────────────────────────────
 
-  if (statusLoading || metricsLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+const SystemTab: React.FC = () => {
+  const { data: statusData, error: statusError } = useSystemStatus();
+  const { data: metricsData, error: metricsError } = useSystemMetrics();
 
   const formatUptime = (seconds?: number) => {
     if (!seconds) return 'N/A';
@@ -67,47 +168,43 @@ const Monitoring: React.FC = () => {
   const memUsage = metricsData?.memory?.usage_percent || statusData?.system_metrics?.memory_percent || 0;
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Real-Time Monitoring
-      </Typography>
-      
+    <Box>
       {(statusError || metricsError) && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          Failed to fetch monitoring data. The backend may be offline or endpoints are unavailable.
+          Failed to fetch system metrics. The backend may be offline.
         </Alert>
       )}
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <MetricBox 
-            title="Service Version" 
-            value={statusData?.version || 'N/A'} 
-            icon={<TimelineIcon />} 
+          <MetricBox
+            title="Service Version"
+            value={statusData?.version || 'N/A'}
+            icon={<TimelineIcon />}
             subtitle={statusData?.service_name || 'Alkotrader'}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <MetricBox 
-            title="Uptime" 
-            value={formatUptime(statusData?.uptime_seconds)} 
-            icon={<TimerIcon />} 
+          <MetricBox
+            title="Uptime"
+            value={formatUptime(statusData?.uptime_seconds)}
+            icon={<TimerIcon />}
             subtitle="Time since last restart"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <MetricBox 
-            title="CPU Usage" 
-            value={`${cpuUsage.toFixed(1)}%`} 
-            icon={<SpeedIcon />} 
+          <MetricBox
+            title="CPU Usage"
+            value={`${cpuUsage.toFixed(1)}%`}
+            icon={<SpeedIcon />}
             subtitle="Current system load"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <MetricBox 
-            title="Memory Usage" 
-            value={`${memUsage.toFixed(1)}%`} 
-            icon={<MemoryIcon />} 
+          <MetricBox
+            title="Memory Usage"
+            value={`${memUsage.toFixed(1)}%`}
+            icon={<MemoryIcon />}
             subtitle="Current RAM usage"
           />
         </Grid>
@@ -135,4 +232,318 @@ const Monitoring: React.FC = () => {
   );
 };
 
-export default Monitoring;
+// ── ServicesTab ───────────────────────────────────────────────────────────────
+
+const ServicesTab: React.FC = () => {
+  const { data, isLoading, error } = useServicesStatus();
+
+  if (isLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
+  if (error) return <Alert severity="error">Failed to fetch service status. The backend may be offline.</Alert>;
+
+  const services: ServiceEntry[] = data?.services || [];
+  const channels: Record<string, ChannelEntry> = data?.channels || {};
+
+  return (
+    <Box>
+      <Typography variant="h6" gutterBottom>System Services</Typography>
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {services.map((svc) => (
+          <Grid item xs={12} sm={6} md={3} key={svc.name}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                borderColor: svc.status === 'active' && !svc.has_errors
+                  ? 'success.dark'
+                  : svc.status === 'inactive'
+                  ? 'error.dark'
+                  : 'divider',
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                {statusIcon(svc.has_errors ? 'warning' : svc.status)}
+                <Chip
+                  label={svc.status.toUpperCase()}
+                  color={statusColor(svc.has_errors ? 'warning' : svc.status)}
+                  size="small"
+                  sx={{ fontWeight: 700, fontSize: '0.65rem', height: 20 }}
+                />
+              </Box>
+              <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
+                {svc.display_name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {svc.name}
+              </Typography>
+              {svc.has_errors && (
+                <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 0.5 }}>
+                  Errors detected in logs
+                </Typography>
+              )}
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Typography variant="h6" gutterBottom>Notification Channels</Typography>
+      <Grid container spacing={2}>
+        {Object.entries(channels).map(([name, ch]) => (
+          <Grid item xs={12} sm={6} md={4} key={name}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                borderColor: ch.status === 'healthy' ? 'success.dark' : ch.status === 'degraded' ? 'warning.dark' : 'divider',
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {statusIcon(ch.status)}
+                <Chip
+                  label={ch.status.toUpperCase()}
+                  color={statusColor(ch.status)}
+                  size="small"
+                  sx={{ fontWeight: 700, fontSize: '0.65rem', height: 20 }}
+                />
+              </Box>
+              <Typography variant="body1" fontWeight={600} sx={{ mt: 1, textTransform: 'capitalize' }}>
+                {name}
+              </Typography>
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
+  );
+};
+
+// ── RunHistoryStrip ───────────────────────────────────────────────────────────
+
+const RunHistoryStrip: React.FC<{ runs: RecentRun[] }> = ({ runs }) => {
+  const dots = [...runs].reverse();
+  return (
+    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+      {dots.map((r, i) => {
+        const color =
+          r.status === 'completed' ? 'success.main'
+          : r.status === 'failed' ? 'error.main'
+          : r.status === 'running' ? 'warning.main'
+          : 'text.disabled';
+        const label = `${r.status ?? 'unknown'}${r.started_at ? ' · ' + fmtDateShort(r.started_at) : ''}${r.duration_s !== null ? ' · ' + fmtDuration(r.duration_s) : ''}${r.error ? '\n' + r.error : ''}`;
+        return (
+          <Tooltip key={i} title={<span style={{ whiteSpace: 'pre-line' }}>{label}</span>} arrow>
+            <Box
+              sx={{
+                width: 14,
+                height: 14,
+                borderRadius: '3px',
+                backgroundColor: color,
+                cursor: 'default',
+                opacity: 0.85,
+                '&:hover': { opacity: 1 },
+              }}
+            />
+          </Tooltip>
+        );
+      })}
+      {runs.length === 0 && (
+        <Typography variant="caption" color="text.disabled">No runs yet</Typography>
+      )}
+    </Box>
+  );
+};
+
+// ── PipelineRow ───────────────────────────────────────────────────────────────
+
+const PipelineRow: React.FC<{ pipeline: Pipeline }> = ({ pipeline: p }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <TableRow sx={{ '& > *': { borderBottom: 'unset' }, opacity: p.enabled ? 1 : 0.5 }}>
+        <TableCell padding="checkbox">
+          <IconButton size="small" onClick={() => setOpen(!open)} disabled={p.recent_runs.length === 0}>
+            {open ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+          </IconButton>
+        </TableCell>
+        <TableCell>
+          <Typography variant="body2" fontWeight={600}>{p.name}</Typography>
+          <Typography variant="caption" color="text.secondary">{p.job_type}</Typography>
+        </TableCell>
+        <TableCell>
+          <Chip
+            label={p.last_status.toUpperCase()}
+            color={statusColor(p.last_status)}
+            size="small"
+            sx={{ fontWeight: 700, fontSize: '0.65rem', height: 20 }}
+          />
+        </TableCell>
+        <TableCell>
+          <Typography variant="body2">{fmtDate(p.last_run_at)}</Typography>
+        </TableCell>
+        <TableCell>
+          <Typography variant="body2">{fmtDuration(p.last_duration_s)}</Typography>
+        </TableCell>
+        <TableCell>
+          {p.success_rate_10 !== null ? (
+            <Typography
+              variant="body2"
+              color={p.success_rate_10 >= 0.8 ? 'success.main' : p.success_rate_10 >= 0.5 ? 'warning.main' : 'error.main'}
+              fontWeight={600}
+            >
+              {Math.round(p.success_rate_10 * 100)}%
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.disabled">—</Typography>
+          )}
+        </TableCell>
+        <TableCell>
+          <Typography variant="body2">{fmtDate(p.next_run_at)}</Typography>
+        </TableCell>
+        <TableCell>
+          <RunHistoryStrip runs={p.recent_runs} />
+        </TableCell>
+      </TableRow>
+      <TableRow>
+        <TableCell colSpan={8} sx={{ py: 0 }}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box sx={{ py: 2, px: 4 }}>
+              <Typography variant="caption" color="text.secondary" gutterBottom display="block">
+                Cron: <strong>{p.cron}</strong> · Target: <strong>{p.target}</strong>
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Run ID</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Started</TableCell>
+                    <TableCell>Finished</TableCell>
+                    <TableCell>Duration</TableCell>
+                    <TableCell>Error</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {p.recent_runs.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <Typography variant="caption" color="text.secondary">#{r.id}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={(r.status ?? 'unknown').toUpperCase()}
+                          color={statusColor(r.status ?? 'unknown')}
+                          size="small"
+                          sx={{ fontWeight: 700, fontSize: '0.6rem', height: 18 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption">{fmtDate(r.started_at)}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption">{fmtDate(r.finished_at)}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption">{fmtDuration(r.duration_s)}</Typography>
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 300 }}>
+                        {r.error ? (
+                          <Tooltip title={r.error} arrow>
+                            <Typography
+                              variant="caption"
+                              color="error.main"
+                              sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: 260 }}
+                            >
+                              {r.error}
+                            </Typography>
+                          </Tooltip>
+                        ) : (
+                          <Typography variant="caption" color="text.disabled">—</Typography>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </>
+  );
+};
+
+// ── PipelinesTab ──────────────────────────────────────────────────────────────
+
+const PipelinesTab: React.FC = () => {
+  const { data, isLoading, error } = usePipelinesStatus();
+
+  if (isLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
+  if (error) return <Alert severity="error">Failed to fetch pipeline status. The backend may be offline.</Alert>;
+
+  const pipelines: Pipeline[] = data?.pipelines || [];
+
+  if (pipelines.length === 0) {
+    return (
+      <Alert severity="info">No pipelines configured. Add schedules via the Telegram Schedule Management page.</Alert>
+    );
+  }
+
+  return (
+    <TableContainer component={Paper} variant="outlined">
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell padding="checkbox" />
+            <TableCell>Pipeline</TableCell>
+            <TableCell>Last Status</TableCell>
+            <TableCell>Last Run</TableCell>
+            <TableCell>Duration</TableCell>
+            <TableCell>Success (10 runs)</TableCell>
+            <TableCell>Next Run</TableCell>
+            <TableCell>History</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {pipelines.map((p) => (
+            <PipelineRow key={p.id} pipeline={p} />
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+};
+
+// ── Main Monitoring page ──────────────────────────────────────────────────────
+
+const Monitoring: React.FC = () => {
+  const [activeTab, setActiveTab] = useState(0);
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" component="h1" gutterBottom>
+        Monitoring
+      </Typography>
+
+      <Tabs
+        value={activeTab}
+        onChange={(_e, v) => setActiveTab(v)}
+        sx={{ borderBottom: 1, borderColor: 'divider', mb: 0 }}
+      >
+        <Tab label="System" />
+        <Tab label="Services" />
+        <Tab label="Pipelines" />
+      </Tabs>
+
+      <TabPanel value={activeTab} index={0}>
+        <SystemTab />
+      </TabPanel>
+      <TabPanel value={activeTab} index={1}>
+        <ServicesTab />
+      </TabPanel>
+      <TabPanel value={activeTab} index={2}>
+        <PipelinesTab />
+      </TabPanel>
+    </Box>
+  );
+};
+
+export default Monitoring;

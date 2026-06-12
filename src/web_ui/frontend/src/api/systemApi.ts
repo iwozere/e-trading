@@ -8,7 +8,7 @@ export const systemApi = {
     const response = await api.get(`/api/health`);
     return response.data;
   },
-  
+
   getChannelsHealth: async () => {
     const response = await api.get(`/api/health/channels`);
     return response.data;
@@ -27,7 +27,17 @@ export const systemApi = {
   getAnalyticsDashboard: async (days: number = 30) => {
     const response = await api.get(`/api/analytics/dashboard?days=${days}`);
     return response.data;
-  }
+  },
+
+  getServicesStatus: async () => {
+    const response = await api.get(`/api/monitoring/services`);
+    return response.data;
+  },
+
+  getPipelinesStatus: async () => {
+    const response = await api.get(`/api/monitoring/pipelines`);
+    return response.data;
+  },
 };
 
 
