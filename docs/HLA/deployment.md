@@ -1,42 +1,46 @@
 # Deployment Guide — Raspberry Pi
 
 **Target Platform:** Raspberry Pi 3B+ or 4  
-**OS:** Raspberry Pi OS Bullseye or newer  
-**Project Path:** `/opt/apps/e-trading`
+**OS:** Raspberry Pi OS Bookworm (64-bit recommended)  
+**Project Path:** `/opt/apps/e-trading`  
+**Python:** 3.13 (venv at `/opt/apps/e-trading/.venv`)
 
 ## Related Documentation
-- **[Infrastructure Module](modules/infrastructure.md)** — Database, scheduling, error handling
-- **[Configuration](modules/configuration.md)** — Environment and config management
-- **[Documentation Index](INDEX.md)** — Full documentation guide
+- **[Submodule Reference](../SUBMODULES.md)** — All submodules and their responsibilities
+- **[Monitoring Setup](../monitoring-setup.md)** — Vector log monitoring
+- **[Ports Reference](ports.md)** — All service ports
 
 ---
 
-## Quick Start (Automated)
+## Production Services
 
-For a fresh Raspberry Pi with the project already cloned to `/opt/apps/e-trading`:
+| Systemd Unit | Port | Description |
+|---|---|---|
+| `trading-webui.service` | **5003** | FastAPI backend + React frontend (unified) |
+| `notification_bot.service` | — | Notification delivery bot (Telegram + email) |
+| `scheduler.service` | — | APScheduler pipeline runner |
+| `telegram_bot.service` | — | User-facing Telegram bot |
+| `trading.service` | — | Live IBKR trading execution |
+| `ibgateway-docker.service` | 4797 | IB Gateway (paper trading, Docker) |
+| `vector.service` | — | Log monitoring (journald → Telegram alerts) |
+
+## Quick Start
 
 ```bash
-# 1. Verify project location
-ls -la /opt/apps/e-trading
-
-# 2. Run the automated setup script
+# On the Pi — after git pull
 cd /opt/apps/e-trading
-chmod +x bin/setup_raspberry_pi.sh
-./bin/setup_raspberry_pi.sh
 
-# 3. Configure credentials
-nano .env
+# Restart all core services
+sudo systemctl restart trading-webui.service
+sudo systemctl restart notification_bot.service
+sudo systemctl restart scheduler.service
+sudo systemctl restart telegram_bot.service
 
-# 4. Start services
-sudo systemctl start trading-bot.service
-sudo systemctl start trading-admin.service
-
-# 5. Verify
-sudo systemctl status trading-bot.service
-sudo systemctl status trading-admin.service
+# Check status
+sudo systemctl status trading-webui.service notification_bot.service scheduler.service telegram_bot.service
 ```
 
-After setup, the Telegram bot is reachable via Telegram (`/start`), and the admin panel at `http://<pi-ip>:5002`.
+Web UI available at `http://<pi-ip>:5003` after `trading-webui.service` starts.
 
 ---
 
@@ -262,10 +266,12 @@ sudo certbot --nginx -d your-domain.com
 
 | Service | Port | Entry Point |
 |---|---|---|
-| Telegram Bot | 8080 | `src/frontend/telegram/bot.py` |
-| Admin Panel | 5002 | `src/frontend/telegram/screener/admin_panel.py` |
-| Bot API | 5003 | internal REST API |
-| Nginx (optional) | 80/443 | reverse proxy |
+| Web UI + API | 5003 | `src/api/main.py` (served by `trading-webui.service`) |
+| Notification Bot | — | `src/notification/notification_db_centric_bot.py` |
+| Scheduler | — | `src/scheduler/main.py` |
+| Telegram Bot | — | `src/telegram/` |
+| Trading | — | `src/trading/` |
+| Nginx (optional) | 80/443 | Reverse proxy to port 5003 |
 
 ---
 

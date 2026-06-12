@@ -1,4 +1,12 @@
-# Advanced Trading Framework - Documentation Index
+# Alkotrader — Documentation Index
+
+> **Start here for submodule descriptions:** [../SUBMODULES.md](../SUBMODULES.md)  
+> **Recent changes:** [../CHANGELOG.md](../CHANGELOG.md)  
+> **Deployment:** [deployment.md](deployment.md)  
+> **Ports:** [ports.md](ports.md)  
+> **Log monitoring:** [../monitoring-setup.md](../monitoring-setup.md)
+
+---
 
 ## Quick Reference Guide
 
