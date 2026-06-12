@@ -153,8 +153,10 @@ class SystemMonitoringService:
         try:
             disk_usage = {}
 
-            # Get disk usage for all mounted drives
+            # Get disk usage for all mounted drives (skip loop devices — always 100%)
             for partition in psutil.disk_partitions():
+                if partition.device.startswith("/dev/loop"):
+                    continue
                 try:
                     usage = psutil.disk_usage(partition.mountpoint)
                     total_gb = usage.total / (1024**3)
