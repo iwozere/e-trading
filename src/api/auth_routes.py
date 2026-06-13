@@ -70,9 +70,10 @@ class UserResponse(BaseModel):
     last_login: Optional[str]
 
 
-# TODO: Add 2FA verification models
-# class SendVerificationCodeRequest(BaseModel):
-# class VerifyCodeRequest(BaseModel)
+# 2FA models (ROADMAP-2026.md §3.3) — pending implementation.
+# Requires: verification_codes DB table, code generation, notification dispatch.
+# class SendVerificationCodeRequest(BaseModel):  channel: Literal["telegram", "email"]
+# class VerifyCodeRequest(BaseModel):            code: str
 
 
 # Authentication endpoints

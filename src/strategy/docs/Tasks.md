@@ -91,81 +91,62 @@
 ## 3. Mixin System Implementation
 
 ### 3.1 Entry Mixin System
-- ⏳ **TASK-013**: Implement BaseEntryMixin abstract class
-  - **Status**: Pending
-  - **Description**: Create base class for all entry mixins with required methods
+- ✅ **TASK-013**: Implement BaseEntryMixin abstract class
+  - **Status**: Completed
+  - **Description**: Full abstract base class with contract enforcement, param validation, indicator helpers
   - **Files**: `src/strategy/entry/base_entry_mixin.py`
-  - **Notes**: Needs implementation of abstract methods and interface
 
-- ⏳ **TASK-014**: Implement RSIOrBBEntryMixin
-  - **Status**: Pending
-  - **Description**: Create RSI and Bollinger Bands entry mixin
+- ✅ **TASK-014**: Implement RSIOrBBEntryMixin
+  - **Status**: Completed
   - **Files**: `src/strategy/entry/rsi_or_bb_entry_mixin.py`
-  - **Notes**: Needs signal generation and confidence scoring
 
-- ⏳ **TASK-015**: Implement HMMLSTMEntryMixin
-  - **Status**: Pending
-  - **Description**: Create machine learning-based entry mixin
+- ✅ **TASK-015**: Implement HMMLSTMEntryMixin
+  - **Status**: Completed (excluded from factory registry pending model architecture alignment)
   - **Files**: `src/strategy/entry/hmm_lstm_entry_mixin.py`
-  - **Notes**: Needs ML model integration and prediction logic
 
-- ⏳ **TASK-016**: Implement EntryMixinFactory
-  - **Status**: Pending
-  - **Description**: Create factory for entry mixin instantiation
+- ✅ **TASK-016**: Implement EntryMixinFactory
+  - **Status**: Completed — registry with 9 mixins, get/list/validate/default-params helpers
   - **Files**: `src/strategy/entry/entry_mixin_factory.py`
-  - **Notes**: Needs registry and creation methods
 
 ### 3.2 Exit Mixin System
 - ✅ **TASK-017**: Implement BaseExitMixin abstract class
   - **Status**: Completed
-  - **Description**: Created base class for all exit mixins with required methods
   - **Files**: `src/strategy/exit/base_exit_mixin.py`
-  - **Notes**: Includes abstract methods and indicator management
 
 - ✅ **TASK-018**: Implement AdvancedATRExitMixin
   - **Status**: Completed
-  - **Description**: Created advanced ATR-based exit mixin with state machine
   - **Files**: `src/strategy/exit/advanced_atr_exit_mixin.py`
-  - **Notes**: Includes partial exit support and comprehensive logging
 
 - ✅ **TASK-019**: Fix AdvancedATRExitMixin abstract method implementation
   - **Status**: Completed
-  - **Description**: Implemented missing abstract methods and fixed method signatures
   - **Files**: `src/strategy/exit/advanced_atr_exit_mixin.py`
-  - **Notes**: Added `get_required_params()`, `get_default_params()`, and `get_exit_reason()`
 
 - ✅ **TASK-020**: Fix excessive logging in AdvancedATRExitMixin
   - **Status**: Completed
-  - **Description**: Changed INFO level logs to DEBUG level and fixed indicator registration
   - **Files**: `src/strategy/exit/advanced_atr_exit_mixin.py`
-  - **Notes**: Added proper indicator registration to prevent repeated initialization
 
-- ⏳ **TASK-021**: Implement other exit mixins (ATR, TrailingStop, TimeBased, etc.)
-  - **Status**: Pending
-  - **Description**: Create additional exit mixins for different exit strategies
+- ✅ **TASK-021**: Implement other exit mixins (ATR, TrailingStop, TimeBased, etc.)
+  - **Status**: Completed — 13 exit mixins implemented: ATR, AdvancedATR, SimpleATR,
+    FixedRatio, MACrossover, RSIBB, RSIOrBB, TimeBased, TrailingStop, EOMBreakdown,
+    EOMMAcdBreakdown, EOMRejection, MultiLevelATR
   - **Files**: `src/strategy/exit/`
-  - **Notes**: Needs implementation of basic exit strategies
 
-- ⏳ **TASK-022**: Implement ExitMixinFactory
-  - **Status**: Pending
-  - **Description**: Create factory for exit mixin instantiation
+- ✅ **TASK-022**: Implement ExitMixinFactory
+  - **Status**: Completed — registry with 13 mixins, get/list/validate/default-params helpers
   - **Files**: `src/strategy/exit/exit_mixin_factory.py`
-  - **Notes**: Needs registry and creation methods
 
 ## 4. Strategy Implementations
 
 ### 4.1 Custom Strategy
-- ⏳ **TASK-023**: Implement CustomStrategy class
-  - **Status**: Pending
-  - **Description**: Create configurable strategy using entry/exit mixins
+- ✅ **TASK-023**: Implement CustomStrategy class
+  - **Status**: Completed
+  - **Description**: Configurable strategy inheriting BaseStrategy; reads entry/exit logic from config dict
   - **Files**: `src/strategy/custom_strategy.py`
-  - **Notes**: Needs mixin integration and configuration management
 
-- ⏳ **TASK-024**: Implement mixin integration in CustomStrategy
-  - **Status**: Pending
-  - **Description**: Add logic to integrate and execute entry/exit mixins
+- ✅ **TASK-024**: Implement mixin integration in CustomStrategy
+  - **Status**: Completed — `_initialize_strategy()` wires entry/exit mixins; `_execute_strategy_logic()`
+    calls `should_enter()` / `should_exit()` each bar; `StrategyConfigBuilder` provides fluent config API
   - **Files**: `src/strategy/custom_strategy.py`
-  - **Notes**: Needs signal aggregation and execution logic
 
 ### 4.2 HMM-LSTM Strategy
 - ⏳ **TASK-025**: Implement HMMLSTMStrategy class
@@ -183,11 +164,11 @@
 ## 5. Testing Implementation
 
 ### 5.1 Unit Testing
-- ⏳ **TASK-027**: Create unit tests for BaseStrategy
-  - **Status**: Pending
-  - **Description**: Write comprehensive unit tests for BaseStrategy functionality
-  - **Files**: `tests/test_base_strategy.py`
-  - **Notes**: Needs tests for trade tracking, position management, and validation
+- ✅ **TASK-027**: Create unit tests for BaseStrategy
+  - **Status**: Completed — 26 tests, all pass (2026-06-13)
+  - **Description**: Unit tests for pure-logic methods: asset type detection, position size validation, position sizing arithmetic, actual trade size resolution, and performance summary
+  - **Files**: `src/strategy/tests/test_base_strategy.py`
+  - **Notes**: Uses `object.__new__` to bypass Backtrader cerebro — no broker/datafeed required
 
 - ⏳ **TASK-028**: Create unit tests for TradeRepository
   - **Status**: Pending
@@ -195,11 +176,9 @@
   - **Files**: `tests/test_trade_repository.py`
   - **Notes**: Needs tests for CRUD operations and partial exit workflows
 
-- ⏳ **TASK-029**: Create unit tests for mixin system
-  - **Status**: Pending
-  - **Description**: Write unit tests for entry and exit mixins
-  - **Files**: `tests/test_mixins.py`
-  - **Notes**: Needs tests for signal generation and parameter validation
+- ✅ **TASK-029**: Create unit tests for mixin system
+  - **Status**: Completed — factory CRUD, contract enforcement, StrategyConfigBuilder (33 tests, all pass)
+  - **Files**: `src/strategy/tests/test_mixin_factories.py`
 
 ### 5.2 Integration Testing
 - ⏳ **TASK-030**: Create integration tests for database operations
@@ -387,19 +366,24 @@
 
 ## Progress Summary
 
-### Completed Tasks: 22/56 (39%)
+### Completed Tasks: 35/56 (63%)
 - ✅ Core framework foundation (6 tasks)
 - ✅ Database integration (6 tasks)
-- ✅ Exit mixin system (6 tasks)
+- ✅ Entry mixin system (4 tasks) — updated 2026-06-13
+- ✅ Exit mixin system (6 tasks) — updated 2026-06-13
+- ✅ Custom strategy with mixin integration (2 tasks) — updated 2026-06-13
 - ✅ Documentation (4 tasks)
+- ✅ Mixin unit tests (1 task) — updated 2026-06-13
+- ✅ BaseStrategy unit tests (1 task) — updated 2026-06-13
+- ✅ Entry mixin signal-generation tests (1 task) — 58 tests, all 9 mixins — updated 2026-06-13
+- ✅ Configuration validation schema (1 task) — Pydantic v2, `strategy_config_schema.py` — updated 2026-06-13
+- ✅ Integration test: buy→hold→sell cycle (1 task) — real Cerebro + TALib, 8 tests — updated 2026-06-13
 
-### In Progress Tasks: 0/56 (0%)
-- Currently no tasks in progress
-
-### Pending Tasks: 34/56 (61%)
-- ⏳ Entry mixin system (4 tasks)
-- ⏳ Strategy implementations (4 tasks)
-- ⏳ Testing (6 tasks)
+### Pending Tasks: 21/56 (37%)
+- ⏳ HMM-LSTM strategy implementation (2 tasks)
+- ⏳ TradeRepository unit tests (1 task)
+- ⏳ Integration tests (2 tasks)
+- ⏳ Performance tests (1 task)
 - ⏳ Configuration and deployment (4 tasks)
 - ⏳ Performance optimization (4 tasks)
 - ⏳ Monitoring and analytics (4 tasks)
@@ -411,18 +395,13 @@
 ## Next Priority Tasks
 
 ### High Priority (Next Sprint)
-1. **TASK-013**: Implement BaseEntryMixin abstract class
-2. **TASK-014**: Implement RSIOrBBEntryMixin
-3. **TASK-016**: Implement EntryMixinFactory
-4. **TASK-023**: Implement CustomStrategy class
-5. **TASK-024**: Implement mixin integration in CustomStrategy
+1. **TASK-028**: Create unit tests for TradeRepository
+3. **TASK-041**: Implement configuration validation
 
 ### Medium Priority (Following Sprint)
-1. **TASK-021**: Implement other exit mixins
-2. **TASK-022**: Implement ExitMixinFactory
-3. **TASK-027**: Create unit tests for BaseStrategy
-4. **TASK-028**: Create unit tests for TradeRepository
-5. **TASK-041**: Implement configuration validation
+1. **TASK-025**: Implement HMMLSTMStrategy class
+2. **TASK-030**: Integration tests for database operations
+3. **TASK-053**: Pre-commit hooks and code coverage
 
 ### Low Priority (Future Sprints)
 1. **TASK-025**: Implement HMMLSTMStrategy class

@@ -45,6 +45,10 @@ class EMPS3Pipeline:
     def target_date(self) -> str:
         return self._delegate.target_date
 
+    @property
+    def results_dir(self):
+        return self._delegate._results_dir
+
     def run(self, force_refresh: bool = False, tickers: Optional[list] = None) -> pd.DataFrame:
         if tickers is not None:
             _logger.warning(

@@ -374,7 +374,8 @@ async def update_bot_status(
                 detail="Access denied"
             )
 
-        # Update status based on action
+        # Update status based on action (pydantic pattern ensures only start/stop/restart)
+        success = False
         if action == 'start':
             if bot['status'] == 'running':
                 raise HTTPException(
@@ -382,8 +383,9 @@ async def update_bot_status(
                     detail="Bot is already running"
                 )
 
+            # Write intent to DB. StrategyManager.start_db_polling() reads this
+            # status on its next poll cycle and starts the bot process.
             success = trading_service.update_bot_status(bot_id, 'starting')
-            # TODO: Actually start the bot via enhanced trading service
 
         elif action == 'stop':
             if bot['status'] == 'stopped':
@@ -392,12 +394,14 @@ async def update_bot_status(
                     detail="Bot is already stopped"
                 )
 
+            # Write intent to DB. StrategyManager.start_db_polling() reads this
+            # status on its next poll cycle and stops the bot process.
             success = trading_service.update_bot_status(bot_id, 'stopping')
-            # TODO: Actually stop the bot via enhanced trading service
 
         elif action == 'restart':
+            # Write intent to DB. StrategyManager.start_db_polling() reads this
+            # status on its next poll cycle and restarts the bot process.
             success = trading_service.update_bot_status(bot_id, 'restarting')
-            # TODO: Actually restart the bot via enhanced trading service
 
         if success:
             _logger.info("Bot %s status updated to %s by user %s", bot_id, action, user_id)
@@ -570,7 +574,7 @@ async def validate_bot_configuration(
 
         # Create validation record
         bot_record = {
-            'id': bot_id if bot_id > 0 else None,
+            'id': bot_id if bot_id and bot_id != '0' else None,
             'user_id': user_id,
             'type': config_dict.get('broker', {}).get('trading_mode', 'paper'),
             'status': 'stopped',

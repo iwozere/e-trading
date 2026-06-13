@@ -599,7 +599,7 @@ def get_exit_mixin_parameters(mixin_name: str) -> List[ParameterDefinition]:
     return EXIT_MIXIN_PARAMETERS.get(mixin_name, [])
 
 
-def get_available_entry_mixins() -> List[Dict[str, str]]:
+def get_available_entry_mixins() -> List[Dict[str, Any]]:
     """Get list of available entry mixins."""
     return [
         {'value': name, 'label': name.replace('EntryMixin', '').replace('Entry', '')}
@@ -607,7 +607,7 @@ def get_available_entry_mixins() -> List[Dict[str, str]]:
     ]
 
 
-def get_available_exit_mixins() -> List[Dict[str, str]]:
+def get_available_exit_mixins() -> List[Dict[str, Any]]:
     """Get list of available exit mixins."""
     return [
         {'value': name, 'label': name.replace('ExitMixin', '').replace('Exit', '')}
