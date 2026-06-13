@@ -297,8 +297,11 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 # Get bars using the new data client
                 bars_response = self.data_client.get_stock_bars(request)
 
-                # Extract bars for the symbol
-                bars_dict = bars_response.get(symbol, None)
+                # BarSet (alpaca-py) uses __getitem__, not .get()
+                try:
+                    bars_dict = bars_response[symbol]
+                except KeyError:
+                    bars_dict = None
 
                 if not bars_dict or len(bars_dict) == 0:
                     _logger.debug("No more data available for %s from %s", symbol, current_start.date())

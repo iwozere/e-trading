@@ -132,6 +132,13 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             response = requests.get(self.base_url, params=params, timeout=30)
             data = response.json()
 
+            # Detect known non-error API messages (premium tier, rate limit) and
+            # return None so the caller's fallback chain can try the next provider.
+            if 'Information' in data or 'Note' in data:
+                _logger.warning("Alpha Vantage unavailable for %s (premium/rate-limit): %s",
+                                symbol, data.get('Information') or data.get('Note'))
+                return None
+
             # Find the key for the time series data
             ts_key = None
             for k in data.keys():

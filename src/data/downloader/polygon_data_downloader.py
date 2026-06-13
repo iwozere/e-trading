@@ -116,7 +116,8 @@ class PolygonDataDownloader(BaseDataDownloader):
             }
             response = requests.get(url, params=params)
             if response.status_code == 429:
-                raise RuntimeError("Polygon.io API rate limit exceeded (free tier: 5 requests/minute)")
+                _logger.warning("Polygon.io rate limit hit for %s (free tier: 5 req/min)", symbol)
+                return None
             if response.status_code != 200:
                 raise RuntimeError(f"Polygon.io API error: {response.status_code} {response.text}")
             data = response.json()

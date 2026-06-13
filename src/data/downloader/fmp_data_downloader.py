@@ -104,6 +104,9 @@ class FMPDataDownloader(BaseDataDownloader):
             # Make request with rate limiting
             time.sleep(self.rate_limit_delay)
             response = requests.get(url, params=params, timeout=30)
+            if response.status_code == 402:
+                _logger.warning("FMP OHLCV for %s %s requires a paid subscription (402)", symbol, interval)
+                return None
             response.raise_for_status()
 
             data = response.json()

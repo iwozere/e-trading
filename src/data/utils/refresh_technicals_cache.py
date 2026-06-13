@@ -515,7 +515,7 @@ def main():
                        help="Test all system components")
     parser.add_argument("--validate-cache", action="store_true",
                        help="Validate cache structure and contents")
-    parser.add_argument("--symbols", type=str, default="BTCUSDT,ETHUSDT,LTCUSDT,ADAUSDT,VT,GOOG,TSLA,NVDA,NFLX,VT,PSNY,VUSD,SMCI,RPD,QTUM,QBTS,PFE,MRNA,MASI,LULU,IONQ",
+    parser.add_argument("--symbols", type=str, default="BTCUSDT,ETHUSDT,LTCUSDT,ADAUSDT,VT,GOOG,TSLA,NVDA,NFLX,PSNY,VUSD.L,SMCI,RPD,QTUM,QBTS,PFE,MRNA,MASI,LULU,IONQ",
                        help="Comma-separated list of symbols to download")
     parser.add_argument("--intervals", type=str, default="1h,4h,1d,5m,15m",
                        help="Comma-separated list of intervals to download")
