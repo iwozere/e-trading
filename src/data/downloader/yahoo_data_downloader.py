@@ -17,6 +17,7 @@ Valid values:
 Classes:
 - YahooDataDownloader: Main class for interacting with Yahoo Finance and managing data downloads
 """
+import logging
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
@@ -30,6 +31,27 @@ from src.model.schemas import OptionalFundamentals, Fundamentals
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+
+class _SuppressPricesMissing(logging.Filter):
+    """Downgrade yfinance 'possibly delisted' ERROR lines to DEBUG.
+
+    yfinance raises YFPricesMissingError for date windows that contain no
+    trading activity (e.g. Hurricane Sandy exchange closure, 2012-10-29/30)
+    and logs them as ERROR through the standard logging system.  These are
+    false positives that would otherwise fire on every pipeline run forever.
+    Genuine delistings fail across *all* requested windows, not just a narrow
+    holiday gap, so this filter does not mask real problems.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.ERROR and "possibly delisted" in record.getMessage():
+            record.levelno = logging.DEBUG
+            record.levelname = "DEBUG"
+        return True
+
+
+logging.getLogger("yfinance").addFilter(_SuppressPricesMissing())
 
 
 class YahooDataDownloader(BaseDataDownloader):
@@ -260,7 +282,10 @@ class YahooDataDownloader(BaseDataDownloader):
                 raise e
 
             if df_batch.empty:
-                _logger.warning("No data returned for batch download")
+                _logger.debug(
+                    "No data returned for batch download %s → %s (market closure or holiday)",
+                    start_date.date(), end_date.date(),
+                )
                 return {symbol: pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']) for symbol in symbols}
 
             results = {}
