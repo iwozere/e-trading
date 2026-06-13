@@ -52,7 +52,8 @@ class EMPS2Pipeline:
     All output saved to results/emps2/YYYY-MM-DD/
     """
 
-    def __init__(self, config: Optional[EMPS2PipelineConfig] = None, target_date: Optional[str] = None):
+    def __init__(self, config: Optional[EMPS2PipelineConfig] = None, target_date: Optional[str] = None,
+                 results_base: Optional[Path] = None):
         """
         Initialize EMPS2 pipeline.
 
@@ -60,6 +61,8 @@ class EMPS2Pipeline:
             config: Optional pipeline configuration (uses defaults if None)
             target_date: Target trading date (YYYY-MM-DD). Defaults to yesterday.
                         Allows manual override for backfilling or testing.
+            results_base: Base directory for results (default: results/p06_emps2).
+                         Override to redirect output, e.g. when called from EMPS3 shim.
         """
         self.config = config or EMPS2PipelineConfig.create_default()
 
@@ -72,11 +75,9 @@ class EMPS2Pipeline:
         self.target_date = target_date
 
         # Results directory (dated for target trading day)
-        self._results_dir = Path("results") / "p06_emps2" / target_date
+        self._results_base_path = Path(results_base) if results_base else Path("results") / "p06_emps2"
+        self._results_dir = self._results_base_path / target_date
         self._results_dir.mkdir(parents=True, exist_ok=True)
-
-        # Results base path (for rolling memory to access historical data)
-        self._results_base_path = Path("results") / "p06_emps2"
 
         # Set up per-scan logging to pipeline.log in results directory
         self._setup_pipeline_logging()

@@ -61,34 +61,33 @@ def main() -> int:
             
         final_df = pipeline.run(force_refresh=force_refresh, tickers=tickers)
 
-        # Actual output lives in p06_emps2 (EMPS3 delegates to EMPS2Pipeline).
-        pipeline_output_dir = pipeline.results_dir
+        # results_dir is now p10_emps3/<target_date> (EMPS3 passes results_base to EMPS2).
+        results_dir = pipeline.results_dir
 
         print(
             f"Pipeline complete. Found {len(final_df)} passing candidates. "
-            f"results_dir={pipeline_output_dir} (target_date={pipeline.target_date})"
+            f"results_dir={results_dir} (target_date={pipeline.target_date})"
         )
 
-        # Historical summary tracked under p10_emps3 for continuity.
-        p10_base = PROJECT_ROOT / "results" / "p10_emps3"
+        # Generate/Update historical performance summary
         try:
             print("\n" + "="*70 + "\n Historical Summary \n" + "="*70)
             summary_gen = PipelineSummaryGenerator()
-            summary_gen.generate_historical_summary(p10_base)
+            summary_gen.generate_historical_summary(results_dir.parent)
         except Exception as e:
             _logger.warning(f"Failed to generate historical summary: {e}")
 
-        # File counts from actual EMPS2 output with correct filenames.
-        prebreakout_n = _csv_row_count(pipeline_output_dir / "07_phase1_watchlist.csv")
+        # job_schedules.notification_rules expect phase1_count / phase2_count (insert_p10_schedules.sql).
+        prebreakout_n = _csv_row_count(results_dir / "07_phase1_watchlist.csv")
         phase1_count = max(len(final_df), prebreakout_n)
-        phase2_count = _csv_row_count(pipeline_output_dir / "08_phase2_alerts.csv")
+        phase2_count = _csv_row_count(results_dir / "08_phase2_alerts.csv")
 
         result = {
             "success": True,
             "total_candidates": len(final_df),
             "phase1_count": phase1_count,
             "phase2_count": phase2_count,
-            "results_dir": str(pipeline_output_dir),
+            "results_dir": str(results_dir),
             "timestamp": datetime.now().isoformat(),
         }
         print(f"__SCHEDULER_RESULT__:{json.dumps(result)}")

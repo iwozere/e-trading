@@ -36,10 +36,15 @@ class EMPS3Pipeline:
         warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
         _logger.warning("EMPS3Pipeline is deprecated. %s", _DEPRECATION_MSG)
 
+        from pathlib import Path
         emps2_config = EMPS2PipelineConfig.create_default()
         emps2_config.analyzer_type = "accumulation"
 
-        self._delegate = EMPS2Pipeline(emps2_config, target_date=target_date)
+        self._delegate = EMPS2Pipeline(
+            emps2_config,
+            target_date=target_date,
+            results_base=Path("results") / "p10_emps3",
+        )
 
     @property
     def target_date(self) -> str:
