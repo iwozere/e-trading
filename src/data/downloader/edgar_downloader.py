@@ -735,7 +735,11 @@ class EdgarDownloader(BaseDataDownloader):
             for row in _parse_form4_xml(xml_content, filed_date=date_str):
                 records.append(row)
 
-        df = pd.DataFrame(records) if records else pd.DataFrame()
+        _FORM4_COLS = [
+            "ticker", "issuer_cik", "insider_name", "transaction_code",
+            "shares", "price_per_share", "total_value_usd", "filed_date",
+        ]
+        df = pd.DataFrame(records, columns=_FORM4_COLS) if records else pd.DataFrame(columns=_FORM4_COLS)
 
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
@@ -782,7 +786,8 @@ class EdgarDownloader(BaseDataDownloader):
             for h in hits
         ]
 
-        df = pd.DataFrame(records) if records else pd.DataFrame()
+        _13DG_COLS = ["cik", "entity_name", "accession_number", "filed_date", "form_type"]
+        df = pd.DataFrame(records, columns=_13DG_COLS) if records else pd.DataFrame(columns=_13DG_COLS)
         dest.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(dest, index=False, compression="gzip")
         _logger.info("Cached %d 13D/G filings for %s → %s", len(df), date_str, dest)
