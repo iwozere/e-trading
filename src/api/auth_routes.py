@@ -6,10 +6,12 @@ FastAPI routes for user authentication, registration,
 and token management.
 """
 
+import secrets
+import time
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 from pathlib import Path
 import sys
 
@@ -18,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.api.services.webui_app_service import webui_app_service
-from src.data.db.models.model_users import User
+from src.data.db.models.model_users import User, AuthIdentity, VerificationCode
 from src.api.auth import (
     create_access_token,
     create_refresh_token,
@@ -30,6 +32,7 @@ from src.api.auth import (
 )
 from src.data.db.services.database_service import get_database_service
 from src.notification.logger import setup_logger
+from src.notification.service.client import NotificationServiceClient
 from src.api.rate_limiter import limiter
 
 _logger = setup_logger(__name__)
@@ -70,10 +73,24 @@ class UserResponse(BaseModel):
     last_login: Optional[str]
 
 
-# 2FA models (ROADMAP-2026.md §3.3) — pending implementation.
-# Requires: verification_codes DB table, code generation, notification dispatch.
-# class SendVerificationCodeRequest(BaseModel):  channel: Literal["telegram", "email"]
-# class VerifyCodeRequest(BaseModel):            code: str
+_CODE_TTL_SECONDS = 600  # 10-minute window for verification codes
+
+
+class SendCodeRequest(BaseModel):
+    """Request body for POST /auth/2fa/send."""
+    channel: Literal["telegram", "email"]
+
+
+class VerifyCodeRequest(BaseModel):
+    """Request body for POST /auth/2fa/verify."""
+    code: str
+
+
+class VerifyCodeResponse(BaseModel):
+    """Response returned after successful 2FA verification."""
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
 
 
 # Authentication endpoints
@@ -293,7 +310,164 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return UserResponse(**current_user.to_dict())
 
 
-# TODO: Implement 2FA endpoints for email/telegram verification
-# @router.post("/send-verification-code")
-# @router.post("/verify-code")
-# These will replace password-based authentication
+@router.post("/2fa/send")
+@limiter.limit("3 per 15 minutes")
+async def send_2fa_code(
+    request: Request,
+    body: SendCodeRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Generate and dispatch a 2FA verification code via email or Telegram.
+
+    Args:
+        request: FastAPI request (required by rate limiter)
+        body: Channel selection — "telegram" or "email"
+        current_user: Currently authenticated user
+
+    Returns:
+        Confirmation message
+
+    Raises:
+        HTTPException 400: No linked account for the requested channel
+        HTTPException 500: Notification delivery failed
+    """
+    try:
+        db_service = get_database_service()
+        telegram_chat_id: Optional[int] = None
+
+        # Step 1: read — validate that the requested channel is available for this user
+        with db_service.uow() as r:
+            if body.channel == "telegram":
+                ident = (
+                    r.s.query(AuthIdentity)
+                    .filter(
+                        AuthIdentity.user_id == current_user.id,
+                        AuthIdentity.provider == "telegram",
+                    )
+                    .first()
+                )
+                if ident is None:
+                    telegram_chat_id = None
+                else:
+                    telegram_chat_id = int(ident.external_id)
+
+        if body.channel == "telegram" and telegram_chat_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No Telegram account linked to this user",
+            )
+        if body.channel == "email" and not current_user.email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No email address on file for this user",
+            )
+
+        # Step 2: write — atomically replace any existing code and store the new one
+        code = f"{secrets.randbelow(10 ** 6):06d}"
+        with db_service.uow() as r:
+            r.s.query(VerificationCode).filter(
+                VerificationCode.user_id == current_user.id,
+                VerificationCode.provider == body.channel,
+            ).delete(synchronize_session=False)
+            r.s.add(VerificationCode(
+                user_id=current_user.id,
+                code=code,
+                sent_time=int(time.time()),
+                provider=body.channel,
+            ))
+
+        # Step 3: dispatch notification (queues into msg_messages for the processor)
+        async with NotificationServiceClient(service_url="database://") as notify_client:
+            await notify_client.send_notification(
+                notification_type="system",
+                title="Your verification code",
+                message=f"Your 2FA code is: {code}\nValid for 10 minutes.",
+                channels=[body.channel],
+                telegram_chat_id=telegram_chat_id,
+                email_receiver=current_user.email if body.channel == "email" else None,
+                recipient_id=str(current_user.id),
+            )
+
+        _logger.info("2FA code sent to user %s via %s", current_user.id, body.channel)
+        return {"detail": "Code sent"}
+
+    except HTTPException:
+        raise
+    except Exception:
+        _logger.exception("Error sending 2FA code for user %s:", current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification code",
+        )
+
+
+@router.post("/2fa/verify", response_model=VerifyCodeResponse)
+@limiter.limit("5 per 15 minutes")
+async def verify_2fa_code(
+    request: Request,
+    body: VerifyCodeRequest,
+    current_user: User = Depends(get_current_user),
+) -> VerifyCodeResponse:
+    """
+    Validate a 2FA code and return a JWT with the 2fa_verified claim.
+
+    The code is consumed on first successful use (replay prevention).
+    Expired codes and wrong codes both return the same 400 error to
+    prevent timing-based oracle attacks.
+
+    Args:
+        request: FastAPI request (required by rate limiter)
+        body: The verification code entered by the user
+        current_user: Currently authenticated user
+
+    Returns:
+        New access token with 2fa_verified=True in the payload
+
+    Raises:
+        HTTPException 400: Code is invalid, expired, or already used
+        HTTPException 500: Unexpected server error
+    """
+    try:
+        db_service = get_database_service()
+        valid = False
+
+        with db_service.uow() as r:
+            code_row = (
+                r.s.query(VerificationCode)
+                .filter(VerificationCode.user_id == current_user.id)
+                .order_by(VerificationCode.sent_time.desc())
+                .first()
+            )
+            if code_row is not None:
+                now = int(time.time())
+                not_expired = (now - code_row.sent_time) <= _CODE_TTL_SECONDS
+                valid = (code_row.code == body.code) and not_expired
+                if valid:
+                    r.s.delete(code_row)  # consume on first use; prevents replay
+
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification code",
+            )
+
+        token_data = {
+            "sub": str(current_user.id),
+            "username": current_user.username or current_user.email or f"user_{current_user.id}",
+            "role": current_user.role,
+            "2fa_verified": True,
+        }
+        access_token = create_access_token(token_data)
+
+        _logger.info("2FA verified successfully for user %s", current_user.id)
+        return VerifyCodeResponse(access_token=access_token, expires_in=30 * 60)
+
+    except HTTPException:
+        raise
+    except Exception:
+        _logger.exception("Error verifying 2FA code for user %s:", current_user.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )

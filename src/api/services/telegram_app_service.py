@@ -149,54 +149,55 @@ class TelegramAppService:
 
     def get_alerts_list(self, filter_type: Optional[str] = None, page: int = 1, page_size: int = 50) -> List[Dict[str, Any]]:
         """Get filtered and paginated list of alerts."""
+        import json as _json
         try:
-            # Get all active alerts (telegram_service methods are user-specific)
-            alerts = telegram_service.get_active_alerts()  # Get all active alerts
+            alerts = telegram_service.get_active_alerts()
 
-            # Filter if needed
             if filter_type == "inactive":
-                # For now, return empty list since we only have active alerts
                 alerts = []
 
-            # Apply pagination
             start_idx = (page - 1) * page_size
             end_idx = start_idx + page_size
             paginated_alerts = alerts[start_idx:end_idx]
 
-            # Transform to web UI format - alerts are now dictionaries from telegram_service
-            return [
-                {
-                    "id": alert.get('id'),
-                    "user_id": str(alert.get('user_id', '')),
-                    "ticker": alert.get('ticker', ''),
-                    "price": alert.get('price'),
-                    "condition": alert.get('condition', ''),
-                    "active": alert.get('active', True),
-                    "email": alert.get('email', False),
-                    "alert_type": alert.get('alert_type'),
-                    "timeframe": alert.get('timeframe'),
-                    "config_json": alert.get('config_json'),
-                    "alert_action": alert.get('alert_action'),
-                    "re_arm_config": alert.get('re_arm_config'),
-                    "is_armed": alert.get('is_armed', True),
-                    "last_price": alert.get('last_price'),
-                    "last_triggered_at": alert.get('last_triggered_at'),
-                    "created": alert.get('created')
-                }
-                for alert in paginated_alerts
-            ]
+            result = []
+            for alert in paginated_alerts:
+                task_params = getattr(alert, 'task_params', None) or {}
+                config_json_str = task_params.get("config_json", "{}")
+                try:
+                    config = _json.loads(config_json_str) if isinstance(config_json_str, str) else (config_json_str or {})
+                except (_json.JSONDecodeError, TypeError):
+                    config = {}
+                result.append({
+                    "id": alert.id,
+                    "user_id": str(alert.user_id),
+                    "ticker": task_params.get("ticker", getattr(alert, 'target', '') or config.get("ticker", "")),
+                    "price": config.get("price"),
+                    "condition": config.get("condition", ""),
+                    "active": alert.enabled,
+                    "email": task_params.get("email", config.get("email", False)),
+                    "alert_type": config.get("alert_type"),
+                    "timeframe": config.get("timeframe"),
+                    "config_json": config_json_str,
+                    "alert_action": config.get("alert_action"),
+                    "re_arm_config": task_params.get("re_arm_config"),
+                    "is_armed": alert.enabled,
+                    "last_price": None,
+                    "last_triggered_at": None,
+                    "created": alert.created_at.isoformat() if getattr(alert, 'created_at', None) else None,
+                })
+            return result
         except Exception:
             _logger.exception("Error getting alerts list:")
             raise
 
-    def toggle_alert(self, alert_id: int) -> Dict[str, str]:
+    def toggle_alert(self, alert_id: int) -> Dict[str, Any]:
         """Toggle an alert's active status."""
         try:
             alert = telegram_service.get_alert(alert_id)
             if not alert:
                 raise ValueError("Alert not found")
 
-            # Alert objects from telegram_service have 'enabled' field, not 'active'
             current_enabled = getattr(alert, 'enabled', True)
             new_enabled = not current_enabled
             success = telegram_service.update_alert(alert_id, enabled=new_enabled)
@@ -205,7 +206,12 @@ class TelegramAppService:
                 raise RuntimeError("Failed to toggle alert")
 
             status_text = "activated" if new_enabled else "deactivated"
-            return {"message": f"Alert {alert_id} {status_text} successfully"}
+            return {
+                "id": str(alert_id),
+                "active": new_enabled,
+                "is_active": new_enabled,
+                "message": f"Alert {alert_id} {status_text} successfully",
+            }
         except Exception:
             _logger.exception("Error toggling alert %d:", alert_id)
             raise
@@ -224,6 +230,120 @@ class TelegramAppService:
             return {"message": f"Alert {alert_id} deleted successfully"}
         except Exception:
             _logger.exception("Error deleting alert %d:", alert_id)
+            raise
+
+    def create_alert(self, user_id: str, ticker: str, condition: str = "custom",
+                     config_json: Optional[str] = None, timeframe: Optional[str] = None,
+                     alert_type: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new alert from web UI."""
+        import json as _json
+        try:
+            try:
+                raw_config = _json.loads(config_json) if config_json else {}
+            except (_json.JSONDecodeError, TypeError):
+                raw_config = {}
+
+            full_config = {
+                "ticker": ticker,
+                "condition": condition,
+                "alert_type": alert_type or "custom",
+                **raw_config,
+            }
+            if timeframe:
+                full_config["timeframe"] = timeframe
+
+            alert_id = telegram_service.add_json_alert(user_id, _json.dumps(full_config))
+            _logger.info("Created alert %d for user %s, ticker %s", alert_id, user_id, ticker)
+            return {
+                "id": str(alert_id),
+                "user_id": user_id,
+                "ticker": ticker,
+                "condition": condition,
+                "active": True,
+                "is_active": True,
+                "config_json": config_json,
+                "alert_type": alert_type or "custom",
+                "timeframe": timeframe,
+            }
+        except Exception:
+            _logger.exception("Error creating alert for user %s:", user_id)
+            raise
+
+    def create_schedule(self, user_id: str, scheduled_time: str, ticker: str = "",
+                        config_json: Optional[str] = None, schedule_type: Optional[str] = None,
+                        list_type: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new schedule from web UI."""
+        import json as _json
+        try:
+            try:
+                raw_config = _json.loads(config_json) if config_json else {}
+            except (_json.JSONDecodeError, TypeError):
+                raw_config = {}
+
+            resolved_ticker = ticker or list_type or raw_config.get("ticker", "SCREENER")
+            full_config = {
+                "ticker": resolved_ticker,
+                "scheduled_time": scheduled_time,
+                "schedule_type": schedule_type or "screener",
+                **raw_config,
+            }
+            if list_type:
+                full_config["list_type"] = list_type
+
+            schedule_id = telegram_service.add_json_schedule(user_id, _json.dumps(full_config))
+            _logger.info("Created schedule %d for user %s at %s", schedule_id, user_id, scheduled_time)
+            return {
+                "id": str(schedule_id),
+                "user_id": user_id,
+                "ticker": resolved_ticker,
+                "scheduled_time": scheduled_time,
+                "active": True,
+                "is_active": True,
+                "config_json": config_json,
+                "schedule_type": schedule_type or "screener",
+            }
+        except Exception:
+            _logger.exception("Error creating schedule for user %s:", user_id)
+            raise
+
+    def toggle_schedule(self, schedule_id: int) -> Dict[str, Any]:
+        """Toggle a schedule's active status."""
+        try:
+            schedule = telegram_service.get_schedule(schedule_id)
+            if not schedule:
+                raise ValueError("Schedule not found")
+
+            current_enabled = schedule.get('active', True)
+            new_enabled = not current_enabled
+            success = telegram_service.update_schedule(schedule_id, enabled=new_enabled)
+            if not success:
+                raise RuntimeError("Failed to toggle schedule")
+
+            status_text = "activated" if new_enabled else "deactivated"
+            return {
+                "id": str(schedule_id),
+                "active": new_enabled,
+                "is_active": new_enabled,
+                "message": f"Schedule {schedule_id} {status_text} successfully",
+            }
+        except Exception:
+            _logger.exception("Error toggling schedule %d:", schedule_id)
+            raise
+
+    def delete_schedule(self, schedule_id: int) -> Dict[str, str]:
+        """Delete a schedule."""
+        try:
+            schedule = telegram_service.get_schedule(schedule_id)
+            if not schedule:
+                raise ValueError("Schedule not found")
+
+            success = telegram_service.delete_schedule(schedule_id)
+            if not success:
+                raise RuntimeError("Failed to delete schedule")
+
+            return {"message": f"Schedule {schedule_id} deleted successfully"}
+        except Exception:
+            _logger.exception("Error deleting schedule %d:", schedule_id)
             raise
 
     def get_schedule_stats(self) -> Dict[str, Any]:

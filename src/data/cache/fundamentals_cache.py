@@ -202,8 +202,7 @@ class FundamentalsCache:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, indent=2, ensure_ascii=False)
 
-            _logger.info("Cached fundamentals for %s from %s at %s",
-                        symbol, provider, timestamp)
+            _logger.info("Cached fundamentals for %s from %s", symbol, provider)
 
             return str(file_path)
 

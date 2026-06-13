@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../stores/authStore';
+import { telegramAlertKeys } from '../hooks/telegram/useTelegramAlerts';
+import { telegramScheduleKeys } from '../hooks/telegram/useTelegramSchedules';
 
 // WebSocket Events
 interface WebSocketEvents {
@@ -48,6 +51,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   });
 
   const { user, token, isAuthenticated } = useAuthStore();
+  const queryClient = useQueryClient();
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -147,6 +151,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
           toast(alertData.message || 'System notification');
           break;
       }
+    });
+
+    newSocket.on('telegram_alert_triggered', () => {
+      queryClient.invalidateQueries({ queryKey: telegramAlertKeys.all });
+    });
+
+    newSocket.on('telegram_schedule_executed', () => {
+      queryClient.invalidateQueries({ queryKey: telegramScheduleKeys.all });
     });
 
     setSocket(newSocket);

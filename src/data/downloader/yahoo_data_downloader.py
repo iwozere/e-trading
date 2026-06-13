@@ -23,6 +23,7 @@ from typing import List, Dict, Optional, Any
 
 import pandas as pd
 import yfinance as yf
+from yfinance.exceptions import YFRateLimitError
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 from src.model.schemas import OptionalFundamentals, Fundamentals
@@ -998,9 +999,28 @@ class YahooDataDownloader(BaseDataDownloader):
             "impliedVolatility", "bid", "ask", "lastPrice", "inTheMoney",
             "contractSymbol", "lastTradeDate",
         ]
+        _RATE_LIMIT_RETRIES = 4
+        _RATE_LIMIT_BASE_DELAY = 10.0   # seconds; doubles each retry (10 → 20 → 40s)
+
+        def _fetch_with_retry(fn, label: str):
+            """Call fn(), retrying on YFRateLimitError with exponential backoff."""
+            delay = _RATE_LIMIT_BASE_DELAY
+            for attempt in range(_RATE_LIMIT_RETRIES):
+                try:
+                    return fn()
+                except YFRateLimitError:
+                    if attempt == _RATE_LIMIT_RETRIES - 1:
+                        raise
+                    _logger.warning(
+                        "%s: rate limited on %s — sleeping %.0fs (attempt %d/%d)",
+                        symbol, label, delay, attempt + 1, _RATE_LIMIT_RETRIES,
+                    )
+                    time.sleep(delay)
+                    delay *= 2
+
         try:
             ticker = yf.Ticker(symbol)
-            expirations = ticker.options
+            expirations = _fetch_with_retry(lambda: ticker.options, "options list")
             if not expirations:
                 _logger.debug("%s: no options expirations available", symbol)
                 return pd.DataFrame()
@@ -1008,7 +1028,7 @@ class YahooDataDownloader(BaseDataDownloader):
             frames: List[pd.DataFrame] = []
             for exp in expirations:
                 try:
-                    chain = ticker.option_chain(exp)
+                    chain = _fetch_with_retry(lambda e=exp: ticker.option_chain(e), f"expiration {exp}")
                     for side, df in (("call", chain.calls), ("put", chain.puts)):
                         if df.empty:
                             continue
@@ -1016,7 +1036,9 @@ class YahooDataDownloader(BaseDataDownloader):
                         df["type"] = side
                         df["expiration"] = exp
                         frames.append(df)
-                    time.sleep(0.05)
+                    time.sleep(0.1)
+                except YFRateLimitError:
+                    _logger.error("%s: rate limit exhausted for expiration %s — skipping", symbol, exp)
                 except Exception:
                     _logger.warning("%s: could not fetch chain for expiration %s", symbol, exp)
 
@@ -1031,6 +1053,9 @@ class YahooDataDownloader(BaseDataDownloader):
             )
             return combined[available]
 
+        except YFRateLimitError:
+            _logger.error("%s: rate limit exhausted fetching options list — returning empty", symbol)
+            return pd.DataFrame()
         except Exception:
             _logger.exception("%s: failed to fetch full options chain", symbol)
             return pd.DataFrame()

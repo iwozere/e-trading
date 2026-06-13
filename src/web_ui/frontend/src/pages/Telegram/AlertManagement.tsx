@@ -38,8 +38,15 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import TelegramBreadcrumbs from '../../components/Telegram/TelegramBreadcrumbs';
-import { useTelegramAlerts } from '../../hooks/telegram/useTelegramAlerts';
+import {
+  useTelegramAlerts,
+  useCreateTelegramAlert,
+  useToggleTelegramAlert,
+  useDeleteTelegramAlert,
+} from '../../hooks/telegram/useTelegramAlerts';
 import ConfigBuilder from '../../components/Telegram/ConfigBuilder';
+import { useAuthStore } from '../../stores/authStore';
+import { AlertType, RearmConfig } from '../../types/telegram';
 
 const flattenConditionList = (alert: any) => {
   if (alert.condition) return alert.condition;
@@ -57,8 +64,13 @@ const AlertManagement: React.FC = () => {
   const [filter, setFilter] = useState<string>('all');
   const [builderOpen, setBuilderOpen] = useState(false);
 
+  const { user } = useAuthStore();
+  const createAlert = useCreateTelegramAlert();
+  const toggleAlert = useToggleTelegramAlert();
+  const deleteAlert = useDeleteTelegramAlert();
+
   // Query for alerts
-  const { data: alertsResponse, isLoading, isError, error, refetch } = useTelegramAlerts({ 
+  const { data: alertsResponse, isLoading, isError, error, refetch } = useTelegramAlerts({
     status: filter === 'all' ? undefined : filter as any
   });
 
@@ -72,9 +84,19 @@ const AlertManagement: React.FC = () => {
   };
 
   const handleSaveConfig = (config: any, mode: 'alert' | 'schedule') => {
-    // TODO: Connect to backend API `useCreateTelegramAlert` mutation
-    console.log('Saving config to API:', { mode, config });
-    alert('Config generated successfully. Ready to link to backend API.');
+    if (mode !== 'alert') return;
+    const defaultRearm: RearmConfig = { enabled: false, type: 'immediate' };
+    createAlert.mutate({
+      userId: user?.username || '',
+      alertData: {
+        symbol: config.ticker || 'UNKNOWN',
+        alert_type: AlertType.PRICE_ABOVE,
+        target_value: 0,
+        rearm_config: defaultRearm,
+        config_json: JSON.stringify(config),
+        timeframe: config.timeframe,
+      },
+    });
     setBuilderOpen(false);
   };
 
@@ -189,9 +211,8 @@ const AlertManagement: React.FC = () => {
                               <IconButton
                                 size="small"
                                 color={alert.active ? "warning" : "success"}
-                                onClick={() => {
-                                  console.log('Toggle alert', alert.id);
-                                }}
+                                disabled={toggleAlert.isPending}
+                                onClick={() => toggleAlert.mutate(String(alert.id))}
                               >
                                 {alert.active ? <DeactivateIcon /> : <ActivateIcon />}
                               </IconButton>
@@ -200,9 +221,8 @@ const AlertManagement: React.FC = () => {
                               <IconButton
                                 size="small"
                                 color="error"
-                                onClick={() => {
-                                  console.log('Delete alert', alert.id);
-                                }}
+                                disabled={deleteAlert.isPending}
+                                onClick={() => deleteAlert.mutate(String(alert.id))}
                               >
                                 <DeleteIcon />
                               </IconButton>

@@ -108,6 +108,24 @@ class TelegramSchedule(BaseModel):
     schedule_config: Optional[str] = None
     created: Optional[str] = None
 
+class CreateAlertRequest(BaseModel):
+    """Request body for creating a Telegram alert."""
+    user_id: str
+    ticker: str
+    condition: str = "custom"
+    config_json: Optional[str] = None
+    timeframe: Optional[str] = None
+    alert_type: Optional[str] = None
+
+class CreateScheduleRequest(BaseModel):
+    """Request body for creating a Telegram schedule."""
+    user_id: str
+    scheduled_time: str
+    ticker: str = ""
+    config_json: Optional[str] = None
+    schedule_type: Optional[str] = None
+    list_type: Optional[str] = None
+
 class TelegramScheduleUpdate(BaseModel):
     """Partial update payload for a Telegram schedule."""
     ticker: Optional[str] = None
@@ -389,6 +407,29 @@ async def delete_telegram_alert(
 
 
 
+@router.post("/alerts")
+async def create_telegram_alert(
+    alert: CreateAlertRequest,
+    current_user: User = Depends(require_admin)
+):
+    """Create a new Telegram alert from web UI."""
+    try:
+        _logger.info("Creating Telegram alert for user %s, ticker %s", alert.user_id, alert.ticker)
+        result = telegram_app_service.create_alert(
+            user_id=alert.user_id,
+            ticker=alert.ticker,
+            condition=alert.condition,
+            config_json=alert.config_json,
+            timeframe=alert.timeframe,
+            alert_type=alert.alert_type,
+        )
+        _logger.info("Created Telegram alert %s", result.get("id"))
+        return result
+    except Exception as e:
+        _logger.exception("Error creating Telegram alert:")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/stats/alerts", response_model=AlertStats)
 async def get_telegram_alert_stats(
     current_user: User = Depends(get_current_user)
@@ -460,6 +501,65 @@ async def get_telegram_schedules(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+@router.post("/schedules")
+async def create_telegram_schedule(
+    schedule: CreateScheduleRequest,
+    current_user: User = Depends(require_admin)
+):
+    """Create a new Telegram schedule from web UI."""
+    try:
+        _logger.info("Creating Telegram schedule for user %s at %s", schedule.user_id, schedule.scheduled_time)
+        result = telegram_app_service.create_schedule(
+            user_id=schedule.user_id,
+            scheduled_time=schedule.scheduled_time,
+            ticker=schedule.ticker,
+            config_json=schedule.config_json,
+            schedule_type=schedule.schedule_type,
+            list_type=schedule.list_type,
+        )
+        _logger.info("Created Telegram schedule %s", result.get("id"))
+        return result
+    except Exception as e:
+        _logger.exception("Error creating Telegram schedule:")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/schedules/{schedule_id}/toggle")
+async def toggle_telegram_schedule(
+    schedule_id: int,
+    current_user: User = Depends(require_admin)
+):
+    """Toggle a Telegram schedule's active status."""
+    try:
+        _logger.info("Toggling Telegram schedule: %d", schedule_id)
+        result = telegram_app_service.toggle_schedule(schedule_id)
+        _logger.info("Successfully toggled Telegram schedule: %d", schedule_id)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Error toggling Telegram schedule %d:", schedule_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/schedules/{schedule_id}")
+async def delete_telegram_schedule(
+    schedule_id: int,
+    current_user: User = Depends(require_admin)
+):
+    """Delete a Telegram schedule."""
+    try:
+        _logger.info("Deleting Telegram schedule: %d", schedule_id)
+        result = telegram_app_service.delete_schedule(schedule_id)
+        _logger.info("Successfully deleted Telegram schedule: %d", schedule_id)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Error deleting Telegram schedule %d:", schedule_id)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/stats/schedules", response_model=ScheduleStats)

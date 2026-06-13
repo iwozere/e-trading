@@ -38,15 +38,27 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import TelegramBreadcrumbs from '../../components/Telegram/TelegramBreadcrumbs';
-import { useTelegramSchedules } from '../../hooks/telegram/useTelegramSchedules';
+import {
+  useTelegramSchedules,
+  useCreateTelegramSchedule,
+  useToggleTelegramSchedule,
+  useDeleteTelegramSchedule,
+} from '../../hooks/telegram/useTelegramSchedules';
 import ConfigBuilder from '../../components/Telegram/ConfigBuilder';
+import { useAuthStore } from '../../stores/authStore';
+import { ScheduleType } from '../../types/telegram';
 
 const ScheduleManagement: React.FC = () => {
   const [filter, setFilter] = useState<string>('all');
   const [builderOpen, setBuilderOpen] = useState(false);
 
+  const { user } = useAuthStore();
+  const createSchedule = useCreateTelegramSchedule();
+  const toggleSchedule = useToggleTelegramSchedule();
+  const deleteSchedule = useDeleteTelegramSchedule();
+
   // Query for schedules
-  const { data: schedulesResponse, isLoading, isError, error, refetch } = useTelegramSchedules({ 
+  const { data: schedulesResponse, isLoading, isError, error, refetch } = useTelegramSchedules({
     status: filter === 'all' ? undefined : filter as any
   });
 
@@ -60,9 +72,17 @@ const ScheduleManagement: React.FC = () => {
   };
 
   const handleSaveConfig = (config: any, mode: 'alert' | 'schedule') => {
-    // TODO: Connect to backend API `useCreateTelegramSchedule` mutation
-    console.log('Saving config to API:', { mode, config });
-    alert('Config generated successfully. Ready to link to backend API.');
+    if (mode !== 'schedule') return;
+    createSchedule.mutate({
+      userId: user?.username || '',
+      scheduleData: {
+        schedule_type: ScheduleType.DAILY,
+        time: config.parameters?.scheduled_time || '09:00',
+        timezone: 'UTC',
+        config: { report_type: 'screener' },
+        config_json: JSON.stringify(config),
+      },
+    });
     setBuilderOpen(false);
   };
 
@@ -181,10 +201,8 @@ const ScheduleManagement: React.FC = () => {
                               <IconButton
                                 size="small"
                                 color={schedule.active ? "warning" : "success"}
-                                onClick={() => {
-                                  // TODO: Implement toggle functionality
-                                  console.log('Toggle schedule', schedule.id);
-                                }}
+                                disabled={toggleSchedule.isPending}
+                                onClick={() => toggleSchedule.mutate(String(schedule.id))}
                               >
                                 {schedule.active ? <DeactivateIcon /> : <ActivateIcon />}
                               </IconButton>
@@ -193,10 +211,8 @@ const ScheduleManagement: React.FC = () => {
                               <IconButton
                                 size="small"
                                 color="error"
-                                onClick={() => {
-                                  // TODO: Implement delete functionality
-                                  console.log('Delete schedule', schedule.id);
-                                }}
+                                disabled={deleteSchedule.isPending}
+                                onClick={() => deleteSchedule.mutate(String(schedule.id))}
                               >
                                 <DeleteIcon />
                               </IconButton>

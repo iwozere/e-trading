@@ -284,6 +284,8 @@ export interface AlertFormData {
   alert_type: AlertType;
   target_value: number;
   rearm_config: RearmConfig;
+  config_json?: string;
+  timeframe?: string;
 }
 
 /**
@@ -294,6 +296,7 @@ export interface ScheduleFormData {
   time: string;
   timezone: string;
   config: ScheduleConfig;
+  config_json?: string;
 }
 
 /**

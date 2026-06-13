@@ -258,7 +258,11 @@ export class TelegramApiService {
   async createAlert(userId: string, alertData: AlertFormData): Promise<TelegramAlert> {
     const response: AxiosResponse<TelegramAlert> = await this.api.post('/alerts', {
       user_id: userId,
-      ...alertData
+      ticker: alertData.symbol,
+      condition: String(alertData.alert_type),
+      config_json: alertData.config_json,
+      timeframe: alertData.timeframe,
+      alert_type: String(alertData.alert_type),
     });
     return response.data;
   }
@@ -323,7 +327,9 @@ export class TelegramApiService {
   async createSchedule(userId: string, scheduleData: ScheduleFormData): Promise<TelegramSchedule> {
     const response: AxiosResponse<TelegramSchedule> = await this.api.post('/schedules', {
       user_id: userId,
-      ...scheduleData
+      scheduled_time: scheduleData.time,
+      schedule_type: scheduleData.schedule_type,
+      config_json: scheduleData.config_json,
     });
     return response.data;
   }

@@ -297,6 +297,37 @@ class TelegramService(BaseDBService):
 
         return alerts
 
+    @with_uow
+    @handle_db_error
+    def get_alert(self, alert_id: int):
+        from src.data.db.models.model_jobs import JobType
+        schedule = self.repos.jobs.get_schedule(alert_id)
+        if not schedule or schedule.job_type != JobType.ALERT.value:
+            return None
+        return schedule
+
+    @with_uow
+    @handle_db_error
+    def update_alert(self, alert_id: int, **values) -> bool:
+        from src.data.db.models.model_jobs import JobType
+        schedule = self.repos.jobs.get_schedule(alert_id)
+        if not schedule or schedule.job_type != JobType.ALERT.value:
+            return False
+        update_data = {k: v for k, v in values.items() if k == 'enabled'}
+        if not update_data:
+            return True
+        updated = self.repos.jobs.update_schedule(alert_id, update_data)
+        return updated is not None
+
+    @with_uow
+    @handle_db_error
+    def delete_alert(self, alert_id: int) -> bool:
+        from src.data.db.models.model_jobs import JobType
+        schedule = self.repos.jobs.get_schedule(alert_id)
+        if not schedule or schedule.job_type != JobType.ALERT.value:
+            return False
+        return self.repos.jobs.delete_schedule(alert_id)
+
     # --- Schedules ---
     @with_uow
     @handle_db_error

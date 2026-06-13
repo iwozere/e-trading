@@ -70,6 +70,7 @@ Expected outcome after these three changes: **3–10 candidates per run** on nor
 - [x] Unit test: `test_negative_vol_zscore_rejects` — ✅ passes, AR=0.0 confirmed
 - [x] Integration test: `test_apply_filters_passes_good_candidate` — ✅ mocked DataManager, good candidate passes all gates
 - [x] Regression test: `test_low_price_warrant_nan_metrics_regression` — ✅ XRXDW-like warrant with NaN RV is now rejected
+- [x] **37-scenario threshold calibration suite** — `tests/test_threshold_calibration.py` — Groups A–I covering all 7 filter gates from both sides plus grid-sweep comparisons — ✅ all 37 pass (2026-06-13)
 
 ## Documentation Updates
 
