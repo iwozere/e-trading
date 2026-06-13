@@ -6,7 +6,7 @@ FastAPI routes for managing trading bots through the web UI.
 Provides CRUD operations for bot configurations and status management.
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, Request, status, Depends
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -137,9 +137,18 @@ async def get_trading_bots(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/bots/{bot_id}", response_model=BotResponse)
-async def get_trading_bot(bot_id: str, current_user: User = Depends(get_current_user)):
+async def get_trading_bot(
+    bot_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
     """
     Get a specific trading bot by ID.
+
+    The response includes:
+    - DB record fields (status, config, PnL, started_at, last_heartbeat)
+    - ``live_state``: real-time status from StrategyManager when in-process
+    - ``active_positions``: open positions from the trading database
 
     Args:
         bot_id: Bot ID
@@ -162,6 +171,24 @@ async def get_trading_bot(bot_id: str, current_user: User = Depends(get_current_
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
             )
+
+        # Enrich with live state from in-process StrategyManager (best-effort)
+        manager = getattr(request.app.state, "strategy_manager", None)
+        if manager is not None:
+            try:
+                bot['live_state'] = manager.get_strategy_status(bot_id)
+            except Exception:
+                _logger.debug("Could not fetch live state for bot %s", bot_id)
+                bot['live_state'] = None
+        else:
+            bot['live_state'] = None
+
+        # Enrich with active positions from DB
+        try:
+            bot['active_positions'] = trading_service.get_open_positions(bot_id=bot_id)
+        except Exception:
+            _logger.debug("Could not fetch active positions for bot %s", bot_id)
+            bot['active_positions'] = []
 
         return BotResponse(success=True, bot=bot)
 
@@ -344,17 +371,23 @@ async def update_trading_bot(
 async def update_bot_status(
     bot_id: str,
     status_request: BotStatusRequest,
-    current_user: User = Depends(get_current_user)
+    request: Request,
+    current_user: User = Depends(get_current_user),
 ):
     """
     Update bot status (start/stop/restart).
+
+    Writes intent to the database first (so the StrategyManager DB-polling
+    loop can pick it up even across process restarts), then attempts a direct
+    call to the in-process StrategyManager for immediate effect.  The response
+    message indicates whether the action was confirmed live or queued.
 
     Args:
         bot_id: Bot ID
         status_request: Status update request
 
     Returns:
-        JSON with operation result
+        JSON with operation result and confirmation source
     """
     try:
         user_id = current_user.id
@@ -374,18 +407,17 @@ async def update_bot_status(
                 detail="Access denied"
             )
 
-        # Update status based on action (pydantic pattern ensures only start/stop/restart)
-        success = False
+        # --- Step 1: write intent to DB -----------------------------------------
+        # StrategyManager.start_db_polling() picks this up on its next cycle.
+        # This guarantees the action survives a process restart.
+        db_success = False
         if action == 'start':
             if bot['status'] == 'running':
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Bot is already running"
                 )
-
-            # Write intent to DB. StrategyManager.start_db_polling() reads this
-            # status on its next poll cycle and starts the bot process.
-            success = trading_service.update_bot_status(bot_id, 'starting')
+            db_success = trading_service.update_bot_status(bot_id, 'starting')
 
         elif action == 'stop':
             if bot['status'] == 'stopped':
@@ -393,27 +425,48 @@ async def update_bot_status(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Bot is already stopped"
                 )
-
-            # Write intent to DB. StrategyManager.start_db_polling() reads this
-            # status on its next poll cycle and stops the bot process.
-            success = trading_service.update_bot_status(bot_id, 'stopping')
+            db_success = trading_service.update_bot_status(bot_id, 'stopping')
 
         elif action == 'restart':
-            # Write intent to DB. StrategyManager.start_db_polling() reads this
-            # status on its next poll cycle and restarts the bot process.
-            success = trading_service.update_bot_status(bot_id, 'restarting')
+            db_success = trading_service.update_bot_status(bot_id, 'restarting')
 
-        if success:
-            _logger.info("Bot %s status updated to %s by user %s", bot_id, action, user_id)
-            return BotResponse(
-                success=True,
-                message=f'Bot {action} initiated successfully'
-            )
-        else:
+        if not db_success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to {action} bot"
             )
+
+        # --- Step 2: direct manager call (best-effort) --------------------------
+        # When the StrategyManager runs in the same process, call it directly
+        # so the action takes effect immediately rather than waiting up to 60 s
+        # for the next DB-poll cycle.
+        manager = getattr(request.app.state, "strategy_manager", None)
+        manager_confirmed = False
+        if manager is not None:
+            try:
+                if action == 'start':
+                    # Ensure the instance is registered before starting
+                    if bot_id not in manager.strategy_instances:
+                        si_config = manager._db_bot_to_strategy_config(bot)
+                        manager.instance_service.create_instance(bot_id, si_config)
+                    manager_confirmed = await manager.start_strategy(bot_id)
+                elif action == 'stop':
+                    manager_confirmed = await manager.stop_strategy(bot_id)
+                elif action == 'restart':
+                    manager_confirmed = await manager.restart_strategy(bot_id)
+            except Exception:
+                _logger.warning(
+                    "Direct manager call failed for bot %s action=%s; "
+                    "DB polling will handle it on the next cycle",
+                    bot_id, action
+                )
+
+        confirmation = "confirmed live" if manager_confirmed else "queued via DB polling"
+        _logger.info("Bot %s action=%s by user %s (%s)", bot_id, action, user_id, confirmation)
+        return BotResponse(
+            success=True,
+            message=f'Bot {action} initiated successfully ({confirmation})'
+        )
 
     except HTTPException:
         raise

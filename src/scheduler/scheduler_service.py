@@ -505,7 +505,7 @@ class SchedulerService:
             # Use module-level wrapper instead of instance method to avoid pickling errors.
             # max_instances=1 ensures a single schedule never runs concurrently with itself,
             # which also naturally caps catch-up replay to one execution at a time (P3-SCHED-3).
-            self.scheduler.add_job(
+            job = self.scheduler.add_job(
                 func=execute_job_wrapper,
                 trigger=trigger,
                 id=job_id,
@@ -514,8 +514,19 @@ class SchedulerService:
                 max_instances=1,
             )
 
-            _logger.debug("Registered schedule %s (ID: %d) with job ID: %s",
-                         schedule.name, schedule.id, job_id)
+            # Write next_run_at back to DB so the UI reflects the computed fire time.
+            # This is especially important for rows inserted via raw SQL, which bypass
+            # create_schedule() and therefore never have next_run_at populated.
+            if job.next_run_time is not None:
+                try:
+                    await asyncio.to_thread(
+                        lambda: self.jobs_service.update_schedule_next_run(schedule.id)
+                    )
+                except Exception:
+                    _logger.warning("Could not update next_run_at for schedule %d", schedule.id)
+
+            _logger.debug("Registered schedule %s (ID: %d) with job ID: %s, next_run_at: %s",
+                         schedule.name, schedule.id, job_id, job.next_run_time)
 
         except Exception as e:
             _logger.error("Failed to register schedule %s (ID: %d): %s",

@@ -188,7 +188,7 @@ connected to backend API calls (see `AlertManagement.tsx` line 75 and related fi
 
 ---
 
-### 3.5 Fix API trading-bot stub methods
+### 3.5 Fix API trading-bot stub methods ✅
 
 **File**: `src/api/trading_bot_routes.py`  
 
@@ -197,9 +197,9 @@ connected to backend API calls (see `AlertManagement.tsx` line 75 and related fi
 - [x] Fix `success` possibly-unbound Pyright warning (added `success = False` before action branches) — ✅ done
 - [x] Fix `bot_id > 0` type error in `validate_bot_configuration` (`str` vs `int` comparison) — ✅ done
 - [x] Fix `List[Dict[str, str]]` → `List[Dict[str, Any]]` return type in `trading_bot_config.py` (allows `parameters` list to be set on mixin dicts) — ✅ done
-- [ ] Connect each endpoint to `StrategyManager.start()` / `.stop()` / `.restart()` (currently uses intent-to-DB polling; direct wiring may be needed for synchronous status)
-- [ ] Return structured JSON with bot state, active positions, last-run timestamp
-- [ ] Add integration test that starts a paper-trading bot, verifies status, stops it
+- [x] Connect each endpoint to `StrategyManager.start()` / `.stop()` / `.restart()` — `update_bot_status` writes intent to DB first (polling fallback), then calls the in-process manager directly via `app.state.strategy_manager`; response message distinguishes "confirmed live" vs "queued via DB polling" — ✅ done
+- [x] Return structured JSON with bot state, active positions, last-run timestamp — `get_trading_bot` now enriches the DB record with `live_state` (from in-process `StrategyManager.get_strategy_status()`) and `active_positions` (from `trading_service.get_open_positions()`); `started_at` in DB record serves as last-run timestamp — ✅ done
+- [x] Add integration test that starts a paper-trading bot, verifies status, stops it — `src/api/tests/test_trading_bot_lifecycle.py` (13 tests, all pass) — ✅ done
 
 ---
 

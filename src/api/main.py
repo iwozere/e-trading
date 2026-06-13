@@ -142,6 +142,10 @@ async def lifespan(app: FastAPI):
         strategy_manager = None
         _logger.warning("Trading system not available - running in API-only mode")
 
+    # Expose manager via app.state so route handlers can access it without
+    # importing from main (which would create circular imports).
+    app.state.strategy_manager = strategy_manager
+
     # Initialize strategy service
     strategy_service = StrategyManagementService(strategy_manager)
     _logger.info("Strategy management service initialized")
