@@ -23,7 +23,7 @@ Classes:
 import os
 import time
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
 import pandas as pd
 
@@ -41,6 +41,13 @@ try:
     from alpaca.trading.client import TradingClient
     ALPACA_AVAILABLE = True
 except ImportError:
+    # Annotate as Any so Pyright does not flag usages below as "None not callable".
+    # The actual guard is `if not ALPACA_AVAILABLE: raise ImportError(...)` in __init__.
+    StockHistoricalDataClient: Any = None
+    StockBarsRequest: Any = None
+    TimeFrame: Any = None
+    TimeFrameUnit: Any = None
+    TradingClient: Any = None
     ALPACA_AVAILABLE = False
     _logger.warning("alpaca-py not installed. Install with: pip install alpaca-py")
 
@@ -239,8 +246,11 @@ class AlpacaDataDownloader(BaseDataDownloader):
         # Get bars using the new data client
         bars_response = self.data_client.get_stock_bars(request)
 
-        # Extract bars for the symbol (response is a dict with symbol as key)
-        bars = bars_response.get(symbol, None)
+        # BarSet (alpaca-py) uses __getitem__, not .get()
+        try:
+            bars = bars_response[symbol]
+        except KeyError:
+            bars = None
 
         return self._convert_bars_to_dataframe(bars, symbol, start_date, end_date)
 
@@ -377,18 +387,19 @@ class AlpacaDataDownloader(BaseDataDownloader):
             # tz_localize(None) would just drop the label without converting.
             df['timestamp'] = df['timestamp'].dt.tz_convert(None)
 
-        # Filter data to ensure it starts from the requested start_date (UTC)
-        df = df[df['timestamp'] >= start_date]
-        df = df[df['timestamp'] <= end_date]
+        # Filter data to ensure it starts from the requested start_date (UTC).
+        # cast() needed because pandas stubs infer a wide union from boolean indexing.
+        mask = (df['timestamp'] >= start_date) & (df['timestamp'] <= end_date)
+        df = cast(pd.DataFrame, df.loc[mask])
 
         # Remove duplicates and sort
         df = df.drop_duplicates(subset=['timestamp'])
         df.set_index('timestamp', inplace=True)
         df.sort_index(inplace=True)
 
-        _logger.debug("Final dataset for %s: %d rows from %s to %s",
-                     symbol, len(df), df.index.min().date() if len(df) > 0 else 'N/A',
-                     df.index.max().date() if len(df) > 0 else 'N/A')
+        min_ts = str(df.index.min()) if len(df) > 0 else 'N/A'
+        max_ts = str(df.index.max()) if len(df) > 0 else 'N/A'
+        _logger.debug("Final dataset for %s: %d rows from %s to %s", symbol, len(df), min_ts, max_ts)
 
         return df
 
@@ -437,9 +448,10 @@ class AlpacaDataDownloader(BaseDataDownloader):
             # tz_localize(None) would just drop the label without converting.
             df['timestamp'] = df['timestamp'].dt.tz_convert(None)
 
-        # Filter data to ensure it starts from the requested start_date (UTC)
-        df = df[df['timestamp'] >= start_date]
-        df = df[df['timestamp'] <= end_date]
+        # Filter data to ensure it starts from the requested start_date (UTC).
+        # cast() required — pandas stubs infer a wide union from boolean indexing.
+        df = cast(pd.DataFrame, df[df['timestamp'] >= start_date])
+        df = cast(pd.DataFrame, df[df['timestamp'] <= end_date])
 
         df.set_index('timestamp', inplace=True)
         df.sort_index(inplace=True)
@@ -481,41 +493,29 @@ class AlpacaDataDownloader(BaseDataDownloader):
                 company_name=getattr(asset, 'name', symbol),
                 sector=getattr(asset, 'sector', None),
                 industry=getattr(asset, 'industry', None),
-                market_cap=None,  # Would need additional API call
-                pe_ratio=None,    # Would need additional API call
-                dividend_yield=None,  # Would need additional API call
-                beta=None,        # Would need additional API call
-                eps=None,         # Would need additional API call
-                revenue=None,     # Would need additional API call
-                profit_margin=None,  # Would need additional API call
-                debt_to_equity=None,  # Would need additional API call
-                return_on_equity=None,  # Would need additional API call
-                price_to_book=None,     # Would need additional API call
-                free_cash_flow=None,    # Would need additional API call
-                operating_margin=None,  # Would need additional API call
-                current_ratio=None,     # Would need additional API call
-                quick_ratio=None,       # Would need additional API call
-                gross_margin=None,      # Would need additional API call
-                asset_turnover=None,    # Would need additional API call
-                inventory_turnover=None,  # Would need additional API call
-                receivables_turnover=None,  # Would need additional API call
-                payables_turnover=None,     # Would need additional API call
-                revenue_growth=None,        # Would need additional API call
-                earnings_growth=None,       # Would need additional API call
-                book_value_per_share=None,  # Would need additional API call
-                cash_per_share=None,        # Would need additional API call
-                revenue_per_share=None,     # Would need additional API call
-                shares_outstanding=None,    # Would need additional API call
-                float_shares=None,          # Would need additional API call
-                insider_ownership=None,     # Would need additional API call
-                institutional_ownership=None,  # Would need additional API call
-                short_ratio=None,              # Would need additional API call
-                peg_ratio=None,                # Would need additional API call
-                price_to_sales=None,           # Would need additional API call
-                enterprise_value=None,         # Would need additional API call
-                ev_to_revenue=None,            # Would need additional API call
-                ev_to_ebitda=None,             # Would need additional API call
-                description=getattr(asset, 'description', None)
+                market_cap=None,
+                pe_ratio=None,
+                dividend_yield=None,
+                beta=None,
+                earnings_per_share=None,
+                revenue=None,
+                profit_margin=None,
+                debt_to_equity=None,
+                return_on_equity=None,
+                price_to_book=None,
+                free_cash_flow=None,
+                operating_margin=None,
+                current_ratio=None,
+                quick_ratio=None,
+                gross_margin=None,
+                revenue_growth=None,
+                shares_outstanding=None,
+                float_shares=None,
+                short_ratio=None,
+                peg_ratio=None,
+                price_to_sales=None,
+                enterprise_value=None,
+                enterprise_value_to_ebitda=None,
             )
 
             _logger.debug("Retrieved basic fundamentals for %s", symbol)

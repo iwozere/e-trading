@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, cast
 from datetime import datetime
 import pandas as pd
 import requests
@@ -84,7 +84,7 @@ class PolygonDataDownloader(BaseDataDownloader):
         if not self.api_key:
             raise ValueError("Polygon API key is required. Get one at: https://polygon.io/")
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
         """
         Download historical data for a given symbol from Polygon.io.
 
@@ -136,7 +136,7 @@ class PolygonDataDownloader(BaseDataDownloader):
             elif interval == '1h':
                 df = df.set_index('timestamp').resample('1h').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
             # For '1m' and '1d', no resampling needed
-            return df
+            return cast(pd.DataFrame, df)
         except Exception as e:
             _logger.exception("Error downloading data for %s: %s", symbol, str(e))
             raise
@@ -197,13 +197,6 @@ class PolygonDataDownloader(BaseDataDownloader):
             quote_response = requests.get(quote_url, params=quote_params)
             quote_data = quote_response.json() if quote_response.status_code == 200 else {}
             current_price = quote_data.get('results', {}).get('p', 0.0) if quote_data else 0.0
-
-            # Get financials (basic info)
-            financials_url = f"https://api.polygon.io/v2/reference/financials/{symbol}"
-            financials_params = {'apiKey': self.api_key}
-
-            financials_response = requests.get(financials_url, params=financials_params)
-            financials_data = financials_response.json() if financials_response.status_code == 200 else {}
 
             _logger.debug("Retrieved fundamentals for %s: %s", symbol, ticker_info.get('name', 'Unknown'))
 
@@ -271,11 +264,3 @@ class PolygonDataDownloader(BaseDataDownloader):
         """Return list of supported intervals for Polygon.io."""
         return ['1m', '5m', '15m', '1h', '1d']
 
-    def download_multiple_symbols(
-        self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ) -> Dict[str, str]:
-        def download_func(symbol, interval, start_date, end_date):
-            return self.get_ohlcv(symbol, interval, start_date, end_date)
-        return super().download_multiple_symbols(
-            symbols, download_func, interval, start_date, end_date
-        )

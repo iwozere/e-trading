@@ -31,7 +31,7 @@ from apscheduler.events import (
 
 from src.data.db.services.jobs_service import JobsService
 from src.data.db.services.notification_service import NotificationService
-from src.data.db.models.model_jobs import Schedule, ScheduleRun, RunStatus, JobType, ScheduleResponse, ScheduleRunResponse
+from src.data.db.models.model_jobs import Schedule, RunStatus, JobType, ScheduleResponse, ScheduleRunResponse
 from src.common.alerts.cron_parser import CronParser
 from src.common.alerts.alert_evaluator import AlertEvaluator
 from src.notification.logger import setup_logger
@@ -505,6 +505,7 @@ class SchedulerService:
             # Use module-level wrapper instead of instance method to avoid pickling errors.
             # max_instances=1 ensures a single schedule never runs concurrently with itself,
             # which also naturally caps catch-up replay to one execution at a time (P3-SCHED-3).
+            assert self.scheduler is not None, "Scheduler must be initialized before registering jobs"
             job = self.scheduler.add_job(
                 func=execute_job_wrapper,
                 trigger=trigger,
@@ -885,6 +886,7 @@ class SchedulerService:
 
         for line in stdout.splitlines():
             if line.startswith("__SCHEDULER_RESULT__:"):
+                json_str = ""
                 try:
                     json_str = line.split("__SCHEDULER_RESULT__:", 1)[1].strip()
                     result = json.loads(json_str)
@@ -1176,7 +1178,7 @@ class SchedulerService:
         )
         return updated_run or run_record
 
-    async def _complete_run_record(self, run_record: ScheduleRun, status: RunStatus,
+    async def _complete_run_record(self, run_record: ScheduleRunResponse, status: RunStatus,
                                  result: Optional[Dict[str, Any]] = None,
                                  error: Optional[str] = None) -> None:
         """

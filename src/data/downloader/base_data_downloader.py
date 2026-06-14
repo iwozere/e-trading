@@ -85,7 +85,7 @@ class BaseDataDownloader(ABC):
         pass
 
     @abstractmethod
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
         """
         Download historical OHLCV data for a given symbol.
 

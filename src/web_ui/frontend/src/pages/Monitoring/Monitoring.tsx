@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import cronstrue from 'cronstrue';
 import {
   Alert,
   Box,
@@ -90,6 +91,14 @@ function statusIcon(status: string) {
   if (['running', 'degraded'].includes(status))
     return <WarningIcon fontSize="small" color="warning" />;
   return <UnknownIcon fontSize="small" color="disabled" />;
+}
+
+function cronToHuman(cron: string): string {
+  try {
+    return cronstrue.toString(cron, { use24HourTimeFormat: true });
+  } catch {
+    return cron;
+  }
 }
 
 function fmtDuration(seconds: number | null): string {
@@ -382,6 +391,13 @@ const PipelineRow: React.FC<{ pipeline: Pipeline }> = ({ pipeline: p }) => {
           <Typography variant="caption" color="text.secondary">{p.job_type}</Typography>
         </TableCell>
         <TableCell>
+          <Tooltip title={cronToHuman(p.cron)} arrow placement="top">
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', cursor: 'default', whiteSpace: 'nowrap' }}>
+              {p.cron}
+            </Typography>
+          </Tooltip>
+        </TableCell>
+        <TableCell>
           <Chip
             label={p.last_status.toUpperCase()}
             color={statusColor(p.last_status)}
@@ -416,7 +432,7 @@ const PipelineRow: React.FC<{ pipeline: Pipeline }> = ({ pipeline: p }) => {
         </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell colSpan={8} sx={{ py: 0 }}>
+        <TableCell colSpan={9} sx={{ py: 0 }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ py: 2, px: 4 }}>
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
@@ -506,6 +522,7 @@ const PipelinesTab: React.FC = () => {
           <TableRow>
             <TableCell padding="checkbox" />
             <TableCell>Pipeline</TableCell>
+            <TableCell>Schedule</TableCell>
             <TableCell>Last Status</TableCell>
             <TableCell>Last Run</TableCell>
             <TableCell>Duration</TableCell>

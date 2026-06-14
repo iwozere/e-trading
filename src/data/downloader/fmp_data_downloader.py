@@ -50,7 +50,7 @@ class FMPDataDownloader(BaseDataDownloader):
         _logger.info("FMP Data Downloader initialized with API key")
 
     def get_ohlcv(self, symbol: str, interval: str, start_date: datetime,
-                   end_date: datetime, limit: Optional[int] = None) -> Optional[pd.DataFrame]:
+                   end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
         """
         Get OHLCV data from FMP.
 
@@ -59,12 +59,13 @@ class FMPDataDownloader(BaseDataDownloader):
             interval: Time interval ('1m', '5m', '15m', '30m', '1h', '4h', '1d')
             start_date: Start date for data
             end_date: End date for data
-            limit: Maximum number of data points (optional)
+            **kwargs: Optional extra params (e.g. limit)
 
         Returns:
             DataFrame with OHLCV data or None if failed
         """
         try:
+            limit: Optional[int] = kwargs.get('limit')
             # Convert interval to FMP format
             fmp_interval = self._convert_interval(interval)
             if not fmp_interval:
@@ -292,7 +293,7 @@ class FMPDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting batch fundamentals:")
             return {}
 
-    def get_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:  # type: ignore[override]
         """
         Get fundamental data for a single ticker.
 

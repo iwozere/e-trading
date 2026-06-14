@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, cast
 from datetime import datetime
 import pandas as pd
 import requests
@@ -87,8 +87,8 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             raise ValueError("Alpha Vantage API key is required. Get one at: https://www.alphavantage.co/support/#api-key")
 
     def get_ohlcv(
-        self, symbol: str, interval: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+        self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs
+    ) -> Optional[pd.DataFrame]:
         """
         Download historical data for a given symbol from Alpha Vantage.
 
@@ -165,7 +165,8 @@ class AlphaVantageDataDownloader(BaseDataDownloader):
             df['timestamp'] = pd.to_datetime(df.index)
             df = df.reset_index(drop=True)
             df = df.sort_values('timestamp')
-            df = df[(df['timestamp'] >= pd.to_datetime(start_str)) & (df['timestamp'] <= pd.to_datetime(end_str))]
+            mask = (df['timestamp'] >= pd.to_datetime(start_str)) & (df['timestamp'] <= pd.to_datetime(end_str))
+            df = cast(pd.DataFrame, df[mask])
             # Ensure all required columns are present
             required_columns = ["timestamp", "open", "high", "low", "close", "volume"]
             for col in required_columns:
