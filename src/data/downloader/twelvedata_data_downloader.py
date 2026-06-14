@@ -1,9 +1,9 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, cast
 from datetime import datetime
 import pandas as pd
 import requests
 from src.notification.logger import setup_logger
-from src.model.schemas import Fundamentals
+from src.model.schemas import Fundamentals, OptionalFundamentals
 from src.data.downloader.base_data_downloader import BaseDataDownloader
 
 _logger = setup_logger(__name__)
@@ -85,7 +85,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
         if not self.api_key:
             raise ValueError("Twelve Data API key is required. Get one at: https://twelvedata.com/")
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
         """
         Download historical data for a given symbol from Twelve Data.
 
@@ -142,7 +142,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
             elif interval == '1h':
                 df = df.set_index('timestamp').resample('1h').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'}).dropna().reset_index()
             # For '1m' and '1d', no resampling needed
-            return df
+            return cast(pd.DataFrame, df)
         except Exception as e:
             _logger.exception("Error downloading data for %s: %s", symbol, str(e))
             raise
@@ -156,7 +156,7 @@ class TwelveDataDataDownloader(BaseDataDownloader):
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
 
-    def get_fundamentals(self, symbol: str) -> Fundamentals:
+    def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
         """
         Get comprehensive fundamental data for a given stock using Twelve Data.
 
@@ -277,9 +277,9 @@ class TwelveDataDataDownloader(BaseDataDownloader):
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
 
-    def download_multiple_symbols(
+    def download_multiple_symbols(  # type: ignore[override]
         self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ) -> Dict[str, str]:
+    ) -> Dict[str, pd.DataFrame]:
         def download_func(symbol, interval, start_date, end_date):
             return self.get_ohlcv(symbol, interval, start_date, end_date)
         return super().download_multiple_symbols(

@@ -10,7 +10,7 @@ delayed market data support.
 import os
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import List, Optional
 from ib_insync import IB, Stock, Contract, Forex
 
 from src.data.downloader.base_data_downloader import BaseDataDownloader
@@ -36,6 +36,7 @@ class IBKRDownloader(BaseDataDownloader):
         self.cache_dir = DATA_CACHE_DIR
         self.market_data_type = 3  # Delayed data
 
+        super().__init__()
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
             _logger.info("Created cache directory: %s", self.cache_dir)
@@ -105,6 +106,7 @@ class IBKRDownloader(BaseDataDownloader):
         # 2. Check for missing data
         now = datetime.now()
         sync_required = False
+        sync_start = start_date
 
         if df_cached.empty:
             sync_required = True
@@ -158,8 +160,10 @@ class IBKRDownloader(BaseDataDownloader):
         else:
             duration = f"{delta.days + 1} D"
 
+        ib = self.ib
+        assert ib is not None
         try:
-            bars = self.ib.reqHistoricalData(
+            bars = ib.reqHistoricalData(
                 contract,
                 endDateTime='', # most recent
                 durationStr=duration,
@@ -192,6 +196,5 @@ class IBKRDownloader(BaseDataDownloader):
             return pd.DataFrame()
 
     # Stub implementations for other abstract methods
-    def get_fundamentals(self, symbol: str) -> Dict: return {}
     def get_periods(self) -> List[str]: return ['1 D', '1 W', '1 M', '1 Y']
     def get_intervals(self) -> List[str]: return self.get_supported_intervals()

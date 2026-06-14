@@ -128,14 +128,14 @@ class EODHDDataDownloader(BaseDataDownloader):
                     return response.json()
                 elif response.status_code == 429:  # Rate limited
                     retry_after = int(response.headers.get('Retry-After', RATE_LIMIT_DELAY))
-                    _logger.warning(f"Rate limited. Retrying after {retry_after} seconds...")
+                    _logger.warning("Rate limited. Retrying after %s seconds...", retry_after)
                     time.sleep(retry_after)
                     continue
                 else:
                     response.raise_for_status()
 
             except requests.exceptions.RequestException as e:
-                _logger.exception(f"Request failed (attempt {attempt + 1}/{MAX_RETRIES}):")
+                _logger.exception("Request failed (attempt %d/%d):", attempt + 1, MAX_RETRIES)
                 if attempt == MAX_RETRIES - 1:
                     raise EODHDApiError(f"API request failed after {MAX_RETRIES} attempts: {str(e)}")
                 time.sleep(RATE_LIMIT_DELAY * (attempt + 1))
@@ -165,7 +165,7 @@ class EODHDDataDownloader(BaseDataDownloader):
             else:
                 date_str = date
 
-            _logger.info(f"Fetching option chain for {ticker} on {date_str}")
+            _logger.info("Fetching option chain for %s on %s", ticker, date_str)
 
             url = f"{BASE_URL}/{ticker}.US"
             params = {
@@ -177,7 +177,7 @@ class EODHDDataDownloader(BaseDataDownloader):
             data = self._make_api_request(url, params)
 
             if not data or 'data' not in data:
-                _logger.warning(f"No data returned for {ticker} on {date_str}")
+                _logger.warning("No data returned for %s on %s", ticker, date_str)
                 return pd.DataFrame()
 
             rows = []
@@ -200,7 +200,7 @@ class EODHDDataDownloader(BaseDataDownloader):
                             })
 
             if not rows:
-                _logger.warning(f"No options data found for {ticker} on {date_str}")
+                _logger.warning("No options data found for %s on %s", ticker, date_str)
                 return pd.DataFrame()
 
             return pd.DataFrame(rows)
@@ -208,7 +208,7 @@ class EODHDDataDownloader(BaseDataDownloader):
         except EODHDApiError:
             raise  # Re-raise EODHDApiError
         except Exception as e:
-            _logger.error(f"Error fetching option chain for {ticker}: {str(e)}", exc_info=True)
+            _logger.exception("Error fetching option chain for %s:", ticker)
             return pd.DataFrame()
 
     def download_for_date(self, tickers: List[str], date: Union[datetime, str]) -> pd.DataFrame:
@@ -235,22 +235,22 @@ class EODHDDataDownloader(BaseDataDownloader):
         else:
             date_str = date
 
-        _logger.info(f"Downloading options data for {len(tickers)} tickers on {date_str}")
+        _logger.info("Downloading options data for %d tickers on %s", len(tickers), date_str)
 
         frames = []
         for i, ticker in enumerate(tickers):
             try:
-                _logger.debug(f"Processing {ticker} ({i+1}/{len(tickers)})")
+                _logger.debug("Processing %s (%d/%d)", ticker, i + 1, len(tickers))
                 df = self.fetch_chain(ticker, date)
                 if not df.empty:
                     frames.append(df)
-            except Exception as e:
-                _logger.error(f"Error processing {ticker}: {str(e)}")
+            except Exception:
+                _logger.exception("Error processing %s:", ticker)
                 continue
 
         if frames:
             result = pd.concat(frames, ignore_index=True)
-            _logger.info(f"Successfully downloaded data for {len(result['ticker'].unique())} tickers")
+            _logger.info("Successfully downloaded data for %d tickers", len(result['ticker'].unique()))
             return result
 
         _logger.warning("No data was downloaded for any ticker")
@@ -277,7 +277,7 @@ class EODHDDataDownloader(BaseDataDownloader):
 
             required_columns = ['ticker', 'date', 'type', 'volume']
             if not all(col in df.columns for col in required_columns):
-                _logger.error(f"Missing required columns. Expected: {required_columns}")
+                _logger.error("Missing required columns. Expected: %s", required_columns)
                 return pd.DataFrame()
 
             df["date"] = pd.to_datetime(df["date"])
@@ -315,8 +315,8 @@ class EODHDDataDownloader(BaseDataDownloader):
 
             return pivot
 
-        except Exception as e:
-            _logger.error(f"Error computing 30-day statistics: {str(e)}", exc_info=True)
+        except Exception:
+            _logger.exception("Error computing 30-day statistics:")
             return pd.DataFrame()
 
     def compute_uoa_score(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -344,7 +344,7 @@ class EODHDDataDownloader(BaseDataDownloader):
 
             required_columns = ['ticker', 'date', 'call_volume', 'put_volume']
             if not all(col in df.columns for col in required_columns):
-                _logger.error(f"Missing required columns: {required_columns}")
+                _logger.error("Missing required columns: %s", required_columns)
                 return pd.DataFrame()
 
             df = df.copy()
@@ -381,8 +381,8 @@ class EODHDDataDownloader(BaseDataDownloader):
 
             return df.round(2)
 
-        except Exception as e:
-            _logger.error(f"Error computing UOA score: {str(e)}", exc_info=True)
+        except Exception:
+            _logger.exception("Error computing UOA score:")
             return pd.DataFrame()
 
     def save_to_file(self, df: pd.DataFrame, output_dir: str, filename: str) -> bool:
@@ -398,10 +398,10 @@ class EODHDDataDownloader(BaseDataDownloader):
             bool: True if save was successful, False otherwise
         """
         try:
-            output_dir = Path(output_dir)
-            output_dir.mkdir(parents=True, exist_ok=True)
+            out_path = Path(output_dir)
+            out_path.mkdir(parents=True, exist_ok=True)
 
-            filepath = output_dir / filename
+            filepath = out_path / filename
             ext = filepath.suffix.lower()
 
             if ext == '.csv':
@@ -413,11 +413,11 @@ class EODHDDataDownloader(BaseDataDownloader):
             else:
                 raise ValueError(f"Unsupported file format: {ext}")
 
-            _logger.info(f"Data saved to {filepath}")
+            _logger.info("Data saved to %s", filepath)
             return True
 
         except ValueError as e:
-            _logger.error(f"Error saving to file: {str(e)}")
+            _logger.error("Error saving to file: %s", e)
             raise  # Re-raise ValueError for unsupported formats
         except Exception as e:
             _logger.exception("Error saving to file:")

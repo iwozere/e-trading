@@ -36,6 +36,15 @@ Classes:
 - FinnhubDataDownloader: Main class for interacting with Finnhub and managing data downloads
 """
 
+class RateLimitException(Exception):
+    """Raised when a provider enforces a rate limit and all retries are exhausted."""
+
+    def __init__(self, url: str = "", retry_after: int = 0):
+        super().__init__(f"Rate limit exceeded for {url}, retry after {retry_after}s")
+        self.url = url
+        self.retry_after = retry_after
+
+
 class FinnhubDataDownloader(BaseDataDownloader):
     """
     A class to download historical data from Finnhub.
@@ -150,7 +159,7 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
         return None
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
         """
         Download historical data for a given symbol from Finnhub.
 
@@ -219,16 +228,6 @@ class FinnhubDataDownloader(BaseDataDownloader):
     def is_valid_period_interval(self, period, interval) -> bool:
         return interval in self.get_intervals() and period in self.get_periods()
 
-    def get_fundamentals(self, symbol: str) -> OptionalFundamentals:
-        """
-        Get comprehensive fundamental data for a given stock using Finnhub.
-
-        Args:
-            symbol: Stock symbol (e.g., 'AAPL')
-
-        Returns:
-            Fundamentals: Comprehensive fundamental data for the stock
-        """
     def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Fetch company profile (shares outstanding, sector, etc)."""
         url = "https://finnhub.io/api/v1/stock/profile2"
@@ -339,9 +338,9 @@ class FinnhubDataDownloader(BaseDataDownloader):
             last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
 
-    def download_multiple_symbols(
+    def download_multiple_symbols(  # type: ignore[override]
         self, symbols: List[str], interval: str, start_date: datetime, end_date: datetime
-    ) -> Dict[str, str]:
+    ) -> Dict[str, pd.DataFrame]:
         def download_func(symbol, interval, start_date, end_date):
             return self.get_ohlcv(symbol, interval, start_date, end_date)
         return super().download_multiple_symbols(
@@ -929,39 +928,40 @@ class FinnhubDataDownloader(BaseDataDownloader):
 
             results = await asyncio.gather(news_task, social_task, return_exceptions=True)
 
-            news_data = results[0] if not isinstance(results[0], Exception) else None
-            social_data = results[1] if not isinstance(results[1], Exception) else None
+            r0, r1 = results[0], results[1]
+            news_data = r0 if isinstance(r0, SentimentData) else None
+            social_data = r1 if isinstance(r1, SentimentData) else None
 
             if not news_data and not social_data:
                 _logger.warning("Both sentiment sources failed for %s", symbol)
                 return None
 
             # Combine the data
-            if news_sentiment and social_sentiment:
+            if news_data and social_data:
                 # Both available - average the scores
-                combined_score = (news_sentiment.sentiment_score + social_sentiment.sentiment_score) / 2.0
+                combined_score = (float(news_data.sentiment_score or 0.0) + float(social_data.sentiment_score or 0.0)) / 2.0
 
                 combined_data = SentimentData(
                     symbol=symbol.upper(),
                     provider='finnhub',
                     timestamp=datetime.now().isoformat(),
                     sentiment_score=combined_score,
-                    bullish_score=news_sentiment.bullish_score,
-                    bearish_score=news_sentiment.bearish_score,
-                    mention_count=social_sentiment.mention_count,
-                    buzz_ratio=news_sentiment.buzz_ratio,
-                    article_count=news_sentiment.article_count,
-                    reddit_data=social_sentiment.reddit_data,
-                    twitter_data=social_sentiment.twitter_data,
-                    sector_comparison=news_sentiment.sector_comparison,
+                    bullish_score=news_data.bullish_score,
+                    bearish_score=news_data.bearish_score,
+                    mention_count=social_data.mention_count,
+                    buzz_ratio=news_data.buzz_ratio,
+                    article_count=news_data.article_count,
+                    reddit_data=social_data.reddit_data,
+                    twitter_data=social_data.twitter_data,
+                    sector_comparison=news_data.sector_comparison,
                     sources={
                         'news': True,
-                        'reddit': social_sentiment.reddit_data is not None,
-                        'twitter': social_sentiment.twitter_data is not None
+                        'reddit': social_data.reddit_data is not None,
+                        'twitter': social_data.twitter_data is not None
                     },
                     raw_data={
-                        'news': news_sentiment.raw_data,
-                        'social': social_sentiment.raw_data
+                        'news': news_data.raw_data,
+                        'social': social_data.raw_data
                     },
                     data_source='finnhub_combined_sentiment_api'
                 )
@@ -969,15 +969,15 @@ class FinnhubDataDownloader(BaseDataDownloader):
                 _logger.debug("Retrieved combined sentiment for %s: score=%.3f", symbol, combined_score)
                 return combined_data
 
-            elif news_sentiment:
+            elif news_data:
                 # Only news available
                 _logger.debug("Using news sentiment only for %s", symbol)
-                return news_sentiment
+                return news_data
 
             else:
                 # Only social available
                 _logger.debug("Using social sentiment only for %s", symbol)
-                return social_sentiment
+                return social_data
 
         except Exception as e:
             _logger.error("Error getting combined sentiment for %s: %s", symbol, e)

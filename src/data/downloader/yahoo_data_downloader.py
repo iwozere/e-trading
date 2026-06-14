@@ -119,7 +119,7 @@ class YahooDataDownloader(BaseDataDownloader):
         """Return list of supported intervals for Yahoo Finance."""
         return ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo']
 
-    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> pd.DataFrame:
+    def get_ohlcv(self, symbol: str, interval: str, start_date: datetime, end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
         """
         Download OHLCV data for a single symbol with automatic batching for large date ranges.
 
@@ -910,7 +910,7 @@ class YahooDataDownloader(BaseDataDownloader):
             _logger.error("Yahoo Finance connection test failed: %s", e)
             return False
 
-    def load_universe_from_screener(self, criteria: Optional[Dict[str, any]] = None) -> List[str]:
+    def load_universe_from_screener(self, criteria: Optional[Dict[str, Any]] = None) -> List[str]:
         """
         Load universe from screener criteria.
 

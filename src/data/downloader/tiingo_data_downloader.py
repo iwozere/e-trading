@@ -14,11 +14,6 @@ import pandas as pd
 import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
-from pathlib import Path
-import sys
-
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.notification.logger import setup_logger
 from src.data.downloader.base_data_downloader import BaseDataDownloader
@@ -48,7 +43,7 @@ class TiingoDataDownloader(BaseDataDownloader):
         _logger.info("Tiingo Data Downloader initialized with API key")
 
     def get_ohlcv(self, symbol: str, interval: str, start_date: datetime,
-                   end_date: datetime, limit: Optional[int] = None) -> Optional[pd.DataFrame]:
+                   end_date: datetime, **kwargs) -> Optional[pd.DataFrame]:
         """
         Get OHLCV data from Tiingo.
 
@@ -62,6 +57,7 @@ class TiingoDataDownloader(BaseDataDownloader):
         Returns:
             DataFrame with OHLCV data or None if failed
         """
+        limit: Optional[int] = kwargs.get('limit')
         try:
             # Convert interval to Tiingo format
             tiingo_interval = self._convert_interval(interval)
@@ -75,7 +71,7 @@ class TiingoDataDownloader(BaseDataDownloader):
 
             # Build URL
             url = f"{self.base_url}/daily/{symbol}/prices"
-            params = {
+            params: Dict[str, Any] = {
                 'startDate': start_str,
                 'endDate': end_str,
                 'resampleFreq': tiingo_interval,
@@ -210,7 +206,7 @@ class TiingoDataDownloader(BaseDataDownloader):
             _logger.exception("Error getting metadata for %s:", symbol)
             return None
 
-    def get_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_fundamentals(self, symbol: str) -> Optional[Dict[str, Any]]:  # type: ignore[override]
         """
         Get fundamental data for a ticker from Tiingo.
 

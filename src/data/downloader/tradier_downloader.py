@@ -10,7 +10,7 @@ import time
 import json
 import requests
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from pathlib import Path
 
 import pandas as pd
@@ -115,7 +115,7 @@ class TradierDataDownloader(BaseDataDownloader):
             r.raise_for_status()
             return r.json()
         except Exception as e:
-            _logger.error(f"Error fetching {url}: {e}")
+            _logger.error("Error fetching %s: %s", url, e)
             return None
 
     def get_expirations(self, ticker: str) -> List[str]:
@@ -149,7 +149,7 @@ class TradierDataDownloader(BaseDataDownloader):
             return []
         return data["options"]["option"]
 
-    def _save(self, path: str, data: dict) -> None:
+    def _save(self, path: str, data: Any) -> None:
         """
         Save JSON data to disk.
 
@@ -171,11 +171,11 @@ class TradierDataDownloader(BaseDataDownloader):
             ticker: Stock ticker symbol (e.g., 'AAPL')
             out_dir: Output directory path
         """
-        _logger.info(f"Processing {ticker}...")
+        _logger.info("Processing %s...", ticker)
 
         expirations = self.get_expirations(ticker)
         if not expirations:
-            _logger.warning(f"No expirations for {ticker}")
+            _logger.warning("No expirations for %s", ticker)
             return
 
         for exp in expirations:
@@ -185,7 +185,7 @@ class TradierDataDownloader(BaseDataDownloader):
 
             path = os.path.join(out_dir, ticker.upper(), f"options_{exp}.json")
             self._save(path, chain)
-            _logger.info(f"Saved {ticker} {exp} ({len(chain)} contracts)")
+            _logger.info("Saved %s %s (%d contracts)", ticker, exp, len(chain))
 
             time.sleep(self.rate_limit_sleep)
 
@@ -201,7 +201,7 @@ class TradierDataDownloader(BaseDataDownloader):
             try:
                 self.download_ticker(t, out_dir)
             except Exception as e:
-                _logger.error(f"Failed {t}: {e}")
+                _logger.error("Failed %s: %s", t, e)
             time.sleep(self.rate_limit_sleep)
 
 
