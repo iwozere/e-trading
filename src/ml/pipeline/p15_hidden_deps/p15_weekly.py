@@ -29,6 +29,7 @@ sys.path.append(str(PROJECT_ROOT))
 from src.data.downloader.aaii_downloader import AaiiDownloader
 from src.data.downloader.fear_greed_downloader import FearGreedDownloader
 from src.data.downloader.fred_downloader import FredDownloader
+from src.data.downloader.russell3000_downloader import Russell3000Downloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -66,6 +67,15 @@ def _run_job(name: str, fn: Callable[[], Optional[Dict[str, Any]]]) -> Dict[str,
 # Job functions
 # ---------------------------------------------------------------------------
 
+def _job_russell3000_refresh() -> Optional[Dict[str, Any]]:
+    dl = Russell3000Downloader()
+    if not dl.is_stale():
+        _logger.info("russell3000: cache fresh — skipping")
+        return {"skipped": True}
+    df = dl.load(force=True)
+    return {"rows": len(df), "source": dl.last_source_used}
+
+
 def _job_aaii() -> Optional[Dict[str, Any]]:
     path = AaiiDownloader().download(force=True)
     if path and path.exists():
@@ -100,12 +110,13 @@ def main() -> None:
     fred_dl = FredDownloader()
     results: Dict[str, Dict[str, Any]] = {}
 
-    results["aaii"]           = _run_job("aaii",           _job_aaii)
-    results["fear_greed_full"] = _run_job("fear_greed_full", _job_fear_greed_full)
-    results["fred_weekly"]    = _run_job("fred_weekly",    lambda: _job_fred_freq(fred_dl, ["weekly"]))
-    results["fred_monthly"]   = _run_job("fred_monthly",   lambda: _job_fred_freq(fred_dl, ["monthly"]))
-    results["fred_quarterly"] = _run_job("fred_quarterly", lambda: _job_fred_freq(fred_dl, ["quarterly"]))
-    results["fred_combined"]  = _run_job("fred_combined",  lambda: _job_fred_combined(fred_dl))
+    results["aaii"]                = _run_job("aaii",                _job_aaii)
+    results["fear_greed_full"]     = _run_job("fear_greed_full",     _job_fear_greed_full)
+    results["fred_weekly"]         = _run_job("fred_weekly",         lambda: _job_fred_freq(fred_dl, ["weekly"]))
+    results["fred_monthly"]        = _run_job("fred_monthly",        lambda: _job_fred_freq(fred_dl, ["monthly"]))
+    results["fred_quarterly"]      = _run_job("fred_quarterly",      lambda: _job_fred_freq(fred_dl, ["quarterly"]))
+    results["russell3000_refresh"] = _run_job("russell3000_refresh", _job_russell3000_refresh)
+    results["fred_combined"]       = _run_job("fred_combined",       lambda: _job_fred_combined(fred_dl))
 
     n_ok   = sum(1 for r in results.values() if r["success"])
     n_fail = len(results) - n_ok

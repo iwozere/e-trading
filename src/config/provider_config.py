@@ -56,6 +56,7 @@ _KNOWN_KEYS = [
     "FINRA_API_CLIENT",
     "FINRA_API_SECRET",
     "FRED_API_KEY",
+    "ANTHROPIC_API_KEY",
 ]
 
 # ---------------------------------------------------------------------------
