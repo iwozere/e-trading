@@ -108,6 +108,9 @@ class FMPDataDownloader(BaseDataDownloader):
             if response.status_code == 402:
                 _logger.warning("FMP OHLCV for %s %s requires a paid subscription (402)", symbol, interval)
                 return None
+            if response.status_code == 404:
+                _logger.warning("FMP OHLCV for %s %s not found (404) — ticker may be delisted", symbol, interval)
+                return None
             response.raise_for_status()
 
             data = response.json()

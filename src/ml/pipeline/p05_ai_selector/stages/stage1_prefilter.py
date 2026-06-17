@@ -120,6 +120,8 @@ class Stage1Prefilter:
                     "volume_surge_ratio": vol_surge,
                     "signal_breakdown": json.dumps(breakdown),
                 })
+            except RuntimeError as e:
+                _logger.warning("Stage1: skipping %s — %s", ticker, e)
             except Exception:
                 _logger.exception("Stage1: error processing %s", ticker)
 
