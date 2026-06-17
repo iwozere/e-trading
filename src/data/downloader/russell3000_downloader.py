@@ -4,16 +4,17 @@ Russell 3000 Index Constituent Downloader
 Downloads and caches the Russell 3000 index constituent list.
 
 Sources tried in order:
-  1. FMP /stable/russell-index-constituents (free tier — available if key present)
-  2. Bundled static CSV at src/data/downloader/data/russell3000_static.csv
-     (committed to repo; update manually each quarter from Slickcharts or
-      FTSE Russell quarterly rebalance announcement)
+  1. Cache — DATA_CACHE_DIR/universe/russell3000.csv.gz (TTL 90 days)
+  2. FMP /stable/russell-index-constituents (free tier — available if key present)
+  3. Static fallback CSV — DATA_CACHE_DIR/universe/russell3000_static.csv
+     (place a CSV with ticker,name,sector,industry,exchange columns there;
+      update manually each quarter from Slickcharts or FTSE Russell)
 
 Cache layout:
     DATA_CACHE_DIR/universe/
-        russell3000.csv.gz    ← cached constituent list; TTL 90 days
-                                 columns: ticker, name, sector, industry, exchange
-        russell3000_meta.json ← last_updated, source_used, row_count
+        russell3000.csv.gz       ← live cache; auto-managed, TTL 90 days
+        russell3000_meta.json    ← last_updated, source_used, row_count
+        russell3000_static.csv   ← static seed; user-managed
 """
 
 import json
@@ -42,7 +43,6 @@ except ImportError:
 _CACHE_TTL_DAYS = 90
 _FMP_STABLE_URL = "https://financialmodelingprep.com/stable/russell-index-constituents"
 _REQUIRED_COLUMNS = ["ticker", "name", "sector", "industry", "exchange"]
-_STATIC_CSV_PATH = Path(__file__).parent / "data" / "russell3000_static.csv"
 
 
 class Russell3000Downloader(BaseDataDownloader):
@@ -67,6 +67,7 @@ class Russell3000Downloader(BaseDataDownloader):
         self._cache_dir = Path(DATA_CACHE_DIR) / "universe"
         self._cache_file = self._cache_dir / "russell3000.csv.gz"
         self._meta_file = self._cache_dir / "russell3000_meta.json"
+        self._static_csv_path = self._cache_dir / "russell3000_static.csv"
         self.last_source_used: Optional[str] = None
 
     # ------------------------------------------------------------------
@@ -174,17 +175,18 @@ class Russell3000Downloader(BaseDataDownloader):
 
     def _load_static_fallback(self) -> pd.DataFrame:
         """
-        Load bundled static CSV.
+        Load static fallback CSV from DATA_CACHE_DIR/universe/.
 
         Raises:
-            FileNotFoundError: If the static CSV is missing from the repo.
+            FileNotFoundError: If the static CSV has not been seeded.
         """
-        if not _STATIC_CSV_PATH.exists():
+        if not self._static_csv_path.exists():
             raise FileNotFoundError(
-                f"Russell 3000 static fallback CSV not found at {_STATIC_CSV_PATH}. "
-                "Add it to the repo from Slickcharts or FTSE Russell."
+                f"Russell 3000 static fallback CSV not found at {self._static_csv_path}. "
+                "Copy a CSV with columns ticker,name,sector,industry,exchange there "
+                "(download from Slickcharts or FTSE Russell quarterly release)."
             )
-        df = pd.read_csv(_STATIC_CSV_PATH)
+        df = pd.read_csv(self._static_csv_path)
         df = self._normalise_columns(df)
         if df is None:
             raise ValueError("russell3000_static.csv is missing required columns")

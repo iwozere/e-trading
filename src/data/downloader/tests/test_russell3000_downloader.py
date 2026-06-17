@@ -24,6 +24,7 @@ def downloader(tmp_path):
     dl._cache_dir = tmp_path / "universe"
     dl._cache_file = dl._cache_dir / "russell3000.csv.gz"
     dl._meta_file = dl._cache_dir / "russell3000_meta.json"
+    dl._static_csv_path = dl._cache_dir / "russell3000_static.csv"
     return dl
 
 
@@ -90,10 +91,17 @@ class TestLoad:
 
 class TestStaticFallback:
     def test_static_fallback_columns(self, downloader):
-        """Static CSV file has the required columns."""
+        """Static CSV seeded in DATA_CACHE_DIR/universe/ loads correctly."""
+        downloader._cache_dir.mkdir(parents=True, exist_ok=True)
+        _make_sample_df().to_csv(downloader._static_csv_path, index=False)
         df = downloader._load_static_fallback()
         assert set(_REQUIRED_COLUMNS).issubset(df.columns)
         assert len(df) > 0
+
+    def test_static_fallback_missing_raises(self, downloader):
+        """Missing static CSV raises FileNotFoundError with helpful message."""
+        with pytest.raises(FileNotFoundError, match="russell3000_static.csv"):
+            downloader._load_static_fallback()
 
 
 class TestIsStale:
