@@ -1,0 +1,761 @@
+ticker,name,sector,industry,exchange
+AAPL,Apple Inc.,Technology,Consumer Electronics,NASDAQ
+MSFT,Microsoft Corporation,Technology,Software-Infrastructure,NASDAQ
+AMZN,Amazon.com Inc.,Consumer Cyclical,Internet Retail,NASDAQ
+NVDA,NVIDIA Corporation,Technology,Semiconductors,NASDAQ
+GOOGL,Alphabet Inc. Class A,Communication Services,Internet Content & Information,NASDAQ
+GOOG,Alphabet Inc. Class C,Communication Services,Internet Content & Information,NASDAQ
+META,Meta Platforms Inc.,Communication Services,Internet Content & Information,NASDAQ
+TSLA,Tesla Inc.,Consumer Cyclical,Auto Manufacturers,NASDAQ
+BRK.B,Berkshire Hathaway Inc. Class B,Financial Services,Insurance-Diversified,NYSE
+AVGO,Broadcom Inc.,Technology,Semiconductors,NASDAQ
+JPM,JPMorgan Chase & Co.,Financial Services,Banks-Diversified,NYSE
+LLY,Eli Lilly and Company,Healthcare,Drug Manufacturers-General,NYSE
+V,Visa Inc.,Financial Services,Credit Services,NYSE
+UNH,UnitedHealth Group Incorporated,Healthcare,Healthcare Plans,NYSE
+XOM,Exxon Mobil Corporation,Energy,Oil & Gas Integrated,NYSE
+MA,Mastercard Incorporated,Financial Services,Credit Services,NYSE
+COST,Costco Wholesale Corporation,Consumer Defensive,Discount Stores,NASDAQ
+HD,The Home Depot Inc.,Consumer Cyclical,Home Improvement Retail,NYSE
+PG,Procter & Gamble Company,Consumer Defensive,Household & Personal Products,NYSE
+JNJ,Johnson & Johnson,Healthcare,Drug Manufacturers-General,NYSE
+ABBV,AbbVie Inc.,Healthcare,Drug Manufacturers-General,NYSE
+BAC,Bank of America Corporation,Financial Services,Banks-Diversified,NYSE
+WMT,Walmart Inc.,Consumer Defensive,Discount Stores,NYSE
+MRK,Merck & Co. Inc.,Healthcare,Drug Manufacturers-General,NYSE
+CVX,Chevron Corporation,Energy,Oil & Gas Integrated,NYSE
+CRM,Salesforce Inc.,Technology,Software-Application,NYSE
+NFLX,Netflix Inc.,Communication Services,Entertainment,NASDAQ
+AMD,Advanced Micro Devices Inc.,Technology,Semiconductors,NASDAQ
+KO,The Coca-Cola Company,Consumer Defensive,Beverages-Non-Alcoholic,NYSE
+PEP,PepsiCo Inc.,Consumer Defensive,Beverages-Non-Alcoholic,NASDAQ
+ORCL,Oracle Corporation,Technology,Software-Infrastructure,NYSE
+WFC,Wells Fargo & Company,Financial Services,Banks-Diversified,NYSE
+TMO,Thermo Fisher Scientific Inc.,Healthcare,Diagnostics & Research,NYSE
+ACN,Accenture plc,Technology,Information Technology Services,NYSE
+MCD,McDonald's Corporation,Consumer Cyclical,Restaurants,NYSE
+ADBE,Adobe Inc.,Technology,Software-Application,NASDAQ
+IBM,International Business Machines Corporation,Technology,Information Technology Services,NYSE
+CSCO,Cisco Systems Inc.,Technology,Communication Equipment,NASDAQ
+CAT,Caterpillar Inc.,Industrials,Farm & Heavy Construction Machinery,NYSE
+GE,General Electric Company,Industrials,Specialty Industrial Machinery,NYSE
+ABT,Abbott Laboratories,Healthcare,Medical Devices,NYSE
+DHR,Danaher Corporation,Healthcare,Diagnostics & Research,NYSE
+NOW,ServiceNow Inc.,Technology,Software-Application,NYSE
+LIN,Linde plc,Basic Materials,Specialty Chemicals,NASDAQ
+PM,Philip Morris International Inc.,Consumer Defensive,Tobacco,NYSE
+ISRG,Intuitive Surgical Inc.,Healthcare,Medical Instruments & Supplies,NASDAQ
+GS,The Goldman Sachs Group Inc.,Financial Services,Capital Markets,NYSE
+RTX,RTX Corporation,Industrials,Aerospace & Defense,NYSE
+SPGI,S&P Global Inc.,Financial Services,Financial Data & Stock Exchanges,NYSE
+BKNG,Booking Holdings Inc.,Consumer Cyclical,Travel Services,NASDAQ
+BLK,BlackRock Inc.,Financial Services,Asset Management,NYSE
+PFE,Pfizer Inc.,Healthcare,Drug Manufacturers-General,NYSE
+TXN,Texas Instruments Incorporated,Technology,Semiconductors,NASDAQ
+AMGN,Amgen Inc.,Healthcare,Drug Manufacturers-Specialty & Generic,NASDAQ
+MS,Morgan Stanley,Financial Services,Capital Markets,NYSE
+GILD,Gilead Sciences Inc.,Healthcare,Drug Manufacturers-General,NASDAQ
+VRTX,Vertex Pharmaceuticals Incorporated,Healthcare,Biotechnology,NASDAQ
+AMAT,Applied Materials Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+AXP,American Express Company,Financial Services,Credit Services,NYSE
+SYK,Stryker Corporation,Healthcare,Medical Devices,NYSE
+MDT,Medtronic plc,Healthcare,Medical Devices,NYSE
+T,AT&T Inc.,Communication Services,Telecom Services,NYSE
+CVS,CVS Health Corporation,Healthcare,Healthcare Plans,NYSE
+NEE,NextEra Energy Inc.,Utilities,Utilities-Regulated Electric,NYSE
+SCHW,The Charles Schwab Corporation,Financial Services,Capital Markets,NYSE
+DE,Deere & Company,Industrials,Farm & Heavy Construction Machinery,NYSE
+CI,The Cigna Group,Healthcare,Healthcare Plans,NYSE
+ETN,Eaton Corporation plc,Industrials,Specialty Industrial Machinery,NYSE
+ZTS,Zoetis Inc.,Healthcare,Drug Manufacturers-Specialty & Generic,NYSE
+PLD,Prologis Inc.,Real Estate,REIT-Industrial,NYSE
+CB,Chubb Limited,Financial Services,Insurance-Diversified,NYSE
+SO,Southern Company,Utilities,Utilities-Regulated Electric,NYSE
+REGN,Regeneron Pharmaceuticals Inc.,Healthcare,Biotechnology,NASDAQ
+PANW,Palo Alto Networks Inc.,Technology,Software-Infrastructure,NASDAQ
+BSX,Boston Scientific Corporation,Healthcare,Medical Devices,NYSE
+BMY,Bristol-Myers Squibb Company,Healthcare,Drug Manufacturers-General,NYSE
+CME,CME Group Inc.,Financial Services,Financial Data & Stock Exchanges,NASDAQ
+MU,Micron Technology Inc.,Technology,Semiconductors,NASDAQ
+LRCX,Lam Research Corporation,Technology,Semiconductor Equipment & Materials,NASDAQ
+KLAC,KLA Corporation,Technology,Semiconductor Equipment & Materials,NASDAQ
+ADI,Analog Devices Inc.,Technology,Semiconductors,NASDAQ
+HCA,HCA Healthcare Inc.,Healthcare,Medical Care Facilities,NYSE
+SBUX,Starbucks Corporation,Consumer Cyclical,Restaurants,NASDAQ
+PYPL,PayPal Holdings Inc.,Financial Services,Credit Services,NASDAQ
+EOG,EOG Resources Inc.,Energy,Oil & Gas E&P,NYSE
+ELV,Elevance Health Inc.,Healthcare,Healthcare Plans,NYSE
+MDLZ,Mondelez International Inc.,Consumer Defensive,Confectioners,NASDAQ
+DUK,Duke Energy Corporation,Utilities,Utilities-Regulated Electric,NYSE
+MMC,Marsh & McLennan Companies Inc.,Financial Services,Insurance Brokers,NYSE
+SHW,The Sherwin-Williams Company,Basic Materials,Specialty Chemicals,NYSE
+ICE,Intercontinental Exchange Inc.,Financial Services,Financial Data & Stock Exchanges,NYSE
+INTC,Intel Corporation,Technology,Semiconductors,NASDAQ
+PH,Parker-Hannifin Corporation,Industrials,Specialty Industrial Machinery,NYSE
+AON,Aon plc,Financial Services,Insurance Brokers,NYSE
+WELL,Welltower Inc.,Real Estate,REIT-Healthcare Facilities,NYSE
+MCO,Moody's Corporation,Financial Services,Financial Data & Stock Exchanges,NYSE
+USB,U.S. Bancorp,Financial Services,Banks-Diversified,NYSE
+MCK,McKesson Corporation,Healthcare,Medical Distribution,NYSE
+CDNS,Cadence Design Systems Inc.,Technology,Software-Application,NASDAQ
+SNPS,Synopsys Inc.,Technology,Software-Application,NASDAQ
+TJX,The TJX Companies Inc.,Consumer Cyclical,Apparel Retail,NYSE
+CL,Colgate-Palmolive Company,Consumer Defensive,Household & Personal Products,NYSE
+ITW,Illinois Tool Works Inc.,Industrials,Specialty Industrial Machinery,NYSE
+NOC,Northrop Grumman Corporation,Industrials,Aerospace & Defense,NYSE
+FI,Fiserv Inc.,Technology,Information Technology Services,NYSE
+APH,Amphenol Corporation,Technology,Electronic Components,NYSE
+EQIX,Equinix Inc.,Real Estate,REIT-Specialty,NASDAQ
+EMR,Emerson Electric Co.,Industrials,Specialty Industrial Machinery,NYSE
+HUM,Humana Inc.,Healthcare,Healthcare Plans,NYSE
+PNC,PNC Financial Services Group Inc.,Financial Services,Banks-Diversified,NYSE
+COF,Capital One Financial Corporation,Financial Services,Credit Services,NYSE
+GD,General Dynamics Corporation,Industrials,Aerospace & Defense,NYSE
+ORLY,O'Reilly Automotive Inc.,Consumer Cyclical,Specialty Retail,NASDAQ
+CEG,Constellation Energy Corporation,Utilities,Utilities-Regulated Electric,NASDAQ
+MSI,Motorola Solutions Inc.,Technology,Communication Equipment,NYSE
+MPC,Marathon Petroleum Corporation,Energy,Oil & Gas Refining & Marketing,NYSE
+CTAS,Cintas Corporation,Industrials,Specialty Business Services,NASDAQ
+PSX,Phillips 66,Energy,Oil & Gas Refining & Marketing,NYSE
+AIG,American International Group Inc.,Financial Services,Insurance-Diversified,NYSE
+TFC,Truist Financial Corporation,Financial Services,Banks-Diversified,NYSE
+NXPI,NXP Semiconductors N.V.,Technology,Semiconductors,NASDAQ
+VLO,Valero Energy Corporation,Energy,Oil & Gas Refining & Marketing,NYSE
+FTNT,Fortinet Inc.,Technology,Software-Infrastructure,NASDAQ
+SPG,Simon Property Group Inc.,Real Estate,REIT-Retail,NYSE
+CARR,Carrier Global Corporation,Industrials,Building Products & Equipment,NYSE
+CPRT,Copart Inc.,Consumer Cyclical,Auto & Truck Dealerships,NASDAQ
+ROP,Roper Technologies Inc.,Technology,Software-Application,NASDAQ
+PCAR,PACCAR Inc.,Industrials,Farm & Heavy Construction Machinery,NASDAQ
+AZO,AutoZone Inc.,Consumer Cyclical,Specialty Retail,NYSE
+AMP,Ameriprise Financial Inc.,Financial Services,Asset Management,NYSE
+FICO,Fair Isaac Corporation,Technology,Software-Application,NYSE
+MNST,Monster Beverage Corporation,Consumer Defensive,Beverages-Non-Alcoholic,NASDAQ
+NEM,Newmont Corporation,Basic Materials,Gold,NYSE
+ECL,Ecolab Inc.,Basic Materials,Specialty Chemicals,NYSE
+CCI,Crown Castle Inc.,Real Estate,REIT-Specialty,NYSE
+MAR,Marriott International Inc.,Consumer Cyclical,Lodging,NASDAQ
+TT,Trane Technologies plc,Industrials,Building Products & Equipment,NYSE
+OKE,ONEOK Inc.,Energy,Oil & Gas Midstream,NYSE
+WMB,Williams Companies Inc.,Energy,Oil & Gas Midstream,NYSE
+PAYX,Paychex Inc.,Technology,Staffing & Employment Services,NASDAQ
+RSG,Republic Services Inc.,Industrials,Waste Management,NYSE
+MSCI,MSCI Inc.,Financial Services,Financial Data & Stock Exchanges,NYSE
+SLB,Schlumberger Limited,Energy,Oil & Gas Equipment & Services,NYSE
+D,Dominion Energy Inc.,Utilities,Utilities-Regulated Electric,NYSE
+ALL,The Allstate Corporation,Financial Services,Insurance-Property & Casualty,NYSE
+TROW,T. Rowe Price Group Inc.,Financial Services,Asset Management,NASDAQ
+KMB,Kimberly-Clark Corporation,Consumer Defensive,Household & Personal Products,NYSE
+ODFL,Old Dominion Freight Line Inc.,Industrials,Trucking,NASDAQ
+EW,Edwards Lifesciences Corporation,Healthcare,Medical Devices,NYSE
+BK,The Bank of New York Mellon Corporation,Financial Services,Asset Management,NYSE
+CTVA,Corteva Inc.,Basic Materials,Agricultural Inputs,NYSE
+KHC,The Kraft Heinz Company,Consumer Defensive,Packaged Foods,NASDAQ
+PSA,Public Storage,Real Estate,REIT-Industrial,NYSE
+GEV,GE Vernova Inc.,Industrials,Specialty Industrial Machinery,NYSE
+PWR,Quanta Services Inc.,Industrials,Engineering & Construction,NYSE
+FAST,Fastenal Company,Industrials,Industrial Distribution,NASDAQ
+ROST,Ross Stores Inc.,Consumer Cyclical,Apparel Retail,NASDAQ
+FANG,Diamondback Energy Inc.,Energy,Oil & Gas E&P,NASDAQ
+KVUE,Kenvue Inc.,Consumer Defensive,Household & Personal Products,NYSE
+VMC,Vulcan Materials Company,Basic Materials,Building Materials,NYSE
+HAL,Halliburton Company,Energy,Oil & Gas Equipment & Services,NYSE
+HLT,Hilton Worldwide Holdings Inc.,Consumer Cyclical,Lodging,NYSE
+IDXX,IDEXX Laboratories Inc.,Healthcare,Diagnostics & Research,NASDAQ
+VRSK,Verisk Analytics Inc.,Industrials,Consulting Services,NASDAQ
+XEL,Xcel Energy Inc.,Utilities,Utilities-Regulated Electric,NASDAQ
+EA,Electronic Arts Inc.,Communication Services,Electronic Gaming & Multimedia,NASDAQ
+GEHC,GE HealthCare Technologies Inc.,Healthcare,Medical Devices,NASDAQ
+TMUS,T-Mobile US Inc.,Communication Services,Telecom Services,NASDAQ
+CSGP,CoStar Group Inc.,Real Estate,Real Estate Services,NASDAQ
+LHX,L3Harris Technologies Inc.,Industrials,Aerospace & Defense,NYSE
+MTD,Mettler-Toledo International Inc.,Healthcare,Diagnostics & Research,NYSE
+IT,Gartner Inc.,Technology,Information Technology Services,NYSE
+MRNA,Moderna Inc.,Healthcare,Biotechnology,NASDAQ
+DAL,Delta Air Lines Inc.,Industrials,Airlines,NYSE
+URI,United Rentals Inc.,Industrials,Rental & Leasing Services,NYSE
+CTSH,Cognizant Technology Solutions Corporation,Technology,Information Technology Services,NASDAQ
+EXC,Exelon Corporation,Utilities,Utilities-Regulated Electric,NASDAQ
+KR,The Kroger Co.,Consumer Defensive,Grocery Stores,NASDAQ
+XYL,Xylem Inc.,Industrials,Specialty Industrial Machinery,NYSE
+ANSS,ANSYS Inc.,Technology,Software-Application,NASDAQ
+ACGL,Arch Capital Group Ltd.,Financial Services,Insurance-Diversified,NASDAQ
+DXCM,DexCom Inc.,Healthcare,Medical Devices,NASDAQ
+CBRE,CBRE Group Inc.,Real Estate,Real Estate Services,NYSE
+EXR,Extra Space Storage Inc.,Real Estate,REIT-Industrial,NYSE
+LVS,Las Vegas Sands Corp.,Consumer Cyclical,Resorts & Casinos,NYSE
+GIS,General Mills Inc.,Consumer Defensive,Packaged Foods,NYSE
+AVB,AvalonBay Communities Inc.,Real Estate,REIT-Residential,NYSE
+AME,AMETEK Inc.,Industrials,Specialty Industrial Machinery,NYSE
+BR,Broadridge Financial Solutions Inc.,Technology,Information Technology Services,NYSE
+BIIB,Biogen Inc.,Healthcare,Drug Manufacturers-General,NASDAQ
+STE,STERIS plc,Healthcare,Medical Instruments & Supplies,NYSE
+MPWR,Monolithic Power Systems Inc.,Technology,Semiconductors,NASDAQ
+ROK,Rockwell Automation Inc.,Industrials,Specialty Industrial Machinery,NYSE
+ON,ON Semiconductor Corporation,Technology,Semiconductors,NASDAQ
+DLTR,Dollar Tree Inc.,Consumer Defensive,Discount Stores,NASDAQ
+APTV,Aptiv plc,Consumer Cyclical,Auto Parts,NYSE
+DECK,Deckers Outdoor Corporation,Consumer Cyclical,Footwear & Accessories,NYSE
+TSCO,Tractor Supply Company,Consumer Cyclical,Specialty Retail,NASDAQ
+EPAM,EPAM Systems Inc.,Technology,Information Technology Services,NYSE
+AWK,American Water Works Company Inc.,Utilities,Utilities-Regulated Water,NYSE
+DOV,Dover Corporation,Industrials,Specialty Industrial Machinery,NYSE
+STZ,Constellation Brands Inc.,Consumer Defensive,Beverages-Wineries & Distilleries,NYSE
+HSY,The Hershey Company,Consumer Defensive,Confectioners,NYSE
+TDG,TransDigm Group Incorporated,Industrials,Aerospace & Defense,NYSE
+BALL,Ball Corporation,Consumer Cyclical,Packaging & Containers,NYSE
+KEYS,Keysight Technologies Inc.,Technology,Scientific & Technical Instruments,NYSE
+WTW,Willis Towers Watson Public Limited Company,Financial Services,Insurance Brokers,NASDAQ
+HIG,The Hartford Financial Services Group Inc.,Financial Services,Insurance-Diversified,NYSE
+ZBH,Zimmer Biomet Holdings Inc.,Healthcare,Medical Devices,NYSE
+EXPE,Expedia Group Inc.,Consumer Cyclical,Travel Services,NASDAQ
+LUV,Southwest Airlines Co.,Industrials,Airlines,NYSE
+CF,CF Industries Holdings Inc.,Basic Materials,Agricultural Inputs,NYSE
+IP,International Paper Company,Basic Materials,Packaging & Containers,NYSE
+FDS,FactSet Research Systems Inc.,Financial Services,Financial Data & Stock Exchanges,NASDAQ
+LW,Lamb Weston Holdings Inc.,Consumer Defensive,Packaged Foods,NYSE
+POOL,Pool Corporation,Consumer Cyclical,Industrial Distribution,NASDAQ
+UAL,United Airlines Holdings Inc.,Industrials,Airlines,NASDAQ
+CINF,Cincinnati Financial Corporation,Financial Services,Insurance-Property & Casualty,NASDAQ
+TER,Teradyne Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+SBAC,SBA Communications Corporation,Real Estate,REIT-Specialty,NASDAQ
+SWK,Stanley Black & Decker Inc.,Industrials,Tools & Accessories,NYSE
+ENPH,Enphase Energy Inc.,Technology,Solar,NASDAQ
+ALGN,Align Technology Inc.,Healthcare,Medical Devices,NASDAQ
+HEI,HEICO Corporation,Industrials,Aerospace & Defense,NYSE
+MKL,Markel Group Inc.,Financial Services,Insurance-Diversified,NYSE
+ZBRA,Zebra Technologies Corporation,Technology,Communication Equipment,NASDAQ
+NTRS,Northern Trust Corporation,Financial Services,Asset Management,NASDAQ
+ESS,Essex Property Trust Inc.,Real Estate,REIT-Residential,NYSE
+GPC,Genuine Parts Company,Consumer Cyclical,Specialty Retail,NYSE
+JBHT,J.B. Hunt Transport Services Inc.,Industrials,Trucking,NASDAQ
+IPG,The Interpublic Group of Companies Inc.,Communication Services,Advertising Agencies,NYSE
+MRO,Marathon Oil Corporation,Energy,Oil & Gas E&P,NYSE
+PKG,Packaging Corporation of America,Basic Materials,Packaging & Containers,NYSE
+IEX,IDEX Corporation,Industrials,Specialty Industrial Machinery,NYSE
+CHD,Church & Dwight Co. Inc.,Consumer Defensive,Household & Personal Products,NYSE
+AKAM,Akamai Technologies Inc.,Technology,Software-Infrastructure,NASDAQ
+NTAP,NetApp Inc.,Technology,Computer Hardware,NASDAQ
+TYL,Tyler Technologies Inc.,Technology,Software-Application,NYSE
+RMD,ResMed Inc.,Healthcare,Medical Devices,NYSE
+FTV,Fortive Corporation,Industrials,Scientific & Technical Instruments,NYSE
+WST,West Pharmaceutical Services Inc.,Healthcare,Medical Instruments & Supplies,NYSE
+SYF,Synchrony Financial,Financial Services,Credit Services,NYSE
+L,Loews Corporation,Financial Services,Insurance-Diversified,NYSE
+DPZ,Domino's Pizza Inc.,Consumer Cyclical,Restaurants,NASDAQ
+NI,NiSource Inc.,Utilities,Utilities-Diversified,NYSE
+LNT,Alliant Energy Corporation,Utilities,Utilities-Regulated Electric,NASDAQ
+MAS,Masco Corporation,Industrials,Building Products & Equipment,NYSE
+LKQ,LKQ Corporation,Consumer Cyclical,Auto Parts,NASDAQ
+PPL,PPL Corporation,Utilities,Utilities-Regulated Electric,NYSE
+PAYC,Paycom Software Inc.,Technology,Software-Application,NYSE
+FE,FirstEnergy Corp.,Utilities,Utilities-Regulated Electric,NYSE
+PFG,Principal Financial Group Inc.,Financial Services,Insurance-Life,NASDAQ
+HOLX,Hologic Inc.,Healthcare,Medical Devices,NASDAQ
+EFX,Equifax Inc.,Industrials,Consulting Services,NYSE
+JKHY,Jack Henry & Associates Inc.,Technology,Information Technology Services,NASDAQ
+SWKS,Skyworks Solutions Inc.,Technology,Semiconductors,NASDAQ
+MTCH,Match Group Inc.,Communication Services,Internet Content & Information,NASDAQ
+ETSY,Etsy Inc.,Consumer Cyclical,Internet Retail,NASDAQ
+HII,Huntington Ingalls Industries Inc.,Industrials,Aerospace & Defense,NYSE
+NVR,NVR Inc.,Consumer Cyclical,Residential Construction,NYSE
+ULTA,Ulta Beauty Inc.,Consumer Cyclical,Specialty Retail,NASDAQ
+BIO,Bio-Rad Laboratories Inc.,Healthcare,Medical Devices,NYSE
+CPT,Camden Property Trust,Real Estate,REIT-Residential,NYSE
+WAT,Waters Corporation,Healthcare,Diagnostics & Research,NYSE
+IRM,Iron Mountain Incorporated,Real Estate,REIT-Specialty,NYSE
+DRI,Darden Restaurants Inc.,Consumer Cyclical,Restaurants,NYSE
+MOS,The Mosaic Company,Basic Materials,Agricultural Inputs,NYSE
+GL,Globe Life Inc.,Financial Services,Insurance-Life,NYSE
+SNA,Snap-on Incorporated,Industrials,Tools & Accessories,NYSE
+BXP,BXP Inc.,Real Estate,REIT-Office,NYSE
+RVTY,Revvity Inc.,Healthcare,Diagnostics & Research,NYSE
+RE,Everest Group Ltd.,Financial Services,Insurance-Reinsurance,NYSE
+CMS,CMS Energy Corporation,Utilities,Utilities-Diversified,NYSE
+AES,The AES Corporation,Utilities,Utilities-Diversified,NYSE
+ATO,Atmos Energy Corporation,Utilities,Utilities-Regulated Gas,NYSE
+INCY,Incyte Corporation,Healthcare,Biotechnology,NASDAQ
+EXPD,Expeditors International of Washington Inc.,Industrials,Integrated Freight & Logistics,NASDAQ
+WBA,Walgreens Boots Alliance Inc.,Healthcare,Pharmaceutical Retailers,NASDAQ
+FFIV,F5 Inc.,Technology,Software-Infrastructure,NASDAQ
+WYNN,Wynn Resorts Limited,Consumer Cyclical,Resorts & Casinos,NASDAQ
+MGM,MGM Resorts International,Consumer Cyclical,Resorts & Casinos,NYSE
+OMC,Omnicom Group Inc.,Communication Services,Advertising Agencies,NYSE
+KEY,KeyCorp,Financial Services,Banks-Diversified,NYSE
+RCL,Royal Caribbean Cruises Ltd.,Consumer Cyclical,Travel Services,NYSE
+LNC,Lincoln National Corporation,Financial Services,Insurance-Life,NYSE
+AIZ,Assurant Inc.,Financial Services,Insurance-Diversified,NYSE
+WHR,Whirlpool Corporation,Consumer Cyclical,Furnishings Fixtures & Appliances,NYSE
+NRG,NRG Energy Inc.,Utilities,Utilities-Independent Power Producers,NYSE
+TPR,Tapestry Inc.,Consumer Cyclical,Luxury Goods,NYSE
+AAL,American Airlines Group Inc.,Industrials,Airlines,NASDAQ
+PNW,Pinnacle West Capital Corporation,Utilities,Utilities-Regulated Electric,NASDAQ
+IVZ,Invesco Ltd.,Financial Services,Asset Management,NYSE
+HAS,Hasbro Inc.,Consumer Cyclical,Leisure,NASDAQ
+CZR,Caesars Entertainment Inc.,Consumer Cyclical,Resorts & Casinos,NASDAQ
+BWA,BorgWarner Inc.,Consumer Cyclical,Auto Parts,NYSE
+RL,Ralph Lauren Corporation,Consumer Cyclical,Apparel Manufacturing,NYSE
+NWSA,News Corp Class A,Communication Services,Publishing,NASDAQ
+MHK,Mohawk Industries Inc.,Consumer Cyclical,Furnishings Fixtures & Appliances,NYSE
+DVA,DaVita Inc.,Healthcare,Medical Care Facilities,NYSE
+CCL,Carnival Corporation,Consumer Cyclical,Travel Services,NYSE
+DXC,DXC Technology Company,Technology,Information Technology Services,NYSE
+PARA,Paramount Global Class B,Communication Services,Broadcasting,NASDAQ
+LUMN,Lumen Technologies Inc.,Communication Services,Telecom Services,NYSE
+FRT,Federal Realty Investment Trust,Real Estate,REIT-Retail,NYSE
+CPB,Campbell Soup Company,Consumer Defensive,Packaged Foods,NYSE
+HRL,Hormel Foods Corporation,Consumer Defensive,Packaged Foods,NYSE
+SJM,The J.M. Smucker Company,Consumer Defensive,Packaged Foods,NYSE
+TAP,Molson Coors Beverage Company Class B,Consumer Defensive,Beverages-Brewers,NYSE
+CAG,Conagra Brands Inc.,Consumer Defensive,Packaged Foods,NYSE
+MKC,McCormick & Company Incorporated,Consumer Defensive,Packaged Foods,NYSE
+CLX,The Clorox Company,Consumer Defensive,Household & Personal Products,NYSE
+K,Kellanova,Consumer Defensive,Packaged Foods,NYSE
+GEN,Gen Digital Inc.,Technology,Software-Application,NASDAQ
+FOXA,Fox Corporation Class A,Communication Services,Broadcasting,NASDAQ
+PVH,PVH Corp.,Consumer Cyclical,Apparel Manufacturing,NYSE
+VFC,VF Corporation,Consumer Cyclical,Apparel Manufacturing,NYSE
+LEG,Leggett & Platt Incorporated,Consumer Cyclical,Furnishings Fixtures & Appliances,NYSE
+ROL,Rollins Inc.,Consumer Cyclical,Personal Services,NYSE
+ZION,Zions Bancorporation N.A.,Financial Services,Banks-Regional,NASDAQ
+CMA,Comerica Incorporated,Financial Services,Banks-Regional,NASDAQ
+CBOE,Cboe Global Markets Inc.,Financial Services,Financial Data & Stock Exchanges,CBOE
+CDAY,Ceridian HCM Holding Inc.,Technology,Software-Application,NYSE
+HST,Host Hotels & Resorts Inc.,Real Estate,REIT-Hotel & Motel,NASDAQ
+PEAK,Healthpeak Properties Inc.,Real Estate,REIT-Healthcare Facilities,NYSE
+KIM,Kimco Realty Corporation,Real Estate,REIT-Retail,NYSE
+REG,Regency Centers Corporation,Real Estate,REIT-Retail,NASDAQ
+ARE,Alexandria Real Estate Equities Inc.,Real Estate,REIT-Office,NYSE
+EQR,Equity Residential,Real Estate,REIT-Residential,NYSE
+MAA,Mid-America Apartment Communities Inc.,Real Estate,REIT-Residential,NYSE
+UDR,UDR Inc.,Real Estate,REIT-Residential,NYSE
+ACC,American Campus Communities Inc.,Real Estate,REIT-Residential,NYSE
+AMH,American Homes 4 Rent,Real Estate,REIT-Residential,NYSE
+INVH,Invitation Homes Inc.,Real Estate,REIT-Residential,NYSE
+VTR,Ventas Inc.,Real Estate,REIT-Healthcare Facilities,NYSE
+MPW,Medical Properties Trust Inc.,Real Estate,REIT-Healthcare Facilities,NYSE
+O,Realty Income Corporation,Real Estate,REIT-Retail,NYSE
+NNN,National Retail Properties Inc.,Real Estate,REIT-Retail,NYSE
+WPC,W. P. Carey Inc.,Real Estate,REIT-Diversified,NYSE
+STOR,STORE Capital Corporation,Real Estate,REIT-Retail,NYSE
+GLPI,Gaming and Leisure Properties Inc.,Real Estate,REIT-Specialty,NASDAQ
+VICI,VICI Properties Inc.,Real Estate,REIT-Specialty,NYSE
+AMT,American Tower Corporation,Real Estate,REIT-Specialty,NYSE
+CCI,Crown Castle Inc.,Real Estate,REIT-Specialty,NYSE
+EQIX,Equinix Inc.,Real Estate,REIT-Specialty,NASDAQ
+DLR,Digital Realty Trust Inc.,Real Estate,REIT-Specialty,NYSE
+CONE,CyrusOne Inc.,Real Estate,REIT-Specialty,NASDAQ
+QTS,QTS Realty Trust Inc.,Real Estate,REIT-Specialty,NYSE
+UNIT,Uniti Group Inc.,Real Estate,REIT-Specialty,NASDAQ
+IRT,Independence Realty Trust Inc.,Real Estate,REIT-Residential,NYSE
+NHI,National Health Investors Inc.,Real Estate,REIT-Healthcare Facilities,NYSE
+OHI,Omega Healthcare Investors Inc.,Real Estate,REIT-Healthcare Facilities,NYSE
+SBRA,Sabra Health Care REIT Inc.,Real Estate,REIT-Healthcare Facilities,NASDAQ
+CTRE,CareTrust REIT Inc.,Real Estate,REIT-Healthcare Facilities,NASDAQ
+GMRE,Global Medical REIT Inc.,Real Estate,REIT-Healthcare Facilities,NYSE
+HR,Healthcare Realty Trust Incorporated,Real Estate,REIT-Healthcare Facilities,NYSE
+CHCT,Community Healthcare Trust Incorporated,Real Estate,REIT-Healthcare Facilities,NYSE
+NTST,NETSTREIT Corp.,Real Estate,REIT-Retail,NYSE
+STAG,STAG Industrial Inc.,Real Estate,REIT-Industrial,NYSE
+EGP,EastGroup Properties Inc.,Real Estate,REIT-Industrial,NASDAQ
+FR,First Industrial Realty Trust Inc.,Real Estate,REIT-Industrial,NYSE
+REXR,Rexford Industrial Realty Inc.,Real Estate,REIT-Industrial,NYSE
+LXP,LXP Industrial Trust,Real Estate,REIT-Industrial,NYSE
+TRNO,Terreno Realty Corporation,Real Estate,REIT-Industrial,NYSE
+GTY,Getty Realty Corp.,Real Estate,REIT-Retail,NYSE
+ADC,Agree Realty Corporation,Real Estate,REIT-Retail,NYSE
+BNL,Broadstone Net Lease Inc.,Real Estate,REIT-Diversified,NYSE
+FCPT,Four Corners Property Trust Inc.,Real Estate,REIT-Retail,NYSE
+EPRT,Essential Properties Realty Trust Inc.,Real Estate,REIT-Diversified,NYSE
+SAFE,Saul Centers Inc.,Real Estate,REIT-Retail,NYSE
+UE,Urban Edge Properties,Real Estate,REIT-Retail,NYSE
+RPT,RPT Realty,Real Estate,REIT-Retail,NYSE
+ROIC,Retail Opportunity Investments Corp.,Real Estate,REIT-Retail,NASDAQ
+BRX,Brixmor Property Group Inc.,Real Estate,REIT-Retail,NYSE
+WRI,Weingarten Realty Investors,Real Estate,REIT-Retail,NYSE
+AKR,Acadia Realty Trust,Real Estate,REIT-Retail,NYSE
+PECO,Phillips Edison & Company Inc.,Real Estate,REIT-Retail,NASDAQ
+IVT,InvenTrust Properties Corp.,Real Estate,REIT-Retail,NYSE
+MAC,Macerich Company,Real Estate,REIT-Retail,NASDAQ
+CBL,CBL & Associates Properties Inc.,Real Estate,REIT-Retail,NYSE
+WPG,Washington Prime Group Inc.,Real Estate,REIT-Retail,NYSE
+PEI,Pennsylvania Real Estate Investment Trust,Real Estate,REIT-Retail,NYSE
+SKT,Tanger Factory Outlet Centers Inc.,Real Estate,REIT-Retail,NYSE
+PK,Park Hotels & Resorts Inc.,Real Estate,REIT-Hotel & Motel,NYSE
+RHP,Ryman Hospitality Properties Inc.,Real Estate,REIT-Hotel & Motel,NYSE
+APLE,Apple Hospitality REIT Inc.,Real Estate,REIT-Hotel & Motel,NYSE
+SHO,Sunstone Hotel Investors Inc.,Real Estate,REIT-Hotel & Motel,NYSE
+XHR,Xenia Hotels & Resorts Inc.,Real Estate,REIT-Hotel & Motel,NYSE
+CLDT,Chatham Lodging Trust,Real Estate,REIT-Hotel & Motel,NYSE
+DRH,DiamondRock Hospitality Company,Real Estate,REIT-Hotel & Motel,NYSE
+HT,Hersha Hospitality Trust,Real Estate,REIT-Hotel & Motel,NYSE
+INN,Summit Hotel Properties Inc.,Real Estate,REIT-Hotel & Motel,NYSE
+PLYA,Playa Hotels & Resorts N.V.,Real Estate,REIT-Hotel & Motel,NASDAQ
+MCR,MCR Hotels Investments Inc.,Real Estate,REIT-Hotel & Motel,NYSE
+BRSP,BrightSpire Capital Inc.,Real Estate,REIT-Mortgage,NYSE
+GPMT,Granite Point Mortgage Trust Inc.,Real Estate,REIT-Mortgage,NYSE
+KREF,KKR Real Estate Finance Trust Inc.,Real Estate,REIT-Mortgage,NYSE
+RC,Ready Capital Corporation,Real Estate,REIT-Mortgage,NYSE
+BXMT,Blackstone Mortgage Trust Inc.,Real Estate,REIT-Mortgage,NYSE
+LADR,Ladder Capital Corp,Real Estate,REIT-Mortgage,NYSE
+TRTX,Terra Property Trust Inc.,Real Estate,REIT-Mortgage,NYSE
+IIPR,Innovative Industrial Properties Inc.,Real Estate,REIT-Industrial,NYSE
+COLD,Americold Realty Trust Inc.,Real Estate,REIT-Industrial,NYSE
+NSA,National Storage Affiliates Trust,Real Estate,REIT-Industrial,NYSE
+LSI,Life Storage Inc.,Real Estate,REIT-Industrial,NYSE
+CUBE,CubeSmart,Real Estate,REIT-Industrial,NYSE
+PSA,Public Storage,Real Estate,REIT-Industrial,NYSE
+EXR,Extra Space Storage Inc.,Real Estate,REIT-Industrial,NYSE
+SSS,Sovran Self Storage Inc.,Real Estate,REIT-Industrial,NYSE
+SELF,Global Self Storage Inc.,Real Estate,REIT-Industrial,NASDAQ
+NFLX,Netflix Inc.,Communication Services,Entertainment,NASDAQ
+DIS,The Walt Disney Company,Communication Services,Entertainment,NYSE
+CMCSA,Comcast Corporation Class A,Communication Services,Telecom Services,NASDAQ
+CHTR,Charter Communications Inc.,Communication Services,Telecom Services,NASDAQ
+VZ,Verizon Communications Inc.,Communication Services,Telecom Services,NYSE
+LBTYA,Liberty Global plc Class A,Communication Services,Telecom Services,NASDAQ
+WBD,Warner Bros. Discovery Inc.,Communication Services,Entertainment,NASDAQ
+FOX,Fox Corporation Class B,Communication Services,Broadcasting,NASDAQ
+SIRI,Sirius XM Holdings Inc.,Communication Services,Broadcasting,NASDAQ
+SPOT,Spotify Technology S.A.,Communication Services,Internet Content & Information,NYSE
+SNAP,Snap Inc.,Communication Services,Internet Content & Information,NYSE
+PINS,Pinterest Inc.,Communication Services,Internet Content & Information,NYSE
+MTCH,Match Group Inc.,Communication Services,Internet Content & Information,NASDAQ
+ZG,Zillow Group Inc. Class A,Real Estate,Real Estate Services,NASDAQ
+RDFN,Redfin Corporation,Real Estate,Real Estate Services,NASDAQ
+OPEN,Opendoor Technologies Inc.,Real Estate,Real Estate Services,NASDAQ
+COMP,Compass Inc.,Real Estate,Real Estate Services,NASDAQ
+EXPI,eXp World Holdings Inc.,Real Estate,Real Estate Services,NASDAQ
+HOUS,Anywhere Real Estate Inc.,Real Estate,Real Estate Services,NYSE
+DOUG,Douglas Elliman Inc.,Real Estate,Real Estate Services,NYSE
+MMI,Marcus & Millichap Inc.,Real Estate,Real Estate Services,NYSE
+CSGP,CoStar Group Inc.,Real Estate,Real Estate Services,NASDAQ
+NMRK,Newmark Group Inc.,Real Estate,Real Estate Services,NASDAQ
+JLL,Jones Lang LaSalle Incorporated,Real Estate,Real Estate Services,NYSE
+CBRE,CBRE Group Inc.,Real Estate,Real Estate Services,NYSE
+CWK,Cushman & Wakefield plc,Real Estate,Real Estate Services,NYSE
+FSV,FirstService Corporation,Real Estate,Real Estate Services,NASDAQ
+RWT,Redwood Trust Inc.,Real Estate,REIT-Mortgage,NYSE
+RITM,Rithm Capital Corp.,Real Estate,REIT-Mortgage,NYSE
+NLY,Annaly Capital Management Inc.,Real Estate,REIT-Mortgage,NYSE
+AGNC,AGNC Investment Corp.,Real Estate,REIT-Mortgage,NASDAQ
+TWO,Two Harbors Investment Corp.,Real Estate,REIT-Mortgage,NYSE
+MFA,MFA Financial Inc.,Real Estate,REIT-Mortgage,NYSE
+IVR,Invesco Mortgage Capital Inc.,Real Estate,REIT-Mortgage,NYSE
+CIM,Chimera Investment Corporation,Real Estate,REIT-Mortgage,NYSE
+EARN,Ellington Residential Mortgage REIT,Real Estate,REIT-Mortgage,NYSE
+HMH,Houghton Mifflin Harcourt Company,Communication Services,Publishing,NASDAQ
+GCI,Gannett Co. Inc.,Communication Services,Publishing,NYSE
+NWS,News Corp Class B,Communication Services,Publishing,NASDAQ
+MDP,Meredith Corporation,Communication Services,Publishing,NYSE
+TPCO,Tribune Publishing Company,Communication Services,Publishing,NASDAQ
+LEE,Lee Enterprises Incorporated,Communication Services,Publishing,NASDAQ
+AHH,Armada Hoffler Properties Inc.,Real Estate,REIT-Diversified,NYSE
+DEA,Easterly Government Properties Inc.,Real Estate,REIT-Office,NYSE
+OFC,Corporate Office Properties Trust,Real Estate,REIT-Office,NYSE
+CIO,City Office REIT Inc.,Real Estate,REIT-Office,NYSE
+PDM,Piedmont Office Realty Trust Inc.,Real Estate,REIT-Office,NYSE
+SL,SL Green Realty Corp.,Real Estate,REIT-Office,NYSE
+VNO,Vornado Realty Trust,Real Estate,REIT-Office,NYSE
+KRC,Kilroy Realty Corporation,Real Estate,REIT-Office,NYSE
+HIW,Highwoods Properties Inc.,Real Estate,REIT-Office,NYSE
+CUZ,Cousins Properties Incorporated,Real Estate,REIT-Office,NYSE
+CLI,Mack-Cali Realty Corporation,Real Estate,REIT-Office,NYSE
+EQC,Equity Commonwealth,Real Estate,REIT-Office,NYSE
+PGRE,Paramount Group Inc.,Real Estate,REIT-Office,NYSE
+ESRT,Empire State Realty Trust Inc.,Real Estate,REIT-Office,NYSE
+HPP,Hudson Pacific Properties Inc.,Real Estate,REIT-Office,NYSE
+WRE,WashREIT,Real Estate,REIT-Diversified,NYSE
+LAND,Gladstone Land Corporation,Real Estate,REIT-Specialty,NASDAQ
+FPI,Farmland Partners Inc.,Real Estate,REIT-Specialty,NYSE
+AFCG,AFC Gamma Inc.,Real Estate,REIT-Mortgage,NASDAQ
+GOGL,Golden Ocean Group Limited,Industrials,Marine Shipping,NASDAQ
+SBLK,Star Bulk Carriers Corp.,Industrials,Marine Shipping,NASDAQ
+GNK,Genco Shipping & Trading Limited,Industrials,Marine Shipping,NYSE
+EGLE,Eagle Bulk Shipping Inc.,Industrials,Marine Shipping,NASDAQ
+SB,Safe Bulkers Inc.,Industrials,Marine Shipping,NYSE
+HSHP,Himalaya Shipping Ltd.,Industrials,Marine Shipping,NYSE
+NMM,Navios Maritime Partners L.P.,Industrials,Marine Shipping,NYSE
+INSW,International Seaways Inc.,Energy,Oil & Gas Midstream,NYSE
+TK,Teekay Corporation,Energy,Oil & Gas Midstream,NYSE
+TRMD,TORM plc,Energy,Oil & Gas Midstream,NASDAQ
+ASC,Ardmore Shipping Corporation,Energy,Oil & Gas Midstream,NYSE
+STNG,Scorpio Tankers Inc.,Energy,Oil & Gas Midstream,NYSE
+DHT,DHT Holdings Inc.,Energy,Oil & Gas Midstream,NYSE
+TNP,Tsakos Energy Navigation Limited,Energy,Oil & Gas Midstream,NYSE
+FRO,Frontline plc,Energy,Oil & Gas Midstream,NYSE
+TNK,Teekay Tankers Ltd.,Energy,Oil & Gas Midstream,NYSE
+NAT,Nordic American Tankers Limited,Energy,Oil & Gas Midstream,NYSE
+ECO,Ardmore Shipping Corporation,Energy,Oil & Gas Midstream,NYSE
+SFL,SFL Corporation Ltd.,Industrials,Marine Shipping,NYSE
+MX,Magnachip Semiconductor Corporation,Technology,Semiconductors,NYSE
+ONTO,Onto Innovation Inc.,Technology,Semiconductor Equipment & Materials,NYSE
+FORM,FormFactor Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+UCTT,Ultra Clean Holdings Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+AMKR,Amkor Technology Inc.,Technology,Semiconductors,NASDAQ
+IMOS,ChipMOS TECHNOLOGIES Inc.,Technology,Semiconductors,NASDAQ
+POWI,Power Integrations Inc.,Technology,Semiconductors,NASDAQ
+DIOD,Diodes Incorporated,Technology,Semiconductors,NASDAQ
+SLAB,Silicon Laboratories Inc.,Technology,Semiconductors,NASDAQ
+ALGM,Allegro MicroSystems Inc.,Technology,Semiconductors,NASDAQ
+AEIS,Advanced Energy Industries Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+CRUS,Cirrus Logic Inc.,Technology,Semiconductors,NASDAQ
+SITM,SiTime Corporation,Technology,Semiconductors,NASDAQ
+AXTI,AXT Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+RMBS,Rambus Inc.,Technology,Semiconductors,NASDAQ
+SMTC,Semtech Corporation,Technology,Semiconductors,NASDAQ
+AMBA,Ambarella Inc.,Technology,Semiconductors,NASDAQ
+MLNX,Mellanox Technologies Ltd.,Technology,Semiconductors,NASDAQ
+PI,Impinj Inc.,Technology,Semiconductors,NASDAQ
+EGAN,eGain Corporation,Technology,Software-Application,NASDAQ
+PCYG,Park City Group Inc.,Technology,Software-Application,NASDAQ
+DSGX,The Descartes Systems Group Inc.,Technology,Software-Application,NASDAQ
+NCNO,nCino Inc.,Technology,Software-Application,NASDAQ
+ASAN,Asana Inc.,Technology,Software-Application,NYSE
+MNDY,monday.com Ltd.,Technology,Software-Application,NASDAQ
+ZI,ZoomInfo Technologies Inc.,Technology,Software-Application,NASDAQ
+BRZE,Braze Inc.,Technology,Software-Application,NASDAQ
+TOST,Toast Inc.,Technology,Software-Application,NYSE
+GTLB,GitLab Inc.,Technology,Software-Application,NASDAQ
+DV,DoubleVerify Holdings Inc.,Technology,Software-Application,NYSE
+APPS,Digital Turbine Inc.,Technology,Software-Application,NASDAQ
+BIGC,BigCommerce Holdings Inc.,Technology,Software-Application,NASDAQ
+DOCN,DigitalOcean Holdings Inc.,Technology,Software-Infrastructure,NYSE
+FSLY,Fastly Inc.,Technology,Software-Infrastructure,NYSE
+WEB,U.S. Web Corporation,Technology,Software-Infrastructure,NASDAQ
+CFLT,Confluent Inc.,Technology,Software-Infrastructure,NASDAQ
+DDOG,Datadog Inc.,Technology,Software-Application,NASDAQ
+ESTC,Elastic N.V.,Technology,Software-Application,NYSE
+PD,PagerDuty Inc.,Technology,Software-Application,NYSE
+SMAR,Smartsheet Inc.,Technology,Software-Application,NYSE
+APPF,AppFolio Inc.,Technology,Software-Application,NASDAQ
+HUBS,HubSpot Inc.,Technology,Software-Application,NYSE
+VEEV,Veeva Systems Inc.,Technology,Software-Application,NYSE
+PCOR,Procore Technologies Inc.,Technology,Software-Application,NYSE
+ALTR,Altair Engineering Inc.,Technology,Software-Application,NASDAQ
+AZPN,Aspen Technology Inc.,Technology,Software-Application,NASDAQ
+CGNX,Cognex Corporation,Technology,Scientific & Technical Instruments,NASDAQ
+ITRI,Itron Inc.,Technology,Scientific & Technical Instruments,NASDAQ
+TRMB,Trimble Inc.,Technology,Scientific & Technical Instruments,NASDAQ
+ST,Sensata Technologies Holding plc,Technology,Scientific & Technical Instruments,NYSE
+MXL,MaxLinear Inc.,Technology,Semiconductors,NASDAQ
+COHU,Cohu Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+KLIC,Kulicke and Soffa Industries Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+CEVA,CEVA Inc.,Technology,Semiconductors,NASDAQ
+MCHP,Microchip Technology Incorporated,Technology,Semiconductors,NASDAQ
+MPWR,Monolithic Power Systems Inc.,Technology,Semiconductors,NASDAQ
+MTSI,MACOM Technology Solutions Holdings Inc.,Technology,Semiconductors,NASDAQ
+OLED,Universal Display Corporation,Technology,Electronic Components,NASDAQ
+IPGP,IPG Photonics Corporation,Technology,Scientific & Technical Instruments,NASDAQ
+IIVI,II-VI Incorporated,Technology,Electronic Components,NASDAQ
+LITE,Lumentum Holdings Inc.,Technology,Scientific & Technical Instruments,NASDAQ
+CIEN,Ciena Corporation,Technology,Communication Equipment,NYSE
+INFN,Infinera Corporation,Technology,Communication Equipment,NASDAQ
+VIAV,Viavi Solutions Inc.,Technology,Scientific & Technical Instruments,NASDAQ
+COMM,CommScope Holding Company Inc.,Technology,Communication Equipment,NASDAQ
+CALX,Calix Inc.,Technology,Communication Equipment,NYSE
+ADTN,ADTRAN Holdings Inc.,Technology,Communication Equipment,NASDAQ
+GILT,Gilat Satellite Networks Ltd.,Technology,Communication Equipment,NASDAQ
+GSAT,Globalstar Inc.,Communication Services,Telecom Services,NYSE
+VSAT,ViaSat Inc.,Technology,Communication Equipment,NASDAQ
+MAXR,Maxar Technologies Inc.,Technology,Scientific & Technical Instruments,NYSE
+SPCE,Virgin Galactic Holdings Inc.,Industrials,Aerospace & Defense,NYSE
+RKT,Rocket Companies Inc.,Financial Services,Mortgage Finance,NYSE
+UWM,UWM Holdings Corporation,Financial Services,Mortgage Finance,NYSE
+PFSI,PennyMac Financial Services Inc.,Financial Services,Mortgage Finance,NYSE
+GHLD,Guild Holdings Company,Financial Services,Mortgage Finance,NYSE
+HYFM,Hydrofarm Holdings Group Inc.,Consumer Cyclical,Farm Products,NASDAQ
+GRWG,GrowGeneration Corp.,Consumer Cyclical,Farm Products,NASDAQ
+IIIV,i3 Verticals Inc.,Technology,Software-Application,NASDAQ
+TASK,TaskUs Inc.,Technology,Information Technology Services,NASDAQ
+PRFT,Perficient Inc.,Technology,Information Technology Services,NASDAQ
+MCFE,McAfee Corp.,Technology,Software-Application,NASDAQ
+CHKP,Check Point Software Technologies Ltd.,Technology,Software-Application,NASDAQ
+NLOK,NortonLifeLock Inc.,Technology,Software-Application,NASDAQ
+VRNS,Varonis Systems Inc.,Technology,Software-Application,NASDAQ
+SAIL,SailPoint Technologies Holdings Inc.,Technology,Software-Application,NYSE
+SAIL,SailPoint Technologies Holdings Inc.,Technology,Software-Application,NYSE
+TENB,Tenable Holdings Inc.,Technology,Software-Application,NASDAQ
+RPD,Rapid7 Inc.,Technology,Software-Application,NASDAQ
+QLYS,Qualys Inc.,Technology,Software-Application,NASDAQ
+EVBG,Everbridge Inc.,Technology,Software-Application,NASDAQ
+ALRM,Alarm.com Holdings Inc.,Technology,Software-Application,NASDAQ
+OSPN,OneSpan Inc.,Technology,Software-Application,NASDAQ
+ZS,Zscaler Inc.,Technology,Software-Infrastructure,NASDAQ
+CRWD,CrowdStrike Holdings Inc.,Technology,Software-Infrastructure,NASDAQ
+S,SentinelOne Inc.,Technology,Software-Infrastructure,NYSE
+OKTA,Okta Inc.,Technology,Software-Infrastructure,NASDAQ
+CYBR,CyberArk Software Ltd.,Technology,Software-Infrastructure,NASDAQ
+QLYS,Qualys Inc.,Technology,Software-Application,NASDAQ
+PING,Ping Identity Holding Corp.,Technology,Software-Infrastructure,NYSE
+OSPN,OneSpan Inc.,Technology,Software-Application,NASDAQ
+CLPS,CLPS Technology Inc.,Technology,Information Technology Services,NASDAQ
+SSTI,ShotSpotter Inc.,Technology,Software-Application,NASDAQ
+CWAN,Clearwater Analytics Holdings Inc.,Technology,Software-Application,NYSE
+BLKB,Blackbaud Inc.,Technology,Software-Application,NASDAQ
+MNTV,Momentive Global Inc.,Technology,Software-Application,NASDAQ
+FROG,JFrog Ltd.,Technology,Software-Application,NASDAQ
+SUMO,Sumo Logic Inc.,Technology,Software-Application,NASDAQ
+EXAS,Exact Sciences Corporation,Healthcare,Diagnostics & Research,NASDAQ
+ILMN,Illumina Inc.,Healthcare,Diagnostics & Research,NASDAQ
+PACB,Pacific Biosciences of California Inc.,Healthcare,Diagnostics & Research,NASDAQ
+FLGT,Fulgent Genetics Inc.,Healthcare,Diagnostics & Research,NASDAQ
+GH,Guardant Health Inc.,Healthcare,Diagnostics & Research,NASDAQ
+NVAX,Novavax Inc.,Healthcare,Biotechnology,NASDAQ
+SRPT,Sarepta Therapeutics Inc.,Healthcare,Biotechnology,NASDAQ
+ALNY,Alnylam Pharmaceuticals Inc.,Healthcare,Biotechnology,NASDAQ
+IONS,Ionis Pharmaceuticals Inc.,Healthcare,Biotechnology,NASDAQ
+BLUE,bluebird bio Inc.,Healthcare,Biotechnology,NASDAQ
+RARE,Ultragenyx Pharmaceutical Inc.,Healthcare,Biotechnology,NASDAQ
+BGNE,BeiGene Ltd.,Healthcare,Biotechnology,NASDAQ
+RCUS,Arcus Biosciences Inc.,Healthcare,Biotechnology,NYSE
+ITGR,Integer Holdings Corporation,Healthcare,Medical Devices,NYSE
+IRTC,iRhythm Technologies Inc.,Healthcare,Medical Devices,NASDAQ
+INSP,Inspire Medical Systems Inc.,Healthcare,Medical Devices,NYSE
+SWAV,ShockWave Medical Inc.,Healthcare,Medical Devices,NASDAQ
+AXNX,Axonics Inc.,Healthcare,Medical Devices,NASDAQ
+SILK,Silk Road Medical Inc.,Healthcare,Medical Devices,NASDAQ
+PRMD,ProMIS Neurosciences Inc.,Healthcare,Biotechnology,NASDAQ
+TMDX,TransMedics Group Inc.,Healthcare,Medical Devices,NASDAQ
+AVNS,Avanos Medical Inc.,Healthcare,Medical Devices,NYSE
+MMSI,Merit Medical Systems Inc.,Healthcare,Medical Devices,NASDAQ
+ATRC,AtriCure Inc.,Healthcare,Medical Devices,NASDAQ
+ICAD,iCAD Inc.,Healthcare,Medical Devices,NASDAQ
+MASI,Masimo Corporation,Healthcare,Medical Devices,NASDAQ
+NVCR,NovoCure Limited,Healthcare,Medical Devices,NASDAQ
+RMD,ResMed Inc.,Healthcare,Medical Devices,NYSE
+VRAY,ViewRay Inc.,Healthcare,Medical Devices,NASDAQ
+NTRA,Natera Inc.,Healthcare,Diagnostics & Research,NASDAQ
+SDGR,Schrodinger Inc.,Healthcare,Biotechnology,NASDAQ
+RXRX,Recursion Pharmaceuticals Inc.,Healthcare,Biotechnology,NASDAQ
+TWST,Twist Bioscience Corporation,Healthcare,Biotechnology,NASDAQ
+OFIX,Orthofix Medical Inc.,Healthcare,Medical Devices,NASDAQ
+SPNV,Supernova Partners Acquisition Company II Ltd.,Financial Services,Shell Companies,NASDAQ
+TDOC,Teladoc Health Inc.,Healthcare,Health Information Services,NYSE
+AMWL,American Well Corporation,Healthcare,Health Information Services,NYSE
+HIMS,Hims & Hers Health Inc.,Healthcare,Health Information Services,NYSE
+PHR,Phreesia Inc.,Healthcare,Health Information Services,NYSE
+ACCD,Accolade Inc.,Healthcare,Health Information Services,NASDAQ
+GDRX,GoodRx Holdings Inc.,Healthcare,Health Information Services,NASDAQ
+HCAT,Health Catalyst Inc.,Healthcare,Health Information Services,NASDAQ
+CERT,Certara Inc.,Healthcare,Biotechnology,NASDAQ
+PGNY,Progyny Inc.,Healthcare,Healthcare Plans,NASDAQ
+CLOV,Clover Health Investments Corp.,Healthcare,Healthcare Plans,NASDAQ
+OSH,Oak Street Health Inc.,Healthcare,Medical Care Facilities,NYSE
+ALHC,Alignment Healthcare Inc.,Healthcare,Healthcare Plans,NASDAQ
+CANO,Cano Health Inc.,Healthcare,Medical Care Facilities,NYSE
+MDRX,Allscripts Healthcare Solutions Inc.,Healthcare,Health Information Services,NASDAQ
+NXGN,NextGen Healthcare Inc.,Healthcare,Health Information Services,NASDAQ
+VEEVA,Veeva Systems Inc.,Healthcare,Health Information Services,NYSE
+EVHC,Envision Healthcare Corporation,Healthcare,Medical Care Facilities,NYSE
+MD,Pediatrix Medical Group Inc.,Healthcare,Medical Care Facilities,NYSE
+ENSG,The Ensign Group Inc.,Healthcare,Medical Care Facilities,NASDAQ
+ADUS,Addus HomeCare Corporation,Healthcare,Medical Care Facilities,NASDAQ
+AMEDISYS,Amedisys Inc.,Healthcare,Medical Care Facilities,NASDAQ
+LHCG,LHC Group Inc.,Healthcare,Medical Care Facilities,NASDAQ
+BKD,Brookdale Senior Living Inc.,Healthcare,Medical Care Facilities,NYSE
+SUNL,Sunlight Financial Holdings Inc.,Financial Services,Capital Markets,NASDAQ
+UWMC,UWM Holdings Corporation,Financial Services,Mortgage Finance,NYSE
+HMPT,Home Point Capital Inc.,Financial Services,Mortgage Finance,NASDAQ
+GHLD,Guild Holdings Company,Financial Services,Mortgage Finance,NYSE
+LOAN,Manhattan Bridge Capital Inc.,Financial Services,Mortgage Finance,NASDAQ
+BRBR,Bellring Brands Inc.,Consumer Defensive,Packaged Foods,NYSE
+POST,Post Holdings Inc.,Consumer Defensive,Packaged Foods,NYSE
+SMPL,The Simply Good Foods Company,Consumer Defensive,Packaged Foods,NASDAQ
+VITL,Vital Farms Inc.,Consumer Defensive,Farm Products,NASDAQ
+AVO,Mission Produce Inc.,Consumer Defensive,Farm Products,NASDAQ
+APPH,AppHarvest Inc.,Consumer Defensive,Farm Products,NASDAQ
+ARCO,Arcos Dorados Holdings Inc.,Consumer Cyclical,Restaurants,NYSE
+WEST,Westrock Coffee Company,Consumer Defensive,Beverages-Non-Alcoholic,NASDAQ
+CELH,Celsius Holdings Inc.,Consumer Defensive,Beverages-Non-Alcoholic,NASDAQ
+FIZZ,National Beverage Corp.,Consumer Defensive,Beverages-Non-Alcoholic,NASDAQ
+MGPI,MGP Ingredients Inc.,Consumer Defensive,Beverages-Wineries & Distilleries,NASDAQ
+CASK,Cask,Consumer Defensive,Beverages-Wineries & Distilleries,NASDAQ
+SAM,The Boston Beer Company Inc.,Consumer Defensive,Beverages-Brewers,NYSE
+BUD,Anheuser-Busch InBev SA/NV,Consumer Defensive,Beverages-Brewers,NYSE
+ABEV,Ambev S.A.,Consumer Defensive,Beverages-Brewers,NYSE
+BF.B,Brown-Forman Corporation Class B,Consumer Defensive,Beverages-Wineries & Distilleries,NYSE
+WDFC,WD-40 Company,Consumer Defensive,Specialty Chemicals,NASDAQ
+ENR,Energizer Holdings Inc.,Consumer Defensive,Household & Personal Products,NYSE
+SPB,Spectrum Brands Holdings Inc.,Consumer Defensive,Household & Personal Products,NYSE
+HBI,Hanesbrands Inc.,Consumer Cyclical,Apparel Manufacturing,NYSE
+UA,Under Armour Inc. Class C,Consumer Cyclical,Apparel Manufacturing,NYSE
+UAA,Under Armour Inc. Class A,Consumer Cyclical,Apparel Manufacturing,NYSE
+NKE,NIKE Inc.,Consumer Cyclical,Footwear & Accessories,NYSE
+SKX,Skechers U.S.A. Inc.,Consumer Cyclical,Footwear & Accessories,NYSE
+ONON,On Holding AG,Consumer Cyclical,Footwear & Accessories,NYSE
+CROX,Crocs Inc.,Consumer Cyclical,Footwear & Accessories,NASDAQ
+BOOT,Boot Barn Holdings Inc.,Consumer Cyclical,Specialty Retail,NYSE
+GOOS,Canada Goose Holdings Inc.,Consumer Cyclical,Apparel Manufacturing,NYSE
+LEVI,Levi Strauss & Co.,Consumer Cyclical,Apparel Manufacturing,NYSE
+GH,Guardant Health Inc.,Healthcare,Diagnostics & Research,NASDAQ
+AAON,AAON Inc.,Industrials,Building Products & Equipment,NASDAQ
+AACG,ATA Creativity Global,Consumer Cyclical,Education & Training Services,NASDAQ
+AADI,Aadi Biosciences Inc.,Healthcare,Biotechnology,NASDAQ
+AAME,Atlantic American Corporation,Financial Services,Insurance-Life,NASDAQ
+AANA,Envision Solar International Inc.,Technology,Solar,NASDAQ
+AAOI,Applied Optoelectronics Inc.,Technology,Communication Equipment,NASDAQ
+AAPD,Direxion Daily AAPL Bear 1X Shares,Financial Services,Exchange Traded Fund,NYSE
+AAPL,Apple Inc.,Technology,Consumer Electronics,NASDAQ
+AAQC,Accelerate Acquisition Corp.,Financial Services,Shell Companies,NASDAQ
+AATC,Autoscope Technologies Corporation,Technology,Scientific & Technical Instruments,NASDAQ
+AAWW,Atlas Air Worldwide Holdings Inc.,Industrials,Airlines,NASDAQ
+AAXJ,iShares MSCI All Country Asia ex Japan ETF,Financial Services,Exchange Traded Fund,NASDAQ
+ABAX,Abaxis Inc.,Healthcare,Medical Devices,NASDAQ
+ABB,ABB Ltd,Industrials,Specialty Industrial Machinery,NYSE
+ABBV,AbbVie Inc.,Healthcare,Drug Manufacturers-General,NYSE
+ABCB,Ameris Bancorp,Financial Services,Banks-Regional,NASDAQ
+ABCL,AbCellera Biologics Inc.,Healthcare,Biotechnology,NASDAQ
+ABCM,Abcam plc,Healthcare,Diagnostics & Research,NASDAQ
+ABEO,Abeome Corporation,Healthcare,Biotechnology,NASDAQ
+ABEV,Ambev S.A.,Consumer Defensive,Beverages-Brewers,NYSE
+ABG,Asbury Automotive Group Inc.,Consumer Cyclical,Auto & Truck Dealerships,NYSE
+ABIO,ARCA biopharma Inc.,Healthcare,Biotechnology,NASDAQ
+ABM,ABM Industries Incorporated,Industrials,Specialty Business Services,NYSE
+ABNB,Airbnb Inc.,Consumer Cyclical,Travel Services,NASDAQ
+ABOS,Acumen Pharmaceuticals Inc.,Healthcare,Biotechnology,NASDAQ
+ABR,Arbor Realty Trust Inc.,Real Estate,REIT-Mortgage,NYSE
+ABSI,Absci Corporation,Healthcare,Biotechnology,NASDAQ
+ABST,Absolute Software Corporation,Technology,Software-Application,NASDAQ
+ABT,Abbott Laboratories,Healthcare,Medical Devices,NYSE
+ABUS,Arbutus Biopharma Corporation,Healthcare,Biotechnology,NASDAQ
+ABVC,ABVC BioPharma Inc.,Healthcare,Biotechnology,NASDAQ
+AC,Associated Capital Group Inc.,Financial Services,Asset Management,NYSE
+ACA,Arcosa Inc.,Industrials,Infrastructure Operations,NYSE
+ACAB,Atlantic Coastal Acquisition Corp.,Financial Services,Shell Companies,NASDAQ
+ACAD,ACADIA Pharmaceuticals Inc.,Healthcare,Biotechnology,NASDAQ
+ACAH,Atlantic Coastal Acquisition Corp. II,Financial Services,Shell Companies,NASDAQ
+ACAN,AmeriCann Inc.,Consumer Defensive,Tobacco,NASDAQ
+ACAX,Alset Capital Acquisition Corp.,Financial Services,Shell Companies,NASDAQ
+ACB,Aurora Cannabis Inc.,Consumer Defensive,Drug Manufacturers-Specialty & Generic,NYSE
+ACBA,Ace Global Business Acquisition Limited,Financial Services,Shell Companies,NASDAQ
+ACCD,Accolade Inc.,Healthcare,Health Information Services,NASDAQ
+ACDC,ProFrac Holding Corp.,Energy,Oil & Gas Equipment & Services,NASDAQ
+ACEL,Accel Entertainment Inc.,Consumer Cyclical,Gambling,NYSE
+ACET,Aceto Corporation,Healthcare,Drug Manufacturers-Specialty & Generic,NASDAQ
+ACGL,Arch Capital Group Ltd.,Financial Services,Insurance-Diversified,NASDAQ
+ACHC,Acadia Healthcare Company Inc.,Healthcare,Medical Care Facilities,NASDAQ
+ACHL,Achilles Therapeutics plc,Healthcare,Biotechnology,NASDAQ
+ACHR,Archer Aviation Inc.,Industrials,Aerospace & Defense,NYSE
+ACIC,Atlas Crest Investment Corp.,Financial Services,Shell Companies,NYSE
+ACII,Atlas Crest Investment Corp. II,Financial Services,Shell Companies,NYSE
+ACIU,AC Immune SA,Healthcare,Biotechnology,NASDAQ
+ACIX,Academy Sports and Outdoors Inc.,Consumer Cyclical,Specialty Retail,NASDAQ
+ACKIU,Aeac Equity Partners Acquisition Corp.,Financial Services,Shell Companies,NASDAQ
+ACLS,Axcelis Technologies Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+ACM,AECOM,Industrials,Engineering & Construction,NYSE
+ACMR,ACM Research Inc.,Technology,Semiconductor Equipment & Materials,NASDAQ
+ACNB,ACNB Corporation,Financial Services,Banks-Regional,NASDAQ
+ACON,Acon Biosciences Inc.,Healthcare,Medical Devices,NASDAQ
+ACOR,Acorda Therapeutics Inc.,Healthcare,Drug Manufacturers-Specialty & Generic,NASDAQ
+ACP,Aberdeen Income Credit Strategies Fund,Financial Services,Asset Management,NYSE
+ACRS,Aclaris Therapeutics Inc.,Healthcare,Biotechnology,NASDAQ
+ACRX,AcelRx Pharmaceuticals Inc.,Healthcare,Biotechnology,NASDAQ
+ACST,Acasti Pharma Inc.,Healthcare,Biotechnology,NASDAQ
+ACT,Enact Holdings Inc.,Financial Services,Insurance-Specialty,NASDAQ
+ACTG,Acacia Research Corporation,Technology,Software-Application,NASDAQ
+ACTU,Actuate Corporation,Technology,Software-Application,NASDAQ
+ACVA,ACV Auctions Inc.,Consumer Cyclical,Auto & Truck Dealerships,NASDAQ
+ACWI,iShares MSCI ACWI ETF,Financial Services,Exchange Traded Fund,NASDAQ
+ACWX,iShares MSCI ACWI ex U.S. ETF,Financial Services,Exchange Traded Fund,NASDAQ
+ACXM,Acxiom Corporation,Technology,Information Technology Services,NASDAQ

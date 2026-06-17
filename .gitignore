@@ -49,6 +49,7 @@ data/
 !config/data/
 !src/data/
 !src/data/db/
+!src/data/downloader/data/
 results/
 temp/
 
@@ -57,6 +58,7 @@ logs/
 *.zip
 *.log
 *.csv
+!src/data/downloader/data/russell3000_static.csv
 *.json
 *.jsonl
 *.jsonl.gz
