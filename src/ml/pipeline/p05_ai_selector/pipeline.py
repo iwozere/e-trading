@@ -1,5 +1,6 @@
 """P05 AI Selector — 4-stage pipeline orchestrator."""
 
+import logging
 import time
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -16,10 +17,14 @@ from src.ml.pipeline.p05_ai_selector.stages.stage1_prefilter import Stage1Prefil
 from src.ml.pipeline.p05_ai_selector.stages.stage2_scorer import Stage2Scorer
 from src.ml.pipeline.p05_ai_selector.stages.stage3_llm_synthesizer import Stage3LLMSynthesizer
 from src.ml.pipeline.p05_ai_selector.stages.stage4_output import Stage4Output
-from src.ml.pipeline.p05_ai_selector.config import LLM_MODEL
+from src.ml.pipeline.p05_ai_selector.config import LLM_MODEL, RESULTS_BASE
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+
+_P05_LOGGER_NAME = "src.ml.pipeline.p05_ai_selector"
+_RUN_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(lineno)d - %(message)s"
 
 
 class P05Pipeline:
@@ -33,6 +38,18 @@ class P05Pipeline:
       3 — LLM synthesis (top-25 → top-5 with exit strategies)
       4 — Output generation (CSV/MD/JSON + optional notifications)
     """
+
+    def _attach_run_log_handler(self, run_dir: Path) -> logging.FileHandler:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(run_dir / "pipeline.log", encoding="utf-8")
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter(_RUN_LOG_FORMAT))
+        logging.getLogger(_P05_LOGGER_NAME).addHandler(handler)
+        return handler
+
+    def _detach_run_log_handler(self, handler: logging.FileHandler) -> None:
+        logging.getLogger(_P05_LOGGER_NAME).removeHandler(handler)
+        handler.close()
 
     def run(
         self,
@@ -55,11 +72,13 @@ class P05Pipeline:
         t_start = time.monotonic()
         stage_times: Dict[str, float] = {}
 
-        _logger.info("=" * 60)
-        _logger.info("P05 AI Selector — daily run for %s", run_date)
-        _logger.info("=" * 60)
-
+        run_dir = RESULTS_BASE / str(run_date)
+        log_handler = self._attach_run_log_handler(run_dir)
         try:
+            _logger.info("=" * 60)
+            _logger.info("P05 AI Selector — daily run for %s", run_date)
+            _logger.info("=" * 60)
+
             # Stage 0 — Universe
             t0 = time.monotonic()
             tickers = UniverseLoader().load()
@@ -160,6 +179,9 @@ class P05Pipeline:
         except Exception as exc:
             _logger.exception("P05 pipeline failed for %s", run_date)
             return self._failure_result(str(exc), {}, user_id, run_date, t_start)
+
+        finally:
+            self._detach_run_log_handler(log_handler)
 
     def _failure_result(
         self,

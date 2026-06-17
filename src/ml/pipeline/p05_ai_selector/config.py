@@ -13,8 +13,9 @@ except ImportError:
 # Paths
 # ---------------------------------------------------------------------------
 _DATA_CACHE = Path(DATA_CACHE_DIR)
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
-RESULTS_BASE = Path("results") / "p05_ai_selector"
+RESULTS_BASE = _PROJECT_ROOT / "results" / "p05_ai_selector"
 STAGE1_CACHE_DIR = _DATA_CACHE / "p05" / "stage1"
 STAGE2_CACHE_DIR = _DATA_CACHE / "p05" / "stage2"
 EARNINGS_CACHE_DIR = _DATA_CACHE / "p05" / "earnings"
