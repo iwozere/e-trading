@@ -133,3 +133,11 @@ DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 REDDIT_API_KEY = os.getenv("REDDIT_API_KEY")
 REDDIT_API_SECRET = os.getenv("REDDIT_API_SECRET")
 REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT")
+
+
+##################################################################
+#
+# AI KEYS
+#
+##################################################################
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
