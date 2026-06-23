@@ -341,6 +341,104 @@ class InstitutionalFlowPipeline:
         _logger.info("Price proximity: %d/%d tickers within 15%% of 52w high", len(result), len(tickers))
         return result
 
+    def rebuild_quarterly_consensus(
+        self,
+        year: int,
+        quarter: int,
+        force_download: bool = False,
+    ) -> pd.DataFrame:
+        """
+        Rebuild the quarterly 13F consensus from all filings for the quarter.
+
+        Designed to recover from EDGAR EFTS outages: re-downloads the full quarter
+        index, fetches any missing infotables, and rebuilds the consensus from the
+        complete set of holdings on disk.  Safe to call while the daily pipeline is
+        running — it only writes to the consensus cache file.
+
+        Args:
+            year: Calendar year (e.g., 2026).
+            quarter: Quarter number 1–4.
+            force_download: Re-download the index and all infotables even if cached.
+
+        Returns:
+            Updated consensus DataFrame (also written to the consensus cache).
+        """
+        index_df = self._edgar.download_13f_index(year, quarter, force=force_download)
+        if index_df.empty:
+            _logger.warning("No 13F-HR filings found for %d Q%d — cannot rebuild consensus", year, quarter)
+            return pd.DataFrame()
+
+        _logger.info("Rebuilding consensus from %d filers for %d Q%d", len(index_df), year, quarter)
+
+        prior_year, prior_quarter = _prev_quarter(year, quarter)
+        current_holdings_frames = []
+        prior_holdings_frames = []
+
+        for _, row in index_df.iterrows():
+            cik_str = str(row.get("cik", ""))
+            acc = str(row.get("accession_number", ""))
+            name = str(row.get("institution_name", ""))
+            if not cik_str or not acc:
+                continue
+            try:
+                cik_int = int(cik_str)
+            except ValueError:
+                continue
+
+            path = self._edgar.download_13f_infotable(
+                cik=cik_int,
+                accession_number=acc,
+                year=year,
+                quarter=quarter,
+                institution_name=name,
+                force=force_download,
+            )
+            if not (path and path.exists()):
+                continue
+            df = pd.read_csv(path, compression="gzip")
+            if df.empty or df["value_usd"].sum() < self.config.min_aum_usd:
+                continue
+            current_holdings_frames.append(df)
+
+            prior_df = self._edgar.load_13f_holdings(cik_int, prior_year, prior_quarter)
+            if prior_df is not None and not prior_df.empty:
+                prior_holdings_frames.append(prior_df)
+
+        if not current_holdings_frames or not prior_holdings_frames:
+            _logger.warning(
+                "Insufficient holdings data for %d Q%d rebuild "
+                "(current=%d filers, prior=%d filers)",
+                year, quarter, len(current_holdings_frames), len(prior_holdings_frames),
+            )
+            return pd.DataFrame()
+
+        curr_all = pd.concat(current_holdings_frames, ignore_index=True)
+        prev_all = pd.concat(prior_holdings_frames, ignore_index=True)
+
+        cusips = curr_all["cusip"].dropna().unique().tolist()
+        mapping = self._figi.map_cusips(cusips)
+        curr_all["ticker"] = curr_all["cusip"].map(mapping)
+        prev_all["ticker"] = prev_all["cusip"].map(
+            self._figi.map_cusips(prev_all["cusip"].dropna().unique().tolist())
+        )
+        curr_all = curr_all.dropna(subset=["ticker"])
+        prev_all = prev_all.dropna(subset=["ticker"])
+
+        delta_df = self._delta_calc.calculate(curr_all, prev_all)
+        exits_df = self._exit_screener.screen(delta_df)
+        consensus_df = self._consensus.detect(exits_df)
+
+        if not consensus_df.empty:
+            cache_path = self._edgar._13f_dir / "consensus" / f"{year}_Q{quarter}.csv.gz"
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            consensus_df.to_csv(cache_path, index=False, compression="gzip")
+            _logger.info(
+                "Rebuilt consensus for %d Q%d: %d tickers → %s",
+                year, quarter, len(consensus_df), cache_path,
+            )
+
+        return consensus_df
+
     def _load_cached_consensus(self, year: int, quarter: int) -> pd.DataFrame:
         """Load the most recently computed consensus CSV.gz for a quarter."""
         path = self._edgar._13f_dir / "consensus" / f"{year}_Q{quarter}.csv.gz"

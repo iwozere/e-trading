@@ -73,11 +73,13 @@ class Stage1Prefilter:
         dm = DataManager()
 
         start_dt = datetime.combine(as_of_date, dt_time.min)
-        # Request extra days to account for weekends/holidays
         from datetime import timedelta
         lookback_start = datetime.combine(
             as_of_date - timedelta(days=STAGE1_LOOKBACK_DAYS + 10), dt_time.min
         )
+
+        _logger.info("Stage1: batch-fetching OHLCV for %d symbols", len(tickers))
+        ohlcv_map = dm.get_ohlcv_batch(tickers, "1d", lookback_start, start_dt, force_refresh=force_refresh)
 
         rows = []
         n_price_fail = 0
@@ -86,7 +88,7 @@ class Stage1Prefilter:
         for ticker in tickers:
             is_crypto = ticker in _CRYPTO_SET
             try:
-                ohlcv = dm.get_ohlcv(ticker, "1d", lookback_start, start_dt)
+                ohlcv = ohlcv_map.get(ticker)
                 if ohlcv is None or ohlcv.empty:
                     continue
 
