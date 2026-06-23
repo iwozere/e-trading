@@ -9,7 +9,7 @@ Coordinates all three signal layers:
 
 import logging
 import logging.handlers
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import sys
@@ -19,7 +19,8 @@ sys.path.append(str(PROJECT_ROOT))
 
 import pandas as pd
 
-from src.data.downloader.edgar_downloader import EdgarDownloader
+from src.data.data_manager import DataManager
+from src.data.downloader.edgar_downloader import EdgarDownloader, EftsUnavailableError
 from src.data.downloader.openfigi_mapper import OpenFigiMapper
 from src.ml.pipeline.p18_institutional_flow_tracker.config import P18Config
 from src.ml.pipeline.p18_institutional_flow_tracker.processors.position_delta_calculator import PositionDeltaCalculator
@@ -105,12 +106,35 @@ class InstitutionalFlowPipeline:
             # ------------------------------------------------------------------
             # Layer 1: New 13F filings today → update quarterly consensus
             # ------------------------------------------------------------------
-            new_filings = self._edgar.get_new_13f_filings_today(as_of_date=run_date)
+            efts_available = True
+            try:
+                new_filings = self._edgar.get_new_13f_filings_today(as_of_date=run_date)
+            except EftsUnavailableError:
+                _logger.error(
+                    "EDGAR EFTS unavailable for %s — will fall back to prior consensus if possible",
+                    run_date,
+                )
+                new_filings = pd.DataFrame(columns=["cik", "institution_name", "accession_number", "filed_date"])
+                efts_available = False
+
             new_13f_count = len(new_filings)
             _logger.info("New 13F-HR filings today: %d", new_13f_count)
 
             quarter_str, year, quarter = _resolve_current_quarter(run_date)
             consensus_df = self._build_quarterly_consensus(year, quarter, new_filings, force_refresh)
+
+            if consensus_df.empty and not efts_available and run_date.weekday() < 5:
+                consensus_df = self._load_consensus_from_results(run_date)
+                if not consensus_df.empty:
+                    _logger.warning(
+                        "EFTS was unavailable — using prior consensus loaded from results directory"
+                    )
+                else:
+                    _logger.error(
+                        "EDGAR EFTS unavailable and no prior consensus found in results directory "
+                        "for %s — pipeline will produce no signals today",
+                        run_date,
+                    )
 
             # ------------------------------------------------------------------
             # Layer 2: Form 4 and 13D/G daily events
@@ -133,12 +157,14 @@ class InstitutionalFlowPipeline:
             # ------------------------------------------------------------------
             # Scoring
             # ------------------------------------------------------------------
+            price_proximity_df = self._build_price_proximity(watchlist, run_date)
             scored_df = self._scorer.score(
                 consensus_df=consensus_df,
                 volume_df=volume_df,
                 form4_df=form4_df,
                 dg_df=dg_df,
                 as_of_date=run_date,
+                price_proximity_df=price_proximity_df,
             )
 
             # ------------------------------------------------------------------
@@ -165,6 +191,7 @@ class InstitutionalFlowPipeline:
                 "form4_sells_count": len(form4_df),
                 "top_ticker": top_ticker,
                 "top_score": top_score,
+                "efts_available": efts_available,
                 "results_dir": str(run_dir),
                 "timestamp": datetime.now().isoformat(),
                 "user_id": user_id,
@@ -268,6 +295,52 @@ class InstitutionalFlowPipeline:
 
         return consensus_df
 
+    def _build_price_proximity(self, tickers: List[str], as_of_date: date) -> pd.DataFrame:
+        """
+        Return tickers where the current price is within 15% below the 52-week high.
+
+        A ticker passes when: current_price >= 52w_high * 0.85.  This means
+        institutions are exiting before the stock has meaningfully declined —
+        a stronger distribution signal than a ticker already down 30%+.
+
+        Args:
+            tickers: Watchlist tickers to evaluate.
+            as_of_date: Reference date for OHLCV end date.
+
+        Returns:
+            DataFrame with columns: ticker, below_52w_high_15pct, current_price, high_52w.
+        """
+        if not tickers:
+            return pd.DataFrame()
+
+        dm = DataManager()
+        end = datetime(as_of_date.year, as_of_date.month, as_of_date.day, tzinfo=timezone.utc)
+        start = end - timedelta(days=260)
+
+        rows = []
+        for ticker in tickers:
+            try:
+                df = dm.get_ohlcv(ticker, "1d", start, end)
+                if df is None or df.empty or "close" not in df.columns or "high" not in df.columns:
+                    continue
+                high_52w = float(df["high"].max())
+                current_price = float(df["close"].iloc[-1])
+                if high_52w > 0 and current_price >= high_52w * 0.85:
+                    rows.append({
+                        "ticker": ticker,
+                        "below_52w_high_15pct": True,
+                        "current_price": round(current_price, 4),
+                        "high_52w": round(high_52w, 4),
+                    })
+            except Exception:
+                _logger.warning("Could not compute 52w proximity for %s", ticker)
+
+        if not rows:
+            return pd.DataFrame()
+        result = pd.DataFrame(rows)
+        _logger.info("Price proximity: %d/%d tickers within 15%% of 52w high", len(result), len(tickers))
+        return result
+
     def _load_cached_consensus(self, year: int, quarter: int) -> pd.DataFrame:
         """Load the most recently computed consensus CSV.gz for a quarter."""
         path = self._edgar._13f_dir / "consensus" / f"{year}_Q{quarter}.csv.gz"
@@ -275,6 +348,43 @@ class InstitutionalFlowPipeline:
             _logger.info("Loading cached consensus from %s", path)
             return pd.read_csv(path, compression="gzip")
         return pd.DataFrame()
+
+    def _load_consensus_from_results(self, before_date: date) -> pd.DataFrame:
+        """
+        Find the most recent consensus.csv written to a dated results directory.
+
+        Used as a last-resort fallback when the quarterly consensus cache has
+        not yet been built (e.g. EFTS has been down since the quarter started).
+
+        Args:
+            before_date: Only consider result directories strictly before this date.
+
+        Returns:
+            The most recently saved consensus DataFrame, or an empty DataFrame.
+        """
+        candidates = []
+        for entry in self._results_dir.iterdir():
+            if not entry.is_dir():
+                continue
+            try:
+                dir_date = date.fromisoformat(entry.name)
+            except ValueError:
+                continue
+            if dir_date >= before_date:
+                continue
+            consensus_path = entry / "consensus.csv"
+            if consensus_path.exists():
+                candidates.append((dir_date, consensus_path))
+
+        if not candidates:
+            return pd.DataFrame()
+
+        best_date, best_path = max(candidates, key=lambda x: x[0])
+        age_days = (before_date - best_date).days
+        _logger.warning(
+            "Loaded fallback consensus from %s (aged %d day(s))", best_path, age_days
+        )
+        return pd.read_csv(best_path)
 
     def _setup_file_logging(self) -> None:
         log_file = self._results_dir / "pipeline.log"

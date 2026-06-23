@@ -2,7 +2,7 @@
 
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
@@ -73,21 +73,14 @@ class P18Reader:
             except Exception:
                 _logger.exception("P18Reader: error reading consensus.csv")
 
-        form4_file = run_dir / "form4_sells.csv"
-        if form4_file.exists():
-            try:
-                df = pd.read_csv(form4_file)
-                if "ticker" in df.columns and "transaction_type" in df.columns:
-                    buys = df[df["transaction_type"] == "B"]
-                    result["form4_buy_tickers"] = set(buys["ticker"].dropna().tolist())
-            except Exception:
-                _logger.exception("P18Reader: error reading form4_sells.csv")
+        # form4_buy_tickers: P18 currently downloads only sell transactions;
+        # a separate form4_buys.csv is not yet produced. Left empty until
+        # the edgar downloader is extended to capture buy-side Form 4 filings.
 
         _logger.info(
-            "P18Reader: loaded — scores=%d, consensus=%d, form4_buys=%d",
+            "P18Reader: loaded — scores=%d, consensus=%d",
             result["high_score_count"],
             len(result["consensus_tickers"]),
-            len(result["form4_buy_tickers"]),
         )
         return result
 

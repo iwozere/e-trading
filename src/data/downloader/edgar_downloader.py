@@ -56,6 +56,10 @@ _SUBMISSIONS_URL_TEMPLATE = "https://data.sec.gov/submissions/CIK{cik:010d}.json
 _EDGAR_ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
 _EDGAR_EFTS_SEARCH = "https://efts.sec.gov/LATEST/search-index"
 
+class EftsUnavailableError(Exception):
+    """Raised when the EDGAR EFTS search endpoint fails before returning any results."""
+
+
 # SEC Fair Access Policy: no more than 10 requests per second
 _MIN_REQUEST_INTERVAL = 0.11
 
@@ -879,18 +883,41 @@ class EdgarDownloader(BaseDataDownloader):
                 "enddt": end_dt,
                 "from": offset,
             }
-            try:
-                elapsed = time.monotonic() - self._last_request_time
-                if elapsed < _MIN_REQUEST_INTERVAL:
-                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+            last_exc: Optional[Exception] = None
+            data: Dict[str, Any] = {}
+            for attempt in range(3):
+                try:
+                    elapsed = time.monotonic() - self._last_request_time
+                    if elapsed < _MIN_REQUEST_INTERVAL:
+                        time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
 
-                resp = self._session.get(_EDGAR_EFTS_SEARCH, params=params, timeout=30)
-                self._last_request_time = time.monotonic()
-                resp.raise_for_status()
-                data = resp.json()
-            except Exception:
-                _logger.exception("EFTS search failed (forms=%s start=%s end=%s offset=%d)", forms, start_dt, end_dt, offset)
-                break
+                    resp = self._session.get(_EDGAR_EFTS_SEARCH, params=params, timeout=30)
+                    self._last_request_time = time.monotonic()
+                    resp.raise_for_status()
+                    data = resp.json()
+                    last_exc = None
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    status = getattr(getattr(exc, "response", None), "status_code", None)
+                    if status is not None and status < 500:
+                        break  # 4xx — retrying won't help
+                    backoff = 2 ** attempt
+                    _logger.warning(
+                        "EFTS attempt %d/3 failed (forms=%s start=%s status=%s) — retrying in %ds",
+                        attempt + 1, forms, start_dt, status, backoff,
+                    )
+                    time.sleep(backoff)
+
+            if last_exc is not None:
+                _logger.exception(
+                    "EFTS search failed after 3 attempts (forms=%s start=%s end=%s offset=%d)",
+                    forms, start_dt, end_dt, offset,
+                    exc_info=last_exc,
+                )
+                if not all_hits:
+                    raise EftsUnavailableError(f"EFTS unavailable for forms={forms!r} on {start_dt}") from last_exc
+                break  # partial results already collected — stop gracefully
 
             hits = data.get("hits", {}).get("hits", [])
             all_hits.extend(hits)

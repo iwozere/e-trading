@@ -345,10 +345,11 @@ class AccumulationAnalyzer:
         return True, metrics, 'passed'
 
     def _compute_zscore(self, series: np.ndarray, window: int) -> float:
-        if len(series) < window:
+        if len(series) < window + 1:
             return 0.0
-        mean = np.mean(series[-window:])
-        std = np.std(series[-window:])
+        baseline = series[-(window + 1):-1]
+        mean = np.mean(baseline)
+        std = np.std(baseline)
         if std == 0:
             return 0.0
         return (series[-1] - mean) / std

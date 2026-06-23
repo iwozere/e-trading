@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import cronstrue from 'cronstrue';
 import {
   Alert,
@@ -9,9 +9,11 @@ import {
   CircularProgress,
   Collapse,
   Divider,
+  Drawer,
   Grid,
   IconButton,
   Paper,
+  Snackbar,
   Tab,
   Table,
   TableBody,
@@ -24,18 +26,23 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  Article as ArticleIcon,
   CheckCircle as CheckCircleIcon,
+  Close as CloseIcon,
+  ContentCopy as ContentCopyIcon,
   Error as ErrorIcon,
   ExpandLess,
   ExpandMore,
   HelpOutline as UnknownIcon,
   Memory as MemoryIcon,
+  PlayArrow as PlayArrowIcon,
+  Refresh as RefreshIcon,
   Speed as SpeedIcon,
   Timeline as TimelineIcon,
   Timer as TimerIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
-import { useSystemMetrics, useSystemStatus, useServicesStatus, usePipelinesStatus } from '../../hooks/system/useSystemHealth';
+import { useSystemMetrics, useSystemStatus, useServicesStatus, usePipelinesStatus, useTriggerPipeline, useRunLogs } from '../../hooks/system/useSystemHealth';
 
 // ── shared types ─────────────────────────────────────────────────────────────
 
@@ -373,10 +380,114 @@ const RunHistoryStrip: React.FC<{ runs: RecentRun[] }> = ({ runs }) => {
   );
 };
 
+// ── LogViewerDrawer ───────────────────────────────────────────────────────────
+
+interface LogViewerDrawerProps {
+  open: boolean;
+  runId: number | null;
+  pipelineName: string;
+  onClose: () => void;
+}
+
+const LogViewerDrawer: React.FC<LogViewerDrawerProps> = ({ open, runId, pipelineName, onClose }) => {
+  const { data, isLoading, error, refetch } = useRunLogs(open ? runId : null);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (data?.log_content && logEndRef.current) {
+      logEndRef.current.scrollIntoView();
+    }
+  }, [data]);
+
+  const handleCopy = () => {
+    if (data?.log_content) {
+      navigator.clipboard.writeText(data.log_content).catch(() => {});
+    }
+  };
+
+  return (
+    <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', sm: 680 } } }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <Box>
+            <Typography variant="h6">Pipeline Logs</Typography>
+            <Typography variant="caption" color="text.secondary">{pipelineName}</Typography>
+            {data?.started_at && (
+              <Typography variant="caption" color="text.secondary" display="block">{fmtDate(data.started_at)}</Typography>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+            <Tooltip title="Refresh">
+              <IconButton onClick={() => refetch()} size="small"><RefreshIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Tooltip title="Copy to clipboard">
+              <span>
+                <IconButton onClick={handleCopy} size="small" disabled={!data?.log_content}>
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <IconButton onClick={onClose} size="small"><CloseIcon fontSize="small" /></IconButton>
+          </Box>
+        </Box>
+
+        {data?.source && data.source !== 'none' && (
+          <Box sx={{ px: 2, py: 0.5, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary">
+              {data.source === 'file' ? `file: ${data.log_path}` : 'source: database result'}
+            </Typography>
+          </Box>
+        )}
+
+        <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+          {isLoading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>
+          )}
+          {error && <Alert severity="error">Failed to load logs.</Alert>}
+          {!isLoading && data?.source === 'none' && (
+            <Alert severity="info">No log file or result data available for this run.</Alert>
+          )}
+          {data?.log_content && (
+            <Box
+              component="pre"
+              sx={{
+                fontFamily: 'Consolas, "Courier New", monospace',
+                fontSize: '0.72rem',
+                lineHeight: 1.5,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                m: 0,
+                p: 1.5,
+                bgcolor: 'grey.900',
+                color: 'grey.100',
+                borderRadius: 1,
+                border: 1,
+                borderColor: 'divider',
+              }}
+            >
+              {data.log_content}
+            </Box>
+          )}
+          <div ref={logEndRef} />
+        </Box>
+      </Box>
+    </Drawer>
+  );
+};
+
 // ── PipelineRow ───────────────────────────────────────────────────────────────
 
-const PipelineRow: React.FC<{ pipeline: Pipeline }> = ({ pipeline: p }) => {
+interface PipelineRowProps {
+  pipeline: Pipeline;
+  onTrigger: (scheduleId: number, name: string) => void;
+  onViewLogs: (runId: number, pipelineName: string) => void;
+  isTriggeringThis: boolean;
+}
+
+const PipelineRow: React.FC<PipelineRowProps> = ({ pipeline: p, onTrigger, onViewLogs, isTriggeringThis }) => {
   const [open, setOpen] = useState(false);
+  const isRunning = p.last_status === 'running';
+  const runButtonDisabled = !p.enabled || isRunning || isTriggeringThis;
 
   return (
     <>
@@ -430,9 +541,38 @@ const PipelineRow: React.FC<{ pipeline: Pipeline }> = ({ pipeline: p }) => {
         <TableCell>
           <RunHistoryStrip runs={p.recent_runs} />
         </TableCell>
+        <TableCell padding="none" sx={{ pr: 1 }}>
+          <Box sx={{ display: 'flex' }}>
+            <Tooltip title={!p.enabled ? 'Schedule disabled' : isRunning || isTriggeringThis ? 'Pipeline is running' : 'Run now'}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  disabled={runButtonDisabled}
+                  onClick={() => onTrigger(p.id, p.name)}
+                >
+                  {isRunning || isTriggeringThis
+                    ? <CircularProgress size={16} color="inherit" />
+                    : <PlayArrowIcon fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title={p.recent_runs.length === 0 ? 'No runs yet' : 'View logs'}>
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={p.recent_runs.length === 0}
+                  onClick={() => p.recent_runs.length > 0 && onViewLogs(p.recent_runs[0].id, p.name)}
+                >
+                  <ArticleIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell colSpan={9} sx={{ py: 0 }}>
+        <TableCell colSpan={10} sx={{ py: 0 }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ py: 2, px: 4 }}>
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
@@ -447,6 +587,7 @@ const PipelineRow: React.FC<{ pipeline: Pipeline }> = ({ pipeline: p }) => {
                     <TableCell>Finished</TableCell>
                     <TableCell>Duration</TableCell>
                     <TableCell>Error</TableCell>
+                    <TableCell padding="none" />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -487,6 +628,13 @@ const PipelineRow: React.FC<{ pipeline: Pipeline }> = ({ pipeline: p }) => {
                           <Typography variant="caption" color="text.disabled">—</Typography>
                         )}
                       </TableCell>
+                      <TableCell padding="none">
+                        <Tooltip title="View logs">
+                          <IconButton size="small" onClick={() => onViewLogs(r.id, p.name)}>
+                            <ArticleIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -503,6 +651,31 @@ const PipelineRow: React.FC<{ pipeline: Pipeline }> = ({ pipeline: p }) => {
 
 const PipelinesTab: React.FC = () => {
   const { data, isLoading, error } = usePipelinesStatus();
+  const triggerMutation = useTriggerPipeline();
+  const [triggeringId, setTriggeringId] = useState<number | null>(null);
+  const [logDrawer, setLogDrawer] = useState<{ open: boolean; runId: number | null; pipelineName: string }>({
+    open: false, runId: null, pipelineName: '',
+  });
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false, message: '', severity: 'success',
+  });
+
+  const handleTrigger = async (scheduleId: number, name: string) => {
+    setTriggeringId(scheduleId);
+    try {
+      await triggerMutation.mutateAsync(scheduleId);
+      setSnackbar({ open: true, message: `"${name}" triggered successfully`, severity: 'success' });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail ?? `Failed to trigger "${name}"`;
+      setSnackbar({ open: true, message: detail, severity: 'error' });
+    } finally {
+      setTriggeringId(null);
+    }
+  };
+
+  const handleViewLogs = (runId: number, pipelineName: string) => {
+    setLogDrawer({ open: true, runId, pipelineName });
+  };
 
   if (isLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
   if (error) return <Alert severity="error">Failed to fetch pipeline status. The backend may be offline.</Alert>;
@@ -516,28 +689,59 @@ const PipelinesTab: React.FC = () => {
   }
 
   return (
-    <TableContainer component={Paper} variant="outlined">
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell padding="checkbox" />
-            <TableCell>Pipeline</TableCell>
-            <TableCell>Schedule</TableCell>
-            <TableCell>Last Status</TableCell>
-            <TableCell>Last Run</TableCell>
-            <TableCell>Duration</TableCell>
-            <TableCell>Success (10 runs)</TableCell>
-            <TableCell>Next Run</TableCell>
-            <TableCell>History</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {pipelines.map((p) => (
-            <PipelineRow key={p.id} pipeline={p} />
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <>
+      <TableContainer component={Paper} variant="outlined">
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell padding="checkbox" />
+              <TableCell>Pipeline</TableCell>
+              <TableCell>Schedule</TableCell>
+              <TableCell>Last Status</TableCell>
+              <TableCell>Last Run</TableCell>
+              <TableCell>Duration</TableCell>
+              <TableCell>Success (10 runs)</TableCell>
+              <TableCell>Next Run</TableCell>
+              <TableCell>History</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {pipelines.map((p) => (
+              <PipelineRow
+                key={p.id}
+                pipeline={p}
+                onTrigger={handleTrigger}
+                onViewLogs={handleViewLogs}
+                isTriggeringThis={triggeringId === p.id}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <LogViewerDrawer
+        open={logDrawer.open}
+        runId={logDrawer.runId}
+        pipelineName={logDrawer.pipelineName}
+        onClose={() => setLogDrawer((prev) => ({ ...prev, open: false }))}
+      />
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 

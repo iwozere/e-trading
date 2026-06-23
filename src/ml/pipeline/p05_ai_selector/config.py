@@ -20,7 +20,7 @@ STAGE1_CACHE_DIR = _DATA_CACHE / "p05" / "stage1"
 STAGE2_CACHE_DIR = _DATA_CACHE / "p05" / "stage2"
 EARNINGS_CACHE_DIR = _DATA_CACHE / "p05" / "earnings"
 
-P18_RESULTS_BASE = Path("results") / "p18_institutional_flow"
+P18_RESULTS_BASE = _PROJECT_ROOT / "results" / "p18_institutional_flow"
 
 # ---------------------------------------------------------------------------
 # LLM

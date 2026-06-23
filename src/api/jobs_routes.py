@@ -5,7 +5,11 @@ FastAPI routes for job scheduling and execution operations.
 Provides endpoints for managing schedules and runs.
 """
 
+import json
+from datetime import date
+from pathlib import Path
 from typing import List, Optional
+
 # UUID import removed - using integer IDs
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -23,8 +27,17 @@ from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 # Create router
 router = APIRouter(prefix="/api", tags=["jobs"])
+
+
+def _resolve_log_path(name_lower: str, run_date: date) -> Optional[Path]:
+    """Map a schedule name / job_id to its pipeline.log file path."""
+    if "p05" in name_lower:
+        return _PROJECT_ROOT / "results" / "p05_ai_selector" / str(run_date) / "pipeline.log"
+    return None
 
 
 def get_jobs_service(session: Session = Depends(webui_app_service.get_db_session)) -> JobsService:
@@ -128,6 +141,68 @@ async def get_run(
         )
 
     return run
+
+
+@router.get("/runs/{run_id}/logs")
+async def get_run_logs(
+    run_id: int,
+    current_user = Depends(get_current_user),
+    jobs_service: JobsService = Depends(get_jobs_service),
+):
+    """
+    Return log content for a specific run.
+
+    Resolution order:
+      1. Pipeline file log (e.g. results/p05_ai_selector/{date}/pipeline.log)
+      2. ScheduleRun.result JSON serialised as text
+      3. source: "none" — no log available
+    """
+    run = jobs_service.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+    if run.user_id is not None and run.user_id != current_user.id and current_user.role not in ["admin"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    snapshot = run.job_snapshot or {}
+    schedule_name = snapshot.get("schedule_name") or ""
+    job_id_str = run.job_id or ""
+    pipeline_name = schedule_name or job_id_str
+    name_lower = f"{schedule_name} {job_id_str}".lower().replace(" ", "_").replace("-", "_")
+
+    run_dt = run.started_at or run.scheduled_for or run.enqueued_at
+    run_date = run_dt.date() if run_dt else date.today()
+
+    log_path = _resolve_log_path(name_lower, run_date)
+    if log_path and log_path.exists():
+        log_content = log_path.read_text(encoding="utf-8", errors="replace")
+        return {
+            "run_id": run_id,
+            "pipeline_name": pipeline_name,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "log_content": log_content,
+            "source": "file",
+            "log_path": str(log_path),
+        }
+
+    if run.result:
+        return {
+            "run_id": run_id,
+            "pipeline_name": pipeline_name,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "log_content": json.dumps(run.result, indent=2, ensure_ascii=False),
+            "source": "db_result",
+            "log_path": None,
+        }
+
+    return {
+        "run_id": run_id,
+        "pipeline_name": pipeline_name,
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "log_content": None,
+        "source": "none",
+        "log_path": None,
+    }
 
 
 @router.get("/runs", response_model=List[ScheduleRunResponse])

@@ -172,7 +172,7 @@ class UniverseAgent:
 
     def _fetch_chunk(self, tickers: List[str]) -> List[dict]:
         results: List[dict] = []
-        with ThreadPoolExecutor(max_workers=1) as pool:
+        with ThreadPoolExecutor(max_workers=5) as pool:
             futures = {pool.submit(self._fetch_ticker_info, t): t for t in tickers}
             for future in as_completed(futures):
                 result = future.result()

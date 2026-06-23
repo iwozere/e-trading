@@ -90,8 +90,11 @@ class RollingMemoryScanner:
                 _logger.debug("No results for %s", date_str)
                 continue
 
-            # Try new filename first (05_volatility_filtered.csv)
+            # P06 (VolatilityFilter) writes 05_volatility_filtered.csv;
+            # P10 / accumulation mode writes 07_prebreakout_watchlist.csv.
             vol_file = day_folder / '05_volatility_filtered.csv'
+            if not vol_file.exists():
+                vol_file = day_folder / '07_prebreakout_watchlist.csv'
 
             if vol_file.exists():
                 try:

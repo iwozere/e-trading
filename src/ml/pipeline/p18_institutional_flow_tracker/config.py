@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]
+
 
 @dataclass
 class P18Config:
@@ -77,7 +79,7 @@ class P18Config:
     max_tickers_for_volume_check: int = 200
     """Cap on how many tickers are run through the volume anomaly detector per day."""
 
-    results_dir: Path = Path("results") / "p18_institutional_flow"
+    results_dir: Path = field(default_factory=lambda: _PROJECT_ROOT / "results" / "p18_institutional_flow")
     """Directory where per-run CSVs are written."""
 
     @classmethod

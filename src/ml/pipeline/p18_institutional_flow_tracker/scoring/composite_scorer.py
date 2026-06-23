@@ -66,6 +66,7 @@ class CompositeScorer:
         form4_df: pd.DataFrame,
         dg_df: pd.DataFrame,
         as_of_date: Optional[date] = None,
+        price_proximity_df: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
         """
         Compute composite scores for all tickers present in any input DataFrame.
@@ -79,6 +80,8 @@ class CompositeScorer:
             dg_df: Output of Form4Monitor.get_13dg_drops() — columns: entity_name
                 (used as a fuzzy match against ticker when no direct join available).
             as_of_date: Used to check seasonal windows. Defaults to today.
+            price_proximity_df: Optional DataFrame with columns ticker and
+                below_52w_high_15pct (bool). Tickers present and True receive +5.
 
         Returns:
             DataFrame sorted by total_score descending, columns: ticker, total_score,
@@ -128,7 +131,14 @@ class CompositeScorer:
                 score += self._weights["form4_insider_sell"]
 
             # --- Schedule 13D/G drop ---
-            if not dg_df.empty:
+            # dg_df currently has entity_name, not ticker (fuzzy match deferred).
+            # Only apply when a ticker column is present to avoid scoring all tickers.
+            dg_row = (
+                dg_df[dg_df["ticker"] == ticker]
+                if (not dg_df.empty and "ticker" in dg_df.columns)
+                else pd.DataFrame()
+            )
+            if not dg_row.empty:
                 detail["schedule_13dg_drop"] = True
                 score += self._weights["schedule_13dg_drop"]
 
@@ -136,6 +146,13 @@ class CompositeScorer:
             if in_seasonal_window:
                 detail["seasonal_redemption_window"] = True
                 score += self._weights["seasonal_redemption_window"]
+
+            # --- Price within 15% of 52-week high ---
+            if price_proximity_df is not None and not price_proximity_df.empty:
+                pp_row = price_proximity_df[price_proximity_df["ticker"] == ticker]
+                if not pp_row.empty and bool(pp_row.iloc[0].get("below_52w_high_15pct", False)):
+                    detail["price_below_52w_high_15pct"] = True
+                    score += self._weights["price_below_52w_high_15pct"]
 
             rows.append({
                 "ticker": ticker,

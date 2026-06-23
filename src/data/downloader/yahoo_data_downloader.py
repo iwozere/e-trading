@@ -18,8 +18,10 @@ Classes:
 - YahooDataDownloader: Main class for interacting with Yahoo Finance and managing data downloads
 """
 import logging
+import os
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import List, Dict, Optional, Any
 
 import pandas as pd
@@ -31,6 +33,12 @@ from src.model.schemas import OptionalFundamentals, Fundamentals
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
+
+# Redirect yfinance cache away from the user home directory so the app works
+# regardless of which OS user (host vs Docker container) runs the process.
+_yf_cache_dir = Path(os.getenv("DATA_CACHE_DIR", "c:/data-cache")) / "yfinance"
+_yf_cache_dir.mkdir(parents=True, exist_ok=True)
+yf.set_tz_cache_location(str(_yf_cache_dir))
 
 
 class _SuppressPricesMissing(logging.Filter):

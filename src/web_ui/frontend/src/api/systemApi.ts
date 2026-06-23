@@ -38,6 +38,16 @@ export const systemApi = {
     const response = await api.get(`/api/monitoring/pipelines`);
     return response.data;
   },
+
+  triggerPipeline: async (scheduleId: number) => {
+    const response = await api.post(`/api/schedules/${scheduleId}/trigger`);
+    return response.data;
+  },
+
+  getRunLogs: async (runId: number) => {
+    const response = await api.get(`/api/runs/${runId}/logs`);
+    return response.data;
+  },
 };
 
 
