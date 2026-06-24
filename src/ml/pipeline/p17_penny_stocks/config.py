@@ -89,12 +89,13 @@ class P17ScoringConfig:
     """Composite score weights and tier assignment thresholds."""
 
     # Weights — must sum to 1.0
-    weight_momentum: float = 0.25
-    weight_volume: float = 0.20
-    weight_technical: float = 0.15
-    weight_fundamentals: float = 0.15
-    weight_catalyst: float = 0.10
-    weight_short_squeeze: float = 0.10
+    # catalyst is a Phase 1 placeholder (always 0); its 0.10 redistributed proportionally
+    weight_momentum: float = 0.28
+    weight_volume: float = 0.22
+    weight_technical: float = 0.17
+    weight_fundamentals: float = 0.17
+    weight_catalyst: float = 0.00
+    weight_short_squeeze: float = 0.11
     weight_accumulation: float = 0.05
 
     # Dilution hard penalties — deducted from weighted sum after scoring

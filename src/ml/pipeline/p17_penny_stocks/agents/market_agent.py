@@ -2,13 +2,17 @@
 P17 Market Agent
 
 Downloads 90-day OHLCV history and quarterly fundamental data for the
-filtered universe using yfinance. Results are cached as parquet files
-to avoid redundant downloads on reruns.
+filtered universe. OHLCV data is read from / written to the shared
+UnifiedCache (DATA_CACHE_DIR/ohlcv/<symbol>/1d/), so it is available
+to other pipelines and avoids redundant downloads on re-runs.
+
+Fundamentals are served from FundamentalsCache (per-symbol JSON files),
+which is also shared across pipelines.
 """
 
 import dataclasses
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -24,8 +28,10 @@ from src.notification.logger import setup_logger
 from src.ml.pipeline.p17_penny_stocks.config import P17FilterConfig
 from src.data.downloader.yahoo_data_downloader import YahooDataDownloader
 from src.data.cache.fundamentals_cache import FundamentalsCache
+from src.data.cache.unified_cache import get_unified_cache
 
 _logger = setup_logger(__name__)
+
 
 def _safe_float(value, default: Optional[float] = None) -> Optional[float]:
     try:
@@ -53,8 +59,6 @@ class MarketAgent:
         self.config = config
         self.results_dir = results_dir
         self.target_date = target_date
-        self._ohlcv_cache_dir = results_dir / "ohlcv_cache"
-        self._ohlcv_cache_dir.mkdir(parents=True, exist_ok=True)
         self._downloader = YahooDataDownloader()
         self._fundamentals_cache = FundamentalsCache()
 
@@ -84,78 +88,84 @@ class MarketAgent:
         tickers: List[str],
         force_refresh: bool,
     ) -> Dict[str, pd.DataFrame]:
-        cache_file = self._ohlcv_cache_dir / f"ohlcv_{self.target_date}.parquet"
+        """
+        Serve 90-day daily OHLCV per ticker.
 
-        if not force_refresh and cache_file.exists():
-            try:
-                raw = pd.read_parquet(cache_file)
-                ohlcv = self._split_ohlcv(raw, tickers)
-                _logger.info("OHLCV loaded from cache: %d tickers", len(ohlcv))
-                return ohlcv
-            except Exception:
-                _logger.warning("OHLCV cache unreadable — re-downloading")
+        Cache-first: reads from UnifiedCache (DATA_CACHE_DIR/ohlcv/<symbol>/1d/).
+        Cache misses are batch-downloaded and written back to the cache.
+        """
+        end_dt = datetime.now(timezone.utc)
+        start_dt = end_dt - timedelta(days=self.config.ohlcv_lookback_days + 10)
+        # Data is considered fresh when it reaches within 5 calendar days of target_date
+        min_fresh = pd.Timestamp(self.target_date) - timedelta(days=5)
 
-        _logger.info("Batch OHLCV download for %d tickers...", len(tickers))
-        period = f"{self.config.ohlcv_lookback_days}d"
-
-        try:
-            raw = yf.download(
-                tickers=tickers,
-                period=period,
-                interval="1d",
-                auto_adjust=True,
-                progress=False,
-                threads=True,
-                group_by="ticker",
-            )
-        except Exception:
-            _logger.exception("Batch OHLCV download failed")
-            return {}
-
-        if raw is None or raw.empty:
-            _logger.warning("yf.download returned empty result")
-            return {}
-
-        try:
-            raw.to_parquet(cache_file)
-        except Exception:
-            _logger.warning("Could not cache OHLCV to parquet")
-
-        ohlcv = self._split_ohlcv(raw, tickers)
-        _logger.info("OHLCV downloaded: %d/%d tickers have data", len(ohlcv), len(tickers))
-        return ohlcv
-
-    def _split_ohlcv(
-        self,
-        raw: pd.DataFrame,
-        tickers: List[str],
-    ) -> Dict[str, pd.DataFrame]:
-        """Extract per-ticker DataFrames from the yfinance multi-ticker download."""
+        cache = get_unified_cache()
         result: Dict[str, pd.DataFrame] = {}
+        missing: List[str] = []
 
-        if raw.empty:
-            return result
+        if not force_refresh:
+            for ticker in tickers:
+                cached = cache.get(ticker, "1d", start_dt, end_dt)
+                if (
+                    cached is not None
+                    and not cached.empty
+                    and len(cached) >= 20
+                    and cached.index[-1] >= min_fresh  # type: ignore[operator]
+                ):
+                    result[ticker] = self._to_technical_format(cached)
+                else:
+                    missing.append(ticker)
+        else:
+            missing = list(tickers)
 
-        # Single ticker: yf.download returns a simple DataFrame (no MultiIndex)
-        if len(tickers) == 1:
-            ticker = tickers[0]
-            df = raw.dropna(how="all")
-            if not df.empty:
-                result[ticker] = df
-            return result
-
-        for ticker in tickers:
-            try:
-                ticker_data = raw[ticker]
-                if not isinstance(ticker_data, pd.DataFrame):
+        if missing:
+            _logger.info(
+                "Batch OHLCV download: %d cache misses (cache hits: %d)",
+                len(missing), len(result),
+            )
+            batch = self._downloader.get_ohlcv_batch(missing, "1d", start_dt, end_dt)
+            for ticker, df in batch.items():
+                if df is None or df.empty:
                     continue
-                df = ticker_data.dropna(how="all")
-                if not df.empty and len(df) >= 20:
-                    result[ticker] = df
-            except (KeyError, TypeError):
-                pass
+                df_indexed = self._set_datetime_index(df)
+                if len(df_indexed) < 20:
+                    continue
+                result[ticker] = self._to_technical_format(df_indexed)
+                try:
+                    cache.put(df_indexed, ticker, "1d", start_dt, end_dt, provider="yahoo")
+                except Exception:
+                    _logger.debug("Could not write %s to unified cache", ticker)
+        else:
+            _logger.info("OHLCV: all %d tickers served from unified cache", len(result))
 
+        _logger.info("OHLCV ready: %d/%d tickers have sufficient history", len(result), len(tickers))
         return result
+
+    @staticmethod
+    def _set_datetime_index(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Convert get_ohlcv_batch() output (timestamp column + lowercase) to
+        a DataFrame with DatetimeIndex and lowercase columns, ready for UnifiedCache.
+        """
+        if "timestamp" in df.columns:
+            df = df.copy()
+            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+            df = df.dropna(subset=["timestamp"]).set_index("timestamp")
+            if hasattr(df.index, "tz") and df.index.tz is not None:  # type: ignore[union-attr]
+                df.index = df.index.tz_localize(None)  # type: ignore[union-attr]
+        return df
+
+    @staticmethod
+    def _to_technical_format(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalize any OHLCV DataFrame to the format TechnicalAgent expects:
+        DatetimeIndex + capitalized column names (Close, High, Low, Volume, Open).
+        """
+        rename = {"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"}
+        cols = {c: rename[c.lower()] for c in df.columns if c.lower() in rename}
+        df = df.rename(columns=cols)
+        df = df.dropna(how="all")
+        return df
 
     # ── Fundamentals ───────────────────────────────────────────────────────
 
@@ -164,17 +174,10 @@ class MarketAgent:
         tickers: List[str],
         force_refresh: bool,
     ) -> Dict[str, dict]:
-        cache_file = self._ohlcv_cache_dir / f"fundamentals_{self.target_date}.parquet"
-
-        if not force_refresh and cache_file.exists():
-            try:
-                df = pd.read_parquet(cache_file)
-                data = {r["ticker"]: r for r in df.to_dict("records")}
-                _logger.info("Fundamentals loaded from cache: %d tickers", len(data))
-                return data
-            except Exception:
-                _logger.warning("Fundamentals cache unreadable — re-downloading")
-
+        """
+        Fetch fundamentals per ticker from FundamentalsCache (shared per-symbol
+        JSON cache). Falls back to live download when cache is stale or missing.
+        """
         _logger.info("Fetching fundamentals for %d tickers...", len(tickers))
         results: Dict[str, dict] = {}
 
@@ -183,7 +186,8 @@ class MarketAgent:
             chunk = tickers[i : i + chunk_size]
             with ThreadPoolExecutor(max_workers=6) as pool:
                 futures = {
-                    pool.submit(self._fetch_ticker_fundamentals, t): t for t in chunk
+                    pool.submit(self._fetch_ticker_fundamentals, t, force_refresh): t
+                    for t in chunk
                 }
                 for future in as_completed(futures):
                     ticker = futures[future]
@@ -191,22 +195,18 @@ class MarketAgent:
                     if data:
                         results[ticker] = data
 
-        try:
-            pd.DataFrame(list(results.values())).to_parquet(cache_file, index=False)
-        except Exception:
-            _logger.warning("Could not cache fundamentals to parquet")
-
         _logger.info("Fundamentals fetched: %d/%d tickers", len(results), len(tickers))
         return results
 
-    def _fetch_ticker_fundamentals(self, ticker: str) -> Optional[dict]:
-        cache_meta = self._fundamentals_cache.find_latest_json(
-            ticker, provider="yahoo", max_age_days=1
-        )
-        if cache_meta:
-            cached = self._fundamentals_cache.read_json(cache_meta.file_path)
-            if cached:
-                return self._fundamentals_to_market_record(ticker, cached)
+    def _fetch_ticker_fundamentals(self, ticker: str, force_refresh: bool = False) -> Optional[dict]:
+        if not force_refresh:
+            cache_meta = self._fundamentals_cache.find_latest_json(
+                ticker, provider="yahoo", max_age_days=1
+            )
+            if cache_meta:
+                cached = self._fundamentals_cache.read_json(cache_meta.file_path)
+                if cached:
+                    return self._fundamentals_to_market_record(ticker, cached)
 
         try:
             f = self._downloader.get_fundamentals(ticker)
@@ -214,7 +214,7 @@ class MarketAgent:
                 return None
             f_dict = dataclasses.asdict(f)
             f_dict["revenue_growth_yoy"] = self._compute_revenue_growth(
-                ticker, revenue_growth_fallback=f.revenue_growth
+                ticker, revenue_growth_fallback=f_dict.get("revenue_growth")
             )
             self._fundamentals_cache.write_json(ticker, "yahoo", f_dict)
             return self._fundamentals_to_market_record(ticker, f_dict)

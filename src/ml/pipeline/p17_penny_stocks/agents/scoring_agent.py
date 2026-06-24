@@ -148,7 +148,7 @@ class ScoringAgent:
     @staticmethod
     def _fundamentals_score(c: Candidate) -> float:
         if c.revenue_growth_yoy is None:
-            return 0.0   # unknown — scored as 0, flagged separately
+            return 50.0  # unknown → neutral, not a penalty
 
         score = _interp(c.revenue_growth_yoy, -0.10, 0.25, 0.50)
 

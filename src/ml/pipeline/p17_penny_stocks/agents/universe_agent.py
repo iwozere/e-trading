@@ -113,7 +113,7 @@ class UniverseAgent:
 
         _logger.info("Fetching market snapshot for %d tickers", len(all_tickers))
 
-        checkpoint_path = self.results_dir / "00_universe_checkpoint.parquet"
+        checkpoint_path = self.results_dir / "00_universe_checkpoint.csv"
         rows = self._fetch_with_checkpoint(all_tickers, checkpoint_path, force_refresh)
 
         if not rows:
@@ -143,7 +143,7 @@ class UniverseAgent:
 
         if not force_refresh and checkpoint_path.exists():
             try:
-                cp_df = pd.read_parquet(checkpoint_path)
+                cp_df = pd.read_csv(checkpoint_path)
                 processed = {r["ticker"]: r for r in cp_df.to_dict("records")}
                 _logger.info("Checkpoint loaded: %d tickers already processed", len(processed))
             except Exception:
@@ -164,7 +164,7 @@ class UniverseAgent:
             processed.update({r["ticker"]: r for r in chunk_results})
 
             try:
-                pd.DataFrame(list(processed.values())).to_parquet(checkpoint_path, index=False)
+                pd.DataFrame(list(processed.values())).to_csv(checkpoint_path, index=False)
             except Exception:
                 _logger.warning("Could not save checkpoint after chunk %d", chunk_num)
 
