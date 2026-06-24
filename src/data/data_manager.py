@@ -222,8 +222,9 @@ class DataManager:
             bar_duration = self._get_bar_duration(timeframe)
             # Covers overnight/weekend gaps so EOD runs don't trigger suffix
             # re-fetches just because end_date extends past the last trading bar.
-            # 1d=4 bars (weekends), 1h=18 bars (~overnight+buffer), sub-hour scaled.
-            _TOLERANCE = {'1d': 4.0, '1h': 18.0, '30m': 36.0, '15m': 72.0, '5m': 216.0}
+            # 1d=8 covers weekends (3d) plus known extended closures (Sandy=5d, 9/11=7d).
+            # 1h=18 bars (~overnight+buffer), sub-hour scaled.
+            _TOLERANCE = {'1d': 8.0, '1h': 18.0, '30m': 36.0, '15m': 72.0, '5m': 216.0}
             tolerance_factor = _TOLERANCE.get(timeframe, 4.0)
 
             cache_start = cached_data.index[0]
@@ -370,8 +371,9 @@ class DataManager:
             safe_start = start_date.replace(tzinfo=timezone.utc) if start_date.tzinfo is None else start_date
             
             # Tolerance: covers overnight/weekend gaps (same table as get_ohlcv).
+            # 1d=8 covers weekends (3d) plus known extended closures (Sandy=5d, 9/11=7d).
             bar_duration = self._get_bar_duration(timeframe)
-            _TOLERANCE = {'1d': 4.0, '1h': 18.0, '30m': 36.0, '15m': 72.0, '5m': 216.0}
+            _TOLERANCE = {'1d': 8.0, '1h': 18.0, '30m': 36.0, '15m': 72.0, '5m': 216.0}
             tolerance_factor = _TOLERANCE.get(timeframe, 4.0)
             
             if (cache_start - safe_start) > (bar_duration * tolerance_factor):

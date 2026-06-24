@@ -175,7 +175,7 @@ class ShortSqueezeAgent:
             if trf_file is None:
                 return None
 
-            df = pd.read_csv(trf_file, sep="|", low_memory=False)
+            df = pd.read_csv(trf_file, low_memory=False)
             df.to_parquet(cache_file, index=False)
             _logger.info("FINRA TRF downloaded: %d rows", len(df))
             return df
