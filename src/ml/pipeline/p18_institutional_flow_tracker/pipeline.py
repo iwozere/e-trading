@@ -493,7 +493,7 @@ class InstitutionalFlowPipeline:
         handler.setFormatter(logging.Formatter(
             "%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s"
         ))
-        logging.getLogger("src.ml.pipeline.p18").addHandler(handler)
+        logging.getLogger("src.ml.pipeline.p18_institutional_flow_tracker").addHandler(handler)
 
 
 # ---------------------------------------------------------------------------
