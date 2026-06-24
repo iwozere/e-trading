@@ -34,7 +34,11 @@ Jobs executed (in order, failures are isolated):
     9. edgar_facts        — SEC EDGAR XBRL company facts full refresh
                             (quarterly: first weekday on or after the 15th of
                             March/May/August/November)
-   10. finra_trf          — FINRA TRF short-sale volume; weekday range fill;
+   10. p18_13f_index      — Seed the P18 quarterly 13F-HR index cache from EDGAR bulk files
+                            if missing. No-op when already cached or outside the 45-day
+                            filing window. Prevents P18 from running blind for an entire
+                            quarter when a new filing window opens.
+   11. finra_trf          — FINRA TRF short-sale volume; weekday range fill;
                             per-day → DATA_CACHE_DIR/trf/YYYY-MM-DD.csv.gz
                             (skipped silently if FINRA credentials are absent)
 
@@ -46,14 +50,19 @@ Gap-fill policy:
 Logs: results/p15_hidden_deps/pipeline.log (RotatingFileHandler, 10 MB × 5 backups)
 """
 
+import gzip
+import io
 import json
 import logging
 import logging.handlers
+import re
 import sys
 import time
 from datetime import date as _Date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+import requests
 
 import pandas as pd
 
@@ -746,6 +755,93 @@ def _job_edgar_facts() -> Optional[Dict[str, Any]]:
     return summary  # type: ignore[return-value]
 
 
+def _job_p18_13f_index_seed(today: _Date) -> Optional[Dict[str, Any]]:
+    """
+    Seed the P18 quarterly 13F-HR index cache from EDGAR bulk files when missing.
+
+    Runs daily but only does real work once per quarter: the first time the daily
+    bundle runs inside a new 13F filing window and the index cache is absent.
+
+    Filing windows (45 days after quarter-end):
+      Q4 → Jan 1 – Feb 14   (EDGAR QTR1 of same year)
+      Q1 → Apr 1 – May 15   (EDGAR QTR2 of same year)
+      Q2 → Jul 1 – Aug 14   (EDGAR QTR3 of same year)
+      Q3 → Oct 1 – Nov 14   (EDGAR QTR4 of same year)
+    """
+    month, year = today.month, today.year
+    if month <= 3:
+        rep_year, rep_quarter = year - 1, 4
+        edgar_year, edgar_qtr = year, 1
+        window_start, window_end = _Date(year, 1, 1), _Date(year, 2, 14)
+    elif month <= 6:
+        rep_year, rep_quarter = year, 1
+        edgar_year, edgar_qtr = year, 2
+        window_start, window_end = _Date(year, 4, 1), _Date(year, 5, 15)
+    elif month <= 9:
+        rep_year, rep_quarter = year, 2
+        edgar_year, edgar_qtr = year, 3
+        window_start, window_end = _Date(year, 7, 1), _Date(year, 8, 14)
+    else:
+        rep_year, rep_quarter = year, 3
+        edgar_year, edgar_qtr = year, 4
+        window_start, window_end = _Date(year, 10, 1), _Date(year, 11, 14)
+
+    edgar = EdgarDownloader()
+    dest = edgar._13f_index_dir / f"{rep_year}_Q{rep_quarter}.csv.gz"
+
+    if dest.exists():
+        _logger.debug("p18_13f_index: %d Q%d already seeded — skipping", rep_year, rep_quarter)
+        return {"seeded": False, "reason": "already_cached"}
+
+    if not (window_start <= today <= window_end):
+        _logger.debug("p18_13f_index: outside filing window for %d Q%d — skipping", rep_year, rep_quarter)
+        return {"seeded": False, "reason": "outside_window"}
+
+    url = f"https://www.sec.gov/Archives/edgar/full-index/{edgar_year}/QTR{edgar_qtr}/form.gz"
+    _logger.info("p18_13f_index: seeding %d Q%d index from %s", rep_year, rep_quarter, url)
+
+    session = requests.Session()
+    session.headers.update({"User-Agent": "research alkotrader@gmail.com", "Accept-Encoding": "gzip, deflate"})
+    resp = session.get(url, timeout=120)
+    resp.raise_for_status()
+
+    with gzip.open(io.BytesIO(resp.content), "rt", encoding="latin-1") as fh:
+        raw = fh.read()
+
+    line_re = re.compile(
+        r"^13F-HR\s+(.+?)\s{2,}(\d{1,10})\s+(\d{4}-\d{2}-\d{2})\s+"
+        r"edgar/data/\d+/(\d{10}-\d{2}-\d{6})\.txt",
+        re.MULTILINE,
+    )
+    ws, we = window_start.isoformat(), window_end.isoformat()
+    records = [
+        {
+            "cik": str(int(m.group(2))),
+            "institution_name": m.group(1).strip(),
+            "accession_number": m.group(4),
+            "filed_date": m.group(3),
+        }
+        for m in line_re.finditer(raw)
+        if ws <= m.group(3) <= we
+    ]
+
+    if not records:
+        _logger.warning(
+            "p18_13f_index: no 13F-HR records found in window %s → %s — EDGAR QTR%d may not be ready yet",
+            window_start, window_end, edgar_qtr,
+        )
+        return {"seeded": False, "reason": "no_records"}
+
+    df = pd.DataFrame(records)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(dest, index=False, compression="gzip")
+    _logger.info(
+        "p18_13f_index: seeded %d Q%d with %d filers → %s",
+        rep_year, rep_quarter, len(df), dest,
+    )
+    return {"seeded": True, "filers": len(df), "quarter": f"{rep_year}_Q{rep_quarter}"}
+
+
 def _job_finra_trf(yesterday: _Date) -> Optional[Dict[str, Any]]:
     """
     Download FINRA TRF short-sale volume for the gap window ending at yesterday.
@@ -804,6 +900,7 @@ def main() -> None:
     results["fred_daily"]        = _run_job("fred_daily",        lambda: _job_fred_daily(fred_dl))
     results["fred_combined"]     = _run_job("fred_combined",     lambda: _job_fred_combined(fred_dl))
     results["edgar_submissions"] = _run_job("edgar_submissions", _job_edgar_submissions)
+    results["p18_13f_index"]     = _run_job("p18_13f_index",     lambda: _job_p18_13f_index_seed(yesterday))
     if _is_edgar_facts_day(yesterday_dt + timedelta(days=1)):
         results["edgar_facts"]   = _run_job("edgar_facts",       _job_edgar_facts)
 

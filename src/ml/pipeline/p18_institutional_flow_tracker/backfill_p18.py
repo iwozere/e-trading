@@ -101,8 +101,8 @@ def _parse_13f_records(raw_text: str, window_start: str, window_end: str) -> pd.
     df = pd.DataFrame(records)
     dates: pd.Series = pd.to_datetime(df["filed_date"])
     mask = (dates >= window_start) & (dates <= window_end)
-    df = df[mask].reset_index(drop=True)
-    return df
+    result: pd.DataFrame = df.loc[mask].reset_index(drop=True)
+    return result
 
 
 def _seed_index_cache(edgar: EdgarDownloader, index_df: pd.DataFrame,
