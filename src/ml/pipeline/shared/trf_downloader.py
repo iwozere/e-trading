@@ -1,21 +1,25 @@
 """
 FINRA TRF Downloader Wrapper
 
-Wrapper script for backward compatibility with p06_emps2 pipeline.
-This script calls the main FINRA TRF downloader from src/data/downloader.
+Thin wrapper around FinraTRFDownloader (src.data.downloader.finra_trf_downloader),
+which stores data in DATA_CACHE_DIR/trf/{YYYY-MM-DD}.csv.gz — the project-wide
+single cache for FINRA regShoDaily data.  All pipelines (P06, P10, P17) share
+this cache; no duplicate downloads or duplicate CSV files in results/.
 """
 
 import sys
 from pathlib import Path
-import pandas as pd
 from datetime import datetime, timedelta, date
 from typing import Optional
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(PROJECT_ROOT))
+import pandas as pd
 
-from src.data.downloader.finra_data_downloader import FinraDataDownloader
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from config.donotshare.donotshare import DATA_CACHE_DIR
+from src.data.downloader.finra_trf_downloader import FinraTRFDownloader
 from src.notification.logger import setup_logger
 
 _logger = setup_logger(__name__)
@@ -28,166 +32,130 @@ def _is_cache_fresh(path: Path, max_age_days: int = 1) -> bool:
     age_days = (datetime.now().timestamp() - path.stat().st_mtime) / 86400.0
     return age_days <= max_age_days
 
-def get_previous_trading_day(date: Optional[datetime] = None) -> datetime:
-    """Get the previous trading day (Monday-Friday)"""
-    if date is None:
-        date = datetime.now()
-    # If it's Monday, go back to Friday
-    if date.weekday() == 0:  # Monday
-        return date - timedelta(days=3)
-    # If it's Sunday, go back to Friday
-    elif date.weekday() == 6:  # Sunday
-        return date - timedelta(days=2)
-    # Otherwise just go back one day
-    return date - timedelta(days=1)
+
+def get_previous_trading_day(dt: Optional[datetime] = None) -> datetime:
+    """Return the most recent weekday before today (or before dt)."""
+    if dt is None:
+        dt = datetime.now()
+    if dt.weekday() == 0:   # Monday → Friday
+        return dt - timedelta(days=3)
+    if dt.weekday() == 6:   # Sunday → Friday
+        return dt - timedelta(days=2)
+    return dt - timedelta(days=1)
+
 
 def download_trf(target_date: Optional[datetime] = None, force_download: bool = False) -> Path:
     """
-    Download TRF data for the specified date.
+    Ensure FINRA TRF data for target_date is available in DATA_CACHE_DIR/trf/.
 
     Args:
         target_date: Date to download TRF data for. If None, uses previous trading day.
-        force_download: If True, forces re-download even if file exists
+        force_download: If True, re-download even if the cache file is fresh.
 
     Returns:
-        Path to the downloaded TRF file
+        Path to DATA_CACHE_DIR/trf/{YYYY-MM-DD}.csv.gz
     """
-    # Get the actual date of the TRF data
     if target_date is None or (isinstance(target_date, datetime) and target_date.date() == date.today()):
         trf_date = get_previous_trading_day()
     else:
         trf_date = target_date
 
-    date_str = trf_date.strftime('%Y-%m-%d')
-    # Default to a shared location if no parent context
-    trf_dir = Path("results") / "trf_data" / date_str
-    output_file = trf_dir / "trf.csv"
+    date_str = trf_date.strftime("%Y-%m-%d")
+    cache_path = Path(DATA_CACHE_DIR) / "trf" / f"{date_str}.csv.gz"
 
-    # Check if cached file is still fresh enough to reuse
-    if output_file.exists() and not force_download:
-        if _is_cache_fresh(output_file):
-            _logger.info("TRF cache is fresh for data_date=%s: %s", date_str, output_file)
-            return output_file
-        _logger.info("TRF cache is stale for data_date=%s — forcing refresh: %s", date_str, output_file)
+    if cache_path.exists() and not force_download:
+        if _is_cache_fresh(cache_path):
+            _logger.info("TRF cache is fresh for %s: %s", date_str, cache_path)
+            return cache_path
+        _logger.info("TRF cache is stale for %s — refreshing", date_str)
 
-    # Create output directory
-    trf_dir.mkdir(parents=True, exist_ok=True)
+    _logger.info("Downloading TRF data for %s", date_str)
+    downloader = FinraTRFDownloader(date=date_str, fetch_yfinance_data=False)
+    downloader.run()
 
-    # Download the TRF data
-    # NOTE: fetch_yfinance_data=False is important — the downstream consumer
-    # (get_trf_correction_factor below, plus volatility_filter / accumulation_analyzer)
-    # only reads FINRA's own total_volume / short_volume columns. The default
-    # yfinance merge would download ~9k tickers of daily bars (serial, batched)
-    # which takes ~10 minutes on a Raspberry Pi and is entirely unused.
-    _logger.info("Downloading TRF data for data_date=%s", date_str)
-    downloader = FinraDataDownloader(
-        date=date_str,
-        output_dir=trf_dir,
-        output_filename="trf.csv",
-        fetch_yfinance_data=False,
-    )
+    if not cache_path.exists():
+        # Market was closed / FINRA returned no data — write an empty sentinel so
+        # subsequent calls don't trigger re-downloads for the same date.
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({"date": [], "ticker": [], "short_volume": [], "total_volume": []}).to_csv(
+            cache_path, index=False, compression="gzip"
+        )
+        _logger.info("No TRF data for %s (market closed?) — wrote empty sentinel", date_str)
 
-    try:
-        downloader.run()
-        if output_file.exists():
-            _logger.info("Successfully downloaded TRF data to %s", output_file)
-        else:
-            # FINRA returned no data (market closed / holiday) — write an empty sentinel
-            # so the cache check on subsequent calls doesn't trigger re-downloads.
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            pd.DataFrame({"ticker": [], "short_volume": [], "total_volume": []}).to_csv(output_file, index=False)
-            _logger.info("No TRF data for %s (market closed?) — wrote empty sentinel: %s", date_str, output_file)
-        return output_file
-    except Exception as e:
-        _logger.error("Failed to download TRF data: %s", str(e))
-        raise
+    return cache_path
 
-def get_trf_correction_factor(ticker: str, date: datetime) -> float:
+
+def get_trf_correction_factor(ticker: str, dt: datetime) -> float:
     """
-    Get TRF correction factor for a ticker on a specific date.
+    Return the TRF volume correction factor for a ticker on a given date.
+
+    Correction factor = total_volume / (total_volume - short_volume).
+    Returns 1.0 (no correction) if data is unavailable.
 
     Args:
-        ticker: Stock ticker symbol
-        date: Date to get correction factor for
-
-    Returns:
-        Correction factor (1.0 if no data available)
+        ticker: Stock ticker symbol (empty string → just ensure the cache exists).
+        dt: Date to look up.
     """
-    date_str = date.strftime('%Y-%m-%d')
-    # Check multiple possible locations (shared or pipeline specific)
-    possible_paths = [
-        Path("results") / "trf_data" / date_str / "trf.csv",
-        Path("results") / "p06_emps2" / date_str / "trf.csv",
-        Path("results") / "p10_emps3" / date_str / "trf.csv",
-        Path("results") / "emps2" / date_str / "trf.csv" # Legacy
-    ]
-    
-    trf_file = possible_paths[0] # Default for download
-    for p in possible_paths:
-        if p.exists():
-            trf_file = p
-            break
+    date_str = dt.strftime("%Y-%m-%d")
+    cache_path = Path(DATA_CACHE_DIR) / "trf" / f"{date_str}.csv.gz"
 
-    # If file doesn't exist, try to download it
-    if not trf_file.exists():
+    if not cache_path.exists():
         try:
-            download_trf(date)
+            download_trf(dt)
         except Exception as e:
-            _logger.warning("Failed to download TRF data for %s: %s", date_str, str(e))
+            _logger.warning("Failed to download TRF data for %s: %s", date_str, e)
 
-    # If file still doesn't exist, try previous days (up to 5 days back)
-    max_days_back = 5
-    current_date = date
-    while not trf_file.exists() and max_days_back > 0:
-        current_date = current_date - timedelta(days=1)
-        date_str = current_date.strftime('%Y-%m-%d')
-        # Check all possible paths for previous day too
-        for p_base in ["trf_data", "p06_emps2", "p10_emps3", "emps2"]:
-            p = Path("results") / p_base / date_str / "trf.csv"
-            if p.exists():
-                trf_file = p
-                break
-        max_days_back -= 1
+    # Fall back up to 5 trading days if still missing (e.g. holiday gap)
+    current_dt = dt
+    days_back = 5
+    while not cache_path.exists() and days_back > 0:
+        current_dt = current_dt - timedelta(days=1)
+        date_str = current_dt.strftime("%Y-%m-%d")
+        cache_path = Path(DATA_CACHE_DIR) / "trf" / f"{date_str}.csv.gz"
+        days_back -= 1
 
-    # If we found a file, read it and get the correction factor
-    if trf_file.exists():
-        try:
-            df = pd.read_csv(trf_file)
-            ticker_data = df[df['ticker'] == ticker.upper()]
-            if not ticker_data.empty:
-                total_volume = ticker_data['total_volume'].iloc[0]
-                short_volume = ticker_data['short_volume'].iloc[0]
-                if total_volume > 0 and short_volume < total_volume:
-                    factor = total_volume / (total_volume - short_volume)
-                    _logger.debug(
-                        "TRF correction factor for %s: %.4f "
-                        "(data_date=%s, total_vol=%s, short_vol=%s)",
-                        ticker, factor, trf_file.parent.name,
-                        total_volume, short_volume
-                    )
-                    return factor
-        except Exception as e:
-            _logger.error("Error reading TRF file %s: %s", trf_file, str(e))
+    if not cache_path.exists():
+        return 1.0
 
-    # Return 1.0 (no correction) if we couldn't find or read the file
+    try:
+        df = pd.read_csv(cache_path)
+        if not ticker or "ticker" not in df.columns:
+            return 1.0
+        row = df[df["ticker"] == ticker.upper()]
+        if row.empty:
+            return 1.0
+        total_vol = row["total_volume"].values[0]  # type: ignore[union-attr]
+        short_vol = row["short_volume"].values[0]  # type: ignore[union-attr]
+        if total_vol > 0 and short_vol < total_vol:
+            factor = total_vol / (total_vol - short_vol)
+            _logger.debug(
+                "TRF correction factor for %s: %.4f (date=%s, total=%s, short=%s)",
+                ticker, factor, cache_path.stem, total_vol, short_vol,
+            )
+            return factor
+    except Exception as e:
+        _logger.error("Error reading TRF file %s: %s", cache_path, e)
+
     return 1.0
 
-def main():
-    """Main entry point for command-line usage."""
+
+def main() -> None:
+    """Command-line entry point: download TRF data for a given date."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Download FINRA TRF data')
-    parser.add_argument('--date', type=str, help='Date in YYYY-MM-DD format (default: previous trading day)')
-    parser.add_argument('--force', action='store_true', help='Force re-download even if file exists')
-
+    parser = argparse.ArgumentParser(description="Download FINRA TRF data to DATA_CACHE_DIR/trf/")
+    parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format (default: previous trading day)")
+    parser.add_argument("--force", action="store_true", help="Force re-download even if cache is fresh")
     args = parser.parse_args()
 
     try:
-        target_date = datetime.strptime(args.date, '%Y-%m-%d') if args.date else None
+        target_date = datetime.strptime(args.date, "%Y-%m-%d") if args.date else None
         download_trf(target_date, args.force)
     except Exception as e:
-        _logger.error("Error: %s", str(e))
+        _logger.error("Error: %s", e)
+        import sys
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
