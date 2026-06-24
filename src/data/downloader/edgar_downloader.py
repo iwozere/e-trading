@@ -61,7 +61,7 @@ class EftsUnavailableError(Exception):
 
 
 # SEC Fair Access Policy: no more than 10 requests per second
-_MIN_REQUEST_INTERVAL = 0.11
+_MIN_REQUEST_INTERVAL = 0.5
 
 # 13F filing window: institutions have up to 45 days after quarter-end to file
 _QUARTER_END_MONTH_DAY = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
@@ -952,21 +952,31 @@ class EdgarDownloader(BaseDataDownloader):
 
         for filename in names:
             url = f"{base}/{filename}"
-            try:
-                elapsed = time.monotonic() - self._last_request_time
-                if elapsed < _MIN_REQUEST_INTERVAL:
-                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+            for attempt in range(3):
+                try:
+                    elapsed = time.monotonic() - self._last_request_time
+                    if elapsed < _MIN_REQUEST_INTERVAL:
+                        time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
 
-                resp = self._session.get(url, timeout=30)
-                self._last_request_time = time.monotonic()
+                    resp = self._session.get(url, timeout=30)
+                    self._last_request_time = time.monotonic()
 
-                if resp.status_code == 200:
-                    _logger.debug("Found filing document at %s", url)
-                    return resp.text
-                if resp.status_code != 404:
+                    if resp.status_code == 200:
+                        _logger.debug("Found filing document at %s", url)
+                        return resp.text
+                    if resp.status_code == 404:
+                        break  # file does not exist; try next candidate name
+                    if resp.status_code == 503:
+                        sleep_sec = 30 * (attempt + 1)
+                        _logger.warning("EDGAR rate-limited (503) for %s, sleeping %ds (attempt %d/3)", url, sleep_sec, attempt + 1)
+                        time.sleep(sleep_sec)
+                        continue  # retry same URL
                     _logger.warning("Unexpected status %d for %s", resp.status_code, url)
-            except Exception as e:
-                _logger.warning("Network error fetching %s: %s", url, e)
+                    break
+                except Exception as e:
+                    sleep_sec = 15 * (attempt + 1)
+                    _logger.warning("Network error fetching %s (attempt %d/3), sleeping %ds: %s", url, attempt + 1, sleep_sec, e)
+                    time.sleep(sleep_sec)
 
         # Fallback: fetch the filing index HTML and look for any .xml link.
         # Try both the institution CIK path and the filing-agent CIK path.
@@ -983,17 +993,28 @@ class EdgarDownloader(BaseDataDownloader):
                 alt_base = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}"
                 for filename in names:
                     url = f"{alt_base}/{filename}"
-                    try:
-                        elapsed = time.monotonic() - self._last_request_time
-                        if elapsed < _MIN_REQUEST_INTERVAL:
-                            time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-                        resp = self._session.get(url, timeout=30)
-                        self._last_request_time = time.monotonic()
-                        if resp.status_code == 200:
-                            _logger.debug("Found filing document at %s (agent CIK path)", url)
-                            return resp.text
-                    except Exception as e:
-                        _logger.warning("Network error fetching %s: %s", url, e)
+                    for attempt in range(3):
+                        try:
+                            elapsed = time.monotonic() - self._last_request_time
+                            if elapsed < _MIN_REQUEST_INTERVAL:
+                                time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+                            resp = self._session.get(url, timeout=30)
+                            self._last_request_time = time.monotonic()
+                            if resp.status_code == 200:
+                                _logger.debug("Found filing document at %s (agent CIK path)", url)
+                                return resp.text
+                            if resp.status_code == 404:
+                                break
+                            if resp.status_code == 503:
+                                sleep_sec = 30 * (attempt + 1)
+                                _logger.warning("EDGAR rate-limited (503) for %s, sleeping %ds (attempt %d/3)", url, sleep_sec, attempt + 1)
+                                time.sleep(sleep_sec)
+                                continue
+                            break
+                        except Exception as e:
+                            sleep_sec = 15 * (attempt + 1)
+                            _logger.warning("Network error fetching %s (attempt %d/3), sleeping %ds: %s", url, attempt + 1, sleep_sec, e)
+                            time.sleep(sleep_sec)
 
             index_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{acc_norm}-index.htm"
             try:
