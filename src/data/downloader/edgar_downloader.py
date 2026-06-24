@@ -470,7 +470,7 @@ class EdgarDownloader(BaseDataDownloader):
         """
         dest = self._13f_index_dir / f"{year}_Q{quarter}.csv.gz"
         if dest.exists() and not force:
-            _logger.info("13F index for %d Q%d already cached at %s", year, quarter, dest)
+            _logger.debug("13F index for %d Q%d already cached at %s", year, quarter, dest)
             return pd.read_csv(dest, compression="gzip", dtype=str)
 
         start_dt, end_dt = _13f_filing_window(year, quarter)
@@ -965,30 +965,56 @@ class EdgarDownloader(BaseDataDownloader):
                     return resp.text
                 if resp.status_code != 404:
                     _logger.warning("Unexpected status %d for %s", resp.status_code, url)
-            except Exception:
-                _logger.exception("Error fetching %s", url)
+            except Exception as e:
+                _logger.warning("Network error fetching %s: %s", url, e)
 
-        # Fallback: fetch the filing index HTML and look for any .xml link
-        index_url = f"{_EDGAR_ARCHIVES_BASE}/{cik_int}/{acc_norm}/{acc_norm}-index.htm"
-        try:
-            elapsed = time.monotonic() - self._last_request_time
-            if elapsed < _MIN_REQUEST_INTERVAL:
-                time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-            resp = self._session.get(index_url, timeout=30)
-            self._last_request_time = time.monotonic()
+        # Fallback: fetch the filing index HTML and look for any .xml link.
+        # Try both the institution CIK path and the filing-agent CIK path.
+        # EDGAR stores filings under the submitter's CIK (often a filing agent),
+        # which is the first 10 digits of the accession number.
+        acc_filer_cik = int(acc_norm[:10])
+        cik_candidates = [cik_int]
+        if acc_filer_cik != cik_int:
+            cik_candidates.append(acc_filer_cik)
 
-            if resp.status_code == 200:
-                import re as _re
-                xml_files = re.findall(r'href="([^"]+\.xml)"', resp.text, _re.IGNORECASE)
-                infotable_candidates = [f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table"))]
-                for xml_file in (infotable_candidates or xml_files):
-                    xml_url = f"{_EDGAR_ARCHIVES_BASE}/{cik_int}/{acc_norm}/{xml_file}"
-                    r2 = self._session.get(xml_url, timeout=30)
-                    self._last_request_time = time.monotonic()
-                    if r2.status_code == 200:
-                        return r2.text
-        except Exception:
-            _logger.exception("Fallback index fetch failed for CIK %d acc %s", cik_int, acc_norm)
+        for path_cik in cik_candidates:
+            # Try candidate filenames at the alternate CIK path first
+            if path_cik != cik_int:
+                alt_base = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}"
+                for filename in names:
+                    url = f"{alt_base}/{filename}"
+                    try:
+                        elapsed = time.monotonic() - self._last_request_time
+                        if elapsed < _MIN_REQUEST_INTERVAL:
+                            time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+                        resp = self._session.get(url, timeout=30)
+                        self._last_request_time = time.monotonic()
+                        if resp.status_code == 200:
+                            _logger.debug("Found filing document at %s (agent CIK path)", url)
+                            return resp.text
+                    except Exception as e:
+                        _logger.warning("Network error fetching %s: %s", url, e)
+
+            index_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{acc_norm}-index.htm"
+            try:
+                elapsed = time.monotonic() - self._last_request_time
+                if elapsed < _MIN_REQUEST_INTERVAL:
+                    time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+                resp = self._session.get(index_url, timeout=30)
+                self._last_request_time = time.monotonic()
+
+                if resp.status_code == 200:
+                    import re as _re
+                    xml_files = re.findall(r'href="([^"]+\.xml)"', resp.text, _re.IGNORECASE)
+                    infotable_candidates = [f for f in xml_files if any(kw in f.lower() for kw in ("form", "info", "table"))]
+                    for xml_file in (infotable_candidates or xml_files):
+                        xml_url = f"{_EDGAR_ARCHIVES_BASE}/{path_cik}/{acc_norm}/{xml_file}"
+                        r2 = self._session.get(xml_url, timeout=30)
+                        self._last_request_time = time.monotonic()
+                        if r2.status_code == 200:
+                            return r2.text
+            except Exception as e:
+                _logger.warning("Fallback index fetch failed for CIK %d acc %s: %s", path_cik, acc_norm, e)
 
         return None
 
