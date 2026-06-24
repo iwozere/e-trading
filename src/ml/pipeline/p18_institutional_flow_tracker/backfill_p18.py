@@ -18,11 +18,14 @@ Optional flags:
     --force           Force re-download of all infotables even if cached
 """
 
+from __future__ import annotations
+
 import argparse
 import gzip
 import io
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -38,18 +41,38 @@ from src.ml.pipeline.p18_institutional_flow_tracker.pipeline import Institutiona
 
 _logger = setup_logger(__name__)
 
-# Q4 2025: filed Jan 1 – Feb 14 2026  → EDGAR QTR1 2026 bulk file
-# Q1 2026: filed Apr 1 – May 15 2026  → EDGAR QTR2 2026 bulk file
-_QUARTERS = [
-    dict(label="Q4 2025", year=2025, quarter=4, edgar_year=2026, edgar_qtr=1,
-         window_start="2026-01-01", window_end="2026-02-14"),
-    dict(label="Q1 2026", year=2026, quarter=1, edgar_year=2026, edgar_qtr=2,
-         window_start="2026-04-01", window_end="2026-05-15"),
+
+@dataclass(frozen=True)
+class QuarterSpec:
+    label: str
+    year: int           # reporting quarter year
+    quarter: int        # reporting quarter 1-4
+    edgar_year: int     # EDGAR bulk index year (filing calendar year)
+    edgar_qtr: int      # EDGAR bulk index quarter (1-4, by filing date)
+    window_start: str   # earliest 13F filing date for this quarter (YYYY-MM-DD)
+    window_end: str     # latest 13F filing date for this quarter (YYYY-MM-DD)
+
+
+# Q4 2025: 45-day window ends 2026-02-14  → filed in EDGAR QTR1 2026
+# Q1 2026: 45-day window ends 2026-05-15  → filed in EDGAR QTR2 2026
+_QUARTERS: list[QuarterSpec] = [
+    QuarterSpec("Q4 2025", 2025, 4, 2026, 1, "2026-01-01", "2026-02-14"),
+    QuarterSpec("Q1 2026", 2026, 1, 2026, 2, "2026-04-01", "2026-05-15"),
 ]
+
+# form.gz line: fixed-width columns.
+# Form Type  Company Name (variable)   CIK (right-justified)   Date Filed   File Name
+# Filename format: edgar/data/{CIK}/{accno}.txt
+# Accession number IS the filename stem, e.g. 0001356371-26-000004
+_LINE_RE = re.compile(
+    r"^13F-HR\s+(.+?)\s{2,}(\d{1,10})\s+(\d{4}-\d{2}-\d{2})\s+"
+    r"edgar/data/\d+/(\d{10}-\d{2}-\d{6})\.txt",
+    re.MULTILINE,
+)
 
 
 def _download_bulk_index(edgar_year: int, edgar_qtr: int, session: requests.Session) -> str:
-    """Download and decompress EDGAR quarterly form.gz index; return raw text."""
+    """Download and decompress an EDGAR quarterly form.gz index; return raw text."""
     url = f"https://www.sec.gov/Archives/edgar/full-index/{edgar_year}/QTR{edgar_qtr}/form.gz"
     _logger.info("Downloading EDGAR bulk index from %s", url)
     resp = session.get(url, timeout=120)
@@ -59,51 +82,31 @@ def _download_bulk_index(edgar_year: int, edgar_qtr: int, session: requests.Sess
 
 
 def _parse_13f_records(raw_text: str, window_start: str, window_end: str) -> pd.DataFrame:
-    """
-    Extract 13F-HR records within the filing window from a raw form.gz text.
-
-    The EDGAR form.gz uses fixed-width columns but company names contain spaces,
-    so we match with a regex anchored on the form type and the trailing date/filename.
-    """
-    pattern = re.compile(
-        r'^13F-HR\s+(.+?)\s{2,}(\d{6,12})\s+(\d{4}-\d{2}-\d{2})\s+'
-        r'(edgar/data/\d+/[\w./-]+-index\.htm)',
-        re.MULTILINE,
-    )
+    """Extract 13F-HR records within the filing window from a raw form.gz text."""
     records = []
-    for m in pattern.finditer(raw_text):
-        company = m.group(1).strip()
-        cik = str(int(m.group(2)))          # strip leading zeros
-        filed_date = m.group(3)
-        filename = m.group(4)
-
-        # Accession number lives in the filename path: .../0001234567-26-000001-index.htm
-        acc_m = re.search(r'(\d{10}-\d{2}-\d{6})-index', filename)
-        if not acc_m:
-            continue
-
+    for m in _LINE_RE.finditer(raw_text):
         records.append({
-            "cik": cik,
-            "institution_name": company,
-            "accession_number": acc_m.group(1),
-            "filed_date": filed_date,
+            "cik": str(int(m.group(2))),    # strip leading zeros
+            "institution_name": m.group(1).strip(),
+            "accession_number": m.group(4),
+            "filed_date": m.group(3),
         })
 
-    df = pd.DataFrame(records) if records else pd.DataFrame(
-        columns=["cik", "institution_name", "accession_number", "filed_date"]
-    )
+    if not records:
+        return pd.DataFrame({"cik": pd.Series([], dtype=str),
+                             "institution_name": pd.Series([], dtype=str),
+                             "accession_number": pd.Series([], dtype=str),
+                             "filed_date": pd.Series([], dtype=str)})
 
-    if df.empty:
-        return df
-
-    df["filed_date"] = pd.to_datetime(df["filed_date"])
-    mask = (df["filed_date"] >= window_start) & (df["filed_date"] <= window_end)
-    df = df[mask].copy()
-    df["filed_date"] = df["filed_date"].dt.strftime("%Y-%m-%d")
-    return df.reset_index(drop=True)
+    df = pd.DataFrame(records)
+    dates: pd.Series = pd.to_datetime(df["filed_date"])
+    mask = (dates >= window_start) & (dates <= window_end)
+    df = df[mask].reset_index(drop=True)
+    return df
 
 
-def _seed_index_cache(edgar: EdgarDownloader, index_df: pd.DataFrame, year: int, quarter: int) -> None:
+def _seed_index_cache(edgar: EdgarDownloader, index_df: pd.DataFrame,
+                      year: int, quarter: int) -> None:
     """Write index_df to the path that download_13f_index uses as its cache."""
     dest = edgar._13f_index_dir / f"{year}_Q{quarter}.csv.gz"
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -113,9 +116,12 @@ def _seed_index_cache(edgar: EdgarDownloader, index_df: pd.DataFrame, year: int,
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="P18 full backfill via EDGAR bulk index.")
-    p.add_argument("--skip-q4-index", action="store_true", help="Skip downloading Q4 2025 bulk index")
-    p.add_argument("--skip-q1-index", action="store_true", help="Skip downloading Q1 2026 bulk index")
-    p.add_argument("--force", action="store_true", help="Force re-download of all infotables")
+    p.add_argument("--skip-q4-index", action="store_true",
+                   help="Skip downloading Q4 2025 bulk index (use if cache already exists)")
+    p.add_argument("--skip-q1-index", action="store_true",
+                   help="Skip downloading Q1 2026 bulk index (use if cache already exists)")
+    p.add_argument("--force", action="store_true",
+                   help="Force re-download of all infotables even if cached")
     return p.parse_args()
 
 
@@ -130,46 +136,32 @@ def main() -> int:
         "Accept-Encoding": "gzip, deflate",
     })
 
-    skip_flags = {
-        ("Q4 2025", 2025, 4): args.skip_q4_index,
-        ("Q1 2026", 2026, 1): args.skip_q1_index,
-    }
+    skip_by_label = {"Q4 2025": args.skip_q4_index, "Q1 2026": args.skip_q1_index}
 
     # ------------------------------------------------------------------ #
-    # Step 1: Seed the index cache for both quarters from bulk files.
-    # rebuild_quarterly_consensus will use these cached indices instead of
-    # calling EFTS when it fetches per-institution prior-quarter holdings.
+    # Step 1: Seed both index caches from EDGAR bulk files.
     # ------------------------------------------------------------------ #
-    for qinfo in _QUARTERS:
-        label, year, quarter = qinfo["label"], qinfo["year"], qinfo["quarter"]
-        dest = edgar._13f_index_dir / f"{year}_Q{quarter}.csv.gz"
+    for spec in _QUARTERS:
+        dest = edgar._13f_index_dir / f"{spec.year}_Q{spec.quarter}.csv.gz"
 
-        if skip_flags.get((label, year, quarter)) and dest.exists():
-            _logger.info("%s index already cached at %s — skipping download", label, dest)
+        if skip_by_label.get(spec.label) and dest.exists():
+            _logger.info("%s index already cached — skipping download", spec.label)
             continue
 
-        raw = _download_bulk_index(qinfo["edgar_year"], qinfo["edgar_qtr"], session)
-        index_df = _parse_13f_records(raw, qinfo["window_start"], qinfo["window_end"])
+        raw = _download_bulk_index(spec.edgar_year, spec.edgar_qtr, session)
+        index_df = _parse_13f_records(raw, spec.window_start, spec.window_end)
 
         if index_df.empty:
-            _logger.error("%s: no 13F-HR records found in bulk index — aborting", label)
+            _logger.error("%s: no 13F-HR records found in bulk index — aborting", spec.label)
             return 1
 
-        _logger.info("%s: found %d 13F-HR filers in window %s → %s",
-                     label, len(index_df), qinfo["window_start"], qinfo["window_end"])
-        _seed_index_cache(edgar, index_df, year, quarter)
+        _logger.info("%s: %d 13F-HR filers in window %s → %s",
+                     spec.label, len(index_df), spec.window_start, spec.window_end)
+        _seed_index_cache(edgar, index_df, spec.year, spec.quarter)
 
     # ------------------------------------------------------------------ #
     # Step 2: Build Q1 2026 consensus.
-    #
-    # rebuild_quarterly_consensus will:
-    #   - Load the cached Q1 2026 index (seeded above)
-    #   - Download each Q1 2026 infotable from EDGAR (skips if cached)
-    #   - For each institution call load_13f_holdings(cik, 2025, 4) which:
-    #       * finds the cached Q4 2025 index (seeded above)
-    #       * downloads the Q4 2025 infotable if not cached
-    #   - Compute delta, exit screen, consensus
-    #   - Write consensus to {edgar_dir}/13f/consensus/2026_Q1.csv.gz
+    # rebuild_quarterly_consensus uses the cached indices seeded above.
     # ------------------------------------------------------------------ #
     _logger.info("Starting rebuild_quarterly_consensus for 2026 Q1 ...")
     pipeline = InstitutionalFlowPipeline(config)
@@ -178,9 +170,9 @@ def main() -> int:
     if consensus_df.empty:
         _logger.error(
             "Consensus is empty after rebuild. Possible causes:\n"
-            "  - No Q4 2025 infotables could be fetched (prior quarter missing)\n"
+            "  - No Q4 2025 infotables found (prior quarter not downloaded yet)\n"
             "  - No institutions met the exit threshold (>= %.0f%% reduction)\n"
-            "  - AUM filter ($%.0fB) too strict\n"
+            "  - AUM filter ($%.0fB) excluded all filers\n"
             "Check the log above for warnings from PositionDeltaCalculator / ExitScreener.",
             config.exit_threshold_pct * 100,
             config.min_aum_usd / 1e9,
