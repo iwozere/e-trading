@@ -26,7 +26,11 @@ P18_RESULTS_BASE = _PROJECT_ROOT / "results" / "p18_institutional_flow"
 # LLM
 # ---------------------------------------------------------------------------
 LLM_MODEL = "claude-sonnet-4-6"
-LLM_MAX_TOKENS = 4096
+# 5 fully-detailed picks (thesis + risk_factors + exit_strategy with 4 sub-arrays
+# and profit_targets) plus market_context routinely exceed 4096 output tokens, which
+# truncates the forced tool_use call mid-JSON and yields an empty tool_input. Give the
+# model enough headroom to emit the complete structured response.
+LLM_MAX_TOKENS = 16384
 
 # ---------------------------------------------------------------------------
 # Universe

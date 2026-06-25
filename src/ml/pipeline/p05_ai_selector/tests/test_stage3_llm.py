@@ -55,8 +55,11 @@ def _make_mock_pick(rank: int = 1, confidence: int = 7) -> dict:
     }
 
 
-def _make_mock_claude_response(picks: list, notification_override: bool = False) -> MagicMock:
+def _make_mock_claude_response(
+    picks: list, notification_override: bool = False, stop_reason: str = "tool_use"
+) -> MagicMock:
     tool_block = MagicMock()
+    tool_block.type = "tool_use"
     tool_block.input = {
         "picks": picks,
         "market_context": "Markets are showing resilience.",
@@ -68,6 +71,7 @@ def _make_mock_claude_response(picks: list, notification_override: bool = False)
     response = MagicMock()
     response.content = [tool_block]
     response.usage = usage
+    response.stop_reason = stop_reason
     return response
 
 
@@ -137,3 +141,41 @@ class TestParseResponse:
         }, "tokens_used": 5000}
         result = synthesizer._parse_response(raw)
         assert result["notification_override"] is True
+
+
+def _patch_anthropic(response: MagicMock):
+    """Inject a fake `anthropic` module returning `response` from messages.create."""
+    fake_anthropic = MagicMock()
+    fake_anthropic.Anthropic.return_value.messages.create.return_value = response
+    return patch.dict(sys.modules, {"anthropic": fake_anthropic})
+
+
+class TestCallClaude:
+    def test_max_tokens_truncation_raises(self, synthesizer):
+        """A response truncated at max_tokens raises a clear ValueError, not empty picks."""
+        picks = [_make_mock_pick(i + 1) for i in range(5)]
+        response = _make_mock_claude_response(picks, stop_reason="max_tokens")
+        with _patch_anthropic(response):
+            with pytest.raises(ValueError, match="truncated at max_tokens"):
+                synthesizer._call_claude([{"ticker": "X"}])
+
+    def test_tool_use_block_not_first(self, synthesizer):
+        """The tool_use block is selected by type even when a text block comes first."""
+        picks = [_make_mock_pick(i + 1) for i in range(5)]
+        response = _make_mock_claude_response(picks)
+        text_block = MagicMock()
+        text_block.type = "text"
+        response.content = [text_block, response.content[0]]
+        with _patch_anthropic(response):
+            raw = synthesizer._call_claude([{"ticker": "X"}])
+        assert raw["tool_input"]["picks"] == picks
+
+    def test_no_tool_use_block_raises(self, synthesizer):
+        """A response with no tool_use block raises a clear ValueError."""
+        response = _make_mock_claude_response([])
+        text_block = MagicMock()
+        text_block.type = "text"
+        response.content = [text_block]
+        with _patch_anthropic(response):
+            with pytest.raises(ValueError, match="No tool_use block"):
+                synthesizer._call_claude([{"ticker": "X"}])
