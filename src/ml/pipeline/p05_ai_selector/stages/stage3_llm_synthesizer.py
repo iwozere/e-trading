@@ -220,7 +220,26 @@ class Stage3LLMSynthesizer:
         tokens_used = response.usage.input_tokens + response.usage.output_tokens
         _logger.info("Stage3: Claude response received — %d tokens used", tokens_used)
 
-        tool_block = response.content[0]
+        # A truncated response (hit max_tokens) leaves the forced tool_use block with an
+        # incomplete/empty input. Surface this explicitly rather than failing later with a
+        # confusing "picks is empty" error.
+        stop_reason = getattr(response, "stop_reason", None)
+        if stop_reason == "max_tokens":
+            raise ValueError(
+                f"Claude response truncated at max_tokens ({LLM_MAX_TOKENS}); "
+                f"tool_use input is incomplete. Increase LLM_MAX_TOKENS."
+            )
+
+        # The tool_use block is not guaranteed to be content[0] (the model may emit a
+        # leading text block); select it by type.
+        tool_block = next(
+            (block for block in response.content if getattr(block, "type", None) == "tool_use"),
+            None,
+        )
+        if tool_block is None:
+            raise ValueError(
+                f"No tool_use block in Claude response (stop_reason={stop_reason})."
+            )
         return {"tool_input": tool_block.input, "tokens_used": tokens_used}  # type: ignore[attr-defined]
 
     def _parse_response(self, raw: Dict[str, Any]) -> Dict[str, Any]:
