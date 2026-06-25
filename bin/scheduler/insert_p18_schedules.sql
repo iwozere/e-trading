@@ -57,6 +57,37 @@ VALUES (
 );
 
 -- ==============================================================================
+-- 2. Filing-season timeout variant (OPTIONAL)
+-- ==============================================================================
+-- During each 45-day 13F-HR filing window (roughly mid-Feb / May / Aug / Nov),
+-- hundreds of new filings can land per day. The daily scan downloads each new
+-- filer's infotable at EDGAR's ~0.5s rate limit, so on a heavy day it can
+-- approach or exceed the 3600s timeout above and get SIGKILLed — producing no
+-- consensus that day. Raise the timeout for the daily scan during those months.
+--
+-- The scheduler honours a larger timeout: effective_timeout = max(300, inner+60),
+-- so simply bumping task_params.timeout_seconds is enough.
+--
+-- Option A — seasonally bump the existing daily scan's timeout to 6h, then
+-- revert after the window (run the revert UPDATE in the following month):
+--
+--   UPDATE job_schedules
+--      SET task_params = jsonb_set(task_params, '{timeout_seconds}', '21600'),
+--          updated_at  = CURRENT_TIMESTAMP
+--    WHERE user_id = 2 AND name = 'P18 Institutional Flow Daily';
+--   -- revert after the filing window:
+--   UPDATE job_schedules
+--      SET task_params = jsonb_set(task_params, '{timeout_seconds}', '3600'),
+--          updated_at  = CURRENT_TIMESTAMP
+--    WHERE user_id = 2 AND name = 'P18 Institutional Flow Daily';
+--
+-- NOTE: the heavy *full-quarter* rebuild is a different job and must NEVER be put
+-- here. backfill_consensus.py / rebuild_quarterly_consensus take hours and would
+-- be killed by any scheduler timeout. Run them from Linux cron via
+-- bin/scheduler/p18_consensus_backfill.sh instead (see P18 README).
+-- ==============================================================================
+
+-- ==============================================================================
 -- Verification Query
 -- ==============================================================================
 -- SELECT id, name, job_type, target, cron, enabled FROM job_schedules WHERE user_id = 2 ORDER BY id DESC LIMIT 5;
