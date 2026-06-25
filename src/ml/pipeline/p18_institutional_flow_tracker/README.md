@@ -60,6 +60,56 @@ VALUES (
 );
 ```
 
+## Quarterly Consensus Backfill (important)
+
+The daily scan **only loads** the quarterly 13F consensus cache
+(`consensus/<YYYY>_Q<N>.csv.gz`); on a day with no new filings it does not build
+it. If that cache is missing the daily scan produces **zero signals** (empty
+results folder) — see the `run_summary.json` `consensus_rows` field to confirm.
+
+Building the consensus is a **heavy** job (thousands of filers × EDGAR rate-limit
++ FIGI CUSIP mapping = hours). **Never run it through the project scheduler**
+(`job_schedules` / APScheduler): its `timeout_seconds` will SIGKILL the run
+mid-way, leaving the cache empty. Run it detached, or — preferably — let Linux
+cron do it automatically.
+
+### Forget-proof: crontab (recommended)
+
+`bin/scheduler/p18_consensus_backfill.sh` runs the backfill **outside** the
+scheduler (no timeout) and is **idempotent + self-targeting**: `--auto-quarter`
+picks the most recently completed quarter and `--if-missing` makes the run a
+no-op once a non-empty consensus exists. Schedule it generously across each
+filing window and forget about it:
+
+```cron
+# 13F-HR are due ~45 days after quarter-end (mid-Feb/May/Aug/Nov). Run daily at
+# 04:00 UTC across the back half of each filing month; --if-missing makes every
+# run after the first success an instant no-op.
+0 4 16-28 2,5,8,11 * /opt/apps/e-trading/bin/scheduler/p18_consensus_backfill.sh
+```
+
+Log: `results/p18_institutional_flow/consensus_backfill_cron.log`.
+
+### Manual one-off (recovery / first seed)
+
+```bash
+# Detached so a dropped SSH session / restart can't kill it:
+nohup python src/ml/pipeline/p18_institutional_flow_tracker/backfill_consensus.py \
+      --year 2026 --quarter 1 > /tmp/p18_backfill.log 2>&1 &
+```
+
+Watch for `Backfill complete: N tickers in consensus for <Y> Q<N>` (success) or
+`Backfill produced an empty consensus` (failure — check EDGAR connectivity and
+that the filing window has closed).
+
+### Daily-scan timeout during filing season
+
+During filing windows the *daily* scan can also approach its 3600s timeout
+because it downloads each new filer's infotable. See
+`bin/scheduler/insert_p18_schedules.sql` for how to seasonally raise
+`timeout_seconds` for the daily scan (this is the incremental job and is fine to
+run through the scheduler — only the full rebuild must not be).
+
 ## Cache Layout
 
 ```

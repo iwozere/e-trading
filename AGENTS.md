@@ -13,6 +13,7 @@ It is intended for both human developers and AI agents contributing to the codeb
 - Maximum line length: **120 characters** (PEP 8 default is 79, but we allow up to 120).
 - Use UTF-8 encoding for all source files.
 - One public class or function per file, if possible.
+- If you find diagnostics issues, fix them immediately.
 
 ---
 

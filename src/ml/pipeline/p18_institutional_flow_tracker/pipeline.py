@@ -7,6 +7,7 @@ Coordinates all three signal layers:
   Layer 3: Volume anomaly detection on current watchlist tickers
 """
 
+import json
 import logging
 import logging.handlers
 from datetime import date, datetime, timedelta, timezone
@@ -136,6 +137,19 @@ class InstitutionalFlowPipeline:
                         run_date,
                     )
 
+            if consensus_df.empty:
+                _logger.warning(
+                    "Consensus cache is empty for %d Q%d — the daily pipeline cannot produce "
+                    "signals without it. This usually means the one-time quarterly backfill has "
+                    "not completed. Run it to completion (detached, so it is not killed mid-run):\n"
+                    "    nohup python src/ml/pipeline/p18_institutional_flow_tracker/"
+                    "backfill_consensus.py --year %d --quarter %d "
+                    "> /tmp/p18_backfill.log 2>&1 &\n"
+                    "Then confirm %s appears before the next daily run.",
+                    year, quarter, year, quarter,
+                    self._edgar._13f_dir / "consensus" / f"{year}_Q{quarter}.csv.gz",
+                )
+
             # ------------------------------------------------------------------
             # Layer 2: Form 4 and 13D/G daily events
             # ------------------------------------------------------------------
@@ -179,6 +193,25 @@ class InstitutionalFlowPipeline:
 
             top_ticker = scored_df.iloc[0]["ticker"] if not scored_df.empty else ""
             top_score = int(scored_df.iloc[0]["total_score"]) if not scored_df.empty else 0
+
+            # Always write a run summary so an empty results folder is unambiguous:
+            # it distinguishes "ran, quiet day" from "consensus missing" or "crashed".
+            run_summary = {
+                "run_date": str(run_date),
+                "status": "success",
+                "alert_count": len(scored_df),
+                "consensus_rows": len(consensus_df),
+                "new_13f_filings_today": new_13f_count,
+                "form4_sells_count": len(form4_df),
+                "dg_amendments_count": len(dg_df),
+                "efts_available": efts_available,
+                "top_ticker": top_ticker,
+                "top_score": top_score,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            (run_dir / "run_summary.json").write_text(
+                json.dumps(run_summary, indent=2), encoding="utf-8"
+            )
 
             _logger.info(
                 "Run complete: %d alerts, top=%s score=%d", len(scored_df), top_ticker, top_score
