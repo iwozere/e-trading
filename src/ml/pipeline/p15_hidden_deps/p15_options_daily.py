@@ -27,7 +27,8 @@ Cache layout (shared with p15_daily.py options job):
                                                 strike, volume, OI, IV, …
       putcall/{TICKER}_putcall.csv.gz        ← growing daily P/C summary
 
-Logs: results/p15_hidden_deps/p15_options_pipeline.log (10 MB × 5 backups)
+Logs: results/p15_hidden_deps/p15_options_pipeline.log (TimedRotatingFileHandler,
+      daily rotation to p15_options_pipeline.log.YYYY-MM-DD, 30-day retention)
 """
 
 import json
@@ -62,15 +63,18 @@ _NASDAQ_REQUEST_TIMEOUT = 20         # seconds
 # ---------------------------------------------------------------------------
 
 def _setup_file_logging() -> None:
-    """Attach a rotating file handler to the root logger."""
+    """Attach a daily-rotating file handler to the root logger."""
     log_dir = PROJECT_ROOT / "results" / "p15_hidden_deps"
     log_dir.mkdir(parents=True, exist_ok=True)
-    handler = logging.handlers.RotatingFileHandler(
+    # Rotate at midnight so each day's run lands in its own dated file
+    # (p15_options_pipeline.log.YYYY-MM-DD); keep 30 days, then auto-prune.
+    handler = logging.handlers.TimedRotatingFileHandler(
         log_dir / "p15_options_pipeline.log",
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
+        when="midnight",
+        backupCount=30,
         encoding="utf-8",
     )
+    handler.suffix = "%Y-%m-%d"
     handler.setFormatter(logging.Formatter(
         "%(asctime)s %(levelname)-8s %(name)-40s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
