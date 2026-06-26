@@ -79,7 +79,7 @@ class VolumeAnomalyDetector:
             try:
                 df = self._dm.get_ohlcv(
                     symbol=ticker,
-                    interval="1d",
+                    timeframe="1d",
                     start_date=start,
                     end_date=end,
                 )

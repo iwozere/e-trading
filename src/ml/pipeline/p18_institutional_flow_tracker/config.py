@@ -82,6 +82,9 @@ class P18Config:
     results_dir: Path = field(default_factory=lambda: _PROJECT_ROOT / "results" / "p18_institutional_flow")
     """Directory where per-run CSVs are written."""
 
+    summary_top_n: int = 10
+    """How many of the highest-scoring tickers to record in run_summary.json."""
+
     @classmethod
     def create_default(cls) -> "P18Config":
         """Return a P18Config with all defaults applied."""
