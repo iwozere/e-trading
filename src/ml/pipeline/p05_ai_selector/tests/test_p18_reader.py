@@ -57,8 +57,8 @@ class TestP18Reader:
         assert result["high_score_count"] == 1
         assert "NVDA" in result["tickers"]
 
-    def test_reads_consensus_and_form4(self, tmp_path):
-        """Reads consensus.csv and form4_sells.csv correctly."""
+    def test_reads_consensus(self, tmp_path):
+        """consensus.csv tickers are loaded into consensus_tickers."""
         run_dir = tmp_path / "2026-06-14"
         run_dir.mkdir()
 
@@ -68,13 +68,39 @@ class TestP18Reader:
         pd.DataFrame({"ticker": ["MSFT", "GOOG"]}).to_csv(
             run_dir / "consensus.csv", index=False
         )
-        pd.DataFrame({"ticker": ["TSLA", "META"], "transaction_type": ["B", "S"]}).to_csv(
-            run_dir / "form4_sells.csv", index=False
-        )
 
         reader = P18Reader(results_base=tmp_path)
         result = reader.get_high_score_tickers(date(2026, 6, 14))
 
         assert "MSFT" in result["consensus_tickers"]
-        assert "TSLA" in result["form4_buy_tickers"]
-        assert "META" not in result["form4_buy_tickers"]
+        assert "GOOG" in result["consensus_tickers"]
+
+    def test_reads_form4_buys_when_present(self, tmp_path):
+        """form4_buys.csv tickers populate form4_buy_tickers (forward-compatible)."""
+        run_dir = tmp_path / "2026-06-14"
+        run_dir.mkdir()
+
+        pd.DataFrame({"ticker": ["AAPL"], "total_score": [70]}).to_csv(
+            run_dir / "signals.csv", index=False
+        )
+        pd.DataFrame({"ticker": ["TSLA", "NVDA"]}).to_csv(
+            run_dir / "form4_buys.csv", index=False
+        )
+
+        reader = P18Reader(results_base=tmp_path)
+        result = reader.get_high_score_tickers(date(2026, 6, 14))
+
+        assert result["form4_buy_tickers"] == {"TSLA", "NVDA"}
+
+    def test_form4_buys_empty_when_file_absent(self, tmp_path):
+        """With no form4_buys.csv (today's P18 reality), form4_buy_tickers is empty."""
+        run_dir = tmp_path / "2026-06-14"
+        run_dir.mkdir()
+        pd.DataFrame({"ticker": ["AAPL"], "total_score": [70]}).to_csv(
+            run_dir / "signals.csv", index=False
+        )
+
+        reader = P18Reader(results_base=tmp_path)
+        result = reader.get_high_score_tickers(date(2026, 6, 14))
+
+        assert result["form4_buy_tickers"] == set()
