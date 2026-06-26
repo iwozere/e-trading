@@ -193,6 +193,7 @@ class InstitutionalFlowPipeline:
 
             top_ticker = scored_df.iloc[0]["ticker"] if not scored_df.empty else ""
             top_score = int(scored_df.iloc[0]["total_score"]) if not scored_df.empty else 0
+            top_tickers = _build_top_tickers(scored_df, self.config.summary_top_n)
 
             # Always write a run summary so an empty results folder is unambiguous:
             # it distinguishes "ran, quiet day" from "consensus missing" or "crashed".
@@ -207,6 +208,7 @@ class InstitutionalFlowPipeline:
                 "efts_available": efts_available,
                 "top_ticker": top_ticker,
                 "top_score": top_score,
+                "top_tickers": top_tickers,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             (run_dir / "run_summary.json").write_text(
@@ -224,6 +226,7 @@ class InstitutionalFlowPipeline:
                 "form4_sells_count": len(form4_df),
                 "top_ticker": top_ticker,
                 "top_score": top_score,
+                "top_tickers": top_tickers,
                 "efts_available": efts_available,
                 "results_dir": str(run_dir),
                 "timestamp": datetime.now().isoformat(),
@@ -552,6 +555,39 @@ def _prev_quarter(year: int, quarter: int) -> tuple:
     if quarter == 1:
         return (year - 1, 4)
     return (year, quarter - 1)
+
+
+def _build_top_tickers(scored_df: pd.DataFrame, top_n: int) -> List[Dict[str, Any]]:
+    """
+    Build a compact, JSON-serialisable list of the highest-scoring tickers.
+
+    Args:
+        scored_df: Output of CompositeScorer.score(), already sorted by
+            total_score descending.
+        top_n: Maximum number of tickers to include.
+
+    Returns:
+        A list of dicts (ticker, score, signals_active, signals), at most
+        ``top_n`` long. Empty when there are no alerts.
+    """
+    if scored_df.empty:
+        return []
+
+    top: List[Dict[str, Any]] = []
+    for _, row in scored_df.head(top_n).iterrows():
+        signal_detail = row.get("signal_detail") or "{}"
+        try:
+            active_signals = sorted(k for k, v in json.loads(signal_detail).items() if v)
+        except (TypeError, ValueError):
+            active_signals = []
+        signals_active = row.get("signals_active")
+        top.append({
+            "ticker": row["ticker"],
+            "score": int(row["total_score"]),
+            "signals_active": int(signals_active) if signals_active is not None else len(active_signals),
+            "signals": active_signals,
+        })
+    return top
 
 
 def _collect_watchlist_tickers(

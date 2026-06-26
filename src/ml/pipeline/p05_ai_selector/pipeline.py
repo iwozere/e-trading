@@ -4,7 +4,7 @@ import logging
 import time
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -155,6 +155,17 @@ class P05Pipeline:
 
             results_dir = output.write_results(picks, stage2_df, metadata, run_date)
 
+            if notify:
+                self._send_notifications(
+                    output=output,
+                    picks=picks,
+                    market_context=metadata["market_context"],
+                    trigger_reason=trigger_reason,
+                    run_date=run_date,
+                    results_dir=results_dir,
+                    user_id=user_id,
+                )
+
             top_ticker = picks[0]["ticker"] if picks else ""
             top_confidence = int(picks[0].get("confidence", 0)) if picks else 0
 
@@ -182,6 +193,104 @@ class P05Pipeline:
 
         finally:
             self._detach_run_log_handler(log_handler)
+
+    def _send_notifications(
+        self,
+        output: Stage4Output,
+        picks: List[Dict[str, Any]],
+        market_context: str,
+        trigger_reason: str,
+        run_date: date,
+        results_dir: Path,
+        user_id: Optional[str],
+    ) -> None:
+        """
+        Send the day's picks as rich Telegram and email notifications.
+
+        Telegram receives the condensed top-3 text; email receives the full HTML
+        report with ``top_picks.csv`` and ``report.md`` attached. Each channel is
+        sent as its own message so per-channel formatting stays clean. Delivery is
+        queued via the notification DB service; the notification processor handles
+        the actual send. Any failure here is logged but never aborts the pipeline —
+        the results are already written to disk.
+
+        Args:
+            output: The Stage4Output instance (provides the formatters).
+            picks: The LLM picks (top 5).
+            market_context: LLM market-context paragraph for the email body.
+            trigger_reason: Human-readable notification trigger.
+            run_date: Run date.
+            results_dir: Directory holding top_picks.csv / report.md for attachment.
+            user_id: Scheduler-injected user id; notifications are skipped if absent.
+        """
+        if not user_id:
+            _logger.warning(
+                "No user_id provided — skipping P05 notifications (results in %s)", results_dir
+            )
+            return
+
+        try:
+            from src.data.db.services.notification_service import NotificationService
+            from src.data.db.services.users_service import UsersService
+
+            channels = UsersService().get_user_notification_channels(int(user_id))
+        except (ValueError, TypeError):
+            _logger.warning("Invalid user_id %r — skipping P05 notifications", user_id)
+            return
+        except Exception:
+            _logger.exception("Could not resolve notification channels for user %s", user_id)
+            return
+
+        if not channels:
+            _logger.warning("No notification channels configured for user %s — skipping", user_id)
+            return
+
+        notif_service = NotificationService()
+        top = picks[0]["ticker"] if picks else "—"
+        extra = f" +{len(picks) - 1} more" if len(picks) > 1 else ""
+        subject = f"P05 AI Selector — {run_date} — {top}{extra}"
+
+        # Telegram: condensed top-3 text only (no attachments).
+        if channels.get("telegram_chat_id"):
+            try:
+                tg_text = output.format_telegram(picks, trigger_reason, run_date)
+                notif_service.create_message({
+                    "message_type": "REPORT",
+                    "channels": ["telegram"],
+                    "recipient_id": str(user_id),
+                    "content": {"title": subject, "message": tg_text, "source": "p05_ai_selector"},
+                    "priority": "NORMAL",
+                    "message_metadata": {"source": "p05_ai_selector"},
+                })
+                _logger.info("Queued P05 Telegram notification for user %s", user_id)
+            except Exception:
+                _logger.exception("Failed to queue P05 Telegram notification for user %s", user_id)
+
+        # Email: full HTML report + CSV/MD attachments.
+        if channels.get("email"):
+            try:
+                html = output.format_email_html(picks, market_context, trigger_reason, run_date)
+                attachments = {"files": [
+                    str(results_dir / "top_picks.csv"),
+                    str(results_dir / "report.md"),
+                ]}
+                notif_service.create_message({
+                    "message_type": "REPORT",
+                    "channels": ["email"],
+                    "recipient_id": str(user_id),
+                    "content": {
+                        "title": subject,
+                        "message": output.format_telegram(picks, trigger_reason, run_date),
+                        "html": html,
+                        "attachments": attachments,
+                        "source": "p05_ai_selector",
+                    },
+                    "priority": "NORMAL",
+                    "message_metadata": {"source": "p05_ai_selector"},
+                })
+                _logger.info("Queued P05 email notification for user %s", user_id)
+            except Exception:
+                _logger.exception("Failed to queue P05 email notification for user %s", user_id)
 
     def _failure_result(
         self,
