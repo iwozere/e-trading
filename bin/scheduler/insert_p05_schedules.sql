@@ -9,10 +9,15 @@
 --   trigger_reason, top_ticker, top_confidence, stage1_out, stage2_out,
 --   llm_tokens_used, results_dir, timestamp, user_id
 --
--- Notification logic (dual OR):
---   Primary : p18_signals_count >= 1  (P18 flagged institutional flow today)
---   Override: notification_override == 1  (LLM confidence >= 9 for any pick)
---   Either condition independently triggers Telegram + email.
+-- Notification logic:
+--   The P05 pipeline now sends its OWN rich notifications from Stage 4 (condensed
+--   Telegram text + full HTML email with market context, per-pick exit strategies,
+--   and top_picks.csv / report.md attached). It applies the dual OR-trigger
+--   internally (p18_signals_count >= 1 OR an LLM pick with confidence >= 9).
+--   Therefore this schedule intentionally defines NO notification_rules — leaving
+--   them in would make the scheduler ALSO emit a generic key:value result dump,
+--   duplicating (and uglifying) every notification. See Stage4Output.format_* and
+--   P05Pipeline._send_notifications.
 --
 -- Usage:
 --   psql -d your_database < bin/scheduler/insert_p05_schedules.sql
@@ -27,7 +32,8 @@
 --          signal boosts (200 → top-25).
 -- Stage 3: Claude claude-sonnet-4-6 synthesises top-5 picks with full exit
 --          strategies (entry/hold/breakers/profit targets). ~$0.05/run.
--- Stage 4: Writes results/p05_ai_selector/{date}/ and triggers notifications.
+-- Stage 4: Writes results/p05_ai_selector/{date}/ and sends its own Telegram +
+--          email notifications (no scheduler notification_rules — see header note).
 -- Timeout: 7200s (2 hours) — covers cold-start OHLCV fetch on first-ever run.
 -- ==============================================================================
 
@@ -40,31 +46,26 @@ VALUES (
     '{
         "script_path": "src/ml/pipeline/p05_ai_selector/run_p05_scan.py",
         "script_args": [],
-        "timeout_seconds": 7200,
-        "notification_rules": {
-            "conditions": [
-                {
-                    "check_field": "p18_signals_count",
-                    "operator": ">=",
-                    "threshold": 1,
-                    "channels": ["telegram", "email"],
-                    "comment": "P18 detected institutional flow today — AI picks are more actionable"
-                },
-                {
-                    "check_field": "notification_override",
-                    "operator": "==",
-                    "threshold": 1,
-                    "channels": ["telegram", "email"],
-                    "comment": "LLM assigned confidence >= 9 for at least one pick — high-conviction signal"
-                }
-            ]
-        }
+        "timeout_seconds": 7200
     }'::jsonb,
     '0 10 * * 1-5',
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 );
+
+-- ==============================================================================
+-- Migration for an already-deployed schedule
+-- ==============================================================================
+-- If the P05 schedule was inserted previously WITH notification_rules, run this
+-- once to stop the duplicate generic result-dump now that the pipeline
+-- self-notifies. It strips only the notification_rules key, leaving timeout etc.
+--
+--   UPDATE job_schedules
+--      SET task_params = task_params - 'notification_rules',
+--          updated_at  = CURRENT_TIMESTAMP
+--    WHERE user_id = 2 AND name = 'P05 AI Selector Daily';
+-- ==============================================================================
 
 -- ==============================================================================
 -- Verification Query
