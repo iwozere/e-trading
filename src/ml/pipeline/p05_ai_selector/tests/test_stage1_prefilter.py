@@ -36,9 +36,9 @@ class TestStage1Prefilter:
         with patch("src.ml.pipeline.p05_ai_selector.stages.stage1_prefilter.DataManager") as MockDM:
             dm_instance = MagicMock()
             MockDM.return_value = dm_instance
-            dm_instance.get_ohlcv.side_effect = lambda ticker, *a, **kw: (
-                ohlcv_cheap if ticker == "PENNYSTOCK" else ohlcv_ok
-            )
+            dm_instance.get_ohlcv_batch.side_effect = lambda tickers, *a, **kw: {
+                t: (ohlcv_cheap if t == "PENNYSTOCK" else ohlcv_ok) for t in tickers
+            }
             result = prefilter.run(["PENNYSTOCK", "AAPL"], date(2026, 6, 14))
 
         assert "PENNYSTOCK" not in result["ticker"].values
@@ -54,9 +54,9 @@ class TestStage1Prefilter:
         with patch("src.ml.pipeline.p05_ai_selector.stages.stage1_prefilter.DataManager") as MockDM:
             dm_instance = MagicMock()
             MockDM.return_value = dm_instance
-            dm_instance.get_ohlcv.side_effect = lambda ticker, *a, **kw: (
-                ohlcv_low_vol if ticker == "LOWVOL" else ohlcv_ok
-            )
+            dm_instance.get_ohlcv_batch.side_effect = lambda tickers, *a, **kw: {
+                t: (ohlcv_low_vol if t == "LOWVOL" else ohlcv_ok) for t in tickers
+            }
             result = prefilter.run(["LOWVOL", "AAPL"], date(2026, 6, 14))
 
         assert "LOWVOL" not in result["ticker"].values
@@ -70,7 +70,9 @@ class TestStage1Prefilter:
         with patch("src.ml.pipeline.p05_ai_selector.stages.stage1_prefilter.DataManager") as MockDM:
             dm_instance = MagicMock()
             MockDM.return_value = dm_instance
-            dm_instance.get_ohlcv.return_value = ohlcv_ok
+            dm_instance.get_ohlcv_batch.side_effect = lambda tickers, *a, **kw: {
+                t: ohlcv_ok for t in tickers
+            }
             result = prefilter.run(tickers, date(2026, 6, 14))
 
         assert len(result) <= STAGE1_TOP_N

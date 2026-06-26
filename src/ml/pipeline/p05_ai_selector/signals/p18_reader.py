@@ -73,9 +73,19 @@ class P18Reader:
             except Exception:
                 _logger.exception("P18Reader: error reading consensus.csv")
 
-        # form4_buy_tickers: P18 currently downloads only sell transactions;
-        # a separate form4_buys.csv is not yet produced. Left empty until
-        # the edgar downloader is extended to capture buy-side Form 4 filings.
+        # form4_buy_tickers: bullish insider-buy signal for Stage 2 (+form4_insider_buy).
+        # Sourced from a dedicated form4_buys.csv. P18 currently persists only
+        # significant SELLS (form4_sells.csv), so this file is absent in production
+        # today and the set stays empty until P18 is extended to capture buy-side
+        # Form 4 filings — but the reader is ready for it.
+        form4_buys_file = run_dir / "form4_buys.csv"
+        if form4_buys_file.exists():
+            try:
+                df = pd.read_csv(form4_buys_file)
+                if "ticker" in df.columns:
+                    result["form4_buy_tickers"] = set(df["ticker"].dropna().tolist())
+            except Exception:
+                _logger.exception("P18Reader: error reading form4_buys.csv")
 
         _logger.info(
             "P18Reader: loaded — scores=%d, consensus=%d",

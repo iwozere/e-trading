@@ -63,9 +63,13 @@ class P18Config:
     score_alert_threshold: int = 60
     """Minimum composite score to generate a Telegram alert."""
 
+    # Binary signal weights. The large single-institution exit is NOT a flat
+    # bonus here — it is graded by dollar value sold inside CompositeScorer
+    # (_DEFAULT_LARGE_EXIT_TIERS_USD), and consensus breadth (institution count)
+    # adds a separate graded bonus. This prevents every $500M+ exit from clearing
+    # the alert threshold and saturating the results.
     signal_weights: Dict[str, int] = field(default_factory=lambda: {
         "consensus_exit_3plus": 40,
-        "large_single_exit_500m": 25,
         "volume_spike_confirmed": 20,
         "form4_insider_sell": 10,
         "schedule_13dg_drop": 10,
