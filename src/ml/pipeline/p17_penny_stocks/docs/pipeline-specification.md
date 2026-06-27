@@ -1103,3 +1103,77 @@ Momentum + Volume + Catalyst + Survivability
 ```
 
 is where explosive asymmetric opportunities usually emerge.
+
+---
+
+# 24. Scoring Calibration Backlog (open tuning items)
+
+Concrete, evidence-backed tuning items identified after the **CatalystAgent (8-K
+detection, §8.6) went live**. Until then `catalyst_score` was a hardcoded `0`
+placeholder; with real catalyst signal now flowing, the composite scoring (§9)
+and ranking tiers (§11) need re-calibration. These are near-term, data-driven
+knobs — distinct from the long-term roadmap in §22.
+
+## 24.1 Observed problem
+
+For several consecutive sessions the screener produced **A=0, B=0** — every
+candidate stuck at tier C or below — even though the catalyst stage is healthy
+(e.g. run of 2026-06-26: 66/160 candidates flagged via the 8-K index cache).
+This is now a **scoring-calibration** issue, not a data gap.
+
+Reference case — **ILLR (2026-06-26)**, the top-ranked name, `final_score=54.0`,
+exactly **1 point below `tier_b_min_score=55`**, and flagged
+`explosive_candidate=True`:
+
+| sub-score      | value | × weight | points |
+| -------------- | ----- | -------- | ------ |
+| momentum       | **0.0** | 0.25   | **0.00** |
+| volume         | 100   | 0.20     | 20.00  |
+| technical      | 80    | 0.15     | 12.00  |
+| fundamentals   | 50    | 0.15     | 7.50   |
+| catalyst       | 100   | 0.10     | 10.00  |
+| short_squeeze  | 10    | 0.10     | 1.00   |
+| accumulation   | 71    | 0.05     | 3.55   |
+
+A textbook explosive setup (rvol 55×, fresh 8-K catalyst, strong technical /
+accumulation, zero dilution) is held under the tier-B wall because
+**`momentum_score=0` sits on the single largest weight (0.25)**, while the two
+explosive drivers (volume + catalyst) are capped at 30% combined weight.
+
+## 24.2 Tuning levers (priority order)
+
+1. **Explosive → tier floor** *(cleanest first fix)*: give any candidate with
+   `explosive_candidate=True` a **minimum tier of B**. Such names already pass
+   every mandatory structural gate in §10, so ranking them tier C (as ILLR was)
+   is inconsistent. This fixes the inconsistency without weakening any threshold.
+   Touches `ScoringAgent._assign_tier` (`scoring_agent.py`).
+
+2. **Rebalance composite weights** (`P17ScoringConfig`, §9): now that catalyst is
+   a *real* signal, `weight_catalyst=0.10` is likely too low for an explosive-penny
+   thesis, and `weight_momentum=0.25` dominating may misfire on pre-breakout names
+   (high volume + catalyst, momentum not yet realised). Sweep
+   `weight_catalyst` / `weight_volume` up and `weight_momentum` down against the
+   backfilled window (§24.3).
+
+3. **Lower `tier_b_min_score` (last resort)**: least principled lever — prefer
+   fixing weights + the explosive floor first. Only revisit if the distribution
+   still shows a meaningful B-tier population is being clipped after (1) and (2).
+
+## 24.3 Validation methodology (avoid single-day overfit)
+
+* **Do not calibrate against one day.** Tuning to 2026-06-26 alone overfits.
+* Use the **60-day 8-K index backfill** (now cached by the P15 daily bundle,
+  `_job_edgar_8k_index`) to run the pipeline across a multi-day window and inspect
+  the resulting A/B/C/W distribution and, where possible, forward returns via the
+  backtester (§15) before committing config changes.
+* Re-check after any change that the **catalyst flag rate is sane** — the
+  2026-06-26 run flagged ~41% (66/160), which is high; verify tier-2 keyword
+  matches (`" ai "`, `partnership`, earnings items) are not over-flagging and
+  inflating `catalyst_score`.
+
+## 24.4 Open verification item
+
+* `momentum_score=0` on a name with 55× relative volume and a fresh catalyst
+  (ILLR) is plausible (price flat/down on the volume spike = possible dump) but
+  worth confirming it is **not a data gap** silently zeroing momentum for
+  high-volume names. See §8.1 Price Momentum.
